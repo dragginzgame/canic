@@ -148,6 +148,10 @@ impl Fixture {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the terminal publication fixture keeps one complete plan and Registry journey"
+)]
 fn fixture(name: &str) -> Fixture {
     let root = temp_dir(&format!("terminal-fleet-catalog-{name}"));
     fs::create_dir_all(&root).expect("create fixture");
@@ -191,6 +195,7 @@ fn fixture(name: &str) -> Fixture {
         fresh_fleet_plan_digest: "ab".repeat(32),
         release_build_id,
         application_artifact_union_digest: [3; 32],
+        admission: crate::test_support::fleet_admission_policy(fleet.clone()),
         coordinator: PlannedFleetCoordinator {
             coordinator_subnet: subnet(1),
             placement_cost: crate::test_support::placement_cost(subnet(1)),
@@ -203,6 +208,7 @@ fn fixture(name: &str) -> Fixture {
             component_group_placements: Vec::new(),
             component_admissions: vec![admission.clone()],
             component_topology_digest: topology_digest,
+            admission_projections: Vec::new(),
             initial_release_set: release_set,
             limits: limits.clone(),
             funding: crate::test_support::fleet_subnet_root_funding_authority(),
@@ -219,8 +225,13 @@ fn fixture(name: &str) -> Fixture {
         },
         epoch: 1,
     };
-    let mut registry =
-        FleetRegistryOps::compile_genesis(&plan.fleet.app, authority, &topology).expect("genesis");
+    let mut registry = FleetRegistryOps::compile_genesis(
+        &plan.fleet.app,
+        authority,
+        &topology,
+        plan.admission.clone(),
+    )
+    .expect("genesis");
     registry = FleetRegistryOps::compile_joining(
         &registry.authority,
         &topology,

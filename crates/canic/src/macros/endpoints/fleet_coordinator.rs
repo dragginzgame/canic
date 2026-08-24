@@ -87,6 +87,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                     | CoordinatorCommand::BeginFundingPolicyRotation(_)
                     | CoordinatorCommand::CompleteRootDeletion(_)
                     | CoordinatorCommand::JoinRoot(_)
+                    | CoordinatorCommand::MutateAdmission(_)
                     | CoordinatorCommand::PrepareAuthoritySnapshot(_)
                     | CoordinatorCommand::PrepareRootDeletionExecution(_)
                     | CoordinatorCommand::ProvisionComponents(_)
@@ -139,6 +140,10 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             }
 
             match request {
+                CoordinatorStatusRequest::Admission(request) => {
+                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::admission_status(request)
+                        .map(CoordinatorStatusResponse::Admission)
+                }
                 CoordinatorStatusRequest::AuthorityRestore => {
                     $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::status()
                         .map(CoordinatorStatusResponse::AuthorityRestore)

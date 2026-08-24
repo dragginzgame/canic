@@ -17,6 +17,8 @@ use crate::storage::stable::component_provisioning::{
     RootComponentProvisioningPlacementRecord, RootComponentProvisioningStateRecord,
 };
 #[cfg(feature = "root-control-plane")]
+use crate::storage::stable::root_admission::{RootAdmissionData, RootAdmissionRecord};
+#[cfg(feature = "root-control-plane")]
 use crate::storage::stable::root_funding::{RootFundingData, RootFundingRecord};
 use crate::storage::stable::{
     component_registry::{
@@ -24,6 +26,7 @@ use crate::storage::stable::{
         RootComponentAllocationRecord, RootComponentDrainingRecord, RootComponentRegistryData,
         RootComponentRegistryStateRecord, RootComponentSubtreeRemovalCompletedLeafRecord,
     },
+    fleet_admission::{FleetAdmissionAuthorityData, FleetAdmissionAuthorityRecord},
     fleet_coordinator::{
         FleetCoordinatorFundingData, FleetCoordinatorFundingRecord, FleetCoordinatorRegistryData,
         FleetCoordinatorRegistryRecord,
@@ -41,7 +44,7 @@ use crate::storage::stable::{
 };
 #[cfg(feature = "root-control-plane")]
 use canic_core::role_contract::allocation::memory::control_plane::{
-    ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
+    ROOT_ADMISSION_ID, ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
     ROOT_CANISTER_POOL_STATE_ID, ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID,
     ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID, ROOT_COMPONENT_PROVISIONING_STATE_ID,
     ROOT_FUNDING_ID,
@@ -50,13 +53,13 @@ use canic_core::{
     role_contract::{
         AllocationOwner, StateAllocationKey,
         allocation::memory::control_plane::{
-            FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_REGISTRY_ID,
-            ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
-            ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
-            ROOT_COMPONENT_REGISTRY_STATE_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
-            ROOT_FLEET_REGISTRY_MIRROR_ID, ROOT_WASM_STORE_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID,
-            TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID,
-            WASM_STORE_GC_STATE_ID,
+            FLEET_COORDINATOR_ADMISSION_ID, FLEET_COORDINATOR_FUNDING_ID,
+            FLEET_COORDINATOR_REGISTRY_ID, ROOT_COMPONENT_ALLOCATIONS_ID,
+            ROOT_COMPONENT_DRAINING_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
+            ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_STATE_ID,
+            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID, ROOT_FLEET_REGISTRY_MIRROR_ID,
+            ROOT_WASM_STORE_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
+            TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
         },
     },
     state_contract::{
@@ -67,6 +70,7 @@ use canic_core::{
 #[must_use]
 pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor> {
     vec![
+        fleet_admission_descriptor(),
         descriptor(
             StateAllocationKey::FleetCoordinatorRegistry,
             "fleet_coordinator_registry",
@@ -76,15 +80,9 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             190,
             "fleet_coordinator_registry_restores_exact_authority_and_canonical_head",
         ),
-        descriptor(
-            StateAllocationKey::FleetCoordinatorFunding,
-            "fleet_coordinator_funding",
-            FLEET_COORDINATOR_FUNDING_ID,
-            FleetCoordinatorFundingRecord::STATE_CONTRACT_NAME,
-            FleetCoordinatorFundingData::STATE_CONTRACT_NAME,
-            191,
-            "fleet_coordinator_funding_restores_exact_reservations_and_terminal_results",
-        ),
+        fleet_coordinator_funding_descriptor(),
+        #[cfg(feature = "root-control-plane")]
+        root_admission_descriptor(),
         #[cfg(feature = "root-control-plane")]
         descriptor(
             StateAllocationKey::RootFunding,
@@ -164,6 +162,31 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             "wasm_store_gc_state_restores_local_gc_mode",
         ),
     ]
+}
+
+fn fleet_coordinator_funding_descriptor() -> StateAllocationDescriptor {
+    descriptor(
+        StateAllocationKey::FleetCoordinatorFunding,
+        "fleet_coordinator_funding",
+        FLEET_COORDINATOR_FUNDING_ID,
+        FleetCoordinatorFundingRecord::STATE_CONTRACT_NAME,
+        FleetCoordinatorFundingData::STATE_CONTRACT_NAME,
+        191,
+        "fleet_coordinator_funding_restores_exact_reservations_and_terminal_results",
+    )
+}
+
+#[cfg(feature = "root-control-plane")]
+fn root_admission_descriptor() -> StateAllocationDescriptor {
+    descriptor(
+        StateAllocationKey::RootAdmission,
+        "root_admission",
+        ROOT_ADMISSION_ID,
+        RootAdmissionRecord::STATE_CONTRACT_NAME,
+        RootAdmissionData::STATE_CONTRACT_NAME,
+        193,
+        "root_admission_restores_exact_participant_progress_and_forward_recovery",
+    )
 }
 
 fn root_component_registry_descriptor() -> StateAllocationDescriptor {
@@ -405,6 +428,18 @@ fn root_component_provisioning_descriptor() -> StateAllocationDescriptor {
     }
 }
 
+fn fleet_admission_descriptor() -> StateAllocationDescriptor {
+    descriptor(
+        StateAllocationKey::FleetCoordinatorAdmission,
+        "fleet_coordinator_admission",
+        FLEET_COORDINATOR_ADMISSION_ID,
+        FleetAdmissionAuthorityRecord::STATE_CONTRACT_NAME,
+        FleetAdmissionAuthorityData::STATE_CONTRACT_NAME,
+        193,
+        "fleet_coordinator_admission_restores_exact_policy_transition_and_terminal_replay",
+    )
+}
+
 fn descriptor(
     allocation: StateAllocationKey,
     domain: &str,
@@ -448,6 +483,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         for expected in [
+            StateAllocationKey::FleetCoordinatorAdmission,
             StateAllocationKey::FleetCoordinatorFunding,
             StateAllocationKey::FleetCoordinatorRegistry,
             StateAllocationKey::RootComponentRegistry,
@@ -470,6 +506,11 @@ mod tests {
         let descriptors = canic_control_plane_state_descriptors();
 
         for (allocation, record, snapshot) in [
+            (
+                StateAllocationKey::FleetCoordinatorAdmission,
+                FleetAdmissionAuthorityRecord::STATE_CONTRACT_NAME,
+                FleetAdmissionAuthorityData::STATE_CONTRACT_NAME,
+            ),
             (
                 StateAllocationKey::FleetCoordinatorFunding,
                 FleetCoordinatorFundingRecord::STATE_CONTRACT_NAME,

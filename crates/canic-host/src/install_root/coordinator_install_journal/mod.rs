@@ -29,9 +29,10 @@ use canic_core::{
     },
     dto::fleet_registry::{FleetRegistryManifest, FleetRegistryVersion},
     ids::{
-        FleetBinding, FleetCoordinatorBinding, FleetCoordinatorRootFundingPolicy,
-        FleetRegistryAuthority, ReleaseBuildId, SubnetId,
+        FleetAdmissionPolicy, FleetBinding, FleetCoordinatorBinding,
+        FleetCoordinatorRootFundingPolicy, FleetRegistryAuthority, ReleaseBuildId, SubnetId,
     },
+    shared_support::fleet_admission_policy::validate_installed_fleet_admission_policy,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -78,6 +79,7 @@ pub(super) struct FleetCoordinatorInstallJournal {
     pub fleet_install_plan_digest: [u8; 32],
     pub infrastructure_manifest_digest: [u8; 32],
     pub fleet: FleetBinding,
+    pub admission: FleetAdmissionPolicy,
     pub release_build_id: ReleaseBuildId,
     pub coordinator_subnet: SubnetId,
     pub creation_funding: PlannedCanisterCreationFunding,
@@ -98,6 +100,7 @@ struct FleetCoordinatorInstallImmutableAuthority<'a> {
     fleet_install_plan_digest: [u8; 32],
     infrastructure_manifest_digest: [u8; 32],
     fleet: &'a FleetBinding,
+    admission: &'a FleetAdmissionPolicy,
     release_build_id: ReleaseBuildId,
     coordinator_subnet: SubnetId,
     creation_funding: &'a PlannedCanisterCreationFunding,
@@ -116,6 +119,7 @@ impl<'a> From<&'a FleetCoordinatorInstallJournal>
             fleet_install_plan_digest: journal.fleet_install_plan_digest,
             infrastructure_manifest_digest: journal.infrastructure_manifest_digest,
             fleet: &journal.fleet,
+            admission: &journal.admission,
             release_build_id: journal.release_build_id,
             coordinator_subnet: journal.coordinator_subnet,
             creation_funding: &journal.creation_funding,
@@ -370,6 +374,7 @@ fn planned_journal(
         fleet_install_plan_digest: request.fleet_install_plan.digest,
         infrastructure_manifest_digest: request.infrastructure_manifest.digest,
         fleet: plan.fleet.clone(),
+        admission: plan.admission.clone(),
         release_build_id: plan.release_build_id,
         coordinator_subnet: plan.coordinator.coordinator_subnet,
         creation_funding: plan.coordinator.creation_funding.clone(),
@@ -511,6 +516,14 @@ fn validate_immutable_authority(
     if journal.schema_version != COORDINATOR_INSTALL_JOURNAL_SCHEMA_VERSION {
         return Err(invalid(path, "unsupported journal schema version"));
     }
+    validate_installed_fleet_admission_policy(&journal.admission)
+        .map_err(|error| invalid(path, error.to_string()))?;
+    if journal.admission.fleet != journal.fleet {
+        return Err(invalid(
+            path,
+            "admission policy does not match the journalled Fleet",
+        ));
+    }
     journal
         .component_deployment_configuration
         .digest()
@@ -631,6 +644,7 @@ fn validate_registry_evidence(
             &journal
                 .component_deployment_configuration
                 .component_topology,
+            journal.admission.clone(),
         )
         .map_err(|error| invalid(path, error.to_string()))?;
         let expected_manifest = FleetRegistryOps::manifest(

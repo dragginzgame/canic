@@ -147,7 +147,6 @@ pub trait Validate {
 /// - Every deployed Fleet-service occurrence resolves through one exact target
 /// - Canister role names follow the canonical deployment identity rule
 /// - Delegated token TTL is sane
-/// - Whitelist principals are valid
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -162,7 +161,7 @@ pub struct ConfigModel {
     #[serde(default)]
     pub auth: AuthConfig,
 
-    /// App source identity, startup mode and whitelist.
+    /// App source identity and startup mode.
     pub app: AppConfig,
 
     /// App-scoped role declarations. Topology attachment is derived from
@@ -227,6 +226,42 @@ impl ConfigModel {
         let mut matches = self.component_specs_for_role(role);
         let one = matches.next()?;
         matches.next().is_none().then_some(one)
+    }
+
+    /// Return the explicit Fleet admission enrollment for one declared role.
+    #[must_use]
+    pub fn role_uses_fleet_admission(&self, role: &CanisterRole) -> Option<bool> {
+        self.roles
+            .get(role)
+            .map(|declaration| declaration.fleet_admission)
+    }
+
+    /// Return whether one Component Spec contains any Fleet admission role.
+    #[must_use]
+    pub fn component_spec_uses_fleet_admission(
+        &self,
+        component_spec: &ComponentSpecId,
+    ) -> Option<bool> {
+        self.component_spec_fleet_admission_roles(component_spec)
+            .map(|roles| !roles.is_empty())
+    }
+
+    /// Return the canonical enrolled roles contained by one Component Spec.
+    #[must_use]
+    pub fn component_spec_fleet_admission_roles(
+        &self,
+        component_spec: &ComponentSpecId,
+    ) -> Option<Vec<CanisterRole>> {
+        let mut roles = self
+            .component_specs
+            .get(component_spec)?
+            .roles()
+            .filter(|role| self.role_uses_fleet_admission(role) == Some(true))
+            .cloned()
+            .collect::<Vec<_>>();
+        roles.sort();
+        roles.dedup();
+        Some(roles)
     }
 
     /// Return the configured App identity.
@@ -353,6 +388,7 @@ impl ConfigModel {
             RoleDeclaration {
                 kind: RoleDeclarationKind::Root,
                 package: "root".to_string(),
+                fleet_admission: false,
             },
         );
         cfg.roles.insert(
@@ -360,6 +396,7 @@ impl ConfigModel {
             RoleDeclaration {
                 kind: RoleDeclarationKind::Canister,
                 package: "app".to_string(),
+                fleet_admission: false,
             },
         );
         cfg.component_specs
@@ -371,8 +408,8 @@ impl ConfigModel {
 ///
 /// AppConfig
 ///
-/// App identity, startup mode and optional whitelist configuration.
-/// Owned by config schema and consumed by fresh runtime seeding/Fleet-state setup.
+/// App identity and startup mode.
+/// Owned by config schema and consumed by Fleet-state setup.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -382,14 +419,6 @@ pub struct AppConfig {
 
     #[serde(default)]
     pub init_mode: FleetInitMode,
-
-    /// Principal whitelist.
-    ///
-    /// Semantics:
-    /// - None  => allow no principals (default-closed)
-    /// - Some  => allow only listed principals (default-closed)
-    #[serde(default)]
-    pub whitelist: Option<Whitelist>,
 }
 
 impl Default for AppConfig {
@@ -397,7 +426,6 @@ impl Default for AppConfig {
         Self {
             name: AppId::default(),
             init_mode: FleetInitMode::Enabled,
-            whitelist: None,
         }
     }
 }
@@ -596,21 +624,6 @@ impl Default for RoleAttestationConfig {
             min_accepted_epoch_by_role: BTreeMap::new(),
         }
     }
-}
-
-///
-/// Whitelist
-///
-/// Stores principals as text to allow validation at config load time.
-/// Text representation is treated as canonical.
-/// Owned by config schema and consumed only as fresh runtime-whitelist seed input.
-///
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Whitelist {
-    #[serde(default)]
-    pub principals: BTreeSet<String>,
 }
 
 ///

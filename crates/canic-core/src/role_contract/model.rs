@@ -55,6 +55,7 @@ pub enum RoleCapabilityKey {
     AutomaticTopup,
     DelegatedTokenIssuer,
     DelegatedTokenVerifier,
+    FleetAdmissionProjection,
     FleetCoordinator,
     Icrc21,
     Index,
@@ -77,6 +78,7 @@ impl RoleCapabilityKey {
             Self::AutomaticTopup => "AutomaticTopup",
             Self::DelegatedTokenIssuer => "DelegatedTokenIssuer",
             Self::DelegatedTokenVerifier => "DelegatedTokenVerifier",
+            Self::FleetAdmissionProjection => "FleetAdmissionProjection",
             Self::FleetCoordinator => "FleetCoordinator",
             Self::Icrc21 => "Icrc21",
             Self::Index => "Index",
@@ -106,8 +108,10 @@ pub enum StateAllocationKey {
     TemplateChunkRefs,
     TemplateChunkPayloads,
     WasmStoreGcState,
+    FleetCoordinatorAdmission,
     FleetCoordinatorFunding,
     FleetCoordinatorRegistry,
+    RootAdmission,
     RootFunding,
     RootWasmStoreState,
     RootFleetRegistryMirror,
@@ -137,7 +141,7 @@ pub enum StateAllocationKey {
     BlobStorageBilling,
     CoreAuthorityRestoreFence,
     CoreAsyncJobRecovery,
-    CoreRuntimeWhitelist,
+    CoreFleetAdmissionProjection,
 }
 
 ///

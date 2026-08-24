@@ -74,4 +74,9 @@ async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error>
     Ok(())
 }
 
+#[canic_query(requires(caller::is_fleet_admitted()))]
+async fn test_fleet_admission_probe() -> Result<(), Error> {
+    Ok(())
+}
+
 canic::finish!();

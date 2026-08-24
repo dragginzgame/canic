@@ -420,6 +420,70 @@ fn protected_policy_changes_canonical_fleet_input_identity() {
 }
 
 #[test]
+fn protected_admission_is_required_and_changes_canonical_identity() {
+    let baseline_text = input_toml();
+    let missing = baseline_text.replace(
+        &format!("[admission]\nprincipals = [\"{}\"]\n\n", subnet_text(9)),
+        "",
+    );
+    assert!(toml::from_slice::<FleetInstallInputDocument>(missing.as_bytes()).is_err());
+
+    let baseline: FleetInstallInputDocument =
+        toml::from_slice(baseline_text.as_bytes()).expect("baseline input");
+    let baseline = resolve_document(&baseline, BuildNetwork::Local, None).expect("baseline");
+    let changed_text = baseline_text.replace(
+        &format!("principals = [\"{}\"]", subnet_text(9)),
+        &format!("principals = [\"{}\"]", subnet_text(8)),
+    );
+    let changed: FleetInstallInputDocument =
+        toml::from_slice(changed_text.as_bytes()).expect("changed input");
+    let changed = resolve_document(&changed, BuildNetwork::Local, None).expect("changed");
+
+    assert_ne!(baseline.canonical_sha256, changed.canonical_sha256);
+    assert_ne!(
+        baseline.admission.template_digest,
+        changed.admission.template_digest
+    );
+}
+
+#[test]
+fn admission_rejects_anonymous_widening_and_noncanonical_membership() {
+    let selector = CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
+    };
+    let mut anonymous = document(selector.clone());
+    anonymous.admission.principals = vec![Principal::anonymous().to_text()];
+    assert!(matches!(
+        resolve_document(&anonymous, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::InvalidAdmissionPrincipal { .. })
+    ));
+
+    let mut widening = document(selector.clone());
+    widening
+        .admission
+        .rules
+        .push(FleetAdmissionRuleInputDocument {
+            selector: FleetAdmissionSelectorInputDocument::ComponentSpec {
+                component_spec: "users".to_string(),
+            },
+            principals: vec![subnet_text(8)],
+        });
+    assert!(matches!(
+        resolve_document(&widening, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::InvalidAdmissionPolicy { .. })
+    ));
+
+    let mut duplicate = document(selector);
+    let principal = duplicate.admission.principals[0].clone();
+    duplicate.admission.principals.push(principal);
+    assert!(matches!(
+        resolve_document(&duplicate, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::InvalidAdmissionPolicy { .. })
+    ));
+}
+
+#[test]
 fn local_document_preserves_explicit_component_group_placement_ordinals() {
     let application_subnet = subnet_text(7);
     let mut document = document(CoordinatorSubnetSelector::Explicit {
@@ -1216,6 +1280,10 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
         schema_version: 1,
         funding_profile: FleetFundingProfile::SingleSubnet,
         operator: subnet_text(9),
+        admission: FleetAdmissionInputDocument {
+            principals: vec![subnet_text(9)],
+            rules: Vec::new(),
+        },
         coordinator: CoordinatorInputDocument {
             subnet: selector,
             creation_funding: CreationFundingDocument::Cycles {
@@ -1302,10 +1370,14 @@ fn assert_invalid_policy(document: &FleetInstallInputDocument, expected_field_su
 
 fn input_toml() -> String {
     let application_subnet = subnet_text(7);
+    let operator = subnet_text(9);
     format!(
         r#"schema_version = 1
 funding_profile = "single_subnet"
-operator = "{}"
+operator = "{operator}"
+
+[admission]
+principals = ["{operator}"]
 
 [coordinator.subnet]
 kind = "explicit"
@@ -1375,8 +1447,7 @@ cycles = "30T"
 [fleet_subnet_roots.wasm_store_creation_funding]
 kind = "cycles"
 cycles = "10T"
-"#,
-        subnet_text(9)
+"#
     )
 }
 

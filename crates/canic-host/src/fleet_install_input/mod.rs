@@ -44,11 +44,13 @@ use canic_core::{
     cdk::types::Cycles,
     ids::{
         BuildNetwork, ComponentGroupDeploymentId, ComponentSpecId, CyclesFundingBudget,
+        FleetAdmissionPolicyTemplate, FleetAdmissionRule, FleetAdmissionSelector,
         FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetCanisterPoolConfig,
         FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootFundingAuthority,
         FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy, FleetSubnetRootLimits,
         SubnetId,
     },
+    shared_support::fleet_admission_policy::compile_fleet_admission_policy_template,
     shared_support::fleet_funding_policy::{
         FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
         validate_fleet_root_funding_capacity as validate_fleet_root_funding_capacity_policy,
@@ -141,6 +143,7 @@ pub struct ResolvedFleetInstallInput {
     pub schema_version: u32,
     pub canonical_sha256: String,
     pub operator_principal: String,
+    pub admission: FleetAdmissionPolicyTemplate,
     pub catalog: FreshFleetCatalogEvidenceV1,
     pub catalog_acquisition: FleetInstallCatalogAcquisitionV1,
     pub funding_profile: FleetFundingProfile,
@@ -323,6 +326,20 @@ pub enum FleetInstallInputError {
     #[error("invalid operator principal {value:?}: {reason}")]
     InvalidOperatorPrincipal { value: String, reason: String },
 
+    #[error("invalid Fleet admission principal at {field}[{index}] {value:?}: {reason}")]
+    InvalidAdmissionPrincipal {
+        field: String,
+        index: usize,
+        value: String,
+        reason: String,
+    },
+
+    #[error("invalid Fleet admission Component Spec {value:?}: {reason}")]
+    InvalidAdmissionComponentSpec { value: String, reason: String },
+
+    #[error("invalid protected Fleet admission policy: {reason}")]
+    InvalidAdmissionPolicy { reason: String },
+
     #[error("could not encode canonical Fleet installation input: {0}")]
     CanonicalEncoding(#[from] serde_json::Error),
 
@@ -371,8 +388,31 @@ struct FleetInstallInputDocument {
     schema_version: u32,
     funding_profile: FleetFundingProfile,
     operator: String,
+    admission: FleetAdmissionInputDocument,
     coordinator: CoordinatorInputDocument,
     fleet_subnet_roots: Vec<FleetSubnetRootInputDocument>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FleetAdmissionInputDocument {
+    principals: Vec<String>,
+    #[serde(default)]
+    rules: Vec<FleetAdmissionRuleInputDocument>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FleetAdmissionRuleInputDocument {
+    selector: FleetAdmissionSelectorInputDocument,
+    principals: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "kind")]
+enum FleetAdmissionSelectorInputDocument {
+    ComponentSpec { component_spec: String },
+    FleetSubnetRoot { placement_subnet: String },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -741,6 +781,7 @@ fn resolve_document_with_evidence(
 ) -> Result<ResolvedFleetInstallInput, FleetInstallInputError> {
     validate_schema_version(document)?;
     let operator_principal = resolve_operator_principal(&document.operator)?;
+    let admission = resolve_admission_policy(&document.admission)?;
     let (catalog_evidence, catalog_acquisition) = resolve_catalog_evidence(build_network, catalog)?;
     let validated_catalog = catalog.map(|outcome| &outcome.catalog);
     let (coordinator_subnet, coordinator_acknowledges_fiduciary_cost) = resolve_coordinator_subnet(
@@ -807,6 +848,7 @@ fn resolve_document_with_evidence(
         schema_version: document.schema_version,
         canonical_sha256: canonical_sha256.to_string(),
         operator_principal,
+        admission,
         catalog: catalog_evidence,
         catalog_acquisition,
         funding_profile: document.funding_profile,
@@ -829,6 +871,80 @@ fn resolve_operator_principal(value: &str) -> Result<String, FleetInstallInputEr
         });
     }
     Ok(value.to_string())
+}
+
+fn resolve_admission_policy(
+    document: &FleetAdmissionInputDocument,
+) -> Result<FleetAdmissionPolicyTemplate, FleetInstallInputError> {
+    let fleet_principals =
+        parse_admission_principals("admission.principals", &document.principals)?;
+    let rules = document
+        .rules
+        .iter()
+        .enumerate()
+        .map(|(index, rule)| {
+            let selector = match &rule.selector {
+                FleetAdmissionSelectorInputDocument::ComponentSpec { component_spec } => {
+                    FleetAdmissionSelector::ComponentSpec(component_spec.parse().map_err(
+                        |error: canic_core::ids::ComponentSpecIdParseError| {
+                            FleetInstallInputError::InvalidAdmissionComponentSpec {
+                                value: component_spec.clone(),
+                                reason: error.to_string(),
+                            }
+                        },
+                    )?)
+                }
+                FleetAdmissionSelectorInputDocument::FleetSubnetRoot { placement_subnet } => {
+                    FleetAdmissionSelector::FleetSubnetRoot(parse_subnet(
+                        &format!("admission.rules[{index}].selector.placement_subnet"),
+                        placement_subnet,
+                    )?)
+                }
+            };
+            let principals = parse_admission_principals(
+                &format!("admission.rules[{index}].principals"),
+                &rule.principals,
+            )?;
+            Ok(FleetAdmissionRule {
+                selector,
+                principals,
+            })
+        })
+        .collect::<Result<Vec<_>, FleetInstallInputError>>()?;
+    compile_fleet_admission_policy_template(fleet_principals, rules).map_err(|error| {
+        FleetInstallInputError::InvalidAdmissionPolicy {
+            reason: error.to_string(),
+        }
+    })
+}
+
+fn parse_admission_principals(
+    field: &str,
+    values: &[String],
+) -> Result<Vec<Principal>, FleetInstallInputError> {
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let principal = Principal::from_text(value).map_err(|error| {
+                FleetInstallInputError::InvalidAdmissionPrincipal {
+                    field: field.to_string(),
+                    index,
+                    value: value.clone(),
+                    reason: error.to_string(),
+                }
+            })?;
+            if principal == Principal::anonymous() || principal.to_text() != *value {
+                return Err(FleetInstallInputError::InvalidAdmissionPrincipal {
+                    field: field.to_string(),
+                    index,
+                    value: value.clone(),
+                    reason: "principal must be canonical and non-anonymous".to_string(),
+                });
+            }
+            Ok(principal)
+        })
+        .collect()
 }
 
 #[cfg(test)]

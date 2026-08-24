@@ -24,6 +24,10 @@ pub(super) struct CommandSpec {
 
 pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
+        name: "admission",
+        about: "Plan, apply, and inspect Fleet ingress admission",
+    },
+    CommandSpec {
         name: "app",
         about: "Manage Canic source apps and roles",
     },

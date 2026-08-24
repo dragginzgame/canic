@@ -34,9 +34,9 @@ security-sensitive actions.
 
 The reusable App topology is in `canic.toml`. Concrete IC placement and
 funding are separate in `deployments/demos/playground-ic.toml`.
-Before building a deployable release, add the mainnet operator principal to
-`[app.whitelist].principals`; the child-creation update fails closed while that
-list is empty.
+The protected Fleet input declares the generation-one Principal set under
+`[admission]`. Keep that set explicit for the target Fleet; App source
+configuration no longer owns user-ingress membership.
 
 ```bash
 canic install playground playground-001 \

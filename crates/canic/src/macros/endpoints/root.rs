@@ -15,6 +15,9 @@ macro_rules! canic_emit_root_command_endpoint {
         #[serde(crate = "::canic::__internal::serde")]
         pub enum RootCommand {
             AcceptFunding(::canic::dto::fleet_funding::FleetRootFundingAcceptanceRequest),
+            ActivateFleetAdmission(
+                ::canic::dto::fleet_admission::FleetAdmissionActivateRootRequest,
+            ),
             ActivateFundingPolicyRotation(
                 ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootActivateRequest,
             ),
@@ -25,11 +28,17 @@ macro_rules! canic_emit_root_command_endpoint {
             ImportPoolCanister(::canic::dto::pool::PoolCanisterRequest),
             InspectCanister(::canic::dto::canister::CanisterInspectionRequest),
             MaintainPool,
+            OpenFleetAdmission(
+                ::canic::dto::fleet_admission::FleetAdmissionOpenRootRequest,
+            ),
             PrepareAuthoritySnapshot(::canic::dto::authority_restore::AuthoritySnapshotRequest),
             PrepareComponentRegistry(
                 ::canic::dto::component_registry::RootComponentRegistryPreparationRequest,
             ),
             PrepareFleetActivation,
+            PrepareFleetAdmission(
+                ::canic::dto::fleet_admission::FleetAdmissionPrepareRootRequest,
+            ),
             PrepareFundingPolicyRotation(
                 ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootPrepareRequest,
             ),
@@ -71,6 +80,9 @@ macro_rules! canic_emit_root_command_endpoint {
         #[serde(crate = "::canic::__internal::serde")]
         pub enum RootCommandResponse {
             AcceptFunding(::canic::dto::fleet_funding::FleetRootFundingAcceptanceReceipt),
+            ActivateFleetAdmission(
+                ::canic::dto::fleet_admission::FleetAdmissionRootReceipt,
+            ),
             ActivateFundingPolicyRotation(
                 ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt,
             ),
@@ -80,12 +92,14 @@ macro_rules! canic_emit_root_command_endpoint {
             InspectCanister(::canic::dto::canister::CanisterStatusResponse),
             MaintainPool(::canic::dto::pool::PoolMaintenanceResponse),
             OperationAccepted(::canic::dto::role::OperationReceipt),
+            OpenFleetAdmission(::canic::dto::fleet_admission::FleetAdmissionRootReceipt),
             PrepareAuthoritySnapshot(
                 ::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
             ),
             PrepareComponentRegistry(
                 ::canic::dto::component_registry::RootComponentRegistryStatusResponse,
             ),
+            PrepareFleetAdmission(::canic::dto::fleet_admission::FleetAdmissionRootReceipt),
             PrepareFundingPolicyRotation(
                 ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt,
             ),
@@ -215,10 +229,22 @@ macro_rules! canic_emit_root_command_endpoint {
             if matches!(
                 &command,
                 RootCommand::AcceptFunding(_)
+                    | RootCommand::ActivateFleetAdmission(_)
                     | RootCommand::ActivateFundingPolicyRotation(_)
+                    | RootCommand::OpenFleetAdmission(_)
+                    | RootCommand::PrepareFleetAdmission(_)
                     | RootCommand::PrepareFundingPolicyRotation(_)
             ) {
-                $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_root_funding_caller(caller)?;
+                if matches!(
+                    &command,
+                    RootCommand::ActivateFleetAdmission(_)
+                        | RootCommand::OpenFleetAdmission(_)
+                        | RootCommand::PrepareFleetAdmission(_)
+                ) {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_root_admission_caller(caller)?;
+                } else {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_root_funding_caller(caller)?;
+                }
             }
 
             if matches!(&command, RootCommand::GetOrCreateDelegationProof) {
@@ -314,6 +340,10 @@ macro_rules! canic_emit_root_command_endpoint {
                 RootCommand::AcceptFunding(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::accept_root_funding(request)
                         .map(RootCommandResponse::AcceptFunding)
+                }
+                RootCommand::ActivateFleetAdmission(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_root_fleet_admission(request)
+                        .map(RootCommandResponse::ActivateFleetAdmission)
                 }
                 RootCommand::ActivateFundingPolicyRotation(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_root_funding_policy_rotation(request)
@@ -439,6 +469,10 @@ macro_rules! canic_emit_root_command_endpoint {
                     };
                     Ok(RootCommandResponse::MaintainPool(response))
                 }
+                RootCommand::OpenFleetAdmission(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::open_root_fleet_admission(request)
+                        .map(RootCommandResponse::OpenFleetAdmission)
+                }
                 RootCommand::PrepareAuthoritySnapshot(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_authority_snapshot(request)
                         .await
@@ -457,6 +491,10 @@ macro_rules! canic_emit_root_command_endpoint {
                             operation_id: response.identity.operation_id,
                         },
                     ))
+                }
+                RootCommand::PrepareFleetAdmission(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_root_fleet_admission(request)
+                        .map(RootCommandResponse::PrepareFleetAdmission)
                 }
                 RootCommand::PrepareFundingPolicyRotation(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_root_funding_policy_rotation(request)
@@ -671,6 +709,7 @@ macro_rules! canic_emit_root_status_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum RootStatusRequest {
+            Admission(::canic::dto::page::PageRequest),
             AuthorityRestore,
             Children(::canic::dto::page::PageRequest),
             ComponentDirectoryHead(
@@ -709,6 +748,7 @@ macro_rules! canic_emit_root_status_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum RootStatusResponse {
+            Admission(::canic::dto::fleet_admission::FleetAdmissionRootStatusResponse),
             AuthorityRestore(::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse),
             Children(
                 ::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>,
@@ -777,7 +817,8 @@ macro_rules! canic_emit_root_status_endpoint {
                     // The durable operation owner supplies the exact public, peer, or
                     // controller authority used by the dispatch arm below.
                 }
-                RootStatusRequest::AuthorityRestore
+                RootStatusRequest::Admission(_)
+                | RootStatusRequest::AuthorityRestore
                 | RootStatusRequest::ComponentDirectoryHead(_)
                 | RootStatusRequest::ComponentRegistryPartition(_)
                 | RootStatusRequest::Config
@@ -799,6 +840,10 @@ macro_rules! canic_emit_root_status_endpoint {
             }
 
             match request {
+                RootStatusRequest::Admission(page) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_admission_status(page)
+                        .map(RootStatusResponse::Admission)
+                }
                 RootStatusRequest::AuthorityRestore => {
                     $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::status()
                         .map(RootStatusResponse::AuthorityRestore)

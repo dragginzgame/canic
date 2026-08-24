@@ -100,8 +100,8 @@ pub enum AccessError {
     #[error("access denied: delegated token TTL configuration overflows nanoseconds")]
     DelegatedTokenMaxTtlOverflow,
 
-    #[error("access denied: a whitelisted caller is required")]
-    WhitelistRequired,
+    #[error("access denied: Fleet admission is required")]
+    FleetAdmissionRequired,
 }
 
 impl AccessError {
@@ -147,7 +147,7 @@ impl AccessError {
             Self::NegatedPredicateMatched => {
                 AccessDiagnosticCodes::public(codes::CONFIGURATION_INVALID_STATE)
             }
-            Self::RequiredScopeMissing | Self::WhitelistRequired => {
+            Self::FleetAdmissionRequired | Self::RequiredScopeMissing => {
                 AccessDiagnosticCodes::public(codes::CONFIGURATION_UNAVAILABLE)
             }
             Self::ServiceGuardInvalid => AccessDiagnosticCodes::projected(
@@ -262,7 +262,7 @@ mod tests {
                 codes::AUTHORITY_UNAVAILABLE,
             ),
             (
-                AccessError::WhitelistRequired,
+                AccessError::FleetAdmissionRequired,
                 codes::CONFIGURATION_UNAVAILABLE,
             ),
         ];

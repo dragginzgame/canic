@@ -81,6 +81,53 @@ impl LifecycleApi {
         crate::workflow::root_funding::status().map_err(Into::into)
     }
 
+    /// Authenticate one Root admission phase before distribution state is read.
+    pub fn authorize_root_admission_caller(
+        caller: candid::Principal,
+    ) -> Result<(), canic_core::dto::error::Error> {
+        crate::workflow::root_admission::authorize_coordinator(caller).map_err(Into::into)
+    }
+
+    /// Start or replay exact subtree preparation through the Root-owned journal.
+    pub fn prepare_root_fleet_admission(
+        request: canic_core::dto::fleet_admission::FleetAdmissionPrepareRootRequest,
+    ) -> Result<
+        canic_core::dto::fleet_admission::FleetAdmissionRootReceipt,
+        canic_core::dto::error::Error,
+    > {
+        crate::workflow::root_admission::prepare(request).map_err(Into::into)
+    }
+
+    /// Start or replay exact subtree successor activation.
+    pub fn activate_root_fleet_admission(
+        request: canic_core::dto::fleet_admission::FleetAdmissionActivateRootRequest,
+    ) -> Result<
+        canic_core::dto::fleet_admission::FleetAdmissionRootReceipt,
+        canic_core::dto::error::Error,
+    > {
+        crate::workflow::root_admission::activate(request).map_err(Into::into)
+    }
+
+    /// Start or replay exact subtree opening.
+    pub fn open_root_fleet_admission(
+        request: canic_core::dto::fleet_admission::FleetAdmissionOpenRootRequest,
+    ) -> Result<
+        canic_core::dto::fleet_admission::FleetAdmissionRootReceipt,
+        canic_core::dto::error::Error,
+    > {
+        crate::workflow::root_admission::open(request).map_err(Into::into)
+    }
+
+    /// Return one bounded controller-only Root admission progress page.
+    pub fn root_admission_status(
+        request: canic_core::dto::page::PageRequest,
+    ) -> Result<
+        canic_core::dto::fleet_admission::FleetAdmissionRootStatusResponse,
+        canic_core::dto::error::Error,
+    > {
+        crate::workflow::root_admission::status(request).map_err(Into::into)
+    }
+
     /// Suspend the exact Root control-plane owners before core authority sealing.
     pub async fn prepare_authority_snapshot(
         request: canic_core::dto::authority_restore::AuthoritySnapshotRequest,
@@ -829,9 +876,11 @@ impl LifecycleApi {
     pub async fn resume_fleet_activation(
         request: FleetActivationResumeRequest,
     ) -> Result<FleetActivationTransition, canic_core::dto::error::Error> {
-        crate::workflow::runtime::fleet_activation::resume_root(request)
-            .await
-            .map_err(Into::into)
+        Box::pin(crate::workflow::runtime::fleet_activation::resume_root(
+            request,
+        ))
+        .await
+        .map_err(Into::into)
     }
 
     /// Delegate root post-upgrade runtime restore to the current core implementation.

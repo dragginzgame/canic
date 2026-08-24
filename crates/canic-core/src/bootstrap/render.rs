@@ -21,7 +21,7 @@ use crate::{
             MetricsCanisterConfig, MetricsProfile, RoleAttestationConfig, RoleDeclaration,
             RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig,
             ShardPool, ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig,
-            TopupPolicy, Whitelist,
+            TopupPolicy,
         },
     },
     ids::{
@@ -87,11 +87,13 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
 fn render_role_declaration(declaration: &RoleDeclaration) -> TokenStream {
     let kind = render_role_declaration_kind(declaration.kind);
     let package = render_owned_string(&declaration.package);
+    let fleet_admission = declaration.fleet_admission;
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::RoleDeclaration {
             kind: #kind,
             package: #package,
+            fleet_admission: #fleet_admission,
         }
     }
 }
@@ -475,24 +477,6 @@ where
     quote!(vec![#(#rendered),*])
 }
 
-// Render a BTreeSet with a caller-provided element renderer.
-fn render_btree_set<'a, T: 'a, I, F>(items: I, render: F) -> TokenStream
-where
-    I: IntoIterator<Item = &'a T>,
-    F: Fn(&T) -> TokenStream,
-{
-    let rendered = items.into_iter().map(render).collect::<Vec<_>>();
-    if rendered.is_empty() {
-        return quote!(::std::collections::BTreeSet::new());
-    }
-
-    quote!({
-        let mut set = ::std::collections::BTreeSet::new();
-        #( set.insert(#rendered); )*
-        set
-    })
-}
-
 // Render a BTreeMap with caller-provided key and value renderers.
 fn render_btree_map<'a, K: 'a, V: 'a, I, FK, FV>(
     items: I,
@@ -678,13 +662,11 @@ fn render_role_attestation_config(config: &RoleAttestationConfig) -> TokenStream
 fn render_app_config(config: &AppConfig) -> TokenStream {
     let name = render_app_id(&config.name);
     let init_mode = render_fleet_init_mode(config.init_mode);
-    let whitelist = render_option(config.whitelist.as_ref(), render_whitelist);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::AppConfig {
             name: #name,
             init_mode: #init_mode,
-            whitelist: #whitelist,
         }
     }
 }
@@ -706,19 +688,6 @@ fn render_fleet_init_mode(mode: FleetInitMode) -> TokenStream {
         }
         FleetInitMode::Disabled => {
             quote!(::canic::__internal::core::bootstrap::compiled::FleetInitMode::Disabled)
-        }
-    }
-}
-
-// Render the principal whitelist.
-fn render_whitelist(whitelist: &Whitelist) -> TokenStream {
-    let principals = render_btree_set(whitelist.principals.iter(), |principal| {
-        render_owned_string(principal)
-    });
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::Whitelist {
-            principals: #principals,
         }
     }
 }

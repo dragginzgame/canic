@@ -4,12 +4,17 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use candid::Principal;
 use canic_core::{
     cdk::types::Cycles,
     ids::{
-        CanonicalNetworkId, CyclesFundingBudget, FleetCoordinatorRootFundingPolicy,
+        CanonicalNetworkId, CyclesFundingBudget, FleetAdmissionPolicy,
+        FleetAdmissionPolicyTemplate, FleetBinding, FleetCoordinatorRootFundingPolicy,
         FleetFundingProfile, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
         SubnetId,
+    },
+    shared_support::fleet_admission_policy::{
+        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
     },
 };
 
@@ -44,6 +49,16 @@ pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority 
         },
         icp_refill: None,
     }
+}
+
+pub fn fleet_admission_policy_template() -> FleetAdmissionPolicyTemplate {
+    compile_fleet_admission_policy_template(vec![Principal::from_slice(&[1; 29])], Vec::new())
+        .expect("test Fleet admission policy template")
+}
+
+pub fn fleet_admission_policy(fleet: FleetBinding) -> FleetAdmissionPolicy {
+    bind_initial_fleet_admission_policy(fleet, &fleet_admission_policy_template())
+        .expect("test Fleet admission policy")
 }
 
 pub fn placement_cost(subnet: SubnetId) -> PlannedSubnetPlacementCostEvidence {

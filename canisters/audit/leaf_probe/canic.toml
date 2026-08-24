@@ -11,8 +11,6 @@ package = "../root_probe"
 kind = "canister"
 package = "."
 
-[app.whitelist]
-
 [auth.delegated_tokens]
 enabled = false
 

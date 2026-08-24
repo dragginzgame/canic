@@ -17,7 +17,7 @@ use crate::{
     dto::component_deployment::ProtectedComponentDeployment,
     ids::{CanisterRole, ComponentBinding, ComponentSpecId},
     model::cycles_funding::FundingLimits,
-    ops::{prelude::*, runtime::env::EnvOps},
+    ops::runtime::env::EnvOps,
     storage::stable::state::fleet::FleetMode,
 };
 use std::sync::Arc;
@@ -143,6 +143,20 @@ impl ConfigOps {
             })
     }
 
+    /// Resolve the explicit role-owned Fleet admission enrollment declaration.
+    pub fn role_uses_fleet_admission(canister_role: &CanisterRole) -> Result<bool, InternalError> {
+        let config = Config::get()?;
+        config
+            .role_uses_fleet_admission(canister_role)
+            .ok_or_else(|| {
+                ConfigOpsError::CanisterNotFound(
+                    canister_role.to_string(),
+                    "role declarations".to_string(),
+                )
+                .into()
+            })
+    }
+
     /// Resolve an implicit infrastructure role or a role structurally contained
     /// by exactly one Component Spec.
     pub fn try_get_canister_by_role(
@@ -187,20 +201,6 @@ impl ConfigOps {
         let cfg = Config::get()?;
 
         Ok(cfg)
-    }
-
-    /// Parse the validated compiled whitelist for one fresh runtime seed.
-    pub(crate) fn runtime_whitelist_seed() -> Result<Vec<Principal>, InternalError> {
-        Config::get()?.app.whitelist.as_ref().map_or_else(
-            || Ok(Vec::new()),
-            |whitelist| {
-                whitelist
-                    .principals
-                    .iter()
-                    .map(|principal| principal.parse().map_err(|_| InternalError::invariant()))
-                    .collect()
-            },
-        )
     }
 
     pub(crate) fn log_config() -> Result<LogConfig, InternalError> {

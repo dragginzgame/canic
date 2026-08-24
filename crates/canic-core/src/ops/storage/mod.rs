@@ -11,11 +11,11 @@ mod canister;
 pub mod children;
 pub mod cycles;
 pub mod fleet_activation;
+pub mod fleet_admission_projection;
 pub mod icp_refill;
 pub mod intent;
 pub mod placement;
 pub mod replay;
-pub mod runtime_whitelist;
 pub mod state;
 
 use crate::InternalError;

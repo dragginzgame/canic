@@ -5,7 +5,10 @@ fn composite_probe() -> Result<(), Error> {
     Ok(())
 }
 
-#[canic_update(requires(caller::is_whitelisted(), deployment::is_service_authority("database"),))]
+#[canic_update(requires(
+    caller::is_fleet_admitted(),
+    deployment::is_service_authority("database"),
+))]
 async fn service_authority_probe() -> Result<(), Error> {
     std::future::ready(()).await;
     Ok(())

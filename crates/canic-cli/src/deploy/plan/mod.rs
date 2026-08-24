@@ -246,6 +246,7 @@ where
         app: &options.app,
         fleet_name: &fleet_name,
         coordinator: &input.coordinator,
+        admission: &input.admission,
         fleet_subnet_roots: &input.fleet_subnet_roots,
         build_profile,
         release_build_id,

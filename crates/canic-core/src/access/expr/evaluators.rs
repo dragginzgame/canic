@@ -17,11 +17,11 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
         BuiltinPredicate::Fleet(FleetPredicate::AllowsUpdates) => "fleet_allows_updates",
         BuiltinPredicate::Fleet(FleetPredicate::IsQueryable) => "fleet_is_queryable",
         BuiltinPredicate::Caller(CallerPredicate::IsController) => "caller_is_controller",
+        BuiltinPredicate::Caller(CallerPredicate::IsFleetAdmitted) => "caller_is_fleet_admitted",
         BuiltinPredicate::Caller(CallerPredicate::IsParent) => "caller_is_parent",
         BuiltinPredicate::Caller(CallerPredicate::IsChild) => "caller_is_child",
         BuiltinPredicate::Caller(CallerPredicate::IsRoot) => "caller_is_root",
         BuiltinPredicate::Caller(CallerPredicate::IsSameCanister) => "caller_is_same_canister",
-        BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted) => "caller_is_whitelisted",
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetSubnetRoot) => {
             "self_is_fleet_subnet_root"
         }
@@ -61,6 +61,9 @@ pub(super) async fn evaluate(
         BuiltinPredicate::Caller(CallerPredicate::IsController) => {
             access::auth::is_controller(ctx.caller).await
         }
+        BuiltinPredicate::Caller(CallerPredicate::IsFleetAdmitted) => {
+            access::auth::is_fleet_admitted(ctx.caller).await
+        }
         BuiltinPredicate::Caller(CallerPredicate::IsParent) => {
             access::auth::is_parent(ctx.caller).await
         }
@@ -72,9 +75,6 @@ pub(super) async fn evaluate(
         }
         BuiltinPredicate::Caller(CallerPredicate::IsSameCanister) => {
             access::auth::is_same_canister(ctx.caller).await
-        }
-        BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted) => {
-            access::auth::is_whitelisted(ctx.caller).await
         }
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetSubnetRoot) => {
             access::env::is_fleet_subnet_root()

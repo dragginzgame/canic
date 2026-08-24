@@ -177,6 +177,9 @@ macro_rules! __canic_build_internal {
                 $crate::__internal::core::role_contract::RoleCapabilityKey::DelegatedTokenVerifier => {
                     println!("cargo:rustc-cfg=canic_capability_delegated_token_verifier");
                 }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::FleetAdmissionProjection => {
+                    println!("cargo:rustc-cfg=canic_capability_fleet_admission_projection");
+                }
                 $crate::__internal::core::role_contract::RoleCapabilityKey::FleetCoordinator => {
                     println!("cargo:rustc-cfg=canic_capability_fleet_coordinator");
                 }

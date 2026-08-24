@@ -181,7 +181,7 @@ fn access_expr_contains_identity_predicate(expr: &AccessExprAst) -> bool {
                     | BuiltinPredicate::CallerIsChild
                     | BuiltinPredicate::CallerIsRoot
                     | BuiltinPredicate::CallerIsSameCanister
-                    | BuiltinPredicate::CallerIsWhitelisted
+                    | BuiltinPredicate::CallerIsFleetAdmitted
                     | BuiltinPredicate::Authenticated { .. }
                     | BuiltinPredicate::AttestedLocalSubnet
                     | BuiltinPredicate::ServiceAuthority { .. }

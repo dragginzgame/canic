@@ -15,9 +15,6 @@ fn configured_app_name_rejects_missing_config_identity() {
         r#"
 [app]
 init_mode = "enabled"
-[app.whitelist]
-
-
 "#,
     )
     .expect_err("missing App name must reject");

@@ -14,12 +14,14 @@ pub mod cycles;
 pub mod cycles_funding;
 pub mod env;
 pub mod fleet_activation;
+pub mod fleet_admission;
+pub mod fleet_admission_projection;
+pub mod fleet_admission_root;
 pub mod fleet_funding;
 pub mod icp_refill;
 pub mod intent;
 pub mod log;
 pub mod placement;
-pub mod runtime_whitelist;
 
 use crate::InternalError;
 use thiserror::Error as ThisError;

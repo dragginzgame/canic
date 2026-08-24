@@ -195,6 +195,7 @@ fn active_registry(config: &ConfigModel) -> FleetRegistry {
         &authority.binding.fleet.app,
         authority.clone(),
         &topology,
+        crate::test::support::fleet_admission_policy(authority.binding.fleet.clone()),
     )
     .expect("genesis Registry");
     for root in [root_entry(&topology, 6, 7), root_entry(&topology, 8, 9)] {

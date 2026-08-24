@@ -110,6 +110,10 @@ fn report_status_errors_delegate_suppression_and_exit_codes() {
 #[test]
 fn command_family_help_returns_ok() {
     for args in [
+        &["admission", "--help"][..],
+        &["admission", "apply", "--help"],
+        &["admission", "plan", "--help"],
+        &["admission", "status", "--help"],
         &["backup", "--help"][..],
         &["backup", "create", "--help"],
         &["backup", "inspect", "--help"],

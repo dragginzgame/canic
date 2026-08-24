@@ -74,10 +74,6 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-[app.whitelist]
-
-
-
 [component_specs.user_hub]
 component_role = "user_hub"
 maximum_instances = 1

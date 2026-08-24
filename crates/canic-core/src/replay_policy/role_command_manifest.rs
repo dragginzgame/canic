@@ -28,6 +28,13 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         None,
     ),
     replay_protected(
+        "ActivateFleetAdmission",
+        "fleet_admission.activate_root.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
+    replay_protected(
         "ActivateFundingPolicyRotation",
         "fleet_funding_policy_rotation.activate_root.v1",
         CostClass::None,
@@ -77,6 +84,13 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    replay_protected(
+        "OpenFleetAdmission",
+        "fleet_admission.open_root.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
     response_idempotent(
         "PrepareAuthoritySnapshot",
         "authority_restore.prepare_snapshot.v1",
@@ -86,6 +100,13 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         "component_registry.prepare_root.v1",
     ),
     response_idempotent("PrepareFleetActivation", "fleet_activation.prepare.v1"),
+    replay_protected(
+        "PrepareFleetAdmission",
+        "fleet_admission.prepare_root.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
     replay_protected(
         "PrepareFundingPolicyRotation",
         "fleet_funding_policy_rotation.prepare_root.v1",
@@ -237,6 +258,13 @@ pub const COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &
         "fleet_registry.complete_root_deletion.v1",
     ),
     response_idempotent("JoinRoot", "fleet_registry.root_join.v1"),
+    replay_protected(
+        "MutateAdmission",
+        "fleet_admission.mutate.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
     response_idempotent(
         "PrepareAuthoritySnapshot",
         "authority_restore.prepare_snapshot.v1",
@@ -282,6 +310,13 @@ pub const COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &
 
 /// Canonical replay-policy rows for managed Canister command variants.
 pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
+    replay_protected(
+        "ActivateFleetAdmission",
+        "fleet_admission.activate_target.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
     response_idempotent("ApplicationSession", "auth.application_session.v1"),
     response_idempotent("ConfigureRuntime", "component_runtime.configure.v1"),
     intentionally_non_idempotent(
@@ -290,10 +325,24 @@ pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         "controller maintenance replaces issuer-local active proof metadata",
     ),
     replay_protected(
+        "OpenFleetAdmission",
+        "fleet_admission.open_target.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
+    replay_protected(
         "PrepareDelegatedToken",
         "auth.prepare_delegated_token.v1",
         CostClass::IssuerCanisterSignaturePrepare,
         Some(ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1),
+        None,
+    ),
+    replay_protected(
+        "PrepareFleetAdmission",
+        "fleet_admission.prepare_target.v1",
+        CostClass::None,
+        None,
         None,
     ),
     command_dispatch(
@@ -304,7 +353,6 @@ pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
-    response_idempotent("RuntimeWhitelist", "runtime_whitelist.mutate.v1"),
 ];
 
 /// Canonical replay-policy rows for Wasm Store command variants.

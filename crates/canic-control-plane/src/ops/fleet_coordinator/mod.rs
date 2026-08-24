@@ -17,6 +17,7 @@ use crate::{
         FleetCoordinatorInitArgs,
     },
     storage::stable::fleet_coordinator::{
+        FleetAdmissionPublicationActionRecord, FleetAdmissionPublicationRecord,
         FleetComponentDirectoryConfirmationIntentRecord, FleetComponentDirectoryConfirmationRecord,
         FleetComponentGroupDeploymentRecord, FleetComponentProvisioningRecord,
         FleetComponentProvisioningRootAcceptanceIntentRecord,
@@ -72,6 +73,7 @@ use canic_core::{
             FleetComponentActivationRootProgress, FleetComponentProvisioningAdvanceRequest,
             FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
             FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
+            FleetComponentProvisioningRetryStage, FleetComponentProvisioningRootFailure,
             FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
             FleetComponentProvisioningStatusResponse, FleetComponentPublicationRootProgress,
             FleetComponentSynchronizationRootProgress, FleetSubnetRootProvisioningBatch,
@@ -95,13 +97,20 @@ use canic_core::{
     },
     ids::{
         ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
-        ComponentTopologyDigest, FleetRegistryAuthority, FleetSubnetRootReleaseSet,
-        MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
+        ComponentTopologyDigest, FleetAdmissionPolicy, FleetRegistryAuthority,
+        FleetSubnetRootReleaseSet, MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
     },
     shared_support::fleet_funding_policy::{
         fleet_funding_policy_rotation_successor_policy_set_hash,
         validate_coordinator_root_funding_policy, validate_fleet_root_funding_admission,
         validate_fleet_root_funding_capacity,
+    },
+    shared_support::{
+        fleet_admission_authority::{
+            FleetAdmissionMutationActionModel, FleetAdmissionMutationRequestModel,
+            MAX_FLEET_ADMISSION_PUBLICATIONS, mutate_fleet_admission_membership,
+        },
+        fleet_admission_policy::compile_installed_fleet_admission_policy,
     },
 };
 use sha2::{Digest, Sha256};
@@ -118,6 +127,30 @@ const COMPONENT_SCALE_OUT_RECEIPT_HASH_DOMAIN: &[u8] =
 pub struct FleetCoordinatorOps;
 
 impl FleetCoordinatorOps {
+    /// Return whether another Coordinator operation domain retains this exact identity.
+    pub(crate) fn retains_operation_id(operation_id: [u8; 32]) -> Result<bool, InternalError> {
+        if operation_id == [0; 32] {
+            return Ok(false);
+        }
+        if Self::current()?
+            .admission_publications
+            .iter()
+            .any(|publication| publication.operation_id == operation_id)
+        {
+            return Ok(true);
+        }
+        match Self::operation_status(operation_id) {
+            Ok(_) => Ok(true),
+            Err(error)
+                if error.public_error().code()
+                    == canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code() =>
+            {
+                Ok(false)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Authorize a controller or exact Root participating in one durable operation.
     pub(crate) fn authorize_operation_caller(
         operation_id: [u8; 32],
@@ -241,20 +274,24 @@ impl FleetCoordinatorOps {
                 .map_err(|_error| InternalError::invalid_input())?;
         }
         let component_topology = &args.component_deployment_configuration.component_topology;
+        let initial_admission_policy = args.admission.clone();
         let registry = FleetRegistryOps::compile_genesis(
             &args.configured_app,
             args.authority.clone(),
             component_topology,
+            args.admission,
         )?;
         Ok(FleetCoordinatorRegistryRecord {
             configured_app: args.configured_app,
             authority: args.authority,
             component_deployment_configuration: args.component_deployment_configuration,
             root_funding: args.root_funding,
+            initial_admission_policy,
             registry,
             root_join_receipts: Vec::new(),
             root_snapshot_acknowledgements: Vec::new(),
             registry_activation_receipt: None,
+            admission_publications: Vec::new(),
             component_provisioning: None,
             component_group_deployments: Vec::new(),
             component_scale_out_receipts: Vec::new(),
@@ -278,6 +315,98 @@ impl FleetCoordinatorOps {
 
     pub(crate) fn registry() -> Result<FleetRegistry, InternalError> {
         Ok(Self::current()?.registry)
+    }
+
+    /// Reject a new admission transition while another participant/Registry owner is active.
+    pub(crate) fn require_admission_transition_start_allowed() -> Result<(), InternalError> {
+        let current = Self::current()?;
+        let component_operation_active = [
+            current.component_provisioning.as_ref(),
+            current.component_scale_out.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(component_provisioning_status_response)
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .any(|status| status.phase != FleetComponentProvisioningPhase::RuntimesActivated);
+        let root_removal_active = current
+            .root_draining_reservations
+            .iter()
+            .any(|reservation| {
+                current.registry.fleet_subnet_roots.iter().any(|root| {
+                    root.fleet_subnet_root
+                        == reservation.response.request.expected_root.fleet_subnet_root
+                        && root.status == FleetSubnetRootStatus::Active
+                })
+            });
+        let funding_rotation_active =
+            crate::storage::stable::fleet_coordinator::FleetCoordinatorFundingStore::export()
+                .current
+                .is_some_and(|funding| funding.rotation_current.is_some());
+        let admission_history_full =
+            admission_publication_history_full(current.admission_publications.len());
+        if component_operation_active
+            || root_removal_active
+            || funding_rotation_active
+            || admission_history_full
+        {
+            Err(InternalError::conflict())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Publish one exact successor admission generation in the canonical Registry.
+    pub(crate) fn publish_admission_policy(
+        request: FleetAdmissionMutationRequestModel,
+        successor: FleetAdmissionPolicy,
+    ) -> Result<FleetRegistry, InternalError> {
+        let current = Self::current()?;
+        let retained = current
+            .admission_publications
+            .iter()
+            .find(|retained| retained.operation_id == request.operation_id);
+        let receipt = match retained {
+            Some(retained)
+                if admission_publication_matches_request(retained, &request, &successor) =>
+            {
+                retained.clone()
+            }
+            Some(_) => return Err(InternalError::conflict()),
+            None => {
+                if admission_publication_history_full(current.admission_publications.len()) {
+                    return Err(InternalError::resource_exhausted());
+                }
+                let receipt = admission_publication_receipt(&current, &request, &successor)?;
+                let mut next = current.clone();
+                next.admission_publications.push(receipt.clone());
+                let next = Self::validate_current(next)?;
+                Self::commit_transition(&current, next)?;
+                receipt
+            }
+        };
+
+        let current = Self::current()?;
+        let current_version = FleetRegistryOps::version(
+            &current.authority,
+            &current
+                .component_deployment_configuration
+                .component_topology,
+            &current.registry,
+        )?;
+        if current_version == receipt.version && current.registry.admission == successor {
+            return Ok(current.registry);
+        }
+        if current_version != receipt.previous_version {
+            return Err(InternalError::conflict());
+        }
+        let mut next = current.clone();
+        next.registry = registry_after_admission_publication(&current, &receipt)?;
+        let next = Self::validate_current(next)?;
+        let registry = next.registry.clone();
+        Self::commit_transition(&current, next)?;
+        Ok(registry)
     }
 
     pub(crate) fn join_root(
@@ -535,6 +664,7 @@ impl FleetCoordinatorOps {
             plan_hash,
             plan: request.plan,
             state: FleetComponentProvisioningStateRecord::Planned { planned_at_ns },
+            last_root_failure: None,
         };
         let mut next = current.clone();
         next.component_provisioning = Some(record.clone());
@@ -611,6 +741,7 @@ impl FleetCoordinatorOps {
             plan_hash,
             plan: request.plan,
             state: FleetComponentProvisioningStateRecord::Planned { planned_at_ns },
+            last_root_failure: None,
         };
         let mut next = current.clone();
         if let Some(receipt) = terminal_receipt {
@@ -639,6 +770,48 @@ impl FleetCoordinatorOps {
             return Err(InternalError::conflict());
         }
         component_scale_out_receipt_response(receipt)
+    }
+
+    pub(crate) fn record_component_provisioning_root_failure(
+        request: FleetComponentProvisioningStatusRequest,
+        diagnostic_code: u16,
+        failed_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        if diagnostic_code == 0 || failed_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        let current = Self::current()?;
+        let record = active_provisioning_record_for_status(&current, &request)?
+            .ok_or_else(InternalError::unavailable)?;
+        let Some(authority) = current_component_provisioning_retry_authority(&record.state) else {
+            return component_provisioning_status_response(record);
+        };
+        if failed_at_ns < authority.started_at_ns
+            || record
+                .last_root_failure
+                .is_some_and(|failure| failed_at_ns < failure.failed_at_ns)
+        {
+            return Err(InternalError::invalid_input());
+        }
+        let failure = FleetComponentProvisioningRootFailure {
+            fleet_subnet_root: authority.fleet_subnet_root,
+            stage: authority.stage,
+            diagnostic_code,
+            failed_at_ns,
+        };
+        if record.last_root_failure == Some(failure) {
+            return component_provisioning_status_response(record);
+        }
+        let mut next = current.clone();
+        let next_record =
+            component_provisioning_operation_record_mut(&mut next, request.operation_id)?;
+        next_record.last_root_failure = Some(failure);
+        let next = Self::validate_current(next)?;
+        let response = component_provisioning_status_response(
+            component_provisioning_operation_record(&next, request.operation_id)?,
+        )?;
+        Self::commit_transition(&current, next)?;
+        Ok(response)
     }
 
     pub(crate) fn advance_component_provisioning_root_acceptance(
@@ -1729,6 +1902,21 @@ impl FleetCoordinatorOps {
         if current.registry.fleet_subnet_roots.len() > MAX_FLEET_ROOT_FUNDING_SLOTS {
             return Err(InternalError::invariant());
         }
+        if current.admission_publications.len() > MAX_FLEET_ADMISSION_PUBLICATIONS
+            || current
+                .admission_publications
+                .windows(2)
+                .any(|pair| pair[0].version.revision >= pair[1].version.revision)
+        {
+            return Err(InternalError::invariant());
+        }
+        let mut admission_operation_ids = BTreeSet::new();
+        if current.admission_publications.iter().any(|publication| {
+            publication.operation_id == [0; 32]
+                || !admission_operation_ids.insert(publication.operation_id)
+        }) {
+            return Err(InternalError::invariant());
+        }
         match current.root_funding.as_ref() {
             Some(policy) => {
                 validate_coordinator_root_funding_policy(policy)
@@ -1844,6 +2032,7 @@ fn validate_component_provisioning_record(
             "Fleet Component provisioning plan hash differs from canonical bytes",
         ));
     }
+    validate_component_provisioning_root_failure(record)?;
     validate_component_provisioning_root_acceptance_state(record)?;
     validate_component_provisioning_root_provision_state(
         &current.component_deployment_configuration,
@@ -1854,6 +2043,34 @@ fn validate_component_provisioning_record(
     validate_component_directory_confirmation_state(current, record)?;
     validate_component_runtime_activation_state(record)?;
     component_provisioning_plan_counts(&record.plan)?;
+    Ok(())
+}
+
+fn validate_component_provisioning_root_failure(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<(), InternalError> {
+    let Some(failure) = record.last_root_failure else {
+        return Ok(());
+    };
+    let root_is_bound = match failure.stage {
+        FleetComponentProvisioningRetryStage::RootAcceptance
+        | FleetComponentProvisioningRetryStage::RootProvisioning => record
+            .plan
+            .batches
+            .iter()
+            .any(|batch| batch.root.fleet_subnet_root == failure.fleet_subnet_root),
+        FleetComponentProvisioningRetryStage::DirectoryConfirmation
+        | FleetComponentProvisioningRetryStage::RuntimeActivation => record
+            .plan
+            .directory_confirmation_roots
+            .contains(&failure.fleet_subnet_root),
+    };
+    let planned_at_ns = component_provisioning_root_acceptance_progress(record)?.planned_at_ns;
+    if failure.diagnostic_code == 0 || failure.failed_at_ns < planned_at_ns || !root_is_bound {
+        return Err(receipt_invariant(
+            "Fleet Component provisioning retry failure is outside its bounded Root authority",
+        ));
+    }
     Ok(())
 }
 
@@ -2909,6 +3126,7 @@ fn component_provisioning_status_response(
             .as_ref()
             .and_then(|progress| progress.in_flight)
             .map(|intent| intent.fleet_subnet_root),
+        pending_root_failure: pending_component_provisioning_root_failure(record),
         group_placement_count: counts.group_placements,
         component_count: counts.components,
         planned_at_ns: acceptance.planned_at_ns,
@@ -3045,6 +3263,7 @@ fn component_scale_out_receipt_response(
         runtime_activated_root_count: receipt.root_batch_count,
         current_activation: None,
         activation_in_flight_root: None,
+        pending_root_failure: None,
         group_placement_count,
         component_count: receipt.component_count,
         planned_at_ns: receipt.planned_at_ns,
@@ -4993,6 +5212,85 @@ const fn confirmation_intent_root(
             ..
         } => *fleet_subnet_root,
     }
+}
+
+const fn confirmation_intent_started_at_ns(
+    intent: &FleetComponentDirectoryConfirmationIntentRecord,
+) -> u64 {
+    match intent {
+        FleetComponentDirectoryConfirmationIntentRecord::FreshPublication {
+            started_at_ns, ..
+        }
+        | FleetComponentDirectoryConfirmationIntentRecord::ScaleOutSynchronization {
+            started_at_ns,
+            ..
+        }
+        | FleetComponentDirectoryConfirmationIntentRecord::ScaleOutPublication {
+            started_at_ns,
+            ..
+        } => *started_at_ns,
+    }
+}
+
+#[derive(Clone, Copy)]
+struct FleetComponentProvisioningRetryAuthority {
+    fleet_subnet_root: Principal,
+    stage: FleetComponentProvisioningRetryStage,
+    started_at_ns: u64,
+}
+
+fn current_component_provisioning_retry_authority(
+    state: &FleetComponentProvisioningStateRecord,
+) -> Option<FleetComponentProvisioningRetryAuthority> {
+    match state {
+        FleetComponentProvisioningStateRecord::AcceptingRoots {
+            in_flight: Some(intent),
+            ..
+        } => Some(FleetComponentProvisioningRetryAuthority {
+            fleet_subnet_root: intent.fleet_subnet_root,
+            stage: FleetComponentProvisioningRetryStage::RootAcceptance,
+            started_at_ns: intent.started_at_ns,
+        }),
+        FleetComponentProvisioningStateRecord::ProvisioningRoots {
+            in_flight: Some(intent),
+            ..
+        } => Some(FleetComponentProvisioningRetryAuthority {
+            fleet_subnet_root: intent.fleet_subnet_root,
+            stage: FleetComponentProvisioningRetryStage::RootProvisioning,
+            started_at_ns: intent.started_at_ns,
+        }),
+        FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+            in_flight: Some(intent),
+            ..
+        } => Some(FleetComponentProvisioningRetryAuthority {
+            fleet_subnet_root: confirmation_intent_root(intent),
+            stage: FleetComponentProvisioningRetryStage::DirectoryConfirmation,
+            started_at_ns: confirmation_intent_started_at_ns(intent),
+        }),
+        FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+            in_flight: Some(intent),
+            ..
+        } => Some(FleetComponentProvisioningRetryAuthority {
+            fleet_subnet_root: intent.fleet_subnet_root,
+            stage: FleetComponentProvisioningRetryStage::RuntimeActivation,
+            started_at_ns: intent.started_at_ns,
+        }),
+        _ => None,
+    }
+}
+
+fn pending_component_provisioning_root_failure(
+    record: &FleetComponentProvisioningRecord,
+) -> Option<FleetComponentProvisioningRootFailure> {
+    let failure = record.last_root_failure?;
+    let current = current_component_provisioning_retry_authority(&record.state)?;
+    let same_root = failure.fleet_subnet_root == current.fleet_subnet_root;
+    let same_stage = failure.stage == current.stage;
+    let follows_current_intent = failure.failed_at_ns >= current.started_at_ns;
+    let matches_current_retry = [same_root, same_stage, follows_current_intent]
+        .into_iter()
+        .all(std::convert::identity);
+    matches_current_retry.then_some(failure)
 }
 
 const fn confirmation_call_publication_request(
@@ -7083,6 +7381,168 @@ fn validate_registry_lifecycle_history(
     Ok(())
 }
 
+fn admission_publication_receipt(
+    current: &FleetCoordinatorRegistryRecord,
+    request: &FleetAdmissionMutationRequestModel,
+    successor: &FleetAdmissionPolicy,
+) -> Result<FleetAdmissionPublicationRecord, InternalError> {
+    if request.operation_id == [0; 32]
+        || request.authority != current.authority.binding
+        || request.expected_generation != current.registry.admission.generation
+        || request.expected_policy_digest != current.registry.admission.policy_digest
+        || request.successor_policy_digest != successor.policy_digest
+        || successor.fleet != current.authority.binding.fleet
+    {
+        return Err(InternalError::conflict());
+    }
+    let previous_version = FleetRegistryOps::version(
+        &current.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        &current.registry,
+    )?;
+    let mut receipt = FleetAdmissionPublicationRecord {
+        operation_id: request.operation_id,
+        action: admission_publication_action(request.action),
+        selector: request.selector.clone(),
+        principal: request.principal,
+        expected_generation: request.expected_generation,
+        expected_policy_digest: request.expected_policy_digest,
+        successor_generation: successor.generation,
+        successor_policy_digest: successor.policy_digest,
+        previous_version,
+        version: FleetRegistryVersion {
+            authority: current.authority.clone(),
+            revision: 0,
+            content_hash: [0; 32],
+        },
+    };
+    let next = apply_admission_publication_to_registry(current, &current.registry, &receipt)?;
+    receipt.version = FleetRegistryOps::version(
+        &current.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        &next,
+    )?;
+    Ok(receipt)
+}
+
+fn admission_publication_matches_request(
+    receipt: &FleetAdmissionPublicationRecord,
+    request: &FleetAdmissionMutationRequestModel,
+    successor: &FleetAdmissionPolicy,
+) -> bool {
+    receipt.operation_id == request.operation_id
+        && receipt.action == admission_publication_action(request.action)
+        && receipt.selector == request.selector
+        && receipt.principal == request.principal
+        && receipt.expected_generation == request.expected_generation
+        && receipt.expected_policy_digest == request.expected_policy_digest
+        && receipt.successor_generation == successor.generation
+        && receipt.successor_policy_digest == successor.policy_digest
+        && successor.fleet == request.authority.fleet
+}
+
+const fn admission_publication_action(
+    action: FleetAdmissionMutationActionModel,
+) -> FleetAdmissionPublicationActionRecord {
+    match action {
+        FleetAdmissionMutationActionModel::Add => FleetAdmissionPublicationActionRecord::Add,
+        FleetAdmissionMutationActionModel::Remove => FleetAdmissionPublicationActionRecord::Remove,
+    }
+}
+
+const fn admission_publication_action_model(
+    action: FleetAdmissionPublicationActionRecord,
+) -> FleetAdmissionMutationActionModel {
+    match action {
+        FleetAdmissionPublicationActionRecord::Add => FleetAdmissionMutationActionModel::Add,
+        FleetAdmissionPublicationActionRecord::Remove => FleetAdmissionMutationActionModel::Remove,
+    }
+}
+
+fn apply_admission_publication_to_registry(
+    current: &FleetCoordinatorRegistryRecord,
+    source: &FleetRegistry,
+    receipt: &FleetAdmissionPublicationRecord,
+) -> Result<FleetRegistry, InternalError> {
+    let previous_version = FleetRegistryOps::version(
+        &current.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        source,
+    )?;
+    if receipt.operation_id == [0; 32]
+        || receipt.previous_version != previous_version
+        || receipt.expected_generation != source.admission.generation
+        || receipt.expected_policy_digest != source.admission.policy_digest
+        || receipt.successor_generation
+            != receipt
+                .expected_generation
+                .checked_add(1)
+                .ok_or_else(InternalError::invariant)?
+    {
+        return Err(receipt_invariant(
+            "Fleet admission publication source differs from canonical history",
+        ));
+    }
+    let membership = mutate_fleet_admission_membership(
+        &source.admission,
+        admission_publication_action_model(receipt.action),
+        &receipt.selector,
+        receipt.principal,
+    )
+    .map_err(|_error| receipt_invariant("Fleet admission publication mutation is invalid"))?;
+    if !membership.changed {
+        return Err(receipt_invariant(
+            "Fleet admission publication retained a no-op mutation",
+        ));
+    }
+    let successor = compile_installed_fleet_admission_policy(
+        source.admission.fleet.clone(),
+        receipt.successor_generation,
+        membership.fleet_principals,
+        membership.rules,
+    )
+    .map_err(|_error| receipt_invariant("Fleet admission successor cannot be recompiled"))?;
+    if successor.policy_digest != receipt.successor_policy_digest {
+        return Err(receipt_invariant(
+            "Fleet admission successor digest differs from canonical mutation",
+        ));
+    }
+    let mut next = source.clone();
+    next.admission = successor;
+    next.revision = next
+        .revision
+        .checked_add(1)
+        .ok_or_else(InternalError::invariant)?;
+    if receipt.version.revision != 0 {
+        let version = FleetRegistryOps::version(
+            &current.authority,
+            &current
+                .component_deployment_configuration
+                .component_topology,
+            &next,
+        )?;
+        if version != receipt.version {
+            return Err(receipt_invariant(
+                "Fleet admission publication target differs from canonical mutation",
+            ));
+        }
+    }
+    Ok(next)
+}
+
+fn registry_after_admission_publication(
+    current: &FleetCoordinatorRegistryRecord,
+    receipt: &FleetAdmissionPublicationRecord,
+) -> Result<FleetRegistry, InternalError> {
+    apply_admission_publication_to_registry(current, &current.registry, receipt)
+}
+
 #[derive(Clone)]
 struct FleetRegistryHistoryPoint {
     registry: FleetRegistry,
@@ -7122,58 +7582,124 @@ fn canonical_registry_lifecycle_history(
         .as_ref()
         .map_or(&[][..], |funding| funding.rotation_history.as_slice());
     let mut checkpoint_index = 0_usize;
+    let mut admission_index = 0_usize;
     apply_service_publication_receipts(
         current,
         checkpoints,
         &mut checkpoint_index,
+        &mut admission_index,
         &mut historical_registry,
         &mut history,
     )?;
     for lifecycle in canonical_lifecycle_receipts(current)? {
-        apply_funding_policy_rotation_checkpoints_through(
+        apply_registry_policy_publications_through(
             current,
             checkpoints,
             &mut checkpoint_index,
+            &mut admission_index,
             lifecycle.previous_revision(),
             &mut historical_registry,
             &mut history,
         )?;
         apply_lifecycle_receipt(current, lifecycle, &mut historical_registry, &mut history)?;
     }
-    apply_funding_policy_rotation_checkpoints_through(
+    apply_registry_policy_publications_through(
         current,
         checkpoints,
         &mut checkpoint_index,
-        u64::MAX,
+        &mut admission_index,
+        current.registry.revision,
         &mut historical_registry,
         &mut history,
     )?;
     append_funding_policy_rotation_head(current, &mut historical_registry, &mut history)?;
+    validate_pending_admission_publication(current, admission_index, &historical_registry)?;
     Ok(history)
 }
 
-fn apply_funding_policy_rotation_checkpoints_through(
+fn apply_registry_policy_publications_through(
     current: &FleetCoordinatorRegistryRecord,
     checkpoints: &[crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationCheckpointRecord],
     checkpoint_index: &mut usize,
+    admission_index: &mut usize,
     target_revision: u64,
     historical_registry: &mut FleetRegistry,
     history: &mut Vec<FleetRegistryHistoryPoint>,
 ) -> Result<(), InternalError> {
-    while let Some(checkpoint) = checkpoints.get(*checkpoint_index) {
-        if checkpoint.receipt.successor_registry.revision > target_revision {
+    loop {
+        let funding_revision = checkpoints
+            .get(*checkpoint_index)
+            .map(|checkpoint| checkpoint.receipt.successor_registry.revision);
+        let admission_revision = current
+            .admission_publications
+            .get(*admission_index)
+            .map(|publication| publication.version.revision);
+        let next_revision = match (funding_revision, admission_revision) {
+            (Some(funding), Some(admission)) if funding == admission => {
+                return Err(receipt_invariant(
+                    "Registry policy publications reuse one revision",
+                ));
+            }
+            (Some(funding), Some(admission)) => funding.min(admission),
+            (Some(funding), None) => funding,
+            (None, Some(admission)) => admission,
+            (None, None) => break,
+        };
+        if next_revision > target_revision {
             break;
         }
-        apply_funding_policy_rotation_checkpoint(
-            current,
-            checkpoint,
-            historical_registry,
-            history,
-        )?;
-        *checkpoint_index = checkpoint_index
-            .checked_add(1)
-            .ok_or_else(InternalError::invariant)?;
+        if funding_revision == Some(next_revision) {
+            let checkpoint = checkpoints
+                .get(*checkpoint_index)
+                .ok_or_else(InternalError::invariant)?;
+            apply_funding_policy_rotation_checkpoint(
+                current,
+                checkpoint,
+                historical_registry,
+                history,
+            )?;
+            *checkpoint_index = checkpoint_index
+                .checked_add(1)
+                .ok_or_else(InternalError::invariant)?;
+        } else {
+            let publication = current
+                .admission_publications
+                .get(*admission_index)
+                .ok_or_else(InternalError::invariant)?;
+            let next =
+                apply_admission_publication_to_registry(current, historical_registry, publication)?;
+            let version = publication.version.clone();
+            *historical_registry = next.clone();
+            history.push(FleetRegistryHistoryPoint {
+                registry: next,
+                version,
+            });
+            *admission_index = admission_index
+                .checked_add(1)
+                .ok_or_else(InternalError::invariant)?;
+        }
     }
+    Ok(())
+}
+
+fn validate_pending_admission_publication(
+    current: &FleetCoordinatorRegistryRecord,
+    admission_index: usize,
+    historical_registry: &FleetRegistry,
+) -> Result<(), InternalError> {
+    let remaining = current
+        .admission_publications
+        .get(admission_index..)
+        .ok_or_else(InternalError::invariant)?;
+    if remaining.is_empty() {
+        return Ok(());
+    }
+    if remaining.len() != 1 || historical_registry != &current.registry {
+        return Err(receipt_invariant(
+            "Fleet admission publication history has non-canonical pending entries",
+        ));
+    }
+    apply_admission_publication_to_registry(current, historical_registry, &remaining[0])?;
     Ok(())
 }
 
@@ -7454,14 +7980,16 @@ fn apply_service_publication_receipts(
     current: &FleetCoordinatorRegistryRecord,
     checkpoints: &[crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationCheckpointRecord],
     checkpoint_index: &mut usize,
+    admission_index: &mut usize,
     historical_registry: &mut FleetRegistry,
     history: &mut Vec<FleetRegistryHistoryPoint>,
 ) -> Result<(), InternalError> {
     for receipt in &current.service_publication_receipts {
-        apply_funding_policy_rotation_checkpoints_through(
+        apply_registry_policy_publications_through(
             current,
             checkpoints,
             checkpoint_index,
+            admission_index,
             receipt.previous_version.revision,
             historical_registry,
             history,
@@ -7839,6 +8367,7 @@ fn historical_joining_registry(
         &current
             .component_deployment_configuration
             .component_topology,
+        current.initial_admission_policy.clone(),
     )
     .map_err(|_| receipt_invariant("Fleet Registry join receipt genesis is not canonical"))?;
     for receipt in &current.root_join_receipts {
@@ -8296,4 +8825,26 @@ fn validate_root_draining_reservations(
 
 const fn receipt_invariant(_message: &'static str) -> InternalError {
     InternalError::invariant()
+}
+
+const fn admission_publication_history_full(publication_count: usize) -> bool {
+    publication_count >= MAX_FLEET_ADMISSION_PUBLICATIONS
+}
+
+#[cfg(test)]
+mod admission_capacity_tests {
+    use super::*;
+
+    #[test]
+    fn admission_publication_limit_rejects_identity_4097_before_publication() {
+        assert!(!admission_publication_history_full(
+            MAX_FLEET_ADMISSION_PUBLICATIONS - 1
+        ));
+        assert!(admission_publication_history_full(
+            MAX_FLEET_ADMISSION_PUBLICATIONS
+        ));
+        assert!(admission_publication_history_full(
+            MAX_FLEET_ADMISSION_PUBLICATIONS + 1
+        ));
+    }
 }

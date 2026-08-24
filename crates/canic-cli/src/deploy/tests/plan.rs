@@ -28,10 +28,6 @@ package = "root"
 [roles.user_hub]
 kind = "canister"
 package = "user_hub"
-[app.whitelist]
-
-
-
 [component_specs.user_hub]
 component_role = "user_hub"
 maximum_instances = 1
@@ -82,6 +78,9 @@ name = "demo"
 const SAMPLE_FLEET_INPUT: &str = r#"schema_version = 1
 funding_profile = "single_subnet"
 operator = "ryjl3-tyaaa-aaaaa-aaaba-cai"
+
+[admission]
+principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai"]
 
 [coordinator.subnet]
 kind = "explicit"
@@ -157,10 +156,6 @@ package = "user_hub"
 [roles.user_shard]
 kind = "canister"
 package = "user_shard"
-[app.whitelist]
-
-
-
 [component_specs.user_hub]
 component_role = "user_hub"
 maximum_instances = 1
@@ -1213,6 +1208,8 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("kind: not_required"));
     assert!(text.contains("canonical fresh-Fleet decision"));
     assert!(text.contains("plan_digest: "));
+    assert!(text.contains("admission: generation=1 template_digest="));
+    assert!(text.contains("fleet_principals=1 narrower_rules=0 narrower_principal_references=0"));
     assert!(text.contains("operator_principal: ryjl3-tyaaa-aaaaa-aaaba-cai"));
     assert!(text.contains("maximum_operator_debit: 140000300000000 cycles"));
     assert!(text.contains(
@@ -1222,7 +1219,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
         "canister_counts: coordinator=1 root=1 store=1 component=0 ready_pool=1 role=3 total=4"
     ));
     assert!(text.contains(
-        "root: subnet=pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae component=0 initial_pool=1 pool_creations=1 ready_pool=1 admissions=1"
+        "root: subnet=pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae component=0 initial_pool=1 pool_creations=1 ready_pool=1 admissions=1 admission_projections=1"
     ));
     assert!(text.contains(
         "funding: category=coordinator_creation owner=Fleet Coordinator payer=operator count=1 per_canister=100000000000000 cycles maximum=100000000000000 cycles"

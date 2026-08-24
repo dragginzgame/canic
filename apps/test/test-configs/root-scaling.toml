@@ -15,8 +15,6 @@ package = "../scale_hub"
 kind = "canister"
 package = "../scale"
 
-[app.whitelist]
-
 [auth.delegated_tokens]
 enabled = true
 build_network = "local"

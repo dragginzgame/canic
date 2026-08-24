@@ -138,11 +138,11 @@ pub enum FleetPredicate {
 #[derive(Clone, Debug)]
 pub enum CallerPredicate {
     IsController,
+    IsFleetAdmitted,
     IsParent,
     IsChild,
     IsRoot,
     IsSameCanister,
-    IsWhitelisted,
 }
 
 ///
@@ -252,8 +252,8 @@ pub mod caller {
     }
 
     #[must_use]
-    pub const fn is_whitelisted() -> AccessExpr {
-        builtin(BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted))
+    pub const fn is_fleet_admitted() -> AccessExpr {
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsFleetAdmitted))
     }
 }
 

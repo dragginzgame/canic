@@ -1,15 +1,11 @@
 //! Module: config::validation::app
 //!
-//! Responsibility: validate App identity, mode and whitelist configuration.
+//! Responsibility: validate App identity and mode configuration.
 //! Does not own: app runtime state, access checks, or schema definitions.
 //! Boundary: config validation calls this before runtime installation.
 
-use crate::{
-    cdk::candid::Principal,
-    config::schema::{
-        AppConfig, AppNameIssue, ConfigSchemaError, Validate, Whitelist, validate_app_name,
-    },
-    model::runtime_whitelist::MAX_RUNTIME_WHITELIST_PRINCIPALS,
+use crate::config::schema::{
+    AppConfig, AppNameIssue, ConfigSchemaError, Validate, validate_app_name,
 };
 
 impl Validate for AppConfig {
@@ -27,28 +23,6 @@ impl Validate for AppConfig {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "invalid App name {name:?}; {guidance}"
             )));
-        }
-        if let Some(list) = &self.whitelist {
-            list.validate()?;
-        }
-        Ok(())
-    }
-}
-
-impl Validate for Whitelist {
-    fn validate(&self) -> Result<(), ConfigSchemaError> {
-        if self.principals.len() > MAX_RUNTIME_WHITELIST_PRINCIPALS {
-            return Err(ConfigSchemaError::ValidationError(format!(
-                "App whitelist contains {} principals; maximum is {MAX_RUNTIME_WHITELIST_PRINCIPALS}",
-                self.principals.len()
-            )));
-        }
-        for (i, s) in self.principals.iter().enumerate() {
-            if Principal::from_text(s).is_err() {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "principal #{i} {s} is invalid"
-                )));
-            }
         }
         Ok(())
     }

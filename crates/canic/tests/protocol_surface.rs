@@ -36,6 +36,10 @@ use canic::{
     dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
     dto::error::Error as CanicError,
     dto::fleet_activation::FleetActivationStatusResponse,
+    dto::fleet_admission::{
+        FleetAdmissionPreparedProjectionStatus, FleetAdmissionProjectionPhase,
+        FleetAdmissionProjectionStatusResponse,
+    },
     dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest},
     dto::icrc21::{
         ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
@@ -48,12 +52,12 @@ use canic::{
         CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
         RuntimeFieldVisibility,
     },
-    dto::runtime_whitelist::{
-        RuntimeWhitelistCommand, RuntimeWhitelistMutationOutcome, RuntimeWhitelistMutationRequest,
-        RuntimeWhitelistMutationResponse, RuntimeWhitelistStatusResponse,
-    },
     dto::state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
-    ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
+    ids::{
+        CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId, ComponentSpecId,
+        FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
+        ManagedCanisterBinding, SubnetId,
+    },
 };
 
 fn test_fleet() -> FleetKey {
@@ -63,7 +67,7 @@ fn test_fleet() -> FleetKey {
     }
 }
 
-fn maximum_runtime_whitelist_principal(index: usize) -> Principal {
+fn maximum_admission_principal(index: usize) -> Principal {
     let mut bytes = [0_u8; 29];
     bytes[..8].copy_from_slice(
         &u64::try_from(index)
@@ -72,6 +76,32 @@ fn maximum_runtime_whitelist_principal(index: usize) -> Principal {
     );
     bytes[8..].fill(u8::try_from(index % 251).expect("bounded fixture byte"));
     Principal::from_slice(&bytes)
+}
+
+fn admission_target() -> ManagedCanisterBinding {
+    let fleet = FleetBinding {
+        fleet: test_fleet(),
+        app: canic_core::ids::AppId::from("test"),
+    };
+    let placement_subnet = SubnetId::from_principal(Principal::from_slice(&[2; 29]));
+    ManagedCanisterBinding::Component(ComponentBinding {
+        authority: FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet,
+                coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[3; 29])),
+                coordinator: Principal::from_slice(&[4; 29]),
+            },
+            epoch: 1,
+        },
+        component: ComponentInstanceId::from_generated_bytes([5; 32]),
+        component_spec: ComponentSpecId::try_from(String::from("default"))
+            .expect("default Component Spec"),
+        spec_hash: [6; 32],
+        role: CanisterRole::from("app"),
+        placement_subnet,
+        fleet_subnet_root: Principal::from_slice(&[7; 29]),
+        canister_id: Principal::from_slice(&[8; 29]),
+    })
 }
 
 // Returns the repository root so wire-surface fixtures can be read from disk.
@@ -175,77 +205,89 @@ fn fleet_state_and_internal_cascade_candid_shapes_use_the_current_contract() {
 }
 
 #[test]
-fn runtime_whitelist_candid_uses_the_bounded_managed_role_contract() {
+fn fleet_admission_projection_candid_uses_the_bounded_managed_role_contract() {
     let principal = Principal::from_slice(&[0x31; 29]);
-    let request = RuntimeWhitelistMutationRequest {
-        principal,
-        expected_revision: 7,
-        operation_id: [0x41; 32],
+    let target = admission_target();
+    let authority = match &target {
+        ManagedCanisterBinding::Component(binding) => binding.authority.binding.clone(),
+        ManagedCanisterBinding::ComponentChild(_) => unreachable!(),
     };
-    assert_candid_roundtrip(RuntimeWhitelistCommand::Add(request.clone()));
-    assert_candid_roundtrip(RuntimeWhitelistCommand::Remove(request));
-    assert_candid_roundtrip(RuntimeWhitelistMutationResponse {
-        outcome: RuntimeWhitelistMutationOutcome::AlreadyPresent,
-        principal,
-        revision: 7,
-        membership_digest: [0x51; 32],
-    });
-    let status_value = RuntimeWhitelistStatusResponse {
+    let status_value = FleetAdmissionProjectionStatusResponse {
+        authority,
+        target,
+        generation: 7,
+        policy_digest: [0x41; 32],
+        projection_digest: [0x51; 32],
+        phase: FleetAdmissionProjectionPhase::Fenced,
+        prepared: Some(FleetAdmissionPreparedProjectionStatus {
+            generation: 8,
+            policy_digest: [0x61; 32],
+            projection_digest: [0x71; 32],
+        }),
         principals: Page {
             entries: vec![principal],
             total: 1,
         },
-        revision: 7,
-        membership_digest: [0x51; 32],
-        maximum_principals: 256,
+        maximum_page_size: 128,
     };
-    let status_bytes = encode_one(&status_value).expect("encode runtime-whitelist status");
-    let decoded = decode_one::<RuntimeWhitelistStatusResponse>(&status_bytes)
-        .expect("decode runtime-whitelist status");
+    let status_bytes = encode_one(&status_value).expect("encode Fleet-admission status");
+    let decoded = decode_one::<FleetAdmissionProjectionStatusResponse>(&status_bytes)
+        .expect("decode Fleet-admission status");
     assert_eq!(decoded.principals.entries, status_value.principals.entries);
     assert_eq!(decoded.principals.total, status_value.principals.total);
-    assert_eq!(decoded.revision, status_value.revision);
-    assert_eq!(decoded.membership_digest, status_value.membership_digest);
-    assert_eq!(decoded.maximum_principals, status_value.maximum_principals);
+    assert_eq!(decoded.generation, status_value.generation);
+    assert_eq!(decoded.policy_digest, status_value.policy_digest);
+    assert_eq!(decoded.projection_digest, status_value.projection_digest);
+    assert_eq!(decoded.phase, status_value.phase);
+    assert_eq!(decoded.prepared, status_value.prepared);
+    assert_eq!(decoded.maximum_page_size, status_value.maximum_page_size);
 
-    let command = candid_type_env::<RuntimeWhitelistCommand>();
+    let status = candid_type_env::<FleetAdmissionProjectionStatusResponse>();
     for field in [
-        "Add",
-        "Remove",
-        "expected_revision",
-        "operation_id",
-        "principal",
+        "authority",
+        "target",
+        "generation",
+        "policy_digest",
+        "projection_digest",
+        "phase",
+        "prepared",
+        "principals",
+        "maximum_page_size",
     ] {
         assert!(
-            command.contains(field),
-            "runtime-whitelist command omits {field}:\n{command}"
+            status.contains(field),
+            "projection status omits {field}:\n{status}"
         );
     }
-    let status = candid_type_env::<RuntimeWhitelistStatusResponse>();
-    assert!(status.contains("principals") && status.contains("maximum_principals"));
     assert!(!status.contains("operation_id") && !status.contains("request_hash"));
 
     let maximum_principals = (0..256)
-        .map(maximum_runtime_whitelist_principal)
+        .map(maximum_admission_principal)
         .collect::<Vec<_>>();
-    let maximum_status = encode_one(RuntimeWhitelistStatusResponse {
+    let target = admission_target();
+    let authority = match &target {
+        ManagedCanisterBinding::Component(binding) => binding.authority.binding.clone(),
+        ManagedCanisterBinding::ComponentChild(_) => unreachable!(),
+    };
+    let maximum_status = encode_one(FleetAdmissionProjectionStatusResponse {
+        authority,
+        target,
+        generation: u64::MAX,
+        policy_digest: [0xfb; 32],
+        projection_digest: [0xfc; 32],
+        phase: FleetAdmissionProjectionPhase::Open,
+        prepared: None,
         principals: Page {
             entries: maximum_principals[..128].to_vec(),
             total: 256,
         },
-        revision: u64::MAX,
-        membership_digest: [0xfb; 32],
-        maximum_principals: 256,
+        maximum_page_size: 128,
     })
-    .expect("maximum runtime-whitelist status Candid");
-    let maximum_request = encode_one(RuntimeWhitelistMutationRequest {
-        principal: maximum_principals[255],
-        expected_revision: u64::MAX,
-        operation_id: [0xfa; 32],
-    })
-    .expect("maximum runtime-whitelist request Candid");
-    assert_eq!(maximum_status.len(), 4_072);
-    assert_eq!(maximum_request.len(), 101);
+    .expect("maximum Fleet-admission status Candid");
+    assert!(maximum_status.len() < 16 * 1_024);
+
+    let role_capability = candid_type_env::<canic::dto::role::RoleCapability>();
+    assert!(role_capability.contains("FleetAdmissionProjection"));
 }
 
 #[test]
@@ -426,6 +468,13 @@ fn local_application_authorization_facade_has_one_public_owner() {
 }
 
 #[test]
+fn composed_framework_fleet_admission_facade_is_typed_and_synchronous() {
+    let facade: fn() -> Result<Principal, canic::access::AccessError> =
+        canic::fleet_admission::require_caller;
+    let _ = facade;
+}
+
+#[test]
 fn application_session_audit_is_bounded_protected_and_secret_free() {
     let audit_env = candid_type_env::<canic::dto::auth::ApplicationSessionAuditResponse>();
     for required in [
@@ -517,6 +566,14 @@ fn wasm_store_exposes_cycle_history_only_through_status() {
 fn role_capability_surfaces_are_pruned_at_the_destination_macro() {
     let root = workspace_root();
     let role_surface = read_text(&root.join("crates/canic/src/macros/endpoints/role.rs"));
+    assert!(
+        role_surface.contains("#[cfg(canic_capability_fleet_admission_projection)]")
+            && role_surface.contains("RoleCapabilityKey::FleetAdmissionProjection")
+            && role_surface.contains("CanisterStatusRequest::Admission")
+            && role_surface.contains("CanisterStatusResponse::Admission"),
+        "managed admission status and role-manifest capability must share the compiled projection owner"
+    );
+
     assert!(
         role_surface.contains("#[cfg(canic_capability_automatic_topup)]")
             && role_surface.contains("CanisterStatusRequest::CycleTopups")
@@ -747,10 +804,20 @@ fn fleet_coordinator_canonical_did_parses() {
 }
 
 #[test]
-fn fleet_coordinator_candid_contains_protected_policy_and_funding_protocol_types() {
+fn fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_types() {
     let did =
         read_text(&workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did"));
     for declaration in [
+        "type FleetAdmissionMutationAction = variant {",
+        "type FleetAdmissionMutationRequest = record {",
+        "type FleetAdmissionMutationResponse = record {",
+        "CatalogChanged;",
+        "type FleetAdmissionOperationStatusResponse = record {",
+        "Releasing : record { successor : FleetAdmissionPolicyStatus };",
+        "type FleetAdmissionPolicyStatus = record {",
+        "type FleetAdmissionStatusRequest = record {",
+        "type FleetAdmissionStatusResponse = record {",
+        "FleetAdmissionProjection;",
         "root_funding : opt FleetCoordinatorRootFundingPolicy;",
         "type FleetCoordinatorRootFundingPolicy = record {",
         "type FleetFundingProfile = variant {",
@@ -763,6 +830,8 @@ fn fleet_coordinator_candid_contains_protected_policy_and_funding_protocol_types
         "type FleetFundingPolicyRotationStageRootRequest = record {",
         "type FleetFundingPolicyRotationStatusResponse = record {",
         "type FleetFundingPolicyUsage = record {",
+        "type FleetComponentProvisioningRetryStage = variant {",
+        "type FleetComponentProvisioningRootFailure = record {",
         "type FleetSubnetRootFundingAuthority = record {",
         "type FleetSubnetRootFundingPolicy = record {",
         "type FleetSubnetRootIcpRefillPolicy = record {",
@@ -780,6 +849,9 @@ fn fleet_coordinator_candid_contains_protected_policy_and_funding_protocol_types
         "rotation_checkpoint_count : nat32;",
         "rotation_checkpoint_root_count : nat32;",
         "rotation_checkpoint_root_capacity_remaining : nat32;",
+        "participant_catalog_digest : blob;",
+        "participant_count : nat32;",
+        "pending_root_failure : opt FleetComponentProvisioningRootFailure;",
     ] {
         assert!(
             did.contains(declaration),
@@ -791,6 +863,10 @@ fn fleet_coordinator_candid_contains_protected_policy_and_funding_protocol_types
             .count(),
         2,
         "only the protected root binding and Registry entry should carry root funding authority"
+    );
+    assert!(
+        !did.contains("participant_catalogs : vec"),
+        "Coordinator mutation request must retain only the bounded aggregate participant authority"
     );
 }
 
@@ -811,6 +887,7 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
         "BeginFundingPolicyRotation",
         "CompleteRootDeletion",
         "JoinRoot",
+        "MutateAdmission",
         "PrepareAuthoritySnapshot",
         "PrepareRootDeletionExecution",
         "ProvisionComponents",
@@ -827,7 +904,7 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
     }
     assert_eq!(
         request.lines().filter(|line| line.contains(';')).count(),
-        14,
+        15,
         "CoordinatorCommand acquired an unreviewed variant:\n{request}"
     );
 }
@@ -843,6 +920,7 @@ fn fleet_coordinator_status_surface_is_profile_exact() {
         .expect("canonical Coordinator DID must declare CoordinatorStatusRequest");
 
     for variant in [
+        "Admission",
         "AuthorityRestore",
         "Funding",
         // Candid is structural: the extractor deduplicates the identical
@@ -861,7 +939,7 @@ fn fleet_coordinator_status_surface_is_profile_exact() {
     }
     assert_eq!(
         request.lines().filter(|line| line.contains(';')).count(),
-        8,
+        9,
         "CoordinatorStatusRequest acquired an unreviewed variant:\n{request}"
     );
     assert!(
@@ -1030,6 +1108,7 @@ fn assert_coordinator_ingress_is_command_status_only() {
         "ApplyFundingPolicyRotation(",
         "BeginFundingPolicyRotation(",
         "JoinRoot(",
+        "MutateAdmission(",
         "ProvisionComponents(",
         "RemoveRoot(",
         "RequestRootFunding(",
@@ -1049,6 +1128,7 @@ fn assert_coordinator_ingress_is_command_status_only() {
         "Coordinator ingress must decode the selected command before accepting its exact bound"
     );
     for variant in [
+        "Admission(FleetAdmissionStatusRequest)",
         "Operation(OperationStatusRequest)",
         "Overview",
         "Registry",

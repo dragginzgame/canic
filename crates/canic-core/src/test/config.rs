@@ -75,6 +75,7 @@ impl ConfigTestBuilder {
             RoleDeclaration {
                 kind: declaration_kind,
                 package: role.as_ref().to_string(),
+                fleet_admission: false,
             },
         );
 
@@ -141,6 +142,22 @@ impl ConfigTestBuilder {
                 },
             );
 
+        self
+    }
+
+    /// Enroll one previously declared role in Fleet admission convergence.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the role was not declared by an earlier builder step.
+    #[must_use]
+    pub fn with_fleet_admission(mut self, role: impl Into<CanisterRole>) -> Self {
+        let role = role.into();
+        self.model
+            .roles
+            .get_mut(&role)
+            .expect("Fleet admission test role must be declared first")
+            .fleet_admission = true;
         self
     }
 

@@ -23,6 +23,7 @@ use crate::role_contract::allocation::memory::{
         CYCLES_TRACKER_ID,
     },
     fleet::{FLEET_ACTIVATION_ID, FLEET_STATE_ID},
+    fleet_admission_projection::FLEET_ADMISSION_PROJECTION_ID,
     intent::{
         INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID,
         INTENT_RECEIPT_BACKED_RECORDS_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
@@ -34,7 +35,6 @@ use crate::role_contract::allocation::memory::{
     },
     replay::REPLAY_RECEIPTS_ID,
     runtime::{RUNTIME_BINDINGS_ID, RUNTIME_CANISTER_CHILDREN_ID},
-    runtime_whitelist::RUNTIME_WHITELIST_ID,
     sharding::{SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
 };
 use crate::role_contract::{AllocationOwner, StateAllocationKey};
@@ -260,8 +260,8 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::CoreRuntimeWhitelist,
-            runtime_whitelist_domains(),
+            StateAllocationKey::CoreFleetAdmissionProjection,
+            fleet_admission_projection_domains(),
             Vec::new(),
         ),
     ]
@@ -529,16 +529,18 @@ fn async_job_recovery_domains() -> Vec<StateDomainManifest> {
     )]
 }
 
-fn runtime_whitelist_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::stable::runtime_whitelist::{RuntimeWhitelistData, RuntimeWhitelistRecord};
+fn fleet_admission_projection_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::fleet_admission_projection::{
+        FleetAdmissionProjectionData, FleetAdmissionProjectionRecord,
+    };
 
     vec![state_domain(
-        "runtime_whitelist",
-        RUNTIME_WHITELIST_ID,
-        RuntimeWhitelistRecord::STATE_CONTRACT_NAME,
-        RuntimeWhitelistData::STATE_CONTRACT_NAME,
+        "fleet_admission_projection",
+        FLEET_ADMISSION_PROJECTION_ID,
+        FleetAdmissionProjectionRecord::STATE_CONTRACT_NAME,
+        FleetAdmissionProjectionData::STATE_CONTRACT_NAME,
         59,
-        "runtime_whitelist_restores_canonical_membership_without_reseeding",
+        "fleet_admission_projection_restores_exact_target_authority_without_reseeding",
     )]
 }
 
@@ -827,7 +829,9 @@ mod tests {
     fn runtime_bindings_and_fleet_state_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             env::{EnvData, EnvRecord},
-            runtime_whitelist::{RuntimeWhitelistData, RuntimeWhitelistRecord},
+            fleet_admission_projection::{
+                FleetAdmissionProjectionData, FleetAdmissionProjectionRecord,
+            },
             state::fleet::{FleetStateData, FleetStateRecord},
         };
 
@@ -846,10 +850,10 @@ mod tests {
                 FleetStateData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::CoreRuntimeWhitelist,
-                "runtime_whitelist",
-                RuntimeWhitelistRecord::STATE_CONTRACT_NAME,
-                RuntimeWhitelistData::STATE_CONTRACT_NAME,
+                StateAllocationKey::CoreFleetAdmissionProjection,
+                "fleet_admission_projection",
+                FleetAdmissionProjectionRecord::STATE_CONTRACT_NAME,
+                FleetAdmissionProjectionData::STATE_CONTRACT_NAME,
             ),
         ] {
             let descriptor = descriptors

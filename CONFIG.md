@@ -63,6 +63,13 @@ Component topology is present.
   use `root`.
 - `package: string` – non-empty path to the role package, relative to this
   `canic.toml`.
+- `fleet_admission: bool` – optional, default `false`. `true` enrolls every
+  managed instance of this non-Root role in the Fleet admission participant
+  set and gives it the local projection plus protected admission surfaces.
+  Root declarations reject this field when true. Omission is fail-closed:
+  that role receives no admission projection or admission surface. Enrollment
+  does not itself protect application endpoints; each endpoint still selects
+  its intended access policy explicitly.
 
 Role declarations own package identity. The matching
 `component_specs.<name>` or
@@ -77,13 +84,10 @@ Required source identity and initial application mode.
   evidence.
 - `init_mode = "enabled" | "readonly" | "disabled"` – default `enabled`.
 
-### `[app.whitelist]`
-
-Optional allow-list for privileged operations.
-
-- `principals = ["aaaaa-aa", ...]` – principal text strings authorised for whitelist checks.
-  - If `[app.whitelist]` or `principals` is omitted, whitelist checks deny all
-    principals. An empty table is also deny-all.
+Fleet user-ingress admission is not App source configuration. Declare its
+generation-one Principal set and optional narrowing rules in the protected
+Fleet installation input under `[admission]`; one App checkout may therefore
+install different policies into different Fleets without rebuilding Wasm.
 
 ### `[log]`
 
@@ -398,6 +402,7 @@ package = "root"
 [roles.app]
 kind = "canister"
 package = "app"
+fleet_admission = true
 
 [roles.user_hub]
 kind = "canister"

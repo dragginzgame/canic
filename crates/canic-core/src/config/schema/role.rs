@@ -97,6 +97,10 @@ pub struct RoleDeclaration {
 
     /// Package path relative to the declaring canic.toml.
     pub package: String,
+
+    /// Enroll every managed instance of this role in Fleet admission convergence.
+    #[serde(default)]
+    pub fleet_admission: bool,
 }
 
 ///

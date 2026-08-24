@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 
 ## Purpose
 
@@ -36,7 +36,8 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 ## Current Progress
 
 The 0.108.0 policy-only checkpoint contains M0/M1 plus the urgent fresh-Fleet
-corrections. Tagged 0.108.1 completes B3-B9/M2-M8: exact registered-Root
+corrections. Tagged 0.108.1 contains the complete B3-B9/M2-M8 implementation:
+exact registered-Root
 admission, full Registry-authority-bound operation identity, fixed and
 non-renewing budget/reserve accounting, durable two-sided journals,
 accept-once/zero-accept replay, recovery-first Coordinator funding, protected
@@ -87,7 +88,7 @@ at 2,229,804 kB RSS and 97 threads. The six-test native-agent target passed in
 68.51 seconds after compilation and peaked at 2,519,036 kB and 162 threads.
 Serial capacity remains one: these measurements justify the retained process
 and cache changes, but one local observation does not prove parallel stability.
-The final tagged source at
+The final 0.108.1 implementation source at
 `075560dc1ff87d872dc40d22fa7b3e48f3113260` passed the complete
 `make validate` gate, including all 22 governed internal PocketIC cases. A fresh
 human closeout audit found no runtime P0 or P1 defect but initially rejected
@@ -95,8 +96,10 @@ line closeout because active evidence still described an unpublished draft and
 one older policy paragraph contradicted CANIC-019. The forward documentation
 correction resolves both findings and the complete gate passes on the corrected
 source. On 2026-08-23 the maintainer explicitly accepted the corrected 0.108
-closeout, authorized the 0.108.2 release and directed continuation into 0.109
-after publication.
+closeout. Published `v0.108.2` at
+`dafc455339df92acb304072d3ec2b98c4069747d` records that accepted closeout and
+the maintainer-owned validation/version/publication result. The maintainer then
+explicitly promoted 0.109 B1.
 
 The 2026-08-22 0.108 design amendments are implemented through B9. Protected
 input materializes topology-matched single-Subnet, bounded preview multi-
@@ -113,7 +116,8 @@ before plan and paid install effects. Corrected policy/hash/plan authority
 flows through Registry, stable accounting and generated interfaces before the
 sole Root timer runs.
 
-The Toko operator-config follow-up is also included in tagged 0.108.1.
+The Toko operator-config follow-up is also included in the published 0.108
+line.
 Fleet input now carries only one top-level operator Principal; planning and
 installation verify the active ICP identity, derive its relevant ledger
 account and query its live cycles balance. Volatile balance/source/time
@@ -157,8 +161,8 @@ recovers across the temporary successor-protected/predecessor-mirror split,
 and successor budgets preflight retained fixed-window spend. The corrected
 32 MiB Coordinator cell covers the measured 25,315,095-byte worst fragmented
 history. Focused unit, stable-capacity, generated-surface and real PocketIC
-exhausted-to-successor evidence passes; the complete maintainer validation gate
-and human closeout audit remain pending for the final immutable candidate.
+exhausted-to-successor evidence passes. The complete maintainer validation gate
+and corrected human closeout audit passed before `v0.108.2` publication.
 
 The compact diagnostic and role-owned Candid lines are published. Their
 read-only closeout audit confirmed the compact wire, typed runtime, host-only
@@ -490,13 +494,97 @@ adds explicit same-release funding-policy generation rotation with one durable
 Coordinator fence, bounded retained checkpoints and unchanged application
 state; it is also included in tagged 0.108.1.
 
-Scheduled 0.109 hard-cuts the independent per-canister whitelist into one
+The complete 0.109 candidate hard-cuts the independent per-canister whitelist into one
 Coordinator-owned Fleet admission policy with complete local enforcement
-projections. Fleet, Component-spec, Component-instance, Fleet Subnet Root and
-explicit standalone-consumer scopes narrow authority; physical Subnet
-membership never grants it. The framework-neutral standalone-consumer
-contract lets Toko's IcyDB App enforce the same policy without making it a
-Canic-managed Component or assuming authorization inheritance.
+projections. Fleet, Component-spec, Component-instance and Fleet Subnet Root
+scopes narrow authority; physical Subnet membership never grants it. B1's
+read-only downstream trace corrected the accepted premise: Toko's IcyDB App is
+already a normal Canic-managed Component. B7's fresh recheck records that Toko
+has since hard-removed Core; the singleton App now owns browser login and five
+caller-owned IcyDB/Robot endpoints. The maintained framework seam is
+therefore one synchronous caller adapter over the same managed local projection,
+not a standalone-consumer storage or lifecycle protocol. The maintainer accepted
+B1's exact authority, selectors, public names and bounds on 2026-08-23. B2 now
+compiles strict generation-one admission input through canonical hashes,
+immutable per-Root effective projection summaries, exact Fleet binding,
+Registry genesis and Coordinator installation authority. It hard-cuts the
+fresh `[app.whitelist]` seed. B3 adds the
+sole Coordinator-owned mutation/replay authority at memory ID 64. Exact
+controller requests bind installed Coordinator/Fleet authority, predecessor
+generation/digest, action, selector, Principal, operation identity and
+successor digest. Idempotent requests terminate without renewing generation;
+effective requests retain one exact successor for B6's durable transition. B4
+replaces the
+retained runtime-whitelist implementation with one target-bound managed
+projection at memory ID 61. `[roles.<role>] fleet_admission = true` is the sole
+enrollment declaration. The Root derives a projection from its exact active
+Registry mirror only for enrolled Component/child init payloads; the target retains it fenced,
+opens only after existing activation, evaluates `caller::is_fleet_admitted()`
+locally and validates the same generation/digests on restart. A named role
+capability, protected bounded status, generated managed/Root/Coordinator
+surfaces and a two-Root PocketIC journey prove the maintained boundary. B5's
+`canic::fleet_admission::require_caller()` facade now reads the observed caller
+and that same local projection synchronously. The generic published-IcyDB
+fixture uses the actual `#[icydb::request_execution]` wrapper and proves
+public/direct ingress, typed denial before application work and parity with the
+Canic endpoint predicate. B6 now advances one compact plan-bound operation
+through Coordinator and Root prepare/fence/activate/open journals. Roots derive
+complete target projections from their protected Registry mirrors; the
+Coordinator accepts their aggregate participant catalog only when its digest
+and count exactly match the read-only CLI plan before Registry publication.
+Target unavailability and Coordinator restart resume the same operation;
+Component provisioning is fenced during convergence and a new Component opens
+only with the converged generation. One-Root and two-Root add/remove, every
+Coordinator phase restart, unavailable-target recovery and new-Component
+PocketIC journeys pass. B7 refreshes the current App-only Toko trace, adds the
+requested explicit role-level enrollment for composed-framework Components,
+documents fail-closed omitted and standalone-local behavior, removes active legacy
+whitelist residue, reconciles generated/public surfaces and corrects the one
+stale Root role-allocation expectation for memory ID 65. Its targeted document,
+layering, role-contract, replay-manifest, Candid, endpoint and CLI checks pass.
+Roots with zero enrolled targets remain exact catalog members and advance
+no-effect receipts through the same Root journal, so backend-only placement does
+not block convergence or acquire another owner. Final explicit-enrollment
+qualification proves an enrolled generated role retains the protected
+admission surface while an omitted managed role does not; the composed-IcyDB
+direct-ingress journey passes on fresh Wasm, and the real Root/Component
+add-remove journey converges on the corrected mirrored declaration.
+0.109 B1-B7 are functionally complete. B8 owns Canic release and downstream
+go-live support. Its in-repository corrections are ready with focused native
+and PocketIC evidence; the complete maintainer validation/version/publication
+flow and separately authorized downstream adoption still keep B8 open. B9
+complexity remediation then blocks minor closeout and 0.110.
+
+The 2026-08-24 post-implementation complexity audit rejects that functional
+candidate as the baseline for another distributed control-plane line. Its
+accepted findings cover 0.109 change radius, mature control-plane gravity
+wells, the oversized active handoff, validation-capacity growth, missing
+downstream operator proof and the unearned breadth of 0.110. The maintainer has
+ordered the work so B8 first corrects the known fresh-deployment blockers,
+publishes the matching 0.109 package pair, freezes the current Fleet-input/live-
+plan/App-only adoption contract and corrects every further Canic-owned blocker
+found by separately authorized Toko qualification. B9 owns
+the subsequent evidence-first simplification and immutable superseding verdict.
+Neither publication nor adoption alone closes that gate or authorizes 0.110.
+
+The first fresh Toko deployment on Canic 0.108.1 passed workspace check, Wasm
+build, zero-blocker planning and shell/diff checks, then exposed three inherited
+Canic blockers accepted into B8. The current 0.109 working candidate corrects
+all three. `CANIC-109-GOLIVE-001` now drives one bounded pass of the existing
+Root-owned pool journal after exact Root-batch validation; an IC-profile
+PocketIC journey starts with zero imports, performs one Cycles-Ledger creation
+request and provisions the Component. `CANIC-109-GOLIVE-002` accepts only the
+canonical revision-4 initial-service successor bound to the exact compiled
+fresh-install plan and protected Coordinator operation evidence; missing,
+premature, wrong-plan and later successors reject. `CANIC-109-GOLIVE-003`
+retains one typed Root/stage/code/time failure and projects it only while it
+matches the current durable retry. A complementary local-profile journey
+publishes revision 4 and reaches `RuntimesActivated`. The governed serial
+inventory now contains 30 exact cases, its five ordinary checks pass before
+PocketIC, and warning-denied Clippy passes for the changed packages. The
+complete maintainer validation gate was not run. The observed downstream
+operation remains at `ConfirmingDirectories` with its Root `Published` but not
+runtime-active; this repository has no authority to mutate or resume it.
 
 Scheduled 0.110 owns indexed estates, parallel creation/reset, transfer and
 the 10/100/1,000 proof. Opted-in stateful roles must produce an immutable,
@@ -560,14 +648,27 @@ accepted and B2 stays held pending its separately approved external run plan.
 0.107 B2-B7 implementation and the complete validation gate are finished from
 accepted 0.106 B1 without the held B2 external effects. Its AC12 correction
 re-audit passed and the maintainer accepted the final closeout verdict.
-0.108 has completed 0.107 and its accepted inputs; M0 is accepted, B2/M1
+0.108 completed 0.107 and its accepted inputs; M0 is accepted, B2/M1
 protected policy and the urgent fresh-Fleet corrections form the 0.108.0
 checkpoint. B3/M2 through B9/M8 are implementation-complete in tagged 0.108.1;
 the complete gate passed and the fresh closeout audit found no runtime blocker.
 Its two release-truth/protocol-documentation findings are corrected forward,
-and the maintainer accepted the corrected closeout on 2026-08-23. 0.109 requires
-completed 0.108 and
-explicit B1 promotion; 0.110 requires completed 0.109 plus the accepted,
+and the maintainer accepted the corrected closeout and published `v0.108.2` on
+2026-08-23. 0.109 B1's corrected managed-only authority/bounds evidence is
+accepted. B2 protected policy compilation and B3's sole Coordinator authority
+are implementation-complete with passing focused evidence. B4's managed
+projection hard cut is also complete with passing role, generated-surface,
+stable-state and two-Root PocketIC evidence. B5's synchronous composed-
+framework adapter and direct-ingress IcyDB request-execution proof also pass.
+B6's replay-safe one-Root/two-Root add/remove convergence, Coordinator phase
+restart, unavailable-target recovery and post-convergence Component creation
+proofs pass. B7's App-only Toko recheck, residue cleanup, generated-surface
+reconciliation and targeted security gates also pass. The maintainer accepted
+the binding post-implementation complexity audit on 2026-08-24 with a `fail`
+closeout verdict. B8 must first close the release and downstream-support gate;
+B9 must then fix every complexity finding and produce an accepted passing
+immutable superseding verdict before 0.109 minor closeout or 0.110 promotion.
+0.110 requires that completed 0.109 B8/B9 sequence plus the accepted,
 current 0.106 qualification; 0.111 requires completed 0.110 and an exact
 released predecessor; and 0.112 requires accepted 0.111 closeout. Deferred
 ideas authorize none of these mutations.
@@ -1010,12 +1111,21 @@ terminal-disposition authorization exists. In 0.107, B2-B7 implementation,
 the prior full validation gate and the exact AC12 re-audit/maintainer
 acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 0.108.0 checkpoint remains the downstream policy-only baseline. Tagged 0.108.1
-contains the B3-B9 closeout corrections, CANIC-019 policy-generation rotation,
-funding-domain/fee correction and Registry/offline profile scaffold. Complete
-the maintainer-owned 0.108.2 validation/version/publication workflow while
-preserving the existing tag, then begin the explicitly authorized 0.109 B1
-batch. Do not add a production pool contract or run any remote qualification
-effect.
+contains the B3-B9 runtime implementation, and published `v0.108.2` records the
+accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
+and its managed-only correction are accepted. B2-B7 are functionally ready.
+Continue B8 with the maintainer-owned complete validation/version/publication
+flow, then the Canic-owned Fleet-input/live-plan/App-only adoption support and
+separately authorized downstream qualification feedback. The three accepted
+go-live defects are already corrected in the working candidate. Only after B8
+closes, continue with B9
+under the binding post-implementation complexity audit: freeze the canonical
+evidence, simplify the accepted gravity wells and active authority, preserve
+bounded validation, retriage every 0.110 batch and issue an immutable
+superseding verdict. Do not begin 0.110 unless that verdict passes, the
+maintainer accepts it and then explicitly promotes the revised B1. Do not add a
+production pool contract or run any
+remote qualification effect.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

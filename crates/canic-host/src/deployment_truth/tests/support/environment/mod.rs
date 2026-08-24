@@ -17,10 +17,6 @@ package = "user_hub"
 [roles.user_shard]
 kind = "canister"
 package = "user_shard"
-[app.whitelist]
-
-
-
 [component_specs.user_hub]
 component_role = "user_hub"
 maximum_instances = 1

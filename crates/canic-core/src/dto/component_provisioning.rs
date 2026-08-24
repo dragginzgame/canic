@@ -117,6 +117,25 @@ pub enum FleetComponentProvisioningPhase {
     RuntimesActivated,
 }
 
+/// Exact Coordinator step whose current Root call most recently failed.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetComponentProvisioningRetryStage {
+    RootAcceptance,
+    RootProvisioning,
+    DirectoryConfirmation,
+    RuntimeActivation,
+}
+
+/// Bounded typed diagnostic retained for the Root call that remains retryable.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetComponentProvisioningRootFailure {
+    pub fleet_subnet_root: Principal,
+    pub stage: FleetComponentProvisioningRetryStage,
+    pub diagnostic_code: u16,
+    pub failed_at_ns: u64,
+}
+
 /// Compact exact status for one Coordinator-owned provisioning operation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -141,6 +160,7 @@ pub struct FleetComponentProvisioningStatusResponse {
     pub runtime_activated_root_count: u32,
     pub current_activation: Option<FleetComponentActivationRootProgress>,
     pub activation_in_flight_root: Option<Principal>,
+    pub pending_root_failure: Option<FleetComponentProvisioningRootFailure>,
     pub group_placement_count: u32,
     pub component_count: u32,
     pub planned_at_ns: u64,

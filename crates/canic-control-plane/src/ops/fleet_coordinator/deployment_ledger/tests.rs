@@ -382,6 +382,7 @@ fn fixture() -> (
             activations,
             runtimes_activated_at_ns: 6,
         },
+        last_root_failure: None,
     };
     (configuration, provisioning)
 }
@@ -404,8 +405,10 @@ fn authority() -> FleetRegistryAuthority {
 }
 
 fn registry() -> FleetRegistry {
+    let authority = authority();
     FleetRegistry {
-        authority: authority(),
+        admission: crate::test_support::fleet_admission_policy(authority.binding.fleet.clone()),
+        authority,
         revision: 1,
         component_specs: vec![],
         fleet_subnet_roots: vec![],

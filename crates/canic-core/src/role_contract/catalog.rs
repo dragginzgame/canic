@@ -223,8 +223,16 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
 
 const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     capability_allocation(
+        RoleCapabilityKey::FleetAdmissionProjection,
+        StateAllocationKey::CoreFleetAdmissionProjection,
+    ),
+    capability_allocation(
         RoleCapabilityKey::FleetCoordinator,
         StateAllocationKey::CoreAuthorityRestoreFence,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::FleetCoordinator,
+        StateAllocationKey::FleetCoordinatorAdmission,
     ),
     capability_allocation(
         RoleCapabilityKey::FleetCoordinator,
@@ -331,6 +339,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::RootControlPlane,
+        StateAllocationKey::RootAdmission,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::RootControlPlane,
         StateAllocationKey::RootFunding,
     ),
     capability_allocation(
@@ -406,6 +418,10 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     ),
     feature_allocation(
         CanicFeatureKey::FleetCoordinatorCanister,
+        StateAllocationKey::FleetCoordinatorAdmission,
+    ),
+    feature_allocation(
+        CanicFeatureKey::FleetCoordinatorCanister,
         StateAllocationKey::FleetCoordinatorFunding,
     ),
     feature_allocation(
@@ -450,6 +466,10 @@ const BUILT_IN_ALLOCATIONS: &[BuiltInAllocation] = &[
     built_in_allocation(
         BuiltInRoleKind::FleetCoordinator,
         StateAllocationKey::CoreAuthorityRestoreFence,
+    ),
+    built_in_allocation(
+        BuiltInRoleKind::FleetCoordinator,
+        StateAllocationKey::FleetCoordinatorAdmission,
     ),
     built_in_allocation(
         BuiltInRoleKind::FleetCoordinator,

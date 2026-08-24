@@ -42,11 +42,16 @@ release-batch plan and explicit maintainer acceptance.
    Cycles Ledger budget implicitly.
 7. [0.109 Fleet-wide ingress admission](0.109-fleet-wide-ingress-admission/status.md)
    replaces independent per-canister whitelists with one Coordinator-owned
-   policy, complete local enforcement projections and an explicit standalone-
-   consumer boundary.
+   policy, complete local enforcement projections and one synchronous managed
+   composed-framework caller boundary. Its release/adoption-support batch must
+   close before its binding
+   [post-implementation complexity audit](../audits/release-lines/0.109-post-implementation-complexity-audit.md)
+   enters remediation. That audit must then be superseded by an accepted
+   passing immutable verdict before any 0.110 implementation or promotion.
 8. [0.110 Fleet Subnet Canister estates](0.110-fleet-subnet-canister-estates/status.md)
    adds application retirement evidence before recycling, indexed reusable
-   estates, bounded parallel work, transfer and the 10/100/1,000 proof.
+   estates, bounded parallel work, transfer and the 10/100/1,000 proof only to
+   the extent retained by its required post-audit scope retriage.
 9. [0.111 stateful Fleet release adoption](0.111-stateful-fleet-release-adoption/status.md)
    qualifies one whole-Fleet stop-the-world predecessor-to-successor
    transition before stateful production claims.

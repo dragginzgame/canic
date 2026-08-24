@@ -166,10 +166,18 @@ pub async fn is_controller_or_root(caller: Principal) -> Result<(), AccessError>
     predicates::is_controller_or_root(caller).await
 }
 
-/// Require that the caller appears in the canonical runtime whitelist.
-/// Missing or unavailable stable authority fails closed.
-pub async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_whitelisted(caller).await
+/// Require that the caller appears in the exact open Fleet projection.
+/// Missing, invalid or fenced stable authority fails closed.
+#[expect(clippy::unused_async)]
+pub async fn is_fleet_admitted(caller: Principal) -> Result<(), AccessError> {
+    predicates::require_fleet_admission(caller).map(|_caller| ())
+}
+
+/// Return the observed transport caller only when the exact local Fleet projection admits it.
+/// Missing, invalid or fenced stable authority fails closed.
+pub fn require_fleet_admitted_caller() -> Result<Principal, AccessError> {
+    let caller = IcOps::msg_caller();
+    predicates::require_fleet_admission(caller)
 }
 
 /// Require that the caller is a direct child of the current canister.
@@ -333,6 +341,33 @@ mod tests {
             assert!(
                 !body.contains(forbidden),
                 "authorization facade contains forbidden operation {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn synchronous_fleet_admission_facade_owns_caller_acquisition_only() {
+        let source = include_str!("mod.rs");
+        let start = source
+            .find("pub fn require_fleet_admitted_caller(")
+            .expect("public Fleet-admission caller facade");
+        let end = source[start..]
+            .find("/// Require that the caller is a direct child")
+            .map_or(source.len(), |offset| start + offset);
+        let body = &source[start..end];
+
+        assert_eq!(body.matches("IcOps::msg_caller()").count(), 1);
+        assert_eq!(
+            body.matches("predicates::require_fleet_admission(caller)")
+                .count(),
+            1
+        );
+        for forbidden in [
+            ".await", "spawn(", "timer", "cleanup", "record_", "log!", "set_", "clear_",
+        ] {
+            assert!(
+                !body.contains(forbidden),
+                "Fleet-admission facade contains forbidden operation {forbidden}"
             );
         }
     }

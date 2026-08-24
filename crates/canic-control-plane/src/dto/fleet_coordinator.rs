@@ -14,6 +14,11 @@ use canic_core::{
         component_provisioning::{
             FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusResponse,
         },
+        fleet_admission::{
+            FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
+            FleetAdmissionOperationStatusResponse, FleetAdmissionStatusRequest,
+            FleetAdmissionStatusResponse,
+        },
         fleet_funding::{
             FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
             FleetFundingPolicyRotationReceipt, FleetFundingPolicyRotationStageRootRequest,
@@ -34,8 +39,8 @@ use canic_core::{
         state::{SetCyclesFundingRequest, SetStateResponse},
     },
     ids::{
-        AppId, FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetRegistryAuthority,
-        FleetSubnetRootFundingPolicy,
+        AppId, FleetAdmissionPolicy, FleetCoordinatorRootFundingPolicy, FleetFundingProfile,
+        FleetRegistryAuthority, FleetSubnetRootFundingPolicy,
     },
 };
 use serde::Deserialize;
@@ -50,6 +55,7 @@ use serde::Deserialize;
 pub struct FleetCoordinatorInitArgs {
     pub configured_app: AppId,
     pub authority: FleetRegistryAuthority,
+    pub admission: FleetAdmissionPolicy,
     pub component_deployment_configuration: ComponentDeploymentConfiguration,
     pub root_funding: Option<FleetCoordinatorRootFundingPolicy>,
 }
@@ -63,6 +69,7 @@ pub enum CoordinatorCommand {
     BeginFundingPolicyRotation(FleetFundingPolicyRotationBeginRequest),
     CompleteRootDeletion(FleetSubnetRootDeletionCompletionRequest),
     JoinRoot(FleetSubnetRootJoinRequest),
+    MutateAdmission(FleetAdmissionMutationRequest),
     PrepareAuthoritySnapshot(AuthoritySnapshotRequest),
     PrepareRootDeletionExecution(FleetSubnetRootDeletionExecutionRequest),
     ProvisionComponents(FleetComponentProvisioningPrepareRequest),
@@ -84,6 +91,7 @@ pub enum CoordinatorCommandResponse {
     ActivateRegistry(FleetRegistryActivationResponse),
     CompleteRootDeletion(FleetSubnetRootDeletionResponse),
     JoinRoot(FleetSubnetRootJoinResponse),
+    MutateAdmission(FleetAdmissionMutationResponse),
     OperationAccepted(OperationReceipt),
     PrepareAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
     PrepareRootDeletionExecution(FleetSubnetRootDeletionExecutionResponse),
@@ -93,8 +101,9 @@ pub enum CoordinatorCommandResponse {
 }
 
 /// Closed Coordinator observation selector carried by its single status query.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum CoordinatorStatusRequest {
+    Admission(FleetAdmissionStatusRequest),
     AuthorityRestore,
     Funding,
     Operation(OperationStatusRequest),
@@ -158,6 +167,7 @@ pub struct CoordinatorFundingStatusResponse {
     reason = "the accepted Candid union keeps each existing status DTO as its direct payload"
 )]
 pub enum CoordinatorOperationStatusResponse {
+    Admission(FleetAdmissionOperationStatusResponse),
     ComponentProvisioning(FleetComponentProvisioningStatusResponse),
     FundingPolicyRotation(FleetFundingPolicyRotationStatusResponse),
     RootRemoval(CoordinatorRootRemovalOperationStatus),
@@ -212,6 +222,7 @@ pub struct CoordinatorRootRemovalOperationStatus {
     reason = "the accepted Candid union keeps each existing status DTO as its direct payload"
 )]
 pub enum CoordinatorStatusResponse {
+    Admission(FleetAdmissionStatusResponse),
     AuthorityRestore(AuthorityRestoreFenceStatusResponse),
     Funding(CoordinatorFundingStatusResponse),
     Operation(CoordinatorOperationStatusResponse),
@@ -230,6 +241,13 @@ mod tests {
     #[test]
     fn coordinator_status_request_is_one_closed_candid_variant() {
         let requests = [
+            CoordinatorStatusRequest::Admission(FleetAdmissionStatusRequest {
+                selector: canic_core::ids::FleetAdmissionSelector::Fleet,
+                page: canic_core::dto::page::PageRequest {
+                    limit: 128,
+                    offset: 0,
+                },
+            }),
             CoordinatorStatusRequest::AuthorityRestore,
             CoordinatorStatusRequest::Funding,
             CoordinatorStatusRequest::Operation(OperationStatusRequest {

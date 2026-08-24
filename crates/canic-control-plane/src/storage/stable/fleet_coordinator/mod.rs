@@ -24,8 +24,9 @@ use canic_core::{
     dto::{
         component_provisioning::{
             FleetComponentActivationRootProgress, FleetComponentProvisioningOperation,
-            FleetComponentProvisioningPlan, RootComponentActivationEvidence,
-            RootComponentActivationRequest, RootComponentDirectorySynchronizationRequest,
+            FleetComponentProvisioningPlan, FleetComponentProvisioningRootFailure,
+            RootComponentActivationEvidence, RootComponentActivationRequest,
+            RootComponentDirectorySynchronizationRequest,
             RootComponentDirectorySynchronizationResponse, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
         },
@@ -48,8 +49,9 @@ use canic_core::{
     },
     ids::{
         AppId, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
-        ComponentGroupPlacementId, ComponentGroupSpecId, FleetCoordinatorRootFundingPolicy,
-        FleetRegistryAuthority, FleetSubnetRootFundingAuthority,
+        ComponentGroupPlacementId, ComponentGroupSpecId, FleetAdmissionPolicy,
+        FleetAdmissionSelector, FleetCoordinatorRootFundingPolicy, FleetRegistryAuthority,
+        FleetSubnetRootFundingAuthority,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -67,7 +69,7 @@ use serde::{Deserialize, Serialize};
 // publication receipt, one exact acknowledgement per current root, and at most
 // one draining reservation, one draining receipt and one removal receipt per
 // root.
-const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 33_554_432;
+pub const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 33_554_432;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 // The bound covers the maximum 4,096-Root live grant ledger, one active
@@ -248,10 +250,13 @@ pub struct FleetCoordinatorRegistryRecord {
     pub authority: FleetRegistryAuthority,
     pub component_deployment_configuration: ComponentDeploymentConfiguration,
     pub root_funding: Option<FleetCoordinatorRootFundingPolicy>,
+    /// Immutable generation-one admission policy used to verify Registry history.
+    pub initial_admission_policy: FleetAdmissionPolicy,
     pub registry: FleetRegistry,
     pub root_join_receipts: Vec<FleetSubnetRootJoinReceiptRecord>,
     pub root_snapshot_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
     pub registry_activation_receipt: Option<FleetRegistryActivationReceiptRecord>,
+    pub admission_publications: Vec<FleetAdmissionPublicationRecord>,
     pub component_provisioning: Option<FleetComponentProvisioningRecord>,
     pub component_group_deployments: Vec<FleetComponentGroupDeploymentRecord>,
     pub component_scale_out_receipts: Vec<FleetComponentScaleOutReceiptRecord>,
@@ -297,6 +302,7 @@ pub struct FleetComponentProvisioningRecord {
     pub plan_hash: [u8; 32],
     pub plan: FleetComponentProvisioningPlan,
     pub state: FleetComponentProvisioningStateRecord,
+    pub last_root_failure: Option<FleetComponentProvisioningRootFailure>,
 }
 
 ///
@@ -552,6 +558,28 @@ pub struct FleetServicePublicationReceiptRecord {
     pub configuration_digest: ComponentDeploymentConfigurationDigest,
     pub root_receipt_content_hashes: Vec<[u8; 32]>,
     pub services: Vec<FleetServiceBinding>,
+    pub previous_version: FleetRegistryVersion,
+    pub version: FleetRegistryVersion,
+}
+
+/// Immutable action retained by the canonical Registry history after perimeter fencing.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetAdmissionPublicationActionRecord {
+    Add,
+    Remove,
+}
+
+/// Compact admission publication intent and canonical Registry revision evidence.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetAdmissionPublicationRecord {
+    pub operation_id: [u8; 32],
+    pub action: FleetAdmissionPublicationActionRecord,
+    pub selector: FleetAdmissionSelector,
+    pub principal: Principal,
+    pub expected_generation: u64,
+    pub expected_policy_digest: [u8; 32],
+    pub successor_generation: u64,
+    pub successor_policy_digest: [u8; 32],
     pub previous_version: FleetRegistryVersion,
     pub version: FleetRegistryVersion,
 }

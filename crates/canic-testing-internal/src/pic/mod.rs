@@ -1,10 +1,14 @@
 //! Repo-only PocketIC fixtures layered on top of `ic-testkit`.
 
 use canic_core::{
+    cdk::candid::Principal,
     cdk::types::Cycles,
     ids::{
-        CyclesFundingBudget, FleetCoordinatorRootFundingPolicy, FleetFundingProfile,
-        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+        CyclesFundingBudget, FleetAdmissionPolicy, FleetBinding, FleetCoordinatorRootFundingPolicy,
+        FleetFundingProfile, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+    },
+    shared_support::fleet_admission_policy::{
+        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
     },
 };
 #[cfg(test)]
@@ -90,6 +94,13 @@ pub(crate) const fn root_funding_authority() -> FleetSubnetRootFundingAuthority 
     }
 }
 
+pub(crate) fn fleet_admission_policy(fleet: FleetBinding) -> FleetAdmissionPolicy {
+    let template =
+        compile_fleet_admission_policy_template(vec![Principal::from_slice(&[1; 29])], Vec::new())
+            .expect("PocketIC Fleet admission template");
+    bind_initial_fleet_admission_policy(fleet, &template).expect("PocketIC Fleet admission policy")
+}
+
 #[cfg(test)]
 static PIC_UNIT_TEST_SERIAL: Mutex<()> = Mutex::new(());
 
@@ -153,14 +164,16 @@ mod governed_suite {
         assert_governed_pocketic_order();
         let mut cases = fleet_registry::governed_pocketic_cases();
         cases.extend(fleet_coordinator::governed_pocketic_cases());
+        cases.extend(lifecycle::governed_pocketic_cases());
         run_governed_test_cases(cases);
     }
 
     fn assert_governed_pocketic_order() {
         let mut cases = fleet_registry::governed_pocketic_cases();
         cases.extend(fleet_coordinator::governed_pocketic_cases());
+        cases.extend(lifecycle::governed_pocketic_cases());
         let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
-        assert_eq!(names.len(), 22);
+        assert_eq!(names.len(), 30);
         assert_eq!(names[0], "Fleet deployment restore");
         assert_eq!(names[1], "autonomous Root removal");
         assert_eq!(

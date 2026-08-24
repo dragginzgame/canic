@@ -17,5 +17,3 @@ enabled = false
 [component_specs.default]
 component_role = "test"
 maximum_instances = 1
-
-[app.whitelist]

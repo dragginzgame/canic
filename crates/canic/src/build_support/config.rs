@@ -148,8 +148,6 @@ init_mode = "enabled"
 kind = "canister"
 package = "."
 
-[app.whitelist]
-
 [auth.delegated_tokens]
 enabled = false
 "#

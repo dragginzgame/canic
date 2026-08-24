@@ -189,6 +189,10 @@ pub mod view {
 }
 
 pub mod workflow {
+    pub mod fleet_admission_projection {
+        pub use crate::workflow::fleet_admission_projection::compile_fleet_admission_projection;
+    }
+
     pub mod cost_guard {
         pub use crate::workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error};
     }

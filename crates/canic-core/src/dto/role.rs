@@ -23,6 +23,7 @@ pub enum RoleCapability {
     AutomaticTopup,
     DelegatedTokenIssuer,
     DelegatedTokenVerifier,
+    FleetAdmissionProjection,
     FleetCoordinator,
     Icrc21,
     Index,

@@ -1,3 +1,4 @@
+mod admission;
 mod apps;
 mod auth;
 mod backup;
@@ -51,6 +52,9 @@ const VERSION_TEXT: &str = concat!("canic ", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, ThisError)]
 pub enum CliError {
+    #[error("admission: {0}")]
+    Admission(#[source] Box<admission::AdmissionCommandError>),
+
     #[error("backup: {0}")]
     Backup(#[source] Box<backup::BackupCommandError>),
 
@@ -118,6 +122,12 @@ pub enum CliError {
 impl From<backup::BackupCommandError> for CliError {
     fn from(error: backup::BackupCommandError) -> Self {
         Self::Backup(Box::new(error))
+    }
+}
+
+impl From<admission::AdmissionCommandError> for CliError {
+    fn from(error: admission::AdmissionCommandError) -> Self {
+        Self::Admission(Box::new(error))
     }
 }
 
@@ -207,6 +217,7 @@ where
     let tail = tail.into_iter();
 
     match command {
+        "admission" => admission::run(tail).map_err(CliError::from),
         "app" => apps::run(tail).map_err(CliError::from),
         "auth" => auth::run(tail).map_err(CliError::from),
         "backup" => backup::run(tail).map_err(CliError::from),

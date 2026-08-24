@@ -765,6 +765,9 @@ mod tests {
                 registry: FleetRegistry {
                     authority: current.authority.clone(),
                     revision: current.revision,
+                    admission: crate::test_support::fleet_admission_policy(
+                        current.authority.binding.fleet.clone(),
+                    ),
                     component_specs: Vec::new(),
                     fleet_subnet_roots: Vec::new(),
                     services: Vec::new(),

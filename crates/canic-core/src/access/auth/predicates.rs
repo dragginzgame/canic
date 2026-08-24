@@ -9,7 +9,7 @@ use crate::{
     access::AccessError,
     cdk::types::Principal,
     ops::{runtime::env::EnvOps, storage::children::CanisterChildrenOps},
-    workflow::runtime_whitelist::RuntimeWhitelistWorkflow,
+    workflow::fleet_admission_projection::FleetAdmissionProjectionWorkflow,
 };
 use ic_cdk::api::{canister_self, is_controller as caller_is_controller};
 
@@ -24,16 +24,22 @@ pub(super) async fn is_controller(caller: Principal) -> Result<(), AccessError> 
     }
 }
 
-/// Require that the caller appears in the canonical runtime whitelist.
-/// Missing or unavailable stable authority fails closed.
-#[expect(clippy::unused_async)]
-pub(super) async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
-    let whitelisted = RuntimeWhitelistWorkflow::contains(caller).map_err(dependency_unavailable)?;
-    if !whitelisted {
-        return Err(AccessError::WhitelistRequired);
+/// Require that the caller appears in the exact open Fleet projection.
+/// Missing, invalid or fenced stable authority fails closed.
+pub(super) fn require_fleet_admission(caller: Principal) -> Result<Principal, AccessError> {
+    require_fleet_admission_decision(caller, FleetAdmissionProjectionWorkflow::contains(caller))
+}
+
+fn require_fleet_admission_decision(
+    caller: Principal,
+    membership: Result<bool, crate::InternalError>,
+) -> Result<Principal, AccessError> {
+    let admitted = membership.map_err(dependency_unavailable)?;
+    if !admitted {
+        return Err(AccessError::FleetAdmissionRequired);
     }
 
-    Ok(())
+    Ok(caller)
 }
 
 /// Require controller authority first, then the exact stable Root binding.
@@ -85,5 +91,28 @@ pub(super) async fn is_same_canister(caller: Principal) -> Result<(), AccessErro
         Ok(())
     } else {
         Err(AccessError::SelfRequired)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fleet_admission_decision_returns_only_the_observed_caller() {
+        let caller = Principal::from_slice(&[1; 29]);
+
+        assert_eq!(
+            require_fleet_admission_decision(caller, Ok(true)).expect("admitted caller"),
+            caller
+        );
+        assert!(matches!(
+            require_fleet_admission_decision(caller, Ok(false)),
+            Err(AccessError::FleetAdmissionRequired)
+        ));
+        assert!(matches!(
+            require_fleet_admission_decision(caller, Err(crate::InternalError::invariant())),
+            Err(AccessError::Internal(_))
+        ));
     }
 }

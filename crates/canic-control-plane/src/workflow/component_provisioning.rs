@@ -96,6 +96,7 @@ pub async fn accept(
             existing,
         ));
     }
+    crate::workflow::root_admission::require_catalog_mutation_allowed()?;
     RootComponentProvisioningOps::require_acceptance_open(request.operation_id)?;
 
     let mirror = FleetRegistryMirrorOps::validated_current(&authority, root)?;
@@ -130,6 +131,11 @@ pub async fn accept(
     if revalidated != acceptance {
         return Err(InternalError::conflict());
     }
+    require_ready_pool_capacity(validation.component_count).await?;
+    let final_registry = current_registry_for_acceptance(&authority, root, &request, &validation)?;
+    if final_registry != acceptance {
+        return Err(InternalError::conflict());
+    }
     let accepted = RootComponentProvisioningOps::accept(
         request,
         &validation,
@@ -154,7 +160,7 @@ pub async fn accept_and_schedule(
 ) -> Result<OperationReceipt, InternalError> {
     let operation_id = request.operation_id;
     let plan_hash = request.plan_hash;
-    let status = accept(caller, request).await?;
+    let status = Box::pin(accept(caller, request)).await?;
     if status.operation_id != operation_id || status.plan_hash != plan_hash {
         return Err(InternalError::invariant());
     }
@@ -512,10 +518,12 @@ async fn activate_fresh_root_runtime(
         };
     let active = if prepared.phase == FleetActivationPhase::Prepared {
         let credential = prepared.credential.ok_or_else(InternalError::unavailable)?;
-        root_fleet_activation::resume_root(FleetActivationResumeRequest {
-            operation_id: prepared.identity.operation_id,
-            credential,
-        })
+        Box::pin(root_fleet_activation::resume_root(
+            FleetActivationResumeRequest {
+                operation_id: prepared.identity.operation_id,
+                credential,
+            },
+        ))
         .await?
         .status
     } else {
@@ -965,7 +973,6 @@ fn current_registry_for_acceptance(
         validation.placement_count,
         authority.binding.limits.maximum_group_placements,
     )?;
-    validate_ready_pool_capacity(validation.component_count)?;
     Ok(RootComponentProvisioningAcceptanceContext {
         registry: current,
         runtime_mode,
@@ -1252,9 +1259,12 @@ fn validate_group_placement_capacity(
     Ok(())
 }
 
-fn validate_ready_pool_capacity(component_count: u32) -> Result<(), InternalError> {
-    let ready = CanisterPoolOps::ready_count();
-    if ready < component_count {
+async fn require_ready_pool_capacity(component_count: u32) -> Result<(), InternalError> {
+    if CanisterPoolOps::ready_count() >= component_count {
+        return Ok(());
+    }
+    let _maintenance = crate::workflow::canister_pool::maintain_once().await?;
+    if CanisterPoolOps::ready_count() < component_count {
         return Err(InternalError::unavailable());
     }
     Ok(())

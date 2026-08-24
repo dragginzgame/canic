@@ -68,6 +68,7 @@ use canic_core::{
         },
         workflow::{
             cost_guard::CostGuardWorkflow,
+            fleet_admission_projection::compile_fleet_admission_projection,
             runtime::{fleet_activation::FleetActivationWorkflow, install::ModuleInstallWorkflow},
         },
     },
@@ -641,6 +642,7 @@ pub async fn reserve_allocation(
         return allocation_response(existing);
     }
 
+    crate::workflow::root_admission::require_catalog_mutation_allowed()?;
     crate::ops::component_provisioning::RootComponentProvisioningOps::
         require_ordinary_allocation_open()?;
     ComponentRegistryOps::require_top_level_allocation_open()?;
@@ -698,6 +700,7 @@ pub async fn reserve_peer_allocation(
         );
     }
 
+    crate::workflow::root_admission::require_catalog_mutation_allowed()?;
     let requester = peer_requester_authority(
         &authority,
         authority.initial_release_set,
@@ -809,7 +812,7 @@ async fn advance_component_allocation_once(operation_id: [u8; 32]) -> Result<boo
         | RootComponentAllocationProgressView::InstallIntent { .. }
         | RootComponentAllocationProgressView::Installed { .. } => {
             let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
-            advance_install(operation_id, allocation, plan).await?;
+            Box::pin(advance_install(operation_id, allocation, plan)).await?;
             Ok(false)
         }
         RootComponentAllocationProgressView::Verified { .. } => {
@@ -1290,6 +1293,7 @@ pub async fn reserve_child_allocation(
         return Ok(child_allocation_response(existing));
     }
 
+    crate::workflow::root_admission::require_catalog_mutation_allowed()?;
     let partition = ComponentRegistryOps::partition(request.component)?
         .ok_or_else(InternalError::unavailable)?;
     validate_partition(
@@ -1431,6 +1435,16 @@ pub async fn begin_component_draining(
         &topology,
         &partition,
     )?;
+    if let Some(existing) = ComponentRegistryOps::component_draining(request.component)? {
+        validate_component_draining(
+            &partition,
+            &existing,
+            Some(&request),
+            Some(&fleet_directory),
+        )?;
+        return Ok(component_draining_response(existing));
+    }
+    crate::workflow::root_admission::require_catalog_mutation_allowed()?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
         .ok_or_else(InternalError::invariant)?
@@ -2122,6 +2136,7 @@ pub async fn begin_subtree_removal(
         )?;
         return Ok(subtree_removal_response(existing));
     }
+    crate::workflow::root_admission::require_catalog_mutation_allowed()?;
     let partition = ComponentRegistryOps::partition(request.component)?
         .ok_or_else(InternalError::unavailable)?;
     validate_partition(
@@ -2828,7 +2843,7 @@ pub(super) async fn advance_group_member_install(
     let operation_id = allocation.operation_id;
     let plan =
         component_install_plan_with_deployment(root, store, &allocation, Some(deployment)).await?;
-    let _response = advance_install(operation_id, allocation, plan).await?;
+    let _response = Box::pin(advance_install(operation_id, allocation, plan)).await?;
     ComponentRegistryOps::allocation(operation_id).ok_or_else(InternalError::invariant)
 }
 
@@ -2903,7 +2918,7 @@ pub async fn install_allocation(
     )?;
     let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
 
-    advance_install(request.operation_id, allocation, plan).await
+    Box::pin(advance_install(request.operation_id, allocation, plan)).await
 }
 
 /// Advance peer Component installation for its exact active requester caller.
@@ -4471,6 +4486,18 @@ async fn component_install_plan_with_deployment(
         binding: binding.clone(),
         maximum_registry_bytes,
     };
+    let target = ManagedCanisterBinding::Component(binding.clone());
+    let admission = if ConfigOps::role_uses_fleet_admission(&allocation.role)? {
+        Some(
+            compile_fleet_admission_projection(
+                &crate::workflow::root_admission::current_policy()?,
+                target,
+            )
+            .map_err(|_error| InternalError::invariant())?,
+        )
+    } else {
+        None
+    };
     let payload = CanisterInitPayload {
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,
@@ -4479,6 +4506,7 @@ async fn component_install_plan_with_deployment(
             root: root.clone(),
             binding,
         },
+        admission,
     };
 
     Ok(ComponentInstallPlan {
@@ -4548,6 +4576,18 @@ async fn child_component_install_plan(
         binding: binding.clone(),
         maximum_registry_bytes: allocation.maximum_registry_bytes,
     };
+    let target = ManagedCanisterBinding::ComponentChild(binding.clone());
+    let admission = if ConfigOps::role_uses_fleet_admission(&allocation.child_role)? {
+        Some(
+            compile_fleet_admission_projection(
+                &crate::workflow::root_admission::current_policy()?,
+                target,
+            )
+            .map_err(|_error| InternalError::invariant())?,
+        )
+    } else {
+        None
+    };
     let payload = CanisterInitPayload {
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,
@@ -4556,6 +4596,7 @@ async fn child_component_install_plan(
             root: root.clone(),
             binding,
         },
+        admission,
     };
 
     Ok(ComponentChildInstallPlan {

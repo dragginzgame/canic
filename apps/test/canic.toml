@@ -37,8 +37,7 @@ package = "scale"
 [roles.test]
 kind = "canister"
 package = "test"
-[app.whitelist]
-
+fleet_admission = true
 [auth.delegated_tokens]
 # Root-signed delegated token auth (cert -> proof -> token).
 enabled = true

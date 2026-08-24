@@ -758,6 +758,7 @@ fn compile_current_fresh_fleet_preflight(
         app: app_id,
         fleet_name: &fleet_name,
         coordinator: &input.coordinator,
+        admission: &input.admission,
         fleet_subnet_roots: &input.fleet_subnet_roots,
         build_profile,
         release_build_id,
@@ -837,6 +838,7 @@ fn persist_current_fleet_install_plan(
         fresh_fleet_plan_digest: fresh_fleet_plan.plan_digest.clone(),
         release_build_id: finalized_release_build.record.release_build_id,
         coordinator: input.coordinator,
+        admission: input.admission,
         fleet_subnet_roots: input.fleet_subnet_roots,
     })
     .map_err(Into::into)

@@ -147,7 +147,8 @@ pub fn global_environment_conflict(
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "blob-storage" | "cycles" | "inspect" | "install" | "medic" | "status" | "token" => true,
+        "admission" | "blob-storage" | "cycles" | "inspect" | "install" | "medic" | "status"
+        | "token" => true,
         "auth" => auth_leaf_accepts_globals(tail),
         "deploy" => deploy_leaf_accepts_global_icp(tail),
         "info" => info_leaf_accepts_globals(tail),
@@ -163,8 +164,8 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_environment(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "blob-storage" | "build" | "cycles" | "inspect" | "install" | "medic" | "status"
-        | "token" => true,
+        "admission" | "blob-storage" | "build" | "cycles" | "inspect" | "install" | "medic"
+        | "status" | "token" => true,
         "auth" => auth_leaf_accepts_globals(tail),
         "deploy" => deploy_leaf_accepts_global_environment(tail),
         "info" => info_leaf_accepts_globals(tail),

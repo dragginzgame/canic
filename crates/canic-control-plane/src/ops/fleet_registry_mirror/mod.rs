@@ -27,6 +27,7 @@ use canic_core::{
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
     },
+    ids::{FleetAdmissionPolicy, FleetSubnetRootBinding},
 };
 
 #[derive(Eq, PartialEq)]
@@ -105,6 +106,34 @@ impl FleetRegistryMirrorOps {
             return Err(InternalError::invariant());
         }
         Ok(ValidatedRootFleetRegistryMirrorView { active, root_entry })
+    }
+
+    /// Return the exact active Fleet policy used to project a newly installed target.
+    pub(crate) fn active_admission(
+        root: &FleetSubnetRootBinding,
+    ) -> Result<FleetAdmissionPolicy, InternalError> {
+        let active = Self::current()
+            .active
+            .ok_or_else(InternalError::unavailable)?;
+        let topology = ConfigOps::component_topology()?;
+        FleetRegistryOps::validate(&root.authority, &topology, &active.snapshot.registry)?;
+        let entry = active
+            .snapshot
+            .registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|entry| entry.fleet_subnet_root == root.fleet_subnet_root)
+            .ok_or_else(InternalError::invariant)?;
+        let exact_root = entry.placement_subnet == root.placement_subnet
+            && entry.component_admissions == root.component_admissions
+            && entry.component_topology_digest == root.component_topology_digest
+            && entry.limits == root.limits
+            && entry.funding == root.funding
+            && entry.status == FleetSubnetRootStatus::Active;
+        if !exact_root {
+            return Err(InternalError::invariant());
+        }
+        Ok(active.snapshot.registry.admission)
     }
 
     pub(crate) fn commit_candidate(

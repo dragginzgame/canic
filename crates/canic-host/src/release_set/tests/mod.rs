@@ -68,8 +68,6 @@ package = "scale"
 [roles.role_baseline]
 kind = "canister"
 package = "role_baseline"
-[app.whitelist]
-
 [auth.delegated_tokens]
 enabled = false
 
@@ -105,8 +103,6 @@ package = "alpha"
 kind = "canister"
 package = "beta"
 
-[app.whitelist]
-
 [component_specs.alpha]
 component_role = "alpha"
 maximum_instances = 1
@@ -125,8 +121,6 @@ init_mode = "enabled"
 [roles.user_hub]
 kind = "canister"
 package = "user_hub"
-[app.whitelist]
-
 [component_specs.user_hub]
 component_role = "user_hub"
 maximum_instances = 1

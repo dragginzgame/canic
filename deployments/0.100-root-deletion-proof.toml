@@ -3,6 +3,9 @@ schema_version = 1
 funding_profile = "single_subnet"
 operator = "ryjl3-tyaaa-aaaaa-aaaba-cai"
 
+[admission]
+principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai"]
+
 [coordinator.subnet]
 kind = "explicit"
 subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"

@@ -9,13 +9,21 @@ use crate::{
         ShardingConfig, StandardsCanisterConfig,
     },
     ids::{
-        CanisterRole, CanonicalNetworkId, ComponentSpecId, CyclesFundingBudget,
-        FleetFundingProfile, FleetId, FleetKey, FleetSubnetRootFundingAuthority,
-        FleetSubnetRootFundingPolicy,
+        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId,
+        ComponentSpecId, CyclesFundingBudget, FleetAdmissionPolicy, FleetAdmissionProjection,
+        FleetBinding, FleetCoordinatorBinding, FleetFundingProfile, FleetId, FleetKey,
+        FleetRegistryAuthority, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+        ManagedCanisterBinding, SubnetId,
     },
-    ops::runtime::env::EnvOps,
+    ops::{
+        fleet_admission_policy::{
+            bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
+        },
+        runtime::env::EnvOps,
+    },
     storage::stable::env::{EnvData, EnvRecord},
     test::config::ConfigTestBuilder,
+    workflow::fleet_admission_projection::compile_fleet_admission_projection,
 };
 
 #[must_use]
@@ -44,6 +52,71 @@ pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority 
         },
         icp_refill: None,
     }
+}
+
+/// Return one valid generation-one Fleet admission policy for unrelated fixtures.
+///
+/// # Panics
+///
+/// Panics only if the fixed canonical test Principal stops satisfying the
+/// generation-one Fleet admission invariants.
+#[must_use]
+pub fn fleet_admission_policy(fleet: FleetBinding) -> FleetAdmissionPolicy {
+    let template =
+        compile_fleet_admission_policy_template(vec![Principal::from_slice(&[1; 29])], Vec::new())
+            .expect("test Fleet admission template");
+    bind_initial_fleet_admission_policy(fleet, &template).expect("test Fleet admission policy")
+}
+
+/// Return one exact managed Component binding for admission projection tests.
+///
+/// # Panics
+///
+/// Panics only if the fixed `"default"` Component Spec identifier stops
+/// satisfying the maintained identifier contract.
+#[must_use]
+pub fn managed_component_binding() -> ManagedCanisterBinding {
+    let fleet = FleetBinding {
+        fleet: fleet_key(7),
+        app: AppId::from("test"),
+    };
+    let placement_subnet = SubnetId::from_principal(Principal::from_slice(&[8; 29]));
+    ManagedCanisterBinding::Component(ComponentBinding {
+        authority: FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet,
+                coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[9; 29])),
+                coordinator: Principal::from_slice(&[10; 29]),
+            },
+            epoch: 1,
+        },
+        component: ComponentInstanceId::from_generated_bytes([11; 32]),
+        component_spec: ComponentSpecId::try_from(String::from("default"))
+            .expect("default Component Spec ID"),
+        spec_hash: [12; 32],
+        role: CanisterRole::from("app"),
+        placement_subnet,
+        fleet_subnet_root: Principal::from_slice(&[13; 29]),
+        canister_id: Principal::from_slice(&[14; 29]),
+    })
+}
+
+/// Return one canonical local projection for the exact supplied test target.
+///
+/// # Panics
+///
+/// Panics only if the supplied target or fixed Fleet policy violates the
+/// maintained projection contract.
+#[must_use]
+pub fn fleet_admission_projection(target: ManagedCanisterBinding) -> FleetAdmissionProjection {
+    let fleet = match &target {
+        ManagedCanisterBinding::Component(binding) => binding.authority.binding.fleet.clone(),
+        ManagedCanisterBinding::ComponentChild(binding) => {
+            binding.component.authority.binding.fleet.clone()
+        }
+    };
+    compile_fleet_admission_projection(&fleet_admission_policy(fleet), target)
+        .expect("test Fleet admission projection")
 }
 
 /// Install the canonical sharding test configuration.

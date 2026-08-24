@@ -230,8 +230,8 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsSameCanister => {
             quote!(::canic::__internal::core::access::expr::caller::is_same_canister())
         }
-        BuiltinPredicate::CallerIsWhitelisted => {
-            quote!(::canic::__internal::core::access::expr::caller::is_whitelisted())
+        BuiltinPredicate::CallerIsFleetAdmitted => {
+            quote!(::canic::__internal::core::access::expr::caller::is_fleet_admitted())
         }
         BuiltinPredicate::Authenticated { required_scope } => match required_scope {
             Some(AuthScopeArg::Literal(required_scope)) => quote!(
