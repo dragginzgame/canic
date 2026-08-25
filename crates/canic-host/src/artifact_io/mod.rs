@@ -1,6 +1,7 @@
 use crate::{
     canister_build::{ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput},
     durable_io::write_bytes,
+    output_with_executable_busy_retry,
 };
 use std::{
     fs,
@@ -33,13 +34,13 @@ fn maybe_shrink_wasm_artifact_with_command(
         ));
     };
     let shrunk_path = wasm_path.with_extension("wasm.shrunk");
-    match Command::new(command_name)
+    let mut command = Command::new(command_name);
+    command
         .arg(wasm_path)
         .arg("-o")
         .arg(&shrunk_path)
-        .arg("shrink")
-        .output()
-    {
+        .arg("shrink");
+    match output_with_executable_busy_retry(&mut command) {
         Ok(output) if output.status.success() => {
             fs::rename(shrunk_path, wasm_path)?;
             Ok(transform_output(
@@ -114,14 +115,15 @@ fn embed_candid_metadata_with_command(
             ArtifactTransformOutcome::ToolUnavailable,
         ));
     };
-    let output = Command::new(command_name)
+    let mut command = Command::new(command_name);
+    command
         .arg(wasm_path)
         .args(["-o"])
         .arg(wasm_path)
         .args(["metadata", "candid:service", "-f"])
         .arg(did_path)
-        .args(["-v", "public"])
-        .output();
+        .args(["-v", "public"]);
+    let output = output_with_executable_busy_retry(&mut command);
 
     let output = output.map_err(|err| {
         format!(
@@ -149,7 +151,9 @@ fn embed_candid_metadata_with_command(
 fn optional_ic_wasm_version(
     command_name: &str,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-    let output = match Command::new(command_name).arg("--version").output() {
+    let mut command = Command::new(command_name);
+    command.arg("--version");
+    let output = match output_with_executable_busy_retry(&mut command) {
         Ok(output) => output,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(err) => return Err(format!("failed to inspect ic-wasm version: {err}").into()),

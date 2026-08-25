@@ -206,6 +206,56 @@ fn first_terminal_status_requires_complete_evidence_and_skips_another_advance() 
 }
 
 #[test]
+fn terminal_evidence_binds_direct_one_advance_and_multi_advance_journals() {
+    let (direct_plan, direct_compiled, direct_preparing) =
+        preparing_transaction("fleet-component-provisioning-direct-terminal-completion");
+    let direct_runtime = record_component_provisioning_observed(
+        &direct_preparing,
+        terminal_status(&direct_compiled),
+    )
+    .expect("record direct terminal status");
+    let direct = complete_catalog_transaction(&direct_plan, &direct_runtime);
+
+    let (one_plan, _one_compiled, one_runtime) =
+        terminal_transaction("fleet-component-provisioning-one-advance-completion");
+    let one = complete_catalog_transaction(&one_plan, &one_runtime);
+
+    let (multi_plan, multi_compiled, multi_preparing) =
+        preparing_transaction("fleet-component-provisioning-multi-advance-completion");
+    let multi_prepared =
+        record_component_provisioning_observed(&multi_preparing, planned_status(&multi_compiled))
+            .expect("record initial nonterminal status");
+    let first_advance =
+        begin_component_provisioning_advance(&multi_prepared).expect("begin first advance");
+    let later_prepared = record_component_provisioning_advanced(
+        &first_advance,
+        observed_status(
+            &multi_compiled,
+            FleetComponentProvisioningPhase::RootsAccepted,
+        ),
+    )
+    .expect("record intermediate advance");
+    let second_advance =
+        begin_component_provisioning_advance(&later_prepared).expect("begin second advance");
+    let multi_runtime =
+        record_component_provisioning_advanced(&second_advance, terminal_status(&multi_compiled))
+            .expect("record terminal second advance");
+    let multi = complete_catalog_transaction(&multi_plan, &multi_runtime);
+
+    for (current, expected_sequence) in [(direct, 5), (one, 7), (multi, 9)] {
+        let evidence = terminal_component_provisioning_evidence(&current)
+            .expect("bind exact durable Complete journal");
+        assert_eq!(evidence.sequence, expected_sequence);
+        assert_ne!(evidence.journal_digest, [0; 32]);
+        assert_eq!(
+            evidence.catalog_entry,
+            current.journal.catalog_entry.unwrap()
+        );
+        assert_eq!(evidence.catalog_hash, current.journal.catalog_hash.unwrap());
+    }
+}
+
+#[test]
 fn conflicting_coordinator_status_cannot_replace_frozen_authority() {
     let root = temp_dir("fleet-component-provisioning-conflict");
     let plan = install_plan(&root);
@@ -235,7 +285,9 @@ fn conflicting_coordinator_status_cannot_replace_frozen_authority() {
     ));
 }
 
-fn compiled_plan(plan: &PersistedFleetInstallPlan) -> CompiledFleetComponentProvisioningPlan {
+pub(in crate::install_root) fn compiled_plan(
+    plan: &PersistedFleetInstallPlan,
+) -> CompiledFleetComponentProvisioningPlan {
     let fleet_registry = registry_version(&plan.plan.fleet, 1, [8; 32]);
     let prepare_request = FleetComponentProvisioningPrepareRequest {
         operation_id: [4; 32],
@@ -271,6 +323,18 @@ fn terminal_transaction(
     (plan, compiled, terminal)
 }
 
+fn complete_catalog_transaction(
+    plan: &PersistedFleetInstallPlan,
+    runtime: &ResolvedFleetComponentProvisioningInstall,
+) -> ResolvedFleetComponentProvisioningInstall {
+    let publishing = begin_fleet_catalog_publication(runtime, catalog_entry(plan, 100))
+        .expect("persist catalog publication intent");
+    let published = record_fleet_catalog_published(&publishing, committed_catalog(plan, 100))
+        .expect("record exact catalog publication");
+    complete_fleet_component_provisioning_install(&published)
+        .expect("persist terminal Complete journal")
+}
+
 fn preparing_transaction(
     name: &str,
 ) -> (
@@ -301,7 +365,7 @@ fn planned_status(
     status(compiled, FleetComponentProvisioningPhase::Planned)
 }
 
-fn terminal_status(
+pub(in crate::install_root) fn terminal_status(
     compiled: &CompiledFleetComponentProvisioningPlan,
 ) -> FleetComponentProvisioningStatusResponse {
     observed_status(compiled, FleetComponentProvisioningPhase::RuntimesActivated)
@@ -400,7 +464,7 @@ fn status(
     }
 }
 
-fn install_plan(root: &Path) -> PersistedFleetInstallPlan {
+pub(in crate::install_root) fn install_plan(root: &Path) -> PersistedFleetInstallPlan {
     let fleet = fleet();
     PersistedFleetInstallPlan {
         plan: FleetInstallPlan {
@@ -433,7 +497,10 @@ fn committed_catalog(plan: &PersistedFleetInstallPlan, time: u64) -> CommittedFl
     }
 }
 
-fn catalog_entry(plan: &PersistedFleetInstallPlan, time: u64) -> FleetCatalogEntryV1 {
+pub(in crate::install_root) fn catalog_entry(
+    plan: &PersistedFleetInstallPlan,
+    time: u64,
+) -> FleetCatalogEntryV1 {
     FleetCatalogEntryV1 {
         canonical_network_id: plan.plan.fleet.fleet.canonical_network_id,
         fleet_id: plan.plan.fleet.fleet.fleet_id,

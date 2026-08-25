@@ -34,7 +34,7 @@ use canic_host::{
     icp::IcpCli,
     install_root::{
         FreshFleetInstallRecoveryPlanV1, InspectFreshFleetInstallRecoveryRequest,
-        inspect_fresh_fleet_install_recovery, require_supported_recovery_builder,
+        inspect_fresh_fleet_install_recovery,
     },
     network::resolve_canonical_network_id_from_root,
     release_build::load_finalized_release_build,
@@ -402,7 +402,7 @@ fn retained_recovery_build_error(error: impl std::fmt::Display) -> FreshFleetPre
         catalog_failure: None,
         install_recovery: None,
         next_action: Some(
-            "use a Canic release explicitly admitted for the retained install recovery; do not add ledger funds or replace the Fleet"
+            "follow the typed session/journal diagnostic; export an unsupported schema with its matching Canic reader, and do not add ledger funds or replace the Fleet"
                 .to_string(),
         ),
     }
@@ -459,11 +459,6 @@ fn resolve_plan_release_source(
                     .to_string(),
             );
         }
-        require_supported_recovery_builder(
-            &finalized.record.builder_version,
-            env!("CARGO_PKG_VERSION"),
-        )
-        .map_err(|error| error.to_string())?;
     } else if finalized.record.builder_version != env!("CARGO_PKG_VERSION") {
         return Err(format!(
             "finalized release build belongs to Canic {}, not current Canic {}",
@@ -616,6 +611,8 @@ mod tests {
             release_build_id,
             decision_release_build_id: None,
             retained_builder_version: "0.109.1".to_string(),
+            retained_plan_contract:
+                canic_host::install_root::RetainedInstallPlanContractV1::HistoricalPoolV1,
             fresh_fleet_plan_digest: "cd".repeat(32),
             effects_started: true,
             original_maximum_operator_debit: PlannedCanisterCreationFunding::Cycles {
@@ -633,6 +630,7 @@ mod tests {
         assert!(text.contains("no_effects_started: false"));
         assert!(text.contains("classification: paid_effect_recovery"));
         assert!(text.contains("decision_release_build: workspace"));
+        assert!(text.contains("retained_plan_contract: historical_pool_v1"));
         assert!(text.contains("remaining_operator_debit: 0 cycles"));
         assert!(
             text.contains(

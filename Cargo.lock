@@ -599,6 +599,7 @@ dependencies = [
  "ciborium",
  "flate2",
  "ic-query",
+ "pocket-ic",
  "rustix",
  "serde",
  "serde_bytes",

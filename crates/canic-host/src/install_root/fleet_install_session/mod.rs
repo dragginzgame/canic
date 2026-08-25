@@ -2,20 +2,28 @@
 //!
 //! Responsibility: own the durable Fleet identity and install operation for one fresh install.
 //! Does not own: Coordinator, Fleet Subnet Root, Store, Registry, or activation effects.
-//! Boundary: exact same-release retries recover one immutable session before any paid effect.
+//! Boundary: typed-schema retries recover one immutable session before terminal catalog closure.
 
 #[cfg(test)]
 mod tests;
 
 use crate::{
     durable_io::{
+        BoundedRegularFileReadError, CanonicalJsonEncodeError, CanonicalJsonStyle,
         RegularFileLockError, RegularFileReadError, create_new_bytes_with_parents,
-        lock_regular_file_with_parents, read_optional_regular_bytes,
+        encode_canonical_json, lock_regular_file_with_parents, read_optional_bounded_regular_bytes,
+        read_optional_regular_bytes,
     },
     entropy::{EntropyError, random_bytes_32},
     release_build::{
         FinalizedReleaseBuild, ReleaseBuildPlanError, ReleaseBuildPlanState,
         load_finalized_release_build,
+    },
+};
+use crate::{
+    fleet_catalog::FleetCatalogEntryV1,
+    install_root::fleet_component_provisioning_journal::{
+        FleetComponentProvisioningTerminalEvidence, JOURNAL_SCHEMA_VERSION,
     },
 };
 use std::{
@@ -33,6 +41,10 @@ const SESSION_FILE: &str = "session.json";
 const SESSION_LOCK_FILE: &str = "session.lock";
 const SESSION_SCHEMA_VERSION: u32 = 1;
 const MAX_SESSION_BYTES: usize = 16_384;
+const COMPLETION_FILE: &str = "completion.json";
+const COMPLETION_LOCK_FILE: &str = "completion.lock";
+const COMPLETION_SCHEMA_VERSION: u32 = 1;
+const MAX_COMPLETION_BYTES: usize = 65_536;
 
 ///
 /// FleetInstallSession
@@ -78,6 +90,33 @@ pub(super) struct RecoveredFleetInstallAuthority {
     pub fresh_fleet_plan_digest: String,
 }
 
+/// Exact terminal catalog evidence that permanently closes one fresh-install session.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FleetInstallCompletionV1 {
+    schema_version: u32,
+    session_schema_version: u32,
+    fleet_name: FleetName,
+    fleet: FleetBinding,
+    release_build_id: ReleaseBuildId,
+    fresh_fleet_plan_digest: String,
+    fleet_install_operation_id: [u8; 32],
+    fleet_install_plan_digest: [u8; 32],
+    component_journal_schema_version: u32,
+    component_journal_sequence: u64,
+    component_journal_digest: [u8; 32],
+    component_provisioning_operation_id: [u8; 32],
+    component_provisioning_plan_hash: [u8; 32],
+    catalog_entry: FleetCatalogEntryV1,
+    catalog_hash: [u8; 32],
+}
+
+pub(super) struct CloseFleetInstallSessionRequest<'a> {
+    pub root: &'a Path,
+    pub session: &'a FleetInstallSession,
+    pub component_journal: &'a FleetComponentProvisioningTerminalEvidence,
+}
+
 ///
 /// FleetInstallSessionError
 ///
@@ -88,6 +127,11 @@ pub(super) struct RecoveredFleetInstallAuthority {
 pub(super) enum FleetInstallSessionError {
     #[error("Fleet install session already has different immutable authority: {path}")]
     ConflictingAuthority { path: PathBuf },
+
+    #[error(
+        "Fleet install session is complete and cannot re-enter fresh-install recovery: {path}; wait for and use a separately supported managed-upgrade workflow from the published Fleet baseline"
+    )]
+    Completed { path: PathBuf },
 
     #[error("failed to access Fleet install session {path}: {source}")]
     Io {
@@ -141,6 +185,13 @@ pub(super) fn plan_fleet_install_session(
     );
     let _lock = lock_session(&path)?;
     if let Some(session) = load_optional_session(&path)? {
+        let completion_path = path.with_file_name(COMPLETION_FILE);
+        if let Some(completion) = load_optional_completion(&completion_path)? {
+            validate_completion(&completion_path, &completion, &session)?;
+            return Err(FleetInstallSessionError::Completed {
+                path: completion_path,
+            });
+        }
         if session_matches_request(
             &session,
             &request,
@@ -202,6 +253,52 @@ pub(super) fn plan_fleet_install_session(
     Ok(observed)
 }
 
+/// Permanently close one fresh-install session after terminal Fleet catalog publication.
+pub(super) fn close_fleet_install_session(
+    request: CloseFleetInstallSessionRequest<'_>,
+) -> Result<(), FleetInstallSessionError> {
+    let journal = request.component_journal;
+    let completion = FleetInstallCompletionV1 {
+        schema_version: COMPLETION_SCHEMA_VERSION,
+        session_schema_version: request.session.schema_version,
+        fleet_name: request.session.fleet_name.clone(),
+        fleet: request.session.fleet.clone(),
+        release_build_id: request.session.release_build_id,
+        fresh_fleet_plan_digest: request.session.fresh_fleet_plan_digest.clone(),
+        fleet_install_operation_id: request.session.operation_id,
+        fleet_install_plan_digest: journal.fleet_install_plan_digest,
+        component_journal_schema_version: journal.schema_version,
+        component_journal_sequence: journal.sequence,
+        component_journal_digest: journal.journal_digest,
+        component_provisioning_operation_id: journal.operation_id,
+        component_provisioning_plan_hash: journal.plan_hash,
+        catalog_entry: journal.catalog_entry.clone(),
+        catalog_hash: journal.catalog_hash,
+    };
+    let path = completion_path(request.root, request.session);
+    validate_completion(&path, &completion, request.session)?;
+    let bytes = encode_completion(&path, &completion)?;
+    let _lock = lock_completion(&path)?;
+    match create_new_bytes_with_parents(&path, &bytes) {
+        Ok(()) => {}
+        Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
+            let observed = load_optional_completion(&path)?.ok_or_else(|| {
+                FleetInstallSessionError::ConflictingAuthority { path: path.clone() }
+            })?;
+            if observed != completion {
+                return Err(FleetInstallSessionError::ConflictingAuthority { path });
+            }
+        }
+        Err(source) => return Err(FleetInstallSessionError::Io { path, source }),
+    }
+    let durable = load_optional_completion(&path)?
+        .ok_or_else(|| FleetInstallSessionError::ConflictingAuthority { path: path.clone() })?;
+    if durable != completion {
+        return Err(FleetInstallSessionError::ConflictingAuthority { path });
+    }
+    Ok(())
+}
+
 /// Recover the original decision binding plus finalized artifacts for exact resume.
 pub(super) fn recover_fleet_install_session_authority(
     root: &Path,
@@ -253,6 +350,13 @@ fn inspect_fleet_install_session_authority_at_path(
     {
         return Err(FleetInstallSessionError::ConflictingAuthority {
             path: path.to_path_buf(),
+        });
+    }
+    let completion_path = path.with_file_name(COMPLETION_FILE);
+    if let Some(completion) = load_optional_completion(&completion_path)? {
+        validate_completion(&completion_path, &completion, &session)?;
+        return Err(FleetInstallSessionError::Completed {
+            path: completion_path,
         });
     }
 
@@ -348,7 +452,10 @@ fn validate_session(
     session: &FleetInstallSession,
 ) -> Result<(), FleetInstallSessionError> {
     if session.schema_version != SESSION_SCHEMA_VERSION {
-        return Err(invalid(path, "unsupported schema version"));
+        return Err(invalid(
+            path,
+            "unsupported session schema version; export with the matching Canic release before retrying",
+        ));
     }
     if session.fleet_name.as_str().is_empty() {
         return Err(invalid(path, "Fleet name must not be empty"));
@@ -381,6 +488,96 @@ fn is_canonical_sha256(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
+fn validate_completion(
+    path: &Path,
+    completion: &FleetInstallCompletionV1,
+    session: &FleetInstallSession,
+) -> Result<(), FleetInstallSessionError> {
+    let entry = &completion.catalog_entry;
+    let exact = completion.schema_version == COMPLETION_SCHEMA_VERSION
+        && completion.session_schema_version == session.schema_version
+        && completion.fleet_name == session.fleet_name
+        && completion.fleet == session.fleet
+        && completion.release_build_id == session.release_build_id
+        && completion.fresh_fleet_plan_digest == session.fresh_fleet_plan_digest
+        && completion.fleet_install_operation_id == session.operation_id
+        && completion.fleet_install_plan_digest != [0; 32]
+        && completion.component_journal_schema_version == JOURNAL_SCHEMA_VERSION
+        && completion.component_journal_sequence > 0
+        && completion.component_journal_digest != [0; 32]
+        && completion.component_provisioning_operation_id != [0; 32]
+        && completion.component_provisioning_plan_hash != [0; 32]
+        && completion.catalog_hash != [0; 32]
+        && entry.canonical_network_id == session.fleet.fleet.canonical_network_id
+        && entry.fleet_id == session.fleet.fleet.fleet_id
+        && entry.fleet_name == session.fleet_name
+        && entry.app == session.fleet.app
+        && entry.release_build_id == session.release_build_id;
+    if !exact {
+        return Err(invalid(
+            path,
+            "completion differs from the exact terminal session and catalog authority",
+        ));
+    }
+    Ok(())
+}
+
+fn encode_completion(
+    path: &Path,
+    completion: &FleetInstallCompletionV1,
+) -> Result<Vec<u8>, FleetInstallSessionError> {
+    encode_canonical_json(
+        completion,
+        CanonicalJsonStyle::PrettyNewline,
+        MAX_COMPLETION_BYTES,
+    )
+    .map_err(|error| match error {
+        CanonicalJsonEncodeError::Serialization(error) => invalid(path, error.to_string()),
+        CanonicalJsonEncodeError::TooLarge => invalid(path, "completion exceeds its byte bound"),
+    })
+}
+
+fn load_optional_completion(
+    path: &Path,
+) -> Result<Option<FleetInstallCompletionV1>, FleetInstallSessionError> {
+    let bytes = match read_optional_bounded_regular_bytes(path, MAX_COMPLETION_BYTES) {
+        Ok(bytes) => bytes,
+        Err(BoundedRegularFileReadError::TooLarge) => {
+            return Err(invalid(path, "completion exceeds its byte bound"));
+        }
+        Err(BoundedRegularFileReadError::Read(RegularFileReadError::NotRegular)) => {
+            return Err(FleetInstallSessionError::UnsafeFile {
+                path: path.to_path_buf(),
+            });
+        }
+        Err(BoundedRegularFileReadError::Read(RegularFileReadError::Io(source))) => {
+            return Err(FleetInstallSessionError::Io {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+        #[cfg(not(unix))]
+        Err(BoundedRegularFileReadError::Read(RegularFileReadError::UnsupportedPlatform)) => {
+            return Err(FleetInstallSessionError::Io {
+                path: path.to_path_buf(),
+                source: io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Fleet install completion reads are unsupported",
+                ),
+            });
+        }
+    };
+    let Some(bytes) = bytes else {
+        return Ok(None);
+    };
+    let completion = serde_json::from_slice::<FleetInstallCompletionV1>(&bytes)
+        .map_err(|error| invalid(path, error.to_string()))?;
+    if encode_completion(path, &completion)? != bytes {
+        return Err(invalid(path, "completion JSON bytes are not canonical"));
+    }
+    Ok(Some(completion))
+}
+
 fn session_path(
     root: &Path,
     canonical_network_id: CanonicalNetworkId,
@@ -392,6 +589,36 @@ fn session_path(
         .join(canonical_network_id.to_string())
         .join(fleet_name.as_str())
         .join(SESSION_FILE)
+}
+
+fn completion_path(root: &Path, session: &FleetInstallSession) -> PathBuf {
+    session_path(
+        root,
+        session.fleet.fleet.canonical_network_id,
+        &session.fleet_name,
+    )
+    .with_file_name(COMPLETION_FILE)
+}
+
+fn lock_completion(path: &Path) -> Result<std::fs::File, FleetInstallSessionError> {
+    let lock_path = path.with_file_name(COMPLETION_LOCK_FILE);
+    lock_regular_file_with_parents(&lock_path).map_err(|error| match error {
+        RegularFileLockError::NotRegular => FleetInstallSessionError::UnsafeLock {
+            path: lock_path.clone(),
+        },
+        RegularFileLockError::Io(source) => FleetInstallSessionError::Io {
+            path: lock_path.clone(),
+            source,
+        },
+        #[cfg(windows)]
+        RegularFileLockError::UnsupportedPlatform => FleetInstallSessionError::Io {
+            path: lock_path,
+            source: io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Fleet install completion locking is unsupported on Windows",
+            ),
+        },
+    })
 }
 
 fn lock_session(path: &Path) -> Result<std::fs::File, FleetInstallSessionError> {

@@ -7,6 +7,7 @@
 use super::{
     model::{
         FleetComponentProvisioningInstallJournal, FleetComponentProvisioningInstallJournalError,
+        FleetComponentProvisioningInstallPhase, FleetComponentProvisioningTerminalEvidence,
         ResolvedFleetComponentProvisioningInstall, resolved,
     },
     validation::{invalid, same_immutable_authority, validate_journal},
@@ -17,6 +18,7 @@ use crate::durable_io::{
     encode_canonical_json, lock_regular_file_with_parents, read_optional_bounded_regular_bytes,
     replace_bytes_exact,
 };
+use sha2::{Digest, Sha256};
 use std::{
     io,
     path::{Path, PathBuf},
@@ -82,6 +84,48 @@ pub(super) fn journal_path(plan_path: &Path) -> PathBuf {
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join(JOURNAL_FILE)
+}
+
+/// Re-read and bind the exact durable terminal journal before closing fresh-install recovery.
+pub(in crate::install_root) fn terminal_evidence(
+    current: &ResolvedFleetComponentProvisioningInstall,
+) -> Result<FleetComponentProvisioningTerminalEvidence, FleetComponentProvisioningInstallJournalError>
+{
+    let durable = load_required_journal(&current.path)?;
+    if durable != current.journal {
+        return Err(invalid(
+            &current.path,
+            "journal changed before terminal session closure",
+        ));
+    }
+    if durable.phase != FleetComponentProvisioningInstallPhase::Complete {
+        return Err(invalid(
+            &current.path,
+            "only an exact Complete journal may close fresh-install recovery",
+        ));
+    }
+    let bytes = encode_journal(&current.path, &durable)?;
+    let mut hasher = Sha256::new();
+    hasher.update(b"canic.fleet-component-provisioning-terminal-journal.v1\0");
+    hasher.update(bytes);
+    let mut journal_digest: [u8; 32] = hasher.finalize().into();
+    if journal_digest == [0; 32] {
+        journal_digest[31] = 1;
+    }
+    Ok(FleetComponentProvisioningTerminalEvidence {
+        schema_version: durable.schema_version,
+        sequence: durable.sequence,
+        journal_digest,
+        fleet_install_plan_digest: durable.fleet_install_plan_digest,
+        operation_id: durable.prepare_request.operation_id,
+        plan_hash: durable.plan_hash,
+        catalog_entry: durable
+            .catalog_entry
+            .expect("validated Complete journal retains its catalog entry"),
+        catalog_hash: durable
+            .catalog_hash
+            .expect("validated Complete journal retains its catalog hash"),
+    })
 }
 
 fn resolve_create_failure(

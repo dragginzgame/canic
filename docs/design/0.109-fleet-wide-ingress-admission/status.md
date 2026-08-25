@@ -38,20 +38,38 @@ Last updated: 2026-08-25
   The retained operation crossed that correction, then exposed `CANIC-034`
   Root-ledger funding and `CANIC-035` undersized pool policy. Authorized
   funding/import work retained Ready assets at 2T and 4.5T for one unclaimed
-  5T App. The open 0.109.5 hard cut rejects that policy before fresh-plan
+  5T App. Published `v0.109.5` rejects that policy before fresh-plan
   effects, loads only the exact admitted 0.109.1 retained decision under its
   historical rule, matches exact eligible assets at acceptance, claims the
   smallest sufficient Ready asset, retains typed capacity evidence and lets
   the sole Root pool owner re-inspect the topped-up imported asset without
   replacing the operation or journal. Recovery remediation explicitly rejects
-  irrelevant additional funding advice.
+  irrelevant additional funding advice. The separately authorized live Root
+  repair preserved the retained canister and journals and refreshed the import
+  above 5T. It exposed `CANIC-039`: compact teracycle formatting rendered the
+  actual and required amounts identically, and `CANIC-040`: the retained host
+  accepted only the predecessor Root module after the authorized repair. Open
+  0.109.6 adds the raw actual, required and deficit cycle integers to that
+  actionable diagnostic. It also
+  replaces product-version recovery pairs with bounded current/historical-pool
+  `v1` contracts, admits one exact already-applied state-preserving Root repair
+  through a separate immutable artifact/Candid/authority receipt, and closes
+  fresh-install recovery at terminal catalog publication. `CANIC-042` removes
+  an exact-step runtime-activation observation assumption: the Coordinator now
+  accepts any strictly monotonic, bounded Root progress under the existing
+  operation/receipt/timestamp authority, including a terminal first
+  observation after every intermediate Component state was missed.
   The accepted post-implementation complexity audit has a
   `fail` closeout verdict; B9 must
   supersede it with a pass before B10, 0.109 minor closeout or 0.110 promotion.
-  Direct managed-application ingress architecture is positively qualified, but
-  B8 remains open on targeted completion and maintainer validation/publication
-  of the `CANIC-035` correction, then the separately authorized Root upgrade,
-  asset refresh, exact-session resume and deployed-state/admission evidence.
+  Direct managed-application ingress architecture is positively qualified.
+  Published 0.109.5, the authorized Root upgrade and asset refresh close the
+  `CANIC-035` work. The 0.109.6 source through `CANIC-041` passed the complete
+  unmodified `make validate` gate. `CANIC-042` passes focused control-plane,
+  warning-denied and real five-Component PocketIC proof; the immutable
+  candidate still requires a fresh complete maintainer gate. B8 remains open
+  on maintainer version/publication, separately authorized exact-session resume
+  and deployed-state/admission evidence.
 - Outcome: one Coordinator-owned, bounded Fleet admission policy projected and
   enforced locally by every managed instance whose exact role declares
   `fleet_admission = true`.
@@ -103,7 +121,7 @@ B8 correction evidence:
 | B5 | Composed-framework adapter | Synchronous managed-projection caller guard and generic IcyDB-style fixture | Native parity and direct-ingress PocketIC journey | Ready |
 | B6 | Runtime convergence | Pre-effect catalog reserve/release, fence/activate/open journals, participant fences, exact retry and forward recovery | Stale-catalog, interruption, unavailable-target, add/remove and new-Component PocketIC matrix | Ready |
 | B7 | Security closeout and propagation | Docs/generated surfaces, residue cleanup, measurements and read-only Toko adoption review | Targeted repository gates and adversarial multi-Root journey | Ready |
-| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment and interrupted-install recovery blockers through `CANIC-035`; publish immutable matching `canic`/`canic-cli` 0.109 pairs, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, finalized-artifact reuse without predecessor-workspace rejection, monotonic first-status reconciliation, exact pool-demand and Ready-refresh recovery checks, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/recovery evidence | Active: published 0.109.4 crossed monotonic first-status recovery; open 0.109.5 corrects the resulting undersized full-pool deadlock and passes focused pure/host/PocketIC proof, but still awaits maintainer validation/publication before the downstream Root recovery |
+| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment and interrupted-install recovery blockers through `CANIC-042`; publish immutable matching `canic`/`canic-cli` 0.109 pairs, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, finalized-artifact reuse without predecessor-workspace rejection, monotonic first-status and runtime-activation reconciliation, exact pool-demand and Ready-refresh recovery checks, typed exact-artifact repair adoption, exact terminal-journal session closure, exact cycle diagnostics, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/recovery evidence | Active: published 0.109.5 corrects the undersized full-pool deadlock; the downstream Root upgrade and retained-asset refresh succeeded, open 0.109.6 owns the repair receipt, typed recovery boundary, exact terminal-journal closure, rounded diagnostic and coalesced runtime-activation reconciliation exposed there, and exact-session resume plus deployed-state/admission evidence remain |
 | B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, active handoff below 250 lines, bounded PocketIC resource envelope, `CANIC-028` artifact advice, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Accepted; blocked on B8 |
 | B10 | Published managed-App qualification support | One bounded downstream test-support surface for exact managed init/activation, admission fencing, fresh install and same-release recovery without private `canic-core`/`ic-testkit` reconstruction | Public-package consumer build plus managed/standalone lifecycle qualification and Toko adapter removal | Scheduled; blocked on B9 |
 

@@ -15,10 +15,13 @@ use super::{
         begin_component_provisioning_preparation, begin_fleet_catalog_publication,
         complete_fleet_component_provisioning_install, plan_fleet_component_provisioning_install,
         record_component_provisioning_advanced, record_component_provisioning_observed,
-        record_fleet_catalog_published,
+        record_fleet_catalog_published, terminal_component_provisioning_evidence,
     },
     fleet_component_provisioning_plan::{
         CompileFleetComponentProvisioningPlanRequest, compile_fleet_component_provisioning_plan,
+    },
+    fleet_install_session::{
+        CloseFleetInstallSessionRequest, FleetInstallSession, close_fleet_install_session,
     },
     icp_context::InstallIcpContext,
     operations::{call_with_arg, query_with_arg, resolve_install_protocol_binding},
@@ -67,6 +70,7 @@ pub(super) struct InstallFleetComponentsRequest<'a> {
     pub icp: &'a InstallIcpContext,
     pub config_path: &'a Path,
     pub fleet_name: FleetName,
+    pub fleet_install_session: &'a FleetInstallSession,
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
     pub coordinator: Principal,
     pub install_operation_id: [u8; 32],
@@ -175,9 +179,25 @@ pub(super) fn install_fleet_components_and_publish_catalog(
             FleetComponentProvisioningInstallPhase::CatalogPublished => {
                 complete_fleet_component_provisioning_install(&current)?
             }
-            FleetComponentProvisioningInstallPhase::Complete => return Ok(()),
+            FleetComponentProvisioningInstallPhase::Complete => {
+                close_terminal_session(&request, &current)?;
+                return Ok(());
+            }
         };
     }
+}
+
+fn close_terminal_session(
+    request: &InstallFleetComponentsRequest<'_>,
+    current: &ResolvedFleetComponentProvisioningInstall,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let journal = terminal_component_provisioning_evidence(current)?;
+    close_fleet_install_session(CloseFleetInstallSessionRequest {
+        root: request.icp.root(),
+        session: request.fleet_install_session,
+        component_journal: &journal,
+    })?;
+    Ok(())
 }
 
 fn query_or_prepare(

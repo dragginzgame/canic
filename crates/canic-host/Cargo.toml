@@ -38,5 +38,8 @@ toml = { workspace = true }
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true }
 
+[dev-dependencies]
+pocket-ic = { workspace = true }
+
 [lints]
 workspace = true

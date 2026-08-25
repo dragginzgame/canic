@@ -14,21 +14,33 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 
 ## Current Release
 
-- Published `v0.109.4` corrects `CANIC-033`: the exact retained 0.109.1 install
-  reconciles a Coordinator provisioning status that advanced beyond `Planned`
-  before the host's first query. The downstream resume crossed that gate, then
-  exposed `CANIC-034` Root-ledger funding and `CANIC-035`: the accepted App
-  requires 5T, while the now-full Root pool retains Ready assets at 2T and
-  4.5T. The open 0.109.5 hard cut rejects undersized policy in every fresh
-  plan, admits only the exact supported 0.109.1 retained decision under its
-  historical 2T rule, matches exact eligible Ready assets during acceptance,
-  claims the smallest sufficient asset, preserves a typed capacity diagnostic
-  and lets the sole Root pool owner re-inspect the topped-up imported asset
-  without replacing the active journal. Its recovery diagnostic names the
-  compatible retained path and warns against irrelevant additional funding.
-  It adds no general migration lane; the retained recovery must upgrade rather
-  than reinstall the Root so its stable provisioning operation survives. The
-  0.109.3 release also hard-cuts the
+- Published `v0.109.5` corrects `CANIC-035`: every fresh plan rejects an
+  undersized pool policy before effects, while only the exact supported
+  0.109.1 retained decision loads under its historical 2T rule. Root batch
+  acceptance matches exact eligible assets, claiming is smallest-sufficient
+  first, and the sole Root pool owner can re-inspect a topped-up imported asset
+  without replacing the active journal. The authorized downstream repair
+  upgraded the retained Root, preserved its journals and refreshed the same
+  imported asset to 5,000,098,949,600 cycles. That live work exposed
+  `CANIC-039`: compact formatting rendered an actual 4,999,546,217,226 cycles
+  and required 5,000,000,000,000 cycles as the same `5.000 TC` value. Open
+  0.109.6 retains compact summaries but adds exact actual, required and deficit
+  integers to the actionable underfunding diagnostic. It also replaces the
+  product-version recovery allowlist with one current `v1` and one historical-
+  pool `v1` plan contract, both gated by canonical session, finalized-artifact
+  and journal evidence. A separate immutable receipt can adopt one exact
+  already-applied state-preserving Root upgrade after controller, Fleet
+  authority, Candid, live module-hash and retained Component Registry
+  verification. Terminal catalog
+  publication closes fresh-install recovery permanently; later code changes
+  must wait for and use a separately supported managed-upgrade workflow rather
+  than reopening that session. `CANIC-042` corrects the downstream five-
+  Component fresh-install failure: runtime reconciliation accepts strictly
+  monotonic coalesced Root observations instead of requiring the Coordinator
+  to witness every intermediate Component activation. Exact Root/count shape,
+  operation, receipt and timing authority remains mandatory. No second pool,
+  provisioning, upgrade or recovery owner is introduced. The 0.109.3 release
+  also hard-cuts the
   repository-owned Playground and Saltz application estates,
   including their canister crates, deployment inputs, ICP environments,
   active design/calibration material and test inventories. Canic retains
@@ -611,7 +623,7 @@ exactly `Planned`. Published 0.109.4 retains every exact nonterminal phase and
 derives the next request from it; the live recovery crossed that boundary.
 It then exposed `CANIC-034` Root-ledger funding and `CANIC-035`: count-only
 acceptance admitted one 5T App against a pool that ultimately became full with
-2T and 4.5T Ready assets. The open 0.109.5 hard cut requires every fresh pool
+2T and 4.5T Ready assets. Published 0.109.5 requires every fresh pool
 amount to cover the largest initially placed Component, preserves the exact
 0.109.1 retained plan under its historical rule, matches exact Ready amounts
 at acceptance, claims smallest-sufficient-first, reports typed
@@ -619,9 +631,37 @@ at acceptance, claims smallest-sufficient-first, reports typed
 re-inspect the externally topped-up 4.5T asset against the retained 5T demand.
 It changes no stable schema and creates no second pool, provisioning or
 recovery owner. Focused pure/host proof and a governed Root-upgrade, retained-
-identity, 5T claim/install and no-debit journey pass. B8 remains open
-for maintainer validation/publication, the separately authorized Root
-upgrade/asset refresh/exact-source resume and deployed-state/
+identity, 5T claim/install and no-debit journey pass. The separately authorized
+live repair upgraded the Root and refreshed the retained 4.5T asset beyond 5T
+without a new canister or journal. Open 0.109.6 corrects the rounded
+underfunding message exposed during that repair and replaces release-number
+pairing with bounded typed recovery plus one exact successor-artifact receipt.
+Receipt publication also requires the live Root to reproduce the retained
+Component Registry result from its preserved Store and Registry prerequisites.
+Terminal publication closes the install session; future changes must wait for
+a separately supported managed-upgrade workflow and cannot reopen this one.
+The follow-up `CANIC-041` correction removes the invalid fixed sequence-7
+closure assumption. `completion.json` now binds the domain-separated digest
+of the exact durable `Complete` Component journal, including its observed
+sequence; direct-terminal, one-advance and multi-advance paths finish at 5, 7
+and 9 respectively and later valid sequences remain admissible. A serial
+host/PocketIC journey adopts a real compatible successor Wasm, covers the four
+negative repair classes, installs a Component, commits the catalog, writes the
+completion receipt and proves recovery cannot reopen. Focused checks pass; the
+complete unmodified `make validate` gate also passes on this final correction.
+An immediate cached rerun exposed one remaining fixture-only Linux `ETXTBSY`
+race while launching the atomically published fake `ic-wasm`. Optional
+`ic-wasm` inspection and transforms now reuse the host's existing sole bounded
+executable-busy launch retry; its deliberate held-writer proof, all seven
+artifact-transform tests and warning-denied host Clippy pass, and the complete
+gate passes after that correction. `CANIC-042` then removes the exact-step
+runtime-activation observation assumption exposed by a fresh five-Component
+deployment. Pure and Coordinator workflow tests cover first, intermediate and
+terminal coalescing plus fail-closed identity/count/receipt/timestamp cases; a
+real local five-Component Coordinator/Root PocketIC journey reaches terminal
+Fleet catalog publication. The most recent complete gate predates
+`CANIC-042`; B8 remains open for one fresh immutable-candidate gate,
+maintainer version/publication, the exact-source resume and deployed-state/
 admission proof. B9
 complexity remediation and B10 published managed-App test support then block
 minor closeout and 0.110.
@@ -1108,16 +1148,25 @@ acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 contains the B3-B9 runtime implementation, and published `v0.108.2` records the
 accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
-Published `v0.109.4` completes the retained first-status correction and the
-real downstream session crossed that gate. Focused pure/host and governed
-PocketIC evidence passes for the corrected open 0.109.5 `CANIC-035` hard cut,
-including historical-plan selection, Root upgrade, retained principal refresh
-and capacity-preserving 5T claim/install; continue B8 with maintainer-owned
-validation/publication. Then upgrade, do not reinstall, the retained Root with
-the exact corrected artifact, re-inspect the externally topped-up asset, and
-use the downstream `v0.2.0` recovery checkout for a read-only plan that
-requires the unchanged digest, zero debit and `fleet_component_provisioning`
-next before separately authorizing one resume.
+Published `v0.109.5` completes the pool-policy and retained-asset correction.
+Focused pure/host and governed PocketIC evidence covers historical-plan
+selection, Root upgrade, retained-principal refresh and capacity-preserving 5T
+claim/install. The separately authorized downstream Root upgrade and asset
+refresh completed without replacing a canister or journal; open 0.109.6 adds
+raw actual, required and deficit integers to the rounded diagnostic exposed by
+that repair, adopts the already-applied exact Root artifact through a separate
+immutable receipt and replaces product-version recovery pairs with bounded
+typed contracts. Its `CANIC-041` follow-up binds terminal closure to the exact
+durable Component journal rather than fixed sequence 7 and adds the retained-
+repair host/PocketIC journey. `CANIC-042` additionally makes first,
+intermediate and terminal Root runtime-activation observations accept any
+strictly monotonic bounded progress without weakening receipt authority; the
+five-Component local PocketIC journey reaches catalog publication. Run the
+fresh complete maintainer gate on the immutable candidate and publish the
+matching patch before continuing B8 from the downstream `v0.2.0` recovery
+checkout with a
+read-only plan that requires the unchanged digest, zero debit and
+`fleet_component_provisioning` next before separately authorizing one resume.
 The earlier published `v0.109.2`
 contains the zero-to-five pool/revision-4 recovery plus the funding/journal
 part of `CANIC-029`. Only after deployed-state/admission evidence closes B8,

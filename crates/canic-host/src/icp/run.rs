@@ -2,13 +2,11 @@ use std::{
     fs::File,
     io::{self, Read, Write},
     path::Path,
-    process::{Command, Output, Stdio},
+    process::{Command, Stdio},
     thread,
-    time::Duration,
 };
 
-const EXECUTABLE_BUSY_RETRY_ATTEMPTS: usize = 8;
-const EXECUTABLE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
+use crate::output_with_executable_busy_retry;
 
 use super::{
     command::{command_display, configure_inherited_fd, ensure_command_compatible},
@@ -188,21 +186,6 @@ pub fn run_raw_output(
         stdout: output.stdout,
         stderr: output.stderr,
     })
-}
-
-pub(super) fn output_with_executable_busy_retry(command: &mut Command) -> io::Result<Output> {
-    for attempt in 0..EXECUTABLE_BUSY_RETRY_ATTEMPTS {
-        match command.output() {
-            Err(error)
-                if error.kind() == io::ErrorKind::ExecutableFileBusy
-                    && attempt + 1 < EXECUTABLE_BUSY_RETRY_ATTEMPTS =>
-            {
-                thread::sleep(EXECUTABLE_BUSY_RETRY_DELAY);
-            }
-            result => return result,
-        }
-    }
-    unreachable!("bounded executable-busy retry always returns on its final attempt")
 }
 
 fn is_icp_program(program: &str) -> bool {

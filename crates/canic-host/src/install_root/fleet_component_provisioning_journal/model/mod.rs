@@ -21,7 +21,7 @@ use canic_core::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
-pub(super) const JOURNAL_SCHEMA_VERSION: u32 = 1;
+pub(in crate::install_root) const JOURNAL_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -58,6 +58,19 @@ pub(in crate::install_root) struct FleetComponentProvisioningInstallJournal {
 pub(in crate::install_root) struct ResolvedFleetComponentProvisioningInstall {
     pub journal: FleetComponentProvisioningInstallJournal,
     pub path: PathBuf,
+}
+
+/// Exact durable terminal journal evidence consumed by fresh-install session closure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::install_root) struct FleetComponentProvisioningTerminalEvidence {
+    pub schema_version: u32,
+    pub sequence: u64,
+    pub journal_digest: [u8; 32],
+    pub fleet_install_plan_digest: [u8; 32],
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub catalog_entry: FleetCatalogEntryV1,
+    pub catalog_hash: [u8; 32],
 }
 
 pub(in crate::install_root) struct PlanFleetComponentProvisioningInstallRequest<'a> {

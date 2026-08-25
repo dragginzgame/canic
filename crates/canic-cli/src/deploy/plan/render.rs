@@ -160,6 +160,10 @@ fn append_install_recovery(lines: &mut Vec<String>, recovery: &FreshFleetInstall
         recovery.retained_builder_version
     ));
     lines.push(format!(
+        "  retained_plan_contract: {}",
+        recovery.retained_plan_contract.as_str()
+    ));
+    lines.push(format!(
         "  fresh_fleet_plan_digest: {}",
         recovery.fresh_fleet_plan_digest
     ));

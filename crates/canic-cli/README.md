@@ -196,7 +196,27 @@ Registry, and every root's exact Mirror and Directories. It then provisions
 and activates configured initial Components, seals root inventory, activates
 every selected root, and publishes the terminal Coordinator-anchored Fleet
 catalog. An interruption before that boundary is not a partially successful
-Fleet; rerun the exact command for same-release reconciliation.
+Fleet; rerun the exact command for reconciliation under the retained typed
+session and journal contracts. Terminal catalog publication closes the install
+session. Later code changes must wait for and use a separately supported
+managed-upgrade workflow; they cannot reopen fresh-install recovery.
+
+An exceptional retained session whose Root was already repaired with a
+state-preserving upgrade can authorize that exact live artifact once:
+
+```bash
+canic install <app> <fleet> \
+  --fleet-input <path> \
+  --expected-plan-digest <sha256> \
+  --adopt-retained-root-repair <root-principal>=<raw-root-wasm>
+```
+
+Canic hashes the raw Wasm, requires exact predecessor Candid, rechecks the
+retained controller and protected Fleet authority, and replays the exact
+retained Component Registry preparation as an idempotent stable-state proof.
+Only then does it publish a separate immutable repair receipt and resume. The
+option neither performs the upgrade nor edits the original install journal,
+and it is not a general cross-release adoption surface.
 
 Once an install has finalized its release build, another fresh Fleet under the
 same ICP root can reuse those exact artifacts without running Cargo again:

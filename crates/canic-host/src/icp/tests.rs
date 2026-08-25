@@ -121,7 +121,7 @@ fn command_output_retries_a_transient_executable_busy_race() {
     });
     let mut command = Command::new(&executable);
 
-    let output = super::run::output_with_executable_busy_retry(&mut command)
+    let output = crate::output_with_executable_busy_retry(&mut command)
         .expect("retry transient executable-busy failure");
     release_writer
         .join()

@@ -348,7 +348,8 @@ mod tests {
         );
 
         let next = diagnostic.next.expect("recovery remediation");
-        assert!(next.contains("release explicitly admitted for the retained install recovery"));
+        assert!(next.contains("typed session/journal diagnostic"));
+        assert!(next.contains("export an unsupported schema"));
         assert!(next.contains("do not add ledger funds"));
         assert!(!next.contains("sufficient funds"));
     }
