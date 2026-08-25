@@ -548,7 +548,7 @@ mirror, so a same-authority reinstall cannot manufacture a repair receipt. The
 original install journal is never edited.
 
 That paragraph records the published 0.109.6 contract and the proof that later
-failed against legitimate live reservation progress. Open 0.109.7 hard-cuts
+failed against legitimate live reservation progress. Published 0.109.7 hard-cuts
 the input to
 `<ROOT>,<POOL>=<LIVE_PREDECESSOR_WASM>,<SUCCESSOR_WASM>` and owns the complete
 procedure. It verifies the exact currently live artifact and controller/Fleet
@@ -794,7 +794,7 @@ Fleet Registry revision 4. The complete maintainer gate last passed before
 `CANIC-042`; this new runtime correction requires one fresh unmodified gate at
 the immutable versioning candidate.
 
-Open 0.109.7 replaces the earlier adoption-shaped fixture shortcut with one
+Published 0.109.7 replaces the earlier adoption-shaped fixture shortcut with one
 production-boundary journey. The test installs an exact-Candid retained Root
 fixture, gives one Root-controlled imported asset an exact undersized balance,
 then calls the production pre-repair authority verifier, repair executor and
@@ -842,18 +842,51 @@ the exact repair procedure; IcyDB 0.240.1 lifecycle composition; and the
 remaining native runtime, blob-storage, payload and instruction-audit suites.
 No version, tag, package publication or downstream effect was performed.
 
+`CANIC-047` was then reproduced from a fresh single-Root five-Component
+installation. The Root autonomously reached terminal `Published` with all five
+Component Directories before the Coordinator recorded any intermediate
+publication. The Coordinator retained a zero predecessor and rejected the
+complete `0 -> 5` observation as E132 because Directory confirmation and stale-
+request replay required exact `+1` progress. The durable confirmation intent
+therefore could not converge even though operation, plan, Registry, Directory
+and terminal receipt evidence was valid.
+
+Open 0.109.8 replaces that observation-interval assumption with bounded non-
+regressing publication validation. Exact operation, plan, configuration,
+Registry, Root, Component count, ordered Component Directory evidence,
+Component Group Directory hash, terminal receipt and timing validation remain
+unchanged. The common fresh-install and selected-Root scale-out path accepts a
+complete first observation or partial coalesced progress. Stale replay accepts
+any valid first snapshot and strictly advancing successors while still
+rejecting regression, overflow, changed authority and corrupt evidence.
+
+Focused current-source evidence:
+
+```text
+cargo test --locked -p canic-control-plane directory_publication --lib -- --nocapture
+# PASS: 6 tests; terminal 0 -> 5, partial 0 -> 3 -> 5, fail-closed malformed
+# snapshots, retained E132 clearing, stale replay, runtime continuation and
+# scale-out
+
+cargo test --locked -p canic-control-plane --lib -- --nocapture
+# PASS: 236 tests, including the complete 39-test Coordinator workflow module
+
+cargo clippy --locked -p canic-control-plane --lib --tests -- -D warnings
+# PASS
+```
+
 The remaining feedback is routed without widening B8 or adding product
 capability to B9:
 
 | Feedback | Disposition |
 | --- | --- |
 | `CANIC-026` supported managed-App qualification harness | Scheduled as a separate bounded B10 support batch after B9, so the pure simplification batch does not acquire another product capability. It must replace downstream private payload/lifecycle plumbing without creating runtime authority. |
-| `CANIC-028` named-environment artifact advice | Corrected in open 0.109.7: exact selected-root observation remains, while the diagnostic names matching initial-install build/finalization or an existing finalized `--release-build`; it no longer recommends a `canic build` command that cannot populate the observed named-environment root. |
+| `CANIC-028` named-environment artifact advice | Corrected in published 0.109.7: exact selected-root observation remains, while the diagnostic names matching initial-install build/finalization or an existing finalized `--release-build`; it no longer recommends a `canic build` command that cannot populate the observed named-environment root. |
 | Retained-decision source drift | Non-blocking operator diagnostic defect remains assigned to B9: identify workspace-source drift, name the exact retained source identity/revision and omit unrelated identity/funding remediation after those checks pass. |
-| `CANIC-043` atomic repair syntax | Corrected in open 0.109.7: parser, help, README and examples use only `ROOT,POOL=LIVE_PREDECESSOR_WASM,SUCCESSOR_WASM`; the 0.109.6 form rejects with the complete hard-cut replacement. |
-| `CANIC-044` monotonic Registry proof | Corrected in open 0.109.7: the existing protected preparation command supplies a status-like non-mutating replay, and the host accepts only exact immutable authority plus monotonic live progress. The production-boundary PocketIC journey calls both sides. |
-| `CANIC-045` receipt/operation convergence | Corrected in open 0.109.7: a published receipt can terminalize only the exact retained `AssetReady` operation without a remote effect; earlier or conflicting state fails closed. |
-| `CANIC-046` IcyDB patch alignment | Corrected in open 0.109.7: all six locked IcyDB packages and the composed-framework fixture/evidence use exact published 0.240.1. |
+| `CANIC-043` atomic repair syntax | Corrected in published 0.109.7: parser, help, README and examples use only `ROOT,POOL=LIVE_PREDECESSOR_WASM,SUCCESSOR_WASM`; the 0.109.6 form rejects with the complete hard-cut replacement. |
+| `CANIC-044` monotonic Registry proof | Corrected in published 0.109.7: the existing protected preparation command supplies a status-like non-mutating replay, and the host accepts only exact immutable authority plus monotonic live progress. The production-boundary PocketIC journey calls both sides. |
+| `CANIC-045` receipt/operation convergence | Corrected in published 0.109.7: a published receipt can terminalize only the exact retained `AssetReady` operation without a remote effect; earlier or conflicting state fails closed. |
+| `CANIC-046` IcyDB patch alignment | Corrected in published 0.109.7: all six locked IcyDB packages and the composed-framework fixture/evidence use exact published 0.240.1. |
 | `CANIC-030` retained funded Saltz asset | The open repository-estate cleanup now archives the exact calibration and terminal disposition record instead of deleting the only retained evidence for the live external canister and its approximately `2.590 Pcycles`; it authorizes no external effect. |
 | `CANIC-006` state-preserving release transition | Already owned by scheduled 0.111's exact stop-the-world predecessor-to-successor transition. It remains blocked on the accepted 0.109 and 0.110 gates. |
 | `CANIC-005` application retirement acknowledgement | Already owned by scheduled 0.110 B2. It remains blocked on 0.109 closeout and explicit 0.110 promotion. |
@@ -874,14 +907,16 @@ contracts and closes recovery after terminal catalog publication using the
 exact terminal-journal digest rather than a fixed journal sequence. It also
 accepts strictly monotonic coalesced Root runtime-activation observations and
 has focused plus real five-Component PocketIC proof. The complete maintainer
-gate and immutable publication are finished. Open 0.109.7 completes the
+gate and immutable publication are finished. Published 0.109.7 completes the
 retained Root/pool procedure, fixes its live Component Registry proof and
 receipt/operation interruption boundary, makes Medic and Cargo diagnostics
 recovery-aware, hardens release completeness and advances the generic
 composed-framework fixture to exact published IcyDB 0.240.1. Focused compile,
 authority, funding arithmetic, interruption, ownership and warning-denied
-fixture Clippy evidence passes, and the complete maintainer gate passes on the
-final source candidate. Patch publication and the exact downstream resume
-remain pending. B8 stays open until that release plus
-deployed-state/admission proof are accepted; B9 remains blocked until that
+fixture Clippy evidence passes, the complete maintainer gate passes on the
+final source candidate and the complete matching package set is published.
+Open 0.109.8 corrects `CANIC-047` under the unchanged Directory evidence and
+receipt authority, with focused pure and Coordinator workflow proof. B8 stays
+open until the exact downstream resume plus deployed-state/admission proof are
+accepted; B9 remains blocked until that
 evidence is accepted, and B10/0.110 remain blocked behind B9.

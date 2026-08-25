@@ -59,8 +59,8 @@ use canic_core::{
             FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
             FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
             FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
-            FleetSubnetRootProvisioningBatch, RootComponentActivationEvidence,
-            RootComponentDirectorySynchronizationResponse,
+            FleetComponentPublicationRootProgress, FleetSubnetRootProvisioningBatch,
+            RootComponentActivationEvidence, RootComponentDirectorySynchronizationResponse,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningPhase,
             RootComponentProvisioningResult, RootComponentProvisioningStatusResponse,
             RootComponentPublicationEvidence, RootComponentPublicationRequest,
@@ -95,7 +95,7 @@ use canic_core::{
         },
     },
     ids::{
-        AppId, CanonicalNetworkId, ComponentBinding, ComponentGroupPlacementId,
+        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentGroupPlacementId,
         ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget, FleetAdmissionRule,
         FleetAdmissionSelector, FleetBinding, FleetCoordinatorBinding, FleetFundingProfile,
         FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding, FleetSubnetRootLimits,
@@ -669,6 +669,36 @@ fn scale_out_coordinator_config() -> ConfigModel {
 fn ordinary_scale_out_coordinator_config() -> ConfigModel {
     parse_config_model(ORDINARY_SCALE_OUT_COORDINATOR_CONFIG)
         .expect("valid ordinary scale-out Coordinator config")
+}
+
+fn five_component_coordinator_config() -> ConfigModel {
+    parse_config_model(
+        &ORDINARY_SCALE_OUT_COORDINATOR_CONFIG
+            .replace("maximum_instances = 3", "maximum_instances = 10")
+            .replace(
+                r#"[component_groups.project_cell.components.project]
+component_spec = "projects""#,
+                r#"[component_groups.project_cell.components.alpha]
+component_spec = "projects"
+
+[component_groups.project_cell.components.beta]
+component_spec = "projects"
+
+[component_groups.project_cell.components.delta]
+component_spec = "projects"
+
+[component_groups.project_cell.components.epsilon]
+component_spec = "projects"
+
+[component_groups.project_cell.components.gamma]
+component_spec = "projects""#,
+            )
+            .replace(
+                "placement.maximum_per_root = 1",
+                "placement.maximum_per_root = 2",
+            ),
+    )
+    .expect("valid five-Component Coordinator config")
 }
 
 fn repeated_scale_out_coordinator_config() -> ConfigModel {
@@ -2623,6 +2653,32 @@ fn drive_terminal_fresh_install_with_admission(
     drive_runtime_activation(status, 300)
 }
 
+fn drive_single_root_fresh_install_to_service_topology(
+    config: &ConfigModel,
+) -> FleetComponentProvisioningStatusResponse {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (_root, _version) = activate_one_root_with_config(principal(200), config, 10);
+    let registry = FleetCoordinatorWorkflow::registry().expect("active Registry");
+    let plan = initial_scale_out_component_plan(config, &registry);
+    let mut status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(
+            config,
+            FleetComponentProvisioningPrepareRequest {
+                operation_id: [101; 32],
+                plan,
+            },
+            100,
+        )
+        .expect("prepare single-root five-Component plan");
+    status = drive_root_acceptance(config, status, 110);
+    status = drive_root_provisioning(config, status, 120);
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::publish_component_provisioning_services(
+        &root_provision_advance_request(&status),
+        200,
+    )
+    .expect("publish single-root five-Component topology")
+}
+
 fn drive_fresh_install_to_directories_with_admission(
     config: &ConfigModel,
     maximum_root_instances: u32,
@@ -2758,6 +2814,236 @@ fn drive_runtime_activation(
         now += 3;
     }
     status
+}
+
+#[test]
+fn coordinator_accepts_terminal_directory_publication_after_missing_every_component() {
+    let config = five_component_coordinator_config();
+    let status = drive_single_root_fresh_install_to_service_topology(&config);
+    assert_eq!(
+        status.phase,
+        FleetComponentProvisioningPhase::ServiceTopologyPublished
+    );
+    assert_eq!(status.root_batch_count, 1);
+    assert_eq!(status.component_count, 5);
+
+    let request = root_provision_advance_request(&status);
+    let FleetComponentDirectoryConfirmationDisposition::Invoke(
+        FleetComponentDirectoryConfirmationCallView::FreshPublication {
+            fleet_subnet_root,
+            ..
+        },
+    ) = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        advance_component_directory_confirmation(&request, 210)
+        .expect("persist first Directory publication observation")
+    else {
+        panic!("first Directory publication observation must query its Root")
+    };
+    let durable_intent = FleetCoordinatorRegistryStore::export();
+    let response = terminal_directory_response(fleet_subnet_root, 211);
+
+    let mut invalid_responses = Vec::new();
+    let mut wrong_root = response.clone();
+    wrong_root.fleet_subnet_root = principal(250);
+    invalid_responses.push(wrong_root);
+    let mut changed_count = response.clone();
+    changed_count.component_count = 6;
+    invalid_responses.push(changed_count);
+    let mut excessive_progress = response.clone();
+    excessive_progress.published_component_count = 6;
+    invalid_responses.push(excessive_progress);
+    let mut wrong_receipt = response.clone();
+    wrong_receipt.receipt_content_hash[0] ^= 1;
+    invalid_responses.push(wrong_receipt);
+
+    for invalid in invalid_responses {
+        let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            record_component_directory_confirmation(&request, invalid, 212)
+            .expect_err("invalid coalesced Directory publication must fail closed");
+        assert_eq!(
+            conflict.public_error().code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
+        assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+    }
+
+    let failed = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_failure(
+            FleetComponentProvisioningStatusRequest {
+                operation_id: request.operation_id,
+                plan_hash: request.plan_hash,
+            },
+            canic_core::diagnostics::codes::STATE_CONFLICT
+                .raw_code()
+                .raw(),
+            212,
+        )
+        .expect("retain the observed Directory confirmation failure");
+    assert_eq!(
+        failed
+            .pending_root_failure
+            .expect("pending Directory confirmation failure")
+            .diagnostic_code,
+        canic_core::diagnostics::codes::STATE_CONFLICT
+            .raw_code()
+            .raw()
+    );
+
+    let confirmed = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_directory_confirmation(&request, response, 213)
+        .expect("accept fully published Root as the first Directory observation");
+    assert_eq!(
+        confirmed.phase,
+        FleetComponentProvisioningPhase::DirectoriesConfirmed
+    );
+    assert_eq!(confirmed.directory_confirmed_root_count, 1);
+    assert_eq!(confirmed.current_publication, None);
+    assert_eq!(confirmed.publication_in_flight_root, None);
+    assert_eq!(confirmed.pending_root_failure, None);
+
+    let durable_confirmation = FleetCoordinatorRegistryStore::export();
+    let FleetComponentDirectoryConfirmationDisposition::Current(replayed) =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&request, 999)
+            .expect("replay terminal Directory publication after missed observations")
+    else {
+        panic!("terminal Directory publication retry must return retained progress")
+    };
+    assert_eq!(*replayed, confirmed);
+    assert_eq!(
+        FleetCoordinatorRegistryStore::export(),
+        durable_confirmation
+    );
+
+    let terminal = drive_runtime_activation(confirmed, 300);
+    assert_eq!(
+        terminal.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+    assert_eq!(terminal.runtime_activated_root_count, 1);
+}
+
+#[test]
+fn coordinator_accepts_partial_coalesced_directory_publication_and_rejects_regression() {
+    let config = five_component_coordinator_config();
+    let status = drive_single_root_fresh_install_to_service_topology(&config);
+    let first_request = root_provision_advance_request(&status);
+    let FleetComponentDirectoryConfirmationDisposition::Invoke(
+        FleetComponentDirectoryConfirmationCallView::FreshPublication {
+            fleet_subnet_root,
+            ..
+        },
+    ) = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        advance_component_directory_confirmation(&first_request, 210)
+        .expect("persist first partial Directory observation")
+    else {
+        panic!("first partial Directory observation must query its Root")
+    };
+
+    let partial = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_directory_confirmation(
+            &first_request,
+            partial_directory_response(fleet_subnet_root, 3),
+            212,
+        )
+        .expect("accept zero-to-three Directory publication progress");
+    assert_eq!(
+        partial.current_publication,
+        Some(FleetComponentPublicationRootProgress {
+            fleet_subnet_root,
+            component_count: 5,
+            published_component_count: 3,
+        })
+    );
+    assert_eq!(partial.publication_in_flight_root, None);
+
+    let durable_partial = FleetCoordinatorRegistryStore::export();
+    let FleetComponentDirectoryConfirmationDisposition::Current(replayed) =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&first_request, 999)
+            .expect("replay first coalesced Directory observation")
+    else {
+        panic!("first coalesced Directory observation retry must return current progress")
+    };
+    assert_eq!(*replayed, partial);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_partial);
+
+    let terminal_request = root_provision_advance_request(&partial);
+    let FleetComponentDirectoryConfirmationDisposition::Invoke(
+        FleetComponentDirectoryConfirmationCallView::FreshPublication { .. },
+    ) = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        advance_component_directory_confirmation(&terminal_request, 220)
+        .expect("persist terminal Directory observation")
+    else {
+        panic!("terminal Directory observation must query its Root")
+    };
+    let durable_terminal_intent = FleetCoordinatorRegistryStore::export();
+    let regression = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_directory_confirmation(
+            &terminal_request,
+            partial_directory_response(fleet_subnet_root, 2),
+            222,
+        )
+        .expect_err("Directory publication count regression must fail closed");
+    assert_eq!(
+        regression.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+    );
+    assert_eq!(
+        FleetCoordinatorRegistryStore::export(),
+        durable_terminal_intent
+    );
+
+    let confirmed = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_directory_confirmation(
+            &terminal_request,
+            terminal_directory_response(fleet_subnet_root, 221),
+            223,
+        )
+        .expect("accept three-to-five terminal Directory publication progress");
+    assert_eq!(
+        confirmed.phase,
+        FleetComponentProvisioningPhase::DirectoriesConfirmed
+    );
+
+    let durable_confirmation = FleetCoordinatorRegistryStore::export();
+    let FleetComponentDirectoryConfirmationDisposition::Current(replayed) =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&terminal_request, 999)
+            .expect("replay intermediate-to-terminal Directory publication")
+    else {
+        panic!("terminal coalesced Directory retry must return retained progress")
+    };
+    assert_eq!(*replayed, confirmed);
+    assert_eq!(
+        FleetCoordinatorRegistryStore::export(),
+        durable_confirmation
+    );
+}
+
+#[test]
+fn scale_out_accepts_coalesced_terminal_directory_publication() {
+    let config = five_component_coordinator_config();
+    let status = drive_single_root_fresh_install_to_service_topology(&config);
+    let status = drive_directory_confirmation(status, 210);
+    let status = drive_runtime_activation(status, 300);
+    assert_eq!(
+        status.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+
+    let registry = FleetCoordinatorWorkflow::registry().expect("published Registry");
+    let request = FleetComponentProvisioningPrepareRequest {
+        operation_id: [111; 32],
+        plan: scale_out_plan_on_root(&config, &registry, 1, 2, 0),
+    };
+    let terminal = drive_terminal_scale_out(&config, request, 1_000);
+    assert_eq!(
+        terminal.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+    assert_eq!(terminal.component_count, 5);
+    assert_eq!(terminal.directory_confirmed_root_count, 1);
 }
 
 #[test]
@@ -3832,6 +4118,32 @@ fn provisioning_acceptances(
     }
 }
 
+fn provisioned_group_member(
+    batch: &FleetSubnetRootProvisioningBatch,
+    entry: &ComponentGroupPlanEntry,
+    role: CanisterRole,
+    identity_byte: u8,
+) -> RootProvisionedGroupMember {
+    RootProvisionedGroupMember {
+        member_path: entry.member_path.clone(),
+        component_spec: entry.component_spec.clone(),
+        purpose: entry.purpose.clone(),
+        limits: entry.limits.clone(),
+        binding: ComponentBinding {
+            authority: batch.root.authority.clone(),
+            component: ComponentInstanceId::from_generated_bytes([identity_byte; 32]),
+            component_spec: entry.component_spec.clone(),
+            spec_hash: entry.spec_hash,
+            role,
+            placement_subnet: batch.root.placement_subnet,
+            fleet_subnet_root: batch.root.fleet_subnet_root,
+            canister_id: principal(identity_byte),
+        },
+        component_registry_revision: u64::from(identity_byte),
+        component_registry_content_hash: [identity_byte; 32],
+    }
+}
+
 fn provisioned_root_response(
     config: &ConfigModel,
     record: &crate::storage::stable::fleet_coordinator::FleetComponentProvisioningRecord,
@@ -3852,6 +4164,7 @@ fn provisioned_root_response(
         .checked_add(49)
         .and_then(|base| base.checked_add(u8::try_from(root_index).expect("root index byte")))
         .expect("test identity byte");
+    let mut next_identity_byte = identity_byte;
     let result = RootComponentProvisioningResult {
         placements: batch
             .placements
@@ -3864,26 +4177,16 @@ fn provisioned_root_response(
                     .iter()
                     .map(|entry| {
                         let spec = topology.get(&entry.component_spec).expect("known Spec");
-                        RootProvisionedGroupMember {
-                            member_path: entry.member_path.clone(),
-                            component_spec: entry.component_spec.clone(),
-                            purpose: entry.purpose.clone(),
-                            limits: entry.limits.clone(),
-                            binding: ComponentBinding {
-                                authority: batch.root.authority.clone(),
-                                component: ComponentInstanceId::from_generated_bytes(
-                                    [identity_byte; 32],
-                                ),
-                                component_spec: entry.component_spec.clone(),
-                                spec_hash: entry.spec_hash,
-                                role: spec.component_role.clone(),
-                                placement_subnet: batch.root.placement_subnet,
-                                fleet_subnet_root: batch.root.fleet_subnet_root,
-                                canister_id: principal(identity_byte),
-                            },
-                            component_registry_revision: u64::from(identity_byte),
-                            component_registry_content_hash: [identity_byte; 32],
-                        }
+                        let member_identity_byte = next_identity_byte;
+                        next_identity_byte = next_identity_byte
+                            .checked_add(1)
+                            .expect("test member identity byte");
+                        provisioned_group_member(
+                            batch,
+                            entry,
+                            spec.component_role.clone(),
+                            member_identity_byte,
+                        )
                     })
                     .collect(),
             })
@@ -4239,6 +4542,21 @@ fn terminal_directory_response(
     fleet_subnet_root: Principal,
     published_at_ns: u64,
 ) -> RootComponentProvisioningStatusResponse {
+    directory_response(fleet_subnet_root, None, Some(published_at_ns))
+}
+
+fn partial_directory_response(
+    fleet_subnet_root: Principal,
+    published_component_count: u32,
+) -> RootComponentProvisioningStatusResponse {
+    directory_response(fleet_subnet_root, Some(published_component_count), None)
+}
+
+fn directory_response(
+    fleet_subnet_root: Principal,
+    published_component_count: Option<u32>,
+    published_at_ns: Option<u64>,
+) -> RootComponentProvisioningStatusResponse {
     let durable = FleetCoordinatorRegistryStore::export();
     let current = durable.current.as_ref().expect("Coordinator state");
     let record = current
@@ -4256,10 +4574,13 @@ fn terminal_directory_response(
     let batch = &record.plan.batches[context.root_index];
     assert_eq!(batch.root.fleet_subnet_root, fleet_subnet_root);
     let result = context.previous.result.clone().expect("provisioned result");
+    let published_component_count =
+        published_component_count.unwrap_or(context.previous.component_count);
     let component_directories = result
         .placements
         .iter()
         .flat_map(|placement| &placement.members)
+        .take(usize::try_from(published_component_count).expect("published Component count"))
         .map(|member| ComponentDirectoryPublicationEvidence {
             component: member.binding.component,
             content_hash: member.component_registry_content_hash,
@@ -4302,29 +4623,33 @@ fn terminal_directory_response(
         component_directories,
         component_group_directories,
     };
-    let receipt_content_hash = RootComponentProvisioningReceiptOps::published_content_hash(
-        RootComponentProvisioningPublishedReceiptAuthority {
-            operation_id: record.operation_id,
-            plan_hash: record.plan_hash,
-            configuration_digest: record.plan.configuration_digest,
-            root: &batch.root,
-            result: &result,
-            publication: &publication,
-            accepted_at_ns: context.previous.accepted_at_ns,
-            provisioned_at_ns: context
-                .previous
-                .provisioned_at_ns
-                .expect("provisioned time"),
-            published_at_ns,
-        },
-    )
-    .expect("published receipt hash");
+    let receipt_content_hash = published_at_ns.map(|published_at_ns| {
+        RootComponentProvisioningReceiptOps::published_content_hash(
+            RootComponentProvisioningPublishedReceiptAuthority {
+                operation_id: record.operation_id,
+                plan_hash: record.plan_hash,
+                configuration_digest: record.plan.configuration_digest,
+                root: &batch.root,
+                result: &result,
+                publication: &publication,
+                accepted_at_ns: context.previous.accepted_at_ns,
+                provisioned_at_ns: context
+                    .previous
+                    .provisioned_at_ns
+                    .expect("provisioned time"),
+                published_at_ns,
+            },
+        )
+        .expect("published receipt hash")
+    });
     let mut response = context.previous;
-    response.phase = RootComponentProvisioningPhase::Published;
-    response.published_component_count = response.component_count;
+    response.published_component_count = published_component_count;
     response.publication = Some(publication);
-    response.published_at_ns = Some(published_at_ns);
-    response.receipt_content_hash = receipt_content_hash;
+    if let Some(published_at_ns) = published_at_ns {
+        response.phase = RootComponentProvisioningPhase::Published;
+        response.published_at_ns = Some(published_at_ns);
+        response.receipt_content_hash = receipt_content_hash.expect("terminal receipt hash");
+    }
     response
 }
 
@@ -4701,6 +5026,38 @@ fn assert_corrupt_root_acceptance_fails_closed(config: &ConfigModel, plan_hash: 
         canic_core::diagnostics::codes::STATE_INVALID
     );
     FleetCoordinatorRegistryStore::import(exact);
+}
+
+fn activate_one_root_with_config(
+    coordinator: Principal,
+    config: &ConfigModel,
+    maximum_root_instances: u32,
+) -> (FleetSubnetRootEntry, FleetRegistryVersion) {
+    let args = init_args_with_config(coordinator, config);
+    let topology = args
+        .component_deployment_configuration
+        .component_topology
+        .clone();
+    FleetCoordinatorWorkflow::initialize(args, principal(60), true, coordinator)
+        .expect("commit genesis");
+    let root = joining_entry(&topology, 61, 62, maximum_root_instances);
+    let joined = FleetCoordinatorWorkflow::join_root(FleetSubnetRootJoinRequest {
+        expected_registry: FleetCoordinatorWorkflow::version().expect("genesis version"),
+        entry: root.clone(),
+    })
+    .expect("join root");
+    FleetCoordinatorWorkflow::acknowledge_root_snapshot(
+        root.fleet_subnet_root,
+        canic_core::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
+            version: joined.version.clone(),
+        },
+    )
+    .expect("acknowledge joining snapshot");
+    let active = FleetCoordinatorWorkflow::activate_registry(FleetRegistryActivationRequest {
+        expected_registry: joined.version,
+    })
+    .expect("activate root");
+    (root, active.version)
 }
 
 fn activate_two_roots(
@@ -5520,7 +5877,7 @@ fn joining_entry(
         },
         funding: crate::test_support::fleet_subnet_root_funding_authority(),
         limits: FleetSubnetRootLimits {
-            maximum_component_instances: 3,
+            maximum_component_instances: maximum_root_instances.max(3),
             maximum_registry_bytes: 2_097_152,
             maximum_wasm_store_bytes: 268_435_456,
             maximum_group_placements: 16,

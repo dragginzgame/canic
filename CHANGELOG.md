@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.8` lets the Coordinator reconcile bounded monotonic coalesced
+  Component Directory publication observed from an autonomously advancing
+  Root, preserving exact authority, evidence and replay validation while
+  preventing fresh-install and scale-out confirmation stalls.
 - `0.109.7` completes the retained Root and pool-asset repair as one
   authority-bound, exactly reconciled and interruption-safe operation; keeps
   its protected Component Registry proof non-mutating across live provisioning

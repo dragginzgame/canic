@@ -124,7 +124,7 @@ authorization, and Toko remains read-only from this repository.
 
 ## Current published-IcyDB refresh
 
-The open 0.109.7 draft resolves all six IcyDB packages at exact published
+Published 0.109.7 resolves all six IcyDB packages at exact published
 0.240.1. The existing fixture required no source adaptation. Its focused
 refresh qualification passed:
 
