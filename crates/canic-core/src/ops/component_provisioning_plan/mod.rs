@@ -16,6 +16,7 @@ pub use scale_out::{
 
 use crate::{
     InternalError,
+    cdk::types::Cycles,
     config::{
         ComponentDeploymentConfiguration, ComponentDeploymentPurpose, ComponentGroupDeploymentSpec,
         ComponentGroupDeploymentTopology, ComponentTopology, ConfigModel,
@@ -227,6 +228,25 @@ pub enum ComponentProvisioningPlanOpsError {
 pub struct ComponentProvisioningPlanOps;
 
 impl ComponentProvisioningPlanOps {
+    /// Resolve the exact top-level prepaid-Canister demand in canonical batch order.
+    pub fn root_batch_initial_cycle_demands(
+        config: &ConfigModel,
+        batch: &FleetSubnetRootProvisioningBatch,
+    ) -> Result<Vec<Cycles>, InternalError> {
+        batch
+            .placements
+            .iter()
+            .flat_map(|placement| &placement.entries)
+            .map(|entry| {
+                config
+                    .component_specs
+                    .get(&entry.component_spec)
+                    .map(|component| component.initial_cycles.clone())
+                    .ok_or_else(InternalError::conflict)
+            })
+            .collect()
+    }
+
     /// Validate one plan against checked-in configuration and the exact current Fleet Registry.
     pub fn validate(
         config: &ConfigModel,

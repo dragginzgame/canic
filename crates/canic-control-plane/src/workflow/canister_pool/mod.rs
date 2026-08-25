@@ -3,7 +3,9 @@
 mod refill;
 
 use crate::ops::{
-    canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps,
+    canister_pool::{CanisterPoolOps, CanisterPoolResetPreparation},
+    component_provisioning::RootComponentProvisioningOps,
+    component_registry::ComponentRegistryOps,
     storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
 use canic_core::{
@@ -11,14 +13,19 @@ use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::{
         error::InternalError,
-        ops::async_job_recovery::{
-            AsyncJobAttempt, AsyncJobClaim, AsyncJobCompletion, AsyncJobOwner, AsyncJobRecoveryOps,
-        },
-        ops::ic::{
-            IcOps,
-            build_network::BuildNetworkOps,
-            mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
-            nns::NnsRegistryOps,
+        ops::{
+            async_job_recovery::{
+                AsyncJobAttempt, AsyncJobClaim, AsyncJobCompletion, AsyncJobOwner,
+                AsyncJobRecoveryOps,
+            },
+            component_provisioning_plan::ComponentProvisioningPlanOps,
+            config::ConfigOps,
+            ic::{
+                IcOps,
+                build_network::BuildNetworkOps,
+                mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
+                nns::NnsRegistryOps,
+            },
         },
         workflow::runtime::fleet_activation::FleetActivationWorkflow,
     },
@@ -121,7 +128,9 @@ pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, Inter
         }
         PoolAdminCommand::Import { canister_id } => import(canister_id).await,
         PoolAdminCommand::RetryReset { canister_id } => {
-            CanisterPoolOps::retry_reset(canister_id, IcOps::now_nanos())?;
+            let config = pool_config()?;
+            let required_cycles = required_pool_asset_cycles(&config)?;
+            CanisterPoolOps::retry_reset(canister_id, &required_cycles, IcOps::now_nanos())?;
             Ok(PoolAdminResponse::ResetQueued { canister_id })
         }
         PoolAdminCommand::Handoff {
@@ -535,35 +544,26 @@ async fn reset_asset(
     canister_id: Principal,
     config: &FleetSubnetCanisterPoolConfig,
 ) -> Result<ResetAssetOutcome, InternalError> {
-    if CanisterPoolOps::asset_is_ready(canister_id)? {
+    let required_cycles = required_pool_asset_cycles(config)?;
+    let preparation = CanisterPoolOps::prepare_ready_reinspection(
+        canister_id,
+        &required_cycles,
+        IcOps::now_nanos(),
+    )?;
+    if preparation == CanisterPoolResetPreparation::Ready {
         return Ok(ResetAssetOutcome::Ready);
     }
     let root = IcOps::canister_self();
-    let result: Result<Cycles, InternalError> = async {
-        MgmtOps::update_settings(&UpdateSettingsArgs {
-            canister_id,
-            settings: CanisterSettings {
-                controllers: Some(vec![root]),
-                ..CanisterSettings::default()
-            },
-            sender_canister_version: None,
-        })
-        .await?;
-        MgmtOps::uninstall_code(canister_id).await?;
-        let cycles = MgmtOps::get_cycles(canister_id).await?;
-        Ok(cycles)
-    }
-    .await;
+    let result = observe_reset_asset_cycles(canister_id, root, preparation).await;
 
     match result {
-        Ok(cycles) if cycles >= config.canister_cycles => {
+        Ok(cycles) if cycles >= required_cycles => {
             CanisterPoolOps::mark_ready(canister_id, cycles, IcOps::now_nanos())?;
             Ok(ResetAssetOutcome::Ready)
         }
         Ok(cycles) => {
             let reason = format!(
-                "Canister pool asset {canister_id} has {cycles}, below configured {}",
-                config.canister_cycles
+                "Canister pool asset {canister_id} has {cycles}, below required {required_cycles}"
             );
             CanisterPoolOps::mark_failed(
                 canister_id,
@@ -578,6 +578,60 @@ async fn reset_asset(
             Err(error)
         }
     }
+}
+
+async fn observe_reset_asset_cycles(
+    canister_id: Principal,
+    root: Principal,
+    preparation: CanisterPoolResetPreparation,
+) -> Result<Cycles, InternalError> {
+    if preparation == CanisterPoolResetPreparation::Reinspect {
+        let status = MgmtOps::canister_status(canister_id).await?;
+        if status.settings.controllers != [root] || status.module_hash.is_some() {
+            return Err(InternalError::conflict());
+        }
+        return Cycles::try_from(status.cycles).map_err(|_error| InternalError::invariant());
+    }
+    if preparation != CanisterPoolResetPreparation::Reset {
+        return Err(InternalError::invariant());
+    }
+    MgmtOps::update_settings(&UpdateSettingsArgs {
+        canister_id,
+        settings: CanisterSettings {
+            controllers: Some(vec![root]),
+            ..CanisterSettings::default()
+        },
+        sender_canister_version: None,
+    })
+    .await?;
+    MgmtOps::uninstall_code(canister_id).await?;
+    MgmtOps::get_cycles(canister_id).await
+}
+
+fn required_pool_asset_cycles(
+    config: &FleetSubnetCanisterPoolConfig,
+) -> Result<Cycles, InternalError> {
+    let required = config.canister_cycles.clone();
+    let Some(active) = RootComponentProvisioningOps::active_operation()? else {
+        return Ok(required);
+    };
+    let app_config = ConfigOps::get()?;
+    let demands =
+        ComponentProvisioningPlanOps::root_batch_initial_cycle_demands(&app_config, &active.batch)?;
+    let claimed = usize::try_from(active.claim_cursor.claimed_component_count)
+        .map_err(|_error| InternalError::invariant())?;
+    maximum_required_pool_asset_cycles(required, &demands, claimed)
+}
+
+fn maximum_required_pool_asset_cycles(
+    configured: Cycles,
+    demands: &[Cycles],
+    claimed: usize,
+) -> Result<Cycles, InternalError> {
+    let remaining = demands
+        .get(claimed..)
+        .ok_or_else(InternalError::invariant)?;
+    Ok(remaining.iter().cloned().fold(configured, Cycles::max))
 }
 
 fn reset_admin_response(canister_id: Principal, outcome: ResetAssetOutcome) -> PoolAdminResponse {
@@ -657,6 +711,27 @@ mod tests {
         };
         assert!(require_ready_target(&config, 5).is_ok());
         assert!(require_ready_target(&config, 11).is_err());
+    }
+
+    #[test]
+    fn active_batch_demands_raise_only_the_remaining_asset_floor() {
+        let configured = Cycles::new(2_000_000_000_000);
+        let demands = vec![
+            Cycles::new(3_000_000_000_000),
+            Cycles::new(5_000_000_000_000),
+        ];
+
+        assert_eq!(
+            maximum_required_pool_asset_cycles(configured.clone(), &demands, 0)
+                .expect("complete active demand"),
+            Cycles::new(5_000_000_000_000)
+        );
+        assert_eq!(
+            maximum_required_pool_asset_cycles(configured.clone(), &demands, 2)
+                .expect("no remaining active demand"),
+            configured
+        );
+        assert!(maximum_required_pool_asset_cycles(Cycles::new(2), &demands, 3).is_err());
     }
 
     #[test]

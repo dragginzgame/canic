@@ -131,7 +131,12 @@ pub async fn accept(
     if revalidated != acceptance {
         return Err(InternalError::conflict());
     }
-    require_ready_pool_capacity(validation.component_count).await?;
+    let cycle_demands =
+        ComponentProvisioningPlanOps::root_batch_initial_cycle_demands(&config, &request.batch)?;
+    if u32::try_from(cycle_demands.len()).ok() != Some(validation.component_count) {
+        return Err(InternalError::invariant());
+    }
+    require_ready_pool_capacity(&authority.binding.limits.canister_pool, &cycle_demands).await?;
     let final_registry = current_registry_for_acceptance(&authority, root, &request, &validation)?;
     if final_registry != acceptance {
         return Err(InternalError::conflict());
@@ -301,8 +306,9 @@ pub fn status(
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
     let (authority, _root) = validated_root_authority()?;
     require_coordinator(caller, authority.binding.authority.binding.coordinator)?;
-    RootComponentProvisioningOps::status(request)
-        .map(crate::ops::component_provisioning::status_response)
+    let current = RootComponentProvisioningOps::status(request)?;
+    require_next_claim_capacity(&authority, &current)?;
+    Ok(crate::ops::component_provisioning::status_response(current))
 }
 
 /// Advance one canonical lifecycle step or freeze the complete provisioned result.
@@ -1259,16 +1265,70 @@ fn validate_group_placement_capacity(
     Ok(())
 }
 
-async fn require_ready_pool_capacity(component_count: u32) -> Result<(), InternalError> {
-    if CanisterPoolOps::ready_count() >= component_count {
+async fn require_ready_pool_capacity(
+    pool: &canic_core::ids::FleetSubnetCanisterPoolConfig,
+    cycle_demands: &[canic_core::cdk::types::Cycles],
+) -> Result<(), InternalError> {
+    if CanisterPoolOps::ready_assets_cover(cycle_demands) {
         return Ok(());
     }
+    if cycle_demands
+        .iter()
+        .any(|required| required > &pool.canister_cycles)
+    {
+        return Err(InternalError::public(
+            canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
+        ));
+    }
+    let ready_target =
+        u32::try_from(cycle_demands.len()).map_err(|_error| InternalError::resource_exhausted())?;
     let _maintenance =
-        crate::workflow::canister_pool::maintain_ready_capacity_once(component_count).await?;
-    if CanisterPoolOps::ready_count() < component_count {
-        return Err(InternalError::unavailable());
+        crate::workflow::canister_pool::maintain_ready_capacity_once(ready_target).await?;
+    if CanisterPoolOps::ready_assets_cover(cycle_demands) {
+        return Ok(());
+    }
+    if CanisterPoolOps::standby_capacity_is_exhausted(pool) {
+        return Err(InternalError::public(
+            canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
+        ));
+    }
+    Err(InternalError::unavailable())
+}
+
+fn require_next_claim_capacity(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    current: &RootComponentProvisioningView,
+) -> Result<(), InternalError> {
+    if current.phase != RootComponentProvisioningPhase::Accepted
+        || current.reservation_cursor.reserved_component_count != current.component_count
+        || current.claim_cursor.claimed_component_count >= current.component_count
+    {
+        return Ok(());
+    }
+    let member = RootComponentProvisioningOps::next_member_claim(current)?;
+    let config = ConfigOps::get()?;
+    let required_cycles = config
+        .component_specs
+        .get(&member.component_spec)
+        .map(|component| &component.initial_cycles)
+        .ok_or_else(InternalError::conflict)?;
+    if CanisterPoolOps::has_ready_asset_for(required_cycles) {
+        return Ok(());
+    }
+    if CanisterPoolOps::standby_capacity_is_exhausted(&authority.binding.limits.canister_pool) {
+        return Err(InternalError::public(
+            canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
+        ));
     }
     Ok(())
+}
+
+/// Project an active full-pool capacity defect only after the observer is authorized.
+pub(super) fn require_current_claim_capacity(
+    current: &RootComponentProvisioningView,
+) -> Result<(), InternalError> {
+    let (authority, _root) = validated_root_authority()?;
+    require_next_claim_capacity(&authority, current)
 }
 
 fn validate_store_artifacts(

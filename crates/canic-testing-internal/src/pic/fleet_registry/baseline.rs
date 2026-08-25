@@ -32,7 +32,9 @@ mod tests {
         AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
     };
     #[cfg(test)]
-    use canic::dto::pool::{CanisterPoolAssetOrigin, CanisterPoolAssetStatus};
+    use canic::dto::pool::{
+        CanisterPoolAssetOrigin, CanisterPoolAssetStatus, PoolCanisterRequest, PoolImportResponse,
+    };
     use canic::dto::pool::{
         CanisterPoolResponse, CanisterPoolStatusRequest, PoolMaintenanceResponse,
     };
@@ -208,6 +210,8 @@ mod tests {
     #[derive(CandidType)]
     enum RootCommandFragment {
         BootstrapStore(RootStoreBootstrapRequest),
+        #[cfg(test)]
+        ImportPoolCanister(PoolCanisterRequest),
         MaintainPool,
         #[cfg(test)]
         PrepareAuthoritySnapshot(AuthoritySnapshotRequest),
@@ -228,6 +232,8 @@ mod tests {
         reason = "the PocketIC decoder mirrors the direct Root command wire"
     )]
     enum RootCommandResponseFragment {
+        #[cfg(test)]
+        ImportPoolCanister(PoolImportResponse),
         MaintainPool(PoolMaintenanceResponse),
         OperationAccepted(OperationReceipt),
         #[cfg(test)]
@@ -1241,6 +1247,99 @@ mod tests {
     #[test]
     fn uncertain_mainnet_refill_reuses_the_exact_paid_request() {
         assert_mainnet_refill(true, 2);
+    }
+
+    #[test]
+    fn topped_up_import_refreshes_the_ready_row_without_losing_cycles() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let root_wasm = build_test_root_wasm();
+        let store_fixture = build_root_store_fixture();
+        let pic = build_pic();
+        let imported = std::cell::Cell::new(None);
+        let fixture = install_bootstrapped_root_with_pool_setup(
+            &pic,
+            root_wasm,
+            Principal::from_slice(&[0x41; 29]),
+            store_fixture,
+            |pic, root| {
+                let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
+                let asset = pic
+                    .create_canister_with_params(
+                        None,
+                        CreateCanisterParams {
+                            cycles: Some(4_500_000_000_000),
+                            settings: None,
+                            placement: Some(CreateCanisterPlacement::SubnetId(root_subnet)),
+                        },
+                    )
+                    .expect("create exact underfunded pool asset");
+                pic.set_controllers(asset, None, vec![root])
+                    .expect("prepare underfunded Root-controlled import");
+                imported.set(Some(asset));
+                vec![asset]
+            },
+        );
+        let asset = imported.get().expect("underfunded imported asset");
+
+        let RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::ResetFailed {
+            canister_id,
+            ..
+        }) = root_command(
+            &pic,
+            fixture.root_id,
+            RootCommandFragment::ImportPoolCanister(PoolCanisterRequest { canister_id: asset }),
+        )
+        .expect("underfunded import is retained fail-closed")
+        else {
+            panic!("Root accepted an underfunded pool asset");
+        };
+        assert_eq!(canister_id, asset);
+        let failed = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(failed.failed, 1);
+        assert_eq!(failed.ready, 0);
+        let failed_entry = failed
+            .entries
+            .iter()
+            .find(|entry| entry.canister_id == asset)
+            .expect("underfunded imported row");
+        let failed_balance = pic.cycle_balance(asset);
+        assert!(failed_balance < 5_000_000_000_000);
+        assert_eq!(failed_entry.cycles, Cycles::new(failed_balance));
+
+        pic.add_cycles(asset, 5_000_000_000_000 - failed_balance);
+        let funded_balance = pic.cycle_balance(asset);
+        assert_eq!(funded_balance, 5_000_000_000_000);
+        for attempt in 0..2 {
+            let RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported {
+                canister_id,
+            }) = root_command(
+                &pic,
+                fixture.root_id,
+                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest { canister_id: asset }),
+            )
+            .expect("refresh topped-up import")
+            else {
+                panic!("Root did not publish the refreshed imported asset");
+            };
+            assert_eq!(canister_id, asset);
+            assert_eq!(
+                pic.cycle_balance(asset),
+                funded_balance,
+                "attempt {attempt} must not debit the imported asset"
+            );
+        }
+
+        let refreshed = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(refreshed.failed, 0);
+        assert_eq!(refreshed.ready, 1);
+        let refreshed_entry = refreshed
+            .entries
+            .iter()
+            .find(|entry| entry.canister_id == asset)
+            .expect("refreshed imported row");
+        assert_eq!(refreshed_entry.origin, CanisterPoolAssetOrigin::Imported);
+        assert_eq!(refreshed_entry.status, CanisterPoolAssetStatus::Ready);
+        assert_eq!(refreshed_entry.cycles, Cycles::new(funded_balance));
     }
 
     #[test]
@@ -6266,6 +6365,10 @@ mod tests {
             (
                 "uncertain mainnet refill replay",
                 uncertain_mainnet_refill_reuses_the_exact_paid_request,
+            ),
+            (
+                "topped-up imported pool asset refresh",
+                topped_up_import_refreshes_the_ready_row_without_losing_cycles,
             ),
             (
                 "fresh provisioning automatic pool readiness",

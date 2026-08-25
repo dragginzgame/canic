@@ -4123,7 +4123,9 @@ fn advance_creation(
     {
         return claim_component_pool_asset(operation_id, plan, pool_claim, canister);
     }
-    Err(InternalError::resource_exhausted())
+    Err(InternalError::public(
+        canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
+    ))
 }
 
 fn advance_child_creation(

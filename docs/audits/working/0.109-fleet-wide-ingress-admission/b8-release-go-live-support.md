@@ -13,7 +13,8 @@ Date: 2026-08-24
 | Published correction | annotated `v0.109.1`, commit `44e90e6dd4fd9293f7f013cf58f3242c188620d2`; clean `main` and `origin/main` agree |
 | Published recovery correction | annotated `v0.109.2`, commit `b48181ba2b4b0d9f679386ddb62179ba498b8ee2`; remote tag object `94aa4d190d142acda51eac35a19234fa0509b8bd` |
 | Published artifact-reuse correction | annotated `v0.109.3`, commit `d861febb00bed2ca8145b705f82d836dc0ae6686`; downstream recovery crossed immutable retained-artifact reuse without Cargo or artifact mutation |
-| Open provisioning-recovery correction | 0.109.4 changelog draft over the still-0.109.3 workspace version; all 126 focused install-root tests and warning-denied host Clippy pass, complete maintainer validation/version/publication not run |
+| Published provisioning-recovery correction | annotated `v0.109.4`, commit `2a5ef929b76bc29e62d19cbe1785690dc0d51fd2`; the downstream retained session crossed monotonic first-status reconciliation |
+| Open pool-eligibility correction | 0.109.5 hard-cut changelog draft over published 0.109.4; exact Ready matching, undersized-Ready reinspection, first-excess planning, explicit recovery-pair and governed PocketIC balance-preservation tests pass; maintainer validation/version/publication not run |
 | Canic effects | Repository source/documentation and local build artifacts plus maintainer-owned validation/version/publication through 0.109.3; no downstream effect from this repository |
 | Downstream evidence | Separately owned exact-0.109.3 graph/CLI adoption, exact-source zero-debit plan and authorized recovery; retained-artifact reuse, Registry activation and Root preparation advanced before `CANIC-033`; App/frontend effects did not start |
 | Excluded | Any new live staging, resume, paid effect or other external mutation from this repository |
@@ -33,9 +34,14 @@ recovery crossed that gate. It then exposed `CANIC-033`: Coordinator-owned
 zero-delay advancement raced the host's requirement that its first correlated
 status remain `Planned`. The open correction retains any exact monotonic first
 status and explicitly admits 0.109.4 as the next host successor for the same
-retained 0.109.1 session. B8 therefore remains open for maintainer validation/
-publication, the separately authorized plan/resume and deployed-state/
-admission evidence.
+retained 0.109.1 session. Published 0.109.4 crossed that boundary. Subsequent
+authorized funding and import work exposed `CANIC-035`: the accepted 5T App is
+blocked behind a full pool containing 2T and 4.5T Ready rows. Open 0.109.5 owns
+the hard-cut plan, acceptance, typed-diagnostic and Ready-row refresh
+correction. Its focused pure/host and governed PocketIC evidence now passes.
+B8 therefore remains open for maintainer validation/publication, then the
+separately authorized Root upgrade, asset refresh, exact-session resume and
+deployed-state/admission evidence.
 
 ## Published package integrity
 
@@ -354,7 +360,7 @@ The broader Coordinator filter initially found a test-only terminal admission
 fixture with an arbitrary nonzero Root receipt hash. The fixture now derives
 the exact operation/policy/catalog-bound receipt and the complete 44-test
 filter passes. The governed fast tier then caught its stale 25-case inventory
-expectation before PocketIC; the exact current inventory is 30. Warning-denied
+expectation before PocketIC; that release-candidate inventory was 30. Warning-denied
 Clippy found and closed current-0.109 cfg, pattern, future-size and explicit
 long-proof annotations without weakening runtime authority.
 
@@ -506,9 +512,9 @@ phase, so restart proceeds to catalog publication without another provisioning
 request. Mismatched identity/cardinality and incomplete terminal evidence still
 reject before journal replacement.
 
-The explicit retained-install successor list now admits only 0.109.2, 0.109.3
-and 0.109.4 hosts for the one 0.109.1 predecessor. Same-version replay remains
-unchanged; 0.109.5, other predecessors and reversed pairs reject. This does not
+The explicit retained-install successor list now admits 0.109.2 through
+0.109.5 hosts for the one 0.109.1 predecessor. Same-version replay remains
+unchanged; 0.109.6, other predecessors and reversed pairs reject. This does not
 create a general migration or mixed-version runtime lane.
 
 Focused tests recover the durable `preparation_in_flight` journal after a lost
@@ -531,12 +537,85 @@ cargo clippy --locked -p canic-host --lib --tests -- -D warnings
 # passed
 ```
 
-No fresh downstream staging attempt is appropriate. After immutable
-publication the downstream owner must use the advanced exact `v0.2.0`
-recovery checkout for a read-only plan, require the unchanged digest, zero
-remaining debit and `fleet_component_provisioning` next, and separately
-authorize one exact resume. Only after Fleet/App and deployed-state/admission
-proof may frontend and fixture publication proceed.
+Published 0.109.4 crossed this first-status boundary in the retained session.
+No fresh downstream staging attempt is appropriate. The later pool blocker is
+owned by the open correction below; only after its immutable publication and
+separately authorized recovery may Fleet/App, frontend and fixture publication
+proceed.
+
+## `CANIC-035`: exact pool eligibility and retained Ready refresh
+
+The retained Root accepted one App requiring 5T, then became full with Ready
+assets recorded at 2T and 4.5T. Count-only acceptance considered the pool
+sufficient, while the later exact claim correctly found no eligible asset. An
+external top-up could not repair the durable row because published 0.109.4
+short-circuited import of an already-Ready principal and rejected retry-reset
+for that state.
+
+The hard-cut correction keeps the Root pool journal as the sole physical-asset
+owner and the accepted Root batch as the sole provisioning owner:
+
+- no-effect planning requires each Root's configured pool-asset amount to
+  cover the largest `initial_cycles` requirement among its initial placements;
+- Root acceptance greedily matches distinct sorted Ready balances to the exact
+  sorted batch demands, so heterogeneous assets are not treated as fungible;
+- a full ineligible pool returns typed `CAPACITY_INSUFFICIENT` after protected
+  observer authorization, allowing the existing Coordinator retry record and
+  host report to preserve the cause;
+- the existing controller-only import/reset command derives the larger of the
+  configured floor and every remaining unclaimed demand. An undersized Ready
+  import is fenced as `PendingReset`; because the prior Ready record already
+  proves it empty and Root-controlled, retry rechecks its exact controller,
+  absent module and live balance without repeating uninstall effects. Only an
+  adequate observation returns it to `Ready`; and
+- exact retry while queued is idempotent, while replay after an adequate Ready
+  result returns without another reset or claim.
+
+No stable record or memory allocation changed. The maintainer explicitly chose
+the pre-1.0 hard-cut direction: recovery speed and cycle preservation take
+precedence over a generalized compatibility lane. The retained Root must be
+upgraded, not reinstalled, so its existing pool rows, accepted batch and
+operation IDs survive. The repair does not transfer or discard pooled cycles.
+The downstream top-up must cover the exact freshly observed deficit plus its
+transfer fee rather than assuming a rounded 500B amount; it and every
+deployment command remain separately authorized downstream effects.
+
+Focused evidence currently passes:
+
+```text
+cargo test --locked -p canic-control-plane ops::canister_pool::tests --lib -- --nocapture
+# 10 passed
+
+cargo test --locked -p canic-control-plane workflow::component_provisioning::tests --lib -- --nocapture
+# 5 passed
+
+cargo test --locked -p canic-control-plane workflow::canister_pool::tests --lib -- --nocapture
+# 4 passed
+
+cargo test --locked -p canic-host initial_group_placements_are_explicit_complete_and_durable --lib -- --nocapture
+# 1 passed
+
+cargo test --locked -p canic-host cross_patch_rescue_is_exactly_1091_to_explicit_successors --lib -- --nocapture
+# 1 passed; admits 0.109.5 and rejects 0.109.6
+
+bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh \
+  targeted-pocketic \
+  pic::fleet_registry::baseline::tests::topped_up_import_refreshes_the_ready_row_without_losing_cycles
+# 1 passed in 112s through the governed PocketIC server;
+# high-water 396,352 kB, 19 threads
+```
+
+The PocketIC journey uses the real Root management path: a never-verified
+underfunded import first completes the full reset and stays failed, the exact
+remaining deficit is added, the same principal becomes Ready at 5T, and a
+second protected import leaves both its recorded and live balance unchanged.
+It raises the unique governed serial inventory from 30 to 31 cases.
+The active-batch threshold is separately covered by the exact demand resolver
+and remaining-demand unit proof; the stable pool and provisioning record shapes
+have no 0.109.1-to-candidate diff. Maintainer validation, versioning and
+publication remain unrun, and the downstream live upgrade/top-up/resume remains
+a separately authorized effect rather than release qualification performed by
+this repository.
 
 The remaining feedback is routed without widening B8 or adding product
 capability to B9:
@@ -555,11 +634,11 @@ capability to B9:
 
 ## Result
 
-Published 0.109.3 closes retained-artifact reachability and the downstream
-session crossed that gate. The open `CANIC-033` correction passes all 126
-install-root tests and warning-denied host Clippy and explicitly admits the
-next patch as a successor for the same retained session. It is not versioned,
-validated or published. B8 remains open for the maintainer release flow, the
-separately authorized exact-source plan/resume and deployed-state/admission
-proof. B9 remains blocked until that evidence is accepted; B10 and 0.110 remain
-blocked behind B9.
+Published 0.109.4 closes monotonic first-status recovery and the downstream
+session crossed that gate. The open 0.109.5 `CANIC-035` hard cut now owns exact
+pool policy, acceptance, diagnostics and retained Ready-row reinspection. Its
+focused pure/host and governed PocketIC checks pass; maintainer validation,
+versioning and publication remain unrun. B8 remains open for those gates, the
+separately authorized Root upgrade/asset refresh/exact-
+source resume and deployed-state/admission proof. B9 remains blocked until that
+evidence is accepted; B10 and 0.110 remain blocked behind B9.

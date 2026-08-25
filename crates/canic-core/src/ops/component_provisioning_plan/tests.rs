@@ -518,6 +518,14 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
     assert_eq!(validation.component_count, 2);
     assert_eq!(validation.component_spec_counts.len(), 2);
     assert_eq!(validation.component_roles.len(), 2);
+    assert_eq!(
+        ComponentProvisioningPlanOps::root_batch_initial_cycle_demands(&config, batch)
+            .expect("exact Root batch cycle demands"),
+        vec![
+            Cycles::new(5_000_000_000_000),
+            Cycles::new(5_000_000_000_000),
+        ]
+    );
     let bytes = ComponentProvisioningPlanOps::root_batch_canonical_bytes(
         &config,
         &registry,

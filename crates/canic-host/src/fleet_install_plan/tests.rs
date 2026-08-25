@@ -757,6 +757,17 @@ fn initial_group_placements_are_explicit_complete_and_durable() {
         Err(FleetInstallPlanError::InvalidComponentGroupPlacementAssignments { .. })
     ));
 
+    let mut underfunded = request(&root, &config, fleet.clone(), release_build_id);
+    for (planned_root, ordinal) in underfunded.fleet_subnet_roots.iter_mut().zip([0, 1]) {
+        planned_root.component_admissions = vec![admission("alpha", 1), admission("beta", 1)];
+        planned_root.component_group_placements = vec![group_assignment(ordinal)];
+        planned_root.limits.canister_pool.canister_cycles = Cycles::new(4_500_000_000_000);
+    }
+    assert!(matches!(
+        compile_and_persist_fleet_install_plan(underfunded),
+        Err(FleetInstallPlanError::InvalidComponentGroupPlacementAssignments { .. })
+    ));
+
     let mut complete = request(&root, &config, fleet, release_build_id);
     complete.fleet_subnet_roots[0].component_admissions =
         vec![admission("alpha", 1), admission("beta", 1)];
