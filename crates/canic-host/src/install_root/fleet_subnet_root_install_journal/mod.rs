@@ -6,7 +6,7 @@
 //! Fleet plan, Coordinator authority, root placement, release set, or install operation.
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 
 use crate::{
     durable_io::{
@@ -1016,7 +1016,10 @@ fn validate_immutable_authority(
     journal: &FleetSubnetRootInstallJournal,
 ) -> Result<(), FleetSubnetRootInstallJournalError> {
     if journal.schema_version != JOURNAL_SCHEMA_VERSION {
-        return Err(invalid(path, "unsupported journal schema version"));
+        return Err(invalid(
+            path,
+            "unsupported journal schema version; export with the matching Canic release before retrying",
+        ));
     }
     if journal.install_operation_id == [0; 32] {
         return Err(invalid(path, "install operation identity must not be zero"));

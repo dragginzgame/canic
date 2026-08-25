@@ -316,6 +316,7 @@ fn install_recompiles_the_exact_plan_digest_and_rechecks_live_funding() {
         release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([7; 32])),
         decision_release_build_id: exact.plan.preflight.release_build_id,
         retained_builder_version: env!("CARGO_PKG_VERSION").to_string(),
+        retained_plan_contract: super::RetainedInstallPlanContractV1::CurrentV1,
         fresh_fleet_plan_digest: exact.plan.plan_digest.clone(),
         effects_started: true,
         original_maximum_operator_debit: exact.plan.maximum_operator_debit.clone(),
@@ -517,6 +518,7 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
         expected_fresh_fleet_plan_digest: None,
         admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
+        retained_root_repair_adoption: None,
         interactive_config_selection: false,
         deployment_plan_override: None,
     }
@@ -756,6 +758,7 @@ package = "worker"
         expected_fresh_fleet_plan_digest: None,
         admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
+        retained_root_repair_adoption: None,
         interactive_config_selection: false,
         deployment_plan_override: None,
     };

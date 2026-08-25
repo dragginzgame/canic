@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.6` authorizes one already-applied state-preserving Root repair through
+  an immutable session, journal, controller, Candid and artifact-hash receipt;
+  replaces product-version recovery allowlists with two bounded typed plan
+  contracts; binds terminal closure to the exact durable Component journal
+  instead of one fixed sequence; closes fresh-install recovery after terminal
+  catalog publication; and includes raw actual, required and deficit cycle
+  integers in compact pool diagnostics. Runtime activation now accepts any
+  strictly advancing authority-bound Root observation, including multiple
+  Component activations and terminal Root activation coalesced into one
+  response. Optional `ic-wasm` launches share the existing bounded Linux
+  executable-busy retry used by ICP CLI commands.
 - `0.109.5` rejects undersized initial pool policy before effects while loading
   the one explicitly supported 0.109.1 recovery decision under its historical
   2T rule, allocates heterogeneous Ready assets smallest-sufficient-first and

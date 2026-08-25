@@ -214,6 +214,7 @@ impl DeployTruthOptions {
             expected_fresh_fleet_plan_digest: None,
             admitted_fresh_fleet_plan_digest: None,
             expected_app: Some(app),
+            retained_root_repair_adoption: None,
             interactive_config_selection: false,
             deployment_plan_override: None,
         }

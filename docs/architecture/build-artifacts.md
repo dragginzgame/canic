@@ -91,8 +91,9 @@ shared dependency graph.
 
 A successful install finalizes its immutable release build beneath
 `.canic/release-builds/<release-build-id>/`. An exact interrupted install
-automatically reuses those finalized artifacts. A separate fresh Fleet in the
-same ICP root may select them explicitly:
+automatically reuses those finalized artifacts under its supported typed
+session/journal contract. A separate fresh Fleet in the same ICP root may
+select them explicitly:
 
 ```text
 canic install <app> <fleet> --fleet-input <path> --release-build <id>
@@ -103,6 +104,19 @@ Canic builder version and profile, current App topology and role/package
 identities, canonical artifact manifests and exact artifact bytes must still
 validate before activation. If `--profile` is also supplied, it must name the
 finalized build's profile.
+
+Interrupted-install compatibility is intentionally bounded by protocol data,
+not Cargo or product release numbers. The current host accepts the current
+`v1` install-plan contract plus one `historical_pool_v1` contract that relaxes
+only the superseded initial-pool floor. Session, role-journal and repair-
+receipt schemas remain explicit and bounded; an unknown schema fails closed
+with an export-first diagnostic so old branches cannot accumulate forever.
+Exact artifact hashes, unchanged Candid and immutable receipts bind any
+exceptional already-applied Root repair. Terminal Fleet catalog publication
+closes the install session permanently. Subsequent code changes must wait for
+and use a separately supported managed-upgrade workflow from that installed
+baseline; the fresh-install session cannot be reopened as a compatibility
+path.
 
 Build provenance is opt-in:
 

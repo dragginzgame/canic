@@ -53,6 +53,7 @@ mod fleet_subnet_root_install_journal;
 mod fleet_subnet_root_registry_join;
 mod fleet_subnet_root_registry_mirror_activation;
 mod fleet_subnet_root_registry_sync;
+mod fleet_subnet_root_repair;
 mod fleet_subnet_root_store_bootstrap;
 mod icp_context;
 mod identity;
@@ -85,7 +86,7 @@ use fleet_component_provisioning_install::{
 pub use fleet_install_recovery::{
     FreshFleetInstallRecoveryClassificationV1, FreshFleetInstallRecoveryError,
     FreshFleetInstallRecoveryPlanV1, InspectFreshFleetInstallRecoveryRequest,
-    inspect_fresh_fleet_install_recovery, require_supported_recovery_builder,
+    RetainedInstallPlanContractV1, inspect_fresh_fleet_install_recovery,
 };
 use fleet_registry_activation::{ActivateFleetRegistryRequest, activate_and_verify_fleet_registry};
 use fleet_registry_activation_journal::load_verified_installed_registry;
@@ -105,7 +106,7 @@ use fleet_subnet_root_registry_sync::{
 use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_stores;
 use icp_context::InstallIcpContext;
 use identity::resolve_install_identity;
-pub use options::InstallRootOptions;
+pub use options::{InstallRootOptions, RetainedRootRepairAdoption};
 use output::{TerminalStyle, print_install_timing_summary};
 use phase_receipts::{
     CompletedInstallPhase, InstallReceiptScope, write_completed_install_phase_receipt,
@@ -376,6 +377,7 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
         input: resolved_fleet_install_input,
         fresh_fleet_plan: &fresh_fleet_plan,
         recovery: fresh_fleet_recovery.as_ref(),
+        retained_root_repair_adoption: options.retained_root_repair_adoption.clone(),
     })?;
     let fresh_fleet_receipt_decision = FreshFleetInstallDecisionReceiptV1 {
         plan_digest: fresh_fleet_plan.plan_digest.clone(),
@@ -638,6 +640,7 @@ fn install_current_fleet_infrastructure(
         icp: icp_context,
         config_path,
         fleet_name: planned.session.fleet_name.clone(),
+        fleet_install_session: &planned.session,
         fleet_install_plan: &planned.plan,
         coordinator: coordinator.coordinator,
         install_operation_id: planned.session.operation_id,
@@ -690,6 +693,7 @@ struct CurrentFleetInstallPlanRequest<'a> {
     input: ResolvedFleetInstallInput,
     fresh_fleet_plan: &'a FreshFleetDeploymentPlanV1,
     recovery: Option<&'a FreshFleetInstallRecoveryPlanV1>,
+    retained_root_repair_adoption: Option<RetainedRootRepairAdoption>,
 }
 
 fn plan_current_fleet_install(
@@ -714,12 +718,17 @@ fn plan_current_fleet_install(
         request.recovery,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
-    Ok(PlannedCurrentFleetInstall { session, plan })
+    Ok(PlannedCurrentFleetInstall {
+        session,
+        plan,
+        retained_root_repair_adoption: request.retained_root_repair_adoption,
+    })
 }
 
 struct PlannedCurrentFleetInstall {
     session: fleet_install_session::FleetInstallSession,
     plan: PersistedFleetInstallPlan,
+    retained_root_repair_adoption: Option<RetainedRootRepairAdoption>,
 }
 
 impl PlannedCurrentFleetInstall {
@@ -855,7 +864,6 @@ fn current_install_preflight_release_source(
                 "requested release build differs from the interrupted Fleet install session".into(),
             );
         }
-        require_recovery_release_builder(&finalized.record.builder_version)?;
         require_requested_build_profile(options.build_profile, finalized.record.build_profile)?;
         let recovery = fleet_install_recovery::compile_recovery_plan(icp_root, config, &recovered)?;
         return Ok(CurrentInstallPreflightReleaseSource {
@@ -866,6 +874,12 @@ fn current_install_preflight_release_source(
         });
     }
     if let Some(release_build_id) = options.release_build_id {
+        if options.retained_root_repair_adoption.is_some() {
+            return Err(
+                "--adopt-retained-root-repair requires an existing incomplete Fleet install session"
+                    .into(),
+            );
+        }
         let finalized = load_finalized_release_build(icp_root, release_build_id)?;
         require_current_release_builder(&finalized.record.builder_version)?;
         require_requested_build_profile(options.build_profile, finalized.record.build_profile)?;
@@ -875,6 +889,12 @@ fn current_install_preflight_release_source(
             recovered_plan_digest: None,
             recovery: None,
         });
+    }
+    if options.retained_root_repair_adoption.is_some() {
+        return Err(
+            "--adopt-retained-root-repair requires an existing incomplete Fleet install session"
+                .into(),
+        );
     }
     Ok(CurrentInstallPreflightReleaseSource {
         build_profile: options
@@ -996,10 +1016,11 @@ fn print_fresh_fleet_recovery(recovery: &FreshFleetInstallRecoveryPlanV1) {
     TerminalStyle::detected().print_section(
         "Fresh-Fleet recovery",
         &format!(
-            "session {} retains release build {} (Canic {}), resumes at {}, and may issue at most {remaining} remaining operator debit",
+            "session {} retains release build {} (Canic {}, contract {}), resumes at {}, and may issue at most {remaining} remaining operator debit",
             recovery.fleet_install_operation_id,
             recovery.release_build_id,
             recovery.retained_builder_version,
+            recovery.retained_plan_contract.as_str(),
             recovery.next_replay_phase,
         ),
     );
@@ -1092,8 +1113,10 @@ fn install_current_fleet_subnet_roots(
         icp_context,
         config_path,
         &planned.plan,
+        &planned.session,
         coordinator,
         planned.session.operation_id,
+        planned.retained_root_repair_adoption.as_ref(),
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     Ok(started.elapsed())
@@ -1208,7 +1231,6 @@ fn current_install_release_build(
                 "requested release build differs from the interrupted Fleet install session".into(),
             );
         }
-        require_recovery_release_builder(&finalized.record.builder_version)?;
         require_requested_build_profile(requested_build_profile, finalized.record.build_profile)?;
         return Ok(PlannedReleaseBuild {
             record: finalized.record,
@@ -1242,10 +1264,6 @@ fn require_current_release_builder(recorded: &str) -> Result<(), Box<dyn std::er
         .into());
     }
     Ok(())
-}
-
-fn require_recovery_release_builder(recorded: &str) -> Result<(), Box<dyn std::error::Error>> {
-    require_supported_recovery_builder(recorded, env!("CARGO_PKG_VERSION")).map_err(Into::into)
 }
 
 fn require_requested_build_profile(

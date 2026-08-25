@@ -25,7 +25,8 @@ use canic_host::canister_build::CanisterBuildProfile;
 use canic_host::icp::{IcpDiagnostic, classify_icp_diagnostic};
 use canic_host::icp_config::{IcpConfigError, resolve_current_canic_icp_root};
 use canic_host::install_root::{
-    InstallRootBlockedError, InstallRootError, InstallRootOptions, install_root,
+    InstallRootBlockedError, InstallRootError, InstallRootOptions, RetainedRootRepairAdoption,
+    install_root,
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
@@ -35,6 +36,7 @@ const DEFAULT_ROOT_TARGET: &str = "root";
 const EXPECTED_PLAN_DIGEST_ARG: &str = "expected-plan-digest";
 const FLEET_INPUT_ARG: &str = "fleet-input";
 const RELEASE_BUILD_ARG: &str = "release-build";
+const RETAINED_ROOT_REPAIR_ARG: &str = "adopt-retained-root-repair";
 const INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic install toko toko-local --fleet-input deployments/toko-local.toml
@@ -82,6 +84,7 @@ struct InstallOptions {
     expected_plan_digest: Option<String>,
     profile: Option<CanisterBuildProfile>,
     release_build_id: Option<ReleaseBuildId>,
+    retained_root_repair_adoption: Option<RetainedRootRepairAdoption>,
     fleet_input: PathBuf,
 }
 
@@ -100,6 +103,7 @@ impl InstallOptions {
             expected_plan_digest: matches.get_one::<String>(EXPECTED_PLAN_DIGEST_ARG).cloned(),
             profile: typed_option(&matches, "profile"),
             release_build_id: typed_option(&matches, RELEASE_BUILD_ARG),
+            retained_root_repair_adoption: typed_option(&matches, RETAINED_ROOT_REPAIR_ARG),
             fleet_input: PathBuf::from(required_string(&matches, FLEET_INPUT_ARG)),
         })
     }
@@ -130,6 +134,7 @@ impl InstallOptions {
             expected_fresh_fleet_plan_digest: self.expected_plan_digest,
             admitted_fresh_fleet_plan_digest: None,
             expected_app: Some(self.app),
+            retained_root_repair_adoption: self.retained_root_repair_adoption,
             interactive_config_selection: false,
             deployment_plan_override: None,
         }
@@ -185,6 +190,14 @@ fn install_command() -> ClapCommand {
                 .num_args(1)
                 .value_parser(clap::value_parser!(ReleaseBuildId))
                 .help("Reuse one finalized release build instead of compiling artifacts"),
+        )
+        .arg(
+            value_arg(RETAINED_ROOT_REPAIR_ARG)
+                .long(RETAINED_ROOT_REPAIR_ARG)
+                .value_name("ROOT=RAW_WASM")
+                .num_args(1)
+                .value_parser(clap::value_parser!(RetainedRootRepairAdoption))
+                .help("Adopt one exact already-applied state-preserving Root repair"),
         )
         .arg(internal_icp_arg())
         .arg(internal_environment_arg())

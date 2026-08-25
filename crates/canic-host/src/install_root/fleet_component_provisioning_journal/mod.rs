@@ -7,16 +7,18 @@
 mod model;
 mod persistence;
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 mod transition;
 mod validation;
 
 #[cfg(test)]
 use model::FleetComponentProvisioningInstallJournalError;
 pub(super) use model::{
-    FleetComponentProvisioningInstallPhase, PlanFleetComponentProvisioningInstallRequest,
+    FleetComponentProvisioningInstallPhase, FleetComponentProvisioningTerminalEvidence,
+    JOURNAL_SCHEMA_VERSION, PlanFleetComponentProvisioningInstallRequest,
     ResolvedFleetComponentProvisioningInstall,
 };
+pub(super) use persistence::terminal_evidence as terminal_component_provisioning_evidence;
 pub(super) use transition::{
     begin_component_provisioning_advance, begin_component_provisioning_preparation,
     begin_fleet_catalog_publication, complete_fleet_component_provisioning_install,

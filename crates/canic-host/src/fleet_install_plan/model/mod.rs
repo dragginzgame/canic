@@ -127,6 +127,7 @@ impl FreshFleetPreflightEffectsV1 {
 }
 
 /// Complete named authority accepted by the pure fresh-Fleet preflight compiler.
+#[derive(Clone, Copy)]
 pub struct FreshFleetPreflightRequest<'a> {
     pub config: &'a ConfigModel,
     pub app: &'a str,

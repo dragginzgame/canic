@@ -4554,10 +4554,16 @@ fn classify_runtime_activation_advance(
     }
 }
 
-const fn first_component_activation_progress(actual: FleetComponentActivationRootProgress) -> bool {
-    actual.component_count > 0
-        && actual.activated_component_count == 1
-        && !actual.root_runtime_active
+fn first_component_activation_progress(actual: FleetComponentActivationRootProgress) -> bool {
+    activation_progress_advances(
+        FleetComponentActivationRootProgress {
+            fleet_subnet_root: actual.fleet_subnet_root,
+            component_count: actual.component_count,
+            activated_component_count: 0,
+            root_runtime_active: false,
+        },
+        actual,
+    )
 }
 
 const fn runtime_activation_request_is_current(
@@ -4581,30 +4587,39 @@ fn terminal_runtime_activation_replay(
         .activations
         .last()
         .ok_or_else(|| receipt_invariant("terminal runtime activation lacks a root receipt"))?;
-    Ok(request
-        .expected_current_activation
-        .map_or(terminal.progress.component_count == 0, |expected| {
-            activation_progress_advances(expected, terminal.progress)
-        }))
+    Ok(request.expected_current_activation.map_or_else(
+        || first_component_activation_progress(terminal.progress),
+        |expected| activation_progress_advances(expected, terminal.progress),
+    ))
 }
 
 fn activation_progress_advances(
     expected: FleetComponentActivationRootProgress,
     actual: FleetComponentActivationRootProgress,
 ) -> bool {
-    if expected.fleet_subnet_root != actual.fleet_subnet_root
-        || expected.component_count != actual.component_count
-    {
+    let subject_is_exact = expected.fleet_subnet_root == actual.fleet_subnet_root
+        && expected.component_count == actual.component_count;
+    let shapes_are_valid = runtime_activation_progress_shape_is_valid(expected)
+        && runtime_activation_progress_shape_is_valid(actual);
+    if !subject_is_exact || !shapes_are_valid {
         return false;
     }
-    let component_advances = !expected.root_runtime_active
-        && !actual.root_runtime_active
-        && expected.activated_component_count.checked_add(1)
-            == Some(actual.activated_component_count);
-    let root_advances = !expected.root_runtime_active
-        && actual.root_runtime_active
-        && expected.activated_component_count == actual.activated_component_count;
+    let progression_is_monotonic = !expected.root_runtime_active
+        && actual.activated_component_count >= expected.activated_component_count;
+    if !progression_is_monotonic {
+        return false;
+    }
+    let component_advances = actual.activated_component_count > expected.activated_component_count;
+    let root_advances = actual.root_runtime_active;
     component_advances || root_advances
+}
+
+const fn runtime_activation_progress_shape_is_valid(
+    progress: FleetComponentActivationRootProgress,
+) -> bool {
+    progress.activated_component_count <= progress.component_count
+        && (!progress.root_runtime_active
+            || progress.activated_component_count == progress.component_count)
 }
 
 fn classify_directory_confirmation_advance(
@@ -8829,6 +8844,77 @@ const fn receipt_invariant(_message: &'static str) -> InternalError {
 
 const fn admission_publication_history_full(publication_count: usize) -> bool {
     publication_count >= MAX_FLEET_ADMISSION_PUBLICATIONS
+}
+
+#[cfg(test)]
+mod runtime_activation_progress_tests {
+    use super::*;
+
+    const fn progress(
+        fleet_subnet_root: Principal,
+        component_count: u32,
+        activated_component_count: u32,
+        root_runtime_active: bool,
+    ) -> FleetComponentActivationRootProgress {
+        FleetComponentActivationRootProgress {
+            fleet_subnet_root,
+            component_count,
+            activated_component_count,
+            root_runtime_active,
+        }
+    }
+
+    #[test]
+    fn coalesced_runtime_activation_progress_is_a_strict_monotonic_successor() {
+        let root = Principal::from_slice(&[1]);
+        let zero = progress(root, 5, 0, false);
+        let one = progress(root, 5, 1, false);
+        let five = progress(root, 5, 5, false);
+
+        assert!(first_component_activation_progress(progress(
+            root, 5, 3, false
+        )));
+        assert!(first_component_activation_progress(progress(
+            root, 5, 5, true
+        )));
+        assert!(activation_progress_advances(
+            one,
+            progress(root, 5, 5, false)
+        ));
+        assert!(activation_progress_advances(
+            one,
+            progress(root, 5, 5, true)
+        ));
+        assert!(activation_progress_advances(
+            five,
+            progress(root, 5, 5, true)
+        ));
+        assert!(!activation_progress_advances(zero, zero));
+    }
+
+    #[test]
+    fn invalid_or_regressing_runtime_activation_progress_fails_closed() {
+        let root = Principal::from_slice(&[1]);
+        let other_root = Principal::from_slice(&[2]);
+        let previous = progress(root, 5, 3, false);
+
+        for invalid in [
+            progress(root, 5, 2, false),
+            progress(root, 5, 6, false),
+            progress(root, 5, 4, true),
+            progress(other_root, 5, 5, true),
+            progress(root, 6, 5, true),
+        ] {
+            assert!(!activation_progress_advances(previous, invalid));
+        }
+        assert!(!activation_progress_advances(
+            progress(root, 5, 5, true),
+            progress(root, 5, 5, false)
+        ));
+        assert!(!first_component_activation_progress(progress(
+            root, 5, 0, false
+        )));
+    }
 }
 
 #[cfg(test)]

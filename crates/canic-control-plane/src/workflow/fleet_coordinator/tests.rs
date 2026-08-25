@@ -2619,6 +2619,14 @@ fn drive_terminal_fresh_install_with_admission(
     config: &ConfigModel,
     maximum_root_instances: u32,
 ) -> FleetComponentProvisioningStatusResponse {
+    let status = drive_fresh_install_to_directories_with_admission(config, maximum_root_instances);
+    drive_runtime_activation(status, 300)
+}
+
+fn drive_fresh_install_to_directories_with_admission(
+    config: &ConfigModel,
+    maximum_root_instances: u32,
+) -> FleetComponentProvisioningStatusResponse {
     FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
     let (_, _, _) = activate_two_roots_with_config_and_admission(
         principal(200),
@@ -2642,8 +2650,7 @@ fn drive_terminal_fresh_install_with_admission(
     status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         publish_component_provisioning_services(&root_provision_advance_request(&status), 200)
         .expect("publish initial service");
-    status = drive_directory_confirmation(status, 210);
-    drive_runtime_activation(status, 300)
+    drive_directory_confirmation(status, 210)
 }
 
 fn drive_root_acceptance(
@@ -2751,6 +2758,99 @@ fn drive_runtime_activation(
         now += 3;
     }
     status
+}
+
+#[test]
+fn coordinator_accepts_coalesced_terminal_runtime_activation_and_publishes_catalog() {
+    let config = scale_out_coordinator_config();
+    let status = drive_fresh_install_to_directories_with_admission(&config, 1);
+    assert_eq!(
+        status.phase,
+        FleetComponentProvisioningPhase::DirectoriesConfirmed
+    );
+    assert_eq!(status.component_count, 1);
+
+    let request = root_provision_advance_request(&status);
+    let FleetComponentRuntimeActivationDisposition::Invoke(call) =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::advance_component_runtime_activation(
+            &request, 300,
+        )
+        .expect("persist first runtime activation observation")
+    else {
+        panic!("first runtime activation observation must invoke its Root");
+    };
+    let durable_intent = FleetCoordinatorRegistryStore::export();
+    let response = terminal_runtime_activation_response(call.fleet_subnet_root, 300, 301);
+
+    let mut invalid_responses = Vec::new();
+    let mut wrong_root = response.clone();
+    wrong_root.fleet_subnet_root = principal(250);
+    invalid_responses.push(wrong_root);
+    let mut changed_count = response.clone();
+    changed_count.component_count = 2;
+    invalid_responses.push(changed_count);
+    let mut excessive_progress = response.clone();
+    excessive_progress.activated_component_count = 2;
+    invalid_responses.push(excessive_progress);
+    let mut early_root = response.clone();
+    early_root.activated_component_count = 0;
+    invalid_responses.push(early_root);
+    let mut wrong_receipt = response.clone();
+    wrong_receipt.receipt_content_hash[0] ^= 1;
+    invalid_responses.push(wrong_receipt);
+    let mut invalid_time = response.clone();
+    invalid_time.activation_started_at_ns = Some(0);
+    invalid_responses.push(invalid_time);
+
+    for invalid in invalid_responses {
+        let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            record_component_runtime_activation(&request, &invalid, 302)
+            .expect_err("invalid coalesced runtime activation must fail closed");
+        assert_eq!(
+            conflict.public_error().code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
+        assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+    }
+
+    let first_root_terminal =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::record_component_runtime_activation(
+            &request, &response, 302,
+        )
+        .expect("accept fully terminal Root as the first activation observation");
+    assert_eq!(
+        first_root_terminal.phase,
+        FleetComponentProvisioningPhase::ActivatingRuntimes
+    );
+    assert_eq!(first_root_terminal.runtime_activated_root_count, 1);
+    assert_eq!(first_root_terminal.current_activation, None);
+    assert_eq!(first_root_terminal.activation_in_flight_root, None);
+
+    let durable_first_root = FleetCoordinatorRegistryStore::export();
+    let FleetComponentRuntimeActivationDisposition::Current(replayed) =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::advance_component_runtime_activation(
+            &request, 999,
+        )
+        .expect("replay terminal activation after missing every intermediate observation")
+    else {
+        panic!("terminal activation retry must return the retained result");
+    };
+    assert_eq!(*replayed, first_root_terminal);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_first_root);
+
+    let terminal = drive_runtime_activation(first_root_terminal, 400);
+    assert_eq!(
+        terminal.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+    assert_eq!(terminal.runtime_activated_root_count, 2);
+    let durable_terminal = FleetCoordinatorRegistryStore::export();
+    let current = durable_terminal
+        .current
+        .as_ref()
+        .expect("Coordinator state");
+    assert_eq!(current.component_group_deployments.len(), 1);
+    assert_eq!(current.component_group_deployments[0].placements.len(), 1);
 }
 
 #[test]
@@ -4359,6 +4459,33 @@ fn next_runtime_activation_response(
     activation_started_at_ns: u64,
     observed_at_ns: u64,
 ) -> RootComponentProvisioningStatusResponse {
+    runtime_activation_response(
+        fleet_subnet_root,
+        activation_started_at_ns,
+        observed_at_ns,
+        false,
+    )
+}
+
+fn terminal_runtime_activation_response(
+    fleet_subnet_root: Principal,
+    activation_started_at_ns: u64,
+    observed_at_ns: u64,
+) -> RootComponentProvisioningStatusResponse {
+    runtime_activation_response(
+        fleet_subnet_root,
+        activation_started_at_ns,
+        observed_at_ns,
+        true,
+    )
+}
+
+fn runtime_activation_response(
+    fleet_subnet_root: Principal,
+    activation_started_at_ns: u64,
+    observed_at_ns: u64,
+    terminal: bool,
+) -> RootComponentProvisioningStatusResponse {
     let durable = FleetCoordinatorRegistryStore::export();
     let current = durable.current.as_ref().expect("Coordinator state");
     let record = current
@@ -4381,7 +4508,7 @@ fn next_runtime_activation_response(
         activation_started_at_ns: durable_started_at_ns,
     } = context;
     assert_eq!(publication.fleet_subnet_root, fleet_subnet_root);
-    if activated_component_count < component_count {
+    if !terminal && activated_component_count < component_count {
         let mut response = publication;
         response.activated_component_count = activated_component_count + 1;
         response.activation_started_at_ns = Some(durable_started_at_ns);

@@ -722,6 +722,11 @@ fn fixture(root: &Path) -> Fixture {
     }
 }
 
+pub fn planned_repair_fixture(root: &Path) -> super::ResolvedFleetSubnetRootInstall {
+    let fixture = fixture(root);
+    plan(&fixture).expect("plan repair fixture")
+}
+
 fn topology() -> ComponentTopology {
     ComponentTopology {
         component_specs: vec![ComponentSpec {

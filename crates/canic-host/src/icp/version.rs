@@ -1,10 +1,12 @@
 use std::{io, path::Path, process::Command};
 
+use crate::output_with_executable_busy_retry;
+
 use super::{
     command::command_display,
     error::IcpCommandError,
     model::{IcpCli, IcpCliVersion},
-    run::{command_stderr, output_with_executable_busy_retry},
+    run::command_stderr,
 };
 
 impl IcpCli {

@@ -29,6 +29,7 @@ fn install_defaults_to_root_target() {
     assert_eq!(install.build_profile, None);
     assert_eq!(install.release_build_id, None);
     assert_eq!(install.expected_fresh_fleet_plan_digest, None);
+    assert_eq!(install.retained_root_repair_adoption, None);
     assert_eq!(
         install.fleet_install_input_path,
         Some(PathBuf::from("deployments/demo-local.toml"))
@@ -149,6 +150,52 @@ fn install_accepts_finalized_release_build_identity() {
 }
 
 #[test]
+fn install_accepts_one_exact_retained_root_repair_artifact() {
+    let options = InstallOptions::parse([
+        OsString::from("toko"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo.toml"),
+        OsString::from("--adopt-retained-root-repair"),
+        OsString::from("ryjl3-tyaaa-aaaaa-aaaba-cai=/tmp/repaired-root.wasm"),
+    ])
+    .expect("parse retained Root repair");
+
+    let repair = options
+        .retained_root_repair_adoption
+        .expect("retained Root repair");
+    assert_eq!(
+        repair.fleet_subnet_root.to_text(),
+        "ryjl3-tyaaa-aaaaa-aaaba-cai"
+    );
+    assert_eq!(
+        repair.successor_wasm,
+        PathBuf::from("/tmp/repaired-root.wasm")
+    );
+}
+
+#[test]
+fn install_rejects_malformed_or_anonymous_retained_root_repair() {
+    for repair in [
+        "missing-separator",
+        "not-a-principal=/tmp/root.wasm",
+        "2vxsx-fae=/tmp/root.wasm",
+        "ryjl3-tyaaa-aaaaa-aaaba-cai=",
+    ] {
+        let error = InstallOptions::parse([
+            OsString::from("toko"),
+            OsString::from("demo"),
+            OsString::from("--fleet-input"),
+            OsString::from("deployments/demo.toml"),
+            OsString::from("--adopt-retained-root-repair"),
+            OsString::from(repair),
+        ])
+        .expect_err("invalid repair must fail");
+        std::assert_matches!(error, InstallCommandError::Usage(_));
+    }
+}
+
+#[test]
 fn install_rejects_invalid_build_profile() {
     let err = InstallOptions::parse([
         OsString::from("--profile"),
@@ -210,6 +257,7 @@ fn install_usage_explains_app_config() {
     assert!(!text.contains("--app"));
     assert!(text.contains("--profile"));
     assert!(text.contains("--release-build"));
+    assert!(text.contains("--adopt-retained-root-repair"));
     assert!(text.contains("--fleet-input"));
     assert!(text.contains("--expected-plan-digest"));
     assert!(normalized.contains("fresh Fleet"));

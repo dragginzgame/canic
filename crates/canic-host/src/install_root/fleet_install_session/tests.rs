@@ -5,8 +5,10 @@
 //! Boundary: every test uses one finalized release build and filesystem-local recovery state.
 
 use crate::{
+    install_root::fleet_component_provisioning_journal::FleetComponentProvisioningTerminalEvidence,
     install_root::fleet_install_session::{
-        FleetInstallSessionError, PlanFleetInstallSessionRequest, plan_fleet_install_session,
+        CloseFleetInstallSessionRequest, FleetInstallSessionError, PlanFleetInstallSessionRequest,
+        close_fleet_install_session, plan_fleet_install_session,
         recover_fleet_install_session_authority, session_path,
     },
     release_build::{finalize_release_build_from_manifest, plan_release_build},
@@ -165,6 +167,86 @@ fn recovery_retains_original_finalized_decision_source_and_digest() {
         recovered.finalized_release_build.record.release_build_id,
         release_build_id
     );
+}
+
+#[test]
+fn direct_terminal_one_advance_and_multi_advance_close_fresh_install_recovery() {
+    for (path, sequence) in [
+        ("fleet-install-session-direct-terminal", 5),
+        ("fleet-install-session-one-advance", 7),
+        ("fleet-install-session-multi-advance", 9),
+        ("fleet-install-session-later-terminal", 13),
+    ] {
+        assert_terminal_journal_closes_session(path, sequence);
+    }
+}
+
+fn assert_terminal_journal_closes_session(path: &str, sequence: u64) {
+    let root = temp_dir(path);
+    let finalized = finalized_release(&root, [12; 32]);
+    let network = CanonicalNetworkId::ic_mainnet();
+    let request = || PlanFleetInstallSessionRequest {
+        root: &root,
+        canonical_network_id: network,
+        fleet_name: "primary".parse().expect("Fleet name"),
+        app: "toko".into(),
+        finalized_release_build: &finalized,
+        decision_release_build_id: None,
+        fresh_fleet_plan_digest: PLAN_DIGEST,
+    };
+    let session = plan_fleet_install_session(request()).expect("plan session");
+    let entry = crate::fleet_catalog::FleetCatalogEntryV1 {
+        canonical_network_id: network,
+        fleet_id: session.fleet.fleet.fleet_id,
+        fleet_name: session.fleet_name.clone(),
+        app: session.fleet.app.clone(),
+        environment: "staging".to_string(),
+        deployed_at_unix_secs: 1,
+        release_build_id: session.release_build_id,
+        coordinator_principal: "aaaaa-aa".to_string(),
+    };
+    let terminal_journal = FleetComponentProvisioningTerminalEvidence {
+        schema_version: 1,
+        sequence,
+        journal_digest: [6; 32],
+        fleet_install_plan_digest: [1; 32],
+        operation_id: [2; 32],
+        plan_hash: [3; 32],
+        catalog_entry: entry,
+        catalog_hash: [4; 32],
+    };
+    let close = || CloseFleetInstallSessionRequest {
+        root: &root,
+        session: &session,
+        component_journal: &terminal_journal,
+    };
+
+    close_fleet_install_session(close()).expect("close session");
+    close_fleet_install_session(close()).expect("idempotently close session");
+    assert!(matches!(
+        close_fleet_install_session(CloseFleetInstallSessionRequest {
+            component_journal: &FleetComponentProvisioningTerminalEvidence {
+                catalog_hash: [5; 32],
+                ..terminal_journal.clone()
+            },
+            root: &root,
+            session: &session,
+        }),
+        Err(FleetInstallSessionError::ConflictingAuthority { .. })
+    ));
+    assert!(matches!(
+        recover_fleet_install_session_authority(
+            &root,
+            network,
+            &session.fleet_name,
+            &session.fleet.app,
+        ),
+        Err(FleetInstallSessionError::Completed { .. })
+    ));
+    assert!(matches!(
+        plan_fleet_install_session(request()),
+        Err(FleetInstallSessionError::Completed { .. })
+    ));
 }
 
 #[cfg(unix)]

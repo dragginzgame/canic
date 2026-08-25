@@ -1,6 +1,14 @@
 //! Host-side App build, Fleet install, deployment, and release-set helpers for Canic workspaces.
 
-use std::process::Command;
+use std::{
+    io,
+    process::{Command, Output},
+    thread,
+    time::Duration,
+};
+
+const EXECUTABLE_BUSY_RETRY_ATTEMPTS: usize = 8;
+const EXECUTABLE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
 
 pub mod adoption;
 mod artifact_io;
@@ -59,6 +67,21 @@ pub(crate) fn cargo_command() -> Command {
         command.env("RUSTUP_TOOLCHAIN", toolchain);
     }
     command
+}
+
+pub(crate) fn output_with_executable_busy_retry(command: &mut Command) -> io::Result<Output> {
+    for attempt in 0..EXECUTABLE_BUSY_RETRY_ATTEMPTS {
+        match command.output() {
+            Err(error)
+                if error.kind() == io::ErrorKind::ExecutableFileBusy
+                    && attempt + 1 < EXECUTABLE_BUSY_RETRY_ATTEMPTS =>
+            {
+                thread::sleep(EXECUTABLE_BUSY_RETRY_DELAY);
+            }
+            result => return result,
+        }
+    }
+    unreachable!("bounded executable-busy retry always returns on its final attempt")
 }
 
 pub(crate) fn should_embed_candid_metadata(build_network: canic_core::ids::BuildNetwork) -> bool {

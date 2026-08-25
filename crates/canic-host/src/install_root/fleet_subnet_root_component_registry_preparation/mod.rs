@@ -51,6 +51,49 @@ enum RootComponentRegistryPreparationError {
     LiveEvidenceMismatch,
 }
 
+/// Re-run the exact retained preparation command as an idempotent live-state proof.
+///
+/// The command's Root-owned workflow verifies the durable Store bootstrap and active Registry
+/// mirror before it can return the Component Registry status. Comparing that status with the
+/// retained host receipt therefore proves the upgraded Root preserved the installation state;
+/// matching controllers, authority and module bytes alone cannot establish that property.
+pub(super) fn verify_retained_component_registry_preparation(
+    icp_context: &InstallIcpContext,
+    journal: &super::fleet_subnet_root_install_journal::FleetSubnetRootInstallJournal,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if journal.phase != FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified {
+        return Err(RootComponentRegistryPreparationError::UnexpectedPhase(journal.phase).into());
+    }
+    let root = journal
+        .fleet_subnet_root
+        .ok_or(RootComponentRegistryPreparationError::LiveEvidenceMismatch)?;
+    let request = journal
+        .component_registry_preparation_request
+        .clone()
+        .ok_or(RootComponentRegistryPreparationError::LiveEvidenceMismatch)?;
+    let expected = journal
+        .component_registry_preparation_response
+        .as_ref()
+        .ok_or(RootComponentRegistryPreparationError::LiveEvidenceMismatch)?;
+    let binding = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &journal.root_artifact,
+    )?;
+    let response: RootCommandResponseFragment = call_with_arg(
+        icp_context.cli(),
+        &binding,
+        root,
+        protocol::CANIC_COMMAND,
+        &RootCommandFragment::PrepareComponentRegistry(request),
+    )?;
+    let RootCommandResponseFragment::PrepareComponentRegistry(observed) = response;
+    if &observed != expected {
+        return Err(RootComponentRegistryPreparationError::LiveEvidenceMismatch.into());
+    }
+    Ok(())
+}
+
 pub(super) struct PrepareFleetSubnetRootComponentRegistriesRequest<'a> {
     pub icp: &'a InstallIcpContext,
     pub config_path: &'a Path,

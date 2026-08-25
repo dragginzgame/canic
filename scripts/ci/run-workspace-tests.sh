@@ -20,7 +20,7 @@ case "$MODE" in
     fast | full | ordinary | pocketic) ;;
     targeted-pocketic)
         if [[ -z "$TARGETED_POCKETIC_TEST" ]]; then
-            echo "targeted-pocketic requires one exact canic-testing-internal lib test" >&2
+            echo "targeted-pocketic requires one exact governed lib test" >&2
             exit 2
         fi
         ;;
@@ -467,7 +467,16 @@ require_ordinary_success_before_pocketic
 start_owned_pocketic_server
 
 if [[ "$MODE" == "targeted-pocketic" ]]; then
-    if [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_serial_pocketic_suite" ]]; then
+    if [[ "$TARGETED_POCKETIC_TEST" = "install_root::fleet_subnet_root_repair::tests::retained_repair_adoption_reaches_component_catalog_completion_and_closes_recovery" ]]; then
+        run_serial_pocketic_test \
+            "targeted canic-host retained Root repair PocketIC journey" \
+            -p canic-host \
+            --lib \
+            "$TARGETED_POCKETIC_TEST" \
+            -- \
+            --exact \
+            --ignored
+    elif [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_serial_pocketic_suite" ]]; then
         run_serial_pocketic_test \
             "targeted governed canic-testing-internal PocketIC suite" \
             -p canic-testing-internal \
@@ -499,6 +508,18 @@ run_serial_pocketic_test \
     -p canic-testing-internal \
     --lib \
     pic::governed_suite::governed_serial_pocketic_suite \
+    -- \
+    --exact \
+    --ignored
+
+# Exercise the private host recovery owner in its own crate so the test can
+# inspect immutable filesystem journals while using the same governed
+# PocketIC server for real install/upgrade module-hash evidence.
+run_serial_pocketic_test \
+    "canic-host retained Root repair PocketIC journey" \
+    -p canic-host \
+    --lib \
+    install_root::fleet_subnet_root_repair::tests::retained_repair_adoption_reaches_component_catalog_completion_and_closes_recovery \
     -- \
     --exact \
     --ignored

@@ -2,9 +2,10 @@
 
 #[cfg(test)]
 use super::build::{
-    build_five_trillion_component_root_wasm, build_icp_refill_pic, build_icp_refill_stub_wasm,
-    build_mainnet_five_component_refill_wasms, build_mainnet_refill_wasms, build_two_root_pic,
-    five_component_root_canister_config_path, five_trillion_component_root_canister_config_path,
+    build_five_component_root_wasm, build_five_trillion_component_root_wasm, build_icp_refill_pic,
+    build_icp_refill_stub_wasm, build_mainnet_five_component_refill_wasms,
+    build_mainnet_refill_wasms, build_two_root_pic, five_component_root_canister_config_path,
+    five_trillion_component_root_canister_config_path,
 };
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
@@ -1578,22 +1579,44 @@ mod tests {
     }
 
     #[test]
-    fn fresh_component_provisioning_reaches_runtime_active_with_root_owned_capacity() {
+    fn fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let root_wasm = build_test_root_wasm();
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = five_component_root_canister_config_path(&workspace_root);
+        let root_wasm = build_five_component_root_wasm();
         let coordinator_wasm = build_test_coordinator_wasm();
-        let store_fixture = build_root_store_fixture();
+        let store_fixture =
+            build_root_store_fixture_with_config(&config_path, build_five_component_wasms());
         let pic = build_pic();
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
-        let fixture = install_bootstrapped_root(&pic, root_wasm, coordinator, store_fixture);
+        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
+            &pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
+                coordinator_subnet: None,
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &config_path,
+            create_prepaid_pool_assets,
+        );
+        reset_prepaid_pool_assets(&pic, fixture.root_id);
         let operation_id = [0x6e; 32];
-        begin_fixture_fresh_component_provisioning(
+        begin_fixture_fresh_component_provisioning_with_config(
             &pic,
             coordinator,
             coordinator_wasm,
             &fixture,
             operation_id,
+            &config_path,
         );
 
         let mut last_status = None;
@@ -1610,7 +1633,7 @@ mod tests {
                 panic!("Coordinator returned a differently correlated operation status");
             };
             if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
-                assert_eq!(status.component_count, 1);
+                assert_eq!(status.component_count, 5);
                 assert_eq!(status.runtime_activated_root_count, 1);
                 assert!(status.runtimes_activated_at_ns.is_some());
                 assert!(status.pending_root_failure.is_none());
@@ -1635,9 +1658,11 @@ mod tests {
                 ("Coordinator", coordinator, Principal::anonymous()),
                 ("Root", fixture.root_id, Principal::anonymous()),
             ],
-            "terminal fresh Component provisioning",
+            "terminal fresh five-Component provisioning",
         );
-        panic!("fresh Component provisioning did not reach runtime active: {last_status:?}");
+        panic!(
+            "fresh five-Component provisioning did not publish its terminal Fleet catalog: {last_status:?}"
+        );
     }
 
     #[test]
@@ -5423,25 +5448,6 @@ mod tests {
     }
 
     #[cfg(test)]
-    fn begin_fixture_fresh_component_provisioning(
-        pic: &PocketIc,
-        coordinator: Principal,
-        coordinator_wasm: Vec<u8>,
-        fixture: &BootstrappedRootFixture,
-        operation_id: [u8; 32],
-    ) {
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        begin_fixture_fresh_component_provisioning_with_config(
-            pic,
-            coordinator,
-            coordinator_wasm,
-            fixture,
-            operation_id,
-            &root_canister_config_path(&workspace_root),
-        );
-    }
-
-    #[cfg(test)]
     fn begin_fixture_fresh_component_provisioning_with_config(
         pic: &PocketIc,
         coordinator: Principal,
@@ -6487,7 +6493,7 @@ mod tests {
             ),
             (
                 "fresh provisioning terminal runtime activation",
-                fresh_component_provisioning_reaches_runtime_active_with_root_owned_capacity,
+                fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog,
             ),
             (
                 "Coordinator attached-cycle grant",

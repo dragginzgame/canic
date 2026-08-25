@@ -573,9 +573,7 @@ async fn reset_asset(
             Ok(ResetAssetOutcome::Ready)
         }
         Ok(cycles) => {
-            let reason = format!(
-                "Canister pool asset {canister_id} has {cycles}, below required {required_cycles}"
-            );
+            let reason = pool_asset_underfunding_reason(canister_id, &cycles, &required_cycles)?;
             CanisterPoolOps::mark_failed(
                 canister_id,
                 Some(cycles),
@@ -617,6 +615,22 @@ async fn observe_reset_asset_cycles(
     .await?;
     MgmtOps::uninstall_code(canister_id).await?;
     MgmtOps::get_cycles(canister_id).await
+}
+
+fn pool_asset_underfunding_reason(
+    canister_id: Principal,
+    actual: &Cycles,
+    required: &Cycles,
+) -> Result<String, InternalError> {
+    let actual_cycles = actual.to_u128();
+    let required_cycles = required.to_u128();
+    let deficit_cycles = required_cycles
+        .checked_sub(actual_cycles)
+        .filter(|deficit| *deficit > 0)
+        .ok_or_else(InternalError::invariant)?;
+    Ok(format!(
+        "Canister pool asset {canister_id} has {actual} ({actual_cycles} cycles), below required {required} ({required_cycles} cycles); deficit {deficit_cycles} cycles"
+    ))
 }
 
 fn required_pool_asset_cycles(
@@ -743,6 +757,22 @@ mod tests {
             configured
         );
         assert!(maximum_required_pool_asset_cycles(Cycles::new(2), &demands, 3).is_err());
+    }
+
+    #[test]
+    fn underfunding_reason_preserves_exact_sub_billion_deficit_at_five_trillion() {
+        let canister_id = Principal::anonymous();
+        let actual = Cycles::new(4_999_546_217_226);
+        let required = Cycles::new(5_000_000_000_000);
+
+        assert_eq!(actual.to_string(), required.to_string());
+        assert_eq!(
+            pool_asset_underfunding_reason(canister_id, &actual, &required)
+                .expect("strict underfunding"),
+            "Canister pool asset 2vxsx-fae has 5.000 TC (4999546217226 cycles), below required 5.000 TC (5000000000000 cycles); deficit 453782774 cycles"
+        );
+        assert!(pool_asset_underfunding_reason(canister_id, &required, &actual).is_err());
+        assert!(pool_asset_underfunding_reason(canister_id, &required, &required).is_err());
     }
 
     #[test]

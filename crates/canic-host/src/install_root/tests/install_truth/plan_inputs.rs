@@ -129,6 +129,7 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
         expected_fresh_fleet_plan_digest: None,
         admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
+        retained_root_repair_adoption: None,
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
     };
@@ -167,6 +168,7 @@ fn install_truth_check_rejects_supplied_plan_environment_mismatch() {
         expected_fresh_fleet_plan_digest: None,
         admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
+        retained_root_repair_adoption: None,
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
     };
@@ -204,6 +206,7 @@ fn install_truth_check_rejects_supplied_plan_fleet_name_mismatch() {
         expected_fresh_fleet_plan_digest: None,
         admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
+        retained_root_repair_adoption: None,
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
     };
