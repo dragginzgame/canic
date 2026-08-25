@@ -90,6 +90,16 @@ pub(super) struct RecoveredFleetInstallAuthority {
     pub fresh_fleet_plan_digest: String,
 }
 
+/// Bounded read-only identity for one authoritative incomplete Fleet install session.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RetainedFleetInstallSessionSummaryV1 {
+    pub fleet_name: FleetName,
+    pub app: AppId,
+    pub release_build_id: ReleaseBuildId,
+    pub fresh_fleet_plan_digest: String,
+    pub operation_id: [u8; 32],
+}
+
 /// Exact terminal catalog evidence that permanently closes one fresh-install session.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -154,6 +164,30 @@ pub(super) enum FleetInstallSessionError {
 
     #[error(transparent)]
     ReleaseBuild(#[from] ReleaseBuildPlanError),
+}
+
+/// Inspect one exact Fleet identity without compiling current workspace configuration.
+pub fn inspect_incomplete_fleet_install_session(
+    root: &Path,
+    canonical_network_id: CanonicalNetworkId,
+    fleet_name: &FleetName,
+) -> Result<Option<RetainedFleetInstallSessionSummaryV1>, Box<dyn std::error::Error>> {
+    let path = session_path(root, canonical_network_id, fleet_name);
+    let Some(session) = load_optional_session(&path)? else {
+        return Ok(None);
+    };
+    let completion_path = path.with_file_name(COMPLETION_FILE);
+    if let Some(completion) = load_optional_completion(&completion_path)? {
+        validate_completion(&completion_path, &completion, &session)?;
+        return Ok(None);
+    }
+    Ok(Some(RetainedFleetInstallSessionSummaryV1 {
+        fleet_name: session.fleet_name,
+        app: session.fleet.app,
+        release_build_id: session.release_build_id,
+        fresh_fleet_plan_digest: session.fresh_fleet_plan_digest,
+        operation_id: session.operation_id,
+    }))
 }
 
 /// Publish or recover the exact pre-effect identity for one fresh Fleet install.

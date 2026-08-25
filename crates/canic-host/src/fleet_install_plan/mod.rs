@@ -27,6 +27,7 @@ pub use decision::{
     FRESH_FLEET_DEPLOYMENT_PLAN_SCHEMA_VERSION, compile_fresh_fleet_deployment_plan,
     fresh_fleet_maximum_operator_debit,
 };
+pub(crate) use initial_placement_policy::required_initial_pool_asset_cycles;
 pub use model::{
     FleetInstallPlan, FleetInstallPlanError, FleetInstallPlanRequest, FreshFleetCanisterCountsV1,
     FreshFleetCatalogEvidenceV1, FreshFleetDecisionAuthorityV1, FreshFleetDeploymentPlanError,

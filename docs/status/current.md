@@ -12,9 +12,12 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.90.2](archive/2026-07-13-precompact.md) and
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md).
 
+Release governance: source development state; no validated release candidate is staged.
+
 ## Current Release
 
-- Published `v0.109.5` corrects `CANIC-035`: every fresh plan rejects an
+- Published `v0.109.6` includes the `CANIC-035` correction first released in
+  `v0.109.5`: every fresh plan rejects an
   undersized pool policy before effects, while only the exact supported
   0.109.1 retained decision loads under its historical 2T rule. Root batch
   acceptance matches exact eligible assets, claiming is smallest-sufficient
@@ -23,8 +26,9 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   upgraded the retained Root, preserved its journals and refreshed the same
   imported asset to 5,000,098,949,600 cycles. That live work exposed
   `CANIC-039`: compact formatting rendered an actual 4,999,546,217,226 cycles
-  and required 5,000,000,000,000 cycles as the same `5.000 TC` value. Open
-  0.109.6 retains compact summaries but adds exact actual, required and deficit
+  and required 5,000,000,000,000 cycles as the same `5.000 TC` value. The
+  published correction retains compact summaries but adds exact actual,
+  required and deficit
   integers to the actionable underfunding diagnostic. It also replaces the
   product-version recovery allowlist with one current `v1` and one historical-
   pool `v1` plan contract, both gated by canonical session, finalized-artifact
@@ -50,7 +54,19 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   [dated audit report](../audits/reports/2026-08/2026-08-24/saltz-mainnet-calibration.md).
   Its approximately `2.590 Pcycles` remain externally funded, and this
   repository removal authorizes no reinstall, deletion, controller mutation,
-  funding or other remote effect.
+  funding or other remote effect. Open 0.109.7 completes the exceptional
+  retained Root/pool repair as one authority-bound operation, makes its live
+  Component Registry proof non-mutating and monotonic, makes Medic and Cargo
+  diagnostics recovery-aware, corrects named-environment artifact advice and
+  hardens release completeness. It also advances the maintained generic
+  composed-framework fixture from exact published IcyDB 0.230.2 to 0.240.1.
+  Focused pure, host and governed PocketIC proof passes. The complete
+  unmodified `make validate` gate passes on the final source candidate:
+  check in 1 second, warning-denied workspace Clippy in 16 seconds and the
+  complete test graph in 717 seconds. The 31-case governed internal PocketIC
+  suite passes in 266 seconds, the production-boundary retained-repair journey
+  in 47 seconds and the complete shared-server high-water mark is 4,958,820 kB
+  with 257 threads. No immutable 0.109.7 release candidate is staged yet.
 - The root `Cargo.toml` is the sole live workspace package-version authority;
   this handoff deliberately does not mirror its value. Immutable local and
   remote tag refs own publication truth, and tag presence determines whether a
@@ -633,7 +649,7 @@ It changes no stable schema and creates no second pool, provisioning or
 recovery owner. Focused pure/host proof and a governed Root-upgrade, retained-
 identity, 5T claim/install and no-debit journey pass. The separately authorized
 live repair upgraded the Root and refreshed the retained 4.5T asset beyond 5T
-without a new canister or journal. Open 0.109.6 corrects the rounded
+without a new canister or journal. Published 0.109.6 corrects the rounded
 underfunding message exposed during that repair and replaces release-number
 pairing with bounded typed recovery plus one exact successor-artifact receipt.
 Receipt publication also requires the live Root to reproduce the retained
@@ -659,10 +675,19 @@ runtime-activation observation assumption exposed by a fresh five-Component
 deployment. Pure and Coordinator workflow tests cover first, intermediate and
 terminal coalescing plus fail-closed identity/count/receipt/timestamp cases; a
 real local five-Component Coordinator/Root PocketIC journey reaches terminal
-Fleet catalog publication. The most recent complete gate predates
-`CANIC-042`; B8 remains open for one fresh immutable-candidate gate,
-maintainer version/publication, the exact-source resume and deployed-state/
-admission proof. B9
+Fleet catalog publication. The complete maintainer gate and immutable
+`v0.109.6` publication include that correction. Open 0.109.7 completes the
+retained Root/pool procedure, fixes its live Component Registry proof and
+receipt/operation interruption boundary, makes Medic and Cargo diagnostics
+recovery-aware, corrects named-environment artifact remediation, hardens
+release completeness and advances the generic composed-framework fixture to
+exact published IcyDB 0.240.1. Its governed host/PocketIC journey invokes the
+production executor and verifier, performs one exact Cycles Ledger top-up,
+re-inspects the retained asset, installs a Component, publishes the Fleet
+catalog and closes the install session without duplicate debit or effect.
+Focused checks and the complete maintainer gate pass on the final source
+candidate. B8 remains open for publication, the exact-source resume and
+deployed-state/admission proof. B9
 complexity remediation and B10 published managed-App test support then block
 minor closeout and 0.110.
 
@@ -721,9 +746,11 @@ operator creations, zero remaining debit and the exact verification phase.
 Do not rerun fresh staging: the exact-source 0.109.2 recovery plan is reviewed,
 published 0.109.3 crossed the `CANIC-031` retained-artifact gate without a
 Cargo build or artifact mutation, and the open `CANIC-033` correction must be
-validated and published before its resume is authorized again. `CANIC-028`'s
-impossible named-environment build advice and the generic retained-decision
-source-drift remediation are assigned to pure B9 cleanup. B10
+validated and published before its resume is authorized again. Open 0.109.7
+corrects `CANIC-028` by naming initial-install artifact finalization or an
+existing finalized release build instead of the ineffective `canic build`
+command. The generic retained-decision source-drift remediation remains
+assigned to pure B9 cleanup. B10
 then owns the separate published managed-App qualification harness. Stateful
 release adoption remains owned by 0.111, application retirement by 0.110 B2,
 generic observatory work by 0.112, and saved-plan consumption remains
@@ -1148,11 +1175,12 @@ acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 contains the B3-B9 runtime implementation, and published `v0.108.2` records the
 accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
-Published `v0.109.5` completes the pool-policy and retained-asset correction.
+Published `v0.109.6` completes the pool-policy, retained-asset, typed repair,
+terminal closure and coalesced runtime-activation corrections.
 Focused pure/host and governed PocketIC evidence covers historical-plan
 selection, Root upgrade, retained-principal refresh and capacity-preserving 5T
 claim/install. The separately authorized downstream Root upgrade and asset
-refresh completed without replacing a canister or journal; open 0.109.6 adds
+refresh completed without replacing a canister or journal; published 0.109.6 adds
 raw actual, required and deficit integers to the rounded diagnostic exposed by
 that repair, adopts the already-applied exact Root artifact through a separate
 immutable receipt and replaces product-version recovery pairs with bounded
@@ -1161,9 +1189,14 @@ durable Component journal rather than fixed sequence 7 and adds the retained-
 repair host/PocketIC journey. `CANIC-042` additionally makes first,
 intermediate and terminal Root runtime-activation observations accept any
 strictly monotonic bounded progress without weakening receipt authority; the
-five-Component local PocketIC journey reaches catalog publication. Run the
-fresh complete maintainer gate on the immutable candidate and publish the
-matching patch before continuing B8 from the downstream `v0.2.0` recovery
+five-Component local PocketIC journey reaches catalog publication. Open
+0.109.7 now completes the retained Root/pool procedure, non-mutating monotonic
+Registry proof, recovery-aware diagnostics, exact artifact guidance and
+release governance while updating the generic composed-framework boundary to
+exact published IcyDB 0.240.1. Focused checks and the production-boundary
+retained-repair PocketIC journey pass, and the complete unmodified maintainer
+gate passes on the final source candidate. Continue B8 from the downstream
+`v0.2.0` recovery
 checkout with a
 read-only plan that requires the unchanged digest, zero debit and
 `fleet_component_provisioning` next before separately authorizing one resume.

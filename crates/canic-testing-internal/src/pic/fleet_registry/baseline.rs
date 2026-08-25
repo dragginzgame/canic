@@ -1371,7 +1371,7 @@ mod tests {
         assert_eq!(refreshed_entry.cycles, Cycles::new(funded_balance));
 
         let operation_id = [0x71; 32];
-        begin_fixture_fresh_component_provisioning_with_config(
+        let component_registry_request = begin_fixture_fresh_component_provisioning_with_config(
             &pic,
             coordinator,
             coordinator_wasm,
@@ -1407,6 +1407,28 @@ mod tests {
         assert_eq!(terminal.component_count, 1);
         assert_eq!(terminal.runtime_activated_root_count, 1);
         assert!(terminal.pending_root_failure.is_none());
+
+        let RootCommandResponseFragment::PrepareComponentRegistry(first_proof) = root_command(
+            &pic,
+            fixture.root_id,
+            RootCommandFragment::PrepareComponentRegistry(component_registry_request.clone()),
+        )
+        .expect("replay advanced retained Component Registry without mutation") else {
+            panic!("Root returned a differently correlated Component Registry proof");
+        };
+        let RootCommandResponseFragment::PrepareComponentRegistry(replayed_proof) = root_command(
+            &pic,
+            fixture.root_id,
+            RootCommandFragment::PrepareComponentRegistry(component_registry_request),
+        )
+        .expect("replay advanced retained Component Registry proof") else {
+            panic!("Root returned a differently correlated Component Registry proof");
+        };
+        assert_eq!(replayed_proof, first_proof);
+        assert_eq!(first_proof.fleet_subnet_root, fixture.root_id);
+        assert_eq!(first_proof.reserved_component_instances, 0);
+        assert_eq!(first_proof.committed_component_instances, 1);
+        assert_eq!(first_proof.next_allocation_sequence, 2);
 
         let claimed = root_pool_status(&pic, fixture.root_id);
         assert_eq!(claimed.ready, 1);
@@ -5455,7 +5477,7 @@ mod tests {
         fixture: &BootstrappedRootFixture,
         operation_id: [u8; 32],
         config_path: &Path,
-    ) {
+    ) -> RootComponentRegistryPreparationRequest {
         install_fixture_coordinator_with_config(
             pic,
             coordinator,
@@ -5464,7 +5486,7 @@ mod tests {
             config_path,
         );
         let (joining_version, sync_request) = join_and_synchronize_root(pic, coordinator, fixture);
-        activate_registry_and_prepare_component_registry(
+        let component_registry_request = activate_registry_and_prepare_component_registry(
             pic,
             coordinator,
             fixture,
@@ -5492,6 +5514,7 @@ mod tests {
             panic!("Coordinator returned a differently correlated provisioning response");
         };
         assert_eq!(receipt.operation_id, operation_id);
+        component_registry_request
     }
 
     fn assert_registry_and_root_runtime_activation(
@@ -5627,9 +5650,21 @@ mod tests {
     fn assert_component_allocation(
         pic: &PocketIc,
         fixture: &BootstrappedRootFixture,
-        _component_registry_request: RootComponentRegistryPreparationRequest,
+        component_registry_request: RootComponentRegistryPreparationRequest,
     ) -> ActiveComponentBindings {
         let issuer = provision_component(pic, fixture, [0xa1; 32]);
+        let RootCommandResponseFragment::PrepareComponentRegistry(advanced) = root_command(
+            pic,
+            fixture.root_id,
+            RootCommandFragment::PrepareComponentRegistry(component_registry_request),
+        )
+        .expect("read protected Component Registry after allocation without mutation") else {
+            panic!("Root returned a differently correlated Component Registry status");
+        };
+        assert_eq!(advanced.fleet_subnet_root, fixture.root_id);
+        assert_eq!(advanced.next_allocation_sequence, 2);
+        assert_eq!(advanced.reserved_component_instances, 0);
+        assert_eq!(advanced.committed_component_instances, 1);
         let verifier = provision_component(pic, fixture, [0xa2; 32]);
         assert_ne!(issuer.component, verifier.component);
         assert_eq!(issuer.allocation_sequence, 1);

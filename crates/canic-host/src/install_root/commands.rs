@@ -249,6 +249,28 @@ pub(super) fn icp_canister_install_binary_args_command(
     command
 }
 
+pub(super) fn icp_canister_upgrade_binary_args_command(
+    icp: &InstallIcpContext,
+    canister: Principal,
+    wasm_path: &Path,
+    args_path: &Path,
+) -> Command {
+    let mut command = icp_canister_command(icp);
+    command.args([
+        "install",
+        &canister.to_text(),
+        "--mode=upgrade",
+        "-y",
+        "--wasm",
+    ]);
+    command.arg(wasm_path);
+    command.arg("--args-file");
+    command.arg(args_path);
+    command.args(["--args-format", "bin"]);
+    icp.add_target_args(&mut command);
+    command
+}
+
 pub(super) fn icp_e8s_text(e8s: u64) -> String {
     const E8S_PER_ICP: u64 = 100_000_000;
     let whole = e8s / E8S_PER_ICP;

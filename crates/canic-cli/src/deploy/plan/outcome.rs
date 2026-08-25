@@ -130,8 +130,10 @@ pub(super) fn next_actions(
         || has_artifact_diagnostics(warnings)
         || has_artifact_diagnostics(assumptions)
     {
-        actions
-            .push("run canic build or provide a build profile with resolved artifacts".to_string());
+        actions.push(
+            "run the matching initial install workflow to build and finalize named-environment artifacts, or select an existing finalized --release-build"
+                .to_string(),
+        );
     }
     actions.push(format!(
         "run canic medic fleet {} if operator readiness is uncertain",

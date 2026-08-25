@@ -24,8 +24,12 @@ is_release_file() {
   case "$1" in
     Cargo.toml | \
       Cargo.lock | \
+      docs/status/current.md | \
       scripts/dev/install_dev.sh | \
       scripts/ci/sync-release-surface-version.sh)
+      return 0
+      ;;
+    docs/changelog/[0-9]*.[0-9]*.md)
       return 0
       ;;
     */Cargo.toml)

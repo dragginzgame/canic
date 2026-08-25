@@ -7,6 +7,8 @@ use std::{path::PathBuf, str::FromStr};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RetainedRootRepairAdoption {
     pub fleet_subnet_root: Principal,
+    pub pool_canister: Principal,
+    pub live_predecessor_wasm: PathBuf,
     pub successor_wasm: PathBuf,
 }
 
@@ -14,20 +16,40 @@ impl FromStr for RetainedRootRepairAdoption {
     type Err = String;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let (root, wasm) = value.split_once('=').ok_or_else(|| {
-            "retained Root repair must be formatted as <ROOT_PRINCIPAL>=<RAW_WASM_PATH>".to_string()
+        let (authority, artifacts) = value.split_once('=').ok_or_else(|| {
+            "retained Root repair must be formatted as <ROOT_PRINCIPAL>,<POOL_CANISTER_PRINCIPAL>=<LIVE_RAW_WASM_PATH>,<SUCCESSOR_RAW_WASM_PATH>"
+                .to_string()
+        })?;
+        let (root, pool_canister) = authority.split_once(',').ok_or_else(|| {
+            "retained Root repair no longer accepts <ROOT_PRINCIPAL>=<RAW_WASM_PATH>; expected <ROOT_PRINCIPAL>,<POOL_CANISTER_PRINCIPAL>=<LIVE_RAW_WASM_PATH>,<SUCCESSOR_RAW_WASM_PATH>"
+                .to_string()
         })?;
         let fleet_subnet_root = Principal::from_text(root)
             .map_err(|_| "retained Root repair has an invalid Root Principal".to_string())?;
         if fleet_subnet_root == Principal::anonymous() {
             return Err("retained Root repair cannot name the anonymous Principal".to_string());
         }
-        if wasm.is_empty() {
-            return Err("retained Root repair raw Wasm path must not be empty".to_string());
+        let pool_canister = Principal::from_text(pool_canister).map_err(|_| {
+            "retained Root repair has an invalid pool Canister Principal".to_string()
+        })?;
+        if pool_canister == Principal::anonymous() || pool_canister == fleet_subnet_root {
+            return Err(
+                "retained Root repair must name a distinct non-anonymous pool Canister".to_string(),
+            );
+        }
+        let (live_predecessor_wasm, successor_wasm) =
+            artifacts.split_once(',').ok_or_else(|| {
+                "retained Root repair must name both the exact live predecessor Wasm and successor Wasm"
+                    .to_string()
+            })?;
+        if live_predecessor_wasm.is_empty() || successor_wasm.is_empty() {
+            return Err("retained Root repair raw Wasm paths must not be empty".to_string());
         }
         Ok(Self {
             fleet_subnet_root,
-            successor_wasm: PathBuf::from(wasm),
+            pool_canister,
+            live_predecessor_wasm: PathBuf::from(live_predecessor_wasm),
+            successor_wasm: PathBuf::from(successor_wasm),
         })
     }
 }

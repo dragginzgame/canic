@@ -19,7 +19,9 @@ use super::{
         wasm_store_create_result_path,
     },
     fleet_subnet_root_repair::{
-        RetainedRootRepairReceiptV1, publish_retained_root_repair, resolve_retained_root_repair,
+        RetainedRootRepairReceiptV1, execute_retained_root_repair, publish_retained_root_repair,
+        reconcile_published_retained_root_repair, record_retained_root_repair_adopted,
+        resolve_retained_root_repair,
     },
     icp_context::InstallIcpContext,
     operations::{
@@ -31,7 +33,7 @@ use super::{
     options::RetainedRootRepairAdoption,
 };
 use crate::{
-    fleet_install_plan::PersistedFleetInstallPlan,
+    fleet_install_plan::{PersistedFleetInstallPlan, required_initial_pool_asset_cycles},
     icp::IcpCli,
     protocol_binding::{ResolvedProtocolBinding, resolve_infrastructure_protocol_binding},
     release_set::{
@@ -172,14 +174,45 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
         let adoption = retained_root_repair_adoption.filter(|adoption| {
             current.journal.fleet_subnet_root == Some(adoption.fleet_subnet_root)
         });
-        let repair = resolve_retained_root_repair(&current, fleet_install_session, adoption)?;
+        let required_pool_cycles = adoption
+            .map(|_| required_initial_pool_asset_cycles(config.model(), &current.journal.root_plan))
+            .transpose()?
+            .map(|cycles| cycles.to_u128());
+        let repair = resolve_retained_root_repair(
+            &current,
+            fleet_install_session,
+            adoption,
+            required_pool_cycles,
+        )?;
         if let Some(repair) = repair.as_ref().filter(|repair| repair.needs_publication) {
             let active_controller = active_installation_controller(icp_context.cli())?;
             if current.journal.installation_controller != Some(active_controller) {
                 return Err(RootInstallStateError::RepairControllerMismatch.into());
             }
+            let root_binding = resolve_infrastructure_protocol_binding(
+                icp_context.root(),
+                icp_context.environment(),
+                &current.journal.root_artifact,
+            )?;
+            verify_pre_repair_root_authority(
+                icp_context,
+                &root_binding,
+                &current.journal,
+                &repair.receipt,
+            )?;
+            let operation = execute_retained_root_repair(
+                icp_context,
+                &root_binding,
+                repair,
+                &adoption
+                    .expect("repair publication has explicit successor artifact")
+                    .successor_wasm,
+            )?;
             verify_live_infrastructure(icp_context, &current.journal, Some(&repair.receipt))?;
             publish_retained_root_repair(repair, fleet_install_session, &current.journal)?;
+            record_retained_root_repair_adopted(repair, operation)?;
+        } else if let Some(repair) = repair.as_ref() {
+            reconcile_published_retained_root_repair(repair)?;
         }
         roots.push(drive_root_install(
             icp_context,
@@ -271,6 +304,48 @@ fn drive_root_install(
         };
     }
     Err(RootInstallStateError::TransitionBoundExceeded.into())
+}
+
+pub(super) fn verify_pre_repair_root_authority(
+    icp_context: &InstallIcpContext,
+    root_binding: &ResolvedProtocolBinding,
+    journal: &FleetSubnetRootInstallJournal,
+    repair: &RetainedRootRepairReceiptV1,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let fleet_subnet_root = journal
+        .fleet_subnet_root
+        .expect("repair journal retains its Root");
+    require_expected_controllers(
+        icp_context.cli(),
+        fleet_subnet_root,
+        std::slice::from_ref(
+            &journal
+                .installation_controller
+                .expect("repair journal retains its controller"),
+        ),
+        "Fleet Subnet Root repair predecessor",
+    )?;
+    require_expected_module_hash(
+        icp_context.cli(),
+        fleet_subnet_root,
+        repair.upgrade_predecessor_module_sha256,
+        "Fleet Subnet Root repair predecessor",
+    )?;
+    let expected = expected_root_authority(journal)?;
+    let observed = query_with_arg::<_, RootStatusResponseFragment>(
+        icp_context.cli(),
+        root_binding,
+        fleet_subnet_root,
+        protocol::CANIC_STATUS,
+        &RootStatusRequestFragment::FleetAuthority,
+    )?;
+    let RootStatusResponseFragment::FleetAuthority(observed) = observed else {
+        return Err(RootInstallStateError::AuthorityMismatch.into());
+    };
+    if *observed != expected {
+        return Err(RootInstallStateError::AuthorityMismatch.into());
+    }
+    Ok(())
 }
 
 fn recover_or_create_root(

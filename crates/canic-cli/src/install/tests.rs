@@ -150,14 +150,16 @@ fn install_accepts_finalized_release_build_identity() {
 }
 
 #[test]
-fn install_accepts_one_exact_retained_root_repair_artifact() {
+fn install_accepts_exact_root_pool_and_artifact_repair_authority() {
     let options = InstallOptions::parse([
         OsString::from("toko"),
         OsString::from("demo"),
         OsString::from("--fleet-input"),
         OsString::from("deployments/demo.toml"),
         OsString::from("--adopt-retained-root-repair"),
-        OsString::from("ryjl3-tyaaa-aaaaa-aaaba-cai=/tmp/repaired-root.wasm"),
+        OsString::from(
+            "ryjl3-tyaaa-aaaaa-aaaba-cai,r7inp-6aaaa-aaaaa-aaabq-cai=/tmp/live-root.wasm,/tmp/repaired-root.wasm",
+        ),
     ])
     .expect("parse retained Root repair");
 
@@ -169,6 +171,14 @@ fn install_accepts_one_exact_retained_root_repair_artifact() {
         "ryjl3-tyaaa-aaaaa-aaaba-cai"
     );
     assert_eq!(
+        repair.pool_canister.to_text(),
+        "r7inp-6aaaa-aaaaa-aaabq-cai"
+    );
+    assert_eq!(
+        repair.live_predecessor_wasm,
+        PathBuf::from("/tmp/live-root.wasm")
+    );
+    assert_eq!(
         repair.successor_wasm,
         PathBuf::from("/tmp/repaired-root.wasm")
     );
@@ -178,9 +188,12 @@ fn install_accepts_one_exact_retained_root_repair_artifact() {
 fn install_rejects_malformed_or_anonymous_retained_root_repair() {
     for repair in [
         "missing-separator",
-        "not-a-principal=/tmp/root.wasm",
-        "2vxsx-fae=/tmp/root.wasm",
-        "ryjl3-tyaaa-aaaaa-aaaba-cai=",
+        "not-a-principal=/tmp/live.wasm,/tmp/root.wasm",
+        "2vxsx-fae,r7inp-6aaaa-aaaaa-aaabq-cai=/tmp/live.wasm,/tmp/root.wasm",
+        "ryjl3-tyaaa-aaaaa-aaaba-cai,2vxsx-fae=/tmp/live.wasm,/tmp/root.wasm",
+        "ryjl3-tyaaa-aaaaa-aaaba-cai,ryjl3-tyaaa-aaaaa-aaaba-cai=/tmp/live.wasm,/tmp/root.wasm",
+        "ryjl3-tyaaa-aaaaa-aaaba-cai,r7inp-6aaaa-aaaaa-aaabq-cai=",
+        "ryjl3-tyaaa-aaaaa-aaaba-cai,r7inp-6aaaa-aaaaa-aaabq-cai=/tmp/root.wasm",
     ] {
         let error = InstallOptions::parse([
             OsString::from("toko"),
@@ -193,6 +206,25 @@ fn install_rejects_malformed_or_anonymous_retained_root_repair() {
         .expect_err("invalid repair must fail");
         std::assert_matches!(error, InstallCommandError::Usage(_));
     }
+}
+
+#[test]
+fn install_rejects_predecessor_repair_syntax_with_current_exact_form() {
+    let error = InstallOptions::parse([
+        OsString::from("toko"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo.toml"),
+        OsString::from("--adopt-retained-root-repair"),
+        OsString::from("ryjl3-tyaaa-aaaaa-aaaba-cai=/tmp/repaired-root.wasm"),
+    ])
+    .expect_err("published one-Principal repair syntax must be hard-cut");
+    let text = error.to_string();
+
+    assert!(text.contains("<ROOT_PRINCIPAL>=<RAW_WASM_PATH>"));
+    assert!(text.contains(
+        "<ROOT_PRINCIPAL>,<POOL_CANISTER_PRINCIPAL>=<LIVE_RAW_WASM_PATH>,<SUCCESSOR_RAW_WASM_PATH>"
+    ));
 }
 
 #[test]

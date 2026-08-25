@@ -149,23 +149,32 @@ tags:
 patch:
 	@$(MAKE) --no-print-directory release-cadence
 	@$(MAKE) ensure-clean
-	+@$(MAKE) --no-print-directory validate
-	@$(MAKE) ensure-clean
-	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh patch
+	+@validated_head="$$(git rev-parse HEAD)"; \
+		$(MAKE) --no-print-directory validate; \
+		$(MAKE) ensure-clean; \
+		test "$$validated_head" = "$$(git rev-parse HEAD)"; \
+		CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head" \
+			scripts/ci/bump-version.sh patch
 
 minor:
 	@scripts/ci/confirm-version-bump.sh minor
 	@$(MAKE) ensure-clean
-	+@$(MAKE) --no-print-directory validate
-	@$(MAKE) ensure-clean
-	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh minor
+	+@validated_head="$$(git rev-parse HEAD)"; \
+		$(MAKE) --no-print-directory validate; \
+		$(MAKE) ensure-clean; \
+		test "$$validated_head" = "$$(git rev-parse HEAD)"; \
+		CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head" \
+			scripts/ci/bump-version.sh minor
 
 major:
 	@scripts/ci/confirm-version-bump.sh major
 	@$(MAKE) ensure-clean
-	+@$(MAKE) --no-print-directory validate
-	@$(MAKE) ensure-clean
-	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh major
+	+@validated_head="$$(git rev-parse HEAD)"; \
+		$(MAKE) --no-print-directory validate; \
+		$(MAKE) ensure-clean; \
+		test "$$validated_head" = "$$(git rev-parse HEAD)"; \
+		CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head" \
+			scripts/ci/bump-version.sh major
 
 release-patch:
 	@$(MAKE) patch
@@ -186,8 +195,12 @@ release-major:
 	@$(MAKE) release-push
 
 release-stage:
-	git add Cargo.toml Cargo.lock scripts/dev/install_dev.sh \
-		scripts/ci/sync-release-surface-version.sh $$(git ls-files -m -- '*/Cargo.toml' || true)
+	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
+		minor_line="$${version%.*}"; \
+		git add Cargo.toml Cargo.lock scripts/dev/install_dev.sh \
+			scripts/ci/sync-release-surface-version.sh docs/status/current.md \
+			"docs/changelog/$$minor_line.md" \
+			$$(git ls-files -m -- '*/Cargo.toml' || true)
 
 release-candidate:
 	bash scripts/ci/check-release-candidate.sh

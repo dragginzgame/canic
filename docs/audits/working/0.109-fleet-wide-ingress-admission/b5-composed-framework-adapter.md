@@ -45,9 +45,11 @@ does not replace application membership or resource ownership.
 ## Generic composed-framework fixture
 
 The existing managed `canic_icydb_lifecycle_probe` remains the generic
-composition fixture. It uses exact published `icydb = 0.230.2` and the existing
-synchronous Canic/IcyDB lifecycle participant. B5 adds three direct IC-CDK
-methods rather than a second endpoint framework or storage owner:
+composition fixture. The accepted B5 candidate used exact published
+`icydb = 0.230.2`; the current 0.109.7 draft advances that dependency boundary
+to exact published IcyDB 0.240.1 without changing the existing synchronous
+Canic/IcyDB lifecycle participant. B5 adds three direct IC-CDK methods rather
+than a second endpoint framework or storage owner:
 
 - a deliberately public caller probe;
 - a guarded update that calls `require_caller()` before incrementing one
@@ -120,10 +122,40 @@ gate, the broad PocketIC matrix and the external Toko adoption review were not
 run. Repository policy reserves the complete gate for explicit maintainer
 authorization, and Toko remains read-only from this repository.
 
+## Current published-IcyDB refresh
+
+The open 0.109.7 draft resolves all six IcyDB packages at exact published
+0.240.1. The existing fixture required no source adaptation. Its focused
+refresh qualification passed:
+
+```text
+cargo check --locked -p canic_icydb_lifecycle_probe \
+  -p canic-icydb-lifecycle-schema
+
+cargo test --locked -p canic-core --test timer_inventory_guard \
+  timer_provider_graph_and_manifest_consumers_are_closed \
+  -- --exact --nocapture
+
+cargo test --locked -p canic-tests --test icydb_lifecycle_composition --no-run
+
+cargo clippy --locked -p canic_icydb_lifecycle_probe \
+  -p canic-icydb-lifecycle-schema --all-targets -- -D warnings
+
+CANIC_POCKET_IC_SERVER_URL=http://127.0.0.1:41337/ \
+  cargo test --locked -p canic-tests --test icydb_lifecycle_composition \
+  managed_canic_and_published_icydb_share_lifecycle_and_timer_custody \
+  -- --exact --nocapture --test-threads=1
+# all passed; the PocketIC journey passed 1/1 in 9.35 seconds with cached Wasms
+```
+
+This refresh was repository-local. It did not mutate IcyDB, another workspace,
+an identity, a canister or a network.
+
 ## Result
 
-B5 is ready within its sequenced boundary. A composed endpoint can enforce the
-same exact caller and managed projection as a Canic endpoint without a second
-authority, storage record, lifecycle owner, timer or remote lookup. B6 still
-owns runtime prepare/fence/activate/open convergence and forward recovery, so
-0.109 is not ready for closeout or publication.
+At B5 acceptance, a composed endpoint could enforce the same exact caller and
+managed projection as a Canic endpoint without a second authority, storage
+record, lifecycle owner, timer or remote lookup. B6 then owned runtime
+prepare/fence/activate/open convergence and forward recovery. Current release
+readiness is tracked in the active 0.109 status rather than this historical B5
+result.

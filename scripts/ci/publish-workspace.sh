@@ -24,6 +24,20 @@ PUBLISH_ORDER=(
     canic-wasm-store
 )
 
+if [ -n "$PUBLISH_FROM" ]; then
+    publish_from_is_known=0
+    for crate in "${PUBLISH_ORDER[@]}"; do
+        if [ "$crate" = "$PUBLISH_FROM" ]; then
+            publish_from_is_known=1
+            break
+        fi
+    done
+    if [ "$publish_from_is_known" -ne 1 ]; then
+        echo "PUBLISH_FROM=$PUBLISH_FROM is not in the publish order" >&2
+        exit 1
+    fi
+fi
+
 # Fails before any publish attempt if an explicitly publishable workspace crate
 # depends at runtime or build time on a local crate marked `publish = false`.
 validate_publish_manifest_boundary() {
@@ -60,10 +74,10 @@ wait_for_registry_version() {
 
 version="$(bash "$VERSION_READER")"
 
+bash "$ROOT_DIR/scripts/ci/check-release-candidate.sh"
 validate_publish_manifest_boundary
 
 started=0
-matched_from=0
 if [ -z "$PUBLISH_FROM" ]; then
     started=1
 fi
@@ -74,7 +88,6 @@ for crate in "${PUBLISH_ORDER[@]}"; do
             continue
         fi
         started=1
-        matched_from=1
     fi
 
     if registry_has_version "$crate" "$version"; then
@@ -98,7 +111,17 @@ for crate in "${PUBLISH_ORDER[@]}"; do
     fi
 done
 
-if [ -n "$PUBLISH_FROM" ] && [ "$matched_from" -eq 0 ]; then
-    echo "PUBLISH_FROM=$PUBLISH_FROM is not in the publish order" >&2
-    exit 1
+if [ "$PUBLISH_DRY_RUN" != "1" ]; then
+    missing_packages=()
+    for crate in "${PUBLISH_ORDER[@]}"; do
+        if ! registry_has_version "$crate" "$version"; then
+            missing_packages+=("$crate")
+        fi
+    done
+    if [ "${#missing_packages[@]}" -ne 0 ]; then
+        echo "Publication is incomplete for $version:" >&2
+        printf '  %s\n' "${missing_packages[@]}" >&2
+        exit 1
+    fi
+    echo "Verified complete matching Canic package set at $version"
 fi
