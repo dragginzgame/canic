@@ -620,6 +620,9 @@ cargo test --locked -p canic-cli deploy::plan::diagnostics::tests --lib -- --noc
 cargo test --locked -p canic-host --lib icp::tests -- --nocapture
 # 14 passed, including the bounded executable-busy publication race
 
+cargo test --locked -p canic-core --test timer_inventory_guard -- --nocapture
+# 16 passed; the bounded ICP executable-busy wait is explicitly inventoried
+
 cargo clippy --locked -p canic-host -p canic-cli -p canic-control-plane \
   -p canic-testing-internal --all-targets -- -D warnings
 # passed
