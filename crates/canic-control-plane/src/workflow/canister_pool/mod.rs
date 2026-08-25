@@ -222,7 +222,7 @@ async fn maintain_once_inner_for_target(
     {
         return Ok(reset_admin_response(
             canister_id,
-            reset_asset(canister_id, &config).await?,
+            reset_asset(canister_id, &config, PoolAssetResetIntent::Maintain).await?,
         ));
     }
     if root_is_draining() {
@@ -454,7 +454,7 @@ async fn import(canister_id: Principal) -> Result<PoolAdminResponse, InternalErr
     require_ic_import_on_root_subnet(canister_id).await?;
     let config = pool_config()?;
     CanisterPoolOps::initialize_imports(&config, &[canister_id], IcOps::now_nanos())?;
-    match reset_asset(canister_id, &config).await? {
+    match reset_asset(canister_id, &config, PoolAssetResetIntent::ExplicitImport).await? {
         ResetAssetOutcome::Ready => Ok(PoolAdminResponse::Imported { canister_id }),
         ResetAssetOutcome::Underfunded { reason } => Ok(PoolAdminResponse::ResetFailed {
             canister_id,
@@ -527,7 +527,7 @@ pub async fn recycle(canister_id: Principal) -> Result<(), InternalError> {
     if CanisterPoolOps::recycling_reset_is_terminal(canister_id)? {
         return Ok(());
     }
-    let _ = reset_asset(canister_id, &config).await?;
+    let _ = reset_asset(canister_id, &config, PoolAssetResetIntent::Maintain).await?;
     Ok(())
 }
 
@@ -540,16 +540,27 @@ enum ResetAssetOutcome {
     Underfunded { reason: String },
 }
 
+#[derive(Clone, Copy)]
+enum PoolAssetResetIntent {
+    ExplicitImport,
+    Maintain,
+}
+
 async fn reset_asset(
     canister_id: Principal,
     config: &FleetSubnetCanisterPoolConfig,
+    intent: PoolAssetResetIntent,
 ) -> Result<ResetAssetOutcome, InternalError> {
     let required_cycles = required_pool_asset_cycles(config)?;
-    let preparation = CanisterPoolOps::prepare_ready_reinspection(
-        canister_id,
-        &required_cycles,
-        IcOps::now_nanos(),
-    )?;
+    let now_ns = IcOps::now_nanos();
+    let preparation = match intent {
+        PoolAssetResetIntent::ExplicitImport => {
+            CanisterPoolOps::prepare_import_reinspection(canister_id, &required_cycles, now_ns)
+        }
+        PoolAssetResetIntent::Maintain => {
+            CanisterPoolOps::prepare_ready_reinspection(canister_id, &required_cycles, now_ns)
+        }
+    }?;
     if preparation == CanisterPoolResetPreparation::Ready {
         return Ok(ResetAssetOutcome::Ready);
     }

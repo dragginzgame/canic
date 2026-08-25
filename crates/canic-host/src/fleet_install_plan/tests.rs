@@ -381,12 +381,12 @@ fn complete_group_preflight() -> FreshFleetPreflightV1 {
     first.component_group_placements = vec![group_assignment(0)];
     first.root_creation_funding = PlannedCanisterCreationFunding::Cycles { cycles: 200 };
     first.wasm_store_creation_funding = PlannedCanisterCreationFunding::Cycles { cycles: 300 };
-    first.limits.canister_pool.canister_cycles = Cycles::new(50);
+    first.limits.canister_pool.canister_cycles = Cycles::new(5_000_000_000_000);
     let mut second = root_input(7, vec![admission("alpha", 1), admission("beta", 1)]);
     second.component_group_placements = vec![group_assignment(1)];
     second.root_creation_funding = PlannedCanisterCreationFunding::Cycles { cycles: 200 };
     second.wasm_store_creation_funding = PlannedCanisterCreationFunding::Cycles { cycles: 300 };
-    second.limits.canister_pool.canister_cycles = Cycles::new(50);
+    second.limits.canister_pool.canister_cycles = Cycles::new(5_000_000_000_000);
     let fleet_name = "demo-local".parse().expect("Fleet name");
     let admission = crate::test_support::fleet_admission_policy_template();
 
@@ -797,6 +797,63 @@ fn initial_group_placements_are_explicit_complete_and_durable() {
             .expect("read persisted plan")
             .contains("component_group_placements")
     );
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn retained_predecessor_loader_preserves_only_the_historical_pool_cycles_policy() {
+    let root = temp_dir("fleet-install-historical-pool-policy");
+    let config = group_config();
+    let release_build_id = prepare_finalized_release(&root, &config);
+    let fleet = fleet_binding(18);
+    let mut request = request(&root, &config, fleet.clone(), release_build_id);
+    for (planned_root, ordinal) in request.fleet_subnet_roots.iter_mut().zip([0, 1]) {
+        planned_root.component_admissions = vec![admission("alpha", 1), admission("beta", 1)];
+        planned_root.component_group_placements = vec![group_assignment(ordinal)];
+    }
+    let persisted =
+        compile_and_persist_fleet_install_plan(request).expect("persist current valid plan");
+    let mut historical = persisted.plan;
+    for planned_root in &mut historical.fleet_subnet_roots {
+        planned_root.limits.canister_pool.canister_cycles = Cycles::new(2_000_000_000_000);
+    }
+    let historical_bytes = serde_json::to_vec(&historical).expect("encode historical plan");
+    fs::write(&persisted.path, &historical_bytes).expect("install historical plan fixture");
+
+    assert!(matches!(
+        load_persisted_fleet_install_plan(&root, &config, &fleet, release_build_id),
+        Err(FleetInstallPlanError::InvalidComponentGroupPlacementAssignments { .. })
+    ));
+    let retained = super::persistence::load_retained_fleet_install_plan(
+        &root,
+        &config,
+        &fleet,
+        release_build_id,
+    )
+    .expect("load explicitly retained predecessor plan");
+    assert_eq!(retained.plan, historical);
+    assert_eq!(
+        fs::read(&retained.path).expect("read retained bytes"),
+        historical_bytes
+    );
+
+    let duplicate_ordinal = historical.fleet_subnet_roots[0].component_group_placements[0].ordinal;
+    historical.fleet_subnet_roots[1].component_group_placements[0].ordinal = duplicate_ordinal;
+    fs::write(
+        &retained.path,
+        serde_json::to_vec(&historical).expect("encode invalid historical plan"),
+    )
+    .expect("install invalid historical plan fixture");
+    assert!(matches!(
+        super::persistence::load_retained_fleet_install_plan(
+            &root,
+            &config,
+            &fleet,
+            release_build_id,
+        ),
+        Err(FleetInstallPlanError::InvalidComponentGroupPlacementAssignments { .. })
+    ));
+
     fs::remove_dir_all(root).expect("remove temp root");
 }
 

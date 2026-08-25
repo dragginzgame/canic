@@ -21,9 +21,10 @@ use crate::{
         CYCLES_LEDGER_CREATE_CANISTER_FEE_CYCLES, FreshFleetDecisionAuthorityError,
         FreshFleetDecisionAuthorityRequest, FreshFleetDecisionAuthorityV1,
         FreshFleetDeploymentPlanError, FreshFleetDeploymentPlanRequest, FreshFleetDeploymentPlanV1,
+        FreshFleetPreflightError, FreshFleetPreflightRequest, FreshFleetPreflightV1,
         PersistedFleetInstallPlan, PlannedCanisterCreationFunding,
-        compile_fresh_fleet_deployment_plan_with_operator_debit,
-        load_fresh_fleet_recovery_decision_authority, load_persisted_fleet_install_plan,
+        compile_fresh_fleet_deployment_plan_with_operator_debit, compile_retained_fleet_preflight,
+        load_fresh_fleet_recovery_decision_authority, load_retained_fleet_install_plan,
     },
     release_set::load_persisted_canic_infrastructure_artifact_manifest,
 };
@@ -121,6 +122,40 @@ impl FreshFleetInstallRecoveryPlanV1 {
         self.require_matching_decision(&plan)?;
         Ok(plan)
     }
+
+    /// Compile the retained decision under its exact admitted historical pool-policy boundary.
+    pub fn compile_preflight(
+        &self,
+        request: FreshFleetPreflightRequest<'_>,
+    ) -> Result<FreshFleetPreflightV1, FreshFleetInstallRecoveryError> {
+        require_supported_recovery_builder(
+            &self.retained_builder_version,
+            env!("CARGO_PKG_VERSION"),
+        )?;
+        if uses_historical_pool_policy(&self.retained_builder_version, env!("CARGO_PKG_VERSION")) {
+            return compile_retained_fleet_preflight(request).map_err(Into::into);
+        }
+        crate::fleet_install_plan::compile_fresh_fleet_preflight(request).map_err(Into::into)
+    }
+
+    pub(super) fn load_install_plan(
+        &self,
+        root: &Path,
+        config: &ConfigModel,
+        fleet: &canic_core::ids::FleetBinding,
+    ) -> Result<PersistedFleetInstallPlan, FreshFleetInstallRecoveryError> {
+        require_supported_recovery_builder(
+            &self.retained_builder_version,
+            env!("CARGO_PKG_VERSION"),
+        )?;
+        load_recovery_install_plan(
+            root,
+            config,
+            fleet,
+            self.release_build_id,
+            &self.retained_builder_version,
+        )
+    }
 }
 
 /// Read-only identity needed to discover one retained fresh-install session.
@@ -155,6 +190,9 @@ pub enum FreshFleetInstallRecoveryError {
 
     #[error(transparent)]
     DecisionPlan(#[from] FreshFleetDeploymentPlanError),
+
+    #[error(transparent)]
+    Preflight(#[from] FreshFleetPreflightError),
 }
 
 /// Inspect one existing session without creating a lock, journal, report, or other file.
@@ -179,9 +217,14 @@ pub(super) fn compile_recovery_plan(
     recovered: &fleet_install_session::RecoveredFleetInstallAuthority,
 ) -> Result<FreshFleetInstallRecoveryPlanV1, FreshFleetInstallRecoveryError> {
     let session = &recovered.session;
-    let plan =
-        load_persisted_fleet_install_plan(root, config, &session.fleet, session.release_build_id)
-            .map_err(invalid)?;
+    let retained_builder_version = &recovered.finalized_release_build.record.builder_version;
+    let plan = load_recovery_install_plan(
+        root,
+        config,
+        &session.fleet,
+        session.release_build_id,
+        retained_builder_version,
+    )?;
     if plan.plan.fresh_fleet_plan_digest != session.fresh_fleet_plan_digest {
         return Err(invalid(
             "persisted Fleet plan differs from the retained fresh-Fleet decision digest",
@@ -255,11 +298,7 @@ pub(super) fn compile_recovery_plan(
         fleet_install_operation_id: hex_bytes(session.operation_id),
         release_build_id: session.release_build_id,
         decision_release_build_id: session.decision_release_build_id,
-        retained_builder_version: recovered
-            .finalized_release_build
-            .record
-            .builder_version
-            .clone(),
+        retained_builder_version: retained_builder_version.clone(),
         fresh_fleet_plan_digest: session.fresh_fleet_plan_digest.clone(),
         effects_started,
         original_maximum_operator_debit: PlannedCanisterCreationFunding::Cycles {
@@ -278,6 +317,34 @@ pub(super) fn compile_recovery_plan(
 
 const RETAINED_INSTALL_RECOVERY_PREDECESSOR: &str = "0.109.1";
 const RETAINED_INSTALL_RECOVERY_SUCCESSORS: &[&str] = &["0.109.2", "0.109.3", "0.109.4", "0.109.5"];
+
+fn load_recovery_install_plan(
+    root: &Path,
+    config: &ConfigModel,
+    fleet: &canic_core::ids::FleetBinding,
+    release_build_id: ReleaseBuildId,
+    retained_builder_version: &str,
+) -> Result<PersistedFleetInstallPlan, FreshFleetInstallRecoveryError> {
+    let current = env!("CARGO_PKG_VERSION");
+    require_supported_recovery_builder(retained_builder_version, current)?;
+    if uses_historical_pool_policy(retained_builder_version, current) {
+        return load_retained_fleet_install_plan(root, config, fleet, release_build_id)
+            .map_err(invalid);
+    }
+    crate::fleet_install_plan::load_persisted_fleet_install_plan(
+        root,
+        config,
+        fleet,
+        release_build_id,
+    )
+    .map_err(invalid)
+}
+
+fn uses_historical_pool_policy(recorded: &str, current: &str) -> bool {
+    recorded == RETAINED_INSTALL_RECOVERY_PREDECESSOR
+        && recorded != current
+        && RETAINED_INSTALL_RECOVERY_SUCCESSORS.contains(&current)
+}
 
 /// Enforce the one narrow host-only cross-patch rescue contract for an exact retained build.
 pub fn require_supported_recovery_builder(
@@ -552,6 +619,10 @@ mod tests {
         assert!(require_supported_recovery_builder("0.109.1", "0.109.6").is_err());
         assert!(require_supported_recovery_builder("0.109.2", "0.109.3").is_err());
         assert!(require_supported_recovery_builder("0.109.2", "0.109.1").is_err());
+        assert!(uses_historical_pool_policy("0.109.1", "0.109.5"));
+        assert!(!uses_historical_pool_policy("0.109.5", "0.109.5"));
+        assert!(!uses_historical_pool_policy("0.109.2", "0.109.5"));
+        assert!(!uses_historical_pool_policy("0.109.1", "0.109.6"));
     }
 
     fn zero_root_plan() -> PersistedFleetInstallPlan {

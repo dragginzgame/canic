@@ -41,7 +41,9 @@ pub use model::{
 pub use operator_evidence::{
     FreshFleetOperatorEvidenceError, observe_fresh_fleet_operator_funding,
 };
+pub(crate) use persistence::load_retained_fleet_install_plan;
 pub use persistence::{compile_and_persist_fleet_install_plan, load_persisted_fleet_install_plan};
+pub(crate) use preflight::compile_retained_fleet_preflight;
 pub use preflight::{FRESH_FLEET_PREFLIGHT_SCHEMA_VERSION, compile_fresh_fleet_preflight};
 
 #[cfg(test)]

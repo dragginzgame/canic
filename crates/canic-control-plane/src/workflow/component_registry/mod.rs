@@ -4118,9 +4118,11 @@ fn advance_creation(
         component: allocation.component,
         operation_id,
     };
-    if let Some(canister) =
-        CanisterPoolOps::claim_oldest_ready(&pool_claim, &plan.initial_cycles, IcOps::now_nanos())?
-    {
+    if let Some(canister) = CanisterPoolOps::claim_smallest_sufficient_ready(
+        &pool_claim,
+        &plan.initial_cycles,
+        IcOps::now_nanos(),
+    )? {
         return claim_component_pool_asset(operation_id, plan, pool_claim, canister);
     }
     Err(InternalError::public(
@@ -4144,9 +4146,11 @@ fn advance_child_creation(
         component,
         operation_id,
     };
-    if let Some(canister) =
-        CanisterPoolOps::claim_oldest_ready(&pool_claim, &plan.initial_cycles, IcOps::now_nanos())?
-    {
+    if let Some(canister) = CanisterPoolOps::claim_smallest_sufficient_ready(
+        &pool_claim,
+        &plan.initial_cycles,
+        IcOps::now_nanos(),
+    )? {
         return claim_component_child_pool_asset(
             component,
             operation_id,

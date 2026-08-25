@@ -14,7 +14,7 @@ Date: 2026-08-24
 | Published recovery correction | annotated `v0.109.2`, commit `b48181ba2b4b0d9f679386ddb62179ba498b8ee2`; remote tag object `94aa4d190d142acda51eac35a19234fa0509b8bd` |
 | Published artifact-reuse correction | annotated `v0.109.3`, commit `d861febb00bed2ca8145b705f82d836dc0ae6686`; downstream recovery crossed immutable retained-artifact reuse without Cargo or artifact mutation |
 | Published provisioning-recovery correction | annotated `v0.109.4`, commit `2a5ef929b76bc29e62d19cbe1785690dc0d51fd2`; the downstream retained session crossed monotonic first-status reconciliation |
-| Open pool-eligibility correction | 0.109.5 hard-cut changelog draft over published 0.109.4; exact Ready matching, undersized-Ready reinspection, first-excess planning, explicit recovery-pair and governed PocketIC balance-preservation tests pass; maintainer validation/version/publication not run |
+| Open pool-eligibility correction | 0.109.5 hard-cut changelog draft over published 0.109.4; fresh-only 5T validation, exact 0.109.1 historical-plan load, exact Ready matching, smallest-sufficient claiming, retained-Ready reinspection, recovery remediation, explicit recovery-pair and governed PocketIC Root-upgrade/claim/install tests pass; maintainer validation/version/publication not run |
 | Canic effects | Repository source/documentation and local build artifacts plus maintainer-owned validation/version/publication through 0.109.3; no downstream effect from this repository |
 | Downstream evidence | Separately owned exact-0.109.3 graph/CLI adoption, exact-source zero-debit plan and authorized recovery; retained-artifact reuse, Registry activation and Root preparation advanced before `CANIC-033`; App/frontend effects did not start |
 | Excluded | Any new live staging, resume, paid effect or other external mutation from this repository |
@@ -557,8 +557,16 @@ owner and the accepted Root batch as the sole provisioning owner:
 
 - no-effect planning requires each Root's configured pool-asset amount to
   cover the largest `initial_cycles` requirement among its initial placements;
+- only the explicitly admitted 0.109.1 interrupted-install decision is loaded,
+  recompiled and resumed under its historical pool-cycle rule. Fresh plans,
+  same-release plans and unsupported recovery pairs retain the current 5T
+  requirement, and every other plan/topology/digest/artifact invariant remains
+  enforced;
 - Root acceptance greedily matches distinct sorted Ready balances to the exact
   sorted batch demands, so heterogeneous assets are not treated as fungible;
+- the retained claim step selects the smallest sufficient Ready balance, with
+  age and Principal as deterministic tie-breakers, so a smaller demand cannot
+  strand a later larger demand;
 - a full ineligible pool returns typed `CAPACITY_INSUFFICIENT` after protected
   observer authorization, allowing the existing Coordinator retry record and
   host report to preserve the cause;
@@ -567,9 +575,13 @@ owner and the accepted Root batch as the sole provisioning owner:
   import is fenced as `PendingReset`; because the prior Ready record already
   proves it empty and Root-controlled, retry rechecks its exact controller,
   absent module and live balance without repeating uninstall effects. Only an
-  adequate observation returns it to `Ready`; and
-- exact retry while queued is idempotent, while replay after an adequate Ready
-  result returns without another reset or claim.
+  adequate observation returns it to `Ready`;
+- exact retry while queued is idempotent. A later explicit protected import
+  repeats only the read-only live-status observation and cannot repeat an
+  uninstall, debit, creation, transfer or claim; and
+- a recovery-policy diagnostic names the admitted retained release/historical
+  plan path and explicitly warns against adding Ledger funds or replacing the
+  Fleet.
 
 No stable record or memory allocation changed. The maintainer explicitly chose
 the pre-1.0 hard-cut direction: recovery speed and cycle preservation take
@@ -584,7 +596,7 @@ Focused evidence currently passes:
 
 ```text
 cargo test --locked -p canic-control-plane ops::canister_pool::tests --lib -- --nocapture
-# 10 passed
+# 11 passed
 
 cargo test --locked -p canic-control-plane workflow::component_provisioning::tests --lib -- --nocapture
 # 5 passed
@@ -598,23 +610,39 @@ cargo test --locked -p canic-host initial_group_placements_are_explicit_complete
 cargo test --locked -p canic-host cross_patch_rescue_is_exactly_1091_to_explicit_successors --lib -- --nocapture
 # 1 passed; admits 0.109.5 and rejects 0.109.6
 
+cargo test --locked -p canic-host fleet_install_plan::tests --lib -- --nocapture
+# 17 passed; current load rejects 2T/5T while the retained loader accepts only
+# the historical pool-cycle rule and still rejects another broken invariant
+
+cargo test --locked -p canic-cli deploy::plan::diagnostics::tests --lib -- --nocapture
+# 2 passed; retained recovery remediation cannot recommend more funding
+
+cargo test --locked -p canic-host --lib icp::tests -- --nocapture
+# 14 passed, including the bounded executable-busy publication race
+
+cargo clippy --locked -p canic-host -p canic-cli -p canic-control-plane \
+  -p canic-testing-internal --all-targets -- -D warnings
+# passed
+
 bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh \
   targeted-pocketic \
-  pic::fleet_registry::baseline::tests::topped_up_import_refreshes_the_ready_row_without_losing_cycles
-# 1 passed in 112s through the governed PocketIC server;
-# high-water 396,352 kB, 19 threads
+  pic::fleet_registry::baseline::tests::historical_pool_assets_upgrade_refresh_and_claim_without_losing_cycles
+# 1 passed in 88s through the governed PocketIC server at the final source
+# state; high-water 448,300 kB, 19 threads
 ```
 
-The PocketIC journey uses the real Root management path: a never-verified
-underfunded import first completes the full reset and stays failed, the exact
-remaining deficit is added, the same principal becomes Ready at 5T, and a
-second protected import leaves both its recorded and live balance unchanged.
-It raises the unique governed serial inventory from 30 to 31 cases.
-The active-batch threshold is separately covered by the exact demand resolver
-and remaining-demand unit proof; the stable pool and provisioning record shapes
-have no 0.109.1-to-candidate diff. Maintainer validation, versioning and
-publication remain unrun, and the downstream live upgrade/top-up/resume remains
-a separately authorized effect rather than release qualification performed by
+The PocketIC journey uses the real Root management and Component-provisioning
+paths. It retains two imported principals at the historical 2T floor and 4.5T
+shape, upgrades the Root without rebuilding pool state, tops up and refreshes
+the same larger principal to 5T, repeats the protected observation without a
+debit, claims/installs the 5T Component and leaves the smaller principal Ready
+at its exact retained live balance. The governed serial inventory remains 31
+cases. The host regression separately proves that fresh validation rejects the
+immutable 2T/5T mismatch while the exact supported predecessor loader admits
+only that historical rule. The stable pool and provisioning record shapes have
+no 0.109.1-to-candidate diff. Maintainer validation, versioning and publication
+remain unrun, and the downstream live upgrade/top-up/resume remains a
+separately authorized effect rather than release qualification performed by
 this repository.
 
 The remaining feedback is routed without widening B8 or adding product

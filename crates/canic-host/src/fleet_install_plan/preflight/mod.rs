@@ -22,6 +22,19 @@ pub const FRESH_FLEET_PREFLIGHT_SCHEMA_VERSION: u16 = 1;
 pub fn compile_fresh_fleet_preflight(
     request: FreshFleetPreflightRequest<'_>,
 ) -> Result<FreshFleetPreflightV1, FreshFleetPreflightError> {
+    compile_fleet_preflight(request, false)
+}
+
+pub fn compile_retained_fleet_preflight(
+    request: FreshFleetPreflightRequest<'_>,
+) -> Result<FreshFleetPreflightV1, FreshFleetPreflightError> {
+    compile_fleet_preflight(request, true)
+}
+
+fn compile_fleet_preflight(
+    request: FreshFleetPreflightRequest<'_>,
+    retain_historical_pool_policy: bool,
+) -> Result<FreshFleetPreflightV1, FreshFleetPreflightError> {
     validate_effect_boundary(request.effects)?;
     if request.config.app_id().as_str() != request.app {
         return Err(FreshFleetPreflightError::AppMismatch {
@@ -91,10 +104,17 @@ pub fn compile_fresh_fleet_preflight(
         });
     }
 
-    let component_counts = initial_placement_policy::validate_initial_component_group_assignments(
-        request.config,
-        &fleet_subnet_roots,
-    )
+    let component_counts = if retain_historical_pool_policy {
+        initial_placement_policy::validate_historical_component_group_assignments(
+            request.config,
+            &fleet_subnet_roots,
+        )
+    } else {
+        initial_placement_policy::validate_initial_component_group_assignments(
+            request.config,
+            &fleet_subnet_roots,
+        )
+    }
     .map_err(
         |error| FreshFleetPreflightError::InvalidComponentGroupPlacementAssignments {
             reason: error.to_string(),

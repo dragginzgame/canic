@@ -98,6 +98,40 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
     fs::remove_dir_all(root).expect("remove temp dir");
 }
 
+#[cfg(unix)]
+#[test]
+fn command_output_retries_a_transient_executable_busy_race() {
+    use std::fs::{self, OpenOptions};
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::Duration;
+
+    let root = unique_temp_dir("canic-icp-executable-busy");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let executable = root.join("icp");
+    fs::write(&executable, "#!/bin/sh\nprintf '%s\\n' ready\n").expect("write fake executable");
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
+        .expect("make fake executable runnable");
+    let writer = OpenOptions::new()
+        .write(true)
+        .open(&executable)
+        .expect("hold executable open for writing");
+    let release_writer = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(8));
+        drop(writer);
+    });
+    let mut command = Command::new(&executable);
+
+    let output = super::run::output_with_executable_busy_retry(&mut command)
+        .expect("retry transient executable-busy failure");
+    release_writer
+        .join()
+        .expect("release fake executable writer");
+
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ready");
+    fs::remove_dir_all(root).expect("remove temp dir");
+}
+
 fn unique_temp_dir(label: &str) -> std::path::PathBuf {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

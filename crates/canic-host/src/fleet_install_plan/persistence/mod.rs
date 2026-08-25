@@ -129,6 +129,43 @@ pub fn load_persisted_fleet_install_plan(
     fleet: &FleetBinding,
     release_build_id: ReleaseBuildId,
 ) -> Result<PersistedFleetInstallPlan, FleetInstallPlanError> {
+    load_persisted_fleet_install_plan_with_policy(
+        root,
+        config,
+        fleet,
+        release_build_id,
+        PersistedPlanPoolPolicy::Current,
+    )
+}
+
+pub fn load_retained_fleet_install_plan(
+    root: &Path,
+    config: &ConfigModel,
+    fleet: &FleetBinding,
+    release_build_id: ReleaseBuildId,
+) -> Result<PersistedFleetInstallPlan, FleetInstallPlanError> {
+    load_persisted_fleet_install_plan_with_policy(
+        root,
+        config,
+        fleet,
+        release_build_id,
+        PersistedPlanPoolPolicy::HistoricalPredecessor,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum PersistedPlanPoolPolicy {
+    Current,
+    HistoricalPredecessor,
+}
+
+fn load_persisted_fleet_install_plan_with_policy(
+    root: &Path,
+    config: &ConfigModel,
+    fleet: &FleetBinding,
+    release_build_id: ReleaseBuildId,
+    pool_policy: PersistedPlanPoolPolicy,
+) -> Result<PersistedFleetInstallPlan, FleetInstallPlanError> {
     load_finalized_release_build(root, release_build_id)?;
     let topology = config.compile_component_topology()?;
     let union = load_persisted_application_artifact_union(root, &topology, release_build_id)?;
@@ -144,7 +181,8 @@ pub fn load_persisted_fleet_install_plan(
             "document identity does not match its Fleet/release-build path",
         ));
     }
-    let canonical = canonical_plan_bytes(&plan, &topology, config, union.digest)?;
+    let canonical =
+        canonical_plan_bytes_with_policy(&plan, &topology, config, union.digest, pool_policy)?;
     if canonical != bytes {
         return Err(invalid_plan(&path, "plan bytes are not canonical"));
     }
@@ -339,6 +377,22 @@ fn canonical_plan_bytes(
     config: &ConfigModel,
     union_digest: [u8; 32],
 ) -> Result<Vec<u8>, FleetInstallPlanError> {
+    canonical_plan_bytes_with_policy(
+        plan,
+        topology,
+        config,
+        union_digest,
+        PersistedPlanPoolPolicy::Current,
+    )
+}
+
+fn canonical_plan_bytes_with_policy(
+    plan: &FleetInstallPlan,
+    topology: &canic_core::bootstrap::compiled::ComponentTopology,
+    config: &ConfigModel,
+    union_digest: [u8; 32],
+    pool_policy: PersistedPlanPoolPolicy,
+) -> Result<Vec<u8>, FleetInstallPlanError> {
     let configured_app = config.app_id();
     if &plan.fleet.app != configured_app {
         return Err(FleetInstallPlanError::AppMismatch {
@@ -400,7 +454,7 @@ fn canonical_plan_bytes(
         admissions.push(root.component_admissions.as_slice());
     }
     topology.validate_fleet_admissions(&admissions)?;
-    validate_initial_component_group_assignments(config, &plan.fleet_subnet_roots)?;
+    validate_initial_component_group_assignments(config, &plan.fleet_subnet_roots, pool_policy)?;
     let bytes = serde_json::to_vec(plan).map_err(FleetInstallPlanError::PlanSerialization)?;
     check_size(&bytes, FileKind::Plan)?;
     Ok(bytes)
@@ -505,9 +559,20 @@ fn is_canonical_sha256(value: &str) -> bool {
 fn validate_initial_component_group_assignments(
     config: &ConfigModel,
     roots: &[PlannedFleetSubnetRoot],
+    pool_policy: PersistedPlanPoolPolicy,
 ) -> Result<(), FleetInstallPlanError> {
     let roots = roots.iter().map(fresh_root).collect::<Vec<_>>();
-    initial_placement_policy::validate_initial_component_group_assignments(config, &roots)
+    let result = match pool_policy {
+        PersistedPlanPoolPolicy::Current => {
+            initial_placement_policy::validate_initial_component_group_assignments(config, &roots)
+        }
+        PersistedPlanPoolPolicy::HistoricalPredecessor => {
+            initial_placement_policy::validate_historical_component_group_assignments(
+                config, &roots,
+            )
+        }
+    };
+    result
         .map(|_| ())
         .map_err(|error| invalid_assignments(error.to_string()))
 }

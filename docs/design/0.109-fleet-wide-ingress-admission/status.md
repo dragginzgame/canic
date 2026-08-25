@@ -38,10 +38,13 @@ Last updated: 2026-08-25
   The retained operation crossed that correction, then exposed `CANIC-034`
   Root-ledger funding and `CANIC-035` undersized pool policy. Authorized
   funding/import work retained Ready assets at 2T and 4.5T for one unclaimed
-  5T App. The open 0.109.5 hard cut rejects that policy before effects, matches
-  exact eligible assets at acceptance, retains typed capacity evidence and
-  lets the sole Root pool owner re-inspect the topped-up imported asset without
-  replacing the operation or journal.
+  5T App. The open 0.109.5 hard cut rejects that policy before fresh-plan
+  effects, loads only the exact admitted 0.109.1 retained decision under its
+  historical rule, matches exact eligible assets at acceptance, claims the
+  smallest sufficient Ready asset, retains typed capacity evidence and lets
+  the sole Root pool owner re-inspect the topped-up imported asset without
+  replacing the operation or journal. Recovery remediation explicitly rejects
+  irrelevant additional funding advice.
   The accepted post-implementation complexity audit has a
   `fail` closeout verdict; B9 must
   supersede it with a pass before B10, 0.109 minor closeout or 0.110 promotion.
@@ -252,13 +255,16 @@ publication. The explicit successor set now includes 0.109.5 and still rejects
 later or different predecessor pairs. Published 0.109.4 crossed the first-
 status race, after which the retained operation exposed the separately funded
 but undersized full pool recorded as `CANIC-035`. The open hard-cut correction
-uses the existing Root pool and provisioning owners: future plans reject the
-policy mismatch before effects, exact batch acceptance matches eligible asset
-amounts, protected status retains typed `CAPACITY_INSUFFICIENT`, and a repeated
-protected import/reset may re-inspect the topped-up 4.5T asset against the
-remaining 5T claim. No stable schema or second recovery owner is added. The
-governed targeted PocketIC journey proves fail-closed underfunding, exact
-live-balance refresh and no-debit replay on the same principal. B8 closes only
+uses the existing Root pool and provisioning owners: fresh plans reject the
+policy mismatch before effects, the exact supported predecessor plan retains
+its historical pool-cycle validation, exact batch acceptance matches eligible
+asset amounts, claims preserve heterogeneous capacity, protected status
+retains typed `CAPACITY_INSUFFICIENT`, and a repeated protected import/reset
+may re-inspect the topped-up 4.5T asset against the remaining 5T claim. No
+stable schema or second recovery owner is added. The governed targeted
+PocketIC journey proves same-release Root upgrade, retained identities, exact
+live-balance refresh, 5T claim/install and no-debit handling on the same
+principal. B8 closes only
 after the maintainer release flow passes, the retained Root is upgraded rather
 than reinstalled, its refreshed
 asset is claimed, and deployed-state/admission checks pass;

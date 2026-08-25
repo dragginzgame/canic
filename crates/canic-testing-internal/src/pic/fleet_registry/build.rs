@@ -34,6 +34,8 @@ static MAINNET_REFILL_BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
 static MAINNET_FIVE_COMPONENT_REFILL_BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
+static FIVE_TRILLION_COMPONENT_BUILD_ONCE: Once = Once::new();
+#[cfg(test)]
 static ICP_REFILL_STUB_BUILD_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
@@ -98,6 +100,31 @@ pub(super) fn build_mainnet_five_component_refill_wasms() -> (Vec<u8>, Vec<u8>) 
         read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE),
         read_built_wasm(&target_dir, CYCLES_LEDGER_STUB_PACKAGE),
     )
+}
+
+/// Build the one-Component Root whose retained recovery demand is exactly 5T.
+#[cfg(test)]
+pub(super) fn build_five_trillion_component_root_wasm() -> Vec<u8> {
+    let workspace_root = workspace_root();
+    let _serial_guard = CANISTER_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let target_dir = test_target_dir(&workspace_root).join("five-trillion-component");
+    FIVE_TRILLION_COMPONENT_BUILD_ONCE.call_once_force(|_| {
+        let config_path = five_trillion_component_root_canister_config_path(&workspace_root);
+        let canonical_config_env = (
+            canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+            config_path.to_str().expect("config path UTF-8"),
+        );
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &[ROOT_CANISTER_PACKAGE],
+            CanicWasmBuildProfile::Fast,
+            &[canonical_config_env],
+        );
+    });
+    read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE)
 }
 
 /// Build the exact ICP Ledger/CMC boundary stub without rebuilding a production Root.
@@ -331,6 +358,16 @@ pub(super) fn five_component_root_canister_config_path(workspace_root: &Path) ->
         .join("test")
         .join(ROOT_CANISTER_PACKAGE)
         .join("canic.five-components.toml")
+}
+
+/// Resolve the exact one-Component 5T retained-recovery qualification config.
+#[cfg(test)]
+pub(super) fn five_trillion_component_root_canister_config_path(workspace_root: &Path) -> PathBuf {
+    workspace_root
+        .join("canisters")
+        .join("test")
+        .join(ROOT_CANISTER_PACKAGE)
+        .join("canic.five-trillion-component.toml")
 }
 
 // Read one built fast-profile wasm artifact from an explicit target directory.

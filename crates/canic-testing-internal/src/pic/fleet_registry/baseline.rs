@@ -2,8 +2,9 @@
 
 #[cfg(test)]
 use super::build::{
-    build_icp_refill_pic, build_icp_refill_stub_wasm, build_mainnet_five_component_refill_wasms,
-    build_mainnet_refill_wasms, build_two_root_pic, five_component_root_canister_config_path,
+    build_five_trillion_component_root_wasm, build_icp_refill_pic, build_icp_refill_stub_wasm,
+    build_mainnet_five_component_refill_wasms, build_mainnet_refill_wasms, build_two_root_pic,
+    five_component_root_canister_config_path, five_trillion_component_root_canister_config_path,
 };
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
@@ -1250,64 +1251,91 @@ mod tests {
     }
 
     #[test]
-    fn topped_up_import_refreshes_the_ready_row_without_losing_cycles() {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one recovery journey proves upgrade, refresh, retained identity and exact allocation"
+    )]
+    fn historical_pool_assets_upgrade_refresh_and_claim_without_losing_cycles() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let root_wasm = build_test_root_wasm();
-        let store_fixture = build_root_store_fixture();
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = five_trillion_component_root_canister_config_path(&workspace_root);
+        let root_wasm = build_five_trillion_component_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let store_fixture = build_root_store_fixture_with_config(
+            &config_path,
+            build_five_trillion_component_wasms(),
+        );
         let pic = build_pic();
-        let imported = std::cell::Cell::new(None);
-        let fixture = install_bootstrapped_root_with_pool_setup(
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let imported = std::cell::RefCell::new(Vec::new());
+        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
             &pic,
-            root_wasm,
-            Principal::from_slice(&[0x41; 29]),
+            root_wasm.clone(),
+            coordinator,
             store_fixture,
+            BootstrappedRootPlacement {
+                canister_pool_minimum_size: Some(2),
+                canister_pool_cycles: Some(Cycles::new(2_000_000_000_000)),
+                coordinator_subnet: None,
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &config_path,
             |pic, root| {
                 let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
-                let asset = pic
-                    .create_canister_with_params(
-                        None,
-                        CreateCanisterParams {
-                            cycles: Some(4_500_000_000_000),
-                            settings: None,
-                            placement: Some(CreateCanisterPlacement::SubnetId(root_subnet)),
-                        },
-                    )
-                    .expect("create exact underfunded pool asset");
-                pic.set_controllers(asset, None, vec![root])
-                    .expect("prepare underfunded Root-controlled import");
-                imported.set(Some(asset));
-                vec![asset]
+                let assets = [2_000_000_000_000, 4_500_000_000_000]
+                    .into_iter()
+                    .map(|cycles| {
+                        let asset = pic
+                            .create_canister_with_params(
+                                None,
+                                CreateCanisterParams {
+                                    cycles: Some(cycles + 10_000_000_000),
+                                    settings: None,
+                                    placement: Some(CreateCanisterPlacement::SubnetId(root_subnet)),
+                                },
+                            )
+                            .expect("create bounded retained pool asset");
+                        pic.set_controllers(asset, None, vec![root])
+                            .expect("prepare retained Root-controlled import");
+                        asset
+                    })
+                    .collect::<Vec<_>>();
+                imported.replace(assets.clone());
+                assets
             },
         );
-        let asset = imported.get().expect("underfunded imported asset");
+        reset_prepaid_pool_assets_for_count(&pic, fixture.root_id, 2);
+        let assets = imported.borrow();
+        let small = assets[0];
+        let large = assets[1];
+        let retained = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(retained.ready, 2);
+        assert_eq!(retained.failed, 0);
+        let small_retained_balance = pic.cycle_balance(small);
+        let large_retained_balance = pic.cycle_balance(large);
+        assert!((2_000_000_000_000..2_010_000_000_000).contains(&small_retained_balance));
+        assert!((4_500_000_000_000..4_510_000_000_000).contains(&large_retained_balance));
 
-        let RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::ResetFailed {
-            canister_id,
-            ..
-        }) = root_command(
-            &pic,
-            fixture.root_id,
-            RootCommandFragment::ImportPoolCanister(PoolCanisterRequest { canister_id: asset }),
-        )
-        .expect("underfunded import is retained fail-closed")
-        else {
-            panic!("Root accepted an underfunded pool asset");
-        };
-        assert_eq!(canister_id, asset);
-        let failed = root_pool_status(&pic, fixture.root_id);
-        assert_eq!(failed.failed, 1);
-        assert_eq!(failed.ready, 0);
-        let failed_entry = failed
-            .entries
-            .iter()
-            .find(|entry| entry.canister_id == asset)
-            .expect("underfunded imported row");
-        let failed_balance = pic.cycle_balance(asset);
-        assert!(failed_balance < 5_000_000_000_000);
-        assert_eq!(failed_entry.cycles, Cycles::new(failed_balance));
+        pic.upgrade_canister(fixture.root_id, root_wasm, crate::pic::upgrade_args(), None)
+            .expect("upgrade the Root without rebuilding retained pool state");
+        let upgraded = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(upgraded.ready, 2);
+        assert_eq!(
+            upgraded
+                .entries
+                .iter()
+                .filter(|entry| entry.origin == CanisterPoolAssetOrigin::Imported)
+                .count(),
+            2
+        );
 
-        pic.add_cycles(asset, 5_000_000_000_000 - failed_balance);
-        let funded_balance = pic.cycle_balance(asset);
+        pic.add_cycles(large, 5_000_000_000_000 - pic.cycle_balance(large));
+        let funded_balance = pic.cycle_balance(large);
         assert_eq!(funded_balance, 5_000_000_000_000);
         for attempt in 0..2 {
             let RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported {
@@ -1315,15 +1343,15 @@ mod tests {
             }) = root_command(
                 &pic,
                 fixture.root_id,
-                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest { canister_id: asset }),
+                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest { canister_id: large }),
             )
             .expect("refresh topped-up import")
             else {
                 panic!("Root did not publish the refreshed imported asset");
             };
-            assert_eq!(canister_id, asset);
+            assert_eq!(canister_id, large);
             assert_eq!(
-                pic.cycle_balance(asset),
+                pic.cycle_balance(large),
                 funded_balance,
                 "attempt {attempt} must not debit the imported asset"
             );
@@ -1331,15 +1359,73 @@ mod tests {
 
         let refreshed = root_pool_status(&pic, fixture.root_id);
         assert_eq!(refreshed.failed, 0);
-        assert_eq!(refreshed.ready, 1);
+        assert_eq!(refreshed.ready, 2);
         let refreshed_entry = refreshed
             .entries
             .iter()
-            .find(|entry| entry.canister_id == asset)
+            .find(|entry| entry.canister_id == large)
             .expect("refreshed imported row");
         assert_eq!(refreshed_entry.origin, CanisterPoolAssetOrigin::Imported);
         assert_eq!(refreshed_entry.status, CanisterPoolAssetStatus::Ready);
         assert_eq!(refreshed_entry.cycles, Cycles::new(funded_balance));
+
+        let operation_id = [0x71; 32];
+        begin_fixture_fresh_component_provisioning_with_config(
+            &pic,
+            coordinator,
+            coordinator_wasm,
+            &fixture,
+            operation_id,
+            &config_path,
+        );
+        let mut last_status = None;
+        let mut terminal = None;
+        for _ in 0..120 {
+            let CoordinatorStatusResponse::Operation(
+                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+            ) = coordinator_status(
+                &pic,
+                coordinator,
+                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            )
+            .expect("query retained-pool provisioning")
+            else {
+                panic!("Coordinator returned a differently correlated operation status");
+            };
+            if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
+                terminal = Some(status);
+                break;
+            }
+            last_status = Some(status);
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        let terminal = terminal.unwrap_or_else(|| {
+            panic!("retained-pool provisioning did not converge: {last_status:?}")
+        });
+        assert_eq!(terminal.component_count, 1);
+        assert_eq!(terminal.runtime_activated_root_count, 1);
+        assert!(terminal.pending_root_failure.is_none());
+
+        let claimed = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(claimed.ready, 1);
+        assert_eq!(claimed.workload, 1);
+        let small_entry = claimed
+            .entries
+            .iter()
+            .find(|entry| entry.canister_id == small)
+            .expect("smaller retained asset");
+        assert_eq!(small_entry.status, CanisterPoolAssetStatus::Ready);
+        let large_entry = claimed
+            .entries
+            .iter()
+            .find(|entry| entry.canister_id == large)
+            .expect("refreshed retained asset");
+        assert!(matches!(
+            large_entry.status,
+            CanisterPoolAssetStatus::Workload { .. }
+        ));
+        assert_eq!(pic.cycle_balance(small), small_retained_balance);
     }
 
     #[test]
@@ -1366,6 +1452,7 @@ mod tests {
             store_fixture,
             BootstrappedRootPlacement {
                 canister_pool_minimum_size: Some(5),
+                canister_pool_cycles: None,
                 coordinator_subnet: None,
                 root_subnet: None,
                 component_admission_limits: None,
@@ -2438,6 +2525,7 @@ mod tests {
             store_fixture,
             BootstrappedRootPlacement {
                 canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
                 coordinator_subnet: Some(subnet),
                 root_subnet: Some(subnet),
                 component_admission_limits: None,
@@ -2541,6 +2629,7 @@ mod tests {
             store_fixture,
             BootstrappedRootPlacement {
                 canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
                 coordinator_subnet: Some(subnet),
                 root_subnet: Some(subnet),
                 component_admission_limits: None,
@@ -2604,6 +2693,7 @@ mod tests {
                 build_root_store_fixture(),
                 BootstrappedRootPlacement {
                     canister_pool_minimum_size: None,
+                    canister_pool_cycles: None,
                     coordinator_subnet: Some(*first_subnet),
                     root_subnet: Some(subnet),
                     component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
@@ -5718,6 +5808,7 @@ mod tests {
 
     struct BootstrappedRootPlacement {
         canister_pool_minimum_size: Option<u32>,
+        canister_pool_cycles: Option<canic_core::cdk::types::Cycles>,
         coordinator_subnet: Option<Principal>,
         root_subnet: Option<Principal>,
         component_admission_limits: Option<RootComponentAdmissionLimits>,
@@ -5756,6 +5847,7 @@ mod tests {
             store_fixture,
             BootstrappedRootPlacement {
                 canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
                 coordinator_subnet: Some(coordinator_subnet),
                 root_subnet: Some(placement_subnet),
                 component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
@@ -5786,6 +5878,7 @@ mod tests {
             store_fixture,
             BootstrappedRootPlacement {
                 canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
                 coordinator_subnet: None,
                 root_subnet: None,
                 component_admission_limits: None,
@@ -5870,13 +5963,12 @@ mod tests {
             .expect("encode exact root authority");
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
+        let pool = &mut init_args.authority.binding.limits.canister_pool;
         if let Some(minimum_size) = placement.canister_pool_minimum_size {
-            init_args
-                .authority
-                .binding
-                .limits
-                .canister_pool
-                .minimum_size = minimum_size;
+            pool.minimum_size = minimum_size;
+        }
+        if let Some(canister_cycles) = placement.canister_pool_cycles.clone() {
+            pool.canister_cycles = canister_cycles;
         }
         if let Some(funding) = placement.funding.clone() {
             init_args.authority.binding.funding = funding;
@@ -6063,7 +6155,11 @@ mod tests {
     }
 
     fn reset_prepaid_pool_assets(pic: &PocketIc, root: Principal) {
-        for _ in 0..PREPAID_POOL_ASSET_COUNT {
+        reset_prepaid_pool_assets_for_count(pic, root, PREPAID_POOL_ASSET_COUNT);
+    }
+
+    fn reset_prepaid_pool_assets_for_count(pic: &PocketIc, root: Principal, count: usize) {
+        for _ in 0..count {
             let RootCommandResponseFragment::MaintainPool(response) =
                 root_command(pic, root, RootCommandFragment::MaintainPool)
                     .expect("reset prepaid Canister")
@@ -6078,7 +6174,7 @@ mod tests {
         let status = root_pool_status(pic, root);
         assert_eq!(
             status.ready,
-            u32::try_from(PREPAID_POOL_ASSET_COUNT).expect("bounded fixture pool size")
+            u32::try_from(count).expect("bounded fixture pool size")
         );
         assert_eq!(status.pending_reset, 0);
     }
@@ -6250,6 +6346,21 @@ mod tests {
         })
     }
 
+    #[cfg(test)]
+    fn build_five_trillion_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
+        static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
+        WASMS.get_or_init(|| {
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let config_path = five_trillion_component_root_canister_config_path(&workspace_root);
+            build_component_fixture_wasms(
+                &workspace_root,
+                &config_path,
+                "fleet-registry-five-trillion-component",
+                &[("issuer", ISSUER_PACKAGE)],
+            )
+        })
+    }
+
     fn build_component_fixture_wasms(
         workspace_root: &Path,
         config_path: &Path,
@@ -6368,7 +6479,7 @@ mod tests {
             ),
             (
                 "topped-up imported pool asset refresh",
-                topped_up_import_refreshes_the_ready_row_without_losing_cycles,
+                historical_pool_assets_upgrade_refresh_and_claim_without_losing_cycles,
             ),
             (
                 "fresh provisioning automatic pool readiness",
