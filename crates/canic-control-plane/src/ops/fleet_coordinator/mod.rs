@@ -1345,7 +1345,6 @@ impl FleetCoordinatorOps {
             previous,
             &response,
             recorded_at_ns,
-            true,
         )?;
         if intent_request.operation_id != request.operation_id {
             return Err(InternalError::conflict());
@@ -1479,7 +1478,6 @@ impl FleetCoordinatorOps {
             previous,
             &response,
             recorded_at_ns,
-            true,
         )?;
         let observed = FleetComponentDirectoryConfirmationRecord::ScaleOut {
             started_at_ns: confirmation_started_at_ns(current_confirmation),
@@ -2738,7 +2736,6 @@ fn validate_completed_directory_confirmations(
                 previous,
                 response,
                 confirmation_recorded_at_ns(confirmation),
-                false,
             )
             .map_err(|_| receipt_invariant("stored Directory confirmation receipt is invalid"))?;
             if response.phase != RootComponentProvisioningPhase::Published {
@@ -2797,7 +2794,6 @@ fn validate_current_directory_confirmation(
                 previous,
                 response,
                 confirmation_recorded_at_ns(current),
-                false,
             )
             .map_err(|_| {
                 receipt_invariant("stored in-progress Directory confirmation is invalid")
@@ -2905,7 +2901,6 @@ fn validate_stored_scale_out_confirmation(
                 previous,
                 response,
                 confirmation_recorded_at_ns(confirmation),
-                false,
             )
             .map_err(|_| receipt_invariant("stored scale-out Directory publication is invalid"))?;
             let is_terminal = response.phase == RootComponentProvisioningPhase::Published;
@@ -4765,13 +4760,29 @@ fn publication_progress_replays(
     let Some(actual) = actual else {
         return false;
     };
-    let Some(expected) = expected else {
-        return actual.published_component_count == 1;
-    };
-    expected.fleet_subnet_root == actual.fleet_subnet_root
-        && expected.component_count == actual.component_count
-        && expected.published_component_count.checked_add(1)
-            == Some(actual.published_component_count)
+    expected.map_or_else(
+        || publication_progress_shape_is_valid(actual),
+        |expected| publication_progress_advances(expected, actual),
+    )
+}
+
+fn publication_progress_advances(
+    expected: FleetComponentPublicationRootProgress,
+    actual: FleetComponentPublicationRootProgress,
+) -> bool {
+    let subject_is_exact = expected.fleet_subnet_root == actual.fleet_subnet_root
+        && expected.component_count == actual.component_count;
+    let shapes_are_valid = publication_progress_shape_is_valid(expected)
+        && publication_progress_shape_is_valid(actual);
+    subject_is_exact
+        && shapes_are_valid
+        && actual.published_component_count > expected.published_component_count
+}
+
+const fn publication_progress_shape_is_valid(
+    progress: FleetComponentPublicationRootProgress,
+) -> bool {
+    progress.published_component_count <= progress.component_count
 }
 
 const fn root_publication_progress(
@@ -6058,7 +6069,6 @@ fn validate_directory_confirmation_response(
     previous: &RootComponentProvisioningStatusResponse,
     response: &RootComponentProvisioningStatusResponse,
     recorded_at_ns: u64,
-    require_bounded_advance: bool,
 ) -> Result<(), InternalError> {
     let batch = context
         .operation
@@ -6072,12 +6082,10 @@ fn validate_directory_confirmation_response(
     if RootDirectoryConfirmationAuthority::observed(response) != expected_authority {
         return Err(InternalError::conflict());
     }
-    let count_advances = response.published_component_count == previous.published_component_count
-        || previous.published_component_count.checked_add(1)
-            == Some(response.published_component_count);
-    if (require_bounded_advance && !count_advances)
-        || response.published_component_count > response.component_count
-    {
+    let count_does_not_regress =
+        response.published_component_count >= previous.published_component_count;
+    let count_is_bounded = response.published_component_count <= response.component_count;
+    if !count_does_not_regress || !count_is_bounded {
         return Err(InternalError::conflict());
     }
     let publication = response
@@ -8914,6 +8922,59 @@ mod runtime_activation_progress_tests {
         assert!(!first_component_activation_progress(progress(
             root, 5, 0, false
         )));
+    }
+}
+
+#[cfg(test)]
+mod directory_publication_progress_tests {
+    use super::*;
+
+    const fn progress(
+        fleet_subnet_root: Principal,
+        component_count: u32,
+        published_component_count: u32,
+    ) -> FleetComponentPublicationRootProgress {
+        FleetComponentPublicationRootProgress {
+            fleet_subnet_root,
+            component_count,
+            published_component_count,
+        }
+    }
+
+    #[test]
+    fn coalesced_directory_publication_progress_is_a_strict_monotonic_successor() {
+        let root = Principal::from_slice(&[1]);
+        let zero = progress(root, 5, 0);
+        let three = progress(root, 5, 3);
+        let five = progress(root, 5, 5);
+
+        for first in [zero, three, five] {
+            assert!(publication_progress_replays(None, Some(first)));
+        }
+        assert!(publication_progress_advances(zero, three));
+        assert!(publication_progress_advances(three, five));
+        assert!(!publication_progress_advances(three, three));
+    }
+
+    #[test]
+    fn invalid_or_regressing_directory_publication_progress_fails_closed() {
+        let root = Principal::from_slice(&[1]);
+        let other_root = Principal::from_slice(&[2]);
+        let previous = progress(root, 5, 3);
+
+        for invalid in [
+            progress(root, 5, 2),
+            progress(root, 5, 6),
+            progress(other_root, 5, 5),
+            progress(root, 6, 5),
+        ] {
+            assert!(!publication_progress_advances(previous, invalid));
+        }
+        assert!(!publication_progress_replays(None, None));
+        assert!(!publication_progress_replays(
+            None,
+            Some(progress(root, 5, 6))
+        ));
     }
 }
 

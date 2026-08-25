@@ -66,16 +66,22 @@ Last updated: 2026-08-25
   Published 0.109.6, the authorized Root upgrade and asset refresh close the
   `CANIC-035` work. The final 0.109.6 source passed the complete unmodified
   maintainer gate, including `CANIC-042` control-plane, warning-denied and real
-  five-Component PocketIC proof, before immutable publication. Open 0.109.7
-  completes the exceptional retained Root/pool procedure, non-mutating
+  five-Component PocketIC proof, before immutable publication. Published
+  0.109.7 completes the exceptional retained Root/pool procedure, non-mutating
   monotonic Component Registry proof, receipt/operation interruption recovery,
   recovery-aware Medic and Cargo diagnostics, actionable named-environment
   artifact guidance and release governance. It also advances the generic
   composed-framework fixture to exact published IcyDB 0.240.1. Focused checks
   and the production-boundary retained-repair PocketIC journey pass. The
   complete unmodified maintainer gate also passes on the final source
-  candidate. B8 remains open on patch publication, the separately authorized
-  exact-session resume and deployed-state/admission evidence.
+  candidate, and the complete matching package set is published. The next
+  fresh five-Component install exposed `CANIC-047`: a Root can publish every
+  Component Directory before the Coordinator records its first passive
+  observation, but Directory confirmation still accepts only unchanged or
+  exact `+1` publication counts. Open 0.109.8 makes publication observation
+  monotonic and coalescing-safe under the existing exact authority and receipt
+  checks. B8 remains open on the separately authorized exact-session resume
+  and deployed-state/admission evidence.
 - Outcome: one Coordinator-owned, bounded Fleet admission policy projected and
   enforced locally by every managed instance whose exact role declares
   `fleet_admission = true`.
@@ -127,7 +133,7 @@ B8 correction evidence:
 | B5 | Composed-framework adapter | Synchronous managed-projection caller guard and generic IcyDB-style fixture | Native parity and direct-ingress PocketIC journey | Ready |
 | B6 | Runtime convergence | Pre-effect catalog reserve/release, fence/activate/open journals, participant fences, exact retry and forward recovery | Stale-catalog, interruption, unavailable-target, add/remove and new-Component PocketIC matrix | Ready |
 | B7 | Security closeout and propagation | Docs/generated surfaces, residue cleanup, measurements and read-only Toko adoption review | Targeted repository gates and adversarial multi-Root journey | Ready |
-| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment and interrupted-install recovery blockers through `CANIC-046`, including `CANIC-028`'s ineffective named-environment artifact advice; publish immutable matching `canic`/`canic-cli` 0.109 pairs, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, finalized-artifact reuse without predecessor-workspace rejection, monotonic first-status and runtime-activation reconciliation, exact pool-demand and Ready-refresh recovery checks, production-boundary typed repair execution/adoption, exact terminal-journal session closure, exact cycle diagnostics, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/recovery evidence | Active: published 0.109.6 owns the full-pool, repair-receipt, typed recovery, terminal-journal, exact-diagnostic and coalesced-activation corrections; open 0.109.7 carries the completed operational-repair and diagnostic corrections, while publication, exact-session resume and deployed-state/admission evidence remain |
+| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment and interrupted-install recovery blockers through `CANIC-047`, including `CANIC-028`'s ineffective named-environment artifact advice; publish immutable matching `canic`/`canic-cli` 0.109 pairs, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, finalized-artifact reuse without predecessor-workspace rejection, monotonic first-status, Directory publication and runtime-activation reconciliation, exact pool-demand and Ready-refresh recovery checks, production-boundary typed repair execution/adoption, exact terminal-journal session closure, exact cycle diagnostics, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/recovery evidence | Active: published 0.109.7 owns the operational retained-repair, Registry-proof, diagnostic, governance and fixture corrections; open 0.109.8 corrects coalesced Directory publication, while exact-session resume and deployed-state/admission evidence remain |
 | B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Accepted; blocked on B8 |
 | B10 | Published managed-App qualification support | One bounded downstream test-support surface for exact managed init/activation, admission fencing, fresh install and same-release recovery without private `canic-core`/`ic-testkit` reconstruction | Public-package consumer build plus managed/standalone lifecycle qualification and Toko adapter removal | Scheduled; blocked on B9 |
 
@@ -223,6 +229,27 @@ correction evidence. Downstream adoption and local qualification on 0.109.1
 remain historical positive evidence. Its interrupted fresh install is the
 current recovery subject; B8 must not replace that evidence with another fresh
 staging attempt.
+
+### `CANIC-047`: coalesced Component Directory publication
+
+A fresh single-Root 0.109.6 installation provisioned and published all five
+top-level Components, but the Coordinator retained its first Directory
+confirmation predecessor at zero. Its passive Root status query then observed
+the complete terminal `Published` response at five. Directory response and
+stale-request replay validation accepted only an unchanged count or exact
+`+1`, so the valid zero-to-five observation returned E132 indefinitely while
+the Root remained publication-terminal and runtime activation stayed fenced.
+
+Open 0.109.8 accepts every bounded non-regressing publication snapshot while
+preserving exact operation, plan, configuration, Registry, Root, Component
+count, ordered Component evidence, Component Group Directory hash, terminal
+receipt and timing validation. The same rule owns fresh and selected-Root
+scale-out publication. Replay recognizes any valid first observation and any
+strictly advancing successor, so a response lost after Coordinator commitment
+does not turn coalescing into a stale-request conflict. Focused pure and
+Coordinator workflow proof covers zero-to-five, zero-to-three-to-five,
+regression, overflow, authority/receipt corruption, retained E132 projection
+clearing, exact replay, runtime continuation and scale-out.
 
 ### `CANIC-029`: interrupted fresh-install recovery
 
@@ -358,11 +385,11 @@ and `v0.109.1` publishes `CANIC-027`. The 0.109.2 correction closes the
 funding/journal side of `CANIC-029`, and the exact-source read-only recovery
 plan passes. Published `v0.109.4` corrects `CANIC-033`, and published
 `v0.109.6` closes the subsequent pool, repair-adoption, terminal-completion and
-coalesced-activation defects. Open 0.109.7 now passes focused proof and the
-complete unmodified maintainer gate for its exact repair procedure,
-non-mutating Registry proof, diagnostic, governance and IcyDB-fixture
-corrections. Continue B8 through the maintainer-owned version/publication
-workflow. The downstream owner must then adopt that exact patch, reproduce the
+coalesced-activation defects. Published `v0.109.7` completes the exact repair
+procedure, non-mutating Registry proof, diagnostic, governance and
+IcyDB-fixture corrections. Open 0.109.8 corrects `CANIC-047` coalesced
+Directory publication under the retained authority and receipt checks. The
+downstream owner must then adopt that exact patch, reproduce the
 unchanged digest, zero debit and `fleet_component_provisioning` next, and
 separately authorize one exact resume; Canic does not authorize or perform
 that effect here.
