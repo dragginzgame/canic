@@ -2,9 +2,13 @@ use std::{
     fs::File,
     io::{self, Read, Write},
     path::Path,
-    process::{Command, Stdio},
+    process::{Command, Output, Stdio},
     thread,
+    time::Duration,
 };
+
+const EXECUTABLE_BUSY_RETRY_ATTEMPTS: usize = 8;
+const EXECUTABLE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
     command::{command_display, configure_inherited_fd, ensure_command_compatible},
@@ -41,7 +45,7 @@ pub fn run_output_to_file(command: &mut Command, result: &File) -> Result<(), Ic
 
 fn run_output_unchecked(command: &mut Command) -> Result<String, IcpCommandError> {
     let display = command_display(command);
-    let output = command.output()?;
+    let output = output_with_executable_busy_retry(command)?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
@@ -56,7 +60,7 @@ fn run_output_unchecked(command: &mut Command) -> Result<String, IcpCommandError
 pub fn run_output_with_stderr(command: &mut Command) -> Result<String, IcpCommandError> {
     ensure_command_compatible(command)?;
     let display = command_display(command);
-    let output = command.output()?;
+    let output = output_with_executable_busy_retry(command)?;
     if output.status.success() {
         let mut text = String::from_utf8_lossy(&output.stdout).to_string();
         text.push_str(&String::from_utf8_lossy(&output.stderr));
@@ -76,7 +80,7 @@ where
 {
     ensure_command_compatible(command)?;
     let display = command_display(command);
-    let output = command.output()?;
+    let output = output_with_executable_busy_retry(command)?;
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         serde_json::from_str(&stdout).map_err(|source| IcpCommandError::Json {
@@ -96,7 +100,7 @@ where
 pub fn run_status(command: &mut Command) -> Result<(), IcpCommandError> {
     ensure_command_compatible(command)?;
     let display = command_display(command);
-    let output = command.output()?;
+    let output = output_with_executable_busy_retry(command)?;
     if output.status.success() {
         Ok(())
     } else {
@@ -161,7 +165,7 @@ fn stream_and_capture_stderr(mut stderr: impl Read) -> io::Result<Vec<u8>> {
 /// Execute a command and return whether it exits successfully.
 pub fn run_success(command: &mut Command) -> Result<bool, IcpCommandError> {
     ensure_command_compatible(command)?;
-    Ok(command.output()?.status.success())
+    Ok(output_with_executable_busy_retry(command)?.status.success())
 }
 
 /// Execute a rendered ICP CLI command and return raw process output.
@@ -177,13 +181,28 @@ pub fn run_raw_output(
     let mut command = Command::new(program);
     command.args(args);
     configure_inherited_fd(&mut command, inherited_fd);
-    let output = command.output()?;
+    let output = output_with_executable_busy_retry(&mut command)?;
     Ok(IcpRawOutput {
         success: output.status.success(),
         status: exit_status_label(output.status),
         stdout: output.stdout,
         stderr: output.stderr,
     })
+}
+
+pub(super) fn output_with_executable_busy_retry(command: &mut Command) -> io::Result<Output> {
+    for attempt in 0..EXECUTABLE_BUSY_RETRY_ATTEMPTS {
+        match command.output() {
+            Err(error)
+                if error.kind() == io::ErrorKind::ExecutableFileBusy
+                    && attempt + 1 < EXECUTABLE_BUSY_RETRY_ATTEMPTS =>
+            {
+                thread::sleep(EXECUTABLE_BUSY_RETRY_DELAY);
+            }
+            result => return result,
+        }
+    }
+    unreachable!("bounded executable-busy retry always returns on its final attempt")
 }
 
 fn is_icp_program(program: &str) -> bool {

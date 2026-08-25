@@ -17,6 +17,12 @@ use canic_core::{
 };
 use thiserror::Error as ThisError;
 
+#[derive(Clone, Copy)]
+pub(super) enum InitialPoolCyclesPolicy {
+    Enforce,
+    RetainHistorical,
+}
+
 #[derive(Debug, ThisError)]
 pub(super) enum InitialPlacementPolicyError {
     #[error("{0}")]
@@ -103,6 +109,29 @@ pub(super) fn validate_initial_component_group_assignments(
     config: &ConfigModel,
     roots: &[FreshFleetSubnetRootPlanV1],
 ) -> Result<BTreeMap<SubnetId, u32>, InitialPlacementPolicyError> {
+    validate_initial_component_group_assignments_with_pool_policy(
+        config,
+        roots,
+        InitialPoolCyclesPolicy::Enforce,
+    )
+}
+
+pub(super) fn validate_historical_component_group_assignments(
+    config: &ConfigModel,
+    roots: &[FreshFleetSubnetRootPlanV1],
+) -> Result<BTreeMap<SubnetId, u32>, InitialPlacementPolicyError> {
+    validate_initial_component_group_assignments_with_pool_policy(
+        config,
+        roots,
+        InitialPoolCyclesPolicy::RetainHistorical,
+    )
+}
+
+fn validate_initial_component_group_assignments_with_pool_policy(
+    config: &ConfigModel,
+    roots: &[FreshFleetSubnetRootPlanV1],
+    pool_cycles_policy: InitialPoolCyclesPolicy,
+) -> Result<BTreeMap<SubnetId, u32>, InitialPlacementPolicyError> {
     let configuration = config
         .compile_component_deployment_configuration()
         .map_err(|error| InitialPlacementPolicyError::Configuration(error.to_string()))?;
@@ -122,6 +151,7 @@ pub(super) fn validate_initial_component_group_assignments(
             config,
             root,
             deployments,
+            pool_cycles_policy,
             &mut assignments,
             &mut service_roots,
         )?;
@@ -160,6 +190,7 @@ fn validate_root_initial_assignment_capacity<'a>(
     config: &ConfigModel,
     root: &FreshFleetSubnetRootPlanV1,
     deployments: &'a [ComponentGroupDeploymentSpec],
+    pool_cycles_policy: InitialPoolCyclesPolicy,
     assignments: &mut BTreeMap<
         (ComponentGroupDeploymentId, u32),
         (SubnetId, &'a ComponentGroupDeploymentSpec),
@@ -225,7 +256,12 @@ fn validate_root_initial_assignment_capacity<'a>(
             root: root.placement_subnet,
         });
     }
-    validate_initial_pool_capacity(root, component_count, required_asset_cycles)?;
+    validate_initial_pool_capacity(
+        root,
+        component_count,
+        required_asset_cycles,
+        pool_cycles_policy,
+    )?;
     validate_component_admissions(root, component_counts)?;
     Ok(component_count)
 }
@@ -265,6 +301,7 @@ fn validate_initial_pool_capacity(
     root: &FreshFleetSubnetRootPlanV1,
     component_count: u32,
     required_asset_cycles: Cycles,
+    pool_cycles_policy: InitialPoolCyclesPolicy,
 ) -> Result<(), InitialPlacementPolicyError> {
     let imported_assets = u32::try_from(root.canister_pool_imports.len()).map_err(|_| {
         InitialPlacementPolicyError::CountDoesNotFitU32 {
@@ -279,7 +316,9 @@ fn validate_initial_pool_capacity(
             available: automatic_ready_target,
         });
     }
-    if root.limits.canister_pool.canister_cycles < required_asset_cycles {
+    if matches!(pool_cycles_policy, InitialPoolCyclesPolicy::Enforce)
+        && root.limits.canister_pool.canister_cycles < required_asset_cycles
+    {
         return Err(InitialPlacementPolicyError::PoolAssetCyclesInsufficient {
             root: root.placement_subnet,
             configured: root.limits.canister_pool.canister_cycles.clone(),

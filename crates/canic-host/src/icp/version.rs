@@ -4,7 +4,7 @@ use super::{
     command::command_display,
     error::IcpCommandError,
     model::{IcpCli, IcpCliVersion},
-    run::command_stderr,
+    run::{command_stderr, output_with_executable_busy_retry},
 };
 
 impl IcpCli {
@@ -51,7 +51,7 @@ fn icp_version_output(executable: &str, cwd: Option<&Path>) -> Result<String, Ic
     }
     command.arg("--version");
     let display = command_display(&command);
-    let output = command.output().map_err(|err| {
+    let output = output_with_executable_busy_retry(&mut command).map_err(|err| {
         if err.kind() == io::ErrorKind::NotFound {
             IcpCommandError::MissingCli {
                 executable: executable.to_string(),

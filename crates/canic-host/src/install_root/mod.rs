@@ -375,6 +375,7 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
         finalized_release_build: &finalized_release_build,
         input: resolved_fleet_install_input,
         fresh_fleet_plan: &fresh_fleet_plan,
+        recovery: fresh_fleet_recovery.as_ref(),
     })?;
     let fresh_fleet_receipt_decision = FreshFleetInstallDecisionReceiptV1 {
         plan_digest: fresh_fleet_plan.plan_digest.clone(),
@@ -473,6 +474,7 @@ fn prepare_current_fresh_fleet_preflight(
         &input,
         release_source.build_profile,
         release_source.release_build_id,
+        release_source.recovery.as_ref(),
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
     let maximum_operator_debit = fresh_fleet_maximum_operator_debit(&preflight)
@@ -687,6 +689,7 @@ struct CurrentFleetInstallPlanRequest<'a> {
     finalized_release_build: &'a crate::release_build::FinalizedReleaseBuild,
     input: ResolvedFleetInstallInput,
     fresh_fleet_plan: &'a FreshFleetDeploymentPlanV1,
+    recovery: Option<&'a FreshFleetInstallRecoveryPlanV1>,
 }
 
 fn plan_current_fleet_install(
@@ -708,6 +711,7 @@ fn plan_current_fleet_install(
         request.finalized_release_build,
         request.input,
         request.fresh_fleet_plan,
+        request.recovery,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
     Ok(PlannedCurrentFleetInstall { session, plan })
@@ -799,9 +803,10 @@ fn compile_current_fresh_fleet_preflight(
     input: &ResolvedFleetInstallInput,
     build_profile: crate::canister_build::CanisterBuildProfile,
     release_build_id: Option<canic_core::ids::ReleaseBuildId>,
+    recovery: Option<&FreshFleetInstallRecoveryPlanV1>,
 ) -> Result<FreshFleetPreflightV1, Box<dyn std::error::Error>> {
     let fleet_name = fleet_name.parse()?;
-    compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+    let request = FreshFleetPreflightRequest {
         config: config.model(),
         app: app_id,
         fleet_name: &fleet_name,
@@ -811,8 +816,11 @@ fn compile_current_fresh_fleet_preflight(
         build_profile,
         release_build_id,
         effects: FreshFleetPreflightEffectsV1::none_started(),
-    })
-    .map_err(Into::into)
+    };
+    match recovery {
+        Some(recovery) => recovery.compile_preflight(request).map_err(Into::into),
+        None => compile_fresh_fleet_preflight(request).map_err(Into::into),
+    }
 }
 
 struct CurrentInstallPreflightReleaseSource {
@@ -878,6 +886,10 @@ fn current_install_preflight_release_source(
     })
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the retained-install boundary carries the exact immutable plan and recovery authorities independently"
+)]
 fn persist_current_fleet_install_plan(
     icp_root: &Path,
     config_path: &Path,
@@ -886,8 +898,14 @@ fn persist_current_fleet_install_plan(
     finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
     input: ResolvedFleetInstallInput,
     fresh_fleet_plan: &FreshFleetDeploymentPlanV1,
+    recovery: Option<&FreshFleetInstallRecoveryPlanV1>,
 ) -> Result<PersistedFleetInstallPlan, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(config_path)?;
+    if let Some(recovery) = recovery {
+        return recovery
+            .load_install_plan(icp_root, config.model(), &fleet)
+            .map_err(Into::into);
+    }
     compile_and_persist_fleet_install_plan(FleetInstallPlanRequest {
         root: icp_root,
         config: config.model(),

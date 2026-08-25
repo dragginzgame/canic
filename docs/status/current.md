@@ -19,12 +19,15 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   before the host's first query. The downstream resume crossed that gate, then
   exposed `CANIC-034` Root-ledger funding and `CANIC-035`: the accepted App
   requires 5T, while the now-full Root pool retains Ready assets at 2T and
-  4.5T. The open 0.109.5 hard cut rejects undersized pool policy before
-  effects, matches exact eligible Ready assets during acceptance, preserves a
-  typed capacity diagnostic and lets the sole Root pool owner re-inspect the
-  topped-up imported asset without replacing the active journal. It adds no
-  general migration lane; the retained recovery must upgrade rather than
-  reinstall the Root so its stable provisioning operation survives. The
+  4.5T. The open 0.109.5 hard cut rejects undersized policy in every fresh
+  plan, admits only the exact supported 0.109.1 retained decision under its
+  historical 2T rule, matches exact eligible Ready assets during acceptance,
+  claims the smallest sufficient asset, preserves a typed capacity diagnostic
+  and lets the sole Root pool owner re-inspect the topped-up imported asset
+  without replacing the active journal. Its recovery diagnostic names the
+  compatible retained path and warns against irrelevant additional funding.
+  It adds no general migration lane; the retained recovery must upgrade rather
+  than reinstall the Root so its stable provisioning operation survives. The
   0.109.3 release also hard-cuts the
   repository-owned Playground and Saltz application estates,
   including their canister crates, deployment inputs, ICP environments,
@@ -608,13 +611,15 @@ exactly `Planned`. Published 0.109.4 retains every exact nonterminal phase and
 derives the next request from it; the live recovery crossed that boundary.
 It then exposed `CANIC-034` Root-ledger funding and `CANIC-035`: count-only
 acceptance admitted one 5T App against a pool that ultimately became full with
-2T and 4.5T Ready assets. The open 0.109.5 hard cut requires the future pool
-amount to cover the largest initially placed Component, matches exact Ready
-amounts at acceptance, reports typed `CAPACITY_INSUFFICIENT`, and lets the
-existing protected import/reset path re-inspect the externally topped-up 4.5T
-asset against the retained 5T demand. It changes no stable schema and creates
-no second pool, provisioning or recovery owner. Focused pure/host proof and a
-governed PocketIC live-balance/no-debit replay journey pass. B8 remains open
+2T and 4.5T Ready assets. The open 0.109.5 hard cut requires every fresh pool
+amount to cover the largest initially placed Component, preserves the exact
+0.109.1 retained plan under its historical rule, matches exact Ready amounts
+at acceptance, claims smallest-sufficient-first, reports typed
+`CAPACITY_INSUFFICIENT`, and lets the existing protected import/reset path
+re-inspect the externally topped-up 4.5T asset against the retained 5T demand.
+It changes no stable schema and creates no second pool, provisioning or
+recovery owner. Focused pure/host proof and a governed Root-upgrade, retained-
+identity, 5T claim/install and no-debit journey pass. B8 remains open
 for maintainer validation/publication, the separately authorized Root
 upgrade/asset refresh/exact-source resume and deployed-state/
 admission proof. B9
@@ -1105,10 +1110,12 @@ accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
 Published `v0.109.4` completes the retained first-status correction and the
 real downstream session crossed that gate. Focused pure/host and governed
-PocketIC evidence passes for the open 0.109.5 `CANIC-035` hard cut; continue B8
-with maintainer-owned validation/publication. Then upgrade, do not reinstall, the retained Root
-with the exact corrected artifact, re-inspect the externally topped-up asset,
-and use the downstream `v0.2.0` recovery checkout for a read-only plan that
+PocketIC evidence passes for the corrected open 0.109.5 `CANIC-035` hard cut,
+including historical-plan selection, Root upgrade, retained principal refresh
+and capacity-preserving 5T claim/install; continue B8 with maintainer-owned
+validation/publication. Then upgrade, do not reinstall, the retained Root with
+the exact corrected artifact, re-inspect the externally topped-up asset, and
+use the downstream `v0.2.0` recovery checkout for a read-only plan that
 requires the unchanged digest, zero debit and `fleet_component_provisioning`
 next before separately authorizing one resume.
 The earlier published `v0.109.2`

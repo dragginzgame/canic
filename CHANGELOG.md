@@ -12,10 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
-- `0.109.5` rejects undersized initial pool policy before effects, matches
-  accepted Component batches to exact eligible Ready assets and lets the
-  protected Root pool owner re-inspect a topped-up imported asset without
-  replacing its retained provisioning operation.
+- `0.109.5` rejects undersized initial pool policy before effects while loading
+  the one explicitly supported 0.109.1 recovery decision under its historical
+  2T rule, allocates heterogeneous Ready assets smallest-sufficient-first and
+  lets the protected Root pool owner re-inspect a topped-up imported asset
+  without replacing its retained provisioning operation. Recovery diagnostics
+  for this policy mismatch no longer recommend irrelevant identity or Ledger
+  funding changes.
 - `0.109.4` lets an interrupted fresh install retain any exact monotonic
   Coordinator Component-provisioning status observed after prepare, including
   direct terminal reconciliation, and explicitly extends the one retained

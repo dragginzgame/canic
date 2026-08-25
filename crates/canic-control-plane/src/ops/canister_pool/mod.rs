@@ -49,6 +49,12 @@ pub enum CanisterPoolResetPreparation {
     Reset,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ReadyReinspectionPolicy {
+    OnlyWhenUnderfunded,
+    AlwaysForImported,
+}
+
 /// Mechanical state facade for the Fleet Subnet Root's exclusive physical inventory.
 pub struct CanisterPoolOps;
 
@@ -240,8 +246,45 @@ impl CanisterPoolOps {
         required_cycles: &Cycles,
         now_ns: u64,
     ) -> Result<CanisterPoolResetPreparation, InternalError> {
+        Self::prepare_reinspection(
+            canister_id,
+            required_cycles,
+            now_ns,
+            ReadyReinspectionPolicy::OnlyWhenUnderfunded,
+        )
+    }
+
+    /// Fence an explicitly re-imported asset before refreshing its retained live balance.
+    pub fn prepare_import_reinspection(
+        canister_id: Principal,
+        required_cycles: &Cycles,
+        now_ns: u64,
+    ) -> Result<CanisterPoolResetPreparation, InternalError> {
+        Self::prepare_reinspection(
+            canister_id,
+            required_cycles,
+            now_ns,
+            ReadyReinspectionPolicy::AlwaysForImported,
+        )
+    }
+
+    fn prepare_reinspection(
+        canister_id: Principal,
+        required_cycles: &Cycles,
+        now_ns: u64,
+        policy: ReadyReinspectionPolicy,
+    ) -> Result<CanisterPoolResetPreparation, InternalError> {
         let mut asset = required_asset(canister_id)?;
         match asset.status {
+            CanisterPoolAssetStatusRecord::Ready
+                if policy == ReadyReinspectionPolicy::AlwaysForImported
+                    && asset.origin == CanisterPoolAssetOriginRecord::Imported =>
+            {
+                asset.status = CanisterPoolAssetStatusRecord::PendingReset;
+                asset.updated_at_ns = now_ns;
+                CanisterPoolStore::insert(canister_id, asset);
+                Ok(CanisterPoolResetPreparation::Reinspect)
+            }
             CanisterPoolAssetStatusRecord::Ready if asset.cycles >= *required_cycles => {
                 Ok(CanisterPoolResetPreparation::Ready)
             }
@@ -285,7 +328,7 @@ impl CanisterPoolOps {
             .collect()
     }
 
-    pub fn claim_oldest_ready(
+    pub fn claim_smallest_sufficient_ready(
         claim: &CanisterPoolClaimKey,
         required_cycles: &Cycles,
         now_ns: u64,
@@ -319,8 +362,9 @@ impl CanisterPoolOps {
             })
             .min_by(|left, right| {
                 left.asset
-                    .added_at_ns
-                    .cmp(&right.asset.added_at_ns)
+                    .cycles
+                    .cmp(&right.asset.cycles)
+                    .then_with(|| left.asset.added_at_ns.cmp(&right.asset.added_at_ns))
                     .then_with(|| {
                         left.canister_id
                             .as_slice()
@@ -1587,7 +1631,7 @@ mod tests {
     }
 
     #[test]
-    fn claim_is_oldest_first_and_exactly_replayable() {
+    fn equal_capacity_claim_is_oldest_first_and_exactly_replayable() {
         CanisterPoolStore::clear();
         imported_ready(principal(2), Cycles::new(100), 20);
         imported_ready(principal(1), Cycles::new(100), 10);
@@ -1596,12 +1640,13 @@ mod tests {
             operation_id: [7; 32],
         };
 
-        let selected = CanisterPoolOps::claim_oldest_ready(&claim, &Cycles::new(100), 30)
-            .expect("claim")
-            .expect("ready asset");
+        let selected =
+            CanisterPoolOps::claim_smallest_sufficient_ready(&claim, &Cycles::new(100), 30)
+                .expect("claim")
+                .expect("ready asset");
         assert_eq!(selected, principal(1));
         assert_eq!(
-            CanisterPoolOps::claim_oldest_ready(&claim, &Cycles::new(100), 40)
+            CanisterPoolOps::claim_smallest_sufficient_ready(&claim, &Cycles::new(100), 40)
                 .expect("replay claim"),
             Some(selected)
         );
@@ -1627,7 +1672,7 @@ mod tests {
             operation_id,
         };
         assert_eq!(
-            CanisterPoolOps::claim_oldest_ready(&claim, &Cycles::new(100), 3)
+            CanisterPoolOps::claim_smallest_sufficient_ready(&claim, &Cycles::new(100), 3)
                 .expect("claim pool asset"),
             Some(workload)
         );
@@ -1669,7 +1714,7 @@ mod tests {
         };
 
         assert_eq!(
-            CanisterPoolOps::claim_oldest_ready(&claim, &Cycles::new(100), 20)
+            CanisterPoolOps::claim_smallest_sufficient_ready(&claim, &Cycles::new(100), 20)
                 .expect("claim decision"),
             None
         );
@@ -1691,6 +1736,40 @@ mod tests {
             Cycles::new(50),
         ]));
         assert!(!CanisterPoolOps::has_ready_asset_for(&Cycles::new(50)));
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn claims_preserve_heterogeneous_capacity_for_later_larger_demand() {
+        CanisterPoolStore::clear();
+        let large = principal(1);
+        let small = principal(2);
+        imported_ready(large, Cycles::new(50), 10);
+        imported_ready(small, Cycles::new(20), 20);
+        let first_claim = CanisterPoolClaimKey {
+            component: ComponentInstanceId::from_generated_bytes([8; 32]),
+            operation_id: [8; 32],
+        };
+        let second_claim = CanisterPoolClaimKey {
+            component: ComponentInstanceId::from_generated_bytes([9; 32]),
+            operation_id: [9; 32],
+        };
+
+        assert_eq!(
+            CanisterPoolOps::claim_smallest_sufficient_ready(&first_claim, &Cycles::new(20), 30,)
+                .expect("claim smaller demand"),
+            Some(small)
+        );
+        assert_eq!(
+            CanisterPoolOps::claim_smallest_sufficient_ready(&second_claim, &Cycles::new(50), 40,)
+                .expect("claim later larger demand"),
+            Some(large)
+        );
+        assert_eq!(
+            CanisterPoolOps::claim_smallest_sufficient_ready(&first_claim, &Cycles::new(20), 50,)
+                .expect("replay smaller claim"),
+            Some(small)
+        );
         CanisterPoolStore::clear();
     }
 
@@ -1722,6 +1801,18 @@ mod tests {
                 .expect("sufficient import replay needs no second reset"),
             CanisterPoolResetPreparation::Ready
         );
+        assert_eq!(
+            CanisterPoolOps::prepare_import_reinspection(canister_id, &Cycles::new(50), 41)
+                .expect("an explicit import refreshes the retained live balance"),
+            CanisterPoolResetPreparation::Reinspect
+        );
+        assert_eq!(
+            CanisterPoolOps::pending_reset_canisters(),
+            vec![canister_id]
+        );
+        CanisterPoolOps::mark_ready(canister_id, Cycles::new(55), 42)
+            .expect("publish explicitly refreshed balance");
+        assert!(CanisterPoolOps::has_ready_asset_for(&Cycles::new(55)));
         assert!(CanisterPoolOps::retry_reset(canister_id, &Cycles::new(50), 40).is_err());
         CanisterPoolStore::clear();
     }
@@ -1737,9 +1828,10 @@ mod tests {
             component: ComponentInstanceId::from_generated_bytes([5; 32]),
             operation_id: [5; 32],
         };
-        let recycled = CanisterPoolOps::claim_oldest_ready(&claim, &Cycles::new(100), 5)
-            .expect("claim")
-            .expect("ready asset");
+        let recycled =
+            CanisterPoolOps::claim_smallest_sufficient_ready(&claim, &Cycles::new(100), 5)
+                .expect("claim")
+                .expect("ready asset");
         CanisterPoolOps::finalize_claim(&claim, recycled, 5).expect("workload");
         imported_ready(principal(5), Cycles::new(100), 6);
         CanisterPoolOps::register_recycled_pending(recycled, 6)
@@ -1795,7 +1887,7 @@ mod tests {
             operation_id: [7; 32],
         };
         assert_eq!(
-            CanisterPoolOps::claim_oldest_ready(&claim, &Cycles::new(100), 40)
+            CanisterPoolOps::claim_smallest_sufficient_ready(&claim, &Cycles::new(100), 40)
                 .expect("handoff asset is not claimable"),
             None
         );

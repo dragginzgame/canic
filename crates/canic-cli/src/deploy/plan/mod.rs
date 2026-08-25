@@ -140,6 +140,7 @@ where
                     error.detail,
                     error.source,
                     options.refresh_catalog,
+                    error.next_action,
                 ));
                 None
             }
@@ -276,7 +277,7 @@ where
             app: &app,
             config: config.model(),
         })
-        .map_err(|error| preflight_build_error(SOURCE_LOCAL_OBSERVATION, error))?;
+        .map_err(retained_recovery_build_error)?;
     let build = (|| {
         let input = if options.refresh_catalog {
             load_and_resolve_fleet_install_input(
@@ -296,7 +297,7 @@ where
         let (build_profile, release_build_id) =
             resolve_plan_release_source(options, roots, install_recovery.as_ref())
                 .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
-        let preflight = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+        let preflight_request = FreshFleetPreflightRequest {
             config: config.model(),
             app: &options.app,
             fleet_name: &fleet_name,
@@ -306,8 +307,10 @@ where
             build_profile,
             release_build_id,
             effects: FreshFleetPreflightEffectsV1::none_started(),
-        })
-        .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
+        };
+        let preflight =
+            compile_plan_fresh_fleet_preflight(preflight_request, install_recovery.as_ref())
+                .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
         let maximum_operator_debit = fresh_fleet_maximum_operator_debit(&preflight)
             .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
         let required_operator_debit = install_recovery
@@ -361,11 +364,22 @@ struct FreshFleetPlanBuild {
     install_recovery: Option<FreshFleetInstallRecoveryPlanV1>,
 }
 
+fn compile_plan_fresh_fleet_preflight(
+    request: FreshFleetPreflightRequest<'_>,
+    recovery: Option<&FreshFleetInstallRecoveryPlanV1>,
+) -> Result<canic_host::fleet_install_plan::FreshFleetPreflightV1, Box<dyn std::error::Error>> {
+    match recovery {
+        Some(recovery) => recovery.compile_preflight(request).map_err(Into::into),
+        None => compile_fresh_fleet_preflight(request).map_err(Into::into),
+    }
+}
+
 struct FreshFleetPreflightBuildError {
     detail: String,
     source: PlanDiagnosticSource,
     catalog_failure: Option<Box<SubnetCatalogLoadFailureEvidenceV1>>,
     install_recovery: Option<Box<FreshFleetInstallRecoveryPlanV1>>,
+    next_action: Option<String>,
 }
 
 fn preflight_build_error(
@@ -377,6 +391,20 @@ fn preflight_build_error(
         source,
         catalog_failure: None,
         install_recovery: None,
+        next_action: None,
+    }
+}
+
+fn retained_recovery_build_error(error: impl std::fmt::Display) -> FreshFleetPreflightBuildError {
+    FreshFleetPreflightBuildError {
+        detail: error.to_string(),
+        source: SOURCE_LOCAL_OBSERVATION,
+        catalog_failure: None,
+        install_recovery: None,
+        next_action: Some(
+            "use a Canic release explicitly admitted for the retained install recovery; do not add ledger funds or replace the Fleet"
+                .to_string(),
+        ),
     }
 }
 
@@ -396,6 +424,7 @@ fn fleet_input_preflight_build_error(
         source,
         catalog_failure: catalog_failure.map(Box::new),
         install_recovery: None,
+        next_action: None,
     }
 }
 

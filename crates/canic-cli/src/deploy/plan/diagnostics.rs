@@ -104,8 +104,9 @@ pub(super) fn fresh_fleet_plan_blocker(
     detail: impl Into<String>,
     source: crate::deploy::plan::report::PlanDiagnosticSource,
     refresh_catalog: bool,
+    next_override: Option<String>,
 ) -> PlanDiagnostic {
-    let (category, next) = if source == SOURCE_FLEET_CATALOG {
+    let (category, default_next) = if source == SOURCE_FLEET_CATALOG {
         let next = if refresh_catalog {
             "inspect the typed catalog failure and repair the selected Registry or cache authority before retrying"
         } else {
@@ -129,7 +130,7 @@ pub(super) fn fresh_fleet_plan_blocker(
         severity: SEVERITY_BLOCKED,
         subject: fleet.to_string(),
         detail: detail.into(),
-        next: Some(next.to_string()),
+        next: Some(next_override.unwrap_or_else(|| default_next.to_string())),
         source,
     }
 }
@@ -331,5 +332,24 @@ mod tests {
         assert_eq!(warning.source, SOURCE_FLEET_INPUT);
         assert!(warning.detail.starts_with("WARNING:"));
         assert!(warning.next.is_some());
+    }
+
+    #[test]
+    fn retained_recovery_failure_never_recommends_additional_funding() {
+        let error = super::super::retained_recovery_build_error(
+            "retained plan pool provides 2T while its Component requires 5T",
+        );
+        let diagnostic = fresh_fleet_plan_blocker(
+            "staging",
+            error.detail,
+            error.source,
+            false,
+            error.next_action,
+        );
+
+        let next = diagnostic.next.expect("recovery remediation");
+        assert!(next.contains("release explicitly admitted for the retained install recovery"));
+        assert!(next.contains("do not add ledger funds"));
+        assert!(!next.contains("sufficient funds"));
     }
 }
