@@ -12,7 +12,7 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.90.2](archive/2026-07-13-precompact.md) and
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md).
 
-Release governance: source development state; no validated release candidate is staged.
+Release validation: `0.109.7` was validated from source `7d7f568a400799c8dd5cdb3123954ab048b34fb7` on `2026-08-25`; the release commit may differ only in governed release surfaces.
 
 ## Current Release
 
