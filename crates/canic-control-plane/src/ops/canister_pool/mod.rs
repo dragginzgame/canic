@@ -41,6 +41,14 @@ pub struct CanisterPoolCreationAuthority {
     pub created_at_time_ns: u64,
 }
 
+/// Exact workflow action after durably fencing one pool asset for reset or reinspection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanisterPoolResetPreparation {
+    Ready,
+    Reinspect,
+    Reset,
+}
+
 /// Mechanical state facade for the Fleet Subnet Root's exclusive physical inventory.
 pub struct CanisterPoolOps;
 
@@ -194,9 +202,21 @@ impl CanisterPoolOps {
         Ok(())
     }
 
-    pub fn retry_reset(canister_id: Principal, now_ns: u64) -> Result<(), InternalError> {
+    pub fn retry_reset(
+        canister_id: Principal,
+        required_cycles: &Cycles,
+        now_ns: u64,
+    ) -> Result<(), InternalError> {
         let mut asset = required_asset(canister_id)?;
         asset.status = match asset.status {
+            CanisterPoolAssetStatusRecord::Ready if asset.cycles < *required_cycles => {
+                CanisterPoolAssetStatusRecord::PendingReset
+            }
+            CanisterPoolAssetStatusRecord::PendingReset
+            | CanisterPoolAssetStatusRecord::Recycling {
+                reset: CanisterPoolRecycleResetRecord::Pending,
+                ..
+            } => return Ok(()),
             CanisterPoolAssetStatusRecord::Failed(_) => CanisterPoolAssetStatusRecord::PendingReset,
             CanisterPoolAssetStatusRecord::Recycling {
                 claim,
@@ -212,6 +232,38 @@ impl CanisterPoolOps {
         asset.updated_at_ns = now_ns;
         CanisterPoolStore::insert(canister_id, asset);
         Ok(())
+    }
+
+    /// Fence an undersized Ready row before the workflow re-inspects its live balance.
+    pub fn prepare_ready_reinspection(
+        canister_id: Principal,
+        required_cycles: &Cycles,
+        now_ns: u64,
+    ) -> Result<CanisterPoolResetPreparation, InternalError> {
+        let mut asset = required_asset(canister_id)?;
+        match asset.status {
+            CanisterPoolAssetStatusRecord::Ready if asset.cycles >= *required_cycles => {
+                Ok(CanisterPoolResetPreparation::Ready)
+            }
+            CanisterPoolAssetStatusRecord::Ready => {
+                asset.status = CanisterPoolAssetStatusRecord::PendingReset;
+                asset.updated_at_ns = now_ns;
+                CanisterPoolStore::insert(canister_id, asset);
+                Ok(CanisterPoolResetPreparation::Reinspect)
+            }
+            CanisterPoolAssetStatusRecord::PendingReset
+            | CanisterPoolAssetStatusRecord::Failed(_)
+                if asset.cycles > Cycles::default() =>
+            {
+                Ok(CanisterPoolResetPreparation::Reinspect)
+            }
+            CanisterPoolAssetStatusRecord::PendingReset
+            | CanisterPoolAssetStatusRecord::Failed(_)
+            | CanisterPoolAssetStatusRecord::Recycling { .. } => {
+                Ok(CanisterPoolResetPreparation::Reset)
+            }
+            _ => Err(InternalError::conflict()),
+        }
     }
 
     #[must_use]
@@ -858,13 +910,6 @@ impl CanisterPoolOps {
         CanisterPoolStore::handoff_receipt(&canister_id).map(|receipt| receipt.recipient)
     }
 
-    pub fn asset_is_ready(canister_id: Principal) -> Result<bool, InternalError> {
-        Ok(matches!(
-            required_asset(canister_id)?.status,
-            CanisterPoolAssetStatusRecord::Ready
-        ))
-    }
-
     pub fn recycling_reset_is_terminal(canister_id: Principal) -> Result<bool, InternalError> {
         Ok(matches!(
             required_asset(canister_id)?.status,
@@ -890,6 +935,44 @@ impl CanisterPoolOps {
                 .filter(|entry| matches!(entry.asset.status, CanisterPoolAssetStatusRecord::Ready))
                 .count(),
         )
+    }
+
+    /// Whether one Ready asset can satisfy the exact next Component demand.
+    #[must_use]
+    pub fn has_ready_asset_for(required_cycles: &Cycles) -> bool {
+        CanisterPoolStore::export()
+            .entries
+            .into_iter()
+            .any(|entry| {
+                matches!(entry.asset.status, CanisterPoolAssetStatusRecord::Ready)
+                    && entry.asset.cycles >= *required_cycles
+            })
+    }
+
+    /// Whether distinct Ready assets cover every exact demand without double assignment.
+    #[must_use]
+    pub fn ready_assets_cover(required_cycles: &[Cycles]) -> bool {
+        let mut ready = CanisterPoolStore::export()
+            .entries
+            .into_iter()
+            .filter(|entry| matches!(entry.asset.status, CanisterPoolAssetStatusRecord::Ready))
+            .map(|entry| entry.asset.cycles)
+            .collect::<Vec<_>>();
+        ready.sort();
+        let mut required = required_cycles.to_vec();
+        required.sort();
+        let mut ready = ready.into_iter();
+        let mut candidate = ready.next();
+        for demand in required {
+            while candidate.as_ref().is_some_and(|cycles| cycles < &demand) {
+                candidate = ready.next();
+            }
+            if candidate.is_none() {
+                return false;
+            }
+            candidate = ready.next();
+        }
+        true
     }
 
     #[must_use]
@@ -1590,6 +1673,56 @@ mod tests {
                 .expect("claim decision"),
             None
         );
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn ready_capacity_matches_distinct_assets_to_exact_cycle_demands() {
+        CanisterPoolStore::clear();
+        imported_ready(principal(1), Cycles::new(20), 10);
+        imported_ready(principal(2), Cycles::new(45), 20);
+
+        assert!(CanisterPoolOps::ready_assets_cover(&[
+            Cycles::new(40),
+            Cycles::new(20),
+        ]));
+        assert!(!CanisterPoolOps::ready_assets_cover(&[
+            Cycles::new(20),
+            Cycles::new(50),
+        ]));
+        assert!(!CanisterPoolOps::has_ready_asset_for(&Cycles::new(50)));
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn undersized_ready_import_can_be_queued_for_balance_reinspection() {
+        CanisterPoolStore::clear();
+        let canister_id = principal(1);
+        imported_ready(canister_id, Cycles::new(45), 10);
+
+        CanisterPoolOps::retry_reset(canister_id, &Cycles::new(50), 20)
+            .expect("queue undersized Ready asset");
+        CanisterPoolOps::retry_reset(canister_id, &Cycles::new(50), 21)
+            .expect("exact queued retry");
+        assert_eq!(
+            CanisterPoolOps::prepare_ready_reinspection(canister_id, &Cycles::new(50), 22)
+                .expect("resume the fenced Ready-row reinspection"),
+            CanisterPoolResetPreparation::Reinspect
+        );
+        assert_eq!(
+            CanisterPoolOps::pending_reset_canisters(),
+            vec![canister_id]
+        );
+
+        CanisterPoolOps::mark_ready(canister_id, Cycles::new(50), 30)
+            .expect("publish refreshed live balance");
+        assert!(CanisterPoolOps::has_ready_asset_for(&Cycles::new(50)));
+        assert_eq!(
+            CanisterPoolOps::prepare_ready_reinspection(canister_id, &Cycles::new(50), 40)
+                .expect("sufficient import replay needs no second reset"),
+            CanisterPoolResetPreparation::Ready
+        );
+        assert!(CanisterPoolOps::retry_reset(canister_id, &Cycles::new(50), 40).is_err());
         CanisterPoolStore::clear();
     }
 

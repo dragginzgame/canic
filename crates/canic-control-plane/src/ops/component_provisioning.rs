@@ -1130,6 +1130,20 @@ impl RootComponentProvisioningOps {
         Ok(validated_aggregate_state()?.tracked_group_placements)
     }
 
+    /// Return the one exact active aggregate batch without creating another owner.
+    pub(crate) fn active_operation() -> Result<Option<RootComponentProvisioningView>, InternalError>
+    {
+        let state = validated_aggregate_state()?;
+        state
+            .active_operation_id
+            .map(|operation_id| {
+                RootComponentProvisioningStore::operation(operation_id)
+                    .ok_or_else(InternalError::invariant)
+                    .and_then(validated_record)
+            })
+            .transpose()
+    }
+
     /// Fence unrelated top-level allocations while one aggregate batch owns root capacity.
     pub(crate) fn require_ordinary_allocation_open() -> Result<(), InternalError> {
         let state = validated_aggregate_state()?;

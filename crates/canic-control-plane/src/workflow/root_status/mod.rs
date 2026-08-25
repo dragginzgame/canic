@@ -14,7 +14,7 @@ use crate::{
         storage::state::root_wasm_store::RootWasmStoreStateOps,
     },
     workflow::{
-        component_registry, fleet_registry_mirror, fleet_subnet_root,
+        component_provisioning, component_registry, fleet_registry_mirror, fleet_subnet_root,
         root_authority::validated_root_authority,
     },
 };
@@ -141,6 +141,14 @@ pub fn operation_status(
 
     let selected = select_unique_match(matches)?;
     authorize_observer(selected.observer, caller, caller_is_controller)?;
+    if matches!(
+        &selected.status,
+        RootOperationStatusResponse::ProvisionComponents(_)
+    ) {
+        let current = RootComponentProvisioningOps::status_by_operation_id(operation_id)?
+            .ok_or_else(InternalError::invariant)?;
+        component_provisioning::require_current_claim_capacity(&current)?;
+    }
     Ok(selected.status)
 }
 

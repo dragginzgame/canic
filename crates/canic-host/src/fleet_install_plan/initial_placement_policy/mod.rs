@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use canic_core::{
     bootstrap::compiled::ConfigModel,
+    cdk::types::Cycles,
     control_plane_support::config::{
         ComponentDeploymentPurpose, ComponentGroupDeploymentSpec, FleetServiceTopology,
     },
@@ -63,6 +64,15 @@ pub(super) enum InitialPlacementPolicyError {
         available: u32,
     },
 
+    #[error(
+        "root {root} pool assets provide {configured} each but an initial Component requires {required}"
+    )]
+    PoolAssetCyclesInsufficient {
+        root: SubnetId,
+        configured: Cycles,
+        required: Cycles,
+    },
+
     #[error("root {root} does not admit Component Spec '{component_spec}'")]
     MissingComponentAdmission {
         root: SubnetId,
@@ -109,6 +119,7 @@ pub(super) fn validate_initial_component_group_assignments(
     for root in roots {
         validate_root_assignment_order(root)?;
         let component_count = validate_root_initial_assignment_capacity(
+            config,
             root,
             deployments,
             &mut assignments,
@@ -146,6 +157,7 @@ fn validate_root_assignment_order(
 }
 
 fn validate_root_initial_assignment_capacity<'a>(
+    config: &ConfigModel,
     root: &FreshFleetSubnetRootPlanV1,
     deployments: &'a [ComponentGroupDeploymentSpec],
     assignments: &mut BTreeMap<
@@ -156,6 +168,7 @@ fn validate_root_initial_assignment_capacity<'a>(
 ) -> Result<u32, InitialPlacementPolicyError> {
     let mut component_counts = BTreeMap::<ComponentSpecId, u32>::new();
     let mut component_count = 0_u32;
+    let mut required_asset_cycles = Cycles::default();
     for assignment in &root.component_group_placements {
         let deployment = deployments
             .binary_search_by(|candidate| candidate.deployment.cmp(&assignment.deployment))
@@ -192,6 +205,19 @@ fn validate_root_initial_assignment_capacity<'a>(
             .ok_or(InitialPlacementPolicyError::CountOverflow {
                 subject: "root Component",
             })?;
+        for member in &deployment.members {
+            let initial_cycles = config
+                .component_specs
+                .get(&member.component_spec)
+                .map(|component| component.initial_cycles.clone())
+                .ok_or_else(|| {
+                    InitialPlacementPolicyError::Configuration(format!(
+                        "unknown Component Spec '{}' in compiled deployment",
+                        member.component_spec
+                    ))
+                })?;
+            required_asset_cycles = required_asset_cycles.max(initial_cycles);
+        }
         record_member_capacity(root, deployment, &mut component_counts, service_roots)?;
     }
     if component_count > root.limits.maximum_component_instances {
@@ -199,7 +225,7 @@ fn validate_root_initial_assignment_capacity<'a>(
             root: root.placement_subnet,
         });
     }
-    validate_initial_pool_capacity(root, component_count)?;
+    validate_initial_pool_capacity(root, component_count, required_asset_cycles)?;
     validate_component_admissions(root, component_counts)?;
     Ok(component_count)
 }
@@ -238,6 +264,7 @@ fn record_member_capacity(
 fn validate_initial_pool_capacity(
     root: &FreshFleetSubnetRootPlanV1,
     component_count: u32,
+    required_asset_cycles: Cycles,
 ) -> Result<(), InitialPlacementPolicyError> {
     let imported_assets = u32::try_from(root.canister_pool_imports.len()).map_err(|_| {
         InitialPlacementPolicyError::CountDoesNotFitU32 {
@@ -250,6 +277,13 @@ fn validate_initial_pool_capacity(
             root: root.placement_subnet,
             required: component_count,
             available: automatic_ready_target,
+        });
+    }
+    if root.limits.canister_pool.canister_cycles < required_asset_cycles {
+        return Err(InitialPlacementPolicyError::PoolAssetCyclesInsufficient {
+            root: root.placement_subnet,
+            configured: root.limits.canister_pool.canister_cycles.clone(),
+            required: required_asset_cycles,
         });
     }
     Ok(())
