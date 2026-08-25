@@ -1,0 +1,17 @@
+[package]
+name = "retained_root_repair_stub"
+edition = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+canic-core = { workspace = true }
+ic-cdk = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

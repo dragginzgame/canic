@@ -594,12 +594,12 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.6.1"]);
     assert_eq!(locked_package_versions(&lock, "ic-cdk-timers"), ["1.0.0"]);
-    assert_eq!(locked_package_versions(&lock, "icydb"), ["0.230.2"]);
+    assert_eq!(locked_package_versions(&lock, "icydb"), ["0.240.1"]);
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
     assert!(workspace_manifest.contains("ic-timers = \"=0.6.1\""));
-    assert!(workspace_manifest.contains("icydb = { version = \"0.230\""));
-    assert!(workspace_manifest.contains("icydb-model = \"0.230\""));
+    assert!(workspace_manifest.contains("icydb = { version = \"0.240\""));
+    assert!(workspace_manifest.contains("icydb-model = \"0.240\""));
     assert!(!workspace_manifest.contains("ic-cdk-timers ="));
 
     let mut timer_consumers = BTreeSet::from(["Cargo.toml".to_string()]);

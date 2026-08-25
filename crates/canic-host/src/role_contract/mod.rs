@@ -118,6 +118,9 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
         RoleContractFinding::CargoCatalogDrift { reason }
         | RoleContractFinding::CatalogInvalid { reason }
         | RoleContractFinding::DependencyShapeUnsupported { reason } => reason.clone(),
+        RoleContractFinding::CargoEvidenceUnavailable { phase, cause } => {
+            format!("Cargo evidence phase {phase} failed: {cause}")
+        }
         RoleContractFinding::MemoryIdCollision {
             memory_id,
             first,

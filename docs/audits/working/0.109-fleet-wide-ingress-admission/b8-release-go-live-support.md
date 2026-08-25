@@ -15,8 +15,8 @@ Date: 2026-08-24
 | Published artifact-reuse correction | annotated `v0.109.3`, commit `d861febb00bed2ca8145b705f82d836dc0ae6686`; downstream recovery crossed immutable retained-artifact reuse without Cargo or artifact mutation |
 | Published provisioning-recovery correction | annotated `v0.109.4`, commit `2a5ef929b76bc29e62d19cbe1785690dc0d51fd2`; the downstream retained session crossed monotonic first-status reconciliation |
 | Published pool-eligibility correction | annotated `v0.109.5`, commit `156df9aea68f721e6fd20f3a7cb6e5b30218525c`; fresh-only 5T validation, exact 0.109.1 historical-plan load, exact Ready matching, smallest-sufficient claiming, retained-Ready reinspection, recovery remediation, explicit recovery-pair and governed PocketIC Root-upgrade/claim/install tests pass |
-| Open retained-Root repair correction | 0.109.6 draft over published 0.109.5; exact-cycle diagnostics, product-version allowlist removal, bounded current/historical-pool `v1` contracts, one immutable already-applied Root-repair receipt and terminal install-session closure |
-| Canic effects | Repository source/documentation and local build artifacts plus maintainer-owned validation/version/publication through 0.109.5; no downstream effect from this repository |
+| Published retained-Root repair correction | annotated `v0.109.6`, commit `2895b01173590e9253408a0d6dcc05868561d982`; exact-cycle diagnostics, product-version allowlist removal, bounded current/historical-pool `v1` contracts, one immutable already-applied Root-repair receipt, terminal install-session closure and coalesced runtime activation |
+| Canic effects | Repository source/documentation and local build artifacts plus maintainer-owned validation/version/publication through 0.109.6; no downstream effect from this repository |
 | Downstream evidence | Separately owned retained-session recovery crossed artifact reuse, Registry activation, Root preparation, corrected Root upgrade and retained-asset refresh; exact-session resume and App/frontend effects remain |
 | Excluded | Any new live staging, resume, paid effect or other external mutation from this repository |
 
@@ -44,7 +44,7 @@ separately authorized Root upgrade and asset refresh then preserved both paid
 canisters and the retained journals, ending with the imported asset Ready at
 5,000,098,949,600 cycles. The next exact-session resume exposed two host-owned
 gaps: the journal still required the predecessor Root module hash, and the
-actual/required operands both rendered as `5.000 TC`. Open 0.109.6 owns one
+actual/required operands both rendered as `5.000 TC`. Published 0.109.6 owns one
 separate exact-artifact repair receipt plus the diagnostic correction. Recovery
 compatibility is now defined by typed current/historical-pool `v1` contracts,
 not an accumulating product-version allowlist, and terminal catalog publication
@@ -547,6 +547,21 @@ idempotent live proof depends on the preserved Store bootstrap and Registry
 mirror, so a same-authority reinstall cannot manufacture a repair receipt. The
 original install journal is never edited.
 
+That paragraph records the published 0.109.6 contract and the proof that later
+failed against legitimate live reservation progress. Open 0.109.7 hard-cuts
+the input to
+`<ROOT>,<POOL>=<LIVE_PREDECESSOR_WASM>,<SUCCESSOR_WASM>` and owns the complete
+procedure. It verifies the exact currently live artifact and controller/Fleet
+authority before upgrade, retains one bounded operation before upgrade or
+funding effects, reconciles raw operator and asset balances after each top-up,
+and refreshes only the named imported asset. The Root's existing protected
+preparation command is status-like and non-mutating after preparation; replay
+returns current counters under the immutable preparation authority instead of
+trying to create an empty Registry again. A receipt-written/operation-
+`AssetReady` interruption converges locally to `Adopted` without repeating an
+IC effect. The successor preserves the retained Root Candid exactly, so this
+correction adds no new Root wire variant.
+
 Focused tests recover the durable `preparation_in_flight` journal after a lost
 prepare response, reconcile each nonterminal phase, bind the next request to
 that exact observation, accept only complete terminal evidence and reject
@@ -705,8 +720,10 @@ make validate
 
 This validation includes the recovery-specific imported-asset refresh and
 terminal runtime-activation journeys, the complete Ledger/CMC replay matrix,
-admission convergence and the lifecycle/receipt/timer suites. Versioning and
-publication remain maintainer-owned and have not occurred for 0.109.6.
+admission convergence and the lifecycle/receipt/timer suites. At the time of
+this intermediate run, versioning and publication remained maintainer-owned;
+the later final gate and immutable `v0.109.6` publication include the completed
+`CANIC-041` and `CANIC-042` corrections.
 
 The `CANIC-041` follow-up removes the fixed sequence-7 closure assumption.
 `completion.json` instead binds the domain-separated digest and observed
@@ -777,14 +794,66 @@ Fleet Registry revision 4. The complete maintainer gate last passed before
 `CANIC-042`; this new runtime correction requires one fresh unmodified gate at
 the immutable versioning candidate.
 
+Open 0.109.7 replaces the earlier adoption-shaped fixture shortcut with one
+production-boundary journey. The test installs an exact-Candid retained Root
+fixture, gives one Root-controlled imported asset an exact undersized balance,
+then calls the production pre-repair authority verifier, repair executor and
+retained Component Registry verifier. The executor upgrades the same Root,
+uses the PocketIC production Cycles Ledger through the real ICP CLI, re-reads
+both balances, invokes protected pool reinspection, publishes the immutable
+receipt, installs one Component, publishes the Fleet catalog and closes the
+session. Exact replay performs no second debit or remote effect; wrong Candid,
+changed successor bytes, wrong authority and an unrelated live module reject.
+
+```text
+bash scripts/ci/run-with-test-scratch.sh \
+  bash scripts/ci/run-workspace-tests.sh targeted-pocketic \
+  install_root::fleet_subnet_root_repair::tests::retained_repair_adoption_reaches_component_catalog_completion_and_closes_recovery
+# PASS: 1 test in 12.03s, 13s governed lane; shared-server high-water
+# 295,636 kB and 20 threads
+# operator debit 500,201,558,000; asset credit 500,101,558,000;
+# exact fee 100,000,000; final retained margin 100,000,000 cycles
+```
+
+The complete unmodified maintainer gate then passes on the final source
+candidate after two defects found only by that full run were corrected. The
+first was a false assumption that the reservation count itself is monotonic;
+valid allocation commitment changes `reserved=1, committed=0` to
+`reserved=0, committed=1`. The verifier now requires monotonic total occupied
+capacity and committed progress, and the protected live Root proof exercises
+that transition. The second was test-process contamination from the gate's
+ambient `ICP_ENVIRONMENT=local` conflicting with the isolated fixture's exact
+`--network`; the fixture now removes ambient environment selection from all
+isolated ICP CLI children.
+
+```text
+make validate
+# PASS: check 1s; warning-denied workspace Clippy 16s; complete tests 717s
+# PASS: 31-case governed internal PocketIC suite 266s
+# PASS: production-boundary retained Root repair PocketIC journey 47s
+# PASS: public runtime PocketIC suites 254s + 47s + 6s + 4s
+# shared-server high-water: 4,958,820 kB; final observed thread high-water 257
+```
+
+The gate includes all ordinary workspace, integration, layering, release,
+Candid/role, timer and warning-denied checks; production Ledger/CMC replay and
+reserve fallback; five-Component activation; admission convergence/recovery;
+the exact repair procedure; IcyDB 0.240.1 lifecycle composition; and the
+remaining native runtime, blob-storage, payload and instruction-audit suites.
+No version, tag, package publication or downstream effect was performed.
+
 The remaining feedback is routed without widening B8 or adding product
 capability to B9:
 
 | Feedback | Disposition |
 | --- | --- |
 | `CANIC-026` supported managed-App qualification harness | Scheduled as a separate bounded B10 support batch after B9, so the pure simplification batch does not acquire another product capability. It must replace downstream private payload/lifecycle plumbing without creating runtime authority. |
-| `CANIC-028` named-environment artifact advice | Non-blocking operator defect assigned to B9 cleanup: preserve exact selected-root observation, distinguish pre-install assumptions and remove the impossible `canic build` remediation when that command cannot populate the observed root. |
-| Retained-decision source drift | Non-blocking operator diagnostic defect assigned to B9 beside `CANIC-028`: identify workspace-source drift, name the exact retained source identity/revision and omit unrelated identity/funding remediation after those checks pass. |
+| `CANIC-028` named-environment artifact advice | Corrected in open 0.109.7: exact selected-root observation remains, while the diagnostic names matching initial-install build/finalization or an existing finalized `--release-build`; it no longer recommends a `canic build` command that cannot populate the observed named-environment root. |
+| Retained-decision source drift | Non-blocking operator diagnostic defect remains assigned to B9: identify workspace-source drift, name the exact retained source identity/revision and omit unrelated identity/funding remediation after those checks pass. |
+| `CANIC-043` atomic repair syntax | Corrected in open 0.109.7: parser, help, README and examples use only `ROOT,POOL=LIVE_PREDECESSOR_WASM,SUCCESSOR_WASM`; the 0.109.6 form rejects with the complete hard-cut replacement. |
+| `CANIC-044` monotonic Registry proof | Corrected in open 0.109.7: the existing protected preparation command supplies a status-like non-mutating replay, and the host accepts only exact immutable authority plus monotonic live progress. The production-boundary PocketIC journey calls both sides. |
+| `CANIC-045` receipt/operation convergence | Corrected in open 0.109.7: a published receipt can terminalize only the exact retained `AssetReady` operation without a remote effect; earlier or conflicting state fails closed. |
+| `CANIC-046` IcyDB patch alignment | Corrected in open 0.109.7: all six locked IcyDB packages and the composed-framework fixture/evidence use exact published 0.240.1. |
 | `CANIC-030` retained funded Saltz asset | The open repository-estate cleanup now archives the exact calibration and terminal disposition record instead of deleting the only retained evidence for the live external canister and its approximately `2.590 Pcycles`; it authorizes no external effect. |
 | `CANIC-006` state-preserving release transition | Already owned by scheduled 0.111's exact stop-the-world predecessor-to-successor transition. It remains blocked on the accepted 0.109 and 0.110 gates. |
 | `CANIC-005` application retirement acknowledgement | Already owned by scheduled 0.110 B2. It remains blocked on 0.109 closeout and explicit 0.110 promotion. |
@@ -794,16 +863,25 @@ capability to B9:
 
 ## Result
 
-Published 0.109.5 closes the `CANIC-035` pool-policy, acceptance, allocation and
-retained Ready-row reinspection correction. The separately authorized Root
-upgrade and asset refresh succeeded with both paid canisters and durable
-journals preserved. Open 0.109.6 corrects the exact-cycle diagnostic,
+Published 0.109.6 closes the `CANIC-035` pool-policy, acceptance, allocation and
+retained Ready-row reinspection correction, then adds the exact repair and
+coalesced runtime-activation fixes. The separately authorized Root upgrade and
+asset refresh succeeded with both paid canisters and durable journals
+preserved. It corrects the exact-cycle diagnostic,
 authorizes only the one exact already-applied Root artifact through an
 immutable receipt, replaces release-number pairing with bounded typed
 contracts and closes recovery after terminal catalog publication using the
 exact terminal-journal digest rather than a fixed journal sequence. It also
 accepts strictly monotonic coalesced Root runtime-activation observations and
-has focused plus real five-Component PocketIC proof. B8 remains open for a
-fresh complete maintainer gate, exact-source resume and deployed-state/
-admission proof. B9 remains blocked until that evidence is accepted; B10 and
-0.110 remain blocked behind B9.
+has focused plus real five-Component PocketIC proof. The complete maintainer
+gate and immutable publication are finished. Open 0.109.7 completes the
+retained Root/pool procedure, fixes its live Component Registry proof and
+receipt/operation interruption boundary, makes Medic and Cargo diagnostics
+recovery-aware, hardens release completeness and advances the generic
+composed-framework fixture to exact published IcyDB 0.240.1. Focused compile,
+authority, funding arithmetic, interruption, ownership and warning-denied
+fixture Clippy evidence passes, and the complete maintainer gate passes on the
+final source candidate. Patch publication and the exact downstream resume
+remain pending. B8 stays open until that release plus
+deployed-state/admission proof are accepted; B9 remains blocked until that
+evidence is accepted, and B10/0.110 remain blocked behind B9.

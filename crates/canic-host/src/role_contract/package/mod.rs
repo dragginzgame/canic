@@ -383,17 +383,9 @@ fn validate_package_manifest_with_cache(
     built_in: Option<BuiltInRoleKind>,
     cache: &mut PackageValidationCache,
 ) -> RolePackageValidation {
-    let Ok((metadata, catalog)) = cache.evidence_for_manifest(manifest_path, mode) else {
-        let finding = if let Some(role) = built_in {
-            RoleContractFinding::BuiltInPackageUnavailable { role }
-        } else {
-            RoleContractFinding::DependencyShapeUnsupported {
-                reason:
-                    "unable to inspect the local wasm runtime graph for the selected role package"
-                        .to_string(),
-            }
-        };
-        return RolePackageValidation::Unsupported(finding);
+    let (metadata, catalog) = match cache.evidence_for_manifest(manifest_path, mode) {
+        Ok(evidence) => evidence,
+        Err(error) => return RolePackageValidation::Unsupported(error.into_finding()),
     };
 
     let selected = match exact_manifest_package(metadata, manifest_path, expected_role) {
@@ -418,18 +410,25 @@ fn validate_package_manifest_with_cache(
     if let Err(finding) = validate_catalog() {
         return RolePackageValidation::Unsupported(finding);
     }
-    let Ok(tree) = cargo_tree_for_package(
+    let tree = match cargo_tree_for_package(
         manifest_path,
         &declaration.package.id,
         WASM_TARGET,
         mode.locked(),
         mode.offline(),
         TREE_FORMAT,
-    ) else {
-        return unsupported_shape(
-            "unable to inspect the package-selected wasm runtime graph for the selected role package"
-                .to_string(),
-        );
+    ) {
+        Ok(tree) => tree,
+        Err(source) => {
+            return RolePackageValidation::Unsupported(
+                CargoEvidenceFailure::new(
+                    CargoEvidencePhase::PackageSelectedTree,
+                    manifest_path,
+                    source.as_ref(),
+                )
+                .into_finding(),
+            );
+        }
     };
     let graph = match correlate_package_tree(catalog, metadata, declaration.package, &tree) {
         Ok(graph) => graph,
@@ -453,21 +452,78 @@ struct CachedCargoWorkspace {
     catalog: CargoMetadata,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CargoEvidencePhase {
+    CompleteCatalog,
+    PackageSelectedTree,
+    WasmFilteredMetadata,
+}
+
+impl CargoEvidencePhase {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::CompleteCatalog => "complete_catalog",
+            Self::PackageSelectedTree => "package_selected_tree",
+            Self::WasmFilteredMetadata => "wasm_filtered_metadata",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct CargoEvidenceFailure {
+    phase: CargoEvidencePhase,
+    cause: String,
+}
+
+impl CargoEvidenceFailure {
+    fn new(
+        phase: CargoEvidencePhase,
+        manifest_path: &Path,
+        source: &(dyn std::error::Error + 'static),
+    ) -> Self {
+        Self {
+            phase,
+            cause: bounded_cargo_cause(manifest_path, &source.to_string()),
+        }
+    }
+
+    fn into_finding(self) -> RoleContractFinding {
+        RoleContractFinding::CargoEvidenceUnavailable {
+            phase: self.phase.as_str().to_string(),
+            cause: self.cause,
+        }
+    }
+}
+
 impl PackageValidationCache {
     fn evidence_for_manifest(
         &mut self,
         manifest_path: &Path,
         mode: PackageValidationMode,
-    ) -> Result<(&CargoMetadata, &CargoMetadata), Box<dyn std::error::Error>> {
+    ) -> Result<(&CargoMetadata, &CargoMetadata), CargoEvidenceFailure> {
         if let Some(index) = self.workspace_index(manifest_path, mode) {
             let workspace = &self.workspaces[index];
             return Ok((&workspace.metadata, &workspace.catalog));
         }
 
         let metadata =
-            cargo_metadata_for_manifest(manifest_path, WASM_TARGET, mode.locked(), mode.offline())?;
+            cargo_metadata_for_manifest(manifest_path, WASM_TARGET, mode.locked(), mode.offline())
+                .map_err(|source| {
+                    CargoEvidenceFailure::new(
+                        CargoEvidencePhase::WasmFilteredMetadata,
+                        manifest_path,
+                        source.as_ref(),
+                    )
+                })?;
         let catalog =
-            cargo_metadata_catalog_for_manifest(manifest_path, mode.locked(), mode.offline())?;
+            cargo_metadata_catalog_for_manifest(manifest_path, mode.locked(), mode.offline())
+                .map_err(|source| {
+                    CargoEvidenceFailure::new(
+                        CargoEvidencePhase::CompleteCatalog,
+                        manifest_path,
+                        source.as_ref(),
+                    )
+                })?;
         self.workspaces.push(CachedCargoWorkspace {
             mode,
             metadata,
@@ -489,6 +545,55 @@ impl PackageValidationCache {
                 })
         })
     }
+}
+
+fn bounded_cargo_cause(manifest_path: &Path, source: &str) -> String {
+    const MAX_CAUSE_CHARS: usize = 768;
+    const MAX_CAUSE_LINES: usize = 4;
+
+    let manifest = manifest_path.display().to_string();
+    let workspace = manifest_path
+        .parent()
+        .map(|path| path.display().to_string())
+        .unwrap_or_default();
+    let canic_workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .map(|path| path.display().to_string())
+        .unwrap_or_default();
+    let scrubbed = source
+        .replace(&manifest, "<role-manifest>")
+        .replace(&workspace, "<role-workspace>")
+        .replace(&canic_workspace, "<canic-workspace>");
+    let mut selected = scrubbed
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| {
+            let lower = line.to_ascii_lowercase();
+            lower.starts_with("error:")
+                || lower.starts_with("caused by:")
+                || lower.starts_with("failed to")
+                || lower.starts_with("could not")
+                || lower.starts_with("no matching package")
+                || lower.starts_with("perhaps")
+        })
+        .take(MAX_CAUSE_LINES)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if selected.is_empty() {
+        selected = scrubbed
+            .lines()
+            .next()
+            .unwrap_or("Cargo command failed")
+            .trim()
+            .to_string();
+    }
+    if selected.chars().count() > MAX_CAUSE_CHARS {
+        selected = selected.chars().take(MAX_CAUSE_CHARS - 3).collect();
+        selected.push_str("...");
+    }
+    selected
 }
 
 fn validate_role_declaration<'a>(

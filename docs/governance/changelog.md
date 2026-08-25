@@ -369,8 +369,12 @@ For each release:
 4. The maintainer commits the completed implementation and changelog batch.
 5. The maintainer runs the governed version target, which performs the explicit
    `make validate` workflow before updating package and release version files.
+   The same transaction replaces the exact target patch's `Unreleased` suffix
+   with the release date and binds current status to the validated source
+   commit. A missing or duplicate draft fails before version mutation.
 6. The maintainer reviews, stages, commits, tags, and pushes through the
-   governed release targets.
+   governed release targets. The candidate guard rejects a still-open target
+   changelog or any production change made after the recorded validation.
 
 Order must be preserved.
 The normal human patch flow is `make patch`, review, `make release-stage`,

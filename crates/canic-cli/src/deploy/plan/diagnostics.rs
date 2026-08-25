@@ -292,7 +292,10 @@ fn assumption_category(key: &str) -> PlanDiagnosticCategory {
 
 fn assumption_next(key: &str) -> Option<String> {
     if key.starts_with(ASSUMPTION_PREFIX_LOCAL_ARTIFACTS) {
-        Some("run canic build or provide a build profile with resolved artifacts".to_string())
+        Some(
+            "run the matching initial install workflow to build and finalize named-environment artifacts, or select an existing finalized --release-build"
+                .to_string(),
+        )
     } else if key.starts_with(ASSUMPTION_PREFIX_FLEET_CATALOG) {
         Some(
             "compare after the first Fleet install or provide deployment-check evidence"

@@ -109,6 +109,24 @@ fn install_command_uses_binary_candid_file() {
 }
 
 #[test]
+fn upgrade_command_uses_binary_candid_file() {
+    let canister = candid::Principal::from_slice(&[44]);
+    let command = icp_canister_upgrade_binary_args_command(
+        &test_icp(Path::new("/workspace"), "caelum-backend"),
+        canister,
+        Path::new("/artifacts/root.wasm"),
+        Path::new("/state/root-upgrade-args.bin"),
+    );
+
+    assert_eq!(
+        crate::icp::command_display(&command),
+        format!(
+            "/opt/icp --project-root-override /workspace canister install {canister} --mode=upgrade -y --wasm /artifacts/root.wasm --args-file /state/root-upgrade-args.bin --args-format bin -e caelum-backend"
+        )
+    );
+}
+
+#[test]
 fn create_command_binds_subnet_and_exact_cycles() {
     let subnet = canic_core::ids::SubnetId::from_principal(candid::Principal::from_slice(&[41]));
     let command = icp_canister_create_command(

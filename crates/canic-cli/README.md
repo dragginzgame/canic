@@ -202,21 +202,42 @@ session. Later code changes must wait for and use a separately supported
 managed-upgrade workflow; they cannot reopen fresh-install recovery.
 
 An exceptional retained session whose Root was already repaired with a
-state-preserving upgrade can authorize that exact live artifact once:
+state-preserving upgrade, or still requires that exact repair, can authorize
+one plan-bound procedure:
 
 ```bash
 canic install <app> <fleet> \
   --fleet-input <path> \
   --expected-plan-digest <sha256> \
-  --adopt-retained-root-repair <root-principal>=<raw-root-wasm>
+  --release-build <release-build-id> \
+  --adopt-retained-root-repair \
+    <root-principal>,<pool-canister-principal>=\
+<live-raw-root-wasm>,<successor-raw-root-wasm>
 ```
 
-Canic hashes the raw Wasm, requires exact predecessor Candid, rechecks the
-retained controller and protected Fleet authority, and replays the exact
-retained Component Registry preparation as an idempotent stable-state proof.
-Only then does it publish a separate immutable repair receipt and resume. The
-option neither performs the upgrade nor edits the original install journal,
-and it is not a general cross-release adoption surface.
+Canic hashes both raw Wasms, requires the live predecessor and successor to
+preserve the retained Root Candid exactly, rechecks the
+retained controller and protected Fleet authority, and either performs the
+one state-preserving Root upgrade or verifies that the exact successor is
+already live. It reads the named retained pool asset, persists one bounded
+top-up intent before any debit, re-reads the operator Ledger and target balance
+after the effect, and protectedly re-inspects the same asset until its raw
+balance satisfies the exact initial Component requirement. It then invokes the
+existing protected preparation command's status-like, non-mutating replay
+path, binds the Root's immutable Component Registry preparation authority and
+allows only valid provisioning progress before publishing a separate immutable
+repair receipt and resuming the retained install. Drift, an uncertain upgrade,
+an unrelated pool asset, or an unaccounted funding result fails closed; the
+procedure never reinstalls the Root, creates a replacement Root or adds a pool
+asset.
+
+Published 0.109.6 accepted the narrower
+`<root-principal>=<raw-root-wasm>` adoption-only form. The open 0.109.7 hard
+cut requires the retained pool Principal, exact currently live raw Wasm and
+exact successor raw Wasm as shown above, so upgrade, funding, reinspection and
+adoption share one exact operation authority. The earlier form is rejected
+with the required replacement syntax. This exceptional surface does not edit
+the original install journal and is not a general cross-release adoption path.
 
 Once an install has finalized its release build, another fresh Fleet under the
 same ICP root can reuse those exact artifacts without running Cargo again:

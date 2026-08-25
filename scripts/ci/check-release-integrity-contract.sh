@@ -414,8 +414,10 @@ for mode in patch minor major; do
     fi
     rg -F '$(MAKE) --no-print-directory validate' <<<"$mode_recipe" >/dev/null ||
         fail "the $mode version target does not run the explicit validation workflow"
-    rg -F "CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh $mode" <<<"$mode_recipe" >/dev/null ||
-        fail "the $mode version target does not bind mutation to completed validation"
+    rg -F 'CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head"' <<<"$mode_recipe" >/dev/null ||
+        fail "the $mode version target does not bind mutation to the exact validated revision"
+    rg -F "scripts/ci/bump-version.sh $mode" <<<"$mode_recipe" >/dev/null ||
+        fail "the $mode version target omits its governed bump"
 done
 patch_recipe="$(sed -n '/^patch:/,/^$/p' "$MAKEFILE")"
 rg -F '$(MAKE) --no-print-directory release-cadence' <<<"$patch_recipe" >/dev/null ||
@@ -427,8 +429,16 @@ rg -F 'next release ordinal:' <<<"$cadence_output" >/dev/null ||
     fail "the release cadence tool does not report the next release ordinal"
 rg -F 'CANIC_RELEASE_VALIDATED' "$BUMP_VERSION" >/dev/null ||
     fail "direct release version mutation is not guarded by completed validation"
+rg -F 'CANIC_RELEASE_VALIDATED_HEAD' "$BUMP_VERSION" >/dev/null ||
+    fail "release version mutation is not bound to the exact validated revision"
 rg -F 'cargo metadata --locked --offline --format-version 1 --no-deps' "$RELEASE_CANDIDATE" >/dev/null ||
     fail "post-bump release candidate does not verify locked offline metadata"
+rg -F 'still says Unreleased' "$RELEASE_CANDIDATE" >/dev/null ||
+    fail "post-bump release candidate does not reject an unsealed changelog"
+rg -F 'validated source is followed by non-release change' "$RELEASE_CANDIDATE" >/dev/null ||
+    fail "post-bump release candidate does not reject production changes after validation"
+rg -F 'Verified complete matching Canic package set' "$PUBLISH_WORKSPACE" >/dev/null ||
+    fail "workspace publication does not verify the complete matching package set"
 for version_consumer in \
     "$MAKEFILE" \
     "$BUMP_VERSION" \

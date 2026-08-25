@@ -420,7 +420,7 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
     );
     assert_next_action(
         &json,
-        "run canic build or provide a build profile with resolved artifacts",
+        "run the matching initial install workflow to build and finalize named-environment artifacts, or select an existing finalized --release-build",
     );
     assert_proposed_operation_keys(
         &json,
@@ -1234,7 +1234,9 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains(
         "phase: future_apply_preview label: verify_topology subject: demo-local status: not_executed"
     ));
-    assert!(text.contains("run canic build or provide a build profile with resolved artifacts"));
+    assert!(text.contains(
+        "run the matching initial install workflow to build and finalize named-environment artifacts, or select an existing finalized --release-build"
+    ));
     assert!(text.contains("source: app_config"));
     assert!(text.contains("source: deployment_plan_builder"));
     assert!(text.contains("source: fleet_catalog"));

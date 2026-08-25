@@ -27,6 +27,7 @@ use std::{ffi::OsString, fs};
 use canic_core::ids::{AppId, CanisterRole, CanonicalNetworkId, FleetId};
 use canic_host::{
     fleet_catalog::{FleetCatalogEntryV1, FleetCatalogError},
+    fleet_install_plan::PlannedCanisterCreationFunding,
     icp::local_canister_candid_path,
     installed_fleet::InstalledFleetError,
     state_manifest::{StateAuditStatus, build_state_audit_report},
@@ -481,6 +482,65 @@ fn fleet_missing_points_to_deploy_plan() {
     );
 
     fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn retained_recovery_names_exact_authority_without_fresh_install_advice() {
+    let plan = FreshFleetInstallRecoveryPlanV1 {
+        schema_version: 1,
+        classification:
+            canic_host::install_root::FreshFleetInstallRecoveryClassificationV1::PaidEffectRecovery,
+        fleet_install_operation_id: "11".repeat(32),
+        release_build_id: "22".repeat(32).parse().expect("release build"),
+        decision_release_build_id: None,
+        retained_builder_version: "0.109.1".to_string(),
+        retained_plan_contract:
+            canic_host::install_root::RetainedInstallPlanContractV1::HistoricalPoolV1,
+        fresh_fleet_plan_digest: "33".repeat(32),
+        effects_started: true,
+        original_maximum_operator_debit: PlannedCanisterCreationFunding::Cycles {
+            cycles: 310_000_300_000_000,
+        },
+        remaining_operator_debit: PlannedCanisterCreationFunding::Cycles { cycles: 0 },
+        fenced_operator_creations: 3,
+        total_operator_creations: 3,
+        uncertain_creation_outcomes: Vec::new(),
+        next_replay_phase: "component_registry_preparation_verified".to_string(),
+    };
+    let summary = RetainedFleetInstallSessionSummaryV1 {
+        fleet_name: "staging".parse().expect("Fleet name"),
+        app: AppId::from("toko"),
+        release_build_id: plan.release_build_id,
+        fresh_fleet_plan_digest: plan.fresh_fleet_plan_digest.clone(),
+        operation_id: [0x11; 32],
+    };
+
+    let check = retained_recovery_check("staging", &summary, Some(&plan), None);
+
+    assert_eq!(check.code, "fleet_recovery_pending");
+    assert_eq!(check.status, MedicStatus::Warn);
+    assert!(check.detail.contains("retained_builder=0.109.1"));
+    assert!(check.detail.contains("fenced_creations=3/3"));
+    assert!(check.detail.contains(&"33".repeat(32)));
+    assert!(check.next.contains("--expected-plan-digest"));
+    assert!(check.next.contains("--release-build"));
+    assert!(
+        check
+            .next
+            .contains("do not start a fresh or replacement Fleet")
+    );
+    assert!(!check.next.contains("reinstall"));
+
+    let source_drift = retained_recovery_check(
+        "staging",
+        &summary,
+        None,
+        Some("current workspace source no longer compiles the retained decision"),
+    );
+    assert!(source_drift.detail.contains("detailed_plan_unavailable="));
+    assert!(source_drift.detail.contains("operation=111111"));
+    assert!(source_drift.next.contains(&"33".repeat(32)));
+    assert!(!source_drift.next.contains("reinstall"));
 }
 
 // Ensure workspace-only environment warnings do not duplicate Fleet-scoped checks.

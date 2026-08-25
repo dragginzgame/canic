@@ -4,7 +4,9 @@
 //! Does not own: file paths, serialization, durable publication, artifact projection, or effects.
 //! Boundary: compiled deployment/service policy plus planned roots yields acceptance or typed error.
 
-use super::model::FreshFleetSubnetRootPlanV1;
+use super::model::{
+    FreshFleetSubnetRootPlanV1, PlannedComponentGroupPlacementAssignment, PlannedFleetSubnetRoot,
+};
 use std::collections::BTreeMap;
 
 use canic_core::{
@@ -24,7 +26,7 @@ pub(super) enum InitialPoolCyclesPolicy {
 }
 
 #[derive(Debug, ThisError)]
-pub(super) enum InitialPlacementPolicyError {
+pub enum InitialPlacementPolicyError {
     #[error("{0}")]
     Configuration(String),
 
@@ -127,6 +129,27 @@ pub(super) fn validate_historical_component_group_assignments(
     )
 }
 
+/// Return the exact largest initial Component demand assigned to one retained Root plan.
+///
+/// Retained Root repair consumes this same policy projection so its funding target cannot drift
+/// from fresh-plan validation.
+pub fn required_initial_pool_asset_cycles(
+    config: &ConfigModel,
+    root: &PlannedFleetSubnetRoot,
+) -> Result<Cycles, InitialPlacementPolicyError> {
+    let configuration = config
+        .compile_component_deployment_configuration()
+        .map_err(|error| InitialPlacementPolicyError::Configuration(error.to_string()))?;
+    required_asset_cycles_for_assignments(
+        config,
+        root.placement_subnet,
+        &root.component_group_placements,
+        &configuration
+            .deployment_topology
+            .component_group_deployments,
+    )
+}
+
 fn validate_initial_component_group_assignments_with_pool_policy(
     config: &ConfigModel,
     roots: &[FreshFleetSubnetRootPlanV1],
@@ -199,7 +222,12 @@ fn validate_root_initial_assignment_capacity<'a>(
 ) -> Result<u32, InitialPlacementPolicyError> {
     let mut component_counts = BTreeMap::<ComponentSpecId, u32>::new();
     let mut component_count = 0_u32;
-    let mut required_asset_cycles = Cycles::default();
+    let required_asset_cycles = required_asset_cycles_for_assignments(
+        config,
+        root.placement_subnet,
+        &root.component_group_placements,
+        deployments,
+    )?;
     for assignment in &root.component_group_placements {
         let deployment = deployments
             .binary_search_by(|candidate| candidate.deployment.cmp(&assignment.deployment))
@@ -236,19 +264,6 @@ fn validate_root_initial_assignment_capacity<'a>(
             .ok_or(InitialPlacementPolicyError::CountOverflow {
                 subject: "root Component",
             })?;
-        for member in &deployment.members {
-            let initial_cycles = config
-                .component_specs
-                .get(&member.component_spec)
-                .map(|component| component.initial_cycles.clone())
-                .ok_or_else(|| {
-                    InitialPlacementPolicyError::Configuration(format!(
-                        "unknown Component Spec '{}' in compiled deployment",
-                        member.component_spec
-                    ))
-                })?;
-            required_asset_cycles = required_asset_cycles.max(initial_cycles);
-        }
         record_member_capacity(root, deployment, &mut component_counts, service_roots)?;
     }
     if component_count > root.limits.maximum_component_instances {
@@ -264,6 +279,39 @@ fn validate_root_initial_assignment_capacity<'a>(
     )?;
     validate_component_admissions(root, component_counts)?;
     Ok(component_count)
+}
+
+fn required_asset_cycles_for_assignments(
+    config: &ConfigModel,
+    root: SubnetId,
+    assignments: &[PlannedComponentGroupPlacementAssignment],
+    deployments: &[ComponentGroupDeploymentSpec],
+) -> Result<Cycles, InitialPlacementPolicyError> {
+    let mut required = Cycles::default();
+    for assignment in assignments {
+        let deployment = deployments
+            .binary_search_by(|candidate| candidate.deployment.cmp(&assignment.deployment))
+            .ok()
+            .map(|index| &deployments[index])
+            .ok_or_else(|| InitialPlacementPolicyError::UnknownDeployment {
+                root,
+                deployment: assignment.deployment.clone(),
+            })?;
+        for member in &deployment.members {
+            let initial_cycles = config
+                .component_specs
+                .get(&member.component_spec)
+                .map(|component| component.initial_cycles.clone())
+                .ok_or_else(|| {
+                    InitialPlacementPolicyError::Configuration(format!(
+                        "unknown Component Spec '{}' in compiled deployment",
+                        member.component_spec
+                    ))
+                })?;
+            required = required.max(initial_cycles);
+        }
+    }
+    Ok(required)
 }
 
 fn record_member_capacity(

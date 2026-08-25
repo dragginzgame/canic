@@ -8,8 +8,8 @@ use crate::{
     install_root::fleet_component_provisioning_journal::FleetComponentProvisioningTerminalEvidence,
     install_root::fleet_install_session::{
         CloseFleetInstallSessionRequest, FleetInstallSessionError, PlanFleetInstallSessionRequest,
-        close_fleet_install_session, plan_fleet_install_session,
-        recover_fleet_install_session_authority, session_path,
+        close_fleet_install_session, inspect_incomplete_fleet_install_session,
+        plan_fleet_install_session, recover_fleet_install_session_authority, session_path,
     },
     release_build::{finalize_release_build_from_manifest, plan_release_build},
     test_support::temp_dir,
@@ -64,6 +64,13 @@ fn exact_retry_recovers_one_immutable_fleet_and_operation_identity() {
     let path = session_path(&root, CanonicalNetworkId::ic_mainnet(), &first.fleet_name);
     let bytes = fs::read(&path).expect("read session");
     assert_eq!(bytes.last(), Some(&b'\n'));
+    let summary = inspect_incomplete_fleet_install_session(&root, network, &first.fleet_name)
+        .expect("inspect immutable session without current config")
+        .expect("incomplete session summary");
+    assert_eq!(summary.app, first.fleet.app);
+    assert_eq!(summary.release_build_id, first.release_build_id);
+    assert_eq!(summary.fresh_fleet_plan_digest, PLAN_DIGEST);
+    assert_eq!(summary.operation_id, first.operation_id);
 }
 
 #[test]
@@ -223,6 +230,11 @@ fn assert_terminal_journal_closes_session(path: &str, sequence: u64) {
 
     close_fleet_install_session(close()).expect("close session");
     close_fleet_install_session(close()).expect("idempotently close session");
+    assert!(
+        inspect_incomplete_fleet_install_session(&root, network, &session.fleet_name)
+            .expect("inspect completed session")
+            .is_none()
+    );
     assert!(matches!(
         close_fleet_install_session(CloseFleetInstallSessionRequest {
             component_journal: &FleetComponentProvisioningTerminalEvidence {

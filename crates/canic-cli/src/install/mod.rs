@@ -94,7 +94,7 @@ impl InstallOptions {
         I: IntoIterator<Item = OsString>,
     {
         let matches = parse_matches(install_command(), args)
-            .map_err(|_| InstallCommandError::Usage(usage()))?;
+            .map_err(|error| InstallCommandError::Usage(format!("{error}\n{}", usage())))?;
         Ok(Self {
             app: required_string(&matches, "app"),
             fleet: required_string(&matches, "fleet"),
@@ -194,10 +194,10 @@ fn install_command() -> ClapCommand {
         .arg(
             value_arg(RETAINED_ROOT_REPAIR_ARG)
                 .long(RETAINED_ROOT_REPAIR_ARG)
-                .value_name("ROOT=RAW_WASM")
+                .value_name("ROOT,POOL=LIVE_WASM,SUCCESSOR_WASM")
                 .num_args(1)
                 .value_parser(clap::value_parser!(RetainedRootRepairAdoption))
-                .help("Adopt one exact already-applied state-preserving Root repair"),
+                .help("Execute or adopt one exact retained Root and pool-asset repair"),
         )
         .arg(internal_icp_arg())
         .arg(internal_environment_arg())

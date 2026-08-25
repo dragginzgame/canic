@@ -197,17 +197,22 @@ while validation's `make fmt-check` catches bypassed hooks. Any failed target
 leaves the version unchanged. The underlying bump script rejects direct
 invocation without the private validation marker supplied by those targets.
 The root `Cargo.toml` is the sole live workspace package-version authority;
-status and planning documents must not duplicate a version whose release-only
-commit they cannot update. Current and committed version queries must use the
-shared pinned `cargo-get` reader; release scripts must not maintain parallel
-manifest parsers. The cheap current-document semantics gate rejects volatile
-"latest published" and manual release-truth prose in current status and
-detailed changelogs so a version-only release commit cannot make those
-documents false. After staging, `make release-commit` runs the fast
+ordinary status and planning prose must not act as a parallel package-version
+source. Current and committed version queries must use the shared pinned
+`cargo-get` reader; release scripts must not maintain parallel manifest
+parsers. The governed bump is the one exception: after validating one exact
+clean source commit, it seals the matching detailed changelog draft with the
+release date and writes that source commit into one machine-checked current-
+status release marker. The release commit may then differ from the validated
+source only in the enumerated version, lock, installer, changelog and status
+surfaces. The cheap current-document semantics gate still rejects volatile
+"latest published" and manual release-truth prose elsewhere. After staging,
+`make release-commit` runs the fast
 post-bump `make release-candidate` guard before committing or tagging. That
-guard verifies locked offline Cargo metadata, uniform workspace package
-versions and the installed-CLI default without repeating the already completed
-full source validation.
+guard verifies the sealed changelog and source marker, rejects every
+non-release change after the validated source, and checks locked offline Cargo
+metadata, uniform workspace package versions and the installed-CLI default
+without repeating the already completed full source validation.
 
 The test target allocates one private repository-owned
 `.tmp/test-runtime.<suffix>` directory. It clears only that scratch on success,
@@ -249,6 +254,11 @@ For one-shot releases, humans may run `make release-patch`,
 order.
 Minor and major release bumps require interactive command-line confirmation
 before running `make validate`.
+
+Publishing first re-runs the release-candidate guard, then verifies that every
+crate in the governed publish order exposes the same workspace version before
+declaring the package set available. A successful subset or library/CLI split
+is never reported as a complete Canic release.
 
 Tags are immutable.
 

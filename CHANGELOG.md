@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.7` completes the retained Root and pool-asset repair as one
+  authority-bound, exactly reconciled and interruption-safe operation; keeps
+  its protected Component Registry proof non-mutating across live provisioning
+  progress; makes Medic, Cargo and named-environment artifact diagnostics
+  actionable; hardens release completeness checks; and advances the maintained
+  composed-framework qualification fixture to exact published IcyDB 0.240.1.
 - `0.109.6` authorizes one already-applied state-preserving Root repair through
   an immutable session, journal, controller, Candid and artifact-hash receipt;
   replaces product-version recovery allowlists with two bounded typed plan

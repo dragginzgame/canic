@@ -88,6 +88,9 @@ pub use fleet_install_recovery::{
     FreshFleetInstallRecoveryPlanV1, InspectFreshFleetInstallRecoveryRequest,
     RetainedInstallPlanContractV1, inspect_fresh_fleet_install_recovery,
 };
+pub use fleet_install_session::{
+    RetainedFleetInstallSessionSummaryV1, inspect_incomplete_fleet_install_session,
+};
 use fleet_registry_activation::{ActivateFleetRegistryRequest, activate_and_verify_fleet_registry};
 use fleet_registry_activation_journal::load_verified_installed_registry;
 use fleet_subnet_root_component_registry_preparation::{

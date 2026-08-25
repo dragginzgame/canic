@@ -169,6 +169,15 @@ done
 require_texts "$STATUS" "$GUARD_LABEL" \
     "## Current Decision" \
     "## Next Action"
+if ! rg -F \
+    "Release governance: source development state; no validated release candidate is staged." \
+    "$STATUS" >/dev/null \
+    && ! rg -q \
+        '^Release validation: `[0-9]+\.[0-9]+\.[0-9]+` was validated from source `[0-9a-f]{40}` on `[0-9]{4}-[0-9]{2}-[0-9]{2}`; the release commit may differ only in governed release surfaces\.$' \
+        "$STATUS"; then
+    echo "current status omits its governed development or release-validation marker" >&2
+    exit 1
+fi
 require_texts "$COMPLEXITY_AUDIT" "$GUARD_LABEL" \
     "closeout_verdict: fail" \
     "CANIC-109-GOLIVE-001" \

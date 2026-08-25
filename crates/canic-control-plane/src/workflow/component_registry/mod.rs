@@ -573,11 +573,10 @@ pub async fn prepare(
 ) -> Result<RootComponentRegistryStatusResponse, InternalError> {
     let (authority, root) = root_authority()?;
     root_store::status(request.store_bootstrap.clone()).await?;
-    if ComponentRegistryOps::current().is_some() {
-        validate_current_mirror_authority(&authority, root, &request)?;
-    } else {
-        validate_preparation_authority(&authority, root, &request)?;
+    if let Some(prepared) = ComponentRegistryOps::current() {
+        return prepared_status(&authority, root, &request, &prepared);
     }
+    validate_preparation_authority(&authority, root, &request)?;
 
     let prepared = ComponentRegistryOps::prepare(
         authority.binding,
@@ -594,19 +593,27 @@ pub async fn status(
 ) -> Result<RootComponentRegistryStatusResponse, InternalError> {
     let (authority, root) = root_authority()?;
     root_store::status(request.store_bootstrap.clone()).await?;
-    validate_current_mirror_authority(&authority, root, &request)?;
-
     let prepared = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
+    prepared_status(&authority, root, &request, &prepared)
+}
+
+fn prepared_status(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    root: candid::Principal,
+    request: &RootComponentRegistryPreparationRequest,
+    prepared: &RootComponentRegistryView,
+) -> Result<RootComponentRegistryStatusResponse, InternalError> {
+    validate_current_mirror_authority(authority, root, request)?;
     let expected = ComponentRegistryPreparationAuthority::new(
         &authority.binding,
         &request.expected_fleet_registry,
         authority.initial_release_set,
         &request.store_bootstrap,
     );
-    if ComponentRegistryPreparationAuthority::from_registry(&prepared) != expected {
+    if ComponentRegistryPreparationAuthority::from_registry(prepared) != expected {
         return Err(InternalError::conflict());
     }
-    response(root, &prepared)
+    response(root, prepared)
 }
 
 /// Durably reserve one admitted top-level Component identity and root-local capacity.

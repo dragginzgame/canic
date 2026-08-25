@@ -327,6 +327,10 @@ pub enum RoleContractFinding {
     CargoCatalogDrift {
         reason: String,
     },
+    CargoEvidenceUnavailable {
+        phase: String,
+        cause: String,
+    },
     DependencyShapeUnsupported {
         reason: String,
     },
@@ -376,6 +380,7 @@ impl RoleContractFinding {
             Self::BuiltInPackageUnavailable { .. } => "role_contract_builtin_package_unavailable",
             Self::CanicVersionMismatch { .. } => "role_contract_canic_version_mismatch",
             Self::CargoCatalogDrift { .. } => "role_contract_cargo_catalog_drift",
+            Self::CargoEvidenceUnavailable { .. } => "role_contract_cargo_evidence_unavailable",
             Self::CatalogInvalid { .. } => "role_contract_catalog_invalid",
             Self::DependencyShapeUnsupported { .. } => "role_contract_dependency_shape_unsupported",
             Self::MemoryIdCollision { .. } => "role_contract_memory_id_collision",

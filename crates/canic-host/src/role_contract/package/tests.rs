@@ -83,15 +83,24 @@ fn isolated_supported_role_workspace_is_accepted() {
 #[test]
 fn isolated_renamed_canic_workspace_is_rejected() {
     let fixture = FixtureWorkspace::materialize("renamed_canic");
+    let validation = validate_test_role_package(
+        &fixture.root.join("canic.toml"),
+        &CanisterRole::owned("app".to_string()),
+        PackageValidationMode::Build,
+    );
 
-    assert!(matches!(
-        validate_test_role_package(
-            &fixture.root.join("canic.toml"),
-            &CanisterRole::owned("app".to_string()),
-            PackageValidationMode::Build,
-        ),
-        RolePackageValidation::Unsupported(RoleContractFinding::DependencyShapeUnsupported { .. })
-    ));
+    let RolePackageValidation::Unsupported(RoleContractFinding::CargoEvidenceUnavailable {
+        phase,
+        cause,
+    }) = validation
+    else {
+        panic!("renamed duplicate must preserve its Cargo failure, got {validation:?}");
+    };
+    assert_eq!(phase, "wasm_filtered_metadata");
+    assert!(cause.contains("depends on crate `canic"));
+    assert!(cause.contains("multiple times with different names"));
+    assert!(!cause.contains(&fixture.root.display().to_string()));
+    assert!(!cause.contains(env!("CARGO_MANIFEST_DIR")));
 }
 
 #[test]
@@ -149,6 +158,35 @@ fn role_contract_rejection_does_not_expose_local_or_source_data() {
     assert!(!reason.contains(&fixture.root.display().to_string()));
     assert!(!reason.contains(secret_like_value));
     assert_eq!(reason, "invalid role configuration");
+}
+
+#[test]
+fn cargo_evidence_failure_preserves_phase_and_bounded_sanitized_cause() {
+    let fixture = FixtureWorkspace::materialize("supported");
+    let secret_like_value = "cargo-evidence-secret-value";
+    fixture.rewrite(
+        "role/Cargo.toml",
+        "[package]",
+        &format!("[package\nname = \"{secret_like_value}"),
+    );
+
+    let RolePackageValidation::Unsupported(RoleContractFinding::CargoEvidenceUnavailable {
+        phase,
+        cause,
+    }) = validate_test_role_package(
+        &fixture.root.join("canic.toml"),
+        &CanisterRole::owned("app".to_string()),
+        PackageValidationMode::Build,
+    )
+    else {
+        panic!("Cargo evidence failure must retain its typed phase");
+    };
+
+    assert_eq!(phase, "wasm_filtered_metadata");
+    assert!(cause.contains("cargo metadata failed"));
+    assert!(!cause.contains(&fixture.root.display().to_string()));
+    assert!(!cause.contains(secret_like_value));
+    assert!(cause.chars().count() <= 768);
 }
 
 #[test]

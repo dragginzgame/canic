@@ -1,14 +1,20 @@
 //! Module: install_root::fleet_subnet_root_repair
 //!
-//! Responsibility: own one immutable authority for adopting an already-applied, state-preserving
-//! Root repair while a retained fresh-install session is still incomplete.
-//! Does not own: the original install journal, Root upgrade execution, general managed upgrades,
-//! or product-version compatibility.
+//! Responsibility: own one immutable authority for executing or adopting a state-preserving Root
+//! repair while a retained fresh-install session is still incomplete.
+//! Does not own: the original install journal, general managed upgrades, or product-version
+//! compatibility.
 //! Boundary: compatibility is admitted only by bounded typed schemas, exact retained authority,
 //! exact predecessor/successor artifact hashes, Candid equality, and one terminal repair receipt.
 
+mod procedure;
 #[cfg(test)]
 mod tests;
+
+pub(super) use procedure::{
+    execute_retained_root_repair, reconcile_published_retained_root_repair,
+    record_retained_root_repair_adopted,
+};
 
 use super::{
     fleet_install_session::FleetInstallSession,
@@ -42,6 +48,9 @@ const SUPPORTED_SESSION_SCHEMA_VERSIONS: &[u32] = &[1];
 const SUPPORTED_ROOT_JOURNAL_SCHEMA_VERSIONS: &[u32] = &[1];
 const MAX_REPAIR_RECEIPT_BYTES: usize = 16_384;
 const MAX_REPAIR_WASM_BYTES: usize = 64 * 1024 * 1024;
+const MAX_CANDID_DIAGNOSTIC_CHARS: usize = 768;
+const RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES: u128 = 100_000_000;
+const RETAINED_ROOT_REPAIR_TOP_UP_MARGIN_CYCLES: u128 = 100_000_000;
 
 /// The only repair semantics this exceptional fresh-install authority can attest.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -69,14 +78,21 @@ pub(super) struct RetainedRootRepairReceiptV1 {
     pub authority: FleetRegistryAuthority,
     pub placement_subnet: SubnetId,
     pub fleet_subnet_root: Principal,
+    pub pool_canister: Principal,
     pub installation_controller: Principal,
     pub retained_journal_phase: FleetSubnetRootInstallPhase,
     pub retained_journal_sequence: u64,
-    pub predecessor_module_sha256: [u8; 32],
+    pub retained_journal_module_sha256: [u8; 32],
+    pub upgrade_predecessor_module_sha256: [u8; 32],
+    pub upgrade_predecessor_wasm_size_bytes: u64,
     pub successor_module_sha256: [u8; 32],
     pub successor_wasm_size_bytes: u64,
-    pub predecessor_candid_sha256: [u8; 32],
+    pub retained_journal_candid_sha256: [u8; 32],
+    pub upgrade_predecessor_candid_sha256: [u8; 32],
     pub successor_candid_sha256: [u8; 32],
+    pub required_pool_cycles: u128,
+    pub top_up_fee_cycles: u128,
+    pub top_up_margin_cycles: u128,
 }
 
 #[derive(Serialize)]
@@ -93,14 +109,53 @@ struct RetainedRootRepairOperationAuthority<'a> {
     authority: &'a FleetRegistryAuthority,
     placement_subnet: SubnetId,
     fleet_subnet_root: Principal,
+    pool_canister: Principal,
     installation_controller: Principal,
     retained_journal_phase: FleetSubnetRootInstallPhase,
     retained_journal_sequence: u64,
-    predecessor_module_sha256: [u8; 32],
+    retained_journal_module_sha256: [u8; 32],
+    upgrade_predecessor_module_sha256: [u8; 32],
+    upgrade_predecessor_wasm_size_bytes: u64,
     successor_module_sha256: [u8; 32],
     successor_wasm_size_bytes: u64,
-    predecessor_candid_sha256: [u8; 32],
+    retained_journal_candid_sha256: [u8; 32],
+    upgrade_predecessor_candid_sha256: [u8; 32],
     successor_candid_sha256: [u8; 32],
+    required_pool_cycles: u128,
+    top_up_fee_cycles: u128,
+    top_up_margin_cycles: u128,
+}
+
+struct InspectedRepairWasm {
+    bytes: Vec<u8>,
+    candid_sha256: [u8; 32],
+}
+
+#[derive(Clone, Copy)]
+struct RetainedRootRepairTransition {
+    pool_canister: Principal,
+    upgrade_predecessor_module_sha256: [u8; 32],
+    upgrade_predecessor_wasm_size_bytes: u64,
+    upgrade_predecessor_candid_sha256: [u8; 32],
+    successor_module_sha256: [u8; 32],
+    successor_wasm_size_bytes: u64,
+    successor_candid_sha256: [u8; 32],
+    required_pool_cycles: u128,
+}
+
+impl RetainedRootRepairTransition {
+    const fn from_receipt(receipt: &RetainedRootRepairReceiptV1) -> Self {
+        Self {
+            pool_canister: receipt.pool_canister,
+            upgrade_predecessor_module_sha256: receipt.upgrade_predecessor_module_sha256,
+            upgrade_predecessor_wasm_size_bytes: receipt.upgrade_predecessor_wasm_size_bytes,
+            upgrade_predecessor_candid_sha256: receipt.upgrade_predecessor_candid_sha256,
+            successor_module_sha256: receipt.successor_module_sha256,
+            successor_wasm_size_bytes: receipt.successor_wasm_size_bytes,
+            successor_candid_sha256: receipt.successor_candid_sha256,
+            required_pool_cycles: receipt.required_pool_cycles,
+        }
+    }
 }
 
 impl RetainedRootRepairReceiptV1 {
@@ -138,10 +193,10 @@ pub(super) enum RetainedRootRepairError {
     #[error("retained Root repair artifact changed while its Candid was inspected: {path}")]
     ArtifactChanged { path: PathBuf },
 
-    #[error("retained Root repair has incompatible Candid; exact predecessor Candid is required")]
-    CandidMismatch,
+    #[error("retained Root repair has incompatible Candid: {0}")]
+    CandidMismatch(String),
 
-    #[error("retained Root repair successor artifact equals the original journal artifact")]
+    #[error("retained Root repair successor artifact does not advance the exact live Root")]
     NotARepair,
 
     #[error("retained Root repair may be adopted only at component_registry_preparation_verified")]
@@ -149,6 +204,9 @@ pub(super) enum RetainedRootRepairError {
 
     #[error("retained Root repair request names a Root outside the retained install plan")]
     RootNotFound,
+
+    #[error("retained Root repair requires one nonzero initial Component pool-cycle target")]
+    MissingPoolRequirement,
 
     #[error("retained Root repair receipt already has different immutable authority: {path}")]
     ConflictingAuthority { path: PathBuf },
@@ -178,13 +236,25 @@ pub(super) fn resolve_retained_root_repair(
     current: &ResolvedFleetSubnetRootInstall,
     session: &FleetInstallSession,
     adoption: Option<&RetainedRootRepairAdoption>,
+    required_pool_cycles: Option<u128>,
 ) -> Result<Option<ResolvedRetainedRootRepair>, RetainedRootRepairError> {
     let path = repair_receipt_path(&current.path);
     let retained = load_optional_receipt(&path)?;
     if let Some(receipt) = retained {
-        validate_receipt(&path, &receipt, session, &current.journal)?;
+        validate_receipt(
+            &path,
+            &receipt,
+            session,
+            &current.journal,
+            required_pool_cycles,
+        )?;
         if let Some(adoption) = adoption {
-            let requested = compile_adoption(session, &current.journal, adoption)?;
+            let requested = compile_adoption(
+                session,
+                &current.journal,
+                adoption,
+                required_pool_cycles.ok_or(RetainedRootRepairError::MissingPoolRequirement)?,
+            )?;
             if requested != receipt {
                 return Err(RetainedRootRepairError::ConflictingAuthority { path });
             }
@@ -198,7 +268,12 @@ pub(super) fn resolve_retained_root_repair(
     let Some(adoption) = adoption else {
         return Ok(None);
     };
-    let receipt = compile_adoption(session, &current.journal, adoption)?;
+    let receipt = compile_adoption(
+        session,
+        &current.journal,
+        adoption,
+        required_pool_cycles.ok_or(RetainedRootRepairError::MissingPoolRequirement)?,
+    )?;
     Ok(Some(ResolvedRetainedRootRepair {
         receipt,
         needs_publication: true,
@@ -215,7 +290,7 @@ pub(super) fn publish_retained_root_repair(
     if !resolved.needs_publication {
         return Ok(());
     }
-    validate_receipt(&resolved.path, &resolved.receipt, session, journal)?;
+    validate_receipt(&resolved.path, &resolved.receipt, session, journal, None)?;
     let bytes = encode_receipt(&resolved.path, &resolved.receipt)?;
     let _lock = lock_receipt(&resolved.path)?;
     match create_new_bytes_with_parents(&resolved.path, &bytes) {
@@ -256,6 +331,7 @@ fn compile_adoption(
     session: &FleetInstallSession,
     journal: &FleetSubnetRootInstallJournal,
     adoption: &RetainedRootRepairAdoption,
+    required_pool_cycles: u128,
 ) -> Result<RetainedRootRepairReceiptV1, RetainedRootRepairError> {
     if journal.phase != FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified {
         return Err(RetainedRootRepairError::InvalidPhase);
@@ -266,29 +342,52 @@ fn compile_adoption(
     if fleet_subnet_root != adoption.fleet_subnet_root {
         return Err(RetainedRootRepairError::RootNotFound);
     }
+    if required_pool_cycles == 0 {
+        return Err(RetainedRootRepairError::MissingPoolRequirement);
+    }
     let installation_controller = journal
         .installation_controller
         .ok_or(RetainedRootRepairError::RootNotFound)?;
-    let (successor_bytes, successor_candid_sha256) = inspect_successor_wasm(
-        &adoption.successor_wasm,
-        journal.root_artifact.candid_sha256,
-    )?;
-    let successor_module_sha256: [u8; 32] = Sha256::digest(&successor_bytes).into();
-    if successor_module_sha256 == journal.expected_root_module_hash {
+    let upgrade_predecessor = inspect_wasm(&adoption.live_predecessor_wasm)?;
+    if upgrade_predecessor.candid_sha256 != journal.root_artifact.candid_sha256 {
+        return Err(RetainedRootRepairError::CandidMismatch(
+            "the exact live predecessor does not match the retained journal Candid".to_string(),
+        ));
+    }
+    let upgrade_predecessor_module_sha256: [u8; 32] =
+        Sha256::digest(&upgrade_predecessor.bytes).into();
+    let upgrade_predecessor_wasm_size_bytes = u64::try_from(upgrade_predecessor.bytes.len())
+        .map_err(|_| RetainedRootRepairError::ArtifactTooLarge {
+            path: adoption.live_predecessor_wasm.clone(),
+        })?;
+    let successor = inspect_wasm(&adoption.successor_wasm)?;
+    if successor.candid_sha256 != journal.root_artifact.candid_sha256 {
+        return Err(RetainedRootRepairError::CandidMismatch(
+            "the successor does not preserve the retained Root Candid exactly".to_string(),
+        ));
+    }
+    let successor_module_sha256: [u8; 32] = Sha256::digest(&successor.bytes).into();
+    if successor_module_sha256 == upgrade_predecessor_module_sha256
+        || successor_module_sha256 == journal.expected_root_module_hash
+    {
         return Err(RetainedRootRepairError::NotARepair);
     }
-    let successor_wasm_size_bytes = u64::try_from(successor_bytes.len()).map_err(|_| {
+    let successor_wasm_size_bytes = u64::try_from(successor.bytes.len()).map_err(|_| {
         RetainedRootRepairError::ArtifactTooLarge {
             path: adoption.successor_wasm.clone(),
         }
     })?;
-    let repair_operation_id = repair_operation_id(
-        session,
-        journal,
+    let transition = RetainedRootRepairTransition {
+        pool_canister: adoption.pool_canister,
+        upgrade_predecessor_module_sha256,
+        upgrade_predecessor_wasm_size_bytes,
+        upgrade_predecessor_candid_sha256: upgrade_predecessor.candid_sha256,
         successor_module_sha256,
         successor_wasm_size_bytes,
-        successor_candid_sha256,
-    )?;
+        successor_candid_sha256: successor.candid_sha256,
+        required_pool_cycles,
+    };
+    let repair_operation_id = repair_operation_id(session, journal, &transition)?;
     let receipt = RetainedRootRepairReceiptV1 {
         schema_version: REPAIR_RECEIPT_SCHEMA_VERSION,
         repair_operation_id,
@@ -305,37 +404,47 @@ fn compile_adoption(
         authority: journal.authority.clone(),
         placement_subnet: journal.root_plan.placement_subnet,
         fleet_subnet_root,
+        pool_canister: transition.pool_canister,
         installation_controller,
         retained_journal_phase: journal.phase,
         retained_journal_sequence: journal.sequence,
-        predecessor_module_sha256: journal.expected_root_module_hash,
+        retained_journal_module_sha256: journal.expected_root_module_hash,
+        upgrade_predecessor_module_sha256,
+        upgrade_predecessor_wasm_size_bytes,
         successor_module_sha256,
         successor_wasm_size_bytes,
-        predecessor_candid_sha256: journal.root_artifact.candid_sha256,
-        successor_candid_sha256,
+        retained_journal_candid_sha256: journal.root_artifact.candid_sha256,
+        upgrade_predecessor_candid_sha256: transition.upgrade_predecessor_candid_sha256,
+        successor_candid_sha256: transition.successor_candid_sha256,
+        required_pool_cycles,
+        top_up_fee_cycles: RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES,
+        top_up_margin_cycles: RETAINED_ROOT_REPAIR_TOP_UP_MARGIN_CYCLES,
     };
-    validate_receipt(Path::new(REPAIR_RECEIPT_FILE), &receipt, session, journal)?;
+    validate_receipt(
+        Path::new(REPAIR_RECEIPT_FILE),
+        &receipt,
+        session,
+        journal,
+        Some(required_pool_cycles),
+    )?;
     Ok(receipt)
 }
 
-fn inspect_successor_wasm(
-    path: &Path,
-    expected_candid_sha256: [u8; 32],
-) -> Result<(Vec<u8>, [u8; 32]), RetainedRootRepairError> {
+fn inspect_wasm(path: &Path) -> Result<InspectedRepairWasm, RetainedRootRepairError> {
     let before = read_bounded_artifact(path)?;
     let candid = extract_candid_bytes(path)
-        .map_err(|error| RetainedRootRepairError::CandidInspection(error.to_string()))?;
+        .map_err(|error| RetainedRootRepairError::CandidInspection(bounded_diagnostic(error)))?;
     let after = read_bounded_artifact(path)?;
     if before != after {
         return Err(RetainedRootRepairError::ArtifactChanged {
             path: path.to_path_buf(),
         });
     }
-    let candid_sha256: [u8; 32] = Sha256::digest(candid).into();
-    if candid_sha256 != expected_candid_sha256 {
-        return Err(RetainedRootRepairError::CandidMismatch);
-    }
-    Ok((after, candid_sha256))
+    let candid_sha256: [u8; 32] = Sha256::digest(&candid).into();
+    Ok(InspectedRepairWasm {
+        bytes: after,
+        candid_sha256,
+    })
 }
 
 fn read_bounded_artifact(path: &Path) -> Result<Vec<u8>, RetainedRootRepairError> {
@@ -378,6 +487,7 @@ fn validate_receipt(
     receipt: &RetainedRootRepairReceiptV1,
     session: &FleetInstallSession,
     journal: &FleetSubnetRootInstallJournal,
+    expected_required_pool_cycles: Option<u128>,
 ) -> Result<(), RetainedRootRepairError> {
     if receipt.schema_version != REPAIR_RECEIPT_SCHEMA_VERSION {
         return Err(invalid(
@@ -405,9 +515,7 @@ fn validate_receipt(
     let expected_operation_id = repair_operation_id(
         session,
         journal,
-        receipt.successor_module_sha256,
-        receipt.successor_wasm_size_bytes,
-        receipt.successor_candid_sha256,
+        &RetainedRootRepairTransition::from_receipt(receipt),
     )?;
     let exact_authority = [
         receipt_matches_session(receipt, session),
@@ -418,7 +526,7 @@ fn validate_receipt(
             fleet_subnet_root,
             installation_controller,
         ),
-        receipt_has_exact_artifact_transition(receipt, journal),
+        receipt_has_exact_artifact_transition(receipt, journal, expected_required_pool_cycles),
         receipt.repair_operation_id == expected_operation_id,
     ]
     .into_iter()
@@ -466,6 +574,8 @@ fn receipt_matches_root_journal(
         receipt.placement_subnet == journal.root_plan.placement_subnet,
         receipt.fleet_subnet_root == fleet_subnet_root,
         receipt.installation_controller == installation_controller,
+        receipt.pool_canister != Principal::anonymous(),
+        receipt.pool_canister != fleet_subnet_root,
         receipt.retained_journal_phase == journal.phase,
         receipt.retained_journal_sequence == journal.sequence,
     ]
@@ -476,14 +586,24 @@ fn receipt_matches_root_journal(
 fn receipt_has_exact_artifact_transition(
     receipt: &RetainedRootRepairReceiptV1,
     journal: &FleetSubnetRootInstallJournal,
+    expected_required_pool_cycles: Option<u128>,
 ) -> bool {
     [
-        receipt.predecessor_module_sha256 == journal.expected_root_module_hash,
-        receipt.predecessor_candid_sha256 == journal.root_artifact.candid_sha256,
-        receipt.successor_candid_sha256 == journal.root_artifact.candid_sha256,
+        receipt.retained_journal_module_sha256 == journal.expected_root_module_hash,
+        receipt.retained_journal_candid_sha256 == journal.root_artifact.candid_sha256,
+        receipt.upgrade_predecessor_candid_sha256 == journal.root_artifact.candid_sha256,
+        receipt.successor_candid_sha256 != [0; 32],
+        receipt.upgrade_predecessor_wasm_size_bytes > 0,
+        receipt.upgrade_predecessor_wasm_size_bytes <= MAX_REPAIR_WASM_BYTES as u64,
+        receipt.successor_module_sha256 != receipt.upgrade_predecessor_module_sha256,
         receipt.successor_module_sha256 != journal.expected_root_module_hash,
         receipt.successor_wasm_size_bytes > 0,
         receipt.successor_wasm_size_bytes <= MAX_REPAIR_WASM_BYTES as u64,
+        receipt.required_pool_cycles > 0,
+        expected_required_pool_cycles
+            .is_none_or(|expected| expected == receipt.required_pool_cycles),
+        receipt.top_up_fee_cycles == RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES,
+        receipt.top_up_margin_cycles == RETAINED_ROOT_REPAIR_TOP_UP_MARGIN_CYCLES,
     ]
     .into_iter()
     .all(std::convert::identity)
@@ -492,9 +612,7 @@ fn receipt_has_exact_artifact_transition(
 fn repair_operation_id(
     session: &FleetInstallSession,
     journal: &FleetSubnetRootInstallJournal,
-    successor_module_sha256: [u8; 32],
-    successor_wasm_size_bytes: u64,
-    successor_candid_sha256: [u8; 32],
+    transition: &RetainedRootRepairTransition,
 ) -> Result<[u8; 32], RetainedRootRepairError> {
     let fleet_subnet_root = journal
         .fleet_subnet_root
@@ -515,14 +633,21 @@ fn repair_operation_id(
         authority: &journal.authority,
         placement_subnet: journal.root_plan.placement_subnet,
         fleet_subnet_root,
+        pool_canister: transition.pool_canister,
         installation_controller,
         retained_journal_phase: journal.phase,
         retained_journal_sequence: journal.sequence,
-        predecessor_module_sha256: journal.expected_root_module_hash,
-        successor_module_sha256,
-        successor_wasm_size_bytes,
-        predecessor_candid_sha256: journal.root_artifact.candid_sha256,
-        successor_candid_sha256,
+        retained_journal_module_sha256: journal.expected_root_module_hash,
+        upgrade_predecessor_module_sha256: transition.upgrade_predecessor_module_sha256,
+        upgrade_predecessor_wasm_size_bytes: transition.upgrade_predecessor_wasm_size_bytes,
+        successor_module_sha256: transition.successor_module_sha256,
+        successor_wasm_size_bytes: transition.successor_wasm_size_bytes,
+        retained_journal_candid_sha256: journal.root_artifact.candid_sha256,
+        upgrade_predecessor_candid_sha256: transition.upgrade_predecessor_candid_sha256,
+        successor_candid_sha256: transition.successor_candid_sha256,
+        required_pool_cycles: transition.required_pool_cycles,
+        top_up_fee_cycles: RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES,
+        top_up_margin_cycles: RETAINED_ROOT_REPAIR_TOP_UP_MARGIN_CYCLES,
     };
     let mut hasher = Sha256::new();
     hasher.update(b"canic.retained-root-repair.v1\0");
@@ -626,4 +751,17 @@ fn invalid(path: &Path, reason: impl Into<String>) -> RetainedRootRepairError {
         path: path.to_path_buf(),
         reason: reason.into(),
     }
+}
+
+fn bounded_diagnostic(error: impl std::fmt::Display) -> String {
+    let message = error.to_string();
+    if message.chars().count() <= MAX_CANDID_DIAGNOSTIC_CHARS {
+        return message;
+    }
+    let mut bounded = message
+        .chars()
+        .take(MAX_CANDID_DIAGNOSTIC_CHARS.saturating_sub(3))
+        .collect::<String>();
+    bounded.push_str("...");
+    bounded
 }
