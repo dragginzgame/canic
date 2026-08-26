@@ -32,10 +32,16 @@ CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target
 CARGO_TARGET_DIR ?= $(CANIC_CARGO_TARGET_DIR)
 export CARGO_TARGET_DIR
 SCCACHE_BIN ?= $(shell command -v sccache 2>/dev/null)
+ifeq ($(origin RUSTC_WRAPPER), undefined)
 ifneq ($(strip $(SCCACHE_BIN)),)
 RUSTC_WRAPPER ?= $(SCCACHE_BIN)
-export RUSTC_WRAPPER
 endif
+endif
+ifneq ($(filter sccache,$(notdir $(RUSTC_WRAPPER))),)
+CARGO_INCREMENTAL ?= 0
+export CARGO_INCREMENTAL
+endif
+export RUSTC_WRAPPER
 VALIDATION_RUNNER := bash scripts/ci/run-validation-targets.sh
 
 # Check for clean git state
@@ -135,10 +141,12 @@ update-dev:
 		"cargo-tarpaulin@$(CANIC_CARGO_TARPAULIN_VERSION)" \
 		"cargo-sort-derives@$(CANIC_CARGO_SORT_DERIVES_VERSION)" \
 		"candid-extractor@$(CANIC_CANDID_EXTRACTOR_VERSION)" \
+		"sccache@$(CANIC_SCCACHE_VERSION)" \
 		--locked
 	bash scripts/dev/install_dev.sh --ensure-ripgrep
 	"$(CARGO_INSTALL_BIN_DIR)/rg" --version
 	"$(CARGO_INSTALL_BIN_DIR)/rg" --pcre2-version
+	"$(CARGO_INSTALL_BIN_DIR)/sccache" --version
 	icp --version
 	ic-wasm --version
 	"$(GITLEAKS_INSTALL_DIR)/gitleaks" version
@@ -261,9 +269,10 @@ test: test-unit
 # PocketIC suite.
 test-wasm: test-unit-fast
 
-# Complete local validation has two sequential barriers. Each barrier collects
-# every independent target failure before returning; expensive compile and test
-# work starts only after the cheap source, policy, and security barrier passes.
+# Complete local validation has three sequential barriers. Each barrier collects
+# every independent target failure before returning. Compile/lint work starts
+# only after cheap source, policy, and security checks pass, and the complete
+# test graph starts only after compile and warning-denied Clippy pass.
 # Primitive development targets retain only the operation named by that target.
 validate:
 	+@$(VALIDATION_RUNNER) \
@@ -275,7 +284,8 @@ validate:
 		control-plane-feature-gate
 	+@$(VALIDATION_RUNNER) \
 		check \
-		clippy \
+		clippy
+	+@$(VALIDATION_RUNNER) \
 		test
 
 check-invariants:
@@ -374,19 +384,19 @@ workspace-test-inventory-gate:
 	bash scripts/ci/check-workspace-test-inventory.sh
 
 test-unit:
-	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
 		bash scripts/ci/run-workspace-tests.sh full
 
 test-ordinary:
-	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
 		bash scripts/ci/run-workspace-tests.sh ordinary
 
 test-pocketic:
-	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
 		bash scripts/ci/run-workspace-tests.sh pocketic
 
 test-unit-fast:
-	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
 		bash scripts/ci/run-workspace-tests.sh fast
 
 test-auth:
@@ -421,7 +431,7 @@ check:
 	$(CARGO_ENV) cargo check --locked --workspace --keep-going
 
 clippy:
-	CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+	$(CARGO_ENV) cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
 fmt:
 	cargo sort --workspace

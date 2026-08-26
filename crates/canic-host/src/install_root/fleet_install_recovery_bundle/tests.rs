@@ -357,6 +357,22 @@ fn checkpoint_captures_all_authority_roots_and_excludes_its_own_storage() {
             .all(|entry| !entry.logical_path.contains("operator-recovery-bundle")),
         "a bundle nested under an admitted source root must not capture itself"
     );
+
+    let active_manifest_path = checkpoint.join(MANIFEST_FILE);
+    let active_manifest = fs::read(&active_manifest_path).expect("read verified active manifest");
+    write_bytes(&root.join(&session_entry.logical_path), b"{}")
+        .expect("write semantically invalid candidate session");
+    assert!(matches!(
+        checkpoint_bundle_at(&root, &session, &persisted, &checkpoint),
+        Err(FleetInstallRecoveryBundleError::InvalidManifest { .. })
+    ));
+    assert_eq!(
+        fs::read(&active_manifest_path).expect("read preserved active manifest"),
+        active_manifest,
+        "a candidate must pass complete semantic verification before replacing the active manifest"
+    );
+    verify_fleet_install_recovery_bundle(&checkpoint)
+        .expect("the previous verified manifest remains active after candidate rejection");
 }
 
 #[test]

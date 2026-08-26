@@ -527,6 +527,24 @@ fn retained_repair_adoption_reaches_component_catalog_completion_and_closes_reco
     assert_unrelated_live_module_rejects(&fixture, &receipt);
     install_qualification_component(&fixture);
     complete_catalog_and_close_recovery(&fixture);
+
+    let fixture = retained_repair_journey_fixture_with_start(RetainedRepairStartingState {
+        pool_cycles: 5_500_000_000_000,
+        live_successor: true,
+        restart_at_reinspection_without_funding: true,
+        expected_funding_attempts: 0,
+    });
+    execute_exact_repair_and_reject_conflicts(&fixture);
+    install_qualification_component(&fixture);
+    complete_catalog_and_close_recovery(&fixture);
+}
+
+#[derive(Clone, Copy)]
+struct RetainedRepairStartingState {
+    pool_cycles: u128,
+    live_successor: bool,
+    restart_at_reinspection_without_funding: bool,
+    expected_funding_attempts: usize,
 }
 
 struct RetainedRepairJourneyFixture {
@@ -546,6 +564,7 @@ struct RetainedRepairJourneyFixture {
     wrong_candid_path: PathBuf,
     successor_module_sha256: [u8; 32],
     recovery_bundle_path: PathBuf,
+    starting_state: RetainedRepairStartingState,
 }
 
 struct RetainedRepairArtifacts {
@@ -559,11 +578,22 @@ struct RetainedRepairArtifacts {
     wrong_candid_path: PathBuf,
 }
 
+fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
+    retained_repair_journey_fixture_with_start(RetainedRepairStartingState {
+        pool_cycles: 4_500_000_000_000,
+        live_successor: false,
+        restart_at_reinspection_without_funding: false,
+        expected_funding_attempts: 1,
+    })
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "the governed fixture binds one complete retained plan, live topology and isolated identity"
 )]
-fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
+fn retained_repair_journey_fixture_with_start(
+    starting_state: RetainedRepairStartingState,
+) -> RetainedRepairJourneyFixture {
     let root = crate::test_support::temp_dir("retained-root-repair-pocketic-completion");
     fs::create_dir_all(&root).expect("create retained-repair qualification root");
     let artifacts = write_live_retained_repair_artifacts(&root);
@@ -579,7 +609,12 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
     let root_subnet = pic
         .get_subnet(fleet_subnet_root)
         .expect("repair Root placement Subnet");
-    let pool_canister = create_undersized_pool_asset(&pic, root_subnet, fleet_subnet_root);
+    let pool_canister = create_pool_asset(
+        &pic,
+        root_subnet,
+        fleet_subnet_root,
+        starting_state.pool_cycles,
+    );
     let wasm_store = pic.create_canister_on_subnet(None, None, root_subnet);
     let successor_module_sha256: [u8; 32] = Sha256::digest(&artifacts.successor_wasm).into();
     let (planned, fleet_install_plan) = crate::install_root::fleet_subnet_root_install_journal::tests::planned_repair_fixture_with_root_artifact(
@@ -635,7 +670,11 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
     let init_bytes = candid::encode_one(init).expect("encode retained repair fixture authority");
     pic.install_canister(
         fleet_subnet_root,
-        artifacts.live_predecessor_wasm.clone(),
+        if starting_state.live_successor {
+            artifacts.successor_wasm.clone()
+        } else {
+            artifacts.live_predecessor_wasm.clone()
+        },
         init_bytes.clone(),
         Some(controller),
     );
@@ -664,7 +703,14 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
         pic.canister_status(fleet_subnet_root, Some(controller))
             .expect("read retained Root status")
             .module_hash,
-        Some(Sha256::digest(&artifacts.live_predecessor_wasm).to_vec())
+        Some(
+            Sha256::digest(if starting_state.live_successor {
+                &artifacts.successor_wasm
+            } else {
+                &artifacts.live_predecessor_wasm
+            })
+            .to_vec()
+        )
     );
 
     RetainedRepairJourneyFixture {
@@ -684,24 +730,26 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
         wrong_candid_path: artifacts.wrong_candid_path,
         successor_module_sha256,
         recovery_bundle_path: crate::test_support::temp_dir("retained-root-repair-pocketic-bundle"),
+        starting_state,
     }
 }
 
-fn create_undersized_pool_asset(
+fn create_pool_asset(
     pic: &PocketIc,
     root_subnet: pocket_ic::common::rest::SubnetId,
     fleet_subnet_root: Principal,
+    cycles: u128,
 ) -> Principal {
     let pool_canister = pic
         .create_canister_with_params(
             None,
             CreateCanisterParams {
-                cycles: Some(4_500_000_000_000),
+                cycles: Some(cycles),
                 settings: None,
                 placement: Some(CreateCanisterPlacement::SubnetId(root_subnet)),
             },
         )
-        .expect("create exact undersized retained pool asset");
+        .expect("create exact retained pool asset");
     pic.set_controllers(pool_canister, None, vec![fleet_subnet_root])
         .expect("retain exact Root-controlled imported pool asset");
     pool_canister
@@ -1596,6 +1644,18 @@ fn execute_exact_repair_and_reject_conflicts(
     recovery_bundle
         .checkpoint()
         .expect("checkpoint published authority before repair effects");
+    if fixture
+        .starting_state
+        .restart_at_reinspection_without_funding
+    {
+        super::procedure::write_reinspection_in_flight_test_operation(&repair)
+            .expect("retain exact zero-funding reinspection intent");
+        recovery_bundle
+            .checkpoint()
+            .expect("checkpoint zero-funding reinspection intent before restart");
+        crate::install_root::verify_fleet_install_recovery_bundle(&fixture.recovery_bundle_path)
+            .expect("verify persisted zero-funding reinspection operation after restart");
+    }
     let operator_before = fixture
         .icp_context
         .cli()
@@ -1684,7 +1744,13 @@ fn execute_exact_repair_and_reject_conflicts(
         super::procedure::test_operation_is_adopted(&repair)
             .expect("read terminal production repair operation")
     );
-    assert_repair_replay_has_no_effect(fixture, &repair, &operation, operator_before);
+    assert_repair_replay_has_no_effect(
+        fixture,
+        &repair,
+        &operation,
+        operator_before,
+        fixture.starting_state.expected_funding_attempts,
+    );
 
     let changed = repair_adoption_for_pool(
         fixture.fleet_subnet_root,
@@ -1771,6 +1837,7 @@ fn assert_repair_replay_has_no_effect(
     repair: &ResolvedRetainedRootRepair,
     operation: &super::procedure::RetainedRootRepairOperationV1,
     operator_before: u128,
+    expected_funding_attempts: usize,
 ) {
     let operator_after = fixture
         .icp_context
@@ -1782,12 +1849,17 @@ fn assert_repair_replay_has_no_effect(
     let (funding_attempts, operator_debit_cycles, asset_credit_cycles) = operation
         .test_funding_reconciliation()
         .expect("read exact retained repair funding observations");
-    assert_eq!(funding_attempts, 1);
+    assert_eq!(funding_attempts, expected_funding_attempts);
     assert_eq!(operator_before - operator_after, operator_debit_cycles);
-    assert_eq!(
-        operator_debit_cycles,
-        asset_credit_cycles + RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES
-    );
+    if expected_funding_attempts == 0 {
+        assert_eq!(operator_debit_cycles, 0);
+        assert_eq!(asset_credit_cycles, 0);
+    } else {
+        assert_eq!(
+            operator_debit_cycles,
+            asset_credit_cycles + RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES
+        );
+    }
     reconcile_published_retained_root_repair(repair)
         .expect("terminal receipt replay remains effect-free");
     let asset_after_replay = fixture.pic.cycle_balance(fixture.pool_canister);

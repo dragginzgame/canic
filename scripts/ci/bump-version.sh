@@ -58,6 +58,7 @@ PLANNED_MINOR_LINE="${PLANNED%.*}"
 DETAILED_CHANGELOG="docs/changelog/$PLANNED_MINOR_LINE.md"
 STATUS_DOCUMENT="docs/status/current.md"
 SOURCE_STATUS_MARKER="Release governance: source development state; no validated release candidate is staged."
+SOURCE_LINEAGE_MARKER="Source development: published \`v$PREV\` is the immutable predecessor for open \`$PLANNED\`."
 
 [[ -f "$DETAILED_CHANGELOG" ]] || {
   echo "❌ Missing detailed changelog for planned release $PLANNED: $DETAILED_CHANGELOG" >&2
@@ -77,6 +78,10 @@ SOURCE_STATUS_MARKER="Release governance: source development state; no validated
 }
 [[ "$(rg -c -F "$SOURCE_STATUS_MARKER" "$STATUS_DOCUMENT")" -eq 1 ]] || {
   echo "❌ Current status does not declare the governed source-development state." >&2
+  exit 1
+}
+[[ "$(rg -c -F "$SOURCE_LINEAGE_MARKER" "$STATUS_DOCUMENT")" -eq 1 ]] || {
+  echo "❌ Current status does not bind open $PLANNED to immutable predecessor v$PREV." >&2
   exit 1
 }
 
@@ -140,8 +145,12 @@ sed -i \
   "s/^## $NEW - Unreleased$/## $NEW - $RELEASE_DATE/" \
   "$DETAILED_CHANGELOG"
 VALIDATION_STATUS_MARKER="Release validation: \`$NEW\` was validated from source \`$CURRENT_HEAD\` on \`$RELEASE_DATE\`; the release commit may differ only in governed release surfaces."
+RELEASE_LINEAGE_MARKER="Release lineage: \`$NEW\` follows immutable \`v$PREV\`."
 sed -i \
   "s#^$SOURCE_STATUS_MARKER\$#$VALIDATION_STATUS_MARKER#" \
+  "$STATUS_DOCUMENT"
+sed -i \
+  "s#^$SOURCE_LINEAGE_MARKER\$#$RELEASE_LINEAGE_MARKER#" \
   "$STATUS_DOCUMENT"
 
 [[ "$(rg -c -F "## $NEW - $RELEASE_DATE" "$DETAILED_CHANGELOG")" -eq 1 ]] || {
@@ -150,6 +159,10 @@ sed -i \
 }
 [[ "$(rg -c -F "$VALIDATION_STATUS_MARKER" "$STATUS_DOCUMENT")" -eq 1 ]] || {
   echo "❌ Failed to bind current status to validated source $CURRENT_HEAD." >&2
+  rollback_release_surfaces 1
+}
+[[ "$(rg -c -F "$RELEASE_LINEAGE_MARKER" "$STATUS_DOCUMENT")" -eq 1 ]] || {
+  echo "❌ Failed to seal current status lineage from v$PREV to $NEW." >&2
   rollback_release_surfaces 1
 }
 

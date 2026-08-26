@@ -12,24 +12,45 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.90.2](archive/2026-07-13-precompact.md) and
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md).
 
-Source development: published `v0.109.9` is the immutable predecessor. The
-`0.109.10` source batch closes CANIC-053 by deriving every finalized normal
-artifact required by a recovery bundle, implements CANIC-054 sidecar-first
-retained-Root Candid recovery, adds the CANIC-055 effect-equivalent retained-
-install preflight, and prevents CANIC-014 from recurring by rejecting
-contradictory terminal release narratives.
+Source development: published `v0.109.10` is the immutable predecessor for open `0.109.11`.
 
-Release validation: `0.109.10` was validated from source `34e59a4511b9fa259b263bc411db1ba265eafb01` on `2026-08-26`; the release commit may differ only in governed release surfaces.
+The `0.109.11` source batch makes complete validation fail before tests on
+compile or warning-denied Clippy failure, gives Make and installed Canic
+artifact builds one explicit compiler-cache policy, accepts the exact
+zero-debit retained-asset reinspection restart, verifies bundle candidates
+before atomic publication, and closes the release-truth gap that left
+published status carrying stale source-development instructions.
 
-Candidate evidence: focused host/CLI checks and the governed retained-Root
-PocketIC journey pass for the new preflight boundary. Freeze one immutable
-source candidate, run the exact downstream preflight and then run the human-
-owned complete release gate once; no validated release candidate is currently
-staged.
+Release governance: source development state; no validated release candidate is staged.
+
+Candidate evidence: implementation is complete. Focused cache, release-guard,
+repair-procedure and recovery-bundle tests pass. The governed retained-Root
+PocketIC journey passes both its paid repair path and an already-live,
+adequately funded `reinspection_in_flight` restart with zero funding attempts
+and zero operator debit. Warning-denied host Clippy and the remaining focused
+validation/runner/release/document, shell, formatting and diff-hygiene checks
+pass. Complete-gate evidence is owned exclusively by the generated release-
+validation marker and the human deployment/version workflow; focused evidence
+does not substitute for it.
 
 ## Current Release
 
-- The 0.109.10 source batch makes both finalized artifact manifests required
+- The 0.109.11 source batch separates the complete test graph from its
+  compile/lint prerequisite, retains incremental local Cargo work only when no
+  compiler wrapper is active, makes installed `canic build` and `canic install`
+  discover `sccache` without overriding explicit configuration, and expands
+  release-candidate narrative rejection to the exact stale development text
+  that survived the 0.109.10 publication guard.
+- Downstream CANIC-055/CANIC-056 correction treats
+  `reinspection_in_flight` as a protected observation
+  boundary rather than proof that a payment exists: an exact already-live
+  successor with an adequately funded asset may resume with zero attempts,
+  while `top_up_in_flight` still requires one incomplete final attempt and no
+  other phase may retain one. Recovery-bundle candidates now pass the complete
+  semantic verifier under the bundle lock before their manifest is atomically
+  published, so a rejected checkpoint cannot displace the prior verified
+  manifest.
+- Published `v0.109.10` makes both finalized artifact manifests required
   recovery-bundle authorities. Every referenced raw Wasm, gzip Wasm and
   deterministic Candid sidecar must be present with its exact size and digest;
   the application manifest remains bound to the Fleet plan and each retained
@@ -47,13 +68,13 @@ staged.
   digest. A non-operational candidate plus both sidecars is verified in the
   recovery bundle before provisional authority publication, and the published
   authority is checkpointed again before a remote repair effect.
-- CANIC-055 adds `canic install ... --preflight` for an existing incomplete
-  session. It reuses the production install path through finalized artifact
-  selection, exact existing Coordinator/Root journal inspection, both repair
-  Candid sidecars, the non-operational candidate and verified recovery-bundle
-  checkpoint, then returns before pre-root receipts, operational repair
-  authority or IC updates. Make-based development shares the repository
-  `target/` and automatically uses the pinned `sccache` when installed.
+- The retained-install preflight adds `canic install ... --preflight` for an
+  existing incomplete session. It reuses the production install path through
+  finalized artifact selection, exact existing Coordinator/Root journal
+  inspection, both repair Candid sidecars, the non-operational candidate and
+  verified recovery-bundle checkpoint, then returns before pre-root receipts,
+  operational repair authority or IC updates. Make-based development shares
+  the repository `target/` and automatically uses the pinned `sccache` when installed.
 - Published `v0.109.9` separates the provisional successor Root authority from
   its terminal sequence-28 proof, retains exact repair artifacts and resumes
   sequence-15 recovery through the canonical Store, Registry and Component
@@ -1232,17 +1253,20 @@ accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
 Published `v0.109.9` completes the pool-policy, retained-asset, typed repair,
 terminal closure, coalesced runtime-activation and retained Root/pool
-corrections plus the sequence-15 retained-install recovery. The 0.109.10
-source batch makes its generic recovery bundle derive and require every normal
+corrections plus the sequence-15 retained-install recovery. Published
+`v0.109.10` makes its generic recovery bundle derive and require every normal
 finalized artifact, makes historical retained-Root Candid recovery sidecar-
 first without requiring a debug Wasm export, and prevents terminal release
 evidence from retaining stale pre-release obligations. It now also supplies an
 effect-equivalent retained-install preflight that must qualify the exact
 frozen source candidate against the downstream session before versioning.
-Focused host and CLI checks pass. The targeted retained-repair journey, exact
-downstream preflight and one complete maintainer gate on the frozen candidate
-remain before versioning, immutable publication and separately authorized
-exact-session resume.
+The open 0.109.11 batch gates the full test graph behind compile and warning-
+denied Clippy, propagates the pinned compiler cache into Canic-owned artifact
+builds, accepts the zero-funding reinspection restart, makes recovery-bundle
+candidate publication verify-before-swap and hardens the release-truth check
+against stale source-development language. Focused procedure/bundle tests and
+the governed two-path retained-repair PocketIC journey pass; the human release
+flow owns complete validation.
 Focused pure/host and governed PocketIC evidence covers historical-plan
 selection, Root upgrade, retained-principal refresh and capacity-preserving 5T
 claim/install. The separately authorized downstream Root upgrade and asset

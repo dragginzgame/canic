@@ -212,16 +212,21 @@ rg -F 'GITLEAKS_BIN="$(GITLEAKS_BIN)" bash scripts/ci/run-secret-scan.sh' \
     <<<"$gitleaks_recipe" >/dev/null ||
     fail "make gitleaks-scan does not use CI's pinned Gitleaks binary"
 validation_runner_count="$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$validate_recipe")"
-[[ "$validation_runner_count" -eq 2 ]] ||
-    fail "make validate must retain exactly two sequential validation barriers"
+[[ "$validation_runner_count" -eq 3 ]] ||
+    fail "make validate must retain exactly three sequential validation barriers"
 validation_preflight="$(awk '
     /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
     block == 1 { print }
     block > 1 { exit }
 ' <<<"$validate_recipe")"
-validation_expensive="$(awk '
+validation_compile="$(awk '
     /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
     block == 2 { print }
+    block > 2 { exit }
+' <<<"$validate_recipe")"
+validation_tests="$(awk '
+    /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
+    block == 3 { print }
 ' <<<"$validate_recipe")"
 preflight_validate_targets=(
     fmt-check
@@ -231,19 +236,49 @@ preflight_validate_targets=(
     shellcheck
     control-plane-feature-gate
 )
-expensive_validate_targets=(
+compile_validate_targets=(
     check
     clippy
+)
+test_validate_targets=(
     test
 )
 for validate_target in "${preflight_validate_targets[@]}"; do
     rg -w "$validate_target" <<<"$validation_preflight" >/dev/null ||
         fail "make validate preflight omits required target $validate_target"
 done
-for validate_target in "${expensive_validate_targets[@]}"; do
-    rg -w "$validate_target" <<<"$validation_expensive" >/dev/null ||
-        fail "make validate expensive barrier omits required target $validate_target"
+for validate_target in "${compile_validate_targets[@]}"; do
+    rg -w "$validate_target" <<<"$validation_compile" >/dev/null ||
+        fail "make validate compile/lint barrier omits required target $validate_target"
 done
+for validate_target in "${test_validate_targets[@]}"; do
+    rg -w "$validate_target" <<<"$validation_tests" >/dev/null ||
+        fail "make validate test barrier omits required target $validate_target"
+done
+if rg -w 'test' <<<"$validation_compile" >/dev/null; then
+    fail "make validate compile/lint barrier must not start the complete tests"
+fi
+if rg -w 'check|clippy' <<<"$validation_tests" >/dev/null; then
+    fail "make validate test barrier repeats compile/lint work"
+fi
+
+rg -F 'SCCACHE_BIN ?= $(shell command -v sccache 2>/dev/null)' "$MAKEFILE" >/dev/null ||
+    fail "Make does not discover the pinned local sccache"
+rg -F 'CARGO_INCREMENTAL ?= 0' "$MAKEFILE" >/dev/null ||
+    fail "Make does not disable incremental compilation with sccache"
+test_recipe="$(sed -n '/^test-unit:/,/^test-auth:/p' "$MAKEFILE")"
+clippy_recipe="$(sed -n '/^clippy:/,/^$/p' "$MAKEFILE")"
+if rg -F 'CARGO_INCREMENTAL=0' <<<"$test_recipe$clippy_recipe" >/dev/null; then
+    fail "Make still disables incremental local tests or Clippy without a compiler cache"
+fi
+rg -F '"sccache@$CANIC_SCCACHE_VERSION"' "$DEV_INSTALL" >/dev/null ||
+    fail "maintainer toolchain setup does not install the pinned sccache"
+rg -F 'require_command sccache' "$DEV_INSTALL" >/dev/null ||
+    fail "maintainer toolchain setup does not verify sccache availability"
+rg -F 'SOURCE_LINEAGE_MARKER="Source development:' "$BUMP_VERSION" >/dev/null ||
+    fail "version bump does not require the exact open source lineage"
+rg -F 'RELEASE_LINEAGE_MARKER="Release lineage:' "$BUMP_VERSION" >/dev/null ||
+    fail "version bump does not seal the released predecessor lineage"
 
 invariant_recipe="$(sed -n '/^check-invariants:/,/^$/p' "$MAKEFILE")"
 [[ "$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$invariant_recipe")" -eq 1 ]] ||
