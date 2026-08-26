@@ -206,7 +206,7 @@ pub(super) fn activate_and_verify_fleet_registry(
     })
 }
 
-fn drive_activation(
+pub(super) fn drive_activation(
     icp: &IcpCli,
     binding: &crate::protocol_binding::ResolvedProtocolBinding,
     coordinator: Principal,

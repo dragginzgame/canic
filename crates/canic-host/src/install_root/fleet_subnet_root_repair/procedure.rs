@@ -19,6 +19,7 @@ use crate::{
     icp,
     install_root::{
         commands::icp_canister_upgrade_binary_args_command,
+        fleet_install_recovery_bundle::FleetInstallRecoveryBundleCheckpoint,
         icp_context::InstallIcpContext,
         operations::{call_with_arg, observe_module_hash, query_with_arg},
     },
@@ -117,6 +118,23 @@ pub(in crate::install_root) struct RetainedRootRepairOperationV1 {
     final_actual_cycles: Option<u128>,
 }
 
+#[cfg(test)]
+impl RetainedRootRepairOperationV1 {
+    pub(super) fn test_funding_reconciliation(
+        &self,
+    ) -> Result<(usize, u128, u128), RetainedRootRepairProcedureError> {
+        Ok((
+            self.funding_attempts.len(),
+            sum_observed(&self.funding_attempts, |attempt| {
+                attempt.operator_debit_cycles
+            })?,
+            sum_observed(&self.funding_attempts, |attempt| {
+                attempt.asset_credit_cycles
+            })?,
+        ))
+    }
+}
+
 #[derive(Debug, ThisError)]
 pub(in crate::install_root) enum RetainedRootRepairProcedureError {
     #[error("retained Root repair operation already has different immutable authority: {path}")]
@@ -188,11 +206,13 @@ pub(in crate::install_root) fn execute_retained_root_repair(
     root_binding: &ResolvedProtocolBinding,
     resolved: &ResolvedRetainedRootRepair,
     successor_wasm: &std::path::Path,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
     let lock_path = resolved.path.with_file_name(REPAIR_OPERATION_LOCK_FILE);
     let _lock = lock_operation(&lock_path)?;
     let mut current = create_or_load_operation(&operation_path, &resolved.authority)?;
+    recovery_bundle.checkpoint()?;
 
     current = reconcile_upgrade(
         icp_context,
@@ -200,6 +220,7 @@ pub(in crate::install_root) fn execute_retained_root_repair(
         current,
         &resolved.authority,
         successor_wasm,
+        recovery_bundle,
     )?;
     current = reconcile_pool_asset(
         icp_context,
@@ -207,6 +228,7 @@ pub(in crate::install_root) fn execute_retained_root_repair(
         &operation_path,
         current,
         &resolved.authority,
+        recovery_bundle,
     )?;
     print_reconciliation(&current)?;
     Ok(current)
@@ -245,6 +267,26 @@ pub(in crate::install_root) fn reconcile_published_retained_root_repair(
     }
 }
 
+pub(in crate::install_root) fn retained_root_repair_operation_path(
+    journal_path: &std::path::Path,
+) -> PathBuf {
+    journal_path.with_file_name(REPAIR_OPERATION_FILE)
+}
+
+pub(in crate::install_root) fn validate_recovery_bundle_repair_operation_bytes(
+    path: &std::path::Path,
+    bytes: &[u8],
+    authority: &RetainedRootRepairAuthorityV1,
+) -> Result<(), RetainedRootRepairProcedureError> {
+    let operation = serde_json::from_slice::<RetainedRootRepairOperationV1>(bytes)
+        .map_err(|error| invalid(path, error.to_string()))?;
+    validate_operation(path, &operation, authority)?;
+    if encode_operation(path, &operation)? != bytes {
+        return Err(invalid(path, "repair operation bytes are not canonical"));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 pub(super) fn write_asset_ready_test_operation(
     resolved: &ResolvedRetainedRootRepair,
@@ -271,6 +313,7 @@ fn reconcile_upgrade(
     mut current: RetainedRootRepairOperationV1,
     receipt: &RetainedRootRepairAuthorityV1,
     successor_wasm: &std::path::Path,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     let observed = observe_module_hash(icp_context.cli(), receipt.fleet_subnet_root)?;
     if observed == Some(receipt.successor_module_sha256) {
@@ -281,6 +324,7 @@ fn reconcile_upgrade(
         ) {
             current.phase = RetainedRootRepairOperationPhaseV1::UpgradeVerified;
             replace_operation(path, &current)?;
+            recovery_bundle.checkpoint()?;
         }
         return Ok(current);
     }
@@ -296,6 +340,7 @@ fn reconcile_upgrade(
 
     current.phase = RetainedRootRepairOperationPhaseV1::UpgradeInFlight;
     replace_operation(path, &current)?;
+    recovery_bundle.checkpoint()?;
     let args_path = resolved_sibling(path, REPAIR_UPGRADE_ARGS_FILE);
     write_bytes(&args_path, &candid::encode_one(())?)?;
     let mut command = icp_canister_upgrade_binary_args_command(
@@ -318,6 +363,7 @@ fn reconcile_upgrade(
     current.upgrade_command_receipt = Some(command_receipt);
     current.phase = RetainedRootRepairOperationPhaseV1::UpgradeVerified;
     replace_operation(path, &current)?;
+    recovery_bundle.checkpoint()?;
     Ok(current)
 }
 
@@ -327,6 +373,7 @@ fn reconcile_pool_asset(
     path: &std::path::Path,
     mut current: RetainedRootRepairOperationV1,
     receipt: &RetainedRootRepairAuthorityV1,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     if matches!(
         current.phase,
@@ -344,12 +391,16 @@ fn reconcile_pool_asset(
         let before = query_pool_asset(icp_context, root_binding, receipt)?;
         require_repairable_asset(&before)?;
         if before.cycles.to_u128() >= receipt.required_pool_cycles {
+            current.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
+            replace_operation(path, &current)?;
+            recovery_bundle.checkpoint()?;
             reinspect_pool_asset(icp_context, root_binding, receipt)?;
             let ready = query_pool_asset(icp_context, root_binding, receipt)?;
             require_ready_asset(&ready, receipt.required_pool_cycles)?;
             current.final_actual_cycles = Some(ready.cycles.to_u128());
             current.phase = RetainedRootRepairOperationPhaseV1::AssetReady;
             replace_operation(path, &current)?;
+            recovery_bundle.checkpoint()?;
             return Ok(current);
         }
 
@@ -361,7 +412,14 @@ fn reconcile_pool_asset(
             RetainedRootRepairOperationPhaseV1::TopUpInFlight
                 | RetainedRootRepairOperationPhaseV1::ReinspectionInFlight
         ) {
-            return reconcile_uncertain_top_up(icp_context, root_binding, path, current, receipt);
+            return reconcile_uncertain_top_up(
+                icp_context,
+                root_binding,
+                path,
+                current,
+                receipt,
+                recovery_bundle,
+            );
         }
 
         let plan = begin_funding_attempt(
@@ -370,6 +428,7 @@ fn reconcile_pool_asset(
             &mut current,
             before.cycles.to_u128(),
             receipt,
+            recovery_bundle,
         )?;
 
         let command_result = icp_context
@@ -388,6 +447,7 @@ fn reconcile_pool_asset(
         }
         current.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
         replace_operation(path, &current)?;
+        recovery_bundle.checkpoint()?;
         reinspect_pool_asset(icp_context, root_binding, receipt)?;
         current = reconcile_top_up_observation(
             icp_context,
@@ -396,6 +456,7 @@ fn reconcile_pool_asset(
             current,
             receipt,
             command_result.is_ok(),
+            recovery_bundle,
         )?;
         if current.phase == RetainedRootRepairOperationPhaseV1::AssetReady {
             return Ok(current);
@@ -409,6 +470,7 @@ fn begin_funding_attempt(
     current: &mut RetainedRootRepairOperationV1,
     actual_cycles: u128,
     receipt: &RetainedRootRepairAuthorityV1,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<RetainedRootRepairFundingPlan, Box<dyn std::error::Error>> {
     let operator_cycles_before = icp_context.cli().identity_cycles_balance()?;
     let plan = funding_plan(
@@ -450,6 +512,7 @@ fn begin_funding_attempt(
         });
     current.phase = RetainedRootRepairOperationPhaseV1::TopUpInFlight;
     replace_operation(path, current)?;
+    recovery_bundle.checkpoint()?;
     Ok(plan)
 }
 
@@ -459,11 +522,21 @@ fn reconcile_uncertain_top_up(
     path: &std::path::Path,
     mut current: RetainedRootRepairOperationV1,
     receipt: &RetainedRootRepairAuthorityV1,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     current.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
     replace_operation(path, &current)?;
+    recovery_bundle.checkpoint()?;
     reinspect_pool_asset(icp_context, root_binding, receipt)?;
-    reconcile_top_up_observation(icp_context, root_binding, path, current, receipt, false)
+    reconcile_top_up_observation(
+        icp_context,
+        root_binding,
+        path,
+        current,
+        receipt,
+        false,
+        recovery_bundle,
+    )
 }
 
 fn reconcile_top_up_observation(
@@ -473,6 +546,7 @@ fn reconcile_top_up_observation(
     mut current: RetainedRootRepairOperationV1,
     receipt: &RetainedRootRepairAuthorityV1,
     command_succeeded: bool,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     let after = query_pool_asset(icp_context, root_binding, receipt)?;
     let operator_cycles_after = icp_context.cli().identity_cycles_balance()?;
@@ -507,6 +581,7 @@ fn reconcile_top_up_observation(
         current.phase = RetainedRootRepairOperationPhaseV1::UpgradeVerified;
     }
     replace_operation(path, &current)?;
+    recovery_bundle.checkpoint()?;
     Ok(current)
 }
 

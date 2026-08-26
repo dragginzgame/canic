@@ -4075,6 +4075,7 @@ name = "retained_root_repair_stub"
 version = "0.109.8"
 dependencies = [
  "candid",
+ "canic-control-plane",
  "canic-core",
  "ic-cdk",
  "serde",

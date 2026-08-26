@@ -130,6 +130,8 @@ fresh-install proposal labels are suppressed in favor of the exact retained
 next replay phase.
 
 Fresh-install effects are gated by a complete Canic-owned recovery bundle.
+The bundle manifest binds every retained Root's exact typed journal phase and
+rejects missing phase-required journal, install or repair evidence.
 `canic deploy recovery verify <bundle-path>` validates its network, Fleet,
 plan, release build, operation and every path-confined content-addressed file
 without mutation. `canic deploy recovery import <bundle-path> --into

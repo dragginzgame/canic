@@ -139,7 +139,10 @@ and uses the retained next replay phase as its continuation guidance.
 
 Before the first remote effect, Canic checkpoints the exact session, plans,
 journals, receipts and finalized content-addressed artifacts under its stable
-operator-state recovery bundle. Each governed phase refreshes that bundle.
+operator-state recovery bundle. Each governed phase and each repair
+write-before-effect transition refreshes that bundle. Verification derives
+the exact required sidecars and repair artifacts from every retained Root's
+typed journal phase.
 Verify a retained copy without local or remote mutation:
 
 ```text

@@ -7,6 +7,7 @@
 
 use super::{
     commands::prepare_creation_result,
+    fleet_install_recovery_bundle::FleetInstallRecoveryBundleCheckpoint,
     fleet_install_session::FleetInstallSession,
     fleet_subnet_root_component_registry_preparation::verify_retained_component_registry_preparation,
     fleet_subnet_root_install_journal::{
@@ -130,15 +131,30 @@ pub(super) enum RetainedRootRepairLiveModule {
     Successor,
 }
 
+pub(super) struct InstallFleetSubnetRootsRequest<'a> {
+    pub icp_context: &'a InstallIcpContext,
+    pub config_path: &'a Path,
+    pub fleet_install_plan: &'a PersistedFleetInstallPlan,
+    pub fleet_install_session: &'a FleetInstallSession,
+    pub coordinator: Principal,
+    pub install_operation_id: [u8; 32],
+    pub retained_root_repair_adoption: Option<&'a RetainedRootRepairAdoption>,
+    pub recovery_bundle: &'a FleetInstallRecoveryBundleCheckpoint<'a>,
+}
+
 pub(super) fn install_and_verify_fleet_subnet_roots(
-    icp_context: &InstallIcpContext,
-    config_path: &Path,
-    fleet_install_plan: &PersistedFleetInstallPlan,
-    fleet_install_session: &FleetInstallSession,
-    coordinator: Principal,
-    install_operation_id: [u8; 32],
-    retained_root_repair_adoption: Option<&RetainedRootRepairAdoption>,
+    request: InstallFleetSubnetRootsRequest<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let InstallFleetSubnetRootsRequest {
+        icp_context,
+        config_path,
+        fleet_install_plan,
+        fleet_install_session,
+        coordinator,
+        install_operation_id,
+        retained_root_repair_adoption,
+        recovery_bundle,
+    } = request;
     let config = AppConfigSnapshot::load(config_path)?;
     let component_topology = config.model().compile_component_topology()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
@@ -177,6 +193,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
     }) {
         return Err(RootInstallStateError::RepairRootNotFound.into());
     }
+    recovery_bundle.checkpoint()?;
 
     let mut roots = Vec::with_capacity(planned_roots.len());
     for current in planned_roots {
@@ -193,6 +210,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
             fleet_install_session,
             adoption,
             required_pool_cycles,
+            recovery_bundle,
         )?;
         roots.push(drive_root_install(
             icp_context,
@@ -201,6 +219,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
             &fleet_install_plan.plan.fresh_fleet_plan_digest,
             current,
             repair.as_ref().map(|repair| &repair.authority),
+            recovery_bundle,
         )?);
     }
 
@@ -218,6 +237,7 @@ fn resolve_and_execute_retained_root_repair(
     session: &FleetInstallSession,
     adoption: Option<&RetainedRootRepairAdoption>,
     required_pool_cycles: Option<u128>,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<Option<ResolvedRetainedRootRepair>, Box<dyn std::error::Error>> {
     let repair = resolve_retained_root_repair(current, session, adoption, required_pool_cycles)?;
     let Some(resolved) = repair.as_ref() else {
@@ -240,14 +260,17 @@ fn resolve_and_execute_retained_root_repair(
     )?;
     report_retained_root_repair_position(live_module, current.journal.phase);
     publish_retained_root_repair_authority(resolved, session, &current.journal)?;
+    recovery_bundle.checkpoint()?;
     if resolved.terminal_receipt.is_some() {
         reconcile_published_retained_root_repair(resolved)?;
+        recovery_bundle.checkpoint()?;
     } else {
         let _operation = execute_retained_root_repair(
             icp_context,
             &root_binding,
             resolved,
             &resolved.successor_wasm_path,
+            recovery_bundle,
         )?;
         verify_live_infrastructure(icp_context, &current.journal, Some(&resolved.authority))?;
     }
@@ -276,6 +299,7 @@ pub(super) fn finalize_retained_root_repairs(
     fleet_install_plan: &PersistedFleetInstallPlan,
     fleet_install_session: &FleetInstallSession,
     coordinator: Principal,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(config_path)?;
     let component_topology = config.model().compile_component_topology()?;
@@ -310,7 +334,9 @@ pub(super) fn finalize_retained_root_repairs(
         verify_retained_component_registry_preparation(icp_context, &current.journal)?;
         let _receipt =
             publish_retained_root_repair_receipt(&repair, fleet_install_session, &current.journal)?;
+        recovery_bundle.checkpoint()?;
         reconcile_published_retained_root_repair(&repair)?;
+        recovery_bundle.checkpoint()?;
     }
     Ok(())
 }
@@ -322,6 +348,7 @@ fn drive_root_install(
     fresh_fleet_plan_digest: &str,
     mut current: ResolvedFleetSubnetRootInstall,
     repair: Option<&RetainedRootRepairAuthorityV1>,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<FleetSubnetRootAuthority, Box<dyn std::error::Error>> {
     for _ in 0..MAX_ROOT_TRANSITIONS {
         current = match current.journal.phase {
@@ -385,6 +412,7 @@ fn drive_root_install(
                 return Ok(authority);
             }
         };
+        recovery_bundle.checkpoint()?;
     }
     Err(RootInstallStateError::TransitionBoundExceeded.into())
 }
