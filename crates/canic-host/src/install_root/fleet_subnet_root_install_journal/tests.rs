@@ -439,16 +439,17 @@ fn assert_registry_mirror_and_component_registry_journal(
         prepared_against_registry: activation_response.version,
         release_set: preparing.journal.root_plan.initial_release_set,
         component_topology_digest: preparing.journal.root_plan.component_topology_digest,
-        next_allocation_sequence: 1,
-        reserved_component_instances: 0,
+        next_allocation_sequence: 2,
+        reserved_component_instances: 1,
         committed_component_instances: 0,
         managed_descendants: 0,
         known_created_component_canisters: 0,
-        encoded_bytes: 0,
+        encoded_bytes: 1_024,
         initial_inventory: None,
     };
+    assert_malformed_component_progress_rejects(&preparing, &preparation_response);
     let prepared = record_component_registry_prepared(&preparing, preparation_response.clone())
-        .expect("record Component Registry preparation");
+        .expect("record monotonic Component Registry preparation observed after response loss");
     let preparation_verified =
         record_component_registry_preparation_verified(&prepared, preparation_response.clone())
             .expect("verify Component Registry preparation");
@@ -470,6 +471,28 @@ fn assert_registry_mirror_and_component_registry_journal(
             .component_registry_preparation_response,
         Some(preparation_response)
     );
+}
+
+fn assert_malformed_component_progress_rejects(
+    preparing: &super::ResolvedFleetSubnetRootInstall,
+    response: &RootComponentRegistryStatusResponse,
+) {
+    for malformed in [
+        RootComponentRegistryStatusResponse {
+            committed_component_instances: 1,
+            ..response.clone()
+        },
+        RootComponentRegistryStatusResponse {
+            next_allocation_sequence: 2,
+            reserved_component_instances: 2,
+            ..response.clone()
+        },
+    ] {
+        assert!(matches!(
+            record_component_registry_prepared(preparing, malformed),
+            Err(super::FleetSubnetRootInstallJournalError::InvalidDocument { .. })
+        ));
+    }
 }
 
 fn install_infrastructure(
@@ -725,6 +748,43 @@ fn fixture(root: &Path) -> Fixture {
 pub fn planned_repair_fixture(root: &Path) -> super::ResolvedFleetSubnetRootInstall {
     let fixture = fixture(root);
     plan(&fixture).expect("plan repair fixture")
+}
+
+pub fn planned_repair_fixture_with_root_artifact(
+    root: &Path,
+    session: &crate::install_root::fleet_install_session::FleetInstallSession,
+    configure: impl FnOnce(&mut CanicInfrastructureArtifactEntry),
+) -> super::ResolvedFleetSubnetRootInstall {
+    let mut fixture = fixture(root);
+    fixture.plan.plan.fleet = session.fleet.clone();
+    fixture.plan.plan.fresh_fleet_plan_digest = session.fresh_fleet_plan_digest.clone();
+    fixture.plan.plan.release_build_id = session.release_build_id;
+    fixture.plan.plan.admission =
+        crate::test_support::fleet_admission_policy(session.fleet.clone());
+    for root_plan in &mut fixture.plan.plan.fleet_subnet_roots {
+        root_plan.initial_release_set.release_build_id = session.release_build_id;
+    }
+    fixture.manifest.manifest.release_build_id = session.release_build_id;
+    for entry in &mut fixture.manifest.manifest.entries {
+        entry.release_build_id = session.release_build_id;
+    }
+    let artifact = fixture
+        .manifest
+        .manifest
+        .entries
+        .iter_mut()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .expect("repair fixture Root artifact");
+    configure(artifact);
+    plan_fleet_subnet_root_install(PlanFleetSubnetRootInstallRequest {
+        fleet_install_plan: &fixture.plan,
+        infrastructure_manifest: &fixture.manifest,
+        coordinator: Principal::from_slice(&[33]),
+        install_operation_id: session.operation_id,
+        component_topology: fixture.topology,
+        root_plan: &fixture.plan.plan.fleet_subnet_roots[0],
+    })
+    .expect("plan repair fixture with exact session and Root artifact")
 }
 
 fn topology() -> ComponentTopology {

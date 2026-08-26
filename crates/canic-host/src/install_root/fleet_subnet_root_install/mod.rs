@@ -19,16 +19,16 @@ use super::{
         wasm_store_create_result_path,
     },
     fleet_subnet_root_repair::{
-        RetainedRootRepairReceiptV1, execute_retained_root_repair, publish_retained_root_repair,
-        reconcile_published_retained_root_repair, record_retained_root_repair_adopted,
-        resolve_retained_root_repair,
+        ResolvedRetainedRootRepair, RetainedRootRepairAuthorityV1, execute_retained_root_repair,
+        publish_retained_root_repair_authority, publish_retained_root_repair_receipt,
+        reconcile_published_retained_root_repair, resolve_retained_root_repair,
     },
     icp_context::InstallIcpContext,
     operations::{
         CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
         active_installation_controller, execute_or_observe_creation, execute_or_observe_install,
-        query_with_arg, require_expected_controllers, require_expected_module_hash,
-        resolve_install_artifact,
+        observe_module_hash, query_with_arg, require_expected_controllers,
+        require_expected_module_hash, resolve_install_artifact,
     },
     options::RetainedRootRepairAdoption,
 };
@@ -119,6 +119,15 @@ enum RootInstallStateError {
 
     #[error("active installation identity differs from the retained Root repair controller")]
     RepairControllerMismatch,
+
+    #[error("retained Root repair authority disappeared during exact policy revalidation")]
+    RepairAuthorityMissing,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum RetainedRootRepairLiveModule {
+    Predecessor,
+    Successor,
 }
 
 pub(super) fn install_and_verify_fleet_subnet_roots(
@@ -178,49 +187,20 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
             .map(|_| required_initial_pool_asset_cycles(config.model(), &current.journal.root_plan))
             .transpose()?
             .map(|cycles| cycles.to_u128());
-        let repair = resolve_retained_root_repair(
+        let repair = resolve_and_execute_retained_root_repair(
+            icp_context,
             &current,
             fleet_install_session,
             adoption,
             required_pool_cycles,
         )?;
-        if let Some(repair) = repair.as_ref().filter(|repair| repair.needs_publication) {
-            let active_controller = active_installation_controller(icp_context.cli())?;
-            if current.journal.installation_controller != Some(active_controller) {
-                return Err(RootInstallStateError::RepairControllerMismatch.into());
-            }
-            let root_binding = resolve_infrastructure_protocol_binding(
-                icp_context.root(),
-                icp_context.environment(),
-                &current.journal.root_artifact,
-            )?;
-            verify_pre_repair_root_authority(
-                icp_context,
-                &root_binding,
-                &current.journal,
-                &repair.receipt,
-            )?;
-            let operation = execute_retained_root_repair(
-                icp_context,
-                &root_binding,
-                repair,
-                &adoption
-                    .expect("repair publication has explicit successor artifact")
-                    .successor_wasm,
-            )?;
-            verify_live_infrastructure(icp_context, &current.journal, Some(&repair.receipt))?;
-            publish_retained_root_repair(repair, fleet_install_session, &current.journal)?;
-            record_retained_root_repair_adopted(repair, operation)?;
-        } else if let Some(repair) = repair.as_ref() {
-            reconcile_published_retained_root_repair(repair)?;
-        }
         roots.push(drive_root_install(
             icp_context,
             &root_artifact,
             &wasm_store_artifact,
             &fleet_install_plan.plan.fresh_fleet_plan_digest,
             current,
-            repair.as_ref().map(|repair| &repair.receipt),
+            repair.as_ref().map(|repair| &repair.authority),
         )?);
     }
 
@@ -232,13 +212,116 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
     Ok(())
 }
 
+fn resolve_and_execute_retained_root_repair(
+    icp_context: &InstallIcpContext,
+    current: &ResolvedFleetSubnetRootInstall,
+    session: &FleetInstallSession,
+    adoption: Option<&RetainedRootRepairAdoption>,
+    required_pool_cycles: Option<u128>,
+) -> Result<Option<ResolvedRetainedRootRepair>, Box<dyn std::error::Error>> {
+    let repair = resolve_retained_root_repair(current, session, adoption, required_pool_cycles)?;
+    let Some(resolved) = repair.as_ref() else {
+        return Ok(None);
+    };
+    let active_controller = active_installation_controller(icp_context.cli())?;
+    if current.journal.installation_controller != Some(active_controller) {
+        return Err(RootInstallStateError::RepairControllerMismatch.into());
+    }
+    let root_binding = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &current.journal.root_artifact,
+    )?;
+    let live_module = verify_pre_repair_root_authority(
+        icp_context,
+        &root_binding,
+        &current.journal,
+        &resolved.authority,
+    )?;
+    report_retained_root_repair_position(live_module, current.journal.phase);
+    publish_retained_root_repair_authority(resolved, session, &current.journal)?;
+    if resolved.terminal_receipt.is_some() {
+        reconcile_published_retained_root_repair(resolved)?;
+    } else {
+        let _operation = execute_retained_root_repair(
+            icp_context,
+            &root_binding,
+            resolved,
+            &resolved.successor_wasm_path,
+        )?;
+        verify_live_infrastructure(icp_context, &current.journal, Some(&resolved.authority))?;
+    }
+    Ok(repair)
+}
+
+fn report_retained_root_repair_position(
+    live_module: RetainedRootRepairLiveModule,
+    phase: FleetSubnetRootInstallPhase,
+) {
+    match live_module {
+        RetainedRootRepairLiveModule::Predecessor => println!(
+            "Retained Root recovery: the exact predecessor is live; the authorized repair will begin from durable phase {phase:?} before canonical replay continues."
+        ),
+        RetainedRootRepairLiveModule::Successor => println!(
+            "Retained Root recovery: durable phase {phase:?} is behind the verified exact live successor; canonical phase owners will re-observe monotonic state without synthesizing journal evidence."
+        ),
+    }
+}
+
+/// Finalize retained Root repairs only after the ordinary phase owners have replayed every Root to
+/// the protected Component Registry proof boundary.
+pub(super) fn finalize_retained_root_repairs(
+    icp_context: &InstallIcpContext,
+    config_path: &Path,
+    fleet_install_plan: &PersistedFleetInstallPlan,
+    fleet_install_session: &FleetInstallSession,
+    coordinator: Principal,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let config = AppConfigSnapshot::load(config_path)?;
+    let component_topology = config.model().compile_component_topology()?;
+    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
+        icp_context.root(),
+        fleet_install_plan.plan.release_build_id,
+    )?;
+    for root_plan in &fleet_install_plan.plan.fleet_subnet_roots {
+        let current = plan_fleet_subnet_root_install(PlanFleetSubnetRootInstallRequest {
+            fleet_install_plan,
+            infrastructure_manifest: &infrastructure_manifest,
+            coordinator,
+            install_operation_id: fleet_install_session.operation_id,
+            component_topology: component_topology.clone(),
+            root_plan,
+        })?;
+        let Some(_) = resolve_retained_root_repair(&current, fleet_install_session, None, None)?
+        else {
+            continue;
+        };
+        let required_pool_cycles =
+            required_initial_pool_asset_cycles(config.model(), &current.journal.root_plan)?
+                .to_u128();
+        let repair = resolve_retained_root_repair(
+            &current,
+            fleet_install_session,
+            None,
+            Some(required_pool_cycles),
+        )?
+        .ok_or(RootInstallStateError::RepairAuthorityMissing)?;
+        verify_live_infrastructure(icp_context, &current.journal, Some(&repair.authority))?;
+        verify_retained_component_registry_preparation(icp_context, &current.journal)?;
+        let _receipt =
+            publish_retained_root_repair_receipt(&repair, fleet_install_session, &current.journal)?;
+        reconcile_published_retained_root_repair(&repair)?;
+    }
+    Ok(())
+}
+
 fn drive_root_install(
     icp_context: &InstallIcpContext,
     root_artifact: &InstallArtifact,
     wasm_store_artifact: &InstallArtifact,
     fresh_fleet_plan_digest: &str,
     mut current: ResolvedFleetSubnetRootInstall,
-    repair: Option<&RetainedRootRepairReceiptV1>,
+    repair: Option<&RetainedRootRepairAuthorityV1>,
 ) -> Result<FleetSubnetRootAuthority, Box<dyn std::error::Error>> {
     for _ in 0..MAX_ROOT_TRANSITIONS {
         current = match current.journal.phase {
@@ -310,8 +393,8 @@ pub(super) fn verify_pre_repair_root_authority(
     icp_context: &InstallIcpContext,
     root_binding: &ResolvedProtocolBinding,
     journal: &FleetSubnetRootInstallJournal,
-    repair: &RetainedRootRepairReceiptV1,
-) -> Result<(), Box<dyn std::error::Error>> {
+    repair: &RetainedRootRepairAuthorityV1,
+) -> Result<RetainedRootRepairLiveModule, Box<dyn std::error::Error>> {
     let fleet_subnet_root = journal
         .fleet_subnet_root
         .expect("repair journal retains its Root");
@@ -325,12 +408,16 @@ pub(super) fn verify_pre_repair_root_authority(
         ),
         "Fleet Subnet Root repair predecessor",
     )?;
-    require_expected_module_hash(
-        icp_context.cli(),
-        fleet_subnet_root,
-        repair.upgrade_predecessor_module_sha256,
-        "Fleet Subnet Root repair predecessor",
-    )?;
+    let observed_module = observe_module_hash(icp_context.cli(), fleet_subnet_root)?;
+    let live_module = match observed_module {
+        Some(observed) if observed == repair.upgrade_predecessor_module_sha256 => {
+            RetainedRootRepairLiveModule::Predecessor
+        }
+        Some(observed) if observed == repair.successor_module_sha256 => {
+            RetainedRootRepairLiveModule::Successor
+        }
+        Some(_) | None => return Err(RootInstallStateError::AuthorityMismatch.into()),
+    };
     let expected = expected_root_authority(journal)?;
     let observed = query_with_arg::<_, RootStatusResponseFragment>(
         icp_context.cli(),
@@ -345,7 +432,7 @@ pub(super) fn verify_pre_repair_root_authority(
     if *observed != expected {
         return Err(RootInstallStateError::AuthorityMismatch.into());
     }
-    Ok(())
+    Ok(live_module)
 }
 
 fn recover_or_create_root(
@@ -482,7 +569,7 @@ fn recover_or_install_wasm_store(
 fn verify_and_record_infrastructure(
     icp_context: &InstallIcpContext,
     current: &ResolvedFleetSubnetRootInstall,
-    repair: Option<&RetainedRootRepairReceiptV1>,
+    repair: Option<&RetainedRootRepairAuthorityV1>,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
     let (root_authority, wasm_store_authority) =
         verify_live_infrastructure(icp_context, &current.journal, repair)?;
@@ -493,7 +580,7 @@ fn verify_and_record_infrastructure(
 fn verify_live_infrastructure(
     icp_context: &InstallIcpContext,
     journal: &FleetSubnetRootInstallJournal,
-    repair: Option<&RetainedRootRepairReceiptV1>,
+    repair: Option<&RetainedRootRepairAuthorityV1>,
 ) -> Result<(FleetSubnetRootAuthority, FleetSubnetWasmStoreAuthority), Box<dyn std::error::Error>> {
     let fleet_subnet_root = journal
         .fleet_subnet_root
@@ -533,9 +620,6 @@ fn verify_live_infrastructure(
     let observed = *observed;
     if observed != expected {
         return Err(RootInstallStateError::AuthorityMismatch.into());
-    }
-    if repair.is_some() {
-        verify_retained_component_registry_preparation(icp_context, journal)?;
     }
     if journal.phase == FleetSubnetRootInstallPhase::RootInstalled {
         require_initial_prepared_runtime(

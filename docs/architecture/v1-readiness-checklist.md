@@ -129,6 +129,13 @@ not authority to start another fresh install. After paid effects, generic
 fresh-install proposal labels are suppressed in favor of the exact retained
 next replay phase.
 
+Fresh-install effects are gated by a complete Canic-owned recovery bundle.
+`canic deploy recovery verify <bundle-path>` validates its network, Fleet,
+plan, release build, operation and every path-confined content-addressed file
+without mutation. `canic deploy recovery import <bundle-path> --into
+<icp-root>` creates only missing exact local evidence and rejects partial,
+mixed, tampered, newer-schema or conflicting state before any later plan.
+
 Check a Fleet and save stable deployment evidence:
 
 ```text

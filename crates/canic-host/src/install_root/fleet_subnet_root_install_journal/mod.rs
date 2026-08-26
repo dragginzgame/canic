@@ -96,6 +96,62 @@ pub(super) enum FleetSubnetRootInstallPhase {
     ComponentRegistryPreparationVerified,
 }
 
+impl FleetSubnetRootInstallPhase {
+    /// Return the canonical position inside the only phase window where an exact repaired Root
+    /// module may be used to resume a retained fresh-install journal.
+    ///
+    /// This deliberately names protocol phases rather than relying on journal sequence numbers.
+    /// Pre-infrastructure phases have not established the authority required for a repair, while
+    /// completion is owned by the separate Fleet install-session receipt.
+    pub(super) const fn retained_root_repair_position(self) -> Option<u8> {
+        match self {
+            Self::StoreBootstrapped => Some(0),
+            Self::StoreVerified => Some(1),
+            Self::RegistryJoinInFlight => Some(2),
+            Self::RegistryJoined => Some(3),
+            Self::RegistryJoinVerified => Some(4),
+            Self::RegistrySyncInFlight => Some(5),
+            Self::RegistrySynchronized => Some(6),
+            Self::RegistrySyncVerified => Some(7),
+            Self::RegistryMirrorActivationInFlight => Some(8),
+            Self::RegistryMirrorActivated => Some(9),
+            Self::RegistryMirrorActivationVerified => Some(10),
+            Self::ComponentRegistryPreparationInFlight => Some(11),
+            Self::ComponentRegistryPrepared => Some(12),
+            Self::ComponentRegistryPreparationVerified => Some(13),
+            Self::Planned
+            | Self::RootCreationInFlight
+            | Self::RootCreated
+            | Self::WasmStoreCreationInFlight
+            | Self::WasmStoreCreated
+            | Self::WasmStoreInstallInFlight
+            | Self::WasmStoreInstalled
+            | Self::RootInstallInFlight
+            | Self::RootInstalled
+            | Self::InfrastructureVerified
+            | Self::StoreAdoptionInFlight
+            | Self::StoreAdopted
+            | Self::StoreStaging
+            | Self::StoreStaged
+            | Self::StoreBootstrapInFlight => None,
+        }
+    }
+
+    pub(super) const fn admits_retained_root_repair(self) -> bool {
+        self.retained_root_repair_position().is_some()
+    }
+
+    pub(super) const fn is_at_or_after_repair_phase(self, origin: Self) -> bool {
+        match (
+            self.retained_root_repair_position(),
+            origin.retained_root_repair_position(),
+        ) {
+            (Some(current), Some(origin)) => current >= origin,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct FleetSubnetRootInstallJournal {
@@ -1643,23 +1699,27 @@ fn validate_component_registry_preparation_response(
             "Component Registry preparation requires a root principal",
         )
     })?;
-    let expected = RootComponentRegistryStatusResponse {
-        fleet_subnet_root: root,
-        prepared_against_registry: request.expected_fleet_registry.clone(),
-        release_set: journal.root_plan.initial_release_set,
-        component_topology_digest: journal.root_plan.component_topology_digest,
-        next_allocation_sequence: 1,
-        reserved_component_instances: 0,
-        committed_component_instances: 0,
-        managed_descendants: 0,
-        known_created_component_canisters: 0,
-        encoded_bytes: 0,
-        initial_inventory: None,
-    };
-    if response != &expected {
+    let exact_authority = response.fleet_subnet_root == root
+        && response.prepared_against_registry == request.expected_fleet_registry
+        && response.release_set == journal.root_plan.initial_release_set
+        && response.component_topology_digest == journal.root_plan.component_topology_digest;
+    let allocated = response.next_allocation_sequence.checked_sub(1);
+    let top_level = response
+        .reserved_component_instances
+        .checked_add(response.committed_component_instances);
+    let created_capacity =
+        top_level.and_then(|top_level| top_level.checked_add(response.managed_descendants));
+    let progress_is_well_formed = allocated.is_some_and(|allocated| {
+        top_level.is_some_and(|top_level| u64::from(top_level) <= allocated)
+            && created_capacity
+                .is_some_and(|capacity| response.known_created_component_canisters <= capacity)
+            && response.committed_component_instances <= response.known_created_component_canisters
+            && response.managed_descendants <= response.known_created_component_canisters
+    });
+    if !exact_authority || !progress_is_well_formed {
         return Err(invalid(
             path,
-            "Component Registry preparation response differs from immutable root authority",
+            "Component Registry preparation response differs from immutable root authority or has invalid monotonic progress",
         ));
     }
     Ok(())

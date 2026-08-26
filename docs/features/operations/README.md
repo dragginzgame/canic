@@ -14,6 +14,8 @@ and automated workflows without merging their authority.
 - workspace and Fleet `medic` checks with CI and JSON modes
 - deployment evidence and passive policy gates
 - recovery guidance for retries, receipts, and ambiguous external effects
+- local-only verification/import of path-confined, content-addressed
+  fresh-install recovery bundles
 
 Useful orientation commands are:
 

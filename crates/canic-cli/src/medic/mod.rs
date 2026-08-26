@@ -407,7 +407,7 @@ fn retained_recovery_check(
 ) -> MedicCheck {
     let detail = match plan {
         Some(plan) => format!(
-            "app={} operation={} classification={} retained_builder={} current_builder={} release_build={} plan_digest={} fenced_creations={}/{} next_replay_phase={} remaining_debit={:?}",
+            "app={} operation={} classification={} retained_builder={} current_builder={} release_build={} plan_digest={} fenced_creations={}/{} next_replay_phase={} remaining_debit={:?}; retained evidence is recoverable when verified live state is monotonically ahead because canonical phase owners re-observe it",
             summary.app,
             operation_id_text(summary.operation_id),
             plan.classification.as_str(),
@@ -430,7 +430,7 @@ fn retained_recovery_check(
         ),
     };
     let next = format!(
-        "resume only this retained session with canic install {} {fleet} --fleet-input <original-path> --expected-plan-digest {} --release-build {}; do not start a fresh or replacement Fleet",
+        "verify the retained evidence with canic deploy recovery verify <bundle-path>, import it when the original workspace is unavailable, then plan and resume only retained Fleet {fleet} with canic install {} {fleet} --fleet-input <retained-input-path> --expected-plan-digest {} --release-build {}; preserve the exact retained Root identity and do not start a fresh or replacement Fleet",
         summary.app, summary.fresh_fleet_plan_digest, summary.release_build_id,
     );
     MedicCheck::warn(

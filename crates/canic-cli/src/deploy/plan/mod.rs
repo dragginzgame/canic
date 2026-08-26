@@ -237,6 +237,10 @@ fn append_recovery_next_actions(
         "review install_recovery before explicitly authorizing the retained-session resume"
             .to_string(),
     );
+    next_actions.push(
+        "treat the retained checkpoint as replay authority even when verified live state is monotonically ahead; resume through the named phase owners and never edit the journal"
+            .to_string(),
+    );
     next_actions.push("do not start a replacement fresh Fleet install".to_string());
 }
 
@@ -659,6 +663,11 @@ mod tests {
             next_actions
                 .iter()
                 .any(|action| action.contains("retained-session resume"))
+        );
+        assert!(
+            next_actions
+                .iter()
+                .any(|action| action.contains("verified live state is monotonically ahead"))
         );
         assert!(
             next_actions

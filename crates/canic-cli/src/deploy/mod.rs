@@ -5,6 +5,7 @@ mod compare;
 mod inspect;
 mod output_format;
 mod plan;
+mod recovery;
 mod resume_report;
 mod truth;
 
@@ -112,6 +113,7 @@ where
             "check" => check::run(args),
             "inspect" => inspect::run(args),
             "plan" => plan::run(args),
+            "recovery" => recovery::run(args),
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
     }

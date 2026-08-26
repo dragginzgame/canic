@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 ## Purpose
 
@@ -12,11 +12,16 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.90.2](archive/2026-07-13-precompact.md) and
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md).
 
-Release validation: `0.109.8` was validated from source `14091dc830b29c34d1db6dafa21e26b27476dfbc` on `2026-08-25`; the release commit may differ only in governed release surfaces.
+Source development: published `v0.109.8` is the immutable predecessor. Open
+`0.109.9` corrects CANIC-050/051 and has completed the unmodified maintainer
+validation gate; versioning and publication remain maintainer-owned and have
+not occurred.
+
+Release governance: source development state; no validated release candidate is staged.
 
 ## Current Release
 
-- Published `v0.109.7` includes the `CANIC-035` correction first released in
+- Published `v0.109.8` includes the `CANIC-035` correction first released in
   `v0.109.5`: every fresh plan rejects an
   undersized pool policy before effects, while only the exact supported
   0.109.1 retained decision loads under its historical 2T rule. Root batch
@@ -54,7 +59,7 @@ Release validation: `0.109.8` was validated from source `14091dc830b29c34d1db6da
   [dated audit report](../audits/reports/2026-08/2026-08-24/saltz-mainnet-calibration.md).
   Its approximately `2.590 Pcycles` remain externally funded, and this
   repository removal authorizes no reinstall, deletion, controller mutation,
-  funding or other remote effect. Published 0.109.7 completes the exceptional
+  funding or other remote effect. Published 0.109.8 completes the exceptional
   retained Root/pool repair as one authority-bound operation, makes its live
   Component Registry proof non-mutating and monotonic, makes Medic and Cargo
   diagnostics recovery-aware, corrects named-environment artifact advice and
@@ -66,7 +71,7 @@ Release validation: `0.109.8` was validated from source `14091dc830b29c34d1db6da
   complete test graph in 717 seconds. The 31-case governed internal PocketIC
   suite passes in 266 seconds, the production-boundary retained-repair journey
   in 47 seconds and the complete shared-server high-water mark is 4,958,820 kB
-  with 257 threads. Open 0.109.8 corrects `CANIC-047`: Component Directory
+  with 257 threads. Published 0.109.8 corrects `CANIC-047`: Component Directory
   reconciliation now accepts bounded non-regressing publication snapshots
   from an autonomously advancing Root instead of rejecting a valid coalesced
   `0 -> 5` observation as `E132`. Exact operation, plan, configuration,
@@ -74,6 +79,29 @@ Release validation: `0.109.8` was validated from source `14091dc830b29c34d1db6da
   Focused pure and Coordinator workflow tests cover terminal and partial
   coalescing, fail-closed regression and malformed authority/evidence, stale
   replay, runtime continuation and the shared scale-out path.
+- Open 0.109.9 addresses CANIC-050/051 without widening the exceptional
+  retained-install contract. One provisional authority binds the exact
+  successor Root module from the typed `store_bootstrapped` through
+  `component_registry_preparation_verified` window; it cannot attest any
+  Store, Registry, Component Registry, pool, catalog or completion effect.
+  Each original phase owner re-observes monotonic live state and records its
+  normal deterministic transition. Only the sequence-28 protected Component
+  Registry proof can publish the separate terminal repair receipt and make the
+  repair operation terminal. Exact predecessor/successor Wasm and Candid bytes
+  are retained by digest before repair effects. A Canic-owned operator-state
+  bundle checkpoints the session, plans, journals, intents, receipts and
+  finalized artifacts before the first remote effect and after each governed
+  phase; local-only `canic deploy recovery verify|import` rejects partial,
+  mixed, tampered, unconfined, newer-schema or conflicting evidence. Focused
+  host/CLI proof and the governed sequence-15-to-terminal production-boundary
+  journey pass. The complete unmodified `make validate` gate also passes:
+  check in 49 seconds, warning-denied workspace Clippy in 69 seconds and the
+  complete test graph in 1,540 seconds. The 39-target inventory ran 30
+  ordinary targets before nine serial PocketIC targets; the ordered internal
+  PocketIC suite passed in 684 seconds, the retained-Root repair journey in
+  137 seconds and the complete shared-server high-water mark was 4,950,116 kB
+  with 257 threads. Publication and the exact retained-session downstream
+  resume remain deliberately unperformed.
 - The root `Cargo.toml` is the sole live workspace package-version authority;
   this handoff deliberately does not mirror its value. Immutable local and
   remote tag refs own publication truth, and tag presence determines whether a
@@ -683,7 +711,7 @@ deployment. Pure and Coordinator workflow tests cover first, intermediate and
 terminal coalescing plus fail-closed identity/count/receipt/timestamp cases; a
 real local five-Component Coordinator/Root PocketIC journey reaches terminal
 Fleet catalog publication. The complete maintainer gate and immutable
-`v0.109.6` publication include that correction. Published 0.109.7 completes the
+`v0.109.6` publication include that correction. Published 0.109.8 completes the
 retained Root/pool procedure, fixes its live Component Registry proof and
 receipt/operation interruption boundary, makes Medic and Cargo diagnostics
 recovery-aware, corrects named-environment artifact remediation, hardens
@@ -693,7 +721,7 @@ production executor and verifier, performs one exact Cycles Ledger top-up,
 re-inspects the retained asset, installs a Component, publishes the Fleet
 catalog and closes the install session without duplicate debit or effect.
 Focused checks and the complete maintainer gate pass on the final source
-candidate. Open 0.109.8 corrects the coalesced Component Directory publication
+candidate. Published 0.109.8 corrects the coalesced Component Directory publication
 stall as `CANIC-047`; focused pure and Coordinator workflow evidence passes.
 B8 remains open for the exact-source resume and deployed-state/admission proof.
 B9
@@ -755,7 +783,7 @@ operator creations, zero remaining debit and the exact verification phase.
 Do not rerun fresh staging: the exact-source 0.109.2 recovery plan is reviewed,
 published 0.109.3 crossed the `CANIC-031` retained-artifact gate without a
 Cargo build or artifact mutation, and published 0.109.4 later corrected
-`CANIC-033`. Published 0.109.7 corrects `CANIC-028` by naming initial-install
+`CANIC-033`. Published 0.109.8 corrects `CANIC-028` by naming initial-install
 artifact finalization or an existing finalized release build instead of the
 ineffective `canic build` command. The generic retained-
 decision source-drift remediation remains assigned to pure B9 cleanup. B10
@@ -1183,7 +1211,7 @@ acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 contains the B3-B9 runtime implementation, and published `v0.108.2` records the
 accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
-Published `v0.109.7` completes the pool-policy, retained-asset, typed repair,
+Published `v0.109.8` completes the pool-policy, retained-asset, typed repair,
 terminal closure, coalesced runtime-activation and retained Root/pool
 corrections.
 Focused pure/host and governed PocketIC evidence covers historical-plan
@@ -1204,7 +1232,7 @@ Registry proof, recovery-aware diagnostics, exact artifact guidance and
 release governance while updating the generic composed-framework boundary to
 exact published IcyDB 0.240.1. Focused checks and the production-boundary
 retained-repair PocketIC journey pass, and the complete unmodified maintainer
-gate passes on the final source candidate. Open 0.109.8 corrects `CANIC-047`:
+gate passes on the final source candidate. Published 0.109.8 corrects `CANIC-047`:
 the Coordinator accepts bounded non-regressing Component Directory publication
 snapshots, including a fully validated first `0 -> 5` terminal observation.
 Focused pure and Coordinator workflow tests pass for fresh installation,

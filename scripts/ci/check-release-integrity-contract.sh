@@ -495,6 +495,8 @@ rg -F 'mktemp -d "$TEST_SCRATCH_PARENT/test-runtime.XXXXXX"' "$TEST_SCRATCH_RUNN
     fail "test scratch runner does not allocate one private repository directory"
 rg -F 'CANIC_TEST_SCRATCH="$TEST_SCRATCH"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
     fail "test scratch runner does not pass exact cleanup ownership"
+rg -F 'CANIC_OPERATOR_STATE_ROOT="$TEST_SCRATCH/operator-state"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
+    fail "test scratch runner does not confine retained recovery bundles to invocation-owned scratch"
 test_scratch_runner_count="$(rg -c 'bash scripts/ci/run-with-test-scratch\.sh' "$MAKEFILE")"
 [ "$test_scratch_runner_count" -gt 0 ] ||
     fail "temporary-file test targets do not use private scratch ownership"

@@ -4,6 +4,9 @@
 //! Does not own: root snapshot synchronization, acknowledgement, `Active`, or runtime activation.
 //! Boundary: each compare-and-commit request and response is journalled, then the complete
 //! Coordinator snapshot, manifest, and version are independently reproduced from the Fleet plan.
+//! A retained command response may advance a journal whose live Registry has already reached the
+//! exact all-Joining, all-Active, or initial service-publication successor validated at the outer
+//! workflow boundary; observing every intermediate Registry head is not required.
 
 use super::fleet_component_provisioning_plan::{
     CompileFleetComponentProvisioningPlanRequest, compile_fleet_component_provisioning_plan,
@@ -18,9 +21,7 @@ use super::fleet_subnet_root_install_journal::{
     record_registry_join_verified, record_registry_joined,
 };
 use super::icp_context::InstallIcpContext;
-use super::operations::{
-    LiveRegistryEvidence, call_with_arg, query_live_registry, resolve_install_protocol_binding,
-};
+use super::operations::{call_with_arg, query_live_registry, resolve_install_protocol_binding};
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
     release_set::{
@@ -45,9 +46,6 @@ const MAX_REGISTRY_JOIN_TRANSITIONS: usize = 4;
 enum RootRegistryJoinError {
     #[error("root Registry join reached phase {0:?} before Store verification")]
     StoreNotVerified(FleetSubnetRootInstallPhase),
-
-    #[error("live Fleet Registry differs from the exact planned {0} snapshot")]
-    LiveRegistryMismatch(&'static str),
 
     #[error("root Registry join journal is missing its durable request")]
     MissingJoinRequest,
@@ -157,6 +155,16 @@ fn drive_registry_join(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let coordinator = current.journal.authority.binding.coordinator;
     let icp = icp_context.cli();
+    let expected_before_version = FleetRegistryOps::version(
+        &current.journal.authority,
+        component_topology,
+        expected_before,
+    )?;
+    let expected_after_manifest = FleetRegistryOps::manifest(
+        &current.journal.authority,
+        component_topology,
+        expected_after,
+    )?;
     let expected_after_version = FleetRegistryOps::version(
         &current.journal.authority,
         component_topology,
@@ -166,15 +174,7 @@ fn drive_registry_join(
     for _ in 0..MAX_REGISTRY_JOIN_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::StoreVerified => {
-                let live = query_live_registry(icp, binding, coordinator)?;
-                require_exact_registry(
-                    &current.journal.authority,
-                    component_topology,
-                    expected_before,
-                    &live,
-                    "pre-join",
-                )?;
-                begin_registry_join(&current, live.version)?
+                begin_registry_join(&current, expected_before_version.clone())?
             }
             FleetSubnetRootInstallPhase::RegistryJoinInFlight => {
                 let request = current
@@ -197,22 +197,12 @@ fn drive_registry_join(
                 }
                 record_registry_joined(&current, response)?
             }
-            FleetSubnetRootInstallPhase::RegistryJoined => {
-                let live = query_live_registry(icp, binding, coordinator)?;
-                require_exact_registry(
-                    &current.journal.authority,
-                    component_topology,
-                    expected_after,
-                    &live,
-                    "post-join",
-                )?;
-                record_registry_join_verified(
-                    &current,
-                    &live.registry,
-                    &live.manifest,
-                    &live.version,
-                )?
-            }
+            FleetSubnetRootInstallPhase::RegistryJoined => record_registry_join_verified(
+                &current,
+                expected_after,
+                &expected_after_manifest,
+                &expected_after_version,
+            )?,
             FleetSubnetRootInstallPhase::RegistryJoinVerified
             | FleetSubnetRootInstallPhase::RegistrySyncInFlight
             | FleetSubnetRootInstallPhase::RegistrySynchronized
@@ -237,24 +227,4 @@ fn drive_registry_join(
         };
     }
     Err(RootRegistryJoinError::TransitionBoundExceeded.into())
-}
-
-fn require_exact_registry(
-    authority: &FleetRegistryAuthority,
-    component_topology: &ComponentTopology,
-    expected_registry: &FleetRegistry,
-    live: &LiveRegistryEvidence,
-    stage: &'static str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let expected_manifest =
-        FleetRegistryOps::manifest(authority, component_topology, expected_registry)?;
-    let expected_version =
-        FleetRegistryOps::version(authority, component_topology, expected_registry)?;
-    if live.registry != *expected_registry
-        || live.manifest != expected_manifest
-        || live.version != expected_version
-    {
-        return Err(RootRegistryJoinError::LiveRegistryMismatch(stage).into());
-    }
-    Ok(())
 }

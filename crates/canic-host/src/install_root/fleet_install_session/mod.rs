@@ -612,7 +612,7 @@ fn load_optional_completion(
     Ok(Some(completion))
 }
 
-fn session_path(
+pub(super) fn session_path(
     root: &Path,
     canonical_network_id: CanonicalNetworkId,
     fleet_name: &FleetName,
