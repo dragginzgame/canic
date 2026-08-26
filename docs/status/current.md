@@ -12,7 +12,7 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.90.2](archive/2026-07-13-precompact.md) and
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md).
 
-Source development: published `v0.109.10` is the immutable predecessor for open `0.109.11`.
+Release lineage: `0.109.11` follows immutable `v0.109.10`.
 
 The `0.109.11` source batch makes complete validation fail before tests on
 compile or warning-denied Clippy failure, gives Make and installed Canic
@@ -21,7 +21,7 @@ zero-debit retained-asset reinspection restart, verifies bundle candidates
 before atomic publication, and closes the release-truth gap that left
 published status carrying stale source-development instructions.
 
-Release governance: source development state; no validated release candidate is staged.
+Release validation: `0.109.11` was validated from source `8539c3d8ef48473d5ae357a940528e5d5bb84fbd` on `2026-08-26`; the release commit may differ only in governed release surfaces.
 
 Candidate evidence: implementation is complete. Focused cache, release-guard,
 repair-procedure and recovery-bundle tests pass. The governed retained-Root
