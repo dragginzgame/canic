@@ -74,6 +74,7 @@ pub struct InstallRootOptions {
     pub admitted_fresh_fleet_plan_digest: Option<String>,
     pub expected_app: Option<String>,
     pub retained_root_repair_adoption: Option<RetainedRootRepairAdoption>,
+    pub retained_root_repair_funding_authorization: Option<String>,
     pub interactive_config_selection: bool,
     pub deployment_plan_override: Option<DeploymentPlanV1>,
 }

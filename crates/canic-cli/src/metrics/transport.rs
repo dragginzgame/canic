@@ -253,6 +253,7 @@ fn resolve_metrics_fleet(
             fleet: options.fleet.clone(),
             environment: options.environment.clone(),
         },
+        &options.icp,
         &root,
     )
     .map_err(MetricsCommandError::from)

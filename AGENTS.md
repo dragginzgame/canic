@@ -50,7 +50,11 @@ with this file, the code is wrong.
 - Do not recommend a push merely because one focused test or CI repair passes.
   There is no minimum release count for a minor line. As a soft guideline, keep
   each minor to no more than 12 published releases; if another release would
-  exceed that count, reassess the minor boundary and record the decision.
+  exceed that count, reassess the minor boundary and record the decision. The
+  guideline governs planned design cadence, not necessary correctness,
+  security, recovery or operator-regression follow-ups to an already-published
+  minor; those fixes may exceed 12 rather than strand the affected release
+  line.
 
 ## Changelog
 - Follow `docs/governance/changelog.md`; it is the authoritative changelog

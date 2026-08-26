@@ -69,7 +69,7 @@ pub(super) fn missing_config_roles(
     options: &ListOptions,
     registry: &[RegistryEntry],
 ) -> Vec<String> {
-    if !matches!(options.source, ListSource::RootRegistry) || options.subtree.is_some() {
+    if !matches!(options.source, ListSource::FleetInventory) || options.subtree.is_some() {
         return Vec::new();
     }
 

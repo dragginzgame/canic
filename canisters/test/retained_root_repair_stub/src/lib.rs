@@ -33,6 +33,8 @@ use canic_core::{
 use serde::Deserialize;
 use std::cell::RefCell;
 
+const REQUIRED_POOL_CYCLES: u128 = 5_000_000_000_000;
+
 #[derive(CandidType, Clone, Deserialize)]
 struct RepairStubInit {
     authority: FleetSubnetRootAuthority,
@@ -192,6 +194,8 @@ fn canic_status(request: StubStatusRequest) -> Result<StubStatusResponse, Error>
                     .into_iter()
                     .take(usize::from(request.limit))
                     .collect();
+                let ready = u32::from(state.pool_cycles >= REQUIRED_POOL_CYCLES);
+                let failed = u32::from(state.pool_cycles < REQUIRED_POOL_CYCLES);
                 StubStatusResponse::Pool(Box::new(CanisterPoolResponse {
                     config: state.authority.binding.limits.canister_pool.clone(),
                     tracked: 1,
@@ -200,12 +204,12 @@ fn canic_status(request: StubStatusRequest) -> Result<StubStatusResponse, Error>
                     pooled: 1,
                     workload: 0,
                     surplus: 0,
-                    ready: 1,
+                    ready,
                     pending_reset: 0,
                     claimed: 0,
                     recycling: 0,
                     handing_off: 0,
-                    failed: 0,
+                    failed,
                     completed_handoffs: 0,
                     pending_creation: None,
                     pending_handoff: None,
@@ -305,8 +309,18 @@ async fn canic_command(command: StubCommand) -> Result<StubCommandResponse, Erro
                 state.as_mut().expect("repair stub initialized").pool_cycles = cycles;
             });
             Ok(StubCommandResponse::ImportPoolCanister(
-                PoolImportResponse::Imported {
-                    canister_id: request.canister_id,
+                if cycles >= REQUIRED_POOL_CYCLES {
+                    PoolImportResponse::Imported {
+                        canister_id: request.canister_id,
+                    }
+                } else {
+                    PoolImportResponse::ResetFailed {
+                        canister_id: request.canister_id,
+                        reason: format!(
+                            "actual_cycles={cycles} required_cycles={REQUIRED_POOL_CYCLES} deficit_cycles={}",
+                            REQUIRED_POOL_CYCLES - cycles
+                        ),
+                    }
                 },
             ))
         }
@@ -353,7 +367,17 @@ fn pool_asset(state: &RepairStubState) -> CanisterPoolAsset {
         canister_id: state.pool_canister,
         cycles: Cycles::new(state.pool_cycles),
         origin: CanisterPoolAssetOrigin::Imported,
-        status: CanisterPoolAssetStatus::Ready,
+        status: if state.pool_cycles >= REQUIRED_POOL_CYCLES {
+            CanisterPoolAssetStatus::Ready
+        } else {
+            CanisterPoolAssetStatus::Failed {
+                reason: format!(
+                    "actual_cycles={} required_cycles={REQUIRED_POOL_CYCLES} deficit_cycles={}",
+                    state.pool_cycles,
+                    REQUIRED_POOL_CYCLES - state.pool_cycles
+                ),
+            }
+        },
         added_at_ns: 1,
         updated_at_ns: ic_cdk::api::time(),
     }

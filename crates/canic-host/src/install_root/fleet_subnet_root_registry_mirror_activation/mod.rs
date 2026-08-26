@@ -37,7 +37,7 @@ use serde::Deserialize;
 use std::path::Path;
 use thiserror::Error as ThisError;
 
-const MAX_MIRROR_ACTIVATION_TRANSITIONS: usize = 4;
+const MAX_MIRROR_ACTIVATION_STALLED_POLLS: usize = 4;
 
 #[derive(CandidType)]
 enum RootStatusRequestFragment {
@@ -60,8 +60,8 @@ enum RootRegistryMirrorActivationError {
     #[error("active Registry differs from its verified Coordinator version")]
     ActiveRegistryVersionMismatch,
 
-    #[error("root Registry mirror activation exceeded its bounded phase transitions")]
-    TransitionBoundExceeded,
+    #[error("root Registry mirror activation exceeded four consecutive no-progress polls")]
+    StalledPollBoundExceeded,
 
     #[error("live root Registry mirror/Directory differs from durable activation evidence")]
     LiveEvidenceMismatch,
@@ -139,7 +139,7 @@ pub(super) fn activate_and_verify_fleet_subnet_root_registry_mirrors(
 
 pub(super) fn drive_root_mirror_activation(
     icp_context: &InstallIcpContext,
-    mut current: ResolvedFleetSubnetRootInstall,
+    current: ResolvedFleetSubnetRootInstall,
     request: FleetSubnetRootRegistryMirrorActivationRequest,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let root = current
@@ -152,37 +152,47 @@ pub(super) fn drive_root_mirror_activation(
         &current.journal.root_artifact,
     )?;
     let icp = icp_context.cli();
-    for _ in 0..MAX_MIRROR_ACTIVATION_TRANSITIONS {
+    let operation_id =
+        super::root_registry_synchronization_operation_id(current.journal.install_operation_id);
+    drive_root_mirror_activation_with_query(current, request, || {
+        query_registry_synchronization(icp, &binding, root, operation_id)
+            .map(|response| response.activation)
+    })
+}
+
+fn drive_root_mirror_activation_with_query(
+    mut current: ResolvedFleetSubnetRootInstall,
+    request: FleetSubnetRootRegistryMirrorActivationRequest,
+    mut query_activation: impl FnMut() -> Result<
+        Option<canic_core::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationResponse>,
+        Box<dyn std::error::Error>,
+    >,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut stalled_polls = 0_usize;
+    loop {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::RegistrySyncVerified => {
                 begin_registry_mirror_activation(&current, request.clone())?
             }
             FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => {
-                let response = query_registry_synchronization(
-                    icp,
-                    &binding,
-                    root,
-                    super::root_registry_synchronization_operation_id(
-                        current.journal.install_operation_id,
-                    ),
-                )?;
-                let Some(activation) = response.activation else {
+                let Some(activation) = query_activation()? else {
+                    stalled_polls = stalled_polls
+                        .checked_add(1)
+                        .ok_or(RootRegistryMirrorActivationError::StalledPollBoundExceeded)?;
+                    if stalled_polls > MAX_MIRROR_ACTIVATION_STALLED_POLLS {
+                        return Err(
+                            RootRegistryMirrorActivationError::StalledPollBoundExceeded.into()
+                        );
+                    }
                     continue;
                 };
+                stalled_polls = 0;
                 record_registry_mirror_activated(&current, activation)?
             }
             FleetSubnetRootInstallPhase::RegistryMirrorActivated => {
-                let response = query_registry_synchronization(
-                    icp,
-                    &binding,
-                    root,
-                    super::root_registry_synchronization_operation_id(
-                        current.journal.install_operation_id,
-                    ),
-                )?;
-                let activation = response
-                    .activation
+                let activation = query_activation()?
                     .ok_or(RootRegistryMirrorActivationError::LiveEvidenceMismatch)?;
+                stalled_polls = 0;
                 record_registry_mirror_activation_verified(&current, activation)?
             }
             FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
@@ -194,7 +204,24 @@ pub(super) fn drive_root_mirror_activation(
             }
         };
     }
-    Err(RootRegistryMirrorActivationError::TransitionBoundExceeded.into())
+}
+
+#[cfg(test)]
+pub(super) fn drive_root_mirror_activation_with_observations(
+    current: ResolvedFleetSubnetRootInstall,
+    request: FleetSubnetRootRegistryMirrorActivationRequest,
+    observations: impl IntoIterator<
+        Item = Option<
+            canic_core::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationResponse,
+        >,
+    >,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut observations = observations.into_iter();
+    drive_root_mirror_activation_with_query(current, request, || {
+        observations
+            .next()
+            .ok_or_else(|| RootRegistryMirrorActivationError::StalledPollBoundExceeded.into())
+    })
 }
 
 fn query_registry_synchronization(

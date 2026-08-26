@@ -31,16 +31,17 @@ next_ordinal=$((published_count + 1))
 if [ "$next_ordinal" -le "$MAX_RELEASES_PER_MINOR" ]; then
     cadence_status="within guideline"
 else
-    cadence_status="next release exceeds guideline"
+    cadence_status="planned-cadence threshold exceeded; necessary follow-up corrections remain permitted"
 fi
 
 echo "Canic release cadence"
 echo "  minor line: $minor_line"
 echo "  published releases: $published_count"
 echo "  guideline: no more than $MAX_RELEASES_PER_MINOR releases per minor"
+echo "  scope: planned design cadence; necessary published-line corrections may exceed it"
 echo "  next release ordinal: $next_ordinal"
 echo "  status: $cadence_status"
 
 if [ "$next_ordinal" -gt "$MAX_RELEASES_PER_MINOR" ]; then
-    echo "  guidance: keep the current draft open for a complete release batch or record why another release boundary is necessary"
+    echo "  guidance: keep the correction coherent, record why this boundary is necessary, and do not strand the affected published line solely to meet the count"
 fi

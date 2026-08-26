@@ -1,26 +1,5 @@
 use super::*;
 
-// Ensure empty-root command errors explain root registry setup.
-#[test]
-fn root_registry_hint_explains_empty_root_canister() {
-    let hint = root_registry_hint("the canister contains no Wasm module")
-        .expect("empty wasm hint should be available");
-
-    assert!(hint.contains("canic install"));
-    assert!(hint.contains("no Canic root code is installed"));
-}
-
-// Ensure missing-root hints use the installed Fleet and source App identities.
-#[test]
-fn root_registry_hint_explains_missing_fleet_subnet_root() {
-    let hint = root_registry_hint("Cannot find canister id")
-        .expect("missing canister hint should be available");
-
-    assert!(hint.contains("this Fleet"));
-    assert!(hint.contains("canic app config <app>"));
-    assert!(hint.contains("canic install <app> <fleet> --fleet-input <path>"));
-}
-
 // Ensure a panicked live-query worker cannot silently remove its canister.
 #[test]
 fn live_query_worker_panic_is_reported_for_its_canister() {

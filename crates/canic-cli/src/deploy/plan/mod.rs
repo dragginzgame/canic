@@ -319,10 +319,12 @@ where
             .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
         let required_operator_debit = install_recovery
             .as_ref()
-            .map_or(&maximum_operator_debit, |recovery| {
-                &recovery.remaining_operator_debit
-            });
-        let operator = observe_operator(&input.operator_principal, required_operator_debit)
+            .map_or(
+                Ok(maximum_operator_debit),
+                FreshFleetInstallRecoveryPlanV1::next_operator_debit,
+            )
+            .map_err(|error| preflight_build_error(SOURCE_LOCAL_OBSERVATION, error))?;
+        let operator = observe_operator(&input.operator_principal, &required_operator_debit)
             .map_err(|error| preflight_build_error(SOURCE_LOCAL_OBSERVATION, error))?;
         let authority_request = FreshFleetDecisionAuthorityRequest {
             workspace_root: &roots.workspace_root,
@@ -602,6 +604,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one report regression binds fresh debit, repair debit, text, JSON and next actions"
+    )]
     fn retained_install_recovery_renders_exact_session_phase_and_remaining_debit() {
         let mut report = report_with_status(PlanStatus::Blocked);
         let release_build_id = canic_core::ids::ReleaseBuildId::from_nonce(
@@ -623,11 +629,40 @@ mod tests {
                 cycles: 310_000_300_000_000,
             },
             remaining_operator_debit: PlannedCanisterCreationFunding::Cycles { cycles: 0 },
+            retained_root_repair_funding: Some(
+                canic_host::install_root::RetainedRootRepairFundingPlanV1 {
+                    repair_operation_id: "ef".repeat(32),
+                    fleet_subnet_root: "ryjl3-tyaaa-aaaaa-aaaba-cai".to_string(),
+                    pool_canister: "r7inp-6aaaa-aaaaa-aaabq-cai".to_string(),
+                    operator: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
+                    phase: "funding_required".to_string(),
+                    actual_cycles: Some(4_999_013_576_358),
+                    required_cycles: 5_000_000_000_000,
+                    deficit_cycles: Some(986_423_642),
+                    next_requested_cycles: Some(1_086_423_642),
+                    next_maximum_operator_debit_cycles: Some(1_186_423_642),
+                    cumulative_remaining_authority_cycles: 15_001_786_423_642,
+                    completed_funding_attempts: 0,
+                    remaining_funding_attempts: 4,
+                    authorization_digest: Some("12".repeat(32)),
+                },
+            ),
             fenced_operator_creations: 3,
             total_operator_creations: 3,
             uncertain_creation_outcomes: Vec::new(),
             next_replay_phase: "fleet_subnet_root:subnet:store_bootstrap_verification".to_string(),
         });
+        assert_eq!(
+            report
+                .install_recovery
+                .as_ref()
+                .expect("recovery")
+                .next_operator_debit()
+                .expect("combine exact next debit"),
+            PlannedCanisterCreationFunding::Cycles {
+                cycles: 1_186_423_642,
+            }
+        );
 
         let text = render_text(&report);
         assert!(text.contains("status: blocked"));
@@ -636,6 +671,14 @@ mod tests {
         assert!(text.contains("decision_release_build: workspace"));
         assert!(text.contains("retained_plan_contract: historical_pool_v1"));
         assert!(text.contains("remaining_operator_debit: 0 cycles"));
+        assert!(text.contains("fleet_subnet_root: ryjl3-tyaaa-aaaaa-aaaba-cai"));
+        assert!(text.contains("pool_canister: r7inp-6aaaa-aaaaa-aaabq-cai"));
+        assert!(text.contains("actual_cycles: 4999013576358"));
+        assert!(text.contains("next_requested_cycles: 1086423642"));
+        assert!(text.contains("next_maximum_operator_debit_cycles: 1186423642"));
+        assert!(text.contains("cumulative_remaining_authority_cycles: 15001786423642"));
+        assert!(text.contains("completed_funding_attempts: 0"));
+        assert!(text.contains(&format!("authorization_digest: {}", "12".repeat(32))));
         assert!(
             text.contains(
                 "next_replay_phase: fleet_subnet_root:subnet:store_bootstrap_verification"
@@ -652,6 +695,10 @@ mod tests {
         assert_eq!(
             json["install_recovery"]["remaining_operator_debit"]["cycles"],
             "0"
+        );
+        assert_eq!(
+            json["install_recovery"]["retained_root_repair_funding"]["next_maximum_operator_debit_cycles"],
+            serde_json::json!(1_186_423_642_u64)
         );
         assert!(
             report_proposed_operations(&report.plan, report.install_recovery.as_ref()).is_empty(),

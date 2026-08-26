@@ -43,7 +43,7 @@ impl ListOptions {
             .map_err(|_| ListCommandError::Usage(info_usage()))?;
         Ok(Self::from_matches(
             &matches,
-            ListSource::RootRegistry,
+            ListSource::FleetInventory,
             "fleet",
         ))
     }
@@ -76,12 +76,12 @@ impl ListOptions {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ListSource {
     Config,
-    RootRegistry,
+    FleetInventory,
 }
 
 fn list_command(bin_name: &'static str, help_after: &'static str) -> ClapCommand {
     base_list_options(ClapCommand::new("list").bin_name(bin_name))
-        .about("List canisters registered by an installed Fleet Subnet Root")
+        .about("List the live Coordinator-anchored canister tree for an installed Fleet")
         .arg(
             value_arg("fleet")
                 .value_name("fleet")

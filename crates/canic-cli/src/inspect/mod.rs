@@ -288,6 +288,7 @@ fn resolve_fleet_target(
             fleet: fleet.to_string(),
             environment: environment.to_string(),
         },
+        icp,
         &root,
     )
     .map_err(InspectCommandError::from)?;

@@ -72,6 +72,7 @@ fn install_truth_gate_lines_include_warning_codes() {
         admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         retained_root_repair_adoption: None,
+        retained_root_repair_funding_authorization: None,
         interactive_config_selection: false,
         deployment_plan_override: None,
     };
@@ -211,6 +212,7 @@ package = "worker"
         admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         retained_root_repair_adoption: None,
+        retained_root_repair_funding_authorization: None,
         interactive_config_selection: false,
         deployment_plan_override: None,
     };

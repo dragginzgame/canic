@@ -31,6 +31,7 @@ fn install_defaults_to_root_target() {
     assert_eq!(install.release_build_id, None);
     assert_eq!(install.expected_fresh_fleet_plan_digest, None);
     assert_eq!(install.retained_root_repair_adoption, None);
+    assert_eq!(install.retained_root_repair_funding_authorization, None);
     assert_eq!(
         install.fleet_install_input_path,
         Some(PathBuf::from("deployments/demo-local.toml"))
@@ -200,6 +201,40 @@ fn install_accepts_exact_root_pool_and_artifact_repair_authority() {
 }
 
 #[test]
+fn install_accepts_only_a_canonical_repair_funding_digest() {
+    let digest = "cd".repeat(32);
+    let options = InstallOptions::parse([
+        OsString::from("toko"),
+        OsString::from("demo"),
+        OsString::from("--authorize-retained-root-repair-funding"),
+        OsString::from(&digest),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo.toml"),
+    ])
+    .expect("parse retained Root repair funding authority");
+
+    assert_eq!(
+        options
+            .retained_root_repair_funding_authorization
+            .as_deref(),
+        Some(digest.as_str())
+    );
+
+    for invalid in ["cd".repeat(31), "CD".repeat(32), "zz".repeat(32)] {
+        let error = InstallOptions::parse([
+            OsString::from("toko"),
+            OsString::from("demo"),
+            OsString::from("--authorize-retained-root-repair-funding"),
+            OsString::from(invalid),
+            OsString::from("--fleet-input"),
+            OsString::from("deployments/demo.toml"),
+        ])
+        .expect_err("noncanonical repair funding digest must fail");
+        std::assert_matches!(error, InstallCommandError::Usage(_));
+    }
+}
+
+#[test]
 fn install_rejects_malformed_or_anonymous_retained_root_repair() {
     for repair in [
         "missing-separator",
@@ -306,6 +341,7 @@ fn install_usage_explains_app_config() {
     assert!(text.contains("--preflight"));
     assert!(text.contains("--release-build"));
     assert!(text.contains("--adopt-retained-root-repair"));
+    assert!(text.contains("--authorize-retained-root-repair-funding"));
     assert!(normalized.contains("resolves adjacent .did sidecars first"));
     assert!(text.contains("--fleet-input"));
     assert!(text.contains("--expected-plan-digest"));

@@ -21,8 +21,9 @@ use super::{
     },
     fleet_subnet_root_repair::{
         ResolvedRetainedRootRepair, RetainedRootRepairAuthorityV1, execute_retained_root_repair,
-        publish_retained_root_repair_authority, publish_retained_root_repair_receipt,
-        reconcile_published_retained_root_repair, resolve_retained_root_repair,
+        preflight_retained_root_repair_funding, publish_retained_root_repair_authority,
+        publish_retained_root_repair_receipt, reconcile_published_retained_root_repair,
+        resolve_retained_root_repair,
     },
     icp_context::InstallIcpContext,
     operations::{
@@ -144,11 +145,12 @@ pub(super) struct InstallFleetSubnetRootsRequest<'a> {
     pub coordinator: Principal,
     pub install_operation_id: [u8; 32],
     pub retained_root_repair_adoption: Option<&'a RetainedRootRepairAdoption>,
+    pub retained_root_repair_funding_authorization: Option<&'a str>,
     pub recovery_bundle: &'a FleetInstallRecoveryBundleCheckpoint<'a>,
 }
 
 pub(super) struct PreflightFleetSubnetRootsRequest<'a> {
-    pub icp_root: &'a Path,
+    pub icp_context: &'a InstallIcpContext,
     pub config_path: &'a Path,
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
     pub fleet_install_session: &'a FleetInstallSession,
@@ -183,6 +185,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
         coordinator,
         install_operation_id,
         retained_root_repair_adoption,
+        retained_root_repair_funding_authorization,
         recovery_bundle,
     } = request;
     let prepared = prepare_fleet_subnet_root_install(
@@ -216,6 +219,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
             fleet_install_session,
             adoption,
             required_pool_cycles,
+            retained_root_repair_funding_authorization,
             recovery_bundle,
         )?;
         roots.push(drive_root_install(
@@ -243,7 +247,7 @@ pub(super) fn preflight_fleet_subnet_roots(
     request: PreflightFleetSubnetRootsRequest<'_>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let PreflightFleetSubnetRootsRequest {
-        icp_root,
+        icp_context,
         config_path,
         fleet_install_plan,
         fleet_install_session,
@@ -253,7 +257,7 @@ pub(super) fn preflight_fleet_subnet_roots(
         recovery_bundle,
     } = request;
     let prepared = prepare_fleet_subnet_root_install(
-        icp_root,
+        icp_context.root(),
         config_path,
         fleet_install_plan,
         coordinator,
@@ -276,13 +280,42 @@ pub(super) fn preflight_fleet_subnet_roots(
             })
             .transpose()?
             .map(|cycles| cycles.to_u128());
-        let _repair = resolve_and_checkpoint_retained_root_repair(
+        let repair = resolve_and_checkpoint_retained_root_repair(
             &current,
             fleet_install_session,
             adoption,
             required_pool_cycles,
             recovery_bundle,
         )?;
+        let Some(repair) = repair.as_ref() else {
+            continue;
+        };
+        let active_controller = active_installation_controller(icp_context.cli())?;
+        if current.journal.installation_controller != Some(active_controller) {
+            return Err(RootInstallStateError::RepairControllerMismatch.into());
+        }
+        let root_binding = resolve_infrastructure_protocol_binding(
+            icp_context.root(),
+            icp_context.environment(),
+            &current.journal.root_artifact,
+        )?;
+        let live_module = verify_pre_repair_root_authority(
+            icp_context,
+            &root_binding,
+            &current.journal,
+            &repair.authority,
+        )?;
+        report_retained_root_repair_position(live_module, current.journal.phase);
+        let funding = preflight_retained_root_repair_funding(
+            icp_context,
+            &root_binding,
+            repair,
+            recovery_bundle,
+        )?;
+        println!(
+            "Retained Root repair funding preflight: {}",
+            serde_json::to_string(&funding)?
+        );
     }
 
     recovery_bundle.checkpoint().map_err(Into::into)
@@ -362,6 +395,7 @@ fn resolve_and_execute_retained_root_repair(
     session: &FleetInstallSession,
     adoption: Option<&RetainedRootRepairAdoption>,
     required_pool_cycles: Option<u128>,
+    funding_authorization_digest: Option<&str>,
     recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<Option<ResolvedRetainedRootRepair>, Box<dyn std::error::Error>> {
     let repair = resolve_and_checkpoint_retained_root_repair(
@@ -401,6 +435,7 @@ fn resolve_and_execute_retained_root_repair(
             &root_binding,
             resolved,
             &resolved.successor_wasm_path,
+            funding_authorization_digest,
             recovery_bundle,
         )?;
         verify_live_infrastructure(icp_context, &current.journal, Some(&resolved.authority))?;

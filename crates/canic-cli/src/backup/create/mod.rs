@@ -37,6 +37,7 @@ pub(super) fn backup_create(
             fleet: options.fleet.clone(),
             environment: options.environment.clone(),
         },
+        &options.icp,
         &icp_root,
     )
     .map_err(BackupCommandError::from)?;
@@ -58,12 +59,16 @@ pub(super) fn backup_create(
     } else {
         BackupScopeKind::NonRootDeployment
     };
+    let root_canister_id = installed
+        .topology
+        .unique_fleet_subnet_root(&options.fleet)?
+        .to_string();
     let planned = build_backup_plan(BackupPlanBuildInput {
         plan_id,
         run_id,
         fleet: options.fleet.clone(),
         environment: options.environment.clone(),
-        root_canister_id: installed.topology.root_canister_id,
+        root_canister_id,
         selected_canister_id,
         selected_scope_kind,
         include_descendants: true,

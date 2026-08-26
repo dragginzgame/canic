@@ -269,11 +269,11 @@ canic build example hub
 If you pass `--workspace`, `--icp-root`, or `--config` explicitly, use absolute
 paths for the explicit roots and config file.
 
-For a terminal installed Fleet, `canic info list example-local` shows its
-registered application Canisters. `canic info subnets example-local [--json]`
-instead reports exact Fleet-owned Canister counts grouped by occupied physical
-Subnet. It exits without a partial total if current Coordinator/root evidence
-does not agree.
+For a terminal installed Fleet, `canic info list example-local` validates its
+Coordinator Registry and shows the bounded live trees under every current
+Root. `canic info subnets example-local [--json]` instead reports exact
+Fleet-owned Canister counts grouped by occupied physical Subnet. Both exit
+without a partial result if current Coordinator/root evidence does not agree.
 
 ## Testing Shape
 

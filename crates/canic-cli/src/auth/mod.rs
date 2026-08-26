@@ -121,13 +121,6 @@ impl AuthCommandError {
             Self::Icp(IcpCommandError::Io(_))
             | Self::Usage(_)
             | Self::Json(_)
-            | Self::InstalledFleet(
-                InstalledFleetError::NoInstalledFleet { .. }
-                | InstalledFleetError::FleetCatalog(_)
-                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
-                | InstalledFleetError::InstalledAuthority(_)
-                | InstalledFleetError::RootNotInFleet { .. },
-            )
             | Self::IcpRoot(_)
             | Self::CandidUnavailable { .. }
             | Self::InvalidIssuerPrincipal { .. }
@@ -135,7 +128,8 @@ impl AuthCommandError {
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
             | Self::MethodModeMismatch { .. } => 1,
-            Self::Icp(_) => 2,
+            Self::InstalledFleet(InstalledFleetError::Protocol(_)) | Self::Icp(_) => 2,
+            Self::InstalledFleet(_) => 1,
             Self::ResponseParse(_) => 3,
         }
     }
@@ -611,6 +605,7 @@ fn resolve_auth_root_call_target(
             fleet: fleet.to_string(),
             environment: options.environment.clone(),
         },
+        &options.icp,
         &icp_root,
     )
     .map_err(AuthCommandError::from)?;
@@ -642,12 +637,16 @@ fn resolve_auth_root_call_target(
             source,
         })?;
     validate_auth_query_method(&candid_path, &candid, method)?;
+    let root_canister_id = installed
+        .topology
+        .unique_fleet_subnet_root(fleet)?
+        .to_string();
 
     Ok(AuthRootCallTarget {
         target: AuthRootTarget {
             input: ROOT_ROLE.to_string(),
             role: ROOT_ROLE.to_string(),
-            canister_id: installed.topology.root_canister_id,
+            canister_id: root_canister_id,
             candid_source: AuthRenewalCandidSource::InstalledFleet,
         },
         candid_path,

@@ -133,13 +133,6 @@ impl BlobStorageCommandError {
             | Self::Usage(_)
             | Self::InvalidCycles(_)
             | Self::Json(_)
-            | Self::InstalledFleet(
-                InstalledFleetError::NoInstalledFleet { .. }
-                | InstalledFleetError::FleetCatalog(_)
-                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
-                | InstalledFleetError::InstalledAuthority(_)
-                | InstalledFleetError::RootNotInFleet { .. },
-            )
             | Self::IcpRoot(_)
             | Self::UnknownTarget { .. }
             | Self::AmbiguousRole { .. }
@@ -147,7 +140,8 @@ impl BlobStorageCommandError {
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. } => 1,
-            Self::Icp(_) => 2,
+            Self::InstalledFleet(InstalledFleetError::Protocol(_)) | Self::Icp(_) => 2,
+            Self::InstalledFleet(_) => 1,
             Self::Response(_) | Self::ResponseValueOutOfRange { .. } => 3,
             Self::ReadinessCheckFailed { .. } => 4,
         }
@@ -172,13 +166,7 @@ impl BlobStorageCommandError {
             Self::Usage(_)
             | Self::Json(_)
             | Self::IcpRoot(_)
-            | Self::InstalledFleet(
-                InstalledFleetError::NoInstalledFleet { .. }
-                | InstalledFleetError::FleetCatalog(_)
-                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
-                | InstalledFleetError::InstalledAuthority(_)
-                | InstalledFleetError::RootNotInFleet { .. },
-            )
+            | Self::InstalledFleet(_)
             | Self::UnknownTarget { .. }
             | Self::AmbiguousRole { .. }
             | Self::Icp(IcpCommandError::Io(_)) => BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED,

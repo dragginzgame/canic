@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
-use canic_core::ids::{CanonicalNetworkId, FleetId};
+use canic_core::ids::CanonicalNetworkId;
 use std::fs;
 
 // Ensure installed-Fleet lookup retains the Fleet-catalog path and JSON source.
@@ -35,57 +35,76 @@ fn retains_fleet_catalog_decode_error() {
 }
 
 #[test]
-fn coordinator_catalog_rejects_the_removed_single_root_topology_resolver() {
-    let root = temp_dir("canic-installed-fleet-coordinator");
-    fs::create_dir_all(&root).expect("create project root");
-    fs::write(
-        root.join("icp.yaml"),
-        "environments:\n  - name: staging\n    network: ic\n",
-    )
-    .expect("write ICP config");
-    let network = CanonicalNetworkId::ic_mainnet();
-    let path = root
-        .join(".canic")
-        .join("networks")
-        .join(network.to_string())
-        .join("fleets/catalog.json");
-    fs::create_dir_all(path.parent().expect("Fleet catalog parent"))
-        .expect("create Fleet catalog parent");
-    let catalog = serde_json::json!({
-        "schema_version": 1,
-        "canonical_network_id": network,
-        "entries": [{
-            "canonical_network_id": network,
-            "fleet_id": FleetId::from_generated_bytes([1; 32]),
-            "fleet_name": "demo",
-            "app": "shop",
-            "environment": "staging",
-            "deployed_at_unix_secs": 54,
-            "release_build_id": "01".repeat(32),
-            "coordinator_principal": "rrkah-fqaaa-aaaaa-aaaaq-cai"
-        }]
-    });
-    fs::write(
-        &path,
-        serde_json::to_vec_pretty(&catalog).expect("catalog JSON"),
-    )
-    .expect("write Fleet catalog");
-    let request = InstalledFleetRequest {
-        fleet: "demo".to_string(),
-        environment: "staging".to_string(),
+fn singular_root_consumers_reject_zero_or_multiple_current_roots() {
+    let topology = |roots: Vec<&str>| ResolvedFleetTopology {
+        coordinator_canister_id: "coordinator".to_string(),
+        fleet_subnet_root_canister_ids: roots.into_iter().map(str::to_string).collect(),
+        children_by_parent: BTreeMap::new(),
+        roles_by_canister: BTreeMap::new(),
     };
 
-    let error = resolve_installed_fleet_from_root(&request, &root)
-        .expect_err("Coordinator catalog must not be treated as one root");
+    assert_eq!(
+        topology(vec!["root-a"])
+            .unique_fleet_subnet_root("demo")
+            .expect("one exact root"),
+        "root-a"
+    );
+    for roots in [Vec::new(), vec!["root-a", "root-b"]] {
+        assert!(matches!(
+            topology(roots).unique_fleet_subnet_root("demo"),
+            Err(InstalledFleetError::AmbiguousFleetSubnetRoot { fleet, .. })
+                if fleet == "demo"
+        ));
+    }
+}
 
+#[test]
+fn child_projection_retains_exact_parent_role_and_raw_module_hash() {
+    let parent = Principal::from_slice(&[20; 29]);
+    let child = Principal::from_slice(&[21; 29]);
+    let entry = registry_entry_from_child(
+        CanisterInfo {
+            pid: child,
+            role: CanisterRole::from("users"),
+            parent_pid: Some(parent),
+            module_hash: Some(vec![7; 32]),
+            created_at: 81,
+        },
+        None,
+    )
+    .expect("project child");
+
+    assert_eq!(entry.pid, child.to_text());
+    assert_eq!(entry.role.as_deref(), Some("users"));
+    assert_eq!(entry.parent_pid.as_deref(), Some(parent.to_text().as_str()));
+    assert_eq!(entry.module_hash.as_deref(), Some("07".repeat(32).as_str()));
+
+    let malformed = registry_entry_from_child(
+        CanisterInfo {
+            pid: child,
+            role: CanisterRole::from("users"),
+            parent_pid: Some(parent),
+            module_hash: Some(vec![7; 31]),
+            created_at: 81,
+        },
+        None,
+    );
     assert!(matches!(
-        error,
-        InstalledFleetError::CoordinatorAnchoredTopologyUnavailable {
-            fleet,
-            coordinator,
-        } if fleet == "demo" && coordinator == "rrkah-fqaaa-aaaaa-aaaaq-cai"
+        malformed,
+        Err(InstalledFleetError::ChildInventory(_))
     ));
-    fs::remove_dir_all(root).expect("remove test directory");
+}
+
+#[test]
+fn inventory_capacity_includes_every_admitted_component_descendant() {
+    assert_eq!(
+        maximum_admission_canisters(2, 3).expect("bounded admission"),
+        8
+    );
+    assert_eq!(
+        maximum_admission_canisters(u32::MAX, u32::MAX).expect("u32 product fits u64"),
+        u64::from(u32::MAX) * (u64::from(u32::MAX) + 1)
+    );
 }
 
 #[test]

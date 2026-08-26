@@ -502,6 +502,7 @@ fn retained_recovery_names_exact_authority_without_fresh_install_advice() {
             cycles: 310_000_300_000_000,
         },
         remaining_operator_debit: PlannedCanisterCreationFunding::Cycles { cycles: 0 },
+        retained_root_repair_funding: None,
         fenced_operator_creations: 3,
         total_operator_creations: 3,
         uncertain_creation_outcomes: Vec::new(),

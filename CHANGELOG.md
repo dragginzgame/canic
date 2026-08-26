@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.12` restores bounded Coordinator-anchored installed-Fleet inventory,
+  completes reviewed retained-Root threshold funding and makes Registry-mirror
+  recovery bound stalled observations rather than successful progress; necessary
+  published-line corrections may exceed the planned 12-release guideline.
 - `0.109.11` makes complete validation stop before tests when compile or
   warning-denied Clippy fails, uses sccache for installed Canic artifact builds
   while retaining incremental local work without it, accepts exact zero-debit
