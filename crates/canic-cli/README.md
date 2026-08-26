@@ -236,6 +236,41 @@ local candidate/bundle writes still occur, so this is not a generic dry-run.
 After the preflight succeeds and the candidate is published, omit
 `--preflight` to resume the separately authorized installation.
 
+Retained Root funding is reported separately from the remaining fresh-Fleet
+creation debit. Before a protected reinspection has established the exact
+post-burn balance, preflight reports the bounded possible debit across every
+remaining repair attempt. If the live imported asset is already in the exact
+below-threshold failed state, query-only preflight retains that observation and
+prints the raw actual, required and deficit values, the exact next request and
+maximum operator debit, the cumulative remaining authority and a digest bound
+to the retained operation, Root, pool asset and protected operator. The same
+preflight output records the current operator balance and whether it covers the
+exact next debit. It does not run an upgrade, protected reinspection or cycles
+transfer.
+
+Review the structured no-effect report after preflight:
+
+```bash
+canic deploy plan <fleet> \
+  --app <app> \
+  --fleet-input <path> \
+  --release-build <release-build-id> \
+  --json
+```
+
+Only after the named operator has enough cycles for
+`next_maximum_operator_debit_cycles`, resume with the original exact repair
+arguments plus:
+
+```text
+--authorize-retained-root-repair-funding <authorization_digest>
+```
+
+The digest authorizes one exact next attempt, not the cumulative cap. Any
+changed balance or completed attempt requires another no-effect plan and a new
+digest. Insufficient balance fails before Canic retains a payment intent or
+calls the Cycles Ledger.
+
 Canic hashes both raw Wasms and resolves each deterministic adjacent `.did`
 sidecar. The historical finalized predecessor sidecar is mandatory; a
 successor build output may use `candid-extractor` only when the sidecar is
@@ -288,11 +323,15 @@ canic --environment local info list test
 canic --environment local info env test
 ```
 
-`canic info list <name>` reads the selected Fleet's live registered Canisters.
+`canic info list <name>` verifies the selected Fleet's live Coordinator
+Registry and walks the bounded canister trees owned by every current Root.
 Use `--subtree <name-or-principal>` to print one application subtree with that
-node as the rendered root.
+node as the rendered root. Removed Roots and unbound or contradictory child
+records are never projected into the result.
 `canic info env <name>` prints sourceable `CANIC_<ROLE>` canister ID exports
-for scripts and local shell helpers.
+for scripts and local shell helpers, including the exact
+`CANIC_FLEET_COORDINATOR`; repeated roles such as multiple Roots receive
+deterministic numeric suffixes.
 Live list sources query `canic_status(Readiness)` for each listed canister and
 include a `READY` column with `yes`, `no`, or `error`, plus a `CYCLES` balance
 column.

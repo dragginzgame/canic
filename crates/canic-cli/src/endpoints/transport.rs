@@ -99,9 +99,11 @@ fn load_fleet_registry(
         environment: state_environment(options),
     };
     let root = resolve_endpoint_icp_root()?;
-    Ok(resolve_installed_fleet_from_root(&request, &root)?
-        .registry
-        .entries)
+    Ok(
+        resolve_installed_fleet_from_root(&request, &options.icp, &root)?
+            .registry
+            .entries,
+    )
 }
 
 fn resolve_role_did(role: &str) -> Result<PathBuf, EndpointsCommandError> {

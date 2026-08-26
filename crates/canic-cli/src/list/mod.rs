@@ -42,12 +42,6 @@ pub enum ListCommandError {
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
-    #[error("{source}\nHint: {hint}")]
-    IcpHint {
-        source: IcpCommandError,
-        hint: &'static str,
-    },
-
     #[error(transparent)]
     InstalledFleet(#[from] InstalledFleetError),
 
@@ -139,7 +133,7 @@ where
 fn list_title(options: &ListOptions) -> ListTitle {
     let source = match options.source {
         options::ListSource::Config => ListTitleSource::App,
-        options::ListSource::RootRegistry => ListTitleSource::Fleet,
+        options::ListSource::FleetInventory => ListTitleSource::Fleet,
     };
     ListTitle {
         source,

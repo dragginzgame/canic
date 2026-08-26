@@ -176,6 +176,9 @@ fn append_install_recovery(lines: &mut Vec<String>, recovery: &FreshFleetInstall
         "  remaining_operator_debit: {}",
         render_funding(&recovery.remaining_operator_debit)
     ));
+    if let Some(repair) = recovery.retained_root_repair_funding.as_ref() {
+        append_retained_root_repair_funding(lines, repair);
+    }
     lines.push(format!(
         "  fenced_operator_creations: {}/{}",
         recovery.fenced_operator_creations, recovery.total_operator_creations
@@ -191,6 +194,66 @@ fn append_install_recovery(lines: &mut Vec<String>, recovery: &FreshFleetInstall
         ));
     }
     lines.push(String::new());
+}
+
+fn append_retained_root_repair_funding(
+    lines: &mut Vec<String>,
+    repair: &canic_host::install_root::RetainedRootRepairFundingPlanV1,
+) {
+    let pending = || "pending exact observation".to_string();
+    lines.push("  retained_root_repair_funding:".to_string());
+    lines.push(format!("    operation: {}", repair.repair_operation_id));
+    lines.push(format!(
+        "    fleet_subnet_root: {}",
+        repair.fleet_subnet_root
+    ));
+    lines.push(format!("    pool_canister: {}", repair.pool_canister));
+    lines.push(format!("    operator: {}", repair.operator));
+    lines.push(format!("    phase: {}", repair.phase));
+    lines.push(format!("    required_cycles: {}", repair.required_cycles));
+    lines.push(format!(
+        "    actual_cycles: {}",
+        repair
+            .actual_cycles
+            .map_or_else(pending, |value| value.to_string())
+    ));
+    lines.push(format!(
+        "    deficit_cycles: {}",
+        repair
+            .deficit_cycles
+            .map_or_else(pending, |value| value.to_string())
+    ));
+    lines.push(format!(
+        "    next_requested_cycles: {}",
+        repair
+            .next_requested_cycles
+            .map_or_else(pending, |value| value.to_string())
+    ));
+    lines.push(format!(
+        "    next_maximum_operator_debit_cycles: {}",
+        repair
+            .next_maximum_operator_debit_cycles
+            .map_or_else(pending, |value| value.to_string())
+    ));
+    lines.push(format!(
+        "    cumulative_remaining_authority_cycles: {}",
+        repair.cumulative_remaining_authority_cycles
+    ));
+    lines.push(format!(
+        "    completed_funding_attempts: {}",
+        repair.completed_funding_attempts
+    ));
+    lines.push(format!(
+        "    remaining_funding_attempts: {}",
+        repair.remaining_funding_attempts
+    ));
+    lines.push(format!(
+        "    authorization_digest: {}",
+        repair
+            .authorization_digest
+            .as_deref()
+            .unwrap_or("pending exact observation")
+    ));
 }
 
 fn append_catalog_acquisition(

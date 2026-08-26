@@ -60,16 +60,21 @@ pub(super) fn resolve_blob_storage_call_target(
             fleet: fleet.to_string(),
             environment: options.environment.clone(),
         },
+        &options.icp,
         &icp_root,
     )
     .map_err(BlobStorageCommandError::from)?;
+    let root_canister_id = installed
+        .topology
+        .unique_fleet_subnet_root(fleet)?
+        .to_string();
     let resolved = resolve_blob_storage_target(
         fleet,
         selector,
-        &installed.topology.root_canister_id,
+        &root_canister_id,
         &installed.registry.entries,
     )?;
-    let binding = if resolved.canister_id == installed.topology.root_canister_id {
+    let binding = if resolved.canister_id == root_canister_id {
         let manifest = load_persisted_canic_infrastructure_artifact_manifest(
             &icp_root,
             installed.fleet.release_build_id,

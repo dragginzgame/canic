@@ -46,6 +46,13 @@ The tracker may record why another same-minor boundary remains the clearer
 choice. The advisory release-cadence tool surfaces the threshold but does not
 block a maintainer's release decision.
 
+This guideline governs planned design and release-batch decomposition. It does
+not cap necessary correctness, security, recovery or operator-regression
+follow-ups discovered after a minor has been published. Those corrections stay
+on the affected minor when moving them would strand its users, even when that
+exceeds 12 releases. They must still form coherent batches and must not turn
+routine one-proof or one-fallout work into separate patches.
+
 ## Release-Batch Contract
 
 Each planned release batch names:
@@ -208,10 +215,10 @@ Each tracker row records:
 
 Historical releases are immutable and are not renumbered or collapsed. An
 active minor that already exceeds the guideline adopts this policy
-prospectively:
-keep the current patch draft open for its complete outcome, consolidate the
-remaining tracker into a small number of honest batches, and avoid further
-one-proof or one-fallout releases.
+prospectively: keep the current patch draft open for its complete outcome,
+consolidate planned work into a small number of honest batches, and avoid
+further one-proof or one-fallout releases. Necessary follow-up corrections to
+the published line remain permitted under the boundary above.
 
 ## Tooling
 

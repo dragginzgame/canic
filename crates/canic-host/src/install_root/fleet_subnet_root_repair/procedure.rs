@@ -34,6 +34,7 @@ use canic_core::{
     protocol,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{fmt::Write as _, io, path::PathBuf};
 use thiserror::Error as ThisError;
 
@@ -75,6 +76,7 @@ enum RetainedRootRepairOperationPhaseV1 {
     UpgradeVerified,
     TopUpInFlight,
     ReinspectionInFlight,
+    FundingRequired,
     AssetReady,
     Adopted,
 }
@@ -122,7 +124,7 @@ pub(in crate::install_root) struct RetainedRootRepairOperationV1 {
 impl RetainedRootRepairOperationV1 {
     pub(super) fn test_funding_reconciliation(
         &self,
-    ) -> Result<(usize, u128, u128), RetainedRootRepairProcedureError> {
+    ) -> Result<(usize, u128, u128, u128), RetainedRootRepairProcedureError> {
         Ok((
             self.funding_attempts.len(),
             sum_observed(&self.funding_attempts, |attempt| {
@@ -130,6 +132,9 @@ impl RetainedRootRepairOperationV1 {
             })?,
             sum_observed(&self.funding_attempts, |attempt| {
                 attempt.asset_credit_cycles
+            })?,
+            sum_observed(&self.funding_attempts, |attempt| {
+                attempt.observed_fee_and_burn_cycles
             })?,
         ))
     }
@@ -188,6 +193,12 @@ pub(in crate::install_root) enum RetainedRootRepairProcedureError {
     #[error("retained Root repair exceeded four exact funding reconciliation attempts")]
     FundingAttemptBoundExceeded,
 
+    #[error(transparent)]
+    FundingReviewRequired(Box<RetainedRootRepairFundingReviewRequired>),
+
+    #[error("retained Root repair funding authorization digest is missing or stale")]
+    FundingAuthorizationMismatch,
+
     #[error(
         "retained Root repair requires {required_cycles} operator cycles for the next exact top-up but only {available_cycles} are available"
     )]
@@ -200,12 +211,31 @@ pub(in crate::install_root) enum RetainedRootRepairProcedureError {
     ReinspectionResponseMismatch,
 }
 
+#[derive(Debug, ThisError)]
+#[error(
+    "retained Root repair funding requires operator review: actual={actual_cycles} required={required_cycles} deficit={deficit_cycles} requested={requested_cycles} fee={fee_cycles} margin={margin_cycles} next_maximum_operator_debit={next_maximum_operator_debit_cycles} cumulative_remaining_authority={cumulative_remaining_authority_cycles} remaining_attempts={remaining_attempts} authorization_digest={authorization_digest}; Root retained {failure_reason}"
+)]
+pub(in crate::install_root) struct RetainedRootRepairFundingReviewRequired {
+    actual_cycles: u128,
+    required_cycles: u128,
+    deficit_cycles: u128,
+    requested_cycles: u128,
+    fee_cycles: u128,
+    margin_cycles: u128,
+    next_maximum_operator_debit_cycles: u128,
+    cumulative_remaining_authority_cycles: u128,
+    remaining_attempts: usize,
+    authorization_digest: String,
+    failure_reason: String,
+}
+
 /// Execute or reconcile every effect admitted by one exact retained Root repair receipt.
 pub(in crate::install_root) fn execute_retained_root_repair(
     icp_context: &InstallIcpContext,
     root_binding: &ResolvedProtocolBinding,
     resolved: &ResolvedRetainedRootRepair,
     successor_wasm: &std::path::Path,
+    funding_authorization_digest: Option<&str>,
     recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
@@ -228,6 +258,7 @@ pub(in crate::install_root) fn execute_retained_root_repair(
         &operation_path,
         current,
         &resolved.authority,
+        funding_authorization_digest,
         recovery_bundle,
     )?;
     print_reconciliation(&current)?;
@@ -287,6 +318,99 @@ pub(in crate::install_root) fn validate_recovery_bundle_repair_operation_bytes(
     Ok(())
 }
 
+/// Read-only funding exposure retained by one exact repair operation.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::install_root) struct RetainedRootRepairFundingExposureV1 {
+    pub repair_operation_id: String,
+    pub fleet_subnet_root: String,
+    pub pool_canister: String,
+    pub operator: String,
+    pub phase: String,
+    pub actual_cycles: Option<u128>,
+    pub required_cycles: u128,
+    pub deficit_cycles: Option<u128>,
+    pub next_requested_cycles: Option<u128>,
+    pub next_maximum_operator_debit_cycles: Option<u128>,
+    pub cumulative_remaining_authority_cycles: u128,
+    pub completed_funding_attempts: usize,
+    pub remaining_funding_attempts: usize,
+    pub authorization_digest: Option<String>,
+    pub operator_available_cycles: Option<u128>,
+    pub operator_balance_sufficient: Option<bool>,
+}
+
+/// Inspect an existing operation without creating or replacing any retained evidence.
+pub(in crate::install_root) fn inspect_retained_root_repair_funding(
+    resolved: &ResolvedRetainedRootRepair,
+) -> Result<Option<RetainedRootRepairFundingExposureV1>, RetainedRootRepairProcedureError> {
+    let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
+    let operation = load_optional_operation(&operation_path)?
+        .unwrap_or_else(|| planned_operation(&resolved.authority));
+    validate_operation(&operation_path, &operation, &resolved.authority)?;
+    funding_exposure(&operation, &resolved.authority).map(Some)
+}
+
+/// Observe an existing repair's exact pool balance without issuing a repair or payment effect.
+///
+/// A retained `reinspection_in_flight` checkpoint may be behind a live failed pool row when the
+/// protected reinspection crossed the funding threshold before the host recorded its result. This
+/// preflight boundary may retain that exact query observation as `funding_required`; it never
+/// creates a repair operation, invokes the protected reinspection command, upgrades a Root, or
+/// transfers cycles.
+pub(in crate::install_root) fn preflight_retained_root_repair_funding(
+    icp_context: &InstallIcpContext,
+    root_binding: &ResolvedProtocolBinding,
+    resolved: &ResolvedRetainedRootRepair,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
+) -> Result<RetainedRootRepairFundingExposureV1, Box<dyn std::error::Error>> {
+    let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
+    let lock_path = resolved.path.with_file_name(REPAIR_OPERATION_LOCK_FILE);
+    let _lock = lock_operation(&lock_path)?;
+    let Some(mut current) = load_optional_operation(&operation_path)? else {
+        return funding_exposure(&planned_operation(&resolved.authority), &resolved.authority)
+            .map_err(Into::into);
+    };
+    validate_operation(&operation_path, &current, &resolved.authority)?;
+
+    let may_observe_exact_balance = matches!(
+        current.phase,
+        RetainedRootRepairOperationPhaseV1::ReinspectionInFlight
+            | RetainedRootRepairOperationPhaseV1::FundingRequired
+    ) && !has_incomplete_funding_attempt(&current);
+    if may_observe_exact_balance {
+        let asset = query_pool_asset(icp_context, root_binding, &resolved.authority)?;
+        require_repairable_asset(&asset)?;
+        let actual_cycles = asset.cycles.to_u128();
+        if actual_cycles < resolved.authority.required_pool_cycles {
+            if current.phase != RetainedRootRepairOperationPhaseV1::FundingRequired
+                || current.final_actual_cycles != Some(actual_cycles)
+            {
+                current.phase = RetainedRootRepairOperationPhaseV1::FundingRequired;
+                current.final_actual_cycles = Some(actual_cycles);
+                replace_operation(&operation_path, &current)?;
+                recovery_bundle.checkpoint()?;
+            }
+        } else if current.phase == RetainedRootRepairOperationPhaseV1::FundingRequired {
+            // An external top-up invalidates the retained debit digest. The protected Root
+            // reinspection still owns the transition to Ready, so preflight records only that the
+            // prior exact funding request is no longer current.
+            current.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
+            current.final_actual_cycles = None;
+            replace_operation(&operation_path, &current)?;
+            recovery_bundle.checkpoint()?;
+        }
+    }
+
+    let mut exposure = funding_exposure(&current, &resolved.authority)?;
+    if let Some(required_cycles) = exposure.next_maximum_operator_debit_cycles {
+        let available_cycles = icp_context.cli().identity_cycles_balance()?;
+        exposure.operator_available_cycles = Some(available_cycles);
+        exposure.operator_balance_sufficient = Some(available_cycles >= required_cycles);
+    }
+    Ok(exposure)
+}
+
 #[cfg(test)]
 pub(super) fn write_asset_ready_test_operation(
     resolved: &ResolvedRetainedRootRepair,
@@ -305,6 +429,7 @@ pub(super) fn write_reinspection_in_flight_test_operation(
     let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
     let mut operation = create_or_load_operation(&operation_path, &resolved.authority)?;
     operation.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
+    operation.final_actual_cycles = None;
     replace_operation(&operation_path, &operation)
 }
 
@@ -383,6 +508,7 @@ fn reconcile_pool_asset(
     path: &std::path::Path,
     mut current: RetainedRootRepairOperationV1,
     receipt: &RetainedRootRepairAuthorityV1,
+    funding_authorization_digest: Option<&str>,
     recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     if matches!(
@@ -397,81 +523,143 @@ fn reconcile_pool_asset(
         return Ok(current);
     }
 
-    loop {
-        let before = query_pool_asset(icp_context, root_binding, receipt)?;
-        require_repairable_asset(&before)?;
-        if before.cycles.to_u128() >= receipt.required_pool_cycles {
-            current.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
-            replace_operation(path, &current)?;
-            recovery_bundle.checkpoint()?;
-            reinspect_pool_asset(icp_context, root_binding, receipt)?;
-            let ready = query_pool_asset(icp_context, root_binding, receipt)?;
-            require_ready_asset(&ready, receipt.required_pool_cycles)?;
-            current.final_actual_cycles = Some(ready.cycles.to_u128());
-            current.phase = RetainedRootRepairOperationPhaseV1::AssetReady;
-            replace_operation(path, &current)?;
-            recovery_bundle.checkpoint()?;
-            return Ok(current);
-        }
-
-        if current.funding_attempts.len() >= MAX_FUNDING_ATTEMPTS {
-            return Err(RetainedRootRepairProcedureError::FundingAttemptBoundExceeded.into());
-        }
-        if matches!(
-            current.phase,
-            RetainedRootRepairOperationPhaseV1::TopUpInFlight
-                | RetainedRootRepairOperationPhaseV1::ReinspectionInFlight
-        ) {
-            return reconcile_uncertain_top_up(
-                icp_context,
-                root_binding,
-                path,
-                current,
-                receipt,
-                recovery_bundle,
-            );
-        }
-
-        let plan = begin_funding_attempt(
-            icp_context,
-            path,
-            &mut current,
-            before.cycles.to_u128(),
-            receipt,
-            recovery_bundle,
-        )?;
-
-        let command_result = icp_context
-            .cli()
-            .canister_top_up_output(&receipt.pool_canister.to_text(), plan.requested_cycles);
-        if let Ok(output) = &command_result {
-            let bounded = bounded_command_receipt(
-                output.clone(),
-                RetainedRootRepairProcedureError::TopUpReceiptTooLarge,
-            )?;
-            current
-                .funding_attempts
-                .last_mut()
-                .expect("funding intent was retained")
-                .command_receipt = Some(bounded);
-        }
-        current.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
-        replace_operation(path, &current)?;
-        recovery_bundle.checkpoint()?;
-        reinspect_pool_asset(icp_context, root_binding, receipt)?;
-        current = reconcile_top_up_observation(
+    let before = query_pool_asset(icp_context, root_binding, receipt)?;
+    require_repairable_asset(&before)?;
+    if has_incomplete_funding_attempt(&current) {
+        return reconcile_uncertain_top_up(
             icp_context,
             root_binding,
             path,
             current,
             receipt,
-            command_result.is_ok(),
             recovery_bundle,
-        )?;
-        if current.phase == RetainedRootRepairOperationPhaseV1::AssetReady {
-            return Ok(current);
-        }
+        );
     }
+    if before.cycles.to_u128() >= receipt.required_pool_cycles {
+        current.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
+        replace_operation(path, &current)?;
+        recovery_bundle.checkpoint()?;
+        reinspect_pool_asset(icp_context, root_binding, receipt)?;
+        let ready = query_pool_asset(icp_context, root_binding, receipt)?;
+        if ready.cycles.to_u128() < receipt.required_pool_cycles {
+            return retain_funding_required(path, current, &ready, receipt, recovery_bundle);
+        }
+        require_ready_asset(&ready, receipt.required_pool_cycles)?;
+        current.final_actual_cycles = Some(ready.cycles.to_u128());
+        current.phase = RetainedRootRepairOperationPhaseV1::AssetReady;
+        replace_operation(path, &current)?;
+        recovery_bundle.checkpoint()?;
+        return Ok(current);
+    }
+
+    if current.funding_attempts.len() >= MAX_FUNDING_ATTEMPTS {
+        return Err(RetainedRootRepairProcedureError::FundingAttemptBoundExceeded.into());
+    }
+
+    if current.phase != RetainedRootRepairOperationPhaseV1::FundingRequired
+        || current.final_actual_cycles != Some(before.cycles.to_u128())
+    {
+        return retain_funding_required(path, current, &before, receipt, recovery_bundle);
+    }
+
+    let exposure = funding_exposure(&current, receipt)?;
+    if funding_authorization_digest != exposure.authorization_digest.as_deref() {
+        return Err(RetainedRootRepairProcedureError::FundingAuthorizationMismatch.into());
+    }
+
+    let plan = begin_funding_attempt(
+        icp_context,
+        path,
+        &mut current,
+        before.cycles.to_u128(),
+        receipt,
+        recovery_bundle,
+    )?;
+
+    let command_result = icp_context
+        .cli()
+        .canister_top_up_output(&receipt.pool_canister.to_text(), plan.requested_cycles);
+    if let Ok(output) = &command_result {
+        let bounded = bounded_command_receipt(
+            output.clone(),
+            RetainedRootRepairProcedureError::TopUpReceiptTooLarge,
+        )?;
+        current
+            .funding_attempts
+            .last_mut()
+            .expect("funding intent was retained")
+            .command_receipt = Some(bounded);
+    }
+    current.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
+    replace_operation(path, &current)?;
+    recovery_bundle.checkpoint()?;
+    reinspect_pool_asset(icp_context, root_binding, receipt)?;
+    current = reconcile_top_up_observation(
+        icp_context,
+        root_binding,
+        path,
+        current,
+        receipt,
+        command_result.is_ok(),
+        recovery_bundle,
+    )?;
+    if current.phase == RetainedRootRepairOperationPhaseV1::AssetReady {
+        return Ok(current);
+    }
+    let after = query_pool_asset(icp_context, root_binding, receipt)?;
+    retain_funding_required(path, current, &after, receipt, recovery_bundle)
+}
+
+fn retain_funding_required(
+    path: &std::path::Path,
+    mut current: RetainedRootRepairOperationV1,
+    asset: &CanisterPoolAsset,
+    receipt: &RetainedRootRepairAuthorityV1,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
+) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
+    require_repairable_asset(asset)?;
+    if asset.cycles.to_u128() >= receipt.required_pool_cycles {
+        return Err(RetainedRootRepairProcedureError::PoolAssetIneligible.into());
+    }
+    current.final_actual_cycles = Some(asset.cycles.to_u128());
+    current.phase = RetainedRootRepairOperationPhaseV1::FundingRequired;
+    replace_operation(path, &current)?;
+    recovery_bundle.checkpoint()?;
+    let exposure = funding_exposure(&current, receipt)?;
+    let plan = funding_plan(
+        asset.cycles.to_u128(),
+        receipt.required_pool_cycles,
+        receipt.top_up_fee_cycles,
+        receipt.top_up_margin_cycles,
+    )?;
+    Err(
+        RetainedRootRepairProcedureError::FundingReviewRequired(Box::new(
+            RetainedRootRepairFundingReviewRequired {
+                actual_cycles: plan.actual_cycles,
+                required_cycles: plan.required_cycles,
+                deficit_cycles: plan.deficit_cycles,
+                requested_cycles: plan.requested_cycles,
+                fee_cycles: plan.fee_cycles,
+                margin_cycles: plan.margin_cycles,
+                next_maximum_operator_debit_cycles: plan.maximum_operator_debit_cycles,
+                cumulative_remaining_authority_cycles: exposure
+                    .cumulative_remaining_authority_cycles,
+                remaining_attempts: exposure.remaining_funding_attempts,
+                authorization_digest: exposure
+                    .authorization_digest
+                    .expect("funding-required exposure has an authorization digest"),
+                failure_reason: repairable_failure_reason(asset),
+            },
+        ))
+        .into(),
+    )
+}
+
+fn has_incomplete_funding_attempt(operation: &RetainedRootRepairOperationV1) -> bool {
+    operation
+        .funding_attempts
+        .last()
+        .is_some_and(|attempt| attempt.actual_cycles_after.is_none())
 }
 
 fn begin_funding_attempt(
@@ -588,7 +776,8 @@ fn reconcile_top_up_observation(
         current.phase = RetainedRootRepairOperationPhaseV1::AssetReady;
     } else {
         require_repairable_asset(&after)?;
-        current.phase = RetainedRootRepairOperationPhaseV1::UpgradeVerified;
+        current.final_actual_cycles = Some(after.cycles.to_u128());
+        current.phase = RetainedRootRepairOperationPhaseV1::FundingRequired;
     }
     replace_operation(path, &current)?;
     recovery_bundle.checkpoint()?;
@@ -705,6 +894,165 @@ struct RetainedRootRepairFundingObservation {
     observed_fee_and_burn_cycles: u128,
 }
 
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
+struct RetainedRootRepairFundingAuthorizationV1 {
+    schema_version: u16,
+    repair_operation_id: [u8; 32],
+    fleet_subnet_root: Principal,
+    pool_canister: Principal,
+    operator: Principal,
+    actual_cycles: u128,
+    required_cycles: u128,
+    deficit_cycles: u128,
+    requested_cycles: u128,
+    maximum_operator_debit_cycles: u128,
+    cumulative_remaining_authority_cycles: u128,
+    completed_funding_attempts: usize,
+    remaining_funding_attempts: usize,
+}
+
+fn funding_exposure(
+    operation: &RetainedRootRepairOperationV1,
+    receipt: &RetainedRootRepairAuthorityV1,
+) -> Result<RetainedRootRepairFundingExposureV1, RetainedRootRepairProcedureError> {
+    let terminal = matches!(
+        operation.phase,
+        RetainedRootRepairOperationPhaseV1::AssetReady
+            | RetainedRootRepairOperationPhaseV1::Adopted
+    );
+    let remaining_funding_attempts = if terminal {
+        0
+    } else {
+        MAX_FUNDING_ATTEMPTS
+            .checked_sub(operation.funding_attempts.len())
+            .ok_or(RetainedRootRepairProcedureError::FundingAttemptBoundExceeded)?
+    };
+    let actual_cycles = (operation.phase == RetainedRootRepairOperationPhaseV1::FundingRequired)
+        .then_some(operation.final_actual_cycles)
+        .flatten();
+    let exact_plan = actual_cycles
+        .map(|actual| {
+            funding_plan(
+                actual,
+                receipt.required_pool_cycles,
+                receipt.top_up_fee_cycles,
+                receipt.top_up_margin_cycles,
+            )
+        })
+        .transpose()?;
+    let next = (remaining_funding_attempts > 0)
+        .then_some(exact_plan)
+        .flatten();
+    let worst_case_attempt = receipt
+        .required_pool_cycles
+        .checked_add(receipt.top_up_margin_cycles)
+        .and_then(|cycles| cycles.checked_add(receipt.top_up_fee_cycles))
+        .ok_or(RetainedRootRepairProcedureError::ArithmeticOverflow)?;
+    let cumulative_remaining_authority_cycles = match next {
+        Some(next) => {
+            let later_attempts = remaining_funding_attempts.saturating_sub(1);
+            next.maximum_operator_debit_cycles
+                .checked_add(
+                    worst_case_attempt
+                        .checked_mul(later_attempts as u128)
+                        .ok_or(RetainedRootRepairProcedureError::ArithmeticOverflow)?,
+                )
+                .ok_or(RetainedRootRepairProcedureError::ArithmeticOverflow)?
+        }
+        None => worst_case_attempt
+            .checked_mul(remaining_funding_attempts as u128)
+            .ok_or(RetainedRootRepairProcedureError::ArithmeticOverflow)?,
+    };
+    let authorization_digest = next
+        .map(|plan| {
+            funding_authorization_digest(
+                operation,
+                receipt,
+                plan,
+                remaining_funding_attempts,
+                cumulative_remaining_authority_cycles,
+            )
+        })
+        .transpose()?;
+    Ok(RetainedRootRepairFundingExposureV1 {
+        repair_operation_id: hex_digest(operation.repair_operation_id),
+        fleet_subnet_root: operation.fleet_subnet_root.to_text(),
+        pool_canister: operation.pool_canister.to_text(),
+        operator: receipt.installation_controller.to_text(),
+        phase: operation_phase_label(operation.phase).to_string(),
+        actual_cycles,
+        required_cycles: receipt.required_pool_cycles,
+        deficit_cycles: exact_plan.map(|plan| plan.deficit_cycles),
+        next_requested_cycles: next.map(|plan| plan.requested_cycles),
+        next_maximum_operator_debit_cycles: next.map(|plan| plan.maximum_operator_debit_cycles),
+        cumulative_remaining_authority_cycles,
+        completed_funding_attempts: operation.funding_attempts.len(),
+        remaining_funding_attempts,
+        authorization_digest,
+        operator_available_cycles: None,
+        operator_balance_sufficient: None,
+    })
+}
+
+fn funding_authorization_digest(
+    operation: &RetainedRootRepairOperationV1,
+    receipt: &RetainedRootRepairAuthorityV1,
+    plan: RetainedRootRepairFundingPlan,
+    remaining_funding_attempts: usize,
+    cumulative_remaining_authority_cycles: u128,
+) -> Result<String, RetainedRootRepairProcedureError> {
+    let authority = RetainedRootRepairFundingAuthorizationV1 {
+        schema_version: 1,
+        repair_operation_id: operation.repair_operation_id,
+        fleet_subnet_root: operation.fleet_subnet_root,
+        pool_canister: operation.pool_canister,
+        operator: receipt.installation_controller,
+        actual_cycles: plan.actual_cycles,
+        required_cycles: plan.required_cycles,
+        deficit_cycles: plan.deficit_cycles,
+        requested_cycles: plan.requested_cycles,
+        maximum_operator_debit_cycles: plan.maximum_operator_debit_cycles,
+        cumulative_remaining_authority_cycles,
+        completed_funding_attempts: operation.funding_attempts.len(),
+        remaining_funding_attempts,
+    };
+    let bytes = serde_json::to_vec(&authority).map_err(|error| {
+        invalid(
+            std::path::Path::new(REPAIR_OPERATION_FILE),
+            error.to_string(),
+        )
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(b"canic.retained-root-repair.funding-authorization.v1\0");
+    hasher.update(bytes);
+    Ok(hex_digest(hasher.finalize().into()))
+}
+
+const fn operation_phase_label(phase: RetainedRootRepairOperationPhaseV1) -> &'static str {
+    match phase {
+        RetainedRootRepairOperationPhaseV1::Planned => "planned",
+        RetainedRootRepairOperationPhaseV1::UpgradeInFlight => "upgrade_in_flight",
+        RetainedRootRepairOperationPhaseV1::UpgradeVerified => "upgrade_verified",
+        RetainedRootRepairOperationPhaseV1::TopUpInFlight => "top_up_in_flight",
+        RetainedRootRepairOperationPhaseV1::ReinspectionInFlight => "reinspection_in_flight",
+        RetainedRootRepairOperationPhaseV1::FundingRequired => "funding_required",
+        RetainedRootRepairOperationPhaseV1::AssetReady => "asset_ready",
+        RetainedRootRepairOperationPhaseV1::Adopted => "adopted",
+    }
+}
+
+fn repairable_failure_reason(asset: &CanisterPoolAsset) -> String {
+    match &asset.status {
+        CanisterPoolAssetStatus::Failed { reason } => format!("ResetFailed(reason={reason})"),
+        CanisterPoolAssetStatus::Ready => "Ready below the retained requirement".to_string(),
+        CanisterPoolAssetStatus::PendingReset => {
+            "PendingReset below the retained requirement".to_string()
+        }
+        _ => "an unexpected repairable state".to_string(),
+    }
+}
+
 fn funding_plan(
     actual_cycles: u128,
     required_cycles: u128,
@@ -766,21 +1114,7 @@ fn create_or_load_operation(
     path: &std::path::Path,
     receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<RetainedRootRepairOperationV1, RetainedRootRepairProcedureError> {
-    let expected = RetainedRootRepairOperationV1 {
-        schema_version: REPAIR_OPERATION_SCHEMA_VERSION,
-        repair_operation_id: receipt.repair_operation_id,
-        fleet_subnet_root: receipt.fleet_subnet_root,
-        pool_canister: receipt.pool_canister,
-        upgrade_predecessor_module_sha256: receipt.upgrade_predecessor_module_sha256,
-        successor_module_sha256: receipt.successor_module_sha256,
-        required_pool_cycles: receipt.required_pool_cycles,
-        top_up_fee_cycles: receipt.top_up_fee_cycles,
-        top_up_margin_cycles: receipt.top_up_margin_cycles,
-        phase: RetainedRootRepairOperationPhaseV1::Planned,
-        upgrade_command_receipt: None,
-        funding_attempts: Vec::new(),
-        final_actual_cycles: None,
-    };
+    let expected = planned_operation(receipt);
     if let Some(current) = load_optional_operation(path)? {
         validate_operation(path, &current, receipt)?;
         return Ok(current);
@@ -801,6 +1135,26 @@ fn create_or_load_operation(
             path: path.to_path_buf(),
             source,
         }),
+    }
+}
+
+const fn planned_operation(
+    receipt: &RetainedRootRepairAuthorityV1,
+) -> RetainedRootRepairOperationV1 {
+    RetainedRootRepairOperationV1 {
+        schema_version: REPAIR_OPERATION_SCHEMA_VERSION,
+        repair_operation_id: receipt.repair_operation_id,
+        fleet_subnet_root: receipt.fleet_subnet_root,
+        pool_canister: receipt.pool_canister,
+        upgrade_predecessor_module_sha256: receipt.upgrade_predecessor_module_sha256,
+        successor_module_sha256: receipt.successor_module_sha256,
+        required_pool_cycles: receipt.required_pool_cycles,
+        top_up_fee_cycles: receipt.top_up_fee_cycles,
+        top_up_margin_cycles: receipt.top_up_margin_cycles,
+        phase: RetainedRootRepairOperationPhaseV1::Planned,
+        upgrade_command_receipt: None,
+        funding_attempts: Vec::new(),
+        final_actual_cycles: None,
     }
 }
 
@@ -834,6 +1188,16 @@ fn validate_operation(
         return Err(invalid(
             path,
             "terminal repair operation omits exact adequate pool balance",
+        ));
+    }
+    if operation.phase == RetainedRootRepairOperationPhaseV1::FundingRequired
+        && operation
+            .final_actual_cycles
+            .is_none_or(|actual| actual >= operation.required_pool_cycles)
+    {
+        return Err(invalid(
+            path,
+            "funding-required repair operation omits its exact below-threshold balance",
         ));
     }
     validate_funding_attempts(path, operation, receipt)?;
@@ -938,6 +1302,7 @@ const fn funding_phase_accepts_observation(
         RetainedRootRepairOperationPhaseV1::Planned
         | RetainedRootRepairOperationPhaseV1::UpgradeInFlight
         | RetainedRootRepairOperationPhaseV1::UpgradeVerified
+        | RetainedRootRepairOperationPhaseV1::FundingRequired
         | RetainedRootRepairOperationPhaseV1::AssetReady
         | RetainedRootRepairOperationPhaseV1::Adopted => !has_incomplete_attempt,
     }

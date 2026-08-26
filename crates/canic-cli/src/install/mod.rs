@@ -33,6 +33,7 @@ use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
+const AUTHORIZE_RETAINED_ROOT_REPAIR_FUNDING_ARG: &str = "authorize-retained-root-repair-funding";
 const EXPECTED_PLAN_DIGEST_ARG: &str = "expected-plan-digest";
 const FLEET_INPUT_ARG: &str = "fleet-input";
 const PREFLIGHT_ARG: &str = "preflight";
@@ -89,6 +90,7 @@ struct InstallOptions {
     profile: Option<CanisterBuildProfile>,
     release_build_id: Option<ReleaseBuildId>,
     retained_root_repair_adoption: Option<RetainedRootRepairAdoption>,
+    retained_root_repair_funding_authorization: Option<String>,
     fleet_input: PathBuf,
 }
 
@@ -109,6 +111,9 @@ impl InstallOptions {
             profile: typed_option(&matches, "profile"),
             release_build_id: typed_option(&matches, RELEASE_BUILD_ARG),
             retained_root_repair_adoption: typed_option(&matches, RETAINED_ROOT_REPAIR_ARG),
+            retained_root_repair_funding_authorization: matches
+                .get_one::<String>(AUTHORIZE_RETAINED_ROOT_REPAIR_FUNDING_ARG)
+                .cloned(),
             fleet_input: PathBuf::from(required_string(&matches, FLEET_INPUT_ARG)),
         })
     }
@@ -140,6 +145,8 @@ impl InstallOptions {
             admitted_fresh_fleet_plan_digest: None,
             expected_app: Some(self.app),
             retained_root_repair_adoption: self.retained_root_repair_adoption,
+            retained_root_repair_funding_authorization: self
+                .retained_root_repair_funding_authorization,
             interactive_config_selection: false,
             deployment_plan_override: None,
         }
@@ -152,6 +159,16 @@ fn install_command() -> ClapCommand {
         .about("Install and bootstrap a Canic fleet")
         .disable_help_flag(true)
         .override_usage("canic install <app> <fleet> --fleet-input <PATH>")
+        .arg(
+            value_arg(AUTHORIZE_RETAINED_ROOT_REPAIR_FUNDING_ARG)
+                .long(AUTHORIZE_RETAINED_ROOT_REPAIR_FUNDING_ARG)
+                .value_name("SHA256")
+                .num_args(1)
+                .value_parser(parse_repair_funding_digest)
+                .help(
+                    "Authorize only the exact reviewed next retained-Root repair debit",
+                ),
+        )
         .arg(
             value_arg("app")
                 .value_name("app")
@@ -225,6 +242,12 @@ fn parse_plan_digest(value: &str) -> Result<String, String> {
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'));
     valid.then(|| value.to_string()).ok_or_else(|| {
         "plan digest must contain exactly 64 lowercase hexadecimal characters".to_string()
+    })
+}
+
+fn parse_repair_funding_digest(value: &str) -> Result<String, String> {
+    parse_plan_digest(value).map_err(|_| {
+        "repair funding digest must contain exactly 64 lowercase hexadecimal characters".to_string()
     })
 }
 

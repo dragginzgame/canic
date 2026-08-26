@@ -119,8 +119,10 @@ and safety. It is not a release patch by default.
 
 Release grouping, continuation and handoff readiness are governed by
 [delivery cadence governance](delivery-cadence.md). A minor has no minimum
-release count and should normally publish no more than 12 releases; an
-implementation slice is not automatically a release.
+release count and planned design cadence should normally publish no more than
+12 releases; necessary post-publication correctness, security, recovery and
+operator-regression fixes may exceed that guideline. An implementation slice
+is not automatically a release.
 
 Default development cadence:
 

@@ -7,7 +7,7 @@ use canic_host::{
     canister_ready::{query_canister_ready, query_local_canister_ready},
     cycle_balance::query_cycle_balance,
     format::{cycles_tc, wasm_size_label},
-    icp::{IcpCli, IcpDiagnostic, classify_icp_diagnostic},
+    icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     installed_fleet::{
         InstalledFleetRequest, InstalledFleetResolution, resolve_installed_fleet_from_root,
@@ -32,7 +32,7 @@ pub(super) fn load_registry_entries(
     options: &ListOptions,
 ) -> Result<Vec<RegistryEntry>, ListCommandError> {
     let registry = match options.source {
-        ListSource::RootRegistry => resolve_list_fleet(options)?.registry.entries,
+        ListSource::FleetInventory => resolve_list_fleet(options)?.registry.entries,
         ListSource::Config => {
             unreachable!("config source does not use registry entries")
         }
@@ -266,38 +266,14 @@ fn resolve_list_fleet(options: &ListOptions) -> Result<InstalledFleetResolution,
             fleet: options.target.clone(),
             environment: state_environment(options),
         },
+        &options.icp,
         &icp_root,
     )
     .map_err(ListCommandError::from)
-    .map_err(add_root_registry_hint)
 }
 
 fn resolve_live_icp_root() -> Result<PathBuf, ListCommandError> {
     resolve_current_canic_icp_root().map_err(ListCommandError::from)
-}
-
-fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
-    match error {
-        ListCommandError::Icp(source) => {
-            let Some(hint) = source.external_output().and_then(root_registry_hint) else {
-                return ListCommandError::Icp(source);
-            };
-            ListCommandError::IcpHint { source, hint }
-        }
-        error => error,
-    }
-}
-
-fn root_registry_hint(stderr: &str) -> Option<&'static str> {
-    match classify_icp_diagnostic(stderr) {
-        Some(IcpDiagnostic::CanisterIdMissing) => Some(
-            "no root canister id exists for this Fleet. Use `canic app config <app>` to inspect source config, or run `canic install <app> <fleet> --fleet-input <path>` before querying the root registry.",
-        ),
-        Some(IcpDiagnostic::CanisterWasmMissing) => Some(
-            "the root canister id exists but no Canic root code is installed. Run `canic install <app> <fleet> --fleet-input <path>`, then use `canic info list <fleet>`.",
-        ),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

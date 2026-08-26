@@ -532,7 +532,21 @@ fn retained_repair_adoption_reaches_component_catalog_completion_and_closes_reco
         pool_cycles: 5_500_000_000_000,
         live_successor: true,
         restart_at_reinspection_without_funding: true,
+        advance_pool_time_before_reinspection: false,
+        operator_funding_cycles: 2_000_000_000_000,
         expected_funding_attempts: 0,
+    });
+    execute_exact_repair_and_reject_conflicts(&fixture);
+    install_qualification_component(&fixture);
+    complete_catalog_and_close_recovery(&fixture);
+
+    let fixture = retained_repair_journey_fixture_with_start(RetainedRepairStartingState {
+        pool_cycles: 5_000_000_000_001,
+        live_successor: true,
+        restart_at_reinspection_without_funding: true,
+        advance_pool_time_before_reinspection: true,
+        operator_funding_cycles: 276_968,
+        expected_funding_attempts: 1,
     });
     execute_exact_repair_and_reject_conflicts(&fixture);
     install_qualification_component(&fixture);
@@ -544,6 +558,8 @@ struct RetainedRepairStartingState {
     pool_cycles: u128,
     live_successor: bool,
     restart_at_reinspection_without_funding: bool,
+    advance_pool_time_before_reinspection: bool,
+    operator_funding_cycles: u128,
     expected_funding_attempts: usize,
 }
 
@@ -564,6 +580,8 @@ struct RetainedRepairJourneyFixture {
     wrong_candid_path: PathBuf,
     successor_module_sha256: [u8; 32],
     recovery_bundle_path: PathBuf,
+    network_url: String,
+    root_key: String,
     starting_state: RetainedRepairStartingState,
 }
 
@@ -583,6 +601,8 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
         pool_cycles: 4_500_000_000_000,
         live_successor: false,
         restart_at_reinspection_without_funding: false,
+        advance_pool_time_before_reinspection: false,
+        operator_funding_cycles: 2_000_000_000_000,
         expected_funding_attempts: 1,
     })
 }
@@ -691,14 +711,18 @@ fn retained_repair_journey_fixture_with_start(
         &controller,
         live_url.as_str(),
         &root_key,
-        2_000_000_000_000,
+        starting_state.operator_funding_cycles,
     );
     let icp_context = InstallIcpContext::new(&icp_executable, &root, "local").with_local_replica(
         Some(LocalReplicaTarget {
             url: live_url.to_string(),
-            root_key,
+            root_key: root_key.clone(),
         }),
     );
+    if starting_state.advance_pool_time_before_reinspection {
+        pic.advance_time(std::time::Duration::from_mins(1));
+        pic.tick();
+    }
     assert_eq!(
         pic.canister_status(fleet_subnet_root, Some(controller))
             .expect("read retained Root status")
@@ -730,6 +754,8 @@ fn retained_repair_journey_fixture_with_start(
         wrong_candid_path: artifacts.wrong_candid_path,
         successor_module_sha256,
         recovery_bundle_path: crate::test_support::temp_dir("retained-root-repair-pocketic-bundle"),
+        network_url: live_url.to_string(),
+        root_key,
         starting_state,
     }
 }
@@ -1569,19 +1595,31 @@ fn advance_repair_checkpoint_through_canonical_journal(
         fixture.fleet_subnet_root,
     )
     .expect("recompile retained Root Directory");
+    let mirror_activation = FleetSubnetRootRegistryMirrorActivationResponse {
+        fleet_subnet_root: fixture.fleet_subnet_root,
+        previous_registry: joining_version.clone(),
+        version: active_version.clone(),
+        directory: directory.clone(),
+    };
     let mirror_request = FleetSubnetRootRegistryMirrorActivationRequest {
         previous_registry: joining_version,
         expected_registry: active_version.clone(),
         expected_directory: directory,
         store_bootstrap: store_request.clone(),
     };
-    crate::install_root::fleet_subnet_root_registry_mirror_activation::drive_root_mirror_activation(
-        &fixture.icp_context,
+    crate::install_root::fleet_subnet_root_registry_mirror_activation::drive_root_mirror_activation_with_observations(
         sync_verified.clone(),
-        mirror_request,
+        mirror_request.clone(),
+        [None, Some(mirror_activation.clone()), Some(mirror_activation)],
     )
-    .expect("production Registry mirror owner re-observes exact successor");
+    .expect("production Registry mirror owner tolerates one stalled poll and returns terminal success");
     let mirror_verified = restart_root_journal_path(&sync_verified.path);
+    crate::install_root::fleet_subnet_root_registry_mirror_activation::drive_root_mirror_activation_with_observations(
+        mirror_verified.clone(),
+        mirror_request,
+        [],
+    )
+    .expect("production Registry mirror owner returns effect-free success from its verified phase");
     let preparation_request = RootComponentRegistryPreparationRequest {
         store_bootstrap: store_request,
         expected_fleet_registry: active_version,
@@ -1662,14 +1700,131 @@ fn execute_exact_repair_and_reject_conflicts(
         .identity_cycles_balance()
         .expect("observe pre-repair operator cycles");
     let asset_before = fixture.pic.cycle_balance(fixture.pool_canister);
-    let operation = execute_retained_root_repair(
+    let initial = execute_retained_root_repair(
         &fixture.icp_context,
         &root_binding,
         &repair,
         &repair.successor_wasm_path,
+        None,
         &recovery_bundle,
-    )
-    .unwrap_or_else(|error| {
+    );
+    let operation = if fixture.starting_state.expected_funding_attempts == 0 {
+        initial.unwrap_or_else(|error| {
+            let operator_after = fixture
+                .icp_context
+                .cli()
+                .identity_cycles_balance()
+                .expect("observe operator balance after failed repair");
+            let asset_after = fixture.pic.cycle_balance(fixture.pool_canister);
+            panic!(
+                "execute exact zero-funding Root repair: {error}; operator_before={operator_before}; operator_after={operator_after}; asset_before={asset_before}; asset_after={asset_after}"
+            );
+        })
+    } else {
+        let error = initial.expect_err("funding requires one exact reviewed debit");
+        let rendered = error.to_string();
+        assert!(rendered.contains("required=5000000000000"));
+        if fixture.starting_state.operator_funding_cycles < 1_000_000_000 {
+            assert!(rendered.contains("ResetFailed(reason="));
+            assert!(rendered.contains("actual=4999"));
+        }
+        assert!(matches!(
+            error.downcast_ref::<super::procedure::RetainedRootRepairProcedureError>(),
+            Some(super::procedure::RetainedRootRepairProcedureError::FundingReviewRequired(_))
+        ));
+        let exposure = if fixture.starting_state.operator_funding_cycles < 1_000_000_000 {
+            // Reproduce the published predecessor's exact interruption: the protected
+            // reinspection already refreshed the live row, but the local operation remained at
+            // `reinspection_in_flight` with no payment attempt or exact balance.
+            super::procedure::write_reinspection_in_flight_test_operation(&repair)
+                .expect("restore the untouched predecessor-shaped reinspection checkpoint");
+            recovery_bundle
+                .checkpoint()
+                .expect("checkpoint predecessor-shaped reinspection evidence");
+            let operator_before_preflight = fixture
+                .icp_context
+                .cli()
+                .identity_cycles_balance()
+                .expect("observe operator before no-effect repair preflight");
+            let asset_before_preflight = fixture.pic.cycle_balance(fixture.pool_canister);
+            let exposure = super::procedure::preflight_retained_root_repair_funding(
+                &fixture.icp_context,
+                &root_binding,
+                &repair,
+                &recovery_bundle,
+            )
+            .expect("query-only preflight retains the exact below-threshold repair exposure");
+            assert_eq!(exposure.phase, "funding_required");
+            assert_eq!(
+                exposure.operator_available_cycles,
+                Some(operator_before_preflight)
+            );
+            assert_eq!(exposure.operator_balance_sufficient, Some(false));
+            assert_eq!(
+                fixture
+                    .icp_context
+                    .cli()
+                    .identity_cycles_balance()
+                    .expect("observe operator after no-effect repair preflight"),
+                operator_before_preflight
+            );
+            assert_eq!(
+                fixture.pic.cycle_balance(fixture.pool_canister),
+                asset_before_preflight
+            );
+            exposure
+        } else {
+            super::procedure::inspect_retained_root_repair_funding(&repair)
+                .expect("inspect retained repair funding review")
+                .expect("funding-required repair operation")
+        };
+        let authorization = exposure
+            .authorization_digest
+            .expect("exact next debit authorization digest");
+        let authorized = execute_retained_root_repair(
+            &fixture.icp_context,
+            &root_binding,
+            &repair,
+            &repair.successor_wasm_path,
+            Some(&authorization),
+            &recovery_bundle,
+        );
+        if fixture.starting_state.operator_funding_cycles < 1_000_000_000 {
+            let error = authorized.expect_err("insufficient operator funding must fail before top-up");
+            assert!(matches!(
+                error.downcast_ref::<super::procedure::RetainedRootRepairProcedureError>(),
+                Some(
+                    super::procedure::RetainedRootRepairProcedureError::InsufficientOperatorCycles {
+                        required_cycles,
+                        available_cycles,
+                    }
+                ) if *required_cycles == exposure.next_maximum_operator_debit_cycles.expect("exact next debit")
+                    && *available_cycles < *required_cycles
+            ));
+            let retained = super::procedure::inspect_retained_root_repair_funding(&repair)
+                .expect("inspect funding-required checkpoint after insufficient balance")
+                .expect("retained repair funding exposure");
+            assert_eq!(retained.completed_funding_attempts, 0);
+            assert_eq!(retained.authorization_digest.as_deref(), Some(authorization.as_str()));
+            fund_repair_identity(
+                &fixture.root,
+                &fixture.controller,
+                &fixture.network_url,
+                &fixture.root_key,
+                2_000_000_000_000,
+            );
+            execute_retained_root_repair(
+                &fixture.icp_context,
+                &root_binding,
+                &repair,
+                &repair.successor_wasm_path,
+                Some(&authorization),
+                &recovery_bundle,
+            )
+        } else {
+            authorized
+        }
+        .unwrap_or_else(|error| {
         let operator_after = fixture
             .icp_context
             .cli()
@@ -1679,7 +1834,8 @@ fn execute_exact_repair_and_reject_conflicts(
         panic!(
             "execute exact Root upgrade, funding and pool reinspection: {error}; operator_before={operator_before}; operator_after={operator_after}; asset_before={asset_before}; asset_after={asset_after}"
         );
-    });
+        })
+    };
     let operator_after_effects = fixture
         .icp_context
         .cli()
@@ -1691,6 +1847,7 @@ fn execute_exact_repair_and_reject_conflicts(
         &root_binding,
         &repair,
         &repair.successor_wasm_path,
+        None,
         &recovery_bundle,
     )
     .expect("resume when the exact successor and repaired pool asset are already live");
@@ -1846,19 +2003,35 @@ fn assert_repair_replay_has_no_effect(
         .expect("observe post-repair operator cycles");
     let asset_after = fixture.pic.cycle_balance(fixture.pool_canister);
     assert!(asset_after >= 5_000_000_000_000);
-    let (funding_attempts, operator_debit_cycles, asset_credit_cycles) = operation
+    let (
+        funding_attempts,
+        operator_debit_cycles,
+        asset_credit_cycles,
+        observed_fee_and_burn_cycles,
+    ) = operation
         .test_funding_reconciliation()
         .expect("read exact retained repair funding observations");
     assert_eq!(funding_attempts, expected_funding_attempts);
-    assert_eq!(operator_before - operator_after, operator_debit_cycles);
+    let externally_added_cycles = if fixture.starting_state.operator_funding_cycles < 1_000_000_000
+    {
+        2_000_000_000_000
+    } else {
+        0
+    };
+    assert_eq!(
+        operator_before + externally_added_cycles - operator_after,
+        operator_debit_cycles
+    );
     if expected_funding_attempts == 0 {
         assert_eq!(operator_debit_cycles, 0);
         assert_eq!(asset_credit_cycles, 0);
+        assert_eq!(observed_fee_and_burn_cycles, 0);
     } else {
         assert_eq!(
             operator_debit_cycles,
-            asset_credit_cycles + RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES
+            asset_credit_cycles + observed_fee_and_burn_cycles
         );
+        assert!(observed_fee_and_burn_cycles >= RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES);
     }
     reconcile_published_retained_root_repair(repair)
         .expect("terminal receipt replay remains effect-free");

@@ -15,6 +15,9 @@ use super::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest,
         has_fleet_subnet_root_install_journal, inspect_fleet_subnet_root_install,
     },
+    fleet_subnet_root_repair::{
+        inspect_retained_root_repair_funding, resolve_retained_root_repair,
+    },
 };
 use crate::{
     fleet_install_plan::{
@@ -92,10 +95,31 @@ pub struct FreshFleetInstallRecoveryPlanV1 {
     pub effects_started: bool,
     pub original_maximum_operator_debit: PlannedCanisterCreationFunding,
     pub remaining_operator_debit: PlannedCanisterCreationFunding,
+    pub retained_root_repair_funding: Option<RetainedRootRepairFundingPlanV1>,
     pub fenced_operator_creations: u32,
     pub total_operator_creations: u32,
     pub uncertain_creation_outcomes: Vec<String>,
     pub next_replay_phase: String,
+}
+
+/// Separate bounded operator exposure retained by one exceptional Root repair.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RetainedRootRepairFundingPlanV1 {
+    pub repair_operation_id: String,
+    pub fleet_subnet_root: String,
+    pub pool_canister: String,
+    pub operator: String,
+    pub phase: String,
+    pub actual_cycles: Option<u128>,
+    pub required_cycles: u128,
+    pub deficit_cycles: Option<u128>,
+    pub next_requested_cycles: Option<u128>,
+    pub next_maximum_operator_debit_cycles: Option<u128>,
+    pub cumulative_remaining_authority_cycles: u128,
+    pub completed_funding_attempts: usize,
+    pub remaining_funding_attempts: usize,
+    pub authorization_digest: Option<String>,
 }
 
 impl FreshFleetInstallRecoveryPlanV1 {
@@ -103,6 +127,22 @@ impl FreshFleetInstallRecoveryPlanV1 {
     #[must_use]
     pub const fn has_uncertain_creation_outcome(&self) -> bool {
         !self.uncertain_creation_outcomes.is_empty()
+    }
+
+    /// Maximum debit that the next invocation may issue across fresh creation and Root repair.
+    pub fn next_operator_debit(
+        &self,
+    ) -> Result<PlannedCanisterCreationFunding, FreshFleetInstallRecoveryError> {
+        let repair = self
+            .retained_root_repair_funding
+            .as_ref()
+            .and_then(|funding| funding.next_maximum_operator_debit_cycles)
+            .unwrap_or_default();
+        Ok(PlannedCanisterCreationFunding::Cycles {
+            cycles: funding_cycles(&self.remaining_operator_debit)?
+                .checked_add(repair)
+                .ok_or(FreshFleetInstallRecoveryError::FundingOverflow)?,
+        })
     }
 
     /// Require the newly compiled decision to remain the exact retained session authority.
@@ -136,9 +176,16 @@ impl FreshFleetInstallRecoveryPlanV1 {
         &self,
         request: FreshFleetDeploymentPlanRequest,
     ) -> Result<FreshFleetDeploymentPlanV1, FreshFleetInstallRecoveryError> {
+        if self
+            .retained_root_repair_funding
+            .as_ref()
+            .is_some_and(|repair| repair.operator != request.authority.operator.principal)
+        {
+            return Err(FreshFleetInstallRecoveryError::DecisionMismatch);
+        }
         let plan = compile_fresh_fleet_deployment_plan_with_operator_debit(
             request,
-            &self.remaining_operator_debit,
+            &self.next_operator_debit()?,
         )?;
         self.require_matching_decision(&plan)?;
         Ok(plan)
@@ -268,6 +315,7 @@ pub(super) fn compile_recovery_plan(
     let mut next_replay_phase = None;
     let mut uncertain_creation_outcomes = Vec::new();
     let mut verified_coordinator = None;
+    let mut retained_root_repair_funding = None;
 
     if let Some(current) = coordinator {
         if current.journal.phase != FleetCoordinatorInstallPhase::Planned {
@@ -293,8 +341,10 @@ pub(super) fn compile_recovery_plan(
                 config,
                 install_operation_id: session.operation_id,
                 coordinator,
+                session,
             },
             &mut funding,
+            &mut retained_root_repair_funding,
             &mut next_replay_phase,
             &mut uncertain_creation_outcomes,
         )?;
@@ -329,6 +379,7 @@ pub(super) fn compile_recovery_plan(
         remaining_operator_debit: PlannedCanisterCreationFunding::Cycles {
             cycles: funding.remaining_cycles,
         },
+        retained_root_repair_funding,
         fenced_operator_creations: funding.fenced_operator_creations,
         total_operator_creations: funding.total_operator_creations,
         uncertain_creation_outcomes,
@@ -366,11 +417,13 @@ struct RootInspectionAuthority<'a> {
     config: &'a ConfigModel,
     install_operation_id: [u8; 32],
     coordinator: candid::Principal,
+    session: &'a fleet_install_session::FleetInstallSession,
 }
 
 fn inspect_roots(
     authority: RootInspectionAuthority<'_>,
     funding: &mut RecoveryFunding,
+    retained_root_repair_funding: &mut Option<RetainedRootRepairFundingPlanV1>,
     next_replay_phase: &mut Option<String>,
     uncertain_creation_outcomes: &mut Vec<String>,
 ) -> Result<(), FreshFleetInstallRecoveryError> {
@@ -398,6 +451,34 @@ fn inspect_roots(
             continue;
         };
         let phase = current.journal.phase;
+        if let Some(repair) = resolve_retained_root_repair(&current, authority.session, None, None)
+            .map_err(invalid)?
+        {
+            if retained_root_repair_funding.is_some() {
+                return Err(invalid(
+                    "more than one retained Root repair authority exists",
+                ));
+            }
+            *retained_root_repair_funding = inspect_retained_root_repair_funding(&repair)
+                .map_err(invalid)?
+                .map(|exposure| RetainedRootRepairFundingPlanV1 {
+                    repair_operation_id: exposure.repair_operation_id,
+                    fleet_subnet_root: exposure.fleet_subnet_root,
+                    pool_canister: exposure.pool_canister,
+                    operator: exposure.operator,
+                    phase: exposure.phase,
+                    actual_cycles: exposure.actual_cycles,
+                    required_cycles: exposure.required_cycles,
+                    deficit_cycles: exposure.deficit_cycles,
+                    next_requested_cycles: exposure.next_requested_cycles,
+                    next_maximum_operator_debit_cycles: exposure.next_maximum_operator_debit_cycles,
+                    cumulative_remaining_authority_cycles: exposure
+                        .cumulative_remaining_authority_cycles,
+                    completed_funding_attempts: exposure.completed_funding_attempts,
+                    remaining_funding_attempts: exposure.remaining_funding_attempts,
+                    authorization_digest: exposure.authorization_digest,
+                });
+        }
         if phase != FleetSubnetRootInstallPhase::Planned {
             funding.fence(&root_plan.root_creation_funding)?;
         }

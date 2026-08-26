@@ -147,6 +147,7 @@ fn resolve_info_env_fleet(
             fleet: options.fleet.clone(),
             environment: options.environment.clone(),
         },
+        &options.icp,
         icp_root,
     )
     .map_err(InfoEnvCommandError::from)
@@ -156,15 +157,12 @@ fn env_report(options: &InfoEnvOptions, resolution: &InstalledFleetResolution) -
     InfoEnvReport {
         fleet: options.fleet.clone(),
         environment: options.environment.clone(),
-        bindings: env_bindings(
-            &resolution.registry.root_canister_id,
-            &resolution.registry.entries,
-        ),
+        bindings: env_bindings(&resolution.registry.entries),
     }
 }
 
-fn env_bindings(root_canister_id: &str, entries: &[RegistryEntry]) -> Vec<InfoEnvBinding> {
-    let mut entries = normalized_root_entries(root_canister_id, entries);
+fn env_bindings(entries: &[RegistryEntry]) -> Vec<InfoEnvBinding> {
+    let mut entries = entries.to_vec();
     entries.sort_by(|left, right| {
         let left_base = binding_variable_base(left);
         let right_base = binding_variable_base(right);
@@ -195,33 +193,6 @@ fn env_bindings(root_canister_id: &str, entries: &[RegistryEntry]) -> Vec<InfoEn
             }
         })
         .collect()
-}
-
-fn normalized_root_entries(
-    root_canister_id: &str,
-    entries: &[RegistryEntry],
-) -> Vec<RegistryEntry> {
-    let mut entries = entries.to_vec();
-    if let Some(entry) = entries
-        .iter_mut()
-        .find(|entry| entry.pid == root_canister_id && entry.role.is_none())
-    {
-        entry.role = Some("root".to_string());
-        return entries;
-    }
-    if !entries
-        .iter()
-        .any(|entry| entry.role.as_deref() == Some("root"))
-    {
-        entries.push(RegistryEntry {
-            pid: root_canister_id.to_string(),
-            role: Some("root".to_string()),
-            parent_pid: None,
-            module_hash: None,
-            protocol_binding: None,
-        });
-    }
-    entries
 }
 
 fn binding_base_counts(entries: &[RegistryEntry]) -> BTreeMap<String, usize> {
@@ -265,7 +236,11 @@ fn role_env_suffix(role: &str) -> String {
 }
 
 fn binding_base_rank(base: &str) -> u8 {
-    u8::from(base != "CANIC_ROOT")
+    match base {
+        "CANIC_FLEET_COORDINATOR" => 0,
+        "CANIC_ROOT" => 1,
+        _ => 2,
+    }
 }
 
 fn write_env_report(
@@ -328,6 +303,7 @@ mod tests {
     use super::*;
 
     const ROOT: &str = "aaaaa-aa";
+    const COORDINATOR: &str = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     const USER_HUB: &str = "renrk-eyaaa-aaaaa-aaada-cai";
     const USER_SHARD_A: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
     const USER_SHARD_B: &str = "ryjl3-tyaaa-aaaaa-aaaba-cai";
@@ -374,15 +350,13 @@ mod tests {
 
     #[test]
     fn bindings_use_role_scoped_names_and_number_duplicate_roles() {
-        let bindings = env_bindings(
-            ROOT,
-            &[
-                registry_entry(USER_SHARD_B, Some("user-shard")),
-                registry_entry(USER_HUB, Some("user_hub")),
-                registry_entry(ROOT, Some("root")),
-                registry_entry(USER_SHARD_A, Some("user-shard")),
-            ],
-        );
+        let bindings = env_bindings(&[
+            registry_entry(COORDINATOR, Some("fleet_coordinator")),
+            registry_entry(USER_SHARD_B, Some("user-shard")),
+            registry_entry(USER_HUB, Some("user_hub")),
+            registry_entry(ROOT, Some("root")),
+            registry_entry(USER_SHARD_A, Some("user-shard")),
+        ]);
 
         assert_eq!(
             bindings
@@ -390,6 +364,10 @@ mod tests {
                 .map(|binding| (binding.variable.clone(), binding.canister_id.clone()))
                 .collect::<Vec<_>>(),
             [
+                (
+                    "CANIC_FLEET_COORDINATOR".to_string(),
+                    COORDINATOR.to_string()
+                ),
                 ("CANIC_ROOT".to_string(), ROOT.to_string()),
                 ("CANIC_USER_HUB".to_string(), USER_HUB.to_string()),
                 ("CANIC_USER_SHARD_1".to_string(), USER_SHARD_A.to_string()),
@@ -399,18 +377,15 @@ mod tests {
     }
 
     #[test]
-    fn missing_root_role_uses_root_canister_id_for_canic_root() {
-        let bindings = env_bindings(
-            ROOT,
-            &[
-                registry_entry(ROOT, None),
-                registry_entry(USER_HUB, Some("user_hub")),
-            ],
-        );
+    fn missing_role_uses_generic_canister_binding_without_inventing_authority() {
+        let bindings = env_bindings(&[
+            registry_entry(ROOT, None),
+            registry_entry(USER_HUB, Some("user_hub")),
+        ]);
 
-        assert_eq!(bindings[0].variable, "CANIC_ROOT");
+        assert_eq!(bindings[0].variable, "CANIC_CANISTER");
         assert_eq!(bindings[0].canister_id, ROOT);
-        assert_eq!(bindings[0].role.as_deref(), Some("root"));
+        assert_eq!(bindings[0].role, None);
     }
 
     #[test]

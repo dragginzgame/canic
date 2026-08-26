@@ -13,7 +13,8 @@ mod procedure;
 mod tests;
 
 pub(super) use procedure::{
-    execute_retained_root_repair, reconcile_published_retained_root_repair,
+    execute_retained_root_repair, inspect_retained_root_repair_funding,
+    preflight_retained_root_repair_funding, reconcile_published_retained_root_repair,
     retained_root_repair_operation_path, validate_recovery_bundle_repair_operation_bytes,
 };
 

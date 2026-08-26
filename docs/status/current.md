@@ -12,29 +12,53 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.90.2](archive/2026-07-13-precompact.md) and
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md).
 
-Release lineage: `0.109.11` follows immutable `v0.109.10`.
+Release lineage: published `v0.109.11` is the immutable predecessor of the
+open `0.109.12` correction.
 
-The `0.109.11` source batch makes complete validation fail before tests on
-compile or warning-denied Clippy failure, gives Make and installed Canic
-artifact builds one explicit compiler-cache policy, accepts the exact
-zero-debit retained-asset reinspection restart, verifies bundle candidates
-before atomic publication, and closes the release-truth gap that left
-published status carrying stale source-development instructions.
+The `0.109.12` source batch restores installed-Fleet inventory for
+Coordinator-anchored topologies and completes the retained Root threshold
+recovery exposed after 0.109.11. The shared resolver validates the exact live
+Coordinator Registry, manifest and version against terminal local authority,
+then walks bounded public child pages from every current Root and only through
+roles whose frozen contract declares sharding. The repair owner records an
+exact below-threshold query observation before authorizing one reviewed debit,
+while Registry-mirror replay bounds consecutive stalls rather than successful
+journal transitions.
 
-Release validation: `0.109.11` was validated from source `8539c3d8ef48473d5ae357a940528e5d5bb84fbd` on `2026-08-26`; the release commit may differ only in governed release surfaces.
+Commands that genuinely retain singular-Root scope now require exactly one
+current Root. Generic information, environment, endpoint, metrics and cycle
+surfaces consume the complete Coordinator-anchored inventory. The soft
+12-release guideline is recorded as planned-design cadence; necessary
+correctness and recovery follow-ups to a published line may exceed it.
 
-Candidate evidence: implementation is complete. Focused cache, release-guard,
-repair-procedure and recovery-bundle tests pass. The governed retained-Root
-PocketIC journey passes both its paid repair path and an already-live,
-adequately funded `reinspection_in_flight` restart with zero funding attempts
-and zero operator debit. Warning-denied host Clippy and the remaining focused
-validation/runner/release/document, shell, formatting and diff-hygiene checks
-pass. Complete-gate evidence is owned exclusively by the generated release-
-validation marker and the human deployment/version workflow; focused evidence
-does not substitute for it.
+Candidate evidence: focused host resolver, CLI inventory/environment/help and
+affected auth, backup, blob, cycles, endpoint, inspect, metrics and token tests
+pass. Retained-repair procedure, CLI plan/install and production-boundary
+PocketIC checks pass, including query-only threshold preflight, exact
+insufficient-balance rejection, one reviewed debit, terminal Fleet closure and
+Registry-mirror stalled-poll replay. Warning-denied all-target Clippy passes
+for `canic-host` and `canic-cli`; formatting, diff hygiene, changelog,
+current-document and release-integrity guards pass. Complete validation remains
+exclusively human/deployment-owned and is intentionally not pre-run by
+automated coding work.
+
+Release governance: source development state; no validated release candidate is staged.
 
 ## Current Release
 
+- The open 0.109.12 correction replaces the unconditional removed-single-Root
+  error in shared installed-Fleet resolution with one exact
+  Coordinator-anchored live inventory. Every current Root participates;
+  removed Roots do not. Commands whose maintained contract still has one Root
+  fail explicitly when the Fleet has zero or multiple current Roots.
+- The same open correction handles a retained zero-attempt reinspection whose
+  exact imported asset crossed below its funding threshold. Query-only
+  preflight retains raw exposure and one operator-bound next-debit digest,
+  insufficient operator funding stops before any payment intent, and the sole
+  repair journal preserves its four-attempt cumulative authority through
+  terminal Fleet closure. Registry-mirror activation no longer charges
+  successful durable transitions against its stall budget and rejects a fifth
+  consecutive stalled observation.
 - The 0.109.11 source batch separates the complete test graph from its
   compile/lint prerequisite, retains incremental local Cargo work only when no
   compiler wrapper is active, makes installed `canic build` and `canic install`
@@ -1260,13 +1284,17 @@ first without requiring a debug Wasm export, and prevents terminal release
 evidence from retaining stale pre-release obligations. It now also supplies an
 effect-equivalent retained-install preflight that must qualify the exact
 frozen source candidate against the downstream session before versioning.
-The open 0.109.11 batch gates the full test graph behind compile and warning-
+Published `v0.109.11` gates the full test graph behind compile and warning-
 denied Clippy, propagates the pinned compiler cache into Canic-owned artifact
 builds, accepts the zero-funding reinspection restart, makes recovery-bundle
 candidate publication verify-before-swap and hardens the release-truth check
-against stale source-development language. Focused procedure/bundle tests and
-the governed two-path retained-repair PocketIC journey pass; the human release
-flow owns complete validation.
+against stale source-development language. The open 0.109.12 correction must
+finish exact Coordinator-anchored inventory propagation plus the reviewed
+below-threshold repair and Registry-mirror progress corrections; the human
+release flow then owns complete validation. `CANIC-058` remains a separate
+non-blocking candidate because Component provisioning's total-poll bound did
+not fail this recovery journey and must not delay the current rescue. Do not
+revive the removed single-Root Registry authority or advance 0.110.
 Focused pure/host and governed PocketIC evidence covers historical-plan
 selection, Root upgrade, retained-principal refresh and capacity-preserving 5T
 claim/install. The separately authorized downstream Root upgrade and asset

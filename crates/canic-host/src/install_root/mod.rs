@@ -94,7 +94,8 @@ use fleet_component_provisioning_install::{
 pub use fleet_install_recovery::{
     FreshFleetInstallRecoveryClassificationV1, FreshFleetInstallRecoveryError,
     FreshFleetInstallRecoveryPlanV1, InspectFreshFleetInstallRecoveryRequest,
-    RetainedInstallPlanContractV1, inspect_fresh_fleet_install_recovery,
+    RetainedInstallPlanContractV1, RetainedRootRepairFundingPlanV1,
+    inspect_fresh_fleet_install_recovery,
 };
 use fleet_install_recovery_bundle::FleetInstallRecoveryBundleCheckpoint;
 pub use fleet_install_recovery_bundle::{
@@ -362,6 +363,10 @@ pub fn preflight_install_root(options: InstallRootOptions) -> Result<(), Install
     run_install_root(options, InstallExecutionMode::Preflight)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the install owner binds one admitted decision, finalized artifacts and execution receipt"
+)]
 fn run_install_root(
     mut options: InstallRootOptions,
     mode: InstallExecutionMode,
@@ -441,6 +446,9 @@ fn run_install_root(
         fresh_fleet_plan: &fresh_fleet_plan,
         recovery: fresh_fleet_recovery.as_ref(),
         retained_root_repair_adoption: options.retained_root_repair_adoption.clone(),
+        retained_root_repair_funding_authorization: options
+            .retained_root_repair_funding_authorization
+            .clone(),
     })?;
     let fresh_fleet_receipt_decision = FreshFleetInstallDecisionReceiptV1 {
         plan_digest: fresh_fleet_plan.plan_digest.clone(),
@@ -601,13 +609,14 @@ fn prepare_current_fresh_fleet_preflight(
     let required_operator_debit = release_source
         .recovery
         .as_ref()
-        .map_or(&maximum_operator_debit, |recovery| {
-            &recovery.remaining_operator_debit
-        });
+        .map_or(Ok(maximum_operator_debit), |recovery| {
+            recovery.next_operator_debit()
+        })
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
     let operator = observe_fresh_fleet_operator_funding(
         icp_context.cli(),
         &input.operator_principal,
-        required_operator_debit,
+        &required_operator_debit,
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
     let authority_request = FreshFleetDecisionAuthorityRequest {
@@ -662,13 +671,16 @@ fn recheck_fresh_fleet_operator_funding(
     plan: &FreshFleetDeploymentPlanV1,
     recovery: Option<&FreshFleetInstallRecoveryPlanV1>,
 ) -> Result<(), InstallRootError> {
-    let required_operator_debit = recovery.map_or(&plan.maximum_operator_debit, |recovery| {
-        &recovery.remaining_operator_debit
-    });
+    let required_operator_debit = recovery
+        .map_or_else(
+            || Ok(plan.maximum_operator_debit.clone()),
+            FreshFleetInstallRecoveryPlanV1::next_operator_debit,
+        )
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
     let operator = observe_fresh_fleet_operator_funding(
         icp_context.cli(),
         &plan.authority.operator.principal,
-        required_operator_debit,
+        &required_operator_debit,
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
     let mut authority = plan.authority.clone();
@@ -700,7 +712,7 @@ fn preflight_current_fleet_infrastructure(
         &planned.plan,
     );
     preflight_fleet_subnet_roots(PreflightFleetSubnetRootsRequest {
-        icp_root: icp_context.root(),
+        icp_context,
         config_path,
         fleet_install_plan: &planned.plan,
         fleet_install_session: &planned.session,
@@ -921,6 +933,7 @@ struct CurrentFleetInstallPlanRequest<'a> {
     fresh_fleet_plan: &'a FreshFleetDeploymentPlanV1,
     recovery: Option<&'a FreshFleetInstallRecoveryPlanV1>,
     retained_root_repair_adoption: Option<RetainedRootRepairAdoption>,
+    retained_root_repair_funding_authorization: Option<String>,
 }
 
 fn plan_current_fleet_install(
@@ -949,6 +962,8 @@ fn plan_current_fleet_install(
         session,
         plan,
         retained_root_repair_adoption: request.retained_root_repair_adoption,
+        retained_root_repair_funding_authorization: request
+            .retained_root_repair_funding_authorization,
     })
 }
 
@@ -956,6 +971,7 @@ struct PlannedCurrentFleetInstall {
     session: fleet_install_session::FleetInstallSession,
     plan: PersistedFleetInstallPlan,
     retained_root_repair_adoption: Option<RetainedRootRepairAdoption>,
+    retained_root_repair_funding_authorization: Option<String>,
 }
 
 impl PlannedCurrentFleetInstall {
@@ -1251,6 +1267,23 @@ fn print_fresh_fleet_recovery(recovery: &FreshFleetInstallRecoveryPlanV1) {
             recovery.next_replay_phase,
         ),
     );
+    if let Some(repair) = recovery.retained_root_repair_funding.as_ref() {
+        let next = repair.next_maximum_operator_debit_cycles.map_or_else(
+            || "pending exact observation".to_string(),
+            |cycles| format!("{cycles} cycles"),
+        );
+        let digest = repair
+            .authorization_digest
+            .as_deref()
+            .unwrap_or("pending exact observation");
+        TerminalStyle::detected().print_section(
+            "Retained Root repair funding",
+            &format!(
+                "phase {}; next debit {next}; cumulative remaining authority {} cycles; authorization digest {digest}",
+                repair.phase, repair.cumulative_remaining_authority_cycles,
+            ),
+        );
+    }
     if recovery.has_uncertain_creation_outcome() {
         TerminalStyle::detected().print_section(
             "Fenced creation observation",
@@ -1345,6 +1378,9 @@ fn install_current_fleet_subnet_roots(
         coordinator,
         install_operation_id: planned.session.operation_id,
         retained_root_repair_adoption: planned.retained_root_repair_adoption.as_ref(),
+        retained_root_repair_funding_authorization: planned
+            .retained_root_repair_funding_authorization
+            .as_deref(),
         recovery_bundle,
     })
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;

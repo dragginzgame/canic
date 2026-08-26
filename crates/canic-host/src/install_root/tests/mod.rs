@@ -338,6 +338,7 @@ fn install_recompiles_the_exact_plan_digest_and_rechecks_live_funding() {
         original_maximum_operator_debit: exact.plan.maximum_operator_debit.clone(),
         remaining_operator_debit:
             crate::fleet_install_plan::PlannedCanisterCreationFunding::Cycles { cycles: 0 },
+        retained_root_repair_funding: None,
         fenced_operator_creations: 3,
         total_operator_creations: 3,
         uncertain_creation_outcomes: Vec::new(),
@@ -535,6 +536,7 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
         admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         retained_root_repair_adoption: None,
+        retained_root_repair_funding_authorization: None,
         interactive_config_selection: false,
         deployment_plan_override: None,
     }
@@ -775,6 +777,7 @@ package = "worker"
         admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         retained_root_repair_adoption: None,
+        retained_root_repair_funding_authorization: None,
         interactive_config_selection: false,
         deployment_plan_override: None,
     };

@@ -542,6 +542,7 @@ fn resolve_cycles_fleet(
             fleet: options.fleet.clone(),
             environment: options.environment.clone(),
         },
+        &options.icp,
         &root,
     )
     .map_err(CyclesCommandError::from)

@@ -64,10 +64,12 @@ amendment moves one into a numbered design.
 
 ## Release-Batch Plan Template
 
-The whole minor line has no minimum release count and should normally publish
-no more than 12 releases, shared across every design document assigned to that
-minor. Implementation slices may be smaller, but they must map into coherent
-batches; they are not automatically patch releases.
+The whole minor line has no minimum release count. Planned design cadence
+should normally publish no more than 12 releases, shared across every design
+document assigned to that minor. Necessary post-publication correctness,
+security, recovery and operator-regression follow-ups may exceed that
+guideline. Implementation slices may be smaller, but they must map into
+coherent batches; they are not automatically patch releases.
 
 Copy and complete this table in the design or its status tracker:
 

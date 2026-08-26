@@ -30,9 +30,10 @@ canic --environment academic medic fleet <fleet>
 ```
 
 Use `canic app config <app>` to inspect what is configured and
-`canic info list <fleet>` to inspect a terminal deployment. Treat the live
-Fleet and Component Registry projections as the source for current Canister
-IDs and the App config as the source for intended roles, metrics profiles, and
+`canic info list <fleet>` to inspect a terminal deployment. It validates the
+live Coordinator Registry and walks the bounded child trees of every current
+Root. Treat that Fleet projection as the source for current Canister IDs and
+the App config as the source for intended roles, metrics profiles, and
 topology. Live inspection cannot reconstruct or bypass an incomplete install
 journal.
 

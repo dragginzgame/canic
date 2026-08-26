@@ -49,7 +49,7 @@ fn parses_live_list_options() {
     ])
     .expect("parse list options");
 
-    assert_eq!(options.source, ListSource::RootRegistry);
+    assert_eq!(options.source, ListSource::FleetInventory);
     assert_eq!(options.target, "demo");
     assert_eq!(options.subtree, Some(APP.to_string()));
     assert_eq!(options.environment, Some("local".to_string()));
@@ -136,7 +136,7 @@ fn list_and_config_usage_explain_app_and_subtree_options() {
     let list = info_usage();
     let config = config_usage();
 
-    assert!(list.contains("List canisters registered by an installed Fleet Subnet Root"));
+    assert!(list.contains("List the live Coordinator-anchored canister tree"));
     assert!(list.contains("Usage: canic info list [OPTIONS] <fleet>"));
     assert!(list.contains("<fleet>"));
     assert!(list.contains("Installed Fleet name to inspect"));

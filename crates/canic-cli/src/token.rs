@@ -272,13 +272,15 @@ fn transfer_receiver(
             fleet: fleet.to_string(),
             environment: target.environment.clone(),
         },
+        &target.icp,
         root,
     )
     .map_err(TokenCommandError::from)?;
+    let root_canister_id = installed.topology.unique_fleet_subnet_root(fleet)?;
     resolve_canister_or_role(
         fleet,
         canister_or_role,
-        &installed.topology.root_canister_id,
+        root_canister_id,
         &installed.registry.entries,
     )
 }

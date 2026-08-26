@@ -437,10 +437,11 @@ fn transfer_receiver(
         return Ok(receiver.to_string());
     };
     let installed = resolve_fleet(target, root, fleet)?;
+    let root_canister_id = installed.topology.unique_fleet_subnet_root(fleet)?;
     resolve_canister_or_role(
         fleet,
         canister_or_role,
-        &installed.topology.root_canister_id,
+        root_canister_id,
         &installed.registry.entries,
     )
 }
@@ -480,6 +481,7 @@ pub(super) fn resolve_fleet(
             fleet: fleet.to_string(),
             environment: target.environment.clone(),
         },
+        &target.icp,
         root,
     )
     .map_err(CyclesCommandError::from)
