@@ -19,7 +19,7 @@ retained-Root Candid recovery, adds the CANIC-055 effect-equivalent retained-
 install preflight, and prevents CANIC-014 from recurring by rejecting
 contradictory terminal release narratives.
 
-Release governance: source development state; no validated release candidate is staged.
+Release validation: `0.109.10` was validated from source `34e59a4511b9fa259b263bc411db1ba265eafb01` on `2026-08-26`; the release commit may differ only in governed release surfaces.
 
 Candidate evidence: focused host/CLI checks and the governed retained-Root
 PocketIC journey pass for the new preflight boundary. Freeze one immutable
