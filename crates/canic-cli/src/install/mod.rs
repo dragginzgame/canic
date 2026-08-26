@@ -12,8 +12,8 @@ mod tests;
 
 use crate::{
     cli::clap::{
-        parse_matches, render_usage, required_string, string_option_or_else, typed_option,
-        value_arg,
+        flag_arg, parse_matches, render_usage, required_string, string_option_or_else,
+        typed_option, value_arg,
     },
     cli::defaults::{default_icp, local_environment},
     cli::globals::{internal_environment_arg, internal_icp_arg},
@@ -26,7 +26,7 @@ use canic_host::icp::{IcpDiagnostic, classify_icp_diagnostic};
 use canic_host::icp_config::{IcpConfigError, resolve_current_canic_icp_root};
 use canic_host::install_root::{
     InstallRootBlockedError, InstallRootError, InstallRootOptions, RetainedRootRepairAdoption,
-    install_root,
+    install_root, preflight_install_root,
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
@@ -35,19 +35,22 @@ use thiserror::Error as ThisError;
 const DEFAULT_ROOT_TARGET: &str = "root";
 const EXPECTED_PLAN_DIGEST_ARG: &str = "expected-plan-digest";
 const FLEET_INPUT_ARG: &str = "fleet-input";
+const PREFLIGHT_ARG: &str = "preflight";
 const RELEASE_BUILD_ARG: &str = "release-build";
 const RETAINED_ROOT_REPAIR_ARG: &str = "adopt-retained-root-repair";
 const INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic install toko toko-local --fleet-input deployments/toko-local.toml
   canic install toko toko-test --fleet-input deployments/toko-test.toml --release-build <ID>
+  canic install toko toko-mainnet --fleet-input deployments/toko-mainnet.toml --preflight
 
 Creates a fresh Fleet from the App config and required operator-owned Fleet input.
 Before building, Canic refreshes missing or invalid mainnet catalog evidence,
 resolves the effective ICP identity, rejects anonymous or unusable credentials,
 and requires that Principal to equal the Fleet input operator. For encrypted
 non-interactive identities, set CANIC_ICP_IDENTITY_PASSWORD_FILE to an absolute
-operator-owned password file.";
+operator-owned password file. `--preflight` requires an incomplete retained
+install session and stops before operational authority publication or IC updates.";
 
 ///
 /// InstallCommandError
@@ -82,6 +85,7 @@ struct InstallOptions {
     icp: String,
     environment: String,
     expected_plan_digest: Option<String>,
+    preflight: bool,
     profile: Option<CanisterBuildProfile>,
     release_build_id: Option<ReleaseBuildId>,
     retained_root_repair_adoption: Option<RetainedRootRepairAdoption>,
@@ -101,6 +105,7 @@ impl InstallOptions {
             icp: string_option_or_else(&matches, "icp", default_icp),
             environment: string_option_or_else(&matches, "environment", local_environment),
             expected_plan_digest: matches.get_one::<String>(EXPECTED_PLAN_DIGEST_ARG).cloned(),
+            preflight: matches.get_flag(PREFLIGHT_ARG),
             profile: typed_option(&matches, "profile"),
             release_build_id: typed_option(&matches, RELEASE_BUILD_ARG),
             retained_root_repair_adoption: typed_option(&matches, RETAINED_ROOT_REPAIR_ARG),
@@ -184,6 +189,13 @@ fn install_command() -> ClapCommand {
                 .help("Canister wasm build profile; defaults to release"),
         )
         .arg(
+            flag_arg(PREFLIGHT_ARG)
+                .long(PREFLIGHT_ARG)
+                .help(
+                    "Run exact retained-recovery installer preparation through a verified bundle checkpoint without operational authority publication or IC updates",
+                ),
+        )
+        .arg(
             value_arg(RELEASE_BUILD_ARG)
                 .long(RELEASE_BUILD_ARG)
                 .value_name("ID")
@@ -198,7 +210,7 @@ fn install_command() -> ClapCommand {
                 .num_args(1)
                 .value_parser(clap::value_parser!(RetainedRootRepairAdoption))
                 .help(
-                    "Authorize one exact retained Root repair; Canic retains content-addressed Wasm and Candid evidence before repair effects",
+                    "Authorize one exact retained Root repair; resolves adjacent .did sidecars first and retains content-addressed evidence before effects",
                 ),
         )
         .arg(internal_icp_arg())
@@ -230,8 +242,14 @@ where
     let fleet = options.fleet.clone();
     let environment = options.environment.clone();
     let icp_root = Some(resolve_current_canic_icp_root()?);
-    install_root(options.into_install_root_options_with_icp_root(icp_root))
-        .map_err(|err| install_error_with_context(err, &fleet, &environment))
+    let preflight = options.preflight;
+    let options = options.into_install_root_options_with_icp_root(icp_root);
+    let result = if preflight {
+        preflight_install_root(options)
+    } else {
+        install_root(options)
+    };
+    result.map_err(|err| install_error_with_context(err, &fleet, &environment))
 }
 
 fn default_app_config_path(app: &str) -> String {

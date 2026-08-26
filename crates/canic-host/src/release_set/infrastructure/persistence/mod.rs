@@ -35,7 +35,7 @@ use super::{
     CanicInfrastructureArtifactManifestError, CanicInfrastructureRole,
 };
 
-const INFRASTRUCTURE_ARTIFACT_MANIFEST_FILE: &str = "infrastructure-artifact-manifest.json";
+pub const INFRASTRUCTURE_ARTIFACT_MANIFEST_FILE: &str = "infrastructure-artifact-manifest.json";
 
 ///
 /// PersistedCanicInfrastructureArtifactManifest

@@ -12,17 +12,57 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.90.2](archive/2026-07-13-precompact.md) and
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md).
 
-Source development: published `v0.109.8` is the immutable predecessor. Open
-`0.109.9` corrects CANIC-050/051. Its final durability follow-up has passing
-focused host and governed PocketIC proof; the earlier candidate completed the
-unmodified maintainer validation gate, but that result predates the final
-production correction and must be rerun by the maintainer before versioning.
-Versioning and publication remain maintainer-owned and have not occurred.
+Source development: published `v0.109.9` is the immutable predecessor. The
+`0.109.10` source batch closes CANIC-053 by deriving every finalized normal
+artifact required by a recovery bundle, implements CANIC-054 sidecar-first
+retained-Root Candid recovery, adds the CANIC-055 effect-equivalent retained-
+install preflight, and prevents CANIC-014 from recurring by rejecting
+contradictory terminal release narratives.
 
-Release validation: `0.109.9` was validated from source `37be941419c823cefa491539f3b50ee063571068` on `2026-08-26`; the release commit may differ only in governed release surfaces.
+Release governance: source development state; no validated release candidate is staged.
+
+Candidate evidence: focused host/CLI checks and the governed retained-Root
+PocketIC journey pass for the new preflight boundary. Freeze one immutable
+source candidate, run the exact downstream preflight and then run the human-
+owned complete release gate once; no validated release candidate is currently
+staged.
 
 ## Current Release
 
+- The 0.109.10 source batch makes both finalized artifact manifests required
+  recovery-bundle authorities. Every referenced raw Wasm, gzip Wasm and
+  deterministic Candid sidecar must be present with its exact size and digest;
+  the application manifest remains bound to the Fleet plan and each retained
+  Root journal remains bound to the same infrastructure manifest and exact
+  Root/Store entries. A canonically recomputed manifest cannot hide an omitted
+  normal artifact. The release-candidate guard also rejects target status,
+  changelog or working-evidence text that contradicts its generated validation
+  marker by retaining an open, pending-publication or required-rerun claim.
+- CANIC-054 no longer asks a historical finalized Root Wasm to expose the
+  debug-only `get_candid_pointer` export. Repair compilation reads the exact
+  adjacent predecessor `.did`, validates it against the manifest-bound Root
+  journal Candid digest, and resolves the successor `.did` the same way;
+  extraction is a successor build-output fallback only when the Wasm exports
+  that symbol. Sidecars are bounded, parsed, no-follow and retained by content
+  digest. A non-operational candidate plus both sidecars is verified in the
+  recovery bundle before provisional authority publication, and the published
+  authority is checkpointed again before a remote repair effect.
+- CANIC-055 adds `canic install ... --preflight` for an existing incomplete
+  session. It reuses the production install path through finalized artifact
+  selection, exact existing Coordinator/Root journal inspection, both repair
+  Candid sidecars, the non-operational candidate and verified recovery-bundle
+  checkpoint, then returns before pre-root receipts, operational repair
+  authority or IC updates. Make-based development shares the repository
+  `target/` and automatically uses the pinned `sccache` when installed.
+- Published `v0.109.9` separates the provisional successor Root authority from
+  its terminal sequence-28 proof, retains exact repair artifacts and resumes
+  sequence-15 recovery through the canonical Store, Registry and Component
+  Registry phase owners. Its write-through, phase-derived recovery bundle is
+  path-confined, content-addressed and locally verifiable/importable. Final
+  source `37be941419c823cefa491539f3b50ee063571068` passed the complete unmodified
+  maintainer gate, and immutable tag `v0.109.9` plus the complete matching
+  package set were published from release commit
+  `e949712969b1e9a7de875c51811a20c69b35f6ab`.
 - Published `v0.109.8` includes the `CANIC-035` correction first released in
   `v0.109.5`: every fresh plan rejects an
   undersized pool policy before effects, while only the exact supported
@@ -81,32 +121,6 @@ Release validation: `0.109.9` was validated from source `37be941419c823cefa49153
   Focused pure and Coordinator workflow tests cover terminal and partial
   coalescing, fail-closed regression and malformed authority/evidence, stale
   replay, runtime continuation and the shared scale-out path.
-- Open 0.109.9 addresses CANIC-050/051 without widening the exceptional
-  retained-install contract. One provisional authority binds the exact
-  successor Root module from the typed `store_bootstrapped` through
-  `component_registry_preparation_verified` window; it cannot attest any
-  Store, Registry, Component Registry, pool, catalog or completion effect.
-  Each original phase owner re-observes monotonic live state and records its
-  normal deterministic transition. Only the sequence-28 protected Component
-  Registry proof can publish the separate terminal repair receipt and make the
-  repair operation terminal. Exact predecessor/successor Wasm and Candid bytes
-  are retained by digest before repair effects. A Canic-owned operator-state
-  bundle checkpoints the session, plans, journals, intents, receipts and
-  finalized artifacts before the first remote effect, after every local
-  repair transition and before its associated upgrade, top-up or protected
-  reinspection effect. Manifest completeness is derived from each exact Root
-  journal phase; repair authority requires both exact Wasms and Candid
-  sidecars, while each published operation or terminal receipt must match that
-  authority exactly. Local-only
-  `canic deploy recovery verify|import` rejects partial, mixed, tampered,
-  unconfined, newer-schema or conflicting evidence. Five focused bundle tests,
-  nine ordinary repair tests and the governed sequence-15-to-terminal journey
-  pass; the 20-second governed run used the production Store, Registry and
-  Component Registry phase drivers and reported a 353,556 kB/20-thread local
-  PocketIC high-water mark. The earlier candidate's complete `make validate`
-  run passed, but it predates this final durability correction and is not the
-  final release gate. Publication and the exact retained-session downstream
-  resume remain deliberately unperformed.
 - The root `Cargo.toml` is the sole live workspace package-version authority;
   this handoff deliberately does not mirror its value. Immutable local and
   remote tag refs own publication truth, and tag presence determines whether a
@@ -1216,9 +1230,19 @@ acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 contains the B3-B9 runtime implementation, and published `v0.108.2` records the
 accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
-Published `v0.109.8` completes the pool-policy, retained-asset, typed repair,
+Published `v0.109.9` completes the pool-policy, retained-asset, typed repair,
 terminal closure, coalesced runtime-activation and retained Root/pool
-corrections.
+corrections plus the sequence-15 retained-install recovery. The 0.109.10
+source batch makes its generic recovery bundle derive and require every normal
+finalized artifact, makes historical retained-Root Candid recovery sidecar-
+first without requiring a debug Wasm export, and prevents terminal release
+evidence from retaining stale pre-release obligations. It now also supplies an
+effect-equivalent retained-install preflight that must qualify the exact
+frozen source candidate against the downstream session before versioning.
+Focused host and CLI checks pass. The targeted retained-repair journey, exact
+downstream preflight and one complete maintainer gate on the frozen candidate
+remain before versioning, immutable publication and separately authorized
+exact-session resume.
 Focused pure/host and governed PocketIC evidence covers historical-plan
 selection, Root upgrade, retained-principal refresh and capacity-preserving 5T
 claim/install. The separately authorized downstream Root upgrade and asset
@@ -1242,11 +1266,12 @@ the Coordinator accepts bounded non-regressing Component Directory publication
 snapshots, including a fully validated first `0 -> 5` terminal observation.
 Focused pure and Coordinator workflow tests pass for fresh installation,
 partial coalescing, stale replay, fail-closed malformed responses, runtime
-continuation and scale-out. Continue B8 from the downstream
-`v0.2.0` recovery
-checkout with a
-read-only plan that requires the unchanged digest, zero debit and
-`fleet_component_provisioning` next before separately authorizing one resume.
+continuation and scale-out. Continue B8 by freezing the source candidate,
+running its targeted retained-repair PocketIC journey and executing
+`canic install ... --preflight` against the downstream recovery checkout with
+the unchanged plan digest and exact repair Wasm/sidecar inputs. Only that
+successful no-update checkpoint admits the human-owned full release gate and
+publication; the later effectful resume remains separately authorized.
 The earlier published `v0.109.2`
 contains the zero-to-five pool/revision-4 recovery plus the funding/journal
 part of `CANIC-029`. Only after deployed-state/admission evidence closes B8,

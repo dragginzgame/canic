@@ -15,9 +15,9 @@ use super::{
         PlanFleetSubnetRootInstallRequest, ResolvedFleetSubnetRootInstall, begin_root_creation,
         begin_root_install, begin_wasm_store_creation, begin_wasm_store_install,
         create_result_path, expected_root_authority, expected_wasm_store_authority,
-        plan_fleet_subnet_root_install, record_infrastructure_verified, record_root_created,
-        record_root_installed, record_wasm_store_created, record_wasm_store_installed,
-        wasm_store_create_result_path,
+        inspect_fleet_subnet_root_install, plan_fleet_subnet_root_install,
+        record_infrastructure_verified, record_root_created, record_root_installed,
+        record_wasm_store_created, record_wasm_store_installed, wasm_store_create_result_path,
     },
     fleet_subnet_root_repair::{
         ResolvedRetainedRootRepair, RetainedRootRepairAuthorityV1, execute_retained_root_repair,
@@ -123,6 +123,11 @@ enum RootInstallStateError {
 
     #[error("retained Root repair authority disappeared during exact policy revalidation")]
     RepairAuthorityMissing,
+
+    #[error("retained install preflight requires an existing Root journal on {placement_subnet}")]
+    PreflightJournalMissing {
+        placement_subnet: canic_core::ids::SubnetId,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -142,6 +147,31 @@ pub(super) struct InstallFleetSubnetRootsRequest<'a> {
     pub recovery_bundle: &'a FleetInstallRecoveryBundleCheckpoint<'a>,
 }
 
+pub(super) struct PreflightFleetSubnetRootsRequest<'a> {
+    pub icp_root: &'a Path,
+    pub config_path: &'a Path,
+    pub fleet_install_plan: &'a PersistedFleetInstallPlan,
+    pub fleet_install_session: &'a FleetInstallSession,
+    pub coordinator: Principal,
+    pub install_operation_id: [u8; 32],
+    pub retained_root_repair_adoption: Option<&'a RetainedRootRepairAdoption>,
+    pub recovery_bundle: &'a FleetInstallRecoveryBundleCheckpoint<'a>,
+}
+
+#[derive(Clone, Copy)]
+enum RootJournalAccess {
+    InspectExisting,
+    PlanOrRecover,
+}
+
+struct PreparedFleetSubnetRootInstall {
+    config: AppConfigSnapshot,
+    component_topology: canic_core::bootstrap::compiled::ComponentTopology,
+    root_artifact: InstallArtifact,
+    wasm_store_artifact: InstallArtifact,
+    planned_roots: Vec<ResolvedFleetSubnetRootInstall>,
+}
+
 pub(super) fn install_and_verify_fleet_subnet_roots(
     request: InstallFleetSubnetRootsRequest<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -155,53 +185,29 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
         retained_root_repair_adoption,
         recovery_bundle,
     } = request;
-    let config = AppConfigSnapshot::load(config_path)?;
-    let component_topology = config.model().compile_component_topology()?;
-    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
+    let prepared = prepare_fleet_subnet_root_install(
         icp_context.root(),
-        fleet_install_plan.plan.release_build_id,
+        config_path,
+        fleet_install_plan,
+        coordinator,
+        install_operation_id,
+        RootJournalAccess::PlanOrRecover,
     )?;
-    let root_artifact = resolve_install_artifact(
-        icp_context.root(),
-        &infrastructure_manifest,
-        CanicInfrastructureRole::FleetSubnetRoot,
-        fleet_install_plan.plan.release_build_id,
-    )?;
-    let wasm_store_artifact = resolve_install_artifact(
-        icp_context.root(),
-        &infrastructure_manifest,
-        CanicInfrastructureRole::WasmStore,
-        fleet_install_plan.plan.release_build_id,
-    )?;
-    let mut planned_roots = Vec::with_capacity(fleet_install_plan.plan.fleet_subnet_roots.len());
-
-    for root_plan in &fleet_install_plan.plan.fleet_subnet_roots {
-        let current = plan_fleet_subnet_root_install(PlanFleetSubnetRootInstallRequest {
-            fleet_install_plan,
-            infrastructure_manifest: &infrastructure_manifest,
-            coordinator,
-            install_operation_id,
-            component_topology: component_topology.clone(),
-            root_plan,
-        })?;
-        planned_roots.push(current);
-    }
-    if retained_root_repair_adoption.is_some_and(|adoption| {
-        !planned_roots
-            .iter()
-            .any(|current| current.journal.fleet_subnet_root == Some(adoption.fleet_subnet_root))
-    }) {
-        return Err(RootInstallStateError::RepairRootNotFound.into());
-    }
+    require_repair_root(&prepared.planned_roots, retained_root_repair_adoption)?;
     recovery_bundle.checkpoint()?;
 
-    let mut roots = Vec::with_capacity(planned_roots.len());
-    for current in planned_roots {
+    let mut roots = Vec::with_capacity(prepared.planned_roots.len());
+    for current in prepared.planned_roots {
         let adoption = retained_root_repair_adoption.filter(|adoption| {
             current.journal.fleet_subnet_root == Some(adoption.fleet_subnet_root)
         });
         let required_pool_cycles = adoption
-            .map(|_| required_initial_pool_asset_cycles(config.model(), &current.journal.root_plan))
+            .map(|_| {
+                required_initial_pool_asset_cycles(
+                    prepared.config.model(),
+                    &current.journal.root_plan,
+                )
+            })
             .transpose()?
             .map(|cycles| cycles.to_u128());
         let repair = resolve_and_execute_retained_root_repair(
@@ -214,8 +220,8 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
         )?;
         roots.push(drive_root_install(
             icp_context,
-            &root_artifact,
-            &wasm_store_artifact,
+            &prepared.root_artifact,
+            &prepared.wasm_store_artifact,
             &fleet_install_plan.plan.fresh_fleet_plan_digest,
             current,
             repair.as_ref().map(|repair| &repair.authority),
@@ -227,7 +233,126 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
         .iter()
         .map(|authority| authority.binding.clone())
         .collect::<Vec<_>>();
-    component_topology.validate_fleet_subnet_root_bindings(&bindings)?;
+    prepared
+        .component_topology
+        .validate_fleet_subnet_root_bindings(&bindings)?;
+    Ok(())
+}
+
+pub(super) fn preflight_fleet_subnet_roots(
+    request: PreflightFleetSubnetRootsRequest<'_>,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let PreflightFleetSubnetRootsRequest {
+        icp_root,
+        config_path,
+        fleet_install_plan,
+        fleet_install_session,
+        coordinator,
+        install_operation_id,
+        retained_root_repair_adoption,
+        recovery_bundle,
+    } = request;
+    let prepared = prepare_fleet_subnet_root_install(
+        icp_root,
+        config_path,
+        fleet_install_plan,
+        coordinator,
+        install_operation_id,
+        RootJournalAccess::InspectExisting,
+    )?;
+    require_repair_root(&prepared.planned_roots, retained_root_repair_adoption)?;
+    recovery_bundle.checkpoint()?;
+
+    for current in prepared.planned_roots {
+        let adoption = retained_root_repair_adoption.filter(|adoption| {
+            current.journal.fleet_subnet_root == Some(adoption.fleet_subnet_root)
+        });
+        let required_pool_cycles = adoption
+            .map(|_| {
+                required_initial_pool_asset_cycles(
+                    prepared.config.model(),
+                    &current.journal.root_plan,
+                )
+            })
+            .transpose()?
+            .map(|cycles| cycles.to_u128());
+        let _repair = resolve_and_checkpoint_retained_root_repair(
+            &current,
+            fleet_install_session,
+            adoption,
+            required_pool_cycles,
+            recovery_bundle,
+        )?;
+    }
+
+    recovery_bundle.checkpoint().map_err(Into::into)
+}
+
+fn prepare_fleet_subnet_root_install(
+    icp_root: &Path,
+    config_path: &Path,
+    fleet_install_plan: &PersistedFleetInstallPlan,
+    coordinator: Principal,
+    install_operation_id: [u8; 32],
+    journal_access: RootJournalAccess,
+) -> Result<PreparedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
+    let config = AppConfigSnapshot::load(config_path)?;
+    let component_topology = config.model().compile_component_topology()?;
+    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
+        icp_root,
+        fleet_install_plan.plan.release_build_id,
+    )?;
+    let root_artifact = resolve_install_artifact(
+        icp_root,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetSubnetRoot,
+        fleet_install_plan.plan.release_build_id,
+    )?;
+    let wasm_store_artifact = resolve_install_artifact(
+        icp_root,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::WasmStore,
+        fleet_install_plan.plan.release_build_id,
+    )?;
+    let mut planned_roots = Vec::with_capacity(fleet_install_plan.plan.fleet_subnet_roots.len());
+    for root_plan in &fleet_install_plan.plan.fleet_subnet_roots {
+        let request = PlanFleetSubnetRootInstallRequest {
+            fleet_install_plan,
+            infrastructure_manifest: &infrastructure_manifest,
+            coordinator,
+            install_operation_id,
+            component_topology: component_topology.clone(),
+            root_plan,
+        };
+        let current = match journal_access {
+            RootJournalAccess::InspectExisting => inspect_fleet_subnet_root_install(request)?
+                .ok_or(RootInstallStateError::PreflightJournalMissing {
+                    placement_subnet: root_plan.placement_subnet,
+                })?,
+            RootJournalAccess::PlanOrRecover => plan_fleet_subnet_root_install(request)?,
+        };
+        planned_roots.push(current);
+    }
+    Ok(PreparedFleetSubnetRootInstall {
+        config,
+        component_topology,
+        root_artifact,
+        wasm_store_artifact,
+        planned_roots,
+    })
+}
+
+fn require_repair_root(
+    planned_roots: &[ResolvedFleetSubnetRootInstall],
+    adoption: Option<&RetainedRootRepairAdoption>,
+) -> Result<(), RootInstallStateError> {
+    if adoption.is_some_and(|adoption| {
+        !planned_roots
+            .iter()
+            .any(|current| current.journal.fleet_subnet_root == Some(adoption.fleet_subnet_root))
+    }) {
+        return Err(RootInstallStateError::RepairRootNotFound);
+    }
     Ok(())
 }
 
@@ -239,7 +364,13 @@ fn resolve_and_execute_retained_root_repair(
     required_pool_cycles: Option<u128>,
     recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
 ) -> Result<Option<ResolvedRetainedRootRepair>, Box<dyn std::error::Error>> {
-    let repair = resolve_retained_root_repair(current, session, adoption, required_pool_cycles)?;
+    let repair = resolve_and_checkpoint_retained_root_repair(
+        current,
+        session,
+        adoption,
+        required_pool_cycles,
+        recovery_bundle,
+    )?;
     let Some(resolved) = repair.as_ref() else {
         return Ok(None);
     };
@@ -273,6 +404,23 @@ fn resolve_and_execute_retained_root_repair(
             recovery_bundle,
         )?;
         verify_live_infrastructure(icp_context, &current.journal, Some(&resolved.authority))?;
+    }
+    Ok(repair)
+}
+
+fn resolve_and_checkpoint_retained_root_repair(
+    current: &ResolvedFleetSubnetRootInstall,
+    session: &FleetInstallSession,
+    adoption: Option<&RetainedRootRepairAdoption>,
+    required_pool_cycles: Option<u128>,
+    recovery_bundle: &FleetInstallRecoveryBundleCheckpoint<'_>,
+) -> Result<Option<ResolvedRetainedRootRepair>, Box<dyn std::error::Error>> {
+    let repair = resolve_retained_root_repair(current, session, adoption, required_pool_cycles)?;
+    if repair
+        .as_ref()
+        .is_some_and(|repair| repair.needs_authority_publication)
+    {
+        recovery_bundle.checkpoint()?;
     }
     Ok(repair)
 }

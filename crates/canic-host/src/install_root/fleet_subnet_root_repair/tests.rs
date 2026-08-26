@@ -31,7 +31,11 @@ use crate::{
     },
     protocol_binding::resolve_infrastructure_protocol_binding,
     release_build::{finalize_release_build_from_manifest, plan_release_build},
-    release_set::CanicInfrastructureArtifactEntry,
+    release_set::{
+        APPLICATION_ARTIFACT_UNION_FILE, ApplicationArtifactEntry, ApplicationArtifactUnion,
+        CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
+        CanicInfrastructureRole, INFRASTRUCTURE_ARTIFACT_MANIFEST_FILE,
+    },
 };
 use candid::CandidType;
 use canic_control_plane::dto::root::RootRegistrySynchronizationOperationStatus;
@@ -55,10 +59,12 @@ use canic_core::{
     ids::{CanisterRole, CanonicalNetworkId, FleetSubnetRootReleaseSet},
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey, derive_protocol_profile_hashes},
 };
+use flate2::{Compression, GzBuilder};
 use pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig};
 use pocket_ic::{CreateCanisterParams, CreateCanisterPlacement, PocketIc, PocketIcBuilder};
 use std::{
     fs,
+    io::Write,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
@@ -79,9 +85,14 @@ fn repair_compilation_binds_an_already_upgraded_predecessor_and_exact_candid_suc
     let artifacts =
         write_retained_repair_artifacts(current.path.parent().expect("repair journal directory"));
     current.journal.expected_root_module_hash = Sha256::digest(&artifacts.predecessor_wasm).into();
-    current.journal.root_artifact.candid_sha256 =
-        Sha256::digest(extract_candid_bytes(&artifacts.predecessor_path).expect("retained Candid"))
-            .into();
+    current.journal.root_artifact.wasm_size_bytes =
+        u64::try_from(artifacts.predecessor_wasm.len()).expect("retained Wasm size");
+    current.journal.root_artifact.candid_sha256 = Sha256::digest(
+        fs::read(artifacts.predecessor_path.with_extension("did"))
+            .expect("retained Candid sidecar"),
+    )
+    .into();
+    assert!(!wasm_exports_candid_pointer(&artifacts.predecessor_wasm));
     let adoption = repair_adoption(
         current.journal.fleet_subnet_root.expect("Root"),
         &artifacts.live_predecessor_path,
@@ -114,6 +125,97 @@ fn repair_compilation_binds_an_already_upgraded_predecessor_and_exact_candid_suc
 }
 
 #[test]
+fn repair_candid_resolution_requires_bounded_exact_sidecars_and_limits_extraction_to_build_exports()
+{
+    let root = crate::test_support::temp_dir("retained-root-repair-candid-resolution");
+    fs::create_dir_all(&root).expect("create Candid resolution fixture root");
+    let artifacts = write_retained_repair_artifacts(&root);
+    let predecessor_sidecar = artifacts.predecessor_path.with_extension("did");
+    fs::remove_file(&predecessor_sidecar).expect("remove finalized predecessor sidecar");
+    assert!(matches!(
+        inspect_wasm(
+            &artifacts.predecessor_path,
+            RepairCandidResolution::FinalizedSidecar,
+        ),
+        Err(RetainedRootRepairError::FinalizedCandidSidecarMissing { .. })
+    ));
+
+    let successor_sidecar = artifacts.successor_path.with_extension("did");
+    fs::remove_file(&successor_sidecar).expect("remove successor sidecar");
+    assert!(matches!(
+        inspect_wasm(
+            &artifacts.successor_path,
+            RepairCandidResolution::SuccessorSidecarOrBuildExport,
+        ),
+        Err(RetainedRootRepairError::SuccessorCandidUnavailable { .. })
+    ));
+
+    let build_output = root.join("successor-build-output.wasm");
+    fs::write(
+        &build_output,
+        minimal_canister_wasm("service : { ping: () -> (); }\n", "build-output"),
+    )
+    .expect("write successor build output");
+    let extracted = inspect_wasm(
+        &build_output,
+        RepairCandidResolution::SuccessorSidecarOrBuildExport,
+    )
+    .expect("use candid-extractor only for a build output with the debug export");
+    assert_eq!(
+        std::str::from_utf8(&extracted.candid)
+            .expect("extracted Candid is UTF-8")
+            .trim_end(),
+        "service : { ping: () -> (); }"
+    );
+
+    let oversized = root.join("oversized-root.wasm");
+    fs::write(&oversized, &artifacts.predecessor_wasm).expect("write oversized-sidecar Wasm");
+    fs::write(
+        oversized.with_extension("did"),
+        vec![b' '; MAX_REPAIR_CANDID_BYTES + 1],
+    )
+    .expect("write oversized sidecar");
+    assert!(matches!(
+        inspect_wasm(&oversized, RepairCandidResolution::FinalizedSidecar),
+        Err(RetainedRootRepairError::CandidSidecarTooLarge { .. })
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn repair_candid_resolution_rejects_unsafe_and_invalid_sidecars() {
+    use std::os::unix::fs::symlink;
+
+    let root = crate::test_support::temp_dir("retained-root-repair-candid-safety");
+    fs::create_dir_all(&root).expect("create Candid safety fixture root");
+    let artifacts = write_retained_repair_artifacts(&root);
+    let successor_sidecar = artifacts.successor_path.with_extension("did");
+    fs::remove_file(&successor_sidecar).expect("remove regular successor sidecar");
+    symlink(
+        artifacts.predecessor_path.with_extension("did"),
+        &successor_sidecar,
+    )
+    .expect("link unsafe successor sidecar");
+    assert!(matches!(
+        inspect_wasm(
+            &artifacts.successor_path,
+            RepairCandidResolution::SuccessorSidecarOrBuildExport,
+        ),
+        Err(RetainedRootRepairError::CandidSidecarUnsafe { .. })
+    ));
+
+    fs::remove_file(&successor_sidecar).expect("remove unsafe sidecar");
+    fs::write(&successor_sidecar, [0xff]).expect("write invalid sidecar");
+    assert!(matches!(
+        inspect_wasm(
+            &artifacts.successor_path,
+            RepairCandidResolution::SuccessorSidecarOrBuildExport,
+        ),
+        Err(RetainedRootRepairError::InvalidCandidSidecar { .. })
+    ));
+}
+
+#[test]
 fn provisional_authority_is_phase_bounded_and_survives_disposable_artifact_deletion() {
     let (mut current, session, _) = repair_authority_fixture();
     current.journal.phase = FleetSubnetRootInstallPhase::StoreBootstrapped;
@@ -123,9 +225,13 @@ fn provisional_authority_is_phase_bounded_and_survives_disposable_artifact_delet
     let artifacts =
         write_retained_repair_artifacts(current.path.parent().expect("repair journal directory"));
     current.journal.expected_root_module_hash = Sha256::digest(&artifacts.predecessor_wasm).into();
-    current.journal.root_artifact.candid_sha256 =
-        Sha256::digest(extract_candid_bytes(&artifacts.predecessor_path).expect("retained Candid"))
-            .into();
+    current.journal.root_artifact.wasm_size_bytes =
+        u64::try_from(artifacts.predecessor_wasm.len()).expect("retained Wasm size");
+    current.journal.root_artifact.candid_sha256 = Sha256::digest(
+        fs::read(artifacts.predecessor_path.with_extension("did"))
+            .expect("retained Candid sidecar"),
+    )
+    .into();
     let adoption = repair_adoption(
         current.journal.fleet_subnet_root.expect("Root"),
         &artifacts.live_predecessor_path,
@@ -143,13 +249,23 @@ fn provisional_authority_is_phase_bounded_and_survives_disposable_artifact_delet
         publish_retained_root_repair_receipt(&repair, &session, &current.journal),
         Err(RetainedRootRepairError::PrematureTerminalReceipt)
     ));
-    publish_retained_root_repair_authority(&repair, &session, &current.journal)
-        .expect("publish exact provisional authority");
     fs::remove_file(&artifacts.live_predecessor_path).expect("delete caller predecessor artifact");
+    fs::remove_file(artifacts.live_predecessor_path.with_extension("did"))
+        .expect("delete caller predecessor Candid sidecar");
     fs::remove_file(&artifacts.successor_path).expect("delete caller successor artifact");
+    fs::remove_file(artifacts.successor_path.with_extension("did"))
+        .expect("delete caller successor Candid sidecar");
+    let candidate_replay =
+        resolve_retained_root_repair(&current, &session, None, Some(5_000_000_000_000))
+            .expect("reload candidate without caller-owned artifact paths")
+            .expect("retained repair candidate");
+    assert!(candidate_replay.needs_authority_publication);
+    publish_retained_root_repair_authority(&candidate_replay, &session, &current.journal)
+        .expect("publish exact provisional authority after candidate replay");
     let replay = resolve_retained_root_repair(&current, &session, None, Some(5_000_000_000_000))
-        .expect("reload without caller-owned artifact paths")
+        .expect("reload published authority without caller-owned artifact paths")
         .expect("retained provisional authority");
+    assert!(!replay.needs_authority_publication);
     assert!(replay.successor_wasm_path.is_file());
 
     let mut pre_infrastructure = current.journal;
@@ -347,6 +463,8 @@ fn repair_receipt_publication_is_immutable_and_exactly_replayable() {
         path: repair_authority_path(&current.path),
         successor_wasm_path: current.path.with_file_name("successor.wasm"),
     };
+    publish_repair_candidate(&current.path, &resolved.authority)
+        .expect("retain exact repair candidate before authority publication");
     publish_retained_root_repair(&resolved, &session, &current.journal)
         .expect("publish exact repair receipt");
     let replay = resolve_retained_root_repair(&current, &session, None, None)
@@ -366,6 +484,8 @@ fn published_receipt_converges_asset_ready_operation_without_repeating_effects()
         path: repair_authority_path(&current.path),
         successor_wasm_path: current.path.with_file_name("successor.wasm"),
     };
+    publish_repair_candidate(&current.path, &resolved.authority)
+        .expect("retain exact repair candidate before authority publication");
     super::procedure::write_asset_ready_test_operation(&resolved)
         .expect("retain exact AssetReady interruption point");
     publish_retained_root_repair(&resolved, &session, &current.journal)
@@ -425,6 +545,7 @@ struct RetainedRepairJourneyFixture {
     changed_path: PathBuf,
     wrong_candid_path: PathBuf,
     successor_module_sha256: [u8; 32],
+    recovery_bundle_path: PathBuf,
 }
 
 struct RetainedRepairArtifacts {
@@ -446,6 +567,10 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
     let root = crate::test_support::temp_dir("retained-root-repair-pocketic-completion");
     fs::create_dir_all(&root).expect("create retained-repair qualification root");
     let artifacts = write_live_retained_repair_artifacts(&root);
+    assert!(!wasm_exports_candid_pointer(&artifacts.predecessor_wasm));
+    assert!(!wasm_exports_candid_pointer(
+        &artifacts.live_predecessor_wasm
+    ));
     let session = plan_qualification_session(&root);
     let mut pic = repair_pocket_ic();
     let (icp_executable, controller) = isolated_repair_identity(&root);
@@ -463,6 +588,13 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
         coordinator,
         |artifact| configure_repair_stub_artifact(&root, artifact, &artifacts),
     );
+    let (planned, fleet_install_plan, wasm_store_wasm) =
+        bind_finalized_repair_artifacts(&root, planned, fleet_install_plan);
+    pic.set_controllers(wasm_store, None, vec![controller])
+        .expect("grant fixture controller for exact Wasm Store installation");
+    pic.install_canister(wasm_store, wasm_store_wasm, Vec::new(), Some(controller));
+    pic.set_controllers(wasm_store, Some(controller), vec![fleet_subnet_root])
+        .expect("retain exact Root-owned Wasm Store controllers");
     let current =
         store_bootstrapped_repair_checkpoint(planned, fleet_subnet_root, wasm_store, controller);
     assert_eq!(
@@ -551,6 +683,7 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
         changed_path: artifacts.changed_path,
         wrong_candid_path: artifacts.wrong_candid_path,
         successor_module_sha256,
+        recovery_bundle_path: crate::test_support::temp_dir("retained-root-repair-pocketic-bundle"),
     }
 }
 
@@ -575,22 +708,41 @@ fn create_undersized_pool_asset(
 }
 
 fn write_retained_repair_artifacts(root: &Path) -> RetainedRepairArtifacts {
-    let compatible_candid = "service : { ping: () -> (); }\n";
-    let predecessor_wasm = minimal_canister_wasm(compatible_candid, "predecessor");
-    let live_predecessor_wasm = minimal_canister_wasm(compatible_candid, "live-predecessor");
-    let successor_wasm = minimal_canister_wasm(compatible_candid, "successor");
-    let changed_wasm = minimal_canister_wasm(compatible_candid, "changed-successor");
+    let compatible_candid = b"service : { ping: () -> (); }\n";
+    let predecessor_wasm = hide_candid_pointer_export(minimal_canister_wasm(
+        std::str::from_utf8(compatible_candid).expect("test Candid"),
+        "predecessor",
+    ));
+    let live_predecessor_wasm = hide_candid_pointer_export(minimal_canister_wasm(
+        std::str::from_utf8(compatible_candid).expect("test Candid"),
+        "live-predecessor",
+    ));
+    let successor_wasm = hide_candid_pointer_export(minimal_canister_wasm(
+        std::str::from_utf8(compatible_candid).expect("test Candid"),
+        "successor",
+    ));
+    let changed_wasm = hide_candid_pointer_export(minimal_canister_wasm(
+        std::str::from_utf8(compatible_candid).expect("test Candid"),
+        "changed-successor",
+    ));
     write_retained_repair_artifact_set(
         root,
         predecessor_wasm,
         live_predecessor_wasm,
         successor_wasm,
         changed_wasm,
+        compatible_candid,
     )
 }
 
 fn write_live_retained_repair_artifacts(root: &Path) -> RetainedRepairArtifacts {
     let base = build_repair_stub_wasm();
+    let extractor_source = root.join("repair-stub-build-output.wasm");
+    fs::write(&extractor_source, &base).expect("write build-time Candid extractor source");
+    let compatible_candid =
+        extract_candid_bytes(&extractor_source).expect("extract build-time repair-stub Candid");
+    fs::remove_file(&extractor_source).expect("remove disposable extractor source");
+    let base = hide_candid_pointer_export(base);
     let predecessor_wasm = marked_wasm(&base, "predecessor");
     let live_predecessor_wasm = marked_wasm(&base, "live-predecessor");
     let successor_wasm = marked_wasm(&base, "successor");
@@ -601,6 +753,7 @@ fn write_live_retained_repair_artifacts(root: &Path) -> RetainedRepairArtifacts 
         live_predecessor_wasm,
         successor_wasm,
         changed_wasm,
+        &compatible_candid,
     )
 }
 
@@ -610,9 +763,13 @@ fn write_retained_repair_artifact_set(
     live_predecessor_wasm: Vec<u8>,
     successor_wasm: Vec<u8>,
     changed_wasm: Vec<u8>,
+    compatible_candid: &[u8],
 ) -> RetainedRepairArtifacts {
-    let wrong_candid_wasm =
-        minimal_canister_wasm("service : { ping: (nat) -> (); }\n", "wrong-candid");
+    let wrong_candid = b"service : { ping: (nat) -> (); }\n";
+    let wrong_candid_wasm = hide_candid_pointer_export(minimal_canister_wasm(
+        std::str::from_utf8(wrong_candid).expect("wrong test Candid"),
+        "wrong-candid",
+    ));
     let predecessor_path = root.join("predecessor-root.wasm");
     let live_predecessor_path = root.join("live-predecessor-root.wasm");
     let successor_path = root.join("successor-root.wasm");
@@ -623,6 +780,17 @@ fn write_retained_repair_artifact_set(
     fs::write(&successor_path, &successor_wasm).expect("write successor Wasm");
     fs::write(&changed_path, &changed_wasm).expect("write changed successor Wasm");
     fs::write(&wrong_candid_path, &wrong_candid_wasm).expect("write wrong-Candid Wasm");
+    for path in [
+        &predecessor_path,
+        &live_predecessor_path,
+        &successor_path,
+        &changed_path,
+    ] {
+        fs::write(path.with_extension("did"), compatible_candid)
+            .expect("write exact compatible Candid sidecar");
+    }
+    fs::write(wrong_candid_path.with_extension("did"), wrong_candid)
+        .expect("write exact wrong Candid sidecar");
 
     RetainedRepairArtifacts {
         predecessor_wasm,
@@ -715,13 +883,16 @@ fn configure_repair_stub_artifact(
     artifact: &mut CanicInfrastructureArtifactEntry,
     artifacts: &RetainedRepairArtifacts,
 ) {
-    let candid = extract_candid_bytes(&artifacts.predecessor_path)
-        .expect("extract retained repair stub Candid");
+    let candid = fs::read(artifacts.predecessor_path.with_extension("did"))
+        .expect("read retained repair stub Candid sidecar");
     let role = CanisterRole::from("root");
     let capabilities = std::collections::BTreeSet::from([RoleCapabilityKey::Root]);
     let release_identity = artifact.protocol_release_identity.clone();
     let profile = derive_protocol_profile_hashes(&release_identity, &role, &capabilities, &candid);
-    let artifact_relative_path = "retained-repair/root.wasm".to_string();
+    let artifact_relative_path = format!(
+        ".canic/release-builds/{}/artifacts/fleet-subnet-root/root.wasm",
+        artifact.release_build_id
+    );
     let artifact_path = root.join(&artifact_relative_path);
     fs::create_dir_all(artifact_path.parent().expect("repair artifact parent"))
         .expect("create repair artifact parent");
@@ -729,14 +900,180 @@ fn configure_repair_stub_artifact(
         .expect("write retained original Root artifact");
     fs::write(artifact_path.with_extension("did"), &candid)
         .expect("write exact retained Root Candid sidecar");
+    let compressed = gzip_wasm(&artifacts.predecessor_wasm);
+    let compressed_relative_path = format!("{artifact_relative_path}.gz");
+    fs::write(root.join(&compressed_relative_path), &compressed)
+        .expect("write retained Root gzip Wasm");
     artifact.protocol_role = role;
     artifact.protocol_capabilities = capabilities;
     artifact.wasm_relative_path = artifact_relative_path;
     artifact.wasm_size_bytes =
         u64::try_from(artifacts.predecessor_wasm.len()).expect("Root Wasm size");
     artifact.wasm_sha256_hex = encode_hex(&Sha256::digest(&artifacts.predecessor_wasm));
+    artifact.wasm_gz_relative_path = compressed_relative_path;
+    artifact.wasm_gz_size_bytes = u64::try_from(compressed.len()).expect("Root gzip Wasm size");
+    artifact.wasm_gz_sha256_hex = encode_hex(&Sha256::digest(&compressed));
     artifact.candid_sha256 = profile.candid_sha256;
     artifact.protocol_profile_digest = profile.protocol_profile_digest;
+}
+
+fn bind_finalized_repair_artifacts(
+    root: &Path,
+    mut planned: ResolvedFleetSubnetRootInstall,
+    mut plan: crate::fleet_install_plan::PersistedFleetInstallPlan,
+) -> (
+    ResolvedFleetSubnetRootInstall,
+    crate::fleet_install_plan::PersistedFleetInstallPlan,
+    Vec<u8>,
+) {
+    let release_build_id = plan.plan.release_build_id;
+    let coordinator_wasm = minimal_canister_wasm("service : {}\n", "coordinator-artifact");
+    let wasm_store_wasm = minimal_canister_wasm("service : {}\n", "wasm-store-artifact");
+    let coordinator = write_test_infrastructure_artifact(
+        root,
+        release_build_id,
+        CanicInfrastructureRole::FleetCoordinator,
+        &coordinator_wasm,
+        b"service : {}\n",
+        0x41,
+    );
+    let wasm_store = write_test_infrastructure_artifact(
+        root,
+        release_build_id,
+        CanicInfrastructureRole::WasmStore,
+        &wasm_store_wasm,
+        b"service : {}\n",
+        0x43,
+    );
+    let root_artifact = planned.journal.root_artifact.clone();
+    let mut entries = vec![coordinator, root_artifact.clone(), wasm_store.clone()];
+    entries.sort_unstable_by_key(|entry| entry.role);
+    let infrastructure = CanicInfrastructureArtifactManifest {
+        release_build_id,
+        entries,
+    };
+    let infrastructure_bytes = infrastructure
+        .canonical_bytes()
+        .expect("encode exact retained infrastructure manifest");
+    let release_build_root = root
+        .join(".canic/release-builds")
+        .join(release_build_id.to_string());
+    fs::write(
+        release_build_root.join(INFRASTRUCTURE_ARTIFACT_MANIFEST_FILE),
+        &infrastructure_bytes,
+    )
+    .expect("write exact retained infrastructure manifest");
+
+    let component_wasm = minimal_canister_wasm("service : {}\n", "component-artifact");
+    let component_candid = b"service : {}\n";
+    let component_directory =
+        format!(".canic/release-builds/{release_build_id}/artifacts/component");
+    let component_wasm_relative_path = format!("{component_directory}/component.wasm");
+    let component_gzip_relative_path = format!("{component_wasm_relative_path}.gz");
+    let component_gzip = gzip_wasm(&component_wasm);
+    fs::create_dir_all(root.join(&component_directory))
+        .expect("create Component artifact directory");
+    fs::write(root.join(&component_wasm_relative_path), &component_wasm)
+        .expect("write Component raw Wasm");
+    fs::write(root.join(&component_gzip_relative_path), &component_gzip)
+        .expect("write Component gzip Wasm");
+    fs::write(
+        root.join(&component_wasm_relative_path)
+            .with_extension("did"),
+        component_candid,
+    )
+    .expect("write Component Candid sidecar");
+    let application = ApplicationArtifactUnion {
+        release_build_id,
+        fleet_component_topology_digest: canic_core::ids::ComponentTopologyDigest::from_bytes(
+            [0x44; 32],
+        ),
+        entries: vec![ApplicationArtifactEntry {
+            role: CanisterRole::from("project_hub"),
+            package: "project-hub".to_string(),
+            release_build_id,
+            wasm_relative_path: component_wasm_relative_path,
+            wasm_size_bytes: component_wasm.len() as u64,
+            wasm_sha256_hex: encode_hex(&Sha256::digest(&component_wasm)),
+            wasm_gz_relative_path: component_gzip_relative_path,
+            wasm_gz_size_bytes: component_gzip.len() as u64,
+            wasm_gz_sha256_hex: encode_hex(&Sha256::digest(&component_gzip)),
+            candid_sha256: Sha256::digest(component_candid).into(),
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([0x45; 32]),
+        }],
+    };
+    application
+        .validate_retained_shape()
+        .expect("validate exact retained application artifact union");
+    let application_bytes =
+        serde_json::to_vec(&application).expect("encode retained application artifact union");
+    fs::write(
+        release_build_root.join(APPLICATION_ARTIFACT_UNION_FILE),
+        &application_bytes,
+    )
+    .expect("write exact retained application artifact union");
+
+    plan.plan.application_artifact_union_digest = Sha256::digest(&application_bytes).into();
+    let plan_bytes = serde_json::to_vec(&plan.plan).expect("encode artifact-bound Fleet plan");
+    plan.digest = Sha256::digest(&plan_bytes).into();
+    fs::write(&plan.path, &plan_bytes).expect("retain artifact-bound Fleet plan");
+    planned.journal.fleet_install_plan_digest = plan.digest;
+    planned.journal.infrastructure_manifest_digest = Sha256::digest(&infrastructure_bytes).into();
+    planned.journal.root_artifact = root_artifact;
+    planned.journal.wasm_store_artifact = wasm_store;
+    planned.journal.expected_wasm_store_module_hash = Sha256::digest(&wasm_store_wasm).into();
+    fs::write(
+        &planned.path,
+        serde_json::to_vec(&planned.journal).expect("encode artifact-bound Root journal"),
+    )
+    .expect("retain artifact-bound Root journal");
+    (planned, plan, wasm_store_wasm)
+}
+
+fn write_test_infrastructure_artifact(
+    root: &Path,
+    release_build_id: canic_core::ids::ReleaseBuildId,
+    role: CanicInfrastructureRole,
+    wasm: &[u8],
+    candid: &[u8],
+    marker: u8,
+) -> CanicInfrastructureArtifactEntry {
+    let directory = format!(
+        ".canic/release-builds/{release_build_id}/artifacts/{}",
+        role.as_str()
+    );
+    let wasm_relative_path = format!("{directory}/{}.wasm", role.as_str());
+    let wasm_gz_relative_path = format!("{wasm_relative_path}.gz");
+    let wasm_gz = gzip_wasm(wasm);
+    fs::create_dir_all(root.join(&directory)).expect("create infrastructure artifact directory");
+    fs::write(root.join(&wasm_relative_path), wasm).expect("write infrastructure raw Wasm");
+    fs::write(root.join(&wasm_gz_relative_path), &wasm_gz).expect("write infrastructure gzip Wasm");
+    fs::write(root.join(&wasm_relative_path).with_extension("did"), candid)
+        .expect("write infrastructure Candid sidecar");
+    CanicInfrastructureArtifactEntry {
+        role,
+        package: format!("canic-{}", role.as_str().replace('_', "-")),
+        protocol_release_identity: "0.109.10-test".to_string(),
+        protocol_role: CanisterRole::owned(role.protocol_role_name().to_string()),
+        protocol_capabilities: std::collections::BTreeSet::new(),
+        release_build_id,
+        wasm_relative_path,
+        wasm_size_bytes: wasm.len() as u64,
+        wasm_sha256_hex: encode_hex(&Sha256::digest(wasm)),
+        wasm_gz_relative_path,
+        wasm_gz_size_bytes: wasm_gz.len() as u64,
+        wasm_gz_sha256_hex: encode_hex(&Sha256::digest(&wasm_gz)),
+        candid_sha256: Sha256::digest(candid).into(),
+        protocol_profile_digest: ProtocolProfileDigest::from_bytes([marker; 32]),
+    }
+}
+
+fn gzip_wasm(wasm: &[u8]) -> Vec<u8> {
+    let mut encoder = GzBuilder::new()
+        .mtime(0)
+        .write(Vec::new(), Compression::best());
+    encoder.write_all(wasm).expect("gzip test Wasm");
+    encoder.finish().expect("finish test Wasm gzip")
 }
 
 fn store_bootstrapped_repair_checkpoint(
@@ -1244,11 +1581,21 @@ fn execute_exact_repair_and_reject_conflicts(
         &fixture.root,
         &fixture.session,
         &fixture.fleet_install_plan,
-        fixture.root.join("stable-operator-recovery-bundle"),
+        fixture.recovery_bundle_path.clone(),
     );
     let (repair, root_binding) = resolve_repair_for_execution(fixture);
+    recovery_bundle
+        .checkpoint()
+        .expect("checkpoint candidate and both Candid sidecars before authority publication");
+    assert!(repair_candidate_path(&fixture.current.path).is_file());
+    assert!(!repair_authority_path(&fixture.current.path).exists());
+    crate::install_root::verify_fleet_install_recovery_bundle(&fixture.recovery_bundle_path)
+        .expect("verify the effect-equivalent preflight bundle before authority publication");
     publish_retained_root_repair_authority(&repair, &fixture.session, &fixture.current.journal)
         .expect("publish provisional authority before repair effects");
+    recovery_bundle
+        .checkpoint()
+        .expect("checkpoint published authority before repair effects");
     let operator_before = fixture
         .icp_context
         .cli()
@@ -1580,6 +1927,30 @@ fn complete_catalog_and_close_recovery(fixture: &RetainedRepairJourneyFixture) {
         ),
         Err(FleetInstallSessionError::Completed { .. })
     ));
+
+    let recovery_bundle = FleetInstallRecoveryBundleCheckpoint::persistent_at(
+        &fixture.root,
+        &fixture.session,
+        &fixture.fleet_install_plan,
+        fixture.recovery_bundle_path.clone(),
+    );
+    let bundle = recovery_bundle
+        .checkpoint()
+        .expect("checkpoint terminal retained-repair bundle");
+    let detached_source = fixture.root.with_extension("deleted-source");
+    fs::rename(&fixture.root, &detached_source)
+        .expect("remove the original source workspace without deleting its evidence");
+    crate::install_root::import_fleet_install_recovery_bundle(&bundle, &fixture.root)
+        .expect("verify and import the exact bundle after source-workspace removal");
+    assert!(matches!(
+        recover_fleet_install_session_authority(
+            &fixture.root,
+            fixture.session.fleet.fleet.canonical_network_id,
+            &fixture.session.fleet_name,
+            &fixture.session.fleet.app,
+        ),
+        Err(FleetInstallSessionError::Completed { .. })
+    ));
 }
 
 fn repair_adoption(
@@ -1755,6 +2126,21 @@ fn minimal_canister_wasm(candid: &str, marker: &str) -> Vec<u8> {
     data.push(0);
     append_wasm_section(&mut wasm, 11, &data);
     append_custom_section(&mut wasm, "canic:retained-repair-test", marker.as_bytes());
+    wasm
+}
+
+fn hide_candid_pointer_export(mut wasm: Vec<u8>) -> Vec<u8> {
+    const EXPORTED: &[u8; 18] = b"get_candid_pointer";
+    const HIDDEN: &[u8; 18] = b"old_candid_pointer";
+    let matches = wasm
+        .windows(EXPORTED.len())
+        .enumerate()
+        .filter_map(|(offset, bytes)| (bytes == EXPORTED).then_some(offset))
+        .collect::<Vec<_>>();
+    assert_eq!(matches.len(), 1, "fixture has one Candid debug export");
+    let offset = matches[0];
+    wasm[offset..offset + EXPORTED.len()].copy_from_slice(HIDDEN);
+    assert!(!wasm_exports_candid_pointer(&wasm));
     wasm
 }
 

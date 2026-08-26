@@ -84,17 +84,26 @@ Last updated: 2026-08-26
   the repair receipt simultaneously authorized the successor Root and required
   the terminal sequence-28 Component Registry proof, so a valid sequence-15
   checkpoint could not admit the successor early enough for normal workflows
-  to re-observe live state. Open 0.109.9 separates typed provisional module
-  authority from terminal proof, retains exact Wasm/Candid bytes by content
-  digest and checkpoints complete install evidence into a path-confined
-  operator-state bundle. The final correction checkpoints every repair
-  write-before-effect transition, derives required bundle contents from the
-  exact Root journal phase and drives sequence 15 through the production
-  Store, Registry and Component Registry phase owners. Focused and governed
-  PocketIC proof passes. The earlier complete maintainer gate predates that
-  final correction and must be rerun before immutable publication. B8 remains
-  open on that gate, publication, exact-session resume and deployed-state/
-  admission evidence.
+  to re-observe live state. Published 0.109.9 separates typed provisional
+  module authority from terminal proof, retains exact Wasm/Candid bytes by
+  content digest and checkpoints complete install evidence into a
+  path-confined operator-state bundle. Its final correction checkpoints every
+  repair write-before-effect transition, derives required bundle contents from
+  the exact Root journal phase and drives sequence 15 through the production
+  Store, Registry and Component Registry phase owners. The final source passed
+  the complete maintainer gate before immutable tag and package publication.
+  The 0.109.10 source batch closes CANIC-053 by deriving every normal finalized
+  Wasm and Candid sidecar from the infrastructure/application manifests. It
+  also closes blocking CANIC-054: historical retained Root repair consumes the
+  exact manifest-bound `.did` without requiring a debug export, retains both
+  transition sidecars and checkpoints a non-operational candidate before
+  provisional authority. CANIC-055 adds an effect-equivalent retained-install
+  preflight through that verified candidate/bundle checkpoint before any
+  operational authority or IC update. Terminal release-narrative checks are
+  hardened after CANIC-014 recurred. The targeted retained-Root PocketIC
+  journey passes with CANIC-055. B8 remains open on the frozen-candidate
+  downstream/full-gate sequence, immutable publication, exact-session resume
+  and deployed-state/admission evidence.
 - Outcome: one Coordinator-owned, bounded Fleet admission policy projected and
   enforced locally by every managed instance whose exact role declares
   `fleet_admission = true`.
@@ -146,8 +155,8 @@ B8 correction evidence:
 | B5 | Composed-framework adapter | Synchronous managed-projection caller guard and generic IcyDB-style fixture | Native parity and direct-ingress PocketIC journey | Ready |
 | B6 | Runtime convergence | Pre-effect catalog reserve/release, fence/activate/open journals, participant fences, exact retry and forward recovery | Stale-catalog, interruption, unavailable-target, add/remove and new-Component PocketIC matrix | Ready |
 | B7 | Security closeout and propagation | Docs/generated surfaces, residue cleanup, measurements and read-only Toko adoption review | Targeted repository gates and adversarial multi-Root journey | Ready |
-| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment and interrupted-install recovery blockers through `CANIC-051`, including `CANIC-028`'s ineffective named-environment artifact advice; publish immutable matching `canic`/`canic-cli` 0.109 pairs, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, finalized-artifact reuse without predecessor-workspace rejection, monotonic first-status, Directory publication and runtime-activation reconciliation, exact pool-demand and Ready-refresh recovery checks, provisional successor authority followed by canonical sequence-15-to-28 replay, terminal repair proof, content-addressed recovery-bundle loss/import, exact terminal-journal session closure, exact cycle diagnostics, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/recovery evidence | Active: published 0.109.8 owns the coalesced Directory correction; open 0.109.9 corrects CANIC-050/051 and its final governed recovery journey passes, while the final maintainer gate, immutable publication, exact-session resume and deployed-state/admission evidence remain |
-| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Accepted; blocked on B8 |
+| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment and interrupted-install recovery blockers through `CANIC-055`, including `CANIC-028`'s ineffective named-environment artifact advice; publish immutable matching `canic`/`canic-cli` 0.109 pairs, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, finalized-artifact reuse without predecessor-workspace or debug-export dependence, monotonic first-status, Directory publication and runtime-activation reconciliation, exact pool-demand and Ready-refresh recovery checks, sidecar-bound provisional successor authority followed by canonical sequence-15-to-28 replay, terminal repair proof, effect-equivalent exact-session preflight through manifest-derived content-addressed recovery-bundle verification, exact terminal-journal session closure, exact cycle diagnostics, one full gate on the frozen source, package-pair equality, read-only downstream review and retained qualified-adoption/recovery evidence | Active: published 0.109.9 owns CANIC-050/051/052; the 0.109.10 source batch closes CANIC-053/054/055 and the CANIC-014 release-truth recurrence; focused checks and targeted PocketIC pass while the exact downstream preflight, frozen-source full gate, immutable publication, exact-session resume and deployed-state/admission evidence remain |
+| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, dependency-light pure recovery-plan validation separated from IC/PocketIC drivers, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Accepted; blocked on B8 |
 | B10 | Published managed-App qualification support | One bounded downstream test-support surface for exact managed init/activation, admission fencing, fresh install and same-release recovery without private `canic-core`/`ic-testkit` reconstruction | Public-package consumer build plus managed/standalone lifecycle qualification and Toko adapter removal | Scheduled; blocked on B9 |
 
 Ten batches fit the normal minor-line guideline. They are not preassigned
@@ -162,8 +171,11 @@ before the package publication step:
 1. the three accepted fresh-deployment blockers below are reproduced against
    the current 0.109 candidate, corrected and covered by direct recovery
    evidence;
-2. the maintainer-owned release flow publishes matching `canic` and
-   `canic-cli` 0.109 packages from one validated immutable commit;
+2. one clean source commit is frozen, its exact binary passes the retained
+   downstream `canic install ... --preflight` without operational authority or
+   IC updates, and the maintainer-owned release flow then runs the complete
+   gate once and publishes matching `canic` and `canic-cli` 0.109 packages
+   from that unchanged source;
 3. Canic's maintained authoring and planning surfaces support the exact
    App-only topology: Coordinator on PZP, Root/Store/App on PAE4O,
    `funding_profile = "preview_multi_subnet"`, one top-level `operator`,
@@ -401,13 +413,14 @@ plan passes. Published `v0.109.4` corrects `CANIC-033`, and published
 coalesced-activation defects. Published `v0.109.7` completes the exact repair
 procedure, non-mutating Registry proof, diagnostic, governance and
 IcyDB-fixture corrections. Published 0.109.8 corrects `CANIC-047` coalesced
-Directory publication under the retained authority and receipt checks. Open
-0.109.9 corrects the later CANIC-050/051 retained-repair circularity and
-disposable-evidence defect. The
-downstream owner must then adopt that exact patch, reproduce the
-unchanged digest, zero debit and `fleet_component_provisioning` next, and
-separately authorize one exact resume; Canic does not authorize or perform
-that effect here.
+Directory publication under the retained authority and receipt checks, and
+published 0.109.9 closes CANIC-050/051/052. The current 0.109.10 source closes
+CANIC-053/054/055 and passes its focused and targeted PocketIC checks. Freeze
+one immutable source candidate; the downstream owner must run that exact
+candidate's no-effect installer preflight before the human-owned full gate and
+publication. Only after publication may the downstream owner separately
+authorize the exact retained-session resume; Canic does not authorize or
+perform that effect here.
 Accept B8 only after deployed-state/admission evidence confirms convergence;
 then
 continue with B9's evidence-first simplification and immutable superseding

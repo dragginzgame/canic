@@ -22,6 +22,7 @@ fn install_defaults_to_root_target() {
     assert_eq!(options.profile, None);
     assert_eq!(options.release_build_id, None);
     assert_eq!(options.expected_plan_digest, None);
+    assert!(!options.preflight);
     assert_eq!(install.root_canister, "root");
     assert_eq!(install.root_build_target, "root");
     assert_eq!(install.icp_executable, default_icp());
@@ -40,6 +41,20 @@ fn install_defaults_to_root_target() {
     );
     assert_eq!(install.fleet_name, "demo-local");
     assert_eq!(install.expected_app, Some("demo".to_string()));
+}
+
+#[test]
+fn install_accepts_effect_equivalent_preflight() {
+    let options = InstallOptions::parse([
+        OsString::from("toko"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo.toml"),
+        OsString::from("--preflight"),
+    ])
+    .expect("parse retained install preflight");
+
+    assert!(options.preflight);
 }
 
 #[test]
@@ -288,8 +303,10 @@ fn install_usage_explains_app_config() {
     assert!(text.contains("<fleet>"));
     assert!(!text.contains("--app"));
     assert!(text.contains("--profile"));
+    assert!(text.contains("--preflight"));
     assert!(text.contains("--release-build"));
     assert!(text.contains("--adopt-retained-root-repair"));
+    assert!(normalized.contains("resolves adjacent .did sidecars first"));
     assert!(text.contains("--fleet-input"));
     assert!(text.contains("--expected-plan-digest"));
     assert!(normalized.contains("fresh Fleet"));
@@ -297,10 +314,12 @@ fn install_usage_explains_app_config() {
     assert!(normalized.contains("required operator-owned Fleet input"));
     assert!(normalized.contains("refreshes missing or invalid mainnet catalog evidence"));
     assert!(normalized.contains("requires that Principal to equal the Fleet input operator"));
+    assert!(normalized.contains("requires an incomplete retained install session"));
+    assert!(normalized.contains("stops before operational authority publication or IC updates"));
     assert!(text.contains("CANIC_ICP_IDENTITY_PASSWORD_FILE"));
     assert!(!normalized.contains("existing-Fleet update flow"));
     assert!(!normalized.contains("CARGO_TARGET_DIR"));
-    assert_eq!(text.matches("  canic install ").count(), 2);
+    assert_eq!(text.matches("  canic install ").count(), 3);
 }
 
 // Ensure existing-deployment install failures point at diagnostics and the command boundary.

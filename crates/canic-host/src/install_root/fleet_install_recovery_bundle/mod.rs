@@ -17,8 +17,9 @@ use super::{
         validate_retained_fleet_subnet_root_install_journal_bytes,
     },
     fleet_subnet_root_repair::{
-        repair_authority_path, repair_receipt_path, retained_artifact_path,
-        retained_root_repair_operation_path, validate_recovery_bundle_repair_authority_bytes,
+        RetainedRootRepairAuthorityV1, repair_authority_path, repair_candidate_path,
+        repair_receipt_path, retained_artifact_path, retained_root_repair_operation_path,
+        validate_recovery_bundle_repair_authority_bytes,
         validate_recovery_bundle_repair_operation_bytes,
         validate_recovery_bundle_repair_receipt_bytes,
     },
@@ -32,8 +33,12 @@ use crate::{
     },
     fleet_install_plan::{FleetInstallPlan, PersistedFleetInstallPlan},
     release_build::{release_build_plan_path, validate_retained_release_build_plan_bytes},
+    release_set::{
+        APPLICATION_ARTIFACT_UNION_FILE, ApplicationArtifactUnion,
+        CanicInfrastructureArtifactManifest, INFRASTRUCTURE_ARTIFACT_MANIFEST_FILE,
+    },
 };
-use canic_core::ids::ReleaseBuildId;
+use canic_core::{cdk::utils::hash::hex_bytes, ids::ReleaseBuildId};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -89,6 +94,11 @@ struct FleetInstallRecoveryBundleFileV1 {
     logical_path: String,
     sha256: [u8; 32],
     size_bytes: u64,
+}
+
+struct FinalizedReleaseArtifactBinding {
+    infrastructure_manifest: CanicInfrastructureArtifactManifest,
+    infrastructure_manifest_digest: [u8; 32],
 }
 
 /// Read-only verification result for one complete recovery bundle.
@@ -310,8 +320,8 @@ pub fn verify_fleet_install_recovery_bundle(
     }
     let session = require_session_binding(bundle_path, &manifest)?;
     let plan = require_plan_binding(bundle_path, &manifest)?;
-    require_release_build_binding(bundle_path, &manifest)?;
-    require_root_checkpoint_binding(bundle_path, &manifest, &session, &plan)?;
+    let release_artifacts = require_release_build_binding(bundle_path, &manifest, &plan)?;
+    require_root_checkpoint_binding(bundle_path, &manifest, &session, &plan, &release_artifacts)?;
     require_confined_authority_paths(bundle_path, &manifest)?;
     Ok(report(bundle_path, &manifest, total_bytes))
 }
@@ -408,11 +418,10 @@ fn require_plan_binding(
 fn require_release_build_binding(
     bundle_path: &Path,
     manifest: &FleetInstallRecoveryBundleV1,
-) -> Result<(), FleetInstallRecoveryBundleError> {
-    let expected_path = format!(
-        ".canic/release-builds/{}/plan.cbor",
-        manifest.release_build_id
-    );
+    plan: &FleetInstallPlan,
+) -> Result<FinalizedReleaseArtifactBinding, FleetInstallRecoveryBundleError> {
+    let release_build_prefix = format!(".canic/release-builds/{}/", manifest.release_build_id);
+    let expected_path = format!("{release_build_prefix}plan.cbor");
     let entry = exact_entry(bundle_path, manifest, &expected_path)?;
     let path = object_path(bundle_path, entry.sha256);
     let bytes = read_bounded(&path, MAX_BUNDLE_FILE_BYTES)?;
@@ -421,7 +430,172 @@ fn require_release_build_binding(
         .parse::<ReleaseBuildId>()
         .map_err(|error| invalid(&path, format!("{error:?}")))?;
     validate_retained_release_build_plan_bytes(&path, &bytes, release_build_id)
-        .map_err(|error| invalid(&path, error.to_string()))
+        .map_err(|error| invalid(&path, error.to_string()))?;
+
+    let infrastructure_path =
+        format!("{release_build_prefix}{INFRASTRUCTURE_ARTIFACT_MANIFEST_FILE}");
+    let infrastructure_entry = exact_entry(bundle_path, manifest, &infrastructure_path)?;
+    let infrastructure_bytes = entry_bytes(bundle_path, infrastructure_entry)?;
+    let infrastructure =
+        serde_json::from_slice::<CanicInfrastructureArtifactManifest>(&infrastructure_bytes)
+            .map_err(|error| invalid(Path::new(&infrastructure_path), error.to_string()))?;
+    let canonical_infrastructure = infrastructure
+        .canonical_bytes()
+        .map_err(|error| invalid(Path::new(&infrastructure_path), error.to_string()))?;
+    if infrastructure.release_build_id != release_build_id
+        || canonical_infrastructure != infrastructure_bytes
+    {
+        return Err(invalid(
+            Path::new(&infrastructure_path),
+            "bundle infrastructure manifest is noncanonical or belongs to another release build",
+        ));
+    }
+    for artifact in &infrastructure.entries {
+        require_normal_release_artifact(
+            bundle_path,
+            manifest,
+            &release_build_prefix,
+            &artifact.wasm_relative_path,
+            artifact.wasm_size_bytes,
+            &artifact.wasm_sha256_hex,
+            &artifact.wasm_gz_relative_path,
+            artifact.wasm_gz_size_bytes,
+            &artifact.wasm_gz_sha256_hex,
+            artifact.candid_sha256,
+        )?;
+    }
+
+    let application_path = format!("{release_build_prefix}{APPLICATION_ARTIFACT_UNION_FILE}");
+    let application_entry = exact_entry(bundle_path, manifest, &application_path)?;
+    let application_bytes = entry_bytes(bundle_path, application_entry)?;
+    let application = serde_json::from_slice::<ApplicationArtifactUnion>(&application_bytes)
+        .map_err(|error| invalid(Path::new(&application_path), error.to_string()))?;
+    application
+        .validate_retained_shape()
+        .map_err(|error| invalid(Path::new(&application_path), error.to_string()))?;
+    let canonical_application = serde_json::to_vec(&application)
+        .map_err(|error| invalid(Path::new(&application_path), error.to_string()))?;
+    let application_digest: [u8; 32] = Sha256::digest(&application_bytes).into();
+    if application.release_build_id != release_build_id
+        || canonical_application != application_bytes
+        || application_digest != plan.application_artifact_union_digest
+    {
+        return Err(invalid(
+            Path::new(&application_path),
+            "bundle application manifest is noncanonical or differs from its release-build and Fleet-plan authority",
+        ));
+    }
+    for artifact in &application.entries {
+        require_normal_release_artifact(
+            bundle_path,
+            manifest,
+            &release_build_prefix,
+            &artifact.wasm_relative_path,
+            artifact.wasm_size_bytes,
+            &artifact.wasm_sha256_hex,
+            &artifact.wasm_gz_relative_path,
+            artifact.wasm_gz_size_bytes,
+            &artifact.wasm_gz_sha256_hex,
+            artifact.candid_sha256,
+        )?;
+    }
+
+    Ok(FinalizedReleaseArtifactBinding {
+        infrastructure_manifest: infrastructure,
+        infrastructure_manifest_digest: Sha256::digest(&infrastructure_bytes).into(),
+    })
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one manifest entry binds its three exact finalized artifact representations"
+)]
+fn require_normal_release_artifact(
+    bundle_path: &Path,
+    manifest: &FleetInstallRecoveryBundleV1,
+    release_build_prefix: &str,
+    wasm_relative_path: &str,
+    wasm_size_bytes: u64,
+    wasm_sha256_hex: &str,
+    wasm_gz_relative_path: &str,
+    wasm_gz_size_bytes: u64,
+    wasm_gz_sha256_hex: &str,
+    candid_sha256: [u8; 32],
+) -> Result<(), FleetInstallRecoveryBundleError> {
+    require_normal_release_artifact_entry(
+        bundle_path,
+        manifest,
+        release_build_prefix,
+        wasm_relative_path,
+        wasm_size_bytes,
+        wasm_sha256_hex,
+    )?;
+    require_normal_release_artifact_entry(
+        bundle_path,
+        manifest,
+        release_build_prefix,
+        wasm_gz_relative_path,
+        wasm_gz_size_bytes,
+        wasm_gz_sha256_hex,
+    )?;
+
+    let candid_path = PathBuf::from(wasm_relative_path);
+    if candid_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        != Some("wasm")
+    {
+        return Err(invalid(
+            Path::new(wasm_relative_path),
+            "finalized raw Wasm path cannot derive its exact Candid sidecar",
+        ));
+    }
+    let mut candid_path = candid_path;
+    candid_path.set_extension("did");
+    let candid_path = logical_path_string(&candid_path)?;
+    let entry =
+        require_release_build_entry(bundle_path, manifest, release_build_prefix, &candid_path)?;
+    if entry.sha256 != candid_sha256 || entry.size_bytes == 0 {
+        return Err(invalid(
+            Path::new(&candid_path),
+            "bundle Candid sidecar differs from its finalized artifact authority",
+        ));
+    }
+    Ok(())
+}
+
+fn require_normal_release_artifact_entry(
+    bundle_path: &Path,
+    manifest: &FleetInstallRecoveryBundleV1,
+    release_build_prefix: &str,
+    logical_path: &str,
+    size_bytes: u64,
+    sha256_hex: &str,
+) -> Result<(), FleetInstallRecoveryBundleError> {
+    let entry =
+        require_release_build_entry(bundle_path, manifest, release_build_prefix, logical_path)?;
+    if entry.size_bytes != size_bytes || hex_bytes(entry.sha256) != sha256_hex {
+        return Err(invalid(
+            Path::new(logical_path),
+            "bundle release artifact differs from its finalized size or digest authority",
+        ));
+    }
+    Ok(())
+}
+
+fn require_release_build_entry<'a>(
+    bundle_path: &Path,
+    manifest: &'a FleetInstallRecoveryBundleV1,
+    release_build_prefix: &str,
+    logical_path: &str,
+) -> Result<&'a FleetInstallRecoveryBundleFileV1, FleetInstallRecoveryBundleError> {
+    if !logical_path.starts_with(release_build_prefix) {
+        return Err(invalid(
+            Path::new(logical_path),
+            "finalized artifact path is outside its exact release-build directory",
+        ));
+    }
+    exact_entry(bundle_path, manifest, logical_path)
 }
 
 fn require_confined_authority_paths(
@@ -501,6 +675,7 @@ fn require_root_checkpoint_binding(
     manifest: &FleetInstallRecoveryBundleV1,
     session: &FleetInstallSession,
     plan: &FleetInstallPlan,
+    release_artifacts: &FinalizedReleaseArtifactBinding,
 ) -> Result<(), FleetInstallRecoveryBundleError> {
     if manifest.root_checkpoints.len() != plan.fleet_subnet_roots.len() {
         return Err(invalid(
@@ -556,6 +731,12 @@ fn require_root_checkpoint_binding(
                 if journal.install_operation_id != manifest.install_operation_id
                     || journal.sequence != checkpoint.sequence
                     || journal.phase != checkpoint.phase
+                    || journal.infrastructure_manifest_digest
+                        != release_artifacts.infrastructure_manifest_digest
+                    || !root_journal_artifacts_match(
+                        &journal,
+                        &release_artifacts.infrastructure_manifest,
+                    )
                 {
                     return Err(invalid(
                         &journal_path,
@@ -591,6 +772,21 @@ fn require_root_checkpoint_binding(
         ));
     }
     Ok(())
+}
+
+fn root_journal_artifacts_match(
+    journal: &FleetSubnetRootInstallJournal,
+    infrastructure: &CanicInfrastructureArtifactManifest,
+) -> bool {
+    let root = infrastructure
+        .entries
+        .iter()
+        .find(|entry| entry.role == crate::release_set::CanicInfrastructureRole::FleetSubnetRoot);
+    let store = infrastructure
+        .entries
+        .iter()
+        .find(|entry| entry.role == crate::release_set::CanicInfrastructureRole::WasmStore);
+    root == Some(&journal.root_artifact) && store == Some(&journal.wasm_store_artifact)
 }
 
 fn require_root_journal_authority(
@@ -660,9 +856,37 @@ fn require_repair_files(
     journal_path: &Path,
     journal: &FleetSubnetRootInstallJournal,
 ) -> Result<(), FleetInstallRecoveryBundleError> {
+    let Some((authority, published)) =
+        resolve_bundle_repair_authority(bundle_path, manifest, session, journal_path, journal)?
+    else {
+        return Ok(());
+    };
+    require_bundle_repair_artifacts(bundle_path, manifest, journal_path, &authority)?;
+    require_bundle_repair_progress(
+        bundle_path,
+        manifest,
+        session,
+        journal_path,
+        journal,
+        &authority,
+        published,
+    )
+}
+
+fn resolve_bundle_repair_authority(
+    bundle_path: &Path,
+    manifest: &FleetInstallRecoveryBundleV1,
+    session: &FleetInstallSession,
+    journal_path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+) -> Result<Option<(RetainedRootRepairAuthorityV1, bool)>, FleetInstallRecoveryBundleError> {
     let authority_path = repair_authority_path(journal_path);
     let authority_logical = logical_path_string(&authority_path)?;
-    let Some(authority_entry) = optional_entry(&manifest.files, &authority_logical) else {
+    let candidate_path = repair_candidate_path(journal_path);
+    let candidate_logical = logical_path_string(&candidate_path)?;
+    let authority_entry = optional_entry(&manifest.files, &authority_logical);
+    let candidate_entry = optional_entry(&manifest.files, &candidate_logical);
+    if authority_entry.is_none() && candidate_entry.is_none() {
         let directory = journal_path
             .parent()
             .expect("Root journal has an identity directory");
@@ -675,16 +899,55 @@ fn require_repair_files(
                 "bundle repair residue omitted its exact provisional authority",
             ));
         }
-        return Ok(());
-    };
-    let authority_bytes = entry_bytes(bundle_path, authority_entry)?;
-    let authority = validate_recovery_bundle_repair_authority_bytes(
-        &authority_path,
-        &authority_bytes,
-        session,
-        journal,
-    )
-    .map_err(|error| invalid(&authority_path, error.to_string()))?;
+        return Ok(None);
+    }
+    let candidate = candidate_entry
+        .map(|entry| {
+            validate_recovery_bundle_repair_authority_bytes(
+                &candidate_path,
+                &entry_bytes(bundle_path, entry)?,
+                session,
+                journal,
+            )
+            .map_err(|error| invalid(&candidate_path, error.to_string()))
+        })
+        .transpose()?;
+    let published = authority_entry
+        .map(|entry| {
+            validate_recovery_bundle_repair_authority_bytes(
+                &authority_path,
+                &entry_bytes(bundle_path, entry)?,
+                session,
+                journal,
+            )
+            .map_err(|error| invalid(&authority_path, error.to_string()))
+        })
+        .transpose()?;
+    if published
+        .as_ref()
+        .zip(candidate.as_ref())
+        .is_some_and(|(published, candidate)| published != candidate)
+    {
+        return Err(invalid(
+            &candidate_path,
+            "bundle repair candidate differs from its published provisional authority",
+        ));
+    }
+    let authority = published.as_ref().or(candidate.as_ref()).ok_or_else(|| {
+        invalid(
+            &authority_path,
+            "bundle repair evidence has no exact candidate or provisional authority",
+        )
+    })?;
+    Ok(Some((authority.clone(), published.is_some())))
+}
+
+fn require_bundle_repair_artifacts(
+    bundle_path: &Path,
+    manifest: &FleetInstallRecoveryBundleV1,
+    journal_path: &Path,
+    authority: &RetainedRootRepairAuthorityV1,
+) -> Result<(), FleetInstallRecoveryBundleError> {
     for (path, expected_sha256, expected_size) in [
         (
             retained_artifact_path(
@@ -726,24 +989,46 @@ fn require_repair_files(
         }
     }
 
+    Ok(())
+}
+
+fn require_bundle_repair_progress(
+    bundle_path: &Path,
+    manifest: &FleetInstallRecoveryBundleV1,
+    session: &FleetInstallSession,
+    journal_path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+    authority: &RetainedRootRepairAuthorityV1,
+    published: bool,
+) -> Result<(), FleetInstallRecoveryBundleError> {
+    let candidate_path = repair_candidate_path(journal_path);
     let operation_path = retained_root_repair_operation_path(journal_path);
     let operation_logical = logical_path_string(&operation_path)?;
+    let receipt_path = repair_receipt_path(journal_path);
+    let receipt_logical = logical_path_string(&receipt_path)?;
+    if !published
+        && (optional_entry(&manifest.files, &operation_logical).is_some()
+            || optional_entry(&manifest.files, &receipt_logical).is_some())
+    {
+        return Err(invalid(
+            &candidate_path,
+            "unpublished repair candidate cannot own an operation or terminal receipt",
+        ));
+    }
     if let Some(entry) = optional_entry(&manifest.files, &operation_logical) {
         validate_recovery_bundle_repair_operation_bytes(
             &operation_path,
             &entry_bytes(bundle_path, entry)?,
-            &authority,
+            authority,
         )
         .map_err(|error| invalid(&operation_path, error.to_string()))?;
     }
-    let receipt_path = repair_receipt_path(journal_path);
-    let receipt_logical = logical_path_string(&receipt_path)?;
     if let Some(entry) = optional_entry(&manifest.files, &receipt_logical) {
         exact_entry(bundle_path, manifest, &operation_logical)?;
         validate_recovery_bundle_repair_receipt_bytes(
             &receipt_path,
             &entry_bytes(bundle_path, entry)?,
-            &authority,
+            authority,
             session,
             journal,
         )

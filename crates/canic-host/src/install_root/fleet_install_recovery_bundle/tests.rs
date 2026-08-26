@@ -17,13 +17,150 @@ use crate::{
 };
 use candid::Principal;
 use canic_core::{
+    cdk::utils::hash::sha256_hex,
     dto::{
         fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
         root_store::{RootStoreBootstrapResponse, RootStoreCatalogEntry},
     },
-    ids::{CanisterRole, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, SubnetId},
+    ids::{
+        CanisterRole, CanonicalNetworkId, ComponentTopologyDigest, FleetBinding, FleetId, FleetKey,
+        ReleaseBuildId, SubnetId,
+    },
     role_contract::ProtocolProfileDigest,
 };
+use flate2::{Compression, GzBuilder};
+use std::io::Write;
+
+use crate::release_set::{
+    ApplicationArtifactEntry, ApplicationArtifactUnion, CanicInfrastructureArtifactEntry,
+    CanicInfrastructureArtifactManifest, CanicInfrastructureRole,
+};
+
+struct FinalizedArtifactFixture {
+    files: Vec<(String, Vec<u8>)>,
+    application_digest: [u8; 32],
+    infrastructure_digest: [u8; 32],
+    infrastructure: CanicInfrastructureArtifactManifest,
+}
+
+struct ArtifactFixture {
+    wasm_relative_path: String,
+    wasm: Vec<u8>,
+    wasm_gz_relative_path: String,
+    wasm_gz: Vec<u8>,
+    candid_relative_path: String,
+    candid: Vec<u8>,
+}
+
+fn finalized_artifact_fixture(release_build_id: ReleaseBuildId) -> FinalizedArtifactFixture {
+    let infrastructure_artifacts = [
+        (CanicInfrastructureRole::FleetCoordinator, 1_u8),
+        (CanicInfrastructureRole::FleetSubnetRoot, 2_u8),
+        (CanicInfrastructureRole::WasmStore, 3_u8),
+    ]
+    .map(|(role, marker)| {
+        let artifact = artifact_fixture(release_build_id, role.as_str(), marker);
+        let entry = CanicInfrastructureArtifactEntry {
+            role,
+            package: format!("canic-{}", role.as_str().replace('_', "-")),
+            protocol_release_identity: "0.109.9".to_string(),
+            protocol_role: CanisterRole::owned(role.protocol_role_name().to_string()),
+            protocol_capabilities: std::collections::BTreeSet::new(),
+            release_build_id,
+            wasm_relative_path: artifact.wasm_relative_path.clone(),
+            wasm_size_bytes: artifact.wasm.len() as u64,
+            wasm_sha256_hex: sha256_hex(&artifact.wasm),
+            wasm_gz_relative_path: artifact.wasm_gz_relative_path.clone(),
+            wasm_gz_size_bytes: artifact.wasm_gz.len() as u64,
+            wasm_gz_sha256_hex: sha256_hex(&artifact.wasm_gz),
+            candid_sha256: Sha256::digest(&artifact.candid).into(),
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([marker; 32]),
+        };
+        (entry, artifact)
+    });
+    let infrastructure = CanicInfrastructureArtifactManifest {
+        release_build_id,
+        entries: infrastructure_artifacts
+            .iter()
+            .map(|(entry, _)| entry.clone())
+            .collect(),
+    };
+    let infrastructure_bytes = infrastructure
+        .canonical_bytes()
+        .expect("canonical infrastructure artifact manifest");
+
+    let application_artifact = artifact_fixture(release_build_id, "component", 4);
+    let application = ApplicationArtifactUnion {
+        release_build_id,
+        fleet_component_topology_digest: ComponentTopologyDigest::from_bytes([5; 32]),
+        entries: vec![ApplicationArtifactEntry {
+            role: CanisterRole::owned("component".to_string()),
+            package: "component".to_string(),
+            release_build_id,
+            wasm_relative_path: application_artifact.wasm_relative_path.clone(),
+            wasm_size_bytes: application_artifact.wasm.len() as u64,
+            wasm_sha256_hex: sha256_hex(&application_artifact.wasm),
+            wasm_gz_relative_path: application_artifact.wasm_gz_relative_path.clone(),
+            wasm_gz_size_bytes: application_artifact.wasm_gz.len() as u64,
+            wasm_gz_sha256_hex: sha256_hex(&application_artifact.wasm_gz),
+            candid_sha256: Sha256::digest(&application_artifact.candid).into(),
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([6; 32]),
+        }],
+    };
+    application
+        .validate_retained_shape()
+        .expect("canonical application artifact union");
+    let application_bytes = serde_json::to_vec(&application).expect("encode application union");
+
+    let release_build_prefix = format!(".canic/release-builds/{release_build_id}");
+    let mut files = infrastructure_artifacts
+        .into_iter()
+        .map(|(_, artifact)| artifact)
+        .chain([application_artifact])
+        .flat_map(|artifact| {
+            [
+                (artifact.wasm_relative_path, artifact.wasm),
+                (artifact.wasm_gz_relative_path, artifact.wasm_gz),
+                (artifact.candid_relative_path, artifact.candid),
+            ]
+        })
+        .collect::<Vec<_>>();
+    files.push((
+        format!("{release_build_prefix}/{INFRASTRUCTURE_ARTIFACT_MANIFEST_FILE}"),
+        infrastructure_bytes.clone(),
+    ));
+    files.push((
+        format!("{release_build_prefix}/{APPLICATION_ARTIFACT_UNION_FILE}"),
+        application_bytes.clone(),
+    ));
+
+    FinalizedArtifactFixture {
+        files,
+        application_digest: Sha256::digest(&application_bytes).into(),
+        infrastructure_digest: Sha256::digest(&infrastructure_bytes).into(),
+        infrastructure,
+    }
+}
+
+fn artifact_fixture(release_build_id: ReleaseBuildId, role: &str, marker: u8) -> ArtifactFixture {
+    let directory = format!(".canic/release-builds/{release_build_id}/artifacts/{role}");
+    let mut wasm = vec![0x00, 0x61, 0x73, 0x6d, marker];
+    wasm.extend_from_slice(release_build_id.to_string().as_bytes());
+    let mut encoder = GzBuilder::new()
+        .mtime(0)
+        .write(Vec::new(), Compression::best());
+    encoder.write_all(&wasm).expect("gzip finalized Wasm");
+    let wasm_gz = encoder.finish().expect("finish finalized gzip Wasm");
+    let candid = format!("service : {{ /* {role} */ }}\n").into_bytes();
+    ArtifactFixture {
+        wasm_relative_path: format!("{directory}/{role}.wasm"),
+        wasm,
+        wasm_gz_relative_path: format!("{directory}/{role}.wasm.gz"),
+        wasm_gz,
+        candid_relative_path: format!("{directory}/{role}.did"),
+        candid,
+    }
+}
 
 #[expect(
     clippy::too_many_lines,
@@ -41,6 +178,7 @@ fn bundle_fixture() -> (PathBuf, FleetInstallRecoveryBundleV1, Vec<u8>) {
         &release_manifest,
     )
     .expect("finalize retained release build");
+    let finalized_artifacts = finalized_artifact_fixture(finalized_release.record.release_build_id);
     let session = FleetInstallSession {
         schema_version: 1,
         fleet_name: "primary".parse().expect("Fleet name"),
@@ -65,7 +203,7 @@ fn bundle_fixture() -> (PathBuf, FleetInstallRecoveryBundleV1, Vec<u8>) {
         fleet: session.fleet.clone(),
         fresh_fleet_plan_digest: session.fresh_fleet_plan_digest.clone(),
         release_build_id: session.release_build_id,
-        application_artifact_union_digest: [0x36; 32],
+        application_artifact_union_digest: finalized_artifacts.application_digest,
         admission: crate::test_support::fleet_admission_policy(session.fleet.clone()),
         coordinator: PlannedFleetCoordinator {
             coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[0x37; 29])),
@@ -116,6 +254,12 @@ fn bundle_fixture() -> (PathBuf, FleetInstallRecoveryBundleV1, Vec<u8>) {
             &release_payload,
         ),
     ];
+    files.extend(
+        finalized_artifacts
+            .files
+            .into_iter()
+            .map(|(logical_path, payload)| bundle_file(&bundle, logical_path, &payload)),
+    );
     files.sort_by(|left, right| left.logical_path.cmp(&right.logical_path));
     let manifest = FleetInstallRecoveryBundleV1 {
         schema_version: 1,
@@ -201,7 +345,7 @@ fn checkpoint_captures_all_authority_roots_and_excludes_its_own_storage() {
         .expect("checkpoint complete retained authority");
     let report = verify_fleet_install_recovery_bundle(&checkpoint)
         .expect("verify checkpointed retained authority");
-    assert_eq!(report.file_count, 4);
+    assert_eq!(report.file_count, manifest.files.len() + 1);
     let checkpoint_manifest = serde_json::from_slice::<FleetInstallRecoveryBundleV1>(
         &fs::read(checkpoint.join(MANIFEST_FILE)).expect("read checkpoint manifest"),
     )
@@ -220,10 +364,18 @@ fn pre_effect_zero_root_bundle_import_survives_deleted_source_workspace() {
     let (bundle, manifest, payload) = bundle_fixture();
     assert!(
         manifest.root_checkpoints.is_empty(),
-        "the minimal three-file bundle is valid only for the explicit zero-Root pre-effect case"
+        "the pre-effect fixture intentionally has no planned Root"
     );
     let report = verify_fleet_install_recovery_bundle(&bundle).expect("verify complete bundle");
-    assert_eq!(report.file_count, 3);
+    assert_eq!(report.file_count, manifest.files.len());
+    assert!(manifest.files.iter().any(|entry| {
+        entry.logical_path.ends_with("/component.wasm")
+            && entry.logical_path.contains("/artifacts/component/")
+    }));
+    assert!(manifest.files.iter().any(|entry| {
+        entry.logical_path.ends_with("/component.did")
+            && entry.logical_path.contains("/artifacts/component/")
+    }));
 
     let imported_root = crate::test_support::temp_dir("fleet-install-bundle-import");
     import_fleet_install_recovery_bundle(&bundle, &imported_root)
@@ -243,8 +395,39 @@ fn pre_effect_zero_root_bundle_import_survives_deleted_source_workspace() {
         .expect("read imported state"),
         payload
     );
+    for entry in &manifest.files {
+        assert_eq!(
+            fs::read(imported_root.join(&entry.logical_path))
+                .expect("read imported finalized authority"),
+            fs::read(object_path(&bundle, entry.sha256)).expect("read bundled finalized authority")
+        );
+    }
     import_fleet_install_recovery_bundle(&bundle, &imported_root)
         .expect("exact import replay is idempotent");
+}
+
+#[test]
+fn bundle_rejects_recomputed_manifest_that_omits_normal_wasm_or_candid() {
+    for omitted in ["/component.wasm", "/component.did"] {
+        let (bundle, mut manifest, _) = bundle_fixture();
+        let original_count = manifest.files.len();
+        manifest.files.retain(|entry| {
+            !(entry.logical_path.ends_with(omitted)
+                && entry.logical_path.contains("/artifacts/component/"))
+        });
+        assert_eq!(manifest.files.len(), original_count - 1);
+        let manifest_path = bundle.join(MANIFEST_FILE);
+        write_bytes(
+            &manifest_path,
+            &encode_manifest(&manifest_path, &manifest).expect("recompute canonical manifest"),
+        )
+        .expect("publish recomputed incomplete manifest");
+
+        assert!(matches!(
+            verify_fleet_install_recovery_bundle(&bundle),
+            Err(FleetInstallRecoveryBundleError::InvalidManifest { .. })
+        ));
+    }
 }
 
 #[test]
@@ -389,6 +572,21 @@ fn bundle_completeness_is_derived_from_the_exact_retained_root_phase() {
         fs::read(object_path(&bundle, journal_entry.sha256))
             .expect("read bundled phase-15 Root journal")
     );
+    let release_prefix = format!(".canic/release-builds/{}/", manifest.release_build_id);
+    let finalized_entries = manifest
+        .files
+        .iter()
+        .filter(|entry| entry.logical_path.starts_with(&release_prefix))
+        .collect::<Vec<_>>();
+    assert!(finalized_entries.len() > 3);
+    for entry in finalized_entries {
+        assert_eq!(
+            fs::read(imported_root.join(&entry.logical_path))
+                .expect("read imported finalized phase-15 artifact"),
+            fs::read(object_path(&bundle, entry.sha256))
+                .expect("read bundled finalized phase-15 artifact")
+        );
+    }
 
     manifest
         .files
@@ -420,6 +618,11 @@ fn retained_root_phase_bundle_fixture() -> (PathBuf, PathBuf) {
         &release_manifest,
     )
     .expect("finalize retained release build");
+    let finalized_artifacts = finalized_artifact_fixture(finalized_release.record.release_build_id);
+    for (logical_path, bytes) in &finalized_artifacts.files {
+        write_bytes(&root.join(logical_path), bytes)
+            .expect("retain finalized release artifact inventory");
+    }
     let session = FleetInstallSession {
         schema_version: 1,
         fleet_name: "primary".parse().expect("Fleet name"),
@@ -448,12 +651,44 @@ fn retained_root_phase_bundle_fixture() -> (PathBuf, PathBuf) {
             .expect("encode retained session"),
     )
     .expect("retain exact Fleet install session");
-    let (planned, plan) = crate::install_root::fleet_subnet_root_install_journal::tests::planned_repair_fixture_with_root_artifact(
+    let (mut planned, mut plan) = crate::install_root::fleet_subnet_root_install_journal::tests::planned_repair_fixture_with_root_artifact(
         &root,
         &session,
         Principal::from_slice(&[33]),
         |_| {},
     );
+    plan.plan.application_artifact_union_digest = finalized_artifacts.application_digest;
+    let plan_bytes =
+        serde_json::to_vec(&plan.plan).expect("encode artifact-bound retained Fleet plan");
+    plan.digest = Sha256::digest(&plan_bytes).into();
+    write_bytes(&plan.path, &plan_bytes).expect("retain artifact-bound Fleet plan");
+    planned.journal.fleet_install_plan_digest = plan.digest;
+    planned.journal.infrastructure_manifest_digest = finalized_artifacts.infrastructure_digest;
+    planned.journal.root_artifact = finalized_artifacts
+        .infrastructure
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .expect("finalized Root artifact")
+        .clone();
+    planned.journal.expected_root_module_hash =
+        artifact_sha256(&planned.journal.root_artifact.wasm_sha256_hex);
+    planned.journal.wasm_store_artifact = finalized_artifacts
+        .infrastructure
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::WasmStore)
+        .expect("finalized Wasm Store artifact")
+        .clone();
+    planned.journal.expected_wasm_store_module_hash =
+        artifact_sha256(&planned.journal.wasm_store_artifact.wasm_sha256_hex);
+    let journal_bytes = encode_canonical_json(
+        &planned.journal,
+        CanonicalJsonStyle::Compact,
+        MAX_BUNDLE_FILE_BYTES,
+    )
+    .expect("encode artifact-bound Root journal");
+    write_bytes(&planned.path, &journal_bytes).expect("retain artifact-bound Root journal");
     let fleet_subnet_root = Principal::from_slice(&[44]);
     let wasm_store = Principal::from_slice(&[55]);
     let controller = Principal::from_slice(&[56]);
@@ -534,4 +769,11 @@ fn retained_root_phase_bundle_fixture() -> (PathBuf, PathBuf) {
     checkpoint_bundle_at(&root, &session, &plan, &bundle)
         .expect("checkpoint retained phase-15 bundle");
     (root, bundle)
+}
+
+fn artifact_sha256(value: &str) -> [u8; 32] {
+    canic_core::cdk::utils::hash::decode_hex(value)
+        .expect("canonical artifact SHA-256")
+        .try_into()
+        .expect("32-byte artifact SHA-256")
 }

@@ -212,13 +212,30 @@ canic install <app> <fleet> \
   --fleet-input <path> \
   --expected-plan-digest <sha256> \
   --release-build <release-build-id> \
+  --preflight \
   --adopt-retained-root-repair \
     <root-principal>,<pool-canister-principal>=\
 <live-raw-root-wasm>,<successor-raw-root-wasm>
 ```
 
-Canic hashes both raw Wasms, requires the live predecessor and successor to
-preserve the retained Root Candid exactly, rechecks the
+Run that preflight from the exact frozen Canic source candidate before
+versioning or publishing it. Preflight is available only for an existing
+incomplete retained install session. It executes the production installer
+through finalized-artifact selection, exact Root/Store resolution, both
+repair Candid sidecars, content-addressed Wasm/Candid retention, the
+non-operational repair candidate and a fully verified recovery-bundle
+checkpoint. It then returns before pre-root receipt publication, operational
+repair authority or any IC update. Read-only ICP observations and the named
+local candidate/bundle writes still occur, so this is not a generic dry-run.
+After the preflight succeeds and the candidate is published, omit
+`--preflight` to resume the separately authorized installation.
+
+Canic hashes both raw Wasms and resolves each deterministic adjacent `.did`
+sidecar. The historical finalized predecessor sidecar is mandatory; a
+successor build output may use `candid-extractor` only when the sidecar is
+absent and the Wasm actually exports `get_candid_pointer`. Both resolved
+sidecars must preserve the retained Root Candid exactly. Canic retains the
+Wasm and Candid bytes content-addressed before repair effects, rechecks the
 retained controller and protected Fleet authority, and either performs the
 one state-preserving Root upgrade or verifies that the exact successor is
 already live. It reads the named retained pool asset, persists one bounded
