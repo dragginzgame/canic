@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- Open `0.109.9` separates provisional retained-Root successor authority from
+  terminal repair proof, resumes earlier journals through their canonical
+  phase owners, and retains complete path-confined content-addressed recovery
+  bundles with local-only verify/import commands.
+
 - `0.109.8` lets the Coordinator reconcile bounded monotonic coalesced
   Component Directory publication observed from an autonomously advancing
   Root, preserving exact authority, evidence and replay validation while

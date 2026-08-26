@@ -197,7 +197,9 @@ fn install_command() -> ClapCommand {
                 .value_name("ROOT,POOL=LIVE_WASM,SUCCESSOR_WASM")
                 .num_args(1)
                 .value_parser(clap::value_parser!(RetainedRootRepairAdoption))
-                .help("Execute or adopt one exact retained Root and pool-asset repair"),
+                .help(
+                    "Authorize one exact retained Root repair; Canic retains content-addressed Wasm and Candid evidence before repair effects",
+                ),
         )
         .arg(internal_icp_arg())
         .arg(internal_environment_arg())

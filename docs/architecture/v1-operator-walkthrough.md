@@ -137,6 +137,21 @@ separately authorized resume; do not start a replacement fresh install. Once
 paid effects exist, the report suppresses generic fresh-install proposal labels
 and uses the retained next replay phase as its continuation guidance.
 
+Before the first remote effect, Canic checkpoints the exact session, plans,
+journals, receipts and finalized content-addressed artifacts under its stable
+operator-state recovery bundle. Each governed phase refreshes that bundle.
+Verify a retained copy without local or remote mutation:
+
+```text
+canic deploy recovery verify <bundle-path>
+```
+
+If the original checkout was lost, import only missing exact files into a new
+ICP root with `canic deploy recovery import <bundle-path> --into <icp-root>`.
+Import rejects an existing conflicting file and performs no ICP call. Run the
+ordinary read-only `canic deploy plan` after import; never reconstruct journal
+fields manually or start a replacement Fleet.
+
 ## Check Deployment Evidence
 
 When a Fleet exists, run a passive deployment check and save a stable evidence

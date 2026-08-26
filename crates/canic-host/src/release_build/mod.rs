@@ -173,6 +173,23 @@ pub fn load_release_build_plan(
     Ok(record)
 }
 
+/// Validate canonical retained release-build bytes without resolving a caller workspace path.
+pub(crate) fn validate_retained_release_build_plan_bytes(
+    path: &Path,
+    bytes: &[u8],
+    release_build_id: ReleaseBuildId,
+) -> Result<(), ReleaseBuildPlanError> {
+    let record = decode_record(path, bytes)?;
+    validate_record_identity(release_build_id, &record)?;
+    if !matches!(record.state, ReleaseBuildPlanState::Finalized { .. }) {
+        return Err(ReleaseBuildPlanError::InvalidDocument {
+            path: path.to_path_buf(),
+            reason: "retained release-build evidence remained planned".to_string(),
+        });
+    }
+    Ok(())
+}
+
 /// Load one immutable finalized record for deployment-recovery admission.
 pub fn load_finalized_release_build(
     root: &Path,

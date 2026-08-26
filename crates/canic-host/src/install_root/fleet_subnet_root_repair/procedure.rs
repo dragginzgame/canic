@@ -1,11 +1,14 @@
 //! Module: install_root::fleet_subnet_root_repair::procedure
 //!
-//! Responsibility: durably execute and reconcile the one receipt-authorized retained Root repair.
+//! Responsibility: durably execute and reconcile the one provisionally authorized retained Root
+//! repair.
 //! Does not own: general upgrades, fresh installation, pool allocation, or ICP conversion.
 //! Boundary: one immutable repair operation may upgrade its exact Root, fund and re-inspect its
 //! exact retained imported pool Canister, then become eligible for terminal receipt publication.
 
-use super::{ResolvedRetainedRootRepair, RetainedRootRepairReceiptV1};
+use super::{
+    ResolvedRetainedRootRepair, RetainedRootRepairAuthorityV1, require_durable_terminal_receipt,
+};
 use crate::{
     durable_io::{
         BoundedRegularFileReadError, CanonicalJsonEncodeError, CanonicalJsonStyle,
@@ -189,13 +192,13 @@ pub(in crate::install_root) fn execute_retained_root_repair(
     let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
     let lock_path = resolved.path.with_file_name(REPAIR_OPERATION_LOCK_FILE);
     let _lock = lock_operation(&lock_path)?;
-    let mut current = create_or_load_operation(&operation_path, &resolved.receipt)?;
+    let mut current = create_or_load_operation(&operation_path, &resolved.authority)?;
 
     current = reconcile_upgrade(
         icp_context,
         &operation_path,
         current,
-        &resolved.receipt,
+        &resolved.authority,
         successor_wasm,
     )?;
     current = reconcile_pool_asset(
@@ -203,27 +206,10 @@ pub(in crate::install_root) fn execute_retained_root_repair(
         root_binding,
         &operation_path,
         current,
-        &resolved.receipt,
+        &resolved.authority,
     )?;
     print_reconciliation(&current)?;
     Ok(current)
-}
-
-/// Mark the local operation terminal only after the immutable repair receipt is durable.
-pub(in crate::install_root) fn record_retained_root_repair_adopted(
-    resolved: &ResolvedRetainedRootRepair,
-    current: RetainedRootRepairOperationV1,
-) -> Result<(), RetainedRootRepairProcedureError> {
-    if current.phase != RetainedRootRepairOperationPhaseV1::AssetReady {
-        return Err(invalid(
-            &resolved.path,
-            "repair receipt cannot publish before exact pool readiness",
-        ));
-    }
-    let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
-    let mut next = current;
-    next.phase = RetainedRootRepairOperationPhaseV1::Adopted;
-    replace_operation(&operation_path, &next)
 }
 
 /// Converge the operation after an exact immutable receipt won its create-new race.
@@ -233,6 +219,8 @@ pub(in crate::install_root) fn record_retained_root_repair_adopted(
 pub(in crate::install_root) fn reconcile_published_retained_root_repair(
     resolved: &ResolvedRetainedRootRepair,
 ) -> Result<(), RetainedRootRepairProcedureError> {
+    require_durable_terminal_receipt(resolved)
+        .map_err(|error| invalid(&resolved.path, error.to_string()))?;
     let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
     let lock_path = resolved.path.with_file_name(REPAIR_OPERATION_LOCK_FILE);
     let _lock = lock_operation(&lock_path)?;
@@ -242,7 +230,7 @@ pub(in crate::install_root) fn reconcile_published_retained_root_repair(
             "published receipt omitted its repair operation",
         )
     })?;
-    validate_operation(&operation_path, &current, &resolved.receipt)?;
+    validate_operation(&operation_path, &current, &resolved.authority)?;
     match current.phase {
         RetainedRootRepairOperationPhaseV1::AssetReady => {
             let mut adopted = current;
@@ -262,9 +250,9 @@ pub(super) fn write_asset_ready_test_operation(
     resolved: &ResolvedRetainedRootRepair,
 ) -> Result<(), RetainedRootRepairProcedureError> {
     let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
-    let mut operation = create_or_load_operation(&operation_path, &resolved.receipt)?;
+    let mut operation = create_or_load_operation(&operation_path, &resolved.authority)?;
     operation.phase = RetainedRootRepairOperationPhaseV1::AssetReady;
-    operation.final_actual_cycles = Some(resolved.receipt.required_pool_cycles);
+    operation.final_actual_cycles = Some(resolved.authority.required_pool_cycles);
     replace_operation(&operation_path, &operation)
 }
 
@@ -281,7 +269,7 @@ fn reconcile_upgrade(
     icp_context: &InstallIcpContext,
     path: &std::path::Path,
     mut current: RetainedRootRepairOperationV1,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
     successor_wasm: &std::path::Path,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     let observed = observe_module_hash(icp_context.cli(), receipt.fleet_subnet_root)?;
@@ -338,7 +326,7 @@ fn reconcile_pool_asset(
     root_binding: &ResolvedProtocolBinding,
     path: &std::path::Path,
     mut current: RetainedRootRepairOperationV1,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     if matches!(
         current.phase,
@@ -420,7 +408,7 @@ fn begin_funding_attempt(
     path: &std::path::Path,
     current: &mut RetainedRootRepairOperationV1,
     actual_cycles: u128,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<RetainedRootRepairFundingPlan, Box<dyn std::error::Error>> {
     let operator_cycles_before = icp_context.cli().identity_cycles_balance()?;
     let plan = funding_plan(
@@ -470,7 +458,7 @@ fn reconcile_uncertain_top_up(
     root_binding: &ResolvedProtocolBinding,
     path: &std::path::Path,
     mut current: RetainedRootRepairOperationV1,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     current.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
     replace_operation(path, &current)?;
@@ -483,7 +471,7 @@ fn reconcile_top_up_observation(
     root_binding: &ResolvedProtocolBinding,
     path: &std::path::Path,
     mut current: RetainedRootRepairOperationV1,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
     command_succeeded: bool,
 ) -> Result<RetainedRootRepairOperationV1, Box<dyn std::error::Error>> {
     let after = query_pool_asset(icp_context, root_binding, receipt)?;
@@ -525,7 +513,7 @@ fn reconcile_top_up_observation(
 fn reinspect_pool_asset(
     icp_context: &InstallIcpContext,
     root_binding: &ResolvedProtocolBinding,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let response: RootCommandResponseFragment = call_with_arg(
         icp_context.cli(),
@@ -551,7 +539,7 @@ fn reinspect_pool_asset(
 fn query_pool_asset(
     icp_context: &InstallIcpContext,
     root_binding: &ResolvedProtocolBinding,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<CanisterPoolAsset, Box<dyn std::error::Error>> {
     let mut start_after = None;
     for _ in 0..MAX_POOL_PAGES {
@@ -691,7 +679,7 @@ fn funding_observation(
 
 fn create_or_load_operation(
     path: &std::path::Path,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<RetainedRootRepairOperationV1, RetainedRootRepairProcedureError> {
     let expected = RetainedRootRepairOperationV1 {
         schema_version: REPAIR_OPERATION_SCHEMA_VERSION,
@@ -734,7 +722,7 @@ fn create_or_load_operation(
 fn validate_operation(
     path: &std::path::Path,
     operation: &RetainedRootRepairOperationV1,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<(), RetainedRootRepairProcedureError> {
     let authority_matches = operation.schema_version == REPAIR_OPERATION_SCHEMA_VERSION
         && operation.repair_operation_id == receipt.repair_operation_id
@@ -770,7 +758,7 @@ fn validate_operation(
 fn validate_funding_attempts(
     path: &std::path::Path,
     operation: &RetainedRootRepairOperationV1,
-    receipt: &RetainedRootRepairReceiptV1,
+    receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<(), RetainedRootRepairProcedureError> {
     for (index, attempt) in operation.funding_attempts.iter().enumerate() {
         if usize::from(attempt.sequence) != index + 1

@@ -43,6 +43,7 @@ mod fleet_component_provisioning_install;
 mod fleet_component_provisioning_journal;
 mod fleet_component_provisioning_plan;
 mod fleet_install_recovery;
+mod fleet_install_recovery_bundle;
 mod fleet_install_session;
 mod fleet_registry_activation;
 mod fleet_registry_activation_journal;
@@ -88,6 +89,10 @@ pub use fleet_install_recovery::{
     FreshFleetInstallRecoveryPlanV1, InspectFreshFleetInstallRecoveryRequest,
     RetainedInstallPlanContractV1, inspect_fresh_fleet_install_recovery,
 };
+pub use fleet_install_recovery_bundle::{
+    FleetInstallRecoveryBundleReportV1, import_fleet_install_recovery_bundle,
+    verify_fleet_install_recovery_bundle,
+};
 pub use fleet_install_session::{
     RetainedFleetInstallSessionSummaryV1, inspect_incomplete_fleet_install_session,
 };
@@ -97,7 +102,9 @@ use fleet_subnet_root_component_registry_preparation::{
     PrepareFleetSubnetRootComponentRegistriesRequest,
     prepare_and_verify_fleet_subnet_root_component_registries,
 };
-use fleet_subnet_root_install::install_and_verify_fleet_subnet_roots;
+use fleet_subnet_root_install::{
+    finalize_retained_root_repairs, install_and_verify_fleet_subnet_roots,
+};
 use fleet_subnet_root_registry_join::register_and_verify_fleet_subnet_roots_joining;
 use fleet_subnet_root_registry_mirror_activation::{
     ActivateFleetSubnetRootRegistryMirrorsRequest,
@@ -578,14 +585,17 @@ fn install_current_fleet_infrastructure(
     config_path: &Path,
     planned: &PlannedCurrentFleetInstall,
 ) -> Result<(), InstallRootError> {
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
     let (coordinator, _) =
         install_current_fleet_coordinator(icp_context, config_path, &planned.plan)?;
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
     let _ = install_current_fleet_subnet_roots(
         icp_context,
         config_path,
         planned,
         coordinator.coordinator,
     )?;
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
     bootstrap_and_verify_fleet_subnet_root_stores(
         icp_context,
         config_path,
@@ -594,6 +604,7 @@ fn install_current_fleet_infrastructure(
         planned.session.operation_id,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
     let joining_version = register_and_verify_fleet_subnet_roots_joining(
         icp_context,
         config_path,
@@ -602,6 +613,7 @@ fn install_current_fleet_infrastructure(
         planned.session.operation_id,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
     synchronize_and_verify_fleet_subnet_roots(SynchronizeFleetSubnetRootsRequest {
         icp: icp_context,
         config_path,
@@ -611,6 +623,7 @@ fn install_current_fleet_infrastructure(
         joining_version: joining_version.clone(),
     })
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
     let active = activate_and_verify_fleet_registry(ActivateFleetRegistryRequest {
         icp: icp_context,
         config_path,
@@ -620,6 +633,7 @@ fn install_current_fleet_infrastructure(
         joining_version: joining_version.clone(),
     })
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
     activate_and_verify_fleet_subnet_root_registry_mirrors(
         ActivateFleetSubnetRootRegistryMirrorsRequest {
             icp: icp_context,
@@ -633,12 +647,23 @@ fn install_current_fleet_infrastructure(
         },
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
     prepare_current_fleet_subnet_root_component_registries(
         icp_context,
         config_path,
         planned,
         coordinator.coordinator,
     )?;
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
+    finalize_retained_root_repairs(
+        icp_context,
+        config_path,
+        &planned.plan,
+        &planned.session,
+        coordinator.coordinator,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    checkpoint_current_recovery_bundle(icp_context, planned)?;
     install_fleet_components_and_publish_catalog(InstallFleetComponentsRequest {
         icp: icp_context,
         config_path,
@@ -649,7 +674,21 @@ fn install_current_fleet_infrastructure(
         install_operation_id: planned.session.operation_id,
         initial_active_registry: &active.registry,
     })
-    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    checkpoint_current_recovery_bundle(icp_context, planned)
+}
+
+fn checkpoint_current_recovery_bundle(
+    icp_context: &InstallIcpContext,
+    planned: &PlannedCurrentFleetInstall,
+) -> Result<(), InstallRootError> {
+    let path = fleet_install_recovery_bundle::checkpoint_current_fleet_install_recovery_bundle(
+        icp_context.root(),
+        planned,
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
+    println!("Retained recovery bundle: {}", path.display());
+    Ok(())
 }
 
 fn prepare_current_fleet_subnet_root_component_registries(

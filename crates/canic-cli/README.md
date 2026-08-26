@@ -54,6 +54,8 @@ canic app role attach <app> <role> --component-spec <component-spec>
 canic build <app>
 canic build <app> <role> --provenance artifacts/<role>-provenance.json
 canic deploy check <fleet> --evidence-envelope
+canic deploy recovery verify <bundle-path>
+canic deploy recovery import <bundle-path> --into <icp-root>
 canic evidence gate --policy policy.toml --envelope evidence.json
 canic evidence gate --policy policy.toml --manifest evidence-manifest.json
 canic deploy inspect catalog list

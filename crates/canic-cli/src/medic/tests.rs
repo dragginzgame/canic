@@ -509,7 +509,7 @@ fn retained_recovery_names_exact_authority_without_fresh_install_advice() {
     };
     let summary = RetainedFleetInstallSessionSummaryV1 {
         fleet_name: "staging".parse().expect("Fleet name"),
-        app: AppId::from("toko"),
+        app: AppId::from("app"),
         release_build_id: plan.release_build_id,
         fresh_fleet_plan_digest: plan.fresh_fleet_plan_digest.clone(),
         operation_id: [0x11; 32],
@@ -521,6 +521,11 @@ fn retained_recovery_names_exact_authority_without_fresh_install_advice() {
     assert_eq!(check.status, MedicStatus::Warn);
     assert!(check.detail.contains("retained_builder=0.109.1"));
     assert!(check.detail.contains("fenced_creations=3/3"));
+    assert!(
+        check
+            .detail
+            .contains("verified live state is monotonically ahead")
+    );
     assert!(check.detail.contains(&"33".repeat(32)));
     assert!(check.next.contains("--expected-plan-digest"));
     assert!(check.next.contains("--release-build"));

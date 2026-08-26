@@ -28,6 +28,10 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
         name: "plan",
         about: "Explain the deterministic plan without deployment mutation",
     },
+    DeploySubcommand {
+        name: "recovery",
+        about: "Verify or import a retained install recovery bundle",
+    },
 ];
 
 const DEPLOY_HELP_AFTER: &str = "\
