@@ -19,7 +19,7 @@ unmodified maintainer validation gate, but that result predates the final
 production correction and must be rerun by the maintainer before versioning.
 Versioning and publication remain maintainer-owned and have not occurred.
 
-Release governance: source development state; no validated release candidate is staged.
+Release validation: `0.109.9` was validated from source `37be941419c823cefa491539f3b50ee063571068` on `2026-08-26`; the release commit may differ only in governed release surfaces.
 
 ## Current Release
 
