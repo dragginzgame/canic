@@ -17,6 +17,7 @@ CANIC_DEV_TOOLS=(
     "cargo-get@$CANIC_CARGO_GET_VERSION"
     "cargo-sort@$CANIC_CARGO_SORT_VERSION"
     "cargo-sort-derives@$CANIC_CARGO_SORT_DERIVES_VERSION"
+    "sccache@$CANIC_SCCACHE_VERSION"
 )
 CANIC_WASM_TOOLS=(
     "candid-extractor@$CANIC_CANDID_EXTRACTOR_VERSION"

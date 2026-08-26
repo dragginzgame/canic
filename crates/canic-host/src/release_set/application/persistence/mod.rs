@@ -35,7 +35,7 @@ use super::{
     ApplicationReleaseSetError,
 };
 
-const APPLICATION_ARTIFACT_UNION_FILE: &str = "application-artifact-union.json";
+pub const APPLICATION_ARTIFACT_UNION_FILE: &str = "application-artifact-union.json";
 
 ///
 /// ApplicationArtifactFileBuildOutput

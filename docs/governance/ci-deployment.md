@@ -214,6 +214,18 @@ non-release change after the validated source, and checks locked offline Cargo
 metadata, uniform workspace package versions and the installed-CLI default
 without repeating the already completed full source validation.
 
+When an accepted release batch declares an exact downstream pre-publication
+qualification gate, freeze one clean source commit before running that gate.
+Build the candidate executable from that commit and run the declared no-effect
+preflight before version mutation or publication. A source change invalidates
+the downstream result and requires a new candidate commit; release-only
+version surfaces do not change the qualified source. Run focused checks while
+editing, the one declared production-boundary journey before review, and the
+complete `make validate` gate once through the normal human version target
+after the source candidate is frozen. Publication may proceed only when the
+downstream preflight and normal release gate both identify that unchanged
+source candidate.
+
 The test target allocates one private repository-owned
 `.tmp/test-runtime.<suffix>` directory. It clears only that scratch on success,
 ordinary failure or handled interrupt. Before removing it, cleanup forcibly

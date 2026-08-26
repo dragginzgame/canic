@@ -455,6 +455,62 @@ fn release_candidate_rejects_unsealed_changelog_and_late_source_change() {
 }
 
 #[test]
+fn release_candidate_rejects_pending_terminal_release_narrative() {
+    let (root, source) = create_candidate_repo("candidate-pending-narrative");
+    write_file(
+        &root,
+        "docs/status/current.md",
+        &format!(
+            "Release validation: `0.92.8` was validated from source `{source}` on `2026-08-25`; the release commit may differ only in governed release surfaces.\n\nOpen `0.92.8` still must be rerun before publication.\n"
+        ),
+    );
+    let status = run_candidate_guard(&root);
+    assert!(!status.status.success());
+    assert!(
+        output_text(&status)
+            .contains("terminal release narrative remains pending in docs/status/current.md")
+    );
+
+    write_file(
+        &root,
+        "docs/status/current.md",
+        &format!(
+            "Release validation: `0.92.8` was validated from source `{source}` on `2026-08-25`; the release commit may differ only in governed release surfaces.\n"
+        ),
+    );
+    write_file(
+        &root,
+        "docs/changelog/0.92.md",
+        "# Fixture changelog\n\n## 0.92.8 - 2026-08-25\n\n## Complete validation evidence pending refresh\n",
+    );
+    let changelog = run_candidate_guard(&root);
+    assert!(!changelog.status.success());
+    assert!(
+        output_text(&changelog)
+            .contains("terminal release narrative remains pending in docs/changelog/0.92.md")
+    );
+
+    write_file(
+        &root,
+        "docs/changelog/0.92.md",
+        "# Fixture changelog\n\n## 0.92.8 - 2026-08-25\n",
+    );
+    write_file(
+        &root,
+        "docs/audits/working/recovery.md",
+        "Status: open 0.92.8 candidate; publication remains unperformed.\n",
+    );
+    let audit = run_candidate_guard(&root);
+    assert!(!audit.status.success());
+    assert!(
+        output_text(&audit).contains(
+            "terminal release narrative remains pending in docs/audits/working/recovery.md"
+        )
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn make_release_targets_are_sequential_and_push_is_guarded() {
     let makefile =
         fs::read_to_string(workspace_root().join("Makefile")).expect("Makefile should be readable");

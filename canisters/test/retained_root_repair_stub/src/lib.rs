@@ -82,7 +82,7 @@ thread_local! {
 enum StubCommand {
     ImportPoolCanister(PoolCanisterRequest),
     PrepareComponentRegistry(Box<RootComponentRegistryPreparationRequest>),
-    JoinRoot(canic_core::dto::fleet_registry::FleetSubnetRootJoinRequest),
+    JoinRoot(Box<canic_core::dto::fleet_registry::FleetSubnetRootJoinRequest>),
     ActivateRegistry(canic_core::dto::fleet_registry::FleetRegistryActivationRequest),
     SynchronizeRegistry(canic_core::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest),
 }
@@ -91,8 +91,8 @@ enum StubCommand {
 enum StubCommandResponse {
     ImportPoolCanister(PoolImportResponse),
     PrepareComponentRegistry(Box<RootComponentRegistryStatusResponse>),
-    JoinRoot(FleetSubnetRootJoinResponse),
-    ActivateRegistry(FleetRegistryActivationResponse),
+    JoinRoot(Box<FleetSubnetRootJoinResponse>),
+    ActivateRegistry(Box<FleetRegistryActivationResponse>),
     OperationAccepted(OperationReceipt),
 }
 
@@ -111,8 +111,8 @@ enum StubStatusRequest {
 enum StubStatusResponse {
     FleetAuthority(Box<FleetSubnetRootAuthority>),
     Pool(Box<CanisterPoolResponse>),
-    Operation(RootOperationStatusResponse),
-    Registry(FleetRegistry),
+    Operation(Box<RootOperationStatusResponse>),
+    Registry(Box<FleetRegistry>),
     RegistryManifest(FleetRegistryManifest),
     RegistryVersion(FleetRegistryVersion),
     RootAcknowledgements(Vec<FleetSubnetRootSnapshotAcknowledgement>),
@@ -215,25 +215,27 @@ fn canic_status(request: StubStatusRequest) -> Result<StubStatusResponse, Error>
             }
             StubStatusRequest::Operation(request) => {
                 if request.operation_id == state.store_bootstrap_operation_id {
-                    StubStatusResponse::Operation(RootOperationStatusResponse::BootstrapStore(
-                        state.store_bootstrap.clone(),
+                    StubStatusResponse::Operation(Box::new(
+                        RootOperationStatusResponse::BootstrapStore(state.store_bootstrap.clone()),
                     ))
                 } else if request.operation_id == state.registry_sync_operation_id {
-                    StubStatusResponse::Operation(RootOperationStatusResponse::SynchronizeRegistry(
-                        state.registry_synchronization.clone(),
+                    StubStatusResponse::Operation(Box::new(
+                        RootOperationStatusResponse::SynchronizeRegistry(
+                            state.registry_synchronization.clone(),
+                        ),
                     ))
                 } else {
                     return Err(Error::from_registered(PLATFORM_FAILED));
                 }
             }
-            StubStatusRequest::Registry => StubStatusResponse::Registry(
+            StubStatusRequest::Registry => StubStatusResponse::Registry(Box::new(
                 if state.registry_active {
                     &state.active_registry
                 } else {
                     &state.joining_registry
                 }
                 .clone(),
-            ),
+            )),
             StubStatusRequest::RegistryManifest => StubStatusResponse::RegistryManifest(
                 if state.registry_active {
                     &state.active_manifest
@@ -313,7 +315,9 @@ async fn canic_command(command: StubCommand) -> Result<StubCommandResponse, Erro
             if request.entry != state.join_response.entry {
                 return Err(Error::from_registered(PLATFORM_FAILED));
             }
-            Ok(StubCommandResponse::JoinRoot(state.join_response.clone()))
+            Ok(StubCommandResponse::JoinRoot(Box::new(
+                state.join_response.clone(),
+            )))
         }),
         StubCommand::ActivateRegistry(request) => STATE.with_borrow_mut(|state| {
             let state = state.as_mut().expect("repair stub initialized");
@@ -321,12 +325,12 @@ async fn canic_command(command: StubCommand) -> Result<StubCommandResponse, Erro
                 return Err(Error::from_registered(PLATFORM_FAILED));
             }
             state.registry_active = true;
-            Ok(StubCommandResponse::ActivateRegistry(
+            Ok(StubCommandResponse::ActivateRegistry(Box::new(
                 FleetRegistryActivationResponse {
                     previous_version: state.joining_version.clone(),
                     version: state.active_version.clone(),
                 },
-            ))
+            )))
         }),
         StubCommand::SynchronizeRegistry(request) => {
             Ok(StubCommandResponse::OperationAccepted(OperationReceipt {

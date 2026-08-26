@@ -7,6 +7,7 @@ mod infrastructure;
 mod manifest;
 mod paths;
 
+pub(crate) use application::APPLICATION_ARTIFACT_UNION_FILE;
 pub use application::{
     ApplicationArtifactBuildOutput, ApplicationArtifactBuildTarget, ApplicationArtifactEntry,
     ApplicationArtifactFileBuildOutput, ApplicationArtifactUnion,
@@ -27,6 +28,7 @@ pub use config::{
     plan_attach_app_role, plan_declare_app_role, plan_rename_app_role, read_app_config_identity,
     rename_app_role,
 };
+pub(crate) use infrastructure::INFRASTRUCTURE_ARTIFACT_MANIFEST_FILE;
 pub use infrastructure::{
     CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactEntry,
     CanicInfrastructureArtifactInput, CanicInfrastructureArtifactManifest,

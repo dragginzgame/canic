@@ -37,13 +37,14 @@ use super::receipt_io::{
 use super::timing::InstallTimingSummary;
 use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
-    FleetCatalogAcquisition, InstallRootBlockKind, InstallRootBlockedError, InstallRootError,
-    InstallRootOptions, InstallRootPhase, check_install_deployment_truth,
+    FleetCatalogAcquisition, InstallExecutionMode, InstallRootBlockKind, InstallRootBlockedError,
+    InstallRootError, InstallRootOptions, InstallRootPhase, check_install_deployment_truth,
     check_install_execution_preflight, current_install_release_build, install_root,
     latest_deployment_truth_receipt_path_from_root, prepare_current_fresh_fleet_preflight,
     recheck_fresh_fleet_operator_funding, require_current_release_builder,
-    root_component_provisioning_operation_id, root_registry_synchronization_operation_id,
-    root_store_adoption_operation_id, root_store_bootstrap_operation_id,
+    require_preflight_recovery, root_component_provisioning_operation_id,
+    root_registry_synchronization_operation_id, root_store_adoption_operation_id,
+    root_store_bootstrap_operation_id,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -102,6 +103,20 @@ fn root_install_phase_operation_ids_are_nonzero_distinct_and_stable() {
             root_store_bootstrap_operation_id(install_operation_id),
             root_registry_synchronization_operation_id(install_operation_id),
         ]
+    );
+}
+
+#[test]
+fn effect_equivalent_install_preflight_requires_retained_recovery_authority() {
+    assert!(require_preflight_recovery(InstallExecutionMode::Apply, None).is_ok());
+    let error = require_preflight_recovery(InstallExecutionMode::Preflight, None)
+        .expect_err("fresh install preflight must not allocate recovery authority");
+
+    assert_eq!(error.phase(), InstallRootPhase::Planning);
+    assert!(
+        error
+            .to_string()
+            .contains("requires an existing incomplete retained Fleet session")
     );
 }
 

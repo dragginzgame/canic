@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.10` makes recovery bundles derive every finalized artifact, resolves
+  historical retained-Root Candid from exact sidecars, adds an effect-
+  equivalent retained-install preflight and cached persistent build loop, and
+  rejects contradictory release-candidate narratives.
 - `0.109.9` separates provisional retained-Root successor authority from
   terminal repair proof, resumes earlier journals through their canonical
   phase owners, checkpoints every repair transition before its associated

@@ -33,6 +33,7 @@ use crate::{
     },
 };
 use candid::Principal;
+use candid_parser::utils::CandidSource;
 use canic_core::ids::{FleetBinding, FleetName, FleetRegistryAuthority, ReleaseBuildId, SubnetId};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -44,6 +45,8 @@ use thiserror::Error as ThisError;
 
 const REPAIR_AUTHORITY_FILE: &str = "root-repair-authority.json";
 const REPAIR_AUTHORITY_LOCK_FILE: &str = "root-repair-authority.lock";
+const REPAIR_CANDIDATE_FILE: &str = "root-repair-candidate.json";
+const REPAIR_CANDIDATE_LOCK_FILE: &str = "root-repair-candidate.lock";
 const REPAIR_AUTHORITY_SCHEMA_VERSION: u32 = 1;
 const REPAIR_RECEIPT_FILE: &str = "root-repair-terminal-receipt.json";
 const REPAIR_RECEIPT_LOCK_FILE: &str = "root-repair-terminal-receipt.lock";
@@ -53,6 +56,7 @@ const SUPPORTED_SESSION_SCHEMA_VERSIONS: &[u32] = &[1];
 const SUPPORTED_ROOT_JOURNAL_SCHEMA_VERSIONS: &[u32] = &[1];
 const MAX_REPAIR_RECEIPT_BYTES: usize = 16_384;
 const MAX_REPAIR_WASM_BYTES: usize = 64 * 1024 * 1024;
+const MAX_REPAIR_CANDID_BYTES: usize = 1024 * 1024;
 const MAX_CANDID_DIAGNOSTIC_CHARS: usize = 768;
 const RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES: u128 = 100_000_000;
 const RETAINED_ROOT_REPAIR_TOP_UP_MARGIN_CYCLES: u128 = 100_000_000;
@@ -166,6 +170,12 @@ struct InspectedRepairWasm {
 }
 
 #[derive(Clone, Copy)]
+enum RepairCandidResolution {
+    FinalizedSidecar,
+    SuccessorSidecarOrBuildExport,
+}
+
+#[derive(Clone, Copy)]
 struct RetainedRootRepairTransition {
     pool_canister: Principal,
     upgrade_predecessor_module_sha256: [u8; 32],
@@ -229,6 +239,32 @@ pub(super) enum RetainedRootRepairError {
     #[error("retained Root repair artifact changed while its Candid was inspected: {path}")]
     ArtifactChanged { path: PathBuf },
 
+    #[error(
+        "retained Root repair requires the exact finalized Candid sidecar at {path}; historical Wasm extraction is not a recovery compatibility path"
+    )]
+    FinalizedCandidSidecarMissing { path: PathBuf },
+
+    #[error(
+        "retained Root repair successor Candid sidecar is missing at {path}, and the Wasm has no get_candid_pointer build export"
+    )]
+    SuccessorCandidUnavailable { path: PathBuf },
+
+    #[error("retained Root repair Candid sidecar is not a regular no-follow file: {path}")]
+    CandidSidecarUnsafe { path: PathBuf },
+
+    #[error("retained Root repair Candid sidecar exceeds the 1 MiB bound: {path}")]
+    CandidSidecarTooLarge { path: PathBuf },
+
+    #[error("failed to read retained Root repair Candid sidecar {path}: {source}")]
+    CandidSidecarIo {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("retained Root repair Candid sidecar is invalid at {path}: {reason}")]
+    InvalidCandidSidecar { path: PathBuf, reason: String },
+
     #[error("retained Root repair has incompatible Candid: {0}")]
     CandidMismatch(String),
 
@@ -284,30 +320,27 @@ pub(super) fn resolve_retained_root_repair(
     required_pool_cycles: Option<u128>,
 ) -> Result<Option<ResolvedRetainedRootRepair>, RetainedRootRepairError> {
     let path = repair_authority_path(&current.path);
+    let candidate_path = repair_candidate_path(&current.path);
     let receipt_path = repair_receipt_path(&current.path);
     let retained = load_optional_authority(&path)?;
+    let candidate = load_optional_authority(&candidate_path)?;
     if let Some(authority) = retained {
-        validate_authority(
+        if candidate
+            .as_ref()
+            .is_some_and(|candidate| candidate != &authority)
+        {
+            return Err(RetainedRootRepairError::ConflictingAuthority {
+                path: candidate_path,
+            });
+        }
+        validate_requested_authority(
             &path,
             &authority,
             session,
             &current.journal,
+            adoption,
             required_pool_cycles,
         )?;
-        if let Some(adoption) = adoption {
-            let mut authority_journal = current.journal.clone();
-            authority_journal.phase = authority.authority_journal_phase;
-            authority_journal.sequence = authority.authority_journal_sequence;
-            let requested = compile_authority(
-                session,
-                &authority_journal,
-                adoption,
-                required_pool_cycles.ok_or(RetainedRootRepairError::MissingPoolRequirement)?,
-            )?;
-            if requested != authority {
-                return Err(RetainedRootRepairError::ConflictingAuthority { path });
-            }
-        }
         let terminal_receipt = load_optional_receipt(&receipt_path)?;
         if let Some(receipt) = terminal_receipt.as_ref() {
             validate_terminal_receipt(
@@ -317,44 +350,31 @@ pub(super) fn resolve_retained_root_repair(
                 session,
                 &current.journal,
             )?;
+        } else {
+            require_retained_repair_artifacts(&current.path, &authority)?;
         }
-        let successor_wasm_path =
-            retained_artifact_path(&current.path, authority.successor_module_sha256, "wasm");
-        if terminal_receipt.is_none() {
-            require_retained_artifact(
-                &retained_artifact_path(
-                    &current.path,
-                    authority.upgrade_predecessor_module_sha256,
-                    "wasm",
-                ),
-                authority.upgrade_predecessor_module_sha256,
-                authority.upgrade_predecessor_wasm_size_bytes,
-            )?;
-            require_retained_artifact(
-                &successor_wasm_path,
-                authority.successor_module_sha256,
-                authority.successor_wasm_size_bytes,
-            )?;
-            require_retained_artifact_digest(
-                &retained_artifact_path(
-                    &current.path,
-                    authority.upgrade_predecessor_candid_sha256,
-                    "did",
-                ),
-                authority.upgrade_predecessor_candid_sha256,
-            )?;
-            require_retained_artifact_digest(
-                &retained_artifact_path(&current.path, authority.successor_candid_sha256, "did"),
-                authority.successor_candid_sha256,
-            )?;
-        }
-        return Ok(Some(ResolvedRetainedRootRepair {
+        return Ok(Some(resolved_repair(
+            current,
+            path,
             authority,
             terminal_receipt,
-            needs_authority_publication: false,
-            path,
-            successor_wasm_path,
-        }));
+            false,
+        )));
+    }
+    if let Some(authority) = candidate {
+        validate_requested_authority(
+            &candidate_path,
+            &authority,
+            session,
+            &current.journal,
+            adoption,
+            required_pool_cycles,
+        )?;
+        require_retained_repair_artifacts(&current.path, &authority)?;
+        if load_optional_receipt(&receipt_path)?.is_some() {
+            return Err(RetainedRootRepairError::ConflictingAuthority { path: receipt_path });
+        }
+        return Ok(Some(resolved_repair(current, path, authority, None, true)));
     }
     let Some(adoption) = adoption else {
         return Ok(None);
@@ -366,15 +386,55 @@ pub(super) fn resolve_retained_root_repair(
         required_pool_cycles.ok_or(RetainedRootRepairError::MissingPoolRequirement)?,
     )?;
     retain_repair_artifacts(&current.path, adoption, &authority)?;
+    publish_repair_candidate(&current.path, &authority)?;
+    Ok(Some(resolved_repair(current, path, authority, None, true)))
+}
+
+fn validate_requested_authority(
+    path: &Path,
+    authority: &RetainedRootRepairAuthorityV1,
+    session: &FleetInstallSession,
+    journal: &FleetSubnetRootInstallJournal,
+    adoption: Option<&RetainedRootRepairAdoption>,
+    required_pool_cycles: Option<u128>,
+) -> Result<(), RetainedRootRepairError> {
+    validate_authority(path, authority, session, journal, required_pool_cycles)?;
+    let Some(adoption) = adoption else {
+        return Ok(());
+    };
+    let mut authority_journal = journal.clone();
+    authority_journal.phase = authority.authority_journal_phase;
+    authority_journal.sequence = authority.authority_journal_sequence;
+    let requested = compile_authority(
+        session,
+        &authority_journal,
+        adoption,
+        required_pool_cycles.ok_or(RetainedRootRepairError::MissingPoolRequirement)?,
+    )?;
+    if requested != *authority {
+        return Err(RetainedRootRepairError::ConflictingAuthority {
+            path: path.to_path_buf(),
+        });
+    }
+    Ok(())
+}
+
+fn resolved_repair(
+    current: &ResolvedFleetSubnetRootInstall,
+    path: PathBuf,
+    authority: RetainedRootRepairAuthorityV1,
+    terminal_receipt: Option<RetainedRootRepairTerminalReceiptV1>,
+    needs_authority_publication: bool,
+) -> ResolvedRetainedRootRepair {
     let successor_wasm_path =
         retained_artifact_path(&current.path, authority.successor_module_sha256, "wasm");
-    Ok(Some(ResolvedRetainedRootRepair {
+    ResolvedRetainedRootRepair {
         authority,
-        terminal_receipt: None,
-        needs_authority_publication: true,
+        terminal_receipt,
+        needs_authority_publication,
         path,
         successor_wasm_path,
-    }))
+    }
 }
 
 /// Publish provisional authority before any repair effect, reconciling a create-new race exactly.
@@ -385,6 +445,17 @@ pub(super) fn publish_retained_root_repair_authority(
 ) -> Result<(), RetainedRootRepairError> {
     if !resolved.needs_authority_publication {
         return Ok(());
+    }
+    let candidate_path = repair_candidate_path(&resolved.path);
+    let candidate = load_optional_authority(&candidate_path)?.ok_or_else(|| {
+        RetainedRootRepairError::ConflictingAuthority {
+            path: candidate_path.clone(),
+        }
+    })?;
+    if candidate != resolved.authority {
+        return Err(RetainedRootRepairError::ConflictingAuthority {
+            path: candidate_path,
+        });
     }
     validate_authority(&resolved.path, &resolved.authority, session, journal, None)?;
     let bytes = encode_authority(&resolved.path, &resolved.authority)?;
@@ -419,6 +490,28 @@ pub(super) fn publish_retained_root_repair_authority(
         return Err(RetainedRootRepairError::ConflictingAuthority {
             path: resolved.path.clone(),
         });
+    }
+    Ok(())
+}
+
+fn publish_repair_candidate(
+    journal_path: &Path,
+    authority: &RetainedRootRepairAuthorityV1,
+) -> Result<(), RetainedRootRepairError> {
+    let path = repair_candidate_path(journal_path);
+    let bytes = encode_authority(&path, authority)?;
+    let _lock = lock_document(&path, REPAIR_CANDIDATE_LOCK_FILE)?;
+    match create_new_bytes_with_parents(&path, &bytes) {
+        Ok(()) => {}
+        Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(source) => {
+            return Err(RetainedRootRepairError::Io { path, source });
+        }
+    }
+    let retained = load_optional_authority(&path)?
+        .ok_or_else(|| RetainedRootRepairError::ConflictingAuthority { path: path.clone() })?;
+    if retained != *authority {
+        return Err(RetainedRootRepairError::ConflictingAuthority { path });
     }
     Ok(())
 }
@@ -605,19 +698,26 @@ fn compile_repair_transition(
     adoption: &RetainedRootRepairAdoption,
     required_pool_cycles: u128,
 ) -> Result<RetainedRootRepairTransition, RetainedRootRepairError> {
-    let upgrade_predecessor = inspect_wasm(&adoption.live_predecessor_wasm)?;
-    if upgrade_predecessor.candid_sha256 != journal.root_artifact.candid_sha256 {
-        return Err(RetainedRootRepairError::CandidMismatch(
-            "the exact live predecessor does not match the retained journal Candid".to_string(),
-        ));
-    }
+    let upgrade_predecessor = inspect_wasm(
+        &adoption.live_predecessor_wasm,
+        RepairCandidResolution::FinalizedSidecar,
+    )?;
     let upgrade_predecessor_module_sha256: [u8; 32] =
         Sha256::digest(&upgrade_predecessor.bytes).into();
     let upgrade_predecessor_wasm_size_bytes = u64::try_from(upgrade_predecessor.bytes.len())
         .map_err(|_| RetainedRootRepairError::ArtifactTooLarge {
             path: adoption.live_predecessor_wasm.clone(),
         })?;
-    let successor = inspect_wasm(&adoption.successor_wasm)?;
+    if upgrade_predecessor.candid_sha256 != journal.root_artifact.candid_sha256 {
+        return Err(RetainedRootRepairError::CandidMismatch(
+            "the finalized predecessor sidecar does not match the infrastructure manifest and retained journal Candid"
+                .to_string(),
+        ));
+    }
+    let successor = inspect_wasm(
+        &adoption.successor_wasm,
+        RepairCandidResolution::SuccessorSidecarOrBuildExport,
+    )?;
     if successor.candid_sha256 != journal.root_artifact.candid_sha256 {
         return Err(RetainedRootRepairError::CandidMismatch(
             "the successor does not preserve the retained Root Candid exactly".to_string(),
@@ -684,10 +784,12 @@ fn publish_retained_root_repair(
     Ok(())
 }
 
-fn inspect_wasm(path: &Path) -> Result<InspectedRepairWasm, RetainedRootRepairError> {
+fn inspect_wasm(
+    path: &Path,
+    candid_resolution: RepairCandidResolution,
+) -> Result<InspectedRepairWasm, RetainedRootRepairError> {
     let before = read_bounded_artifact(path)?;
-    let candid = extract_candid_bytes(path)
-        .map_err(|error| RetainedRootRepairError::CandidInspection(bounded_diagnostic(error)))?;
+    let candid = resolve_repair_candid(path, &before, candid_resolution)?;
     let after = read_bounded_artifact(path)?;
     if before != after {
         return Err(RetainedRootRepairError::ArtifactChanged {
@@ -702,13 +804,193 @@ fn inspect_wasm(path: &Path) -> Result<InspectedRepairWasm, RetainedRootRepairEr
     })
 }
 
+fn resolve_repair_candid(
+    wasm_path: &Path,
+    wasm: &[u8],
+    resolution: RepairCandidResolution,
+) -> Result<Vec<u8>, RetainedRootRepairError> {
+    let sidecar_path = repair_candid_sidecar_path(wasm_path)?;
+    match read_optional_bounded_regular_bytes(&sidecar_path, MAX_REPAIR_CANDID_BYTES) {
+        Ok(Some(candid)) => validate_repair_candid(&sidecar_path, candid),
+        Ok(None) => match resolution {
+            RepairCandidResolution::FinalizedSidecar => {
+                Err(RetainedRootRepairError::FinalizedCandidSidecarMissing { path: sidecar_path })
+            }
+            RepairCandidResolution::SuccessorSidecarOrBuildExport => {
+                if !wasm_exports_candid_pointer(wasm) {
+                    return Err(RetainedRootRepairError::SuccessorCandidUnavailable {
+                        path: sidecar_path,
+                    });
+                }
+                let candid = extract_candid_bytes(wasm_path).map_err(|error| {
+                    RetainedRootRepairError::CandidInspection(bounded_diagnostic(error))
+                })?;
+                if candid.len() > MAX_REPAIR_CANDID_BYTES {
+                    return Err(RetainedRootRepairError::CandidSidecarTooLarge {
+                        path: sidecar_path,
+                    });
+                }
+                validate_repair_candid(&sidecar_path, candid)
+            }
+        },
+        Err(BoundedRegularFileReadError::TooLarge) => {
+            Err(RetainedRootRepairError::CandidSidecarTooLarge { path: sidecar_path })
+        }
+        Err(BoundedRegularFileReadError::Read(RegularFileReadError::NotRegular)) => {
+            Err(RetainedRootRepairError::CandidSidecarUnsafe { path: sidecar_path })
+        }
+        Err(BoundedRegularFileReadError::Read(RegularFileReadError::Io(source))) => {
+            Err(RetainedRootRepairError::CandidSidecarIo {
+                path: sidecar_path,
+                source,
+            })
+        }
+        #[cfg(not(unix))]
+        Err(BoundedRegularFileReadError::Read(RegularFileReadError::UnsupportedPlatform)) => {
+            Err(RetainedRootRepairError::CandidSidecarIo {
+                path: sidecar_path,
+                source: io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "retained Root repair Candid sidecar reads are unsupported",
+                ),
+            })
+        }
+    }
+}
+
+fn repair_candid_sidecar_path(wasm_path: &Path) -> Result<PathBuf, RetainedRootRepairError> {
+    if wasm_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        != Some("wasm")
+    {
+        return Err(RetainedRootRepairError::InvalidCandidSidecar {
+            path: wasm_path.to_path_buf(),
+            reason: "raw Root artifact path must end in .wasm".to_string(),
+        });
+    }
+    Ok(wasm_path.with_extension("did"))
+}
+
+fn validate_repair_candid(
+    path: &Path,
+    candid: Vec<u8>,
+) -> Result<Vec<u8>, RetainedRootRepairError> {
+    let text = std::str::from_utf8(&candid).map_err(|error| {
+        RetainedRootRepairError::InvalidCandidSidecar {
+            path: path.to_path_buf(),
+            reason: error.to_string(),
+        }
+    })?;
+    let (_, actor) = CandidSource::Text(text).load().map_err(|error| {
+        RetainedRootRepairError::InvalidCandidSidecar {
+            path: path.to_path_buf(),
+            reason: bounded_diagnostic(error),
+        }
+    })?;
+    if actor.is_none() {
+        return Err(RetainedRootRepairError::InvalidCandidSidecar {
+            path: path.to_path_buf(),
+            reason: "Candid sidecar has no service interface".to_string(),
+        });
+    }
+    Ok(candid)
+}
+
+fn wasm_exports_candid_pointer(wasm: &[u8]) -> bool {
+    const WASM_HEADER_BYTES: usize = 8;
+    if wasm.get(..WASM_HEADER_BYTES) != Some(b"\0asm\x01\0\0\0") {
+        return false;
+    }
+    let mut offset = WASM_HEADER_BYTES;
+    while offset < wasm.len() {
+        let Some(section_id) = wasm.get(offset).copied() else {
+            return false;
+        };
+        offset += 1;
+        let Some(section_size) = read_wasm_u32(wasm, &mut offset) else {
+            return false;
+        };
+        let Ok(section_size) = usize::try_from(section_size) else {
+            return false;
+        };
+        let Some(section_end) = offset.checked_add(section_size) else {
+            return false;
+        };
+        let Some(section) = wasm.get(offset..section_end) else {
+            return false;
+        };
+        if section_id == 7 {
+            return wasm_export_section_has_candid_pointer(section);
+        }
+        offset = section_end;
+    }
+    false
+}
+
+fn wasm_export_section_has_candid_pointer(section: &[u8]) -> bool {
+    let mut offset = 0;
+    let Some(count) = read_wasm_u32(section, &mut offset) else {
+        return false;
+    };
+    for _ in 0..count {
+        let Some(name_size) = read_wasm_u32(section, &mut offset) else {
+            return false;
+        };
+        let Ok(name_size) = usize::try_from(name_size) else {
+            return false;
+        };
+        let Some(name_end) = offset.checked_add(name_size) else {
+            return false;
+        };
+        let Some(name) = section.get(offset..name_end) else {
+            return false;
+        };
+        offset = name_end;
+        if section.get(offset).is_none() {
+            return false;
+        }
+        offset += 1;
+        if read_wasm_u32(section, &mut offset).is_none() {
+            return false;
+        }
+        if name == b"get_candid_pointer" {
+            return true;
+        }
+    }
+    false
+}
+
+fn read_wasm_u32(bytes: &[u8], offset: &mut usize) -> Option<u32> {
+    let mut value = 0_u32;
+    for shift in (0..35).step_by(7) {
+        let byte = *bytes.get(*offset)?;
+        *offset += 1;
+        let lane = u32::from(byte & 0x7f);
+        if shift == 28 && lane > 0x0f {
+            return None;
+        }
+        value |= lane << shift;
+        if byte & 0x80 == 0 {
+            return Some(value);
+        }
+    }
+    None
+}
+
 fn retain_repair_artifacts(
     journal_path: &Path,
     adoption: &RetainedRootRepairAdoption,
     authority: &RetainedRootRepairAuthorityV1,
 ) -> Result<(), RetainedRootRepairError> {
-    let predecessor = inspect_wasm(&adoption.live_predecessor_wasm)?;
-    let successor = inspect_wasm(&adoption.successor_wasm)?;
+    let predecessor = inspect_wasm(
+        &adoption.live_predecessor_wasm,
+        RepairCandidResolution::FinalizedSidecar,
+    )?;
+    let successor = inspect_wasm(
+        &adoption.successor_wasm,
+        RepairCandidResolution::SuccessorSidecarOrBuildExport,
+    )?;
     let artifacts = [
         (
             authority.upgrade_predecessor_module_sha256,
@@ -748,6 +1030,38 @@ fn retain_repair_artifacts(
         retain_exact_artifact(&path, digest, size, bytes)?;
     }
     Ok(())
+}
+
+fn require_retained_repair_artifacts(
+    journal_path: &Path,
+    authority: &RetainedRootRepairAuthorityV1,
+) -> Result<(), RetainedRootRepairError> {
+    require_retained_artifact(
+        &retained_artifact_path(
+            journal_path,
+            authority.upgrade_predecessor_module_sha256,
+            "wasm",
+        ),
+        authority.upgrade_predecessor_module_sha256,
+        authority.upgrade_predecessor_wasm_size_bytes,
+    )?;
+    require_retained_artifact(
+        &retained_artifact_path(journal_path, authority.successor_module_sha256, "wasm"),
+        authority.successor_module_sha256,
+        authority.successor_wasm_size_bytes,
+    )?;
+    require_retained_artifact_digest(
+        &retained_artifact_path(
+            journal_path,
+            authority.upgrade_predecessor_candid_sha256,
+            "did",
+        ),
+        authority.upgrade_predecessor_candid_sha256,
+    )?;
+    require_retained_artifact_digest(
+        &retained_artifact_path(journal_path, authority.successor_candid_sha256, "did"),
+        authority.successor_candid_sha256,
+    )
 }
 
 fn retain_exact_artifact(
@@ -1308,6 +1622,10 @@ fn encode_authority(
 
 pub(super) fn repair_authority_path(journal_path: &Path) -> PathBuf {
     journal_path.with_file_name(REPAIR_AUTHORITY_FILE)
+}
+
+pub(super) fn repair_candidate_path(journal_path: &Path) -> PathBuf {
+    journal_path.with_file_name(REPAIR_CANDIDATE_FILE)
 }
 
 pub(super) fn repair_receipt_path(journal_path: &Path) -> PathBuf {

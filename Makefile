@@ -28,6 +28,14 @@ GITLEAKS_BIN ?= $(GITLEAKS_INSTALL_DIR)/gitleaks
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
 CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT)
+CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target
+CARGO_TARGET_DIR ?= $(CANIC_CARGO_TARGET_DIR)
+export CARGO_TARGET_DIR
+SCCACHE_BIN ?= $(shell command -v sccache 2>/dev/null)
+ifneq ($(strip $(SCCACHE_BIN)),)
+RUSTC_WRAPPER ?= $(SCCACHE_BIN)
+export RUSTC_WRAPPER
+endif
 VALIDATION_RUNNER := bash scripts/ci/run-validation-targets.sh
 
 # Check for clean git state

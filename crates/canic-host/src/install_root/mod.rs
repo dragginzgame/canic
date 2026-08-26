@@ -14,7 +14,10 @@ use crate::{
         observe_fresh_fleet_operator_funding,
     },
     network::resolve_canonical_network_id_from_root,
-    release_set::{AppConfigSnapshot, icp_root, workspace_root},
+    release_set::{
+        AppConfigSnapshot, CanicInfrastructureRole, icp_root,
+        load_persisted_canic_infrastructure_artifact_manifest, workspace_root,
+    },
 };
 use config_selection::resolve_install_config_path;
 use sha2::{Digest, Sha256};
@@ -81,6 +84,10 @@ pub use config_selection::{
     select_discovered_app_config_path, workspace_app_roots,
 };
 use coordinator_install::install_and_verify_fleet_coordinator;
+use coordinator_install_journal::{
+    FleetCoordinatorInstallPhase, PlanFleetCoordinatorInstallRequest,
+    inspect_fleet_coordinator_install,
+};
 use fleet_component_provisioning_install::{
     InstallFleetComponentsRequest, install_fleet_components_and_publish_catalog,
 };
@@ -104,8 +111,9 @@ use fleet_subnet_root_component_registry_preparation::{
     prepare_and_verify_fleet_subnet_root_component_registries,
 };
 use fleet_subnet_root_install::{
-    InstallFleetSubnetRootsRequest, finalize_retained_root_repairs,
-    install_and_verify_fleet_subnet_roots,
+    InstallFleetSubnetRootsRequest, PreflightFleetSubnetRootsRequest,
+    finalize_retained_root_repairs, install_and_verify_fleet_subnet_roots,
+    preflight_fleet_subnet_roots,
 };
 use fleet_subnet_root_registry_join::register_and_verify_fleet_subnet_roots_joining;
 use fleet_subnet_root_registry_mirror_activation::{
@@ -126,6 +134,7 @@ use phase_receipts::{
 use plan_artifacts::emit_manifest_with_phase;
 use preparation::prepare_install_deployment_truth;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
+use timing::InstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
 
 pub(crate) fn load_verified_installed_fleet_registry(
@@ -283,6 +292,15 @@ struct FreshFleetPlanDigestMismatchError {
     observed: String,
 }
 
+#[derive(Debug, ThisError)]
+enum InstallPreflightError {
+    #[error("install preflight requires an existing incomplete retained Fleet session")]
+    MissingRetainedSession,
+
+    #[error("install preflight requires a verified retained Fleet Coordinator journal")]
+    CoordinatorNotVerified,
+}
+
 #[derive(Debug)]
 struct PreparedFreshFleetDecision {
     app_id: String,
@@ -314,8 +332,40 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDis
     Ok(choices)
 }
 
-// Execute fresh Fleet planning and the Coordinator-first installation workflow.
-pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootError> {
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum InstallExecutionMode {
+    Apply,
+    Preflight,
+}
+
+struct ExecuteCurrentFleetInstallRequest<'a> {
+    mode: InstallExecutionMode,
+    icp_context: InstallIcpContext,
+    config_path: &'a Path,
+    planned_install: &'a PlannedCurrentFleetInstall,
+    local_replica: Option<crate::icp::LocalReplicaTarget>,
+    receipt_scope: InstallReceiptScope<'a>,
+    pre_activation_receipts: Vec<DeploymentReceiptV1>,
+    build_phase: CompletedInstallPhase,
+    manifest_phase: CompletedInstallPhase,
+    timings: InstallTimingSummary,
+    total_started_at: Instant,
+}
+
+/// Execute fresh Fleet planning and the Coordinator-first installation workflow.
+pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError> {
+    run_install_root(options, InstallExecutionMode::Apply)
+}
+
+/// Run retained-recovery installer preparation through the last verified no-effect checkpoint.
+pub fn preflight_install_root(options: InstallRootOptions) -> Result<(), InstallRootError> {
+    run_install_root(options, InstallExecutionMode::Preflight)
+}
+
+fn run_install_root(
+    mut options: InstallRootOptions,
+    mode: InstallExecutionMode,
+) -> Result<(), InstallRootError> {
     let (workspace_root, icp_root) = resolve_current_install_roots(&options)?;
     let config_path = current_install_config_path(&icp_root, &options)?;
     let (fresh_fleet, icp_context) =
@@ -327,6 +377,7 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
         plan: fresh_fleet_plan,
         recovery: fresh_fleet_recovery,
     } = fresh_fleet;
+    require_preflight_recovery(mode, fresh_fleet_recovery.as_ref())?;
     options.admitted_fresh_fleet_plan_digest = Some(fresh_fleet_plan.plan_digest.clone());
 
     let (build_context, install_snapshot) = current_install_build_inputs(
@@ -402,19 +453,73 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
         execution_context: Some(&execution_context),
         fresh_fleet_decision: Some(&fresh_fleet_receipt_decision),
     };
-    persist_current_pre_root_receipts(
+    execute_planned_current_fleet_install(ExecuteCurrentFleetInstallRequest {
+        mode,
+        icp_context,
+        config_path: &config_path,
+        planned_install: &planned_install,
+        local_replica: build_context.local_replica,
         receipt_scope,
-        &prepared.pre_activation_receipts,
-        prepared.build_phase,
-        emitted_manifest.phase,
-    )?;
-    let icp_context = icp_context.with_local_replica(build_context.local_replica);
-    print_paid_effect_placement_warnings(&planned_install.plan.plan);
-    let activation_started_at = Instant::now();
-    install_current_fleet_infrastructure(&icp_context, &config_path, &planned_install)?;
-    timings.activate_fleet = activation_started_at.elapsed();
+        pre_activation_receipts: prepared.pre_activation_receipts,
+        build_phase: prepared.build_phase,
+        manifest_phase: emitted_manifest.phase,
+        timings,
+        total_started_at,
+    })
+}
 
-    print_install_timing_summary(&timings, total_started_at.elapsed());
+fn execute_planned_current_fleet_install(
+    mut request: ExecuteCurrentFleetInstallRequest<'_>,
+) -> Result<(), InstallRootError> {
+    if request.mode == InstallExecutionMode::Preflight {
+        let bundle_path = preflight_current_fleet_infrastructure(
+            &request.icp_context,
+            request.config_path,
+            request.planned_install,
+        )?;
+        TerminalStyle::detected().print_section(
+            "Install preflight complete",
+            &format!(
+                "verified exact installer inputs and recovery bundle {}; no operational authority was published and no IC update was issued",
+                bundle_path.display()
+            ),
+        );
+        println!();
+        print_install_timing_summary(&request.timings, request.total_started_at.elapsed());
+        return Ok(());
+    }
+    persist_current_pre_root_receipts(
+        request.receipt_scope,
+        &request.pre_activation_receipts,
+        request.build_phase,
+        request.manifest_phase,
+    )?;
+    let icp_context = request
+        .icp_context
+        .with_local_replica(request.local_replica);
+    print_paid_effect_placement_warnings(&request.planned_install.plan.plan);
+    let activation_started_at = Instant::now();
+    install_current_fleet_infrastructure(
+        &icp_context,
+        request.config_path,
+        request.planned_install,
+    )?;
+    request.timings.activate_fleet = activation_started_at.elapsed();
+
+    print_install_timing_summary(&request.timings, request.total_started_at.elapsed());
+    Ok(())
+}
+
+fn require_preflight_recovery(
+    mode: InstallExecutionMode,
+    recovery: Option<&FreshFleetInstallRecoveryPlanV1>,
+) -> Result<(), InstallRootError> {
+    if mode == InstallExecutionMode::Preflight && recovery.is_none() {
+        return Err(InstallRootError::new(
+            InstallRootPhase::Planning,
+            InstallPreflightError::MissingRetainedSession,
+        ));
+    }
     Ok(())
 }
 
@@ -580,6 +685,80 @@ fn recheck_fresh_fleet_operator_funding(
             .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?,
     };
     require_recompiled_fresh_fleet_plan(plan, &rechecked)
+}
+
+fn preflight_current_fleet_infrastructure(
+    icp_context: &InstallIcpContext,
+    config_path: &Path,
+    planned: &PlannedCurrentFleetInstall,
+) -> Result<PathBuf, InstallRootError> {
+    let coordinator =
+        inspect_preflight_fleet_coordinator(icp_context.root(), config_path, &planned.plan)?;
+    let recovery_bundle = FleetInstallRecoveryBundleCheckpoint::new(
+        icp_context.root(),
+        &planned.session,
+        &planned.plan,
+    );
+    preflight_fleet_subnet_roots(PreflightFleetSubnetRootsRequest {
+        icp_root: icp_context.root(),
+        config_path,
+        fleet_install_plan: &planned.plan,
+        fleet_install_session: &planned.session,
+        coordinator,
+        install_operation_id: planned.session.operation_id,
+        retained_root_repair_adoption: planned.retained_root_repair_adoption.as_ref(),
+        recovery_bundle: &recovery_bundle,
+    })
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))
+}
+
+fn inspect_preflight_fleet_coordinator(
+    icp_root: &Path,
+    config_path: &Path,
+    fleet_install_plan: &PersistedFleetInstallPlan,
+) -> Result<canic_core::cdk::types::Principal, InstallRootError> {
+    let config = AppConfigSnapshot::load(config_path)
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Configuration, source))?;
+    let component_deployment_configuration = config
+        .model()
+        .compile_component_deployment_configuration()
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
+        icp_root,
+        fleet_install_plan.plan.release_build_id,
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    let _artifact = operations::resolve_install_artifact(
+        icp_root,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetCoordinator,
+        fleet_install_plan.plan.release_build_id,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
+    let current = inspect_fleet_coordinator_install(PlanFleetCoordinatorInstallRequest {
+        fleet_install_plan,
+        infrastructure_manifest: &infrastructure_manifest,
+        component_deployment_configuration,
+    })
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    let Some(current) = current else {
+        return Err(InstallRootError::new(
+            InstallRootPhase::Planning,
+            InstallPreflightError::CoordinatorNotVerified,
+        ));
+    };
+    if current.journal.phase != FleetCoordinatorInstallPhase::Verified {
+        return Err(InstallRootError::new(
+            InstallRootPhase::Planning,
+            InstallPreflightError::CoordinatorNotVerified,
+        ));
+    }
+    current.journal.coordinator.ok_or_else(|| {
+        InstallRootError::new(
+            InstallRootPhase::Planning,
+            InstallPreflightError::CoordinatorNotVerified,
+        )
+    })
 }
 
 fn install_current_fleet_infrastructure(

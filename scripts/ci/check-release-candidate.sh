@@ -44,6 +44,43 @@ validation_marker="Release validation: \`$workspace_version\` was validated from
 [ "$(rg -c -F "$validation_marker" "$STATUS_DOCUMENT")" -eq 1 ] ||
     fail "current status is not bound to the exact validated source and release"
 
+pending_release_narrative() {
+    local contents="$1"
+    rg -i \
+        -e 'must be rerun' \
+        -e 'complete validation evidence pending' \
+        -e 'versioning and publication remain' \
+        -e 'versioning and publication.*not (occurred|been performed)' \
+        -e 'publication.*remain.*unperformed' \
+        <<<"$contents" >/dev/null
+}
+
+status_contents="$(cat "$STATUS_DOCUMENT")"
+if pending_release_narrative "$status_contents" \
+    || rg -F "Open \`$workspace_version\`" <<<"$status_contents" >/dev/null \
+    || rg -i -F "Status: open $workspace_version" <<<"$status_contents" >/dev/null; then
+    fail "terminal release narrative remains pending in docs/status/current.md"
+fi
+
+release_section="$(awk -v header="## $workspace_version - " '
+    index($0, header) == 1 { in_release = 1; print; next }
+    in_release && /^## [0-9]+\.[0-9]+\.[0-9]+ - / { exit }
+    in_release { print }
+' "$detailed_changelog")"
+pending_release_narrative "$release_section" &&
+    fail "terminal release narrative remains pending in docs/changelog/$minor_line.md"
+
+if [ -d "$ROOT/docs/audits/working" ]; then
+    while IFS= read -r audit_document; do
+        [ -n "$audit_document" ] || continue
+        audit_contents="$(cat "$audit_document")"
+        if pending_release_narrative "$audit_contents" \
+            || rg -i -F "Status: open $workspace_version" <<<"$audit_contents" >/dev/null; then
+            fail "terminal release narrative remains pending in ${audit_document#"$ROOT"/}"
+        fi
+    done < <(rg -l -F "$workspace_version" "$ROOT/docs/audits/working" -g '*.md' || true)
+fi
+
 is_release_only_path() {
     case "$1" in
         Cargo.toml | Cargo.lock | scripts/dev/install_dev.sh | \
