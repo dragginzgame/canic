@@ -58,7 +58,6 @@ PLANNED_MINOR_LINE="${PLANNED%.*}"
 DETAILED_CHANGELOG="docs/changelog/$PLANNED_MINOR_LINE.md"
 STATUS_DOCUMENT="docs/status/current.md"
 SOURCE_STATUS_MARKER="Release governance: source development state; no validated release candidate is staged."
-SOURCE_LINEAGE_MARKER="Source development: published \`v$PREV\` is the immutable predecessor for open \`$PLANNED\`."
 
 [[ -f "$DETAILED_CHANGELOG" ]] || {
   echo "❌ Missing detailed changelog for planned release $PLANNED: $DETAILED_CHANGELOG" >&2
@@ -80,11 +79,6 @@ SOURCE_LINEAGE_MARKER="Source development: published \`v$PREV\` is the immutable
   echo "❌ Current status does not declare the governed source-development state." >&2
   exit 1
 }
-[[ "$(rg -c -F "$SOURCE_LINEAGE_MARKER" "$STATUS_DOCUMENT")" -eq 1 ]] || {
-  echo "❌ Current status does not bind open $PLANNED to immutable predecessor v$PREV." >&2
-  exit 1
-}
-
 TRANSACTION_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-bump.XXXXXX")"
 BACKUP_ARCHIVE="$TRANSACTION_DIR/release-surfaces.tar"
 mapfile -t RELEASE_SURFACES < <(
@@ -149,9 +143,38 @@ RELEASE_LINEAGE_MARKER="Release lineage: \`$NEW\` follows immutable \`v$PREV\`."
 sed -i \
   "s#^$SOURCE_STATUS_MARKER\$#$VALIDATION_STATUS_MARKER#" \
   "$STATUS_DOCUMENT"
-sed -i \
-  "s#^$SOURCE_LINEAGE_MARKER\$#$RELEASE_LINEAGE_MARKER#" \
-  "$STATUS_DOCUMENT"
+LINEAGE_DOCUMENT="$TRANSACTION_DIR/current-status-with-release-lineage.md"
+awk -v replacement="$RELEASE_LINEAGE_MARKER" '
+  BEGIN {
+    replaced = 0
+    skipping = 0
+  }
+  /^Release lineage:/ {
+    if (replaced == 1) {
+      exit 2
+    }
+    print replacement
+    replaced = 1
+    skipping = 1
+    next
+  }
+  skipping == 1 {
+    if ($0 == "") {
+      print
+      skipping = 0
+    }
+    next
+  }
+  {
+    print
+  }
+  END {
+    if (replaced != 1) {
+      exit 3
+    }
+  }
+' "$STATUS_DOCUMENT" >"$LINEAGE_DOCUMENT"
+mv "$LINEAGE_DOCUMENT" "$STATUS_DOCUMENT"
 
 [[ "$(rg -c -F "## $NEW - $RELEASE_DATE" "$DETAILED_CHANGELOG")" -eq 1 ]] || {
   echo "❌ Failed to seal $DETAILED_CHANGELOG for $NEW." >&2

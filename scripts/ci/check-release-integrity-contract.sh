@@ -275,10 +275,13 @@ rg -F '"sccache@$CANIC_SCCACHE_VERSION"' "$DEV_INSTALL" >/dev/null ||
     fail "maintainer toolchain setup does not install the pinned sccache"
 rg -F 'require_command sccache' "$DEV_INSTALL" >/dev/null ||
     fail "maintainer toolchain setup does not verify sccache availability"
-rg -F 'SOURCE_LINEAGE_MARKER="Source development:' "$BUMP_VERSION" >/dev/null ||
-    fail "version bump does not require the exact open source lineage"
 rg -F 'RELEASE_LINEAGE_MARKER="Release lineage:' "$BUMP_VERSION" >/dev/null ||
     fail "version bump does not seal the released predecessor lineage"
+if rg -F 'SOURCE_LINEAGE_MARKER=' "$BUMP_VERSION" >/dev/null; then
+    fail "version bump still requires one exact source-lineage sentence"
+fi
+rg -F '/^Release lineage:/' "$BUMP_VERSION" >/dev/null ||
+    fail "version bump does not rewrite the labeled source-lineage paragraph"
 
 invariant_recipe="$(sed -n '/^check-invariants:/,/^$/p' "$MAKEFILE")"
 [[ "$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$invariant_recipe")" -eq 1 ]] ||
