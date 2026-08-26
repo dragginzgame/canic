@@ -152,7 +152,7 @@ fn create_candidate_repo(name: &str) -> (PathBuf, String) {
     write_file(
         &root,
         "docs/status/current.md",
-        "Release governance: source development state; no validated release candidate is staged.\n",
+        "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.\n\nRelease governance: source development state; no validated release candidate is staged.\n",
     );
     write_file(
         &root,
@@ -200,7 +200,7 @@ fn create_candidate_repo(name: &str) -> (PathBuf, String) {
         &root,
         "docs/status/current.md",
         &format!(
-            "Release validation: `0.92.8` was validated from source `{source}` on `2026-08-25`; the release commit may differ only in governed release surfaces.\n"
+            "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\nRelease validation: `0.92.8` was validated from source `{source}` on `2026-08-25`; the release commit may differ only in governed release surfaces.\n"
         ),
     );
     (root, source)
@@ -314,11 +314,8 @@ fn failed_version_surface_sync_restores_every_mutated_file() {
         "docs/changelog/0.92.md",
         "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
     );
-    write_file(
-        &root,
-        "docs/status/current.md",
-        "Release governance: source development state; no validated release candidate is staged.\n",
-    );
+    let status_document = "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.\n\nRelease governance: source development state; no validated release candidate is staged.\n";
+    write_file(&root, "docs/status/current.md", status_document);
     write_file(&root, "scripts/dev/install_dev.sh", install_script);
     install_version_reader(&root);
     install_failing_release_fixture_commands(&root);
@@ -368,6 +365,10 @@ fn failed_version_surface_sync_restores_every_mutated_file() {
     assert_eq!(
         fs::read_to_string(root.join("scripts/dev/install_dev.sh")).unwrap(),
         install_script
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("docs/status/current.md")).unwrap(),
+        status_document
     );
     let _ = fs::remove_dir_all(root);
 }
@@ -457,26 +458,32 @@ fn release_candidate_rejects_unsealed_changelog_and_late_source_change() {
 #[test]
 fn release_candidate_rejects_pending_terminal_release_narrative() {
     let (root, source) = create_candidate_repo("candidate-pending-narrative");
-    write_file(
-        &root,
-        "docs/status/current.md",
-        &format!(
-            "Release validation: `0.92.8` was validated from source `{source}` on `2026-08-25`; the release commit may differ only in governed release surfaces.\n\nOpen `0.92.8` still must be rerun before publication.\n"
-        ),
+    let validation_marker = format!(
+        "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\nRelease validation: `0.92.8` was validated from source `{source}` on `2026-08-25`; the release commit may differ only in governed release surfaces."
     );
-    let status = run_candidate_guard(&root);
-    assert!(!status.status.success());
-    assert!(
-        output_text(&status)
-            .contains("terminal release narrative remains pending in docs/status/current.md")
-    );
+    for pending_status in [
+        "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.",
+        "Release governance: source development state; no validated release candidate is staged.",
+        "Candidate evidence: no validated release candidate is currently staged.",
+        "The complete maintainer-owned release gate remains before publication.",
+    ] {
+        write_file(
+            &root,
+            "docs/status/current.md",
+            &format!("{validation_marker}\n\n{pending_status}\n"),
+        );
+        let status = run_candidate_guard(&root);
+        assert!(!status.status.success());
+        assert!(
+            output_text(&status)
+                .contains("terminal release narrative remains pending in docs/status/current.md")
+        );
+    }
 
     write_file(
         &root,
         "docs/status/current.md",
-        &format!(
-            "Release validation: `0.92.8` was validated from source `{source}` on `2026-08-25`; the release commit may differ only in governed release surfaces.\n"
-        ),
+        &format!("{validation_marker}\n"),
     );
     write_file(
         &root,

@@ -276,6 +276,8 @@ main() {
     require_python
 
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
+    require_command sccache
+    green "sccache ready: $(sccache --version 2>&1)"
     install_or_update_ripgrep
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
     install_or_update_shellcheck

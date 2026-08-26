@@ -20,15 +20,26 @@ Git hooks, format before checking, or invoke unrelated invariant, feature,
 lint, build, or test targets. `make validate` is the explicit composition
 boundary for the complete local workflow.
 
-`make validate` has two sequential barriers. The first runs every independent
+`make validate` has three sequential barriers. The first runs every independent
 formatting, repository-invariant, dependency, secret, shell and feature check,
-then reports their complete failure set. Expensive workspace checking, Clippy
-and tests start only when that barrier passes. The second likewise runs every
-admitted target before returning one aggregate result. Targets within each
-barrier remain sequential so independent Cargo processes do not contend for
-the same build graph. Complete failed-target logs are retained under
+then reports their complete failure set. Workspace checking and Clippy start
+only when that barrier passes. The complete test graph starts only when both
+compile/lint targets pass, so a deterministic compiler or warning failure never
+leaves PocketIC running. Targets within each barrier remain sequential so
+independent Cargo processes do not contend for the same build graph. Complete
+failed-target logs are retained under
 `target/validation-failures/`; the terminal summary repeats bounded failure
 detail and the exact failed target list.
+
+Make-based work shares the repository `target/`. When `sccache` is available
+and no explicit `RUSTC_WRAPPER` is set, Make selects it and disables Rust
+incremental compilation so compiler results remain cacheable. Without a
+wrapper, Make leaves Cargo's profile defaults intact: local dev/test work may
+remain incremental while `release` and `fast` artifacts stay non-incremental.
+Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values
+remain authoritative. Canic artifact builds keep incremental compilation
+disabled for deterministic Wasm output and independently discover `sccache`
+for `canic build` and `canic install` when no wrapper was supplied.
 
 CI uses the same runner for its preflight, security and Rust-check jobs. Tool
 installation and version verification remain immediate prerequisites, after
@@ -127,12 +138,12 @@ Default development cadence:
 
 Validation is tiered:
 
-- Focused slice checks: run the smallest format, test, lint, or compile command
-  that exercises the touched code and the relevant invariant.
-- Broader batch checks: after a coherent batch or when touching cross-cutting
-  behavior, add wider package or workspace checks as risk warrants.
-- Full release checks: reserve full merge/release validation for release-ready
-  or push-ready states, or when a maintainer explicitly asks for broad checks.
+- Automated coding work runs only the smallest targeted format, test, lint, or
+  compile commands that exercise the touched code and relevant invariant.
+- Human/CI batch validation may add wider package checks when cross-cutting
+  behavior warrants them.
+- The human-owned deployment/version/release flow owns workspace-wide,
+  release-matrix, broad PocketIC and complete `make validate` gates.
 
 For documentation-only governance changes, use docs-appropriate validation such
 as formatting, whitespace, link-shape review, and `git diff --check`. Do not run
@@ -202,10 +213,12 @@ source. Current and committed version queries must use the shared pinned
 `cargo-get` reader; release scripts must not maintain parallel manifest
 parsers. The governed bump is the one exception: after validating one exact
 clean source commit, it seals the matching detailed changelog draft with the
-release date and writes that source commit into one machine-checked current-
-status release marker. The release commit may then differ from the validated
-source only in the enumerated version, lock, installer, changelog and status
-surfaces. The cheap current-document semantics gate still rejects volatile
+release date, converts the exact open predecessor/target statement into a
+sealed release-lineage statement, and writes that source commit into one
+machine-checked current-status release marker. The release commit may then
+differ from the validated source only in the enumerated version, lock,
+installer, changelog and status surfaces. The cheap current-document semantics
+gate still rejects volatile
 "latest published" and manual release-truth prose elsewhere. After staging,
 `make release-commit` runs the fast
 post-bump `make release-candidate` guard before committing or tagging. That

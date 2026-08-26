@@ -81,6 +81,12 @@ Standalone builds default to the fast Wasm profile for iteration. Use
 `--profile release` explicitly for production-optimized artifacts. Install and
 deployment planning retain their release defaults.
 
+Canic keeps Wasm compilation non-incremental so content-addressed artifacts are
+reproducible. Child Cargo builds preserve an explicit `RUSTC_WRAPPER`; when no
+wrapper is supplied, `canic build` and `canic install` automatically use an
+executable `sccache` found on `PATH`. `make install-dev` installs and verifies
+the repository-pinned cache version.
+
 The App-only form builds the canonical Fleet Coordinator and Wasm Store first,
 then batches the configured Fleet Subnet Root with every attached Component
 role. The final output presents infrastructure before application Wasm and
@@ -250,13 +256,16 @@ an unrelated pool asset, or an unaccounted funding result fails closed; the
 procedure never reinstalls the Root, creates a replacement Root or adds a pool
 asset.
 
-Published 0.109.6 accepted the narrower
-`<root-principal>=<raw-root-wasm>` adoption-only form. The open 0.109.7 hard
-cut requires the retained pool Principal, exact currently live raw Wasm and
-exact successor raw Wasm as shown above, so upgrade, funding, reinspection and
-adoption share one exact operation authority. The earlier form is rejected
-with the required replacement syntax. This exceptional surface does not edit
-the original install journal and is not a general cross-release adoption path.
+When the exact successor and an adequately funded asset are already live,
+`reinspection_in_flight` may retain zero funding attempts and restart through
+the same protected reinspection without an operator debit. A bundle candidate
+does not become the active `manifest.json` until its complete semantic
+verification passes under the bundle lock; a rejected candidate leaves the
+previous verified manifest active. The maintained repair form requires the
+retained pool Principal, exact currently live raw Wasm and exact successor raw
+Wasm shown above, so upgrade, funding, reinspection and adoption share one
+operation authority. This exceptional surface does not edit the original
+install journal and is not a general cross-release adoption path.
 
 Once an install has finalized its release build, another fresh Fleet under the
 same ICP root can reuse those exact artifacts without running Cargo again:

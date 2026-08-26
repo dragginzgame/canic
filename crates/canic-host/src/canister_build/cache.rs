@@ -5,7 +5,9 @@
 //! Boundary: resolves one dedicated Wasm target directory while respecting explicit Cargo input.
 
 use std::{
-    env, fs, io,
+    env,
+    ffi::OsStr,
+    fs, io,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -19,6 +21,11 @@ pub fn configure_canister_cargo_command(command: &mut Command, workspace_root: &
     command.env("CARGO_INCREMENTAL", "0").env(
         "CARGO_TARGET_DIR",
         canister_build_target_root(workspace_root),
+    );
+    configure_implicit_sccache(
+        command,
+        env::var_os("RUSTC_WRAPPER").as_deref(),
+        env::var_os("PATH").as_deref(),
     );
 }
 
@@ -72,11 +79,64 @@ fn resolve_canister_build_target_root(
     )
 }
 
+fn resolve_implicit_sccache_wrapper(
+    explicit_wrapper: Option<&OsStr>,
+    search_path: Option<&OsStr>,
+) -> Option<PathBuf> {
+    if explicit_wrapper.is_some() {
+        return None;
+    }
+    search_path.and_then(|search_path| {
+        env::split_paths(search_path)
+            .map(|directory| directory.join(sccache_executable_name()))
+            .find(|candidate| is_executable_file(candidate))
+    })
+}
+
+fn configure_implicit_sccache(
+    command: &mut Command,
+    explicit_wrapper: Option<&OsStr>,
+    search_path: Option<&OsStr>,
+) {
+    if let Some(sccache) = resolve_implicit_sccache_wrapper(explicit_wrapper, search_path) {
+        command.env("RUSTC_WRAPPER", sccache);
+    }
+}
+
+#[cfg(windows)]
+const fn sccache_executable_name() -> &'static str {
+    "sccache.exe"
+}
+
+#[cfg(not(windows))]
+const fn sccache_executable_name() -> &'static str {
+    "sccache"
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::temp_dir;
-    use std::{sync::mpsc, thread, time::Duration};
+    use std::{ffi::OsString, sync::mpsc, thread, time::Duration};
 
     #[test]
     fn default_target_is_a_dedicated_reusable_workspace_cache() {
@@ -96,6 +156,51 @@ mod tests {
             resolve_canister_build_target_root(root, Some(PathBuf::from("custom-target"))),
             Path::new("/workspace/custom-target")
         );
+    }
+
+    #[test]
+    fn install_build_discovers_sccache_without_overriding_explicit_wrapper() {
+        let root = temp_dir("canister-build-sccache");
+        let bin = root.join("bin");
+        fs::create_dir_all(&bin).expect("create cache bin directory");
+        let sccache = bin.join(sccache_executable_name());
+        fs::write(&sccache, b"cache").expect("write cache executable");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            fs::set_permissions(&sccache, fs::Permissions::from_mode(0o755))
+                .expect("make cache executable");
+        }
+        let search_path = env::join_paths([&bin]).expect("join cache search path");
+
+        let mut discovered = Command::new("cargo");
+        configure_implicit_sccache(&mut discovered, None, Some(&search_path));
+        assert_eq!(
+            discovered
+                .get_envs()
+                .find(|(name, _)| *name == "RUSTC_WRAPPER")
+                .and_then(|(_, value)| value),
+            Some(sccache.as_os_str())
+        );
+
+        let explicit_wrapper = OsString::from("custom-wrapper");
+        let mut explicit = Command::new("cargo");
+        explicit.env("RUSTC_WRAPPER", &explicit_wrapper);
+        configure_implicit_sccache(
+            &mut explicit,
+            Some(explicit_wrapper.as_os_str()),
+            Some(&search_path),
+        );
+        assert_eq!(
+            explicit
+                .get_envs()
+                .find(|(name, _)| *name == "RUSTC_WRAPPER")
+                .and_then(|(_, value)| value),
+            Some(explicit_wrapper.as_os_str())
+        );
+
+        fs::remove_dir_all(root).expect("remove cache test root");
     }
 
     #[test]

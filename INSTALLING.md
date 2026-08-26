@@ -21,11 +21,16 @@ repo helper binaries:
 make install-dev
 ```
 
-The maintainer setup installs the pinned `sccache` compiler cache. Make-based
-development and validation keep one repository-owned Cargo target directory
-at `target/` and automatically use `sccache` when it is available. Explicit
-`CARGO_TARGET_DIR` or `RUSTC_WRAPPER` values remain authoritative for isolated
-package, audit, or downstream proof runs.
+The maintainer setup installs and verifies the pinned `sccache` compiler cache.
+Make-based development and validation keep one repository-owned Cargo target
+directory at `target/`, use `sccache` automatically and disable incremental
+compilation for cacheable compiler work. If no wrapper is available, local
+Make work retains Cargo's profile defaults instead, including incremental
+dev/test work and non-incremental `release`/`fast` builds. `canic build` and
+`canic install` also discover `sccache` for their deterministic non-incremental
+Wasm builds. Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` or
+`RUSTC_WRAPPER` values remain authoritative for isolated package, audit, or
+downstream proof runs.
 
 Developer setup also configures Canic's single repository-owned `pre-commit`
 hook. The hook runs only `make fmt`; it never stages files or runs tests,

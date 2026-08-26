@@ -299,6 +299,16 @@ pub(super) fn write_asset_ready_test_operation(
 }
 
 #[cfg(test)]
+pub(super) fn write_reinspection_in_flight_test_operation(
+    resolved: &ResolvedRetainedRootRepair,
+) -> Result<(), RetainedRootRepairProcedureError> {
+    let operation_path = resolved.path.with_file_name(REPAIR_OPERATION_FILE);
+    let mut operation = create_or_load_operation(&operation_path, &resolved.authority)?;
+    operation.phase = RetainedRootRepairOperationPhaseV1::ReinspectionInFlight;
+    replace_operation(&operation_path, &operation)
+}
+
+#[cfg(test)]
 pub(super) fn test_operation_is_adopted(
     resolved: &ResolvedRetainedRootRepair,
 ) -> Result<bool, RetainedRootRepairProcedureError> {
@@ -835,6 +845,7 @@ fn validate_funding_attempts(
     operation: &RetainedRootRepairOperationV1,
     receipt: &RetainedRootRepairAuthorityV1,
 ) -> Result<(), RetainedRootRepairProcedureError> {
+    let mut has_incomplete_attempt = false;
     for (index, attempt) in operation.funding_attempts.iter().enumerate() {
         if usize::from(attempt.sequence) != index + 1
             || attempt.required_cycles != receipt.required_pool_cycles
@@ -877,6 +888,15 @@ fn validate_funding_attempts(
                 "funding observation is only partially retained",
             ));
         }
+        if !observation_is_complete {
+            if index + 1 != operation.funding_attempts.len() {
+                return Err(invalid(
+                    path,
+                    "only the final funding attempt may retain an incomplete observation",
+                ));
+            }
+            has_incomplete_attempt = true;
+        }
         if observation_is_complete {
             let actual_after = attempt
                 .actual_cycles_after
@@ -899,27 +919,28 @@ fn validate_funding_attempts(
             }
         }
     }
-    let has_incomplete_attempt = operation.funding_attempts.last().is_some_and(|attempt| {
-        attempt.actual_cycles_after.is_none()
-            || attempt.operator_cycles_after.is_none()
-            || attempt.operator_debit_cycles.is_none()
-            || attempt.asset_credit_cycles.is_none()
-            || attempt.observed_fee_and_burn_cycles.is_none()
-            || attempt.retained_margin_cycles.is_none()
-    });
-    if has_incomplete_attempt
-        != matches!(
-            operation.phase,
-            RetainedRootRepairOperationPhaseV1::TopUpInFlight
-                | RetainedRootRepairOperationPhaseV1::ReinspectionInFlight
-        )
-    {
+    if !funding_phase_accepts_observation(operation.phase, has_incomplete_attempt) {
         return Err(invalid(
             path,
             "repair phase disagrees with its retained funding observation",
         ));
     }
     Ok(())
+}
+
+const fn funding_phase_accepts_observation(
+    phase: RetainedRootRepairOperationPhaseV1,
+    has_incomplete_attempt: bool,
+) -> bool {
+    match phase {
+        RetainedRootRepairOperationPhaseV1::TopUpInFlight => has_incomplete_attempt,
+        RetainedRootRepairOperationPhaseV1::ReinspectionInFlight => true,
+        RetainedRootRepairOperationPhaseV1::Planned
+        | RetainedRootRepairOperationPhaseV1::UpgradeInFlight
+        | RetainedRootRepairOperationPhaseV1::UpgradeVerified
+        | RetainedRootRepairOperationPhaseV1::AssetReady
+        | RetainedRootRepairOperationPhaseV1::Adopted => !has_incomplete_attempt,
+    }
 }
 
 fn load_optional_operation(
@@ -1281,6 +1302,30 @@ mod tests {
                 true,
             ),
             Err(RetainedRootRepairProcedureError::TopUpOutcomeUnknown)
+        ));
+    }
+
+    #[test]
+    fn funding_phase_accepts_zero_attempt_reinspection_without_weakening_top_up() {
+        assert!(funding_phase_accepts_observation(
+            RetainedRootRepairOperationPhaseV1::ReinspectionInFlight,
+            false,
+        ));
+        assert!(funding_phase_accepts_observation(
+            RetainedRootRepairOperationPhaseV1::ReinspectionInFlight,
+            true,
+        ));
+        assert!(funding_phase_accepts_observation(
+            RetainedRootRepairOperationPhaseV1::TopUpInFlight,
+            true,
+        ));
+        assert!(!funding_phase_accepts_observation(
+            RetainedRootRepairOperationPhaseV1::TopUpInFlight,
+            false,
+        ));
+        assert!(!funding_phase_accepts_observation(
+            RetainedRootRepairOperationPhaseV1::AssetReady,
+            true,
         ));
     }
 }

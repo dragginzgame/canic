@@ -277,8 +277,9 @@ fn checkpoint_bundle_at(
             source: io::Error::new(io::ErrorKind::Unsupported, "bundle locks are unsupported"),
         },
     })?;
+    verify_manifest_bytes(bundle_path, &manifest_path, &bytes)?;
     write_bytes(&manifest_path, &bytes).map_err(|source| FleetInstallRecoveryBundleError::Io {
-        path: manifest_path,
+        path: manifest_path.clone(),
         source,
     })?;
     verify_fleet_install_recovery_bundle(bundle_path)?;
@@ -291,10 +292,18 @@ pub fn verify_fleet_install_recovery_bundle(
 ) -> Result<FleetInstallRecoveryBundleReportV1, FleetInstallRecoveryBundleError> {
     let manifest_path = bundle_path.join(MANIFEST_FILE);
     let bytes = read_bounded(&manifest_path, MAX_MANIFEST_BYTES)?;
-    let manifest = serde_json::from_slice::<FleetInstallRecoveryBundleV1>(&bytes)
-        .map_err(|error| invalid(&manifest_path, error.to_string()))?;
-    if encode_manifest(&manifest_path, &manifest)? != bytes {
-        return Err(invalid(&manifest_path, "manifest bytes are not canonical"));
+    verify_manifest_bytes(bundle_path, &manifest_path, &bytes)
+}
+
+fn verify_manifest_bytes(
+    bundle_path: &Path,
+    manifest_path: &Path,
+    bytes: &[u8],
+) -> Result<FleetInstallRecoveryBundleReportV1, FleetInstallRecoveryBundleError> {
+    let manifest = serde_json::from_slice::<FleetInstallRecoveryBundleV1>(bytes)
+        .map_err(|error| invalid(manifest_path, error.to_string()))?;
+    if encode_manifest(manifest_path, &manifest)? != bytes {
+        return Err(invalid(manifest_path, "manifest bytes are not canonical"));
     }
     validate_manifest(bundle_path, &manifest)?;
     let mut total_bytes = 0_u64;

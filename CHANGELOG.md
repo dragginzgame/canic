@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.11` makes complete validation stop before tests when compile or
+  warning-denied Clippy fails, uses sccache for installed Canic artifact builds
+  while retaining incremental local work without it, accepts exact zero-debit
+  retained-asset reinspection restarts, verifies recovery-bundle candidates
+  before atomic publication, and rejects stale source-development narratives
+  before release publication.
 - `0.109.10` makes recovery bundles derive every finalized artifact, resolves
   historical retained-Root Candid from exact sidecars, adds an effect-
   equivalent retained-install preflight and cached persistent build loop, and
