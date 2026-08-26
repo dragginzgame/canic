@@ -145,7 +145,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
     Ok(joining_version)
 }
 
-fn drive_registry_join(
+pub(super) fn drive_registry_join(
     icp_context: &InstallIcpContext,
     binding: &crate::protocol_binding::ResolvedProtocolBinding,
     component_topology: &ComponentTopology,

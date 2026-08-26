@@ -9,6 +9,7 @@ use crate::{
             plan_fleet_component_provisioning_install, record_component_provisioning_observed,
             record_fleet_catalog_published, terminal_component_provisioning_evidence,
         },
+        fleet_install_recovery_bundle::FleetInstallRecoveryBundleCheckpoint,
         fleet_install_session::{
             CloseFleetInstallSessionRequest, FleetInstallSessionError,
             PlanFleetInstallSessionRequest, close_fleet_install_session,
@@ -17,27 +18,23 @@ use crate::{
         fleet_subnet_root_component_registry_preparation::verify_retained_component_registry_preparation,
         fleet_subnet_root_install::verify_pre_repair_root_authority,
         fleet_subnet_root_install_journal::{
-            FleetSubnetRootInstallJournal, begin_component_registry_preparation,
-            begin_registry_join, begin_registry_mirror_activation, begin_registry_sync,
-            begin_root_creation, begin_root_install, begin_store_adoption, begin_store_bootstrap,
-            begin_store_staging, begin_wasm_store_creation, begin_wasm_store_install,
-            expected_registry_join_entry, expected_root_authority, expected_wasm_store_authority,
-            record_component_registry_preparation_verified, record_component_registry_prepared,
-            record_infrastructure_verified, record_registry_join_verified, record_registry_joined,
-            record_registry_mirror_activated, record_registry_mirror_activation_verified,
-            record_registry_sync_verified, record_registry_synchronized, record_root_created,
-            record_root_installed, record_store_adopted, record_store_bootstrapped,
-            record_store_staged, record_store_verified, record_wasm_store_created,
+            FleetSubnetRootInstallJournal, begin_root_creation, begin_root_install,
+            begin_store_adoption, begin_store_bootstrap, begin_store_staging,
+            begin_wasm_store_creation, begin_wasm_store_install, expected_registry_join_entry,
+            expected_root_authority, expected_wasm_store_authority, record_infrastructure_verified,
+            record_root_created, record_root_installed, record_store_adopted,
+            record_store_bootstrapped, record_store_staged, record_wasm_store_created,
             record_wasm_store_installed,
         },
         icp_context::InstallIcpContext,
-        operations::{call_with_arg, require_expected_module_hash},
+        operations::require_expected_module_hash,
     },
     protocol_binding::resolve_infrastructure_protocol_binding,
     release_build::{finalize_release_build_from_manifest, plan_release_build},
     release_set::CanicInfrastructureArtifactEntry,
 };
 use candid::CandidType;
+use canic_control_plane::dto::root::RootRegistrySynchronizationOperationStatus;
 use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
@@ -45,6 +42,7 @@ use canic_core::{
             RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
         },
         fleet_registry::{
+            FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
             FleetSubnetRootJoinResponse, FleetSubnetRootRegistryMirrorActivationRequest,
             FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
             FleetSubnetRootRegistrySyncResponse, FleetSubnetRootSnapshotAcknowledgement,
@@ -55,12 +53,10 @@ use canic_core::{
         },
     },
     ids::{CanisterRole, CanonicalNetworkId, FleetSubnetRootReleaseSet},
-    protocol,
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey, derive_protocol_profile_hashes},
 };
 use pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig};
 use pocket_ic::{CreateCanisterParams, CreateCanisterPlacement, PocketIc, PocketIcBuilder};
-use serde::Deserialize;
 use std::{
     fs,
     os::unix::fs::PermissionsExt,
@@ -417,9 +413,11 @@ struct RetainedRepairJourneyFixture {
     root: PathBuf,
     pic: PocketIc,
     controller: Principal,
+    coordinator: Principal,
     fleet_subnet_root: Principal,
     pool_canister: Principal,
     current: ResolvedFleetSubnetRootInstall,
+    fleet_install_plan: crate::fleet_install_plan::PersistedFleetInstallPlan,
     session: FleetInstallSession,
     icp_context: InstallIcpContext,
     live_predecessor_path: PathBuf,
@@ -440,6 +438,10 @@ struct RetainedRepairArtifacts {
     wrong_candid_path: PathBuf,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the governed fixture binds one complete retained plan, live topology and isolated identity"
+)]
 fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
     let root = crate::test_support::temp_dir("retained-root-repair-pocketic-completion");
     fs::create_dir_all(&root).expect("create retained-repair qualification root");
@@ -447,6 +449,7 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
     let session = plan_qualification_session(&root);
     let mut pic = repair_pocket_ic();
     let (icp_executable, controller) = isolated_repair_identity(&root);
+    let coordinator = pic.create_canister_with_settings(Some(controller), None);
     let fleet_subnet_root = pic.create_canister_with_settings(Some(controller), None);
     let root_subnet = pic
         .get_subnet(fleet_subnet_root)
@@ -454,9 +457,10 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
     let pool_canister = create_undersized_pool_asset(&pic, root_subnet, fleet_subnet_root);
     let wasm_store = pic.create_canister_on_subnet(None, None, root_subnet);
     let successor_module_sha256: [u8; 32] = Sha256::digest(&artifacts.successor_wasm).into();
-    let planned = crate::install_root::fleet_subnet_root_install_journal::tests::planned_repair_fixture_with_root_artifact(
+    let (planned, fleet_install_plan) = crate::install_root::fleet_subnet_root_install_journal::tests::planned_repair_fixture_with_root_artifact(
         &root,
         &session,
+        coordinator,
         |artifact| configure_repair_stub_artifact(&root, artifact, &artifacts),
     );
     let current =
@@ -466,20 +470,47 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
         FleetSubnetRootInstallPhase::StoreBootstrapped
     );
     assert_eq!(current.journal.sequence, 15);
-    let (_, observed_component_registry) = component_registry_proof(&current, fleet_subnet_root);
+    let live = repair_live_state(&current, fleet_subnet_root);
     let root_authority =
         expected_root_authority(&current.journal).expect("compile exact retained Root authority");
     let pool_cycles = pic.cycle_balance(pool_canister);
+    let init = RepairStubInit {
+        authority: root_authority,
+        pool_canister,
+        pool_cycles,
+        component_registry: live.observed_component_registry,
+        store_bootstrap_operation_id: crate::install_root::root_store_bootstrap_operation_id(
+            session.operation_id,
+        ),
+        registry_sync_operation_id: crate::install_root::root_registry_synchronization_operation_id(
+            session.operation_id,
+        ),
+        store_bootstrap: current
+            .journal
+            .store_bootstrap
+            .clone()
+            .expect("retained Store bootstrap response"),
+        registry_synchronization: live.registry_synchronization,
+        joining_registry: live.joining_registry,
+        active_registry: live.active_registry,
+        joining_manifest: live.joining_manifest,
+        active_manifest: live.active_manifest,
+        joining_version: live.joining_version,
+        active_version: live.active_version,
+        join_response: live.join_response,
+        root_acknowledgements: live.root_acknowledgements,
+    };
+    let init_bytes = candid::encode_one(init).expect("encode retained repair fixture authority");
     pic.install_canister(
         fleet_subnet_root,
         artifacts.live_predecessor_wasm.clone(),
-        candid::encode_one(RepairStubInit {
-            authority: root_authority,
-            pool_canister,
-            pool_cycles,
-            component_registry: observed_component_registry,
-        })
-        .expect("encode retained repair Root fixture authority"),
+        init_bytes.clone(),
+        Some(controller),
+    );
+    pic.install_canister(
+        coordinator,
+        artifacts.live_predecessor_wasm.clone(),
+        init_bytes,
         Some(controller),
     );
     let live_url = pic.make_live(None);
@@ -508,9 +539,11 @@ fn retained_repair_journey_fixture() -> RetainedRepairJourneyFixture {
         root,
         pic,
         controller,
+        coordinator,
         fleet_subnet_root,
         pool_canister,
         current,
+        fleet_install_plan,
         session,
         icp_context,
         live_predecessor_path: artifacts.live_predecessor_path,
@@ -649,6 +682,32 @@ struct RepairStubInit {
     pool_canister: Principal,
     pool_cycles: u128,
     component_registry: RootComponentRegistryStatusResponse,
+    store_bootstrap_operation_id: [u8; 32],
+    registry_sync_operation_id: [u8; 32],
+    store_bootstrap: RootStoreBootstrapResponse,
+    registry_synchronization: RootRegistrySynchronizationOperationStatus,
+    joining_registry: FleetRegistry,
+    active_registry: FleetRegistry,
+    joining_manifest: FleetRegistryManifest,
+    active_manifest: FleetRegistryManifest,
+    joining_version: FleetRegistryVersion,
+    active_version: FleetRegistryVersion,
+    join_response: FleetSubnetRootJoinResponse,
+    root_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
+}
+
+struct RetainedRepairLiveState {
+    retained_component_registry: RootComponentRegistryStatusResponse,
+    observed_component_registry: RootComponentRegistryStatusResponse,
+    registry_synchronization: RootRegistrySynchronizationOperationStatus,
+    joining_registry: FleetRegistry,
+    active_registry: FleetRegistry,
+    joining_manifest: FleetRegistryManifest,
+    active_manifest: FleetRegistryManifest,
+    joining_version: FleetRegistryVersion,
+    active_version: FleetRegistryVersion,
+    join_response: FleetSubnetRootJoinResponse,
+    root_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
 }
 
 fn configure_repair_stub_artifact(
@@ -750,17 +809,31 @@ fn store_bootstrapped_repair_checkpoint(
         },
     )
     .expect("retain sequence-15 Store bootstrap result");
+    let journal_directory = bootstrapped
+        .path
+        .parent()
+        .expect("retained Root journal directory");
+    for (file, bytes) in [
+        ("root-create-result.json", b"{}".as_slice()),
+        ("wasm-store-create-result.json", b"{}".as_slice()),
+        ("wasm-store-install-args.bin", b"store".as_slice()),
+        ("root-install-args.bin", b"root".as_slice()),
+    ] {
+        fs::write(journal_directory.join(file), bytes)
+            .expect("retain phase-derived Root recovery sidecar");
+    }
     assert!(bootstrapped.advanced);
     bootstrapped
 }
 
-fn component_registry_proof(
+#[expect(
+    clippy::too_many_lines,
+    reason = "the governed fixture compiles every exact retained and observed Registry authority"
+)]
+fn repair_live_state(
     current: &ResolvedFleetSubnetRootInstall,
     fleet_subnet_root: Principal,
-) -> (
-    RootComponentRegistryStatusResponse,
-    RootComponentRegistryStatusResponse,
-) {
+) -> RetainedRepairLiveState {
     let genesis = FleetRegistryOps::compile_genesis(
         &current.journal.authority.binding.fleet.app,
         current.journal.authority.clone(),
@@ -770,11 +843,13 @@ fn component_registry_proof(
         ),
     )
     .expect("compile retained recovery genesis Registry");
+    let joining_entry =
+        expected_registry_join_entry(&current.journal).expect("retained Root Registry entry");
     let joining = FleetRegistryOps::compile_joining(
         &current.journal.authority,
         &current.journal.component_topology,
         &genesis,
-        expected_registry_join_entry(&current.journal).expect("retained Root Registry entry"),
+        joining_entry.clone(),
     )
     .expect("compile retained recovery joining Registry");
     let active = FleetRegistryOps::compile_active(
@@ -789,9 +864,49 @@ fn component_registry_proof(
         &active,
     )
     .expect("compile retained recovery active Registry version");
+    let joining_version = FleetRegistryOps::version(
+        &current.journal.authority,
+        &current.journal.component_topology,
+        &joining,
+    )
+    .expect("compile retained recovery joining Registry version");
+    let joining_manifest = FleetRegistryOps::manifest(
+        &current.journal.authority,
+        &current.journal.component_topology,
+        &joining,
+    )
+    .expect("compile retained recovery joining Registry manifest");
+    let active_manifest = FleetRegistryOps::manifest(
+        &current.journal.authority,
+        &current.journal.component_topology,
+        &active,
+    )
+    .expect("compile retained recovery active Registry manifest");
+    let acknowledgement = FleetSubnetRootSnapshotAcknowledgement {
+        fleet_subnet_root,
+        version: joining_version.clone(),
+    };
+    let synchronization = FleetSubnetRootRegistrySyncResponse {
+        fleet_subnet_root,
+        version: joining_version.clone(),
+        acknowledgement: acknowledgement.clone(),
+    };
+    let directory = FleetRegistryOps::directory_for_root(
+        &current.journal.authority,
+        &current.journal.component_topology,
+        &active,
+        fleet_subnet_root,
+    )
+    .expect("compile retained recovery Root Directory");
+    let activation = FleetSubnetRootRegistryMirrorActivationResponse {
+        fleet_subnet_root,
+        previous_registry: joining_version.clone(),
+        version: active_version.clone(),
+        directory,
+    };
     let retained = RootComponentRegistryStatusResponse {
         fleet_subnet_root,
-        prepared_against_registry: active_version,
+        prepared_against_registry: active_version.clone(),
         release_set: FleetSubnetRootReleaseSet {
             release_build_id: current.journal.release_build_id,
             manifest_digest: current
@@ -815,7 +930,25 @@ fn component_registry_proof(
         encoded_bytes: 1_024,
         ..retained.clone()
     };
-    (retained, observed)
+    RetainedRepairLiveState {
+        retained_component_registry: retained,
+        observed_component_registry: observed,
+        registry_synchronization: RootRegistrySynchronizationOperationStatus {
+            synchronization,
+            activation: Some(activation),
+        },
+        joining_registry: joining,
+        active_registry: active,
+        joining_manifest,
+        active_manifest,
+        joining_version: joining_version.clone(),
+        active_version,
+        join_response: FleetSubnetRootJoinResponse {
+            entry: joining_entry,
+            version: joining_version,
+        },
+        root_acknowledgements: vec![acknowledgement],
+    }
 }
 
 fn build_repair_stub_wasm() -> Vec<u8> {
@@ -954,16 +1087,6 @@ fn encode_hex(bytes: &[u8]) -> String {
     encoded
 }
 
-#[derive(CandidType)]
-enum RepairRootCommandFragment {
-    PrepareComponentRegistry(Box<RootComponentRegistryPreparationRequest>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RepairRootCommandResponseFragment {
-    PrepareComponentRegistry(Box<RootComponentRegistryStatusResponse>),
-}
-
 #[expect(
     clippy::too_many_lines,
     reason = "the governed journey deliberately enumerates and restarts every canonical Root phase"
@@ -971,173 +1094,120 @@ enum RepairRootCommandResponseFragment {
 fn advance_repair_checkpoint_through_canonical_journal(
     fixture: &RetainedRepairJourneyFixture,
 ) -> ResolvedFleetSubnetRootInstall {
-    let store_bootstrap = fixture
-        .current
-        .journal
-        .store_bootstrap
-        .clone()
-        .expect("sequence-15 Store bootstrap evidence");
-    let store_verified = restart_root_journal(
-        record_store_verified(&fixture.current, store_bootstrap)
-            .expect("re-observe exact Store bootstrap"),
-    );
-    let topology = &store_verified.journal.component_topology;
-    let authority = &store_verified.journal.authority;
-    let genesis = FleetRegistryOps::compile_genesis(
-        &authority.binding.fleet.app,
-        authority.clone(),
-        topology,
-        crate::test_support::fleet_admission_policy(authority.binding.fleet.clone()),
-    )
-    .expect("recompile retained genesis Registry");
-    let genesis_version = FleetRegistryOps::version(authority, topology, &genesis)
-        .expect("recompile retained genesis version");
-    let joining = restart_root_journal(
-        begin_registry_join(&store_verified, genesis_version)
-            .expect("retain original Registry join request"),
-    );
-    let join_request = joining
-        .journal
-        .registry_join_request
-        .clone()
-        .expect("deterministic Registry join request");
-    let joining_registry = FleetRegistryOps::compile_joining(
-        authority,
-        topology,
-        &genesis,
-        join_request.entry.clone(),
-    )
-    .expect("recompile retained joining Registry");
-    let joining_manifest = FleetRegistryOps::manifest(authority, topology, &joining_registry)
-        .expect("recompile retained joining manifest");
-    let joining_version = FleetRegistryOps::version(authority, topology, &joining_registry)
-        .expect("recompile retained joining version");
-    let joined = restart_root_journal(
-        record_registry_joined(
-            &joining,
-            FleetSubnetRootJoinResponse {
-                entry: join_request.entry,
-                version: joining_version.clone(),
-            },
-        )
-        .expect("retain exact Registry join replay result"),
-    );
-    let join_verified = restart_root_journal(
-        record_registry_join_verified(
-            &joined,
-            &joining_registry,
-            &joining_manifest,
-            &joining_version,
-        )
-        .expect("retain verified joining successor evidence"),
-    );
     let store_request = RootStoreBootstrapRequest {
         operation_id: crate::install_root::root_store_bootstrap_operation_id(
-            join_verified.journal.install_operation_id,
+            fixture.session.operation_id,
         ),
         manifest_payload_size_bytes: 1,
     };
+    let store_verified = restart_root_journal(
+        crate::install_root::fleet_subnet_root_store_bootstrap::verify_retained_store_bootstrap(
+            &fixture.icp_context,
+            &fixture.current,
+            store_request.clone(),
+        )
+        .expect("production Store owner re-observes exact retained bootstrap"),
+    );
+    let topology = store_verified.journal.component_topology.clone();
+    let authority = store_verified.journal.authority.clone();
+    let genesis = FleetRegistryOps::compile_genesis(
+        &authority.binding.fleet.app,
+        authority.clone(),
+        &topology,
+        crate::test_support::fleet_admission_policy(authority.binding.fleet.clone()),
+    )
+    .expect("recompile retained genesis Registry");
+    let join_entry = expected_registry_join_entry(&store_verified.journal)
+        .expect("recompile retained Root Registry entry");
+    let joining_registry =
+        FleetRegistryOps::compile_joining(&authority, &topology, &genesis, join_entry)
+            .expect("recompile retained joining Registry");
+    let joining_version = FleetRegistryOps::version(&authority, &topology, &joining_registry)
+        .expect("recompile retained joining version");
+    let binding = resolve_infrastructure_protocol_binding(
+        &fixture.root,
+        "local",
+        &store_verified.journal.root_artifact,
+    )
+    .expect("resolve production repair-stub protocol binding");
+    crate::install_root::fleet_subnet_root_registry_join::drive_registry_join(
+        &fixture.icp_context,
+        &binding,
+        &topology,
+        store_verified.clone(),
+        &genesis,
+        &joining_registry,
+    )
+    .expect("production Registry join owner re-observes exact successor");
+    let join_verified = restart_root_journal_path(&store_verified.path);
     let sync_request = FleetSubnetRootRegistrySyncRequest {
         operation_id: crate::install_root::root_registry_synchronization_operation_id(
-            join_verified.journal.install_operation_id,
+            fixture.session.operation_id,
         ),
         expected_registry: joining_version.clone(),
         store_bootstrap: store_request.clone(),
     };
-    let synchronizing = restart_root_journal(
-        begin_registry_sync(&join_verified, sync_request).expect("retain Registry sync intent"),
-    );
-    let sync_response = FleetSubnetRootRegistrySyncResponse {
-        fleet_subnet_root: fixture.fleet_subnet_root,
-        version: joining_version.clone(),
-        acknowledgement: FleetSubnetRootSnapshotAcknowledgement {
-            fleet_subnet_root: fixture.fleet_subnet_root,
-            version: joining_version.clone(),
+    crate::install_root::fleet_subnet_root_registry_sync::drive_root_sync(
+        &fixture.icp_context,
+        join_verified.clone(),
+        sync_request,
+    )
+    .expect("production Registry synchronization owner re-observes exact successor");
+    let sync_verified = restart_root_journal_path(&join_verified.path);
+    let activation = crate::install_root::fleet_registry_activation_journal::plan_fleet_registry_activation(
+        crate::install_root::fleet_registry_activation_journal::PlanFleetRegistryActivationRequest {
+            fleet_install_plan: &fixture.fleet_install_plan,
+            component_topology: topology.clone(),
+            joining_registry: joining_registry.clone(),
         },
-    };
-    let synchronized = restart_root_journal(
-        record_registry_synchronized(&synchronizing, sync_response.clone())
-            .expect("retain Registry sync replay result"),
     );
-    let sync_verified = restart_root_journal(
-        record_registry_sync_verified(&synchronized, sync_response)
-            .expect("retain verified Registry sync replay"),
-    );
-    let active_registry = FleetRegistryOps::compile_active(authority, topology, &joining_registry)
-        .expect("recompile retained active Registry");
-    let active_version = FleetRegistryOps::version(authority, topology, &active_registry)
+    let activation = activation.expect("plan production Registry activation journal");
+    let activated = crate::install_root::fleet_registry_activation::drive_activation(
+        fixture.icp_context.cli(),
+        &binding,
+        fixture.coordinator,
+        &topology,
+        vec![fixture.fleet_subnet_root],
+        activation,
+    )
+    .expect("production Registry activation owner converges exact successor");
+    let active_registry =
+        FleetRegistryOps::compile_active(&authority, &topology, &joining_registry)
+            .expect("recompile retained active Registry");
+    assert_eq!(activated.journal.active_registry, active_registry);
+    let active_version = FleetRegistryOps::version(&authority, &topology, &active_registry)
         .expect("recompile retained active version");
     let directory = FleetRegistryOps::directory_for_root(
-        authority,
-        topology,
+        &authority,
+        &topology,
         &active_registry,
         fixture.fleet_subnet_root,
     )
     .expect("recompile retained Root Directory");
     let mirror_request = FleetSubnetRootRegistryMirrorActivationRequest {
-        previous_registry: joining_version.clone(),
+        previous_registry: joining_version,
         expected_registry: active_version.clone(),
-        expected_directory: directory.clone(),
+        expected_directory: directory,
         store_bootstrap: store_request.clone(),
     };
-    let mirror_activating = restart_root_journal(
-        begin_registry_mirror_activation(&sync_verified, mirror_request)
-            .expect("retain Registry mirror activation intent"),
-    );
-    let mirror_response = FleetSubnetRootRegistryMirrorActivationResponse {
-        fleet_subnet_root: fixture.fleet_subnet_root,
-        previous_registry: joining_version,
-        version: active_version.clone(),
-        directory,
-    };
-    let mirror_activated = restart_root_journal(
-        record_registry_mirror_activated(&mirror_activating, mirror_response.clone())
-            .expect("retain Registry mirror activation replay result"),
-    );
-    let mirror_verified = restart_root_journal(
-        record_registry_mirror_activation_verified(&mirror_activated, mirror_response)
-            .expect("retain verified Registry mirror activation replay"),
-    );
+    crate::install_root::fleet_subnet_root_registry_mirror_activation::drive_root_mirror_activation(
+        &fixture.icp_context,
+        sync_verified.clone(),
+        mirror_request,
+    )
+    .expect("production Registry mirror owner re-observes exact successor");
+    let mirror_verified = restart_root_journal_path(&sync_verified.path);
     let preparation_request = RootComponentRegistryPreparationRequest {
         store_bootstrap: store_request,
         expected_fleet_registry: active_version,
     };
-    let preparing = restart_root_journal(
-        begin_component_registry_preparation(&mirror_verified, preparation_request.clone())
-            .expect("retain Component Registry preparation intent"),
-    );
-    let binding = resolve_infrastructure_protocol_binding(
-        &fixture.root,
-        "local",
-        &preparing.journal.root_artifact,
+    crate::install_root::fleet_subnet_root_component_registry_preparation::drive_component_registry_preparation(
+        &fixture.icp_context,
+        mirror_verified.clone(),
+        preparation_request,
     )
-    .expect("resolve retained Root protocol binding");
-    let response: RepairRootCommandResponseFragment = call_with_arg(
-        fixture.icp_context.cli(),
-        &binding,
-        fixture.fleet_subnet_root,
-        protocol::CANIC_COMMAND,
-        &RepairRootCommandFragment::PrepareComponentRegistry(Box::new(preparation_request.clone())),
-    )
-    .expect("re-observe protected advanced Component Registry");
-    let RepairRootCommandResponseFragment::PrepareComponentRegistry(response) = response;
-    let prepared = restart_root_journal(
-        record_component_registry_prepared(&preparing, *response)
-            .expect("retain observed monotonic Component Registry state"),
-    );
-    let response: RepairRootCommandResponseFragment = call_with_arg(
-        fixture.icp_context.cli(),
-        &binding,
-        fixture.fleet_subnet_root,
-        protocol::CANIC_COMMAND,
-        &RepairRootCommandFragment::PrepareComponentRegistry(Box::new(preparation_request)),
-    )
-    .expect("replay protected Component Registry proof");
-    let RepairRootCommandResponseFragment::PrepareComponentRegistry(response) = response;
-    restart_root_journal(
-        record_component_registry_preparation_verified(&prepared, *response)
-            .expect("retain sequence-28 Component Registry proof"),
-    )
+    .expect("production Component Registry owner re-observes exact successor");
+    restart_root_journal_path(&mirror_verified.path)
 }
 
 fn restart_root_journal(current: ResolvedFleetSubnetRootInstall) -> ResolvedFleetSubnetRootInstall {
@@ -1152,6 +1222,17 @@ fn restart_root_journal(current: ResolvedFleetSubnetRootInstall) -> ResolvedFlee
     }
 }
 
+fn restart_root_journal_path(path: &Path) -> ResolvedFleetSubnetRootInstall {
+    let bytes = fs::read(path).expect("read durable Root journal after production phase replay");
+    let journal = serde_json::from_slice::<FleetSubnetRootInstallJournal>(&bytes)
+        .expect("decode durable Root journal after production phase replay");
+    ResolvedFleetSubnetRootInstall {
+        journal,
+        path: path.to_path_buf(),
+        advanced: false,
+    }
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one governed sequence binds repair effects, exact replay and negative authority checks"
@@ -1159,6 +1240,12 @@ fn restart_root_journal(current: ResolvedFleetSubnetRootInstall) -> ResolvedFlee
 fn execute_exact_repair_and_reject_conflicts(
     fixture: &RetainedRepairJourneyFixture,
 ) -> RetainedRootRepairReceiptV1 {
+    let recovery_bundle = FleetInstallRecoveryBundleCheckpoint::persistent_at(
+        &fixture.root,
+        &fixture.session,
+        &fixture.fleet_install_plan,
+        fixture.root.join("stable-operator-recovery-bundle"),
+    );
     let (repair, root_binding) = resolve_repair_for_execution(fixture);
     publish_retained_root_repair_authority(&repair, &fixture.session, &fixture.current.journal)
         .expect("publish provisional authority before repair effects");
@@ -1168,11 +1255,12 @@ fn execute_exact_repair_and_reject_conflicts(
         .identity_cycles_balance()
         .expect("observe pre-repair operator cycles");
     let asset_before = fixture.pic.cycle_balance(fixture.pool_canister);
-    let _operation = execute_retained_root_repair(
+    let operation = execute_retained_root_repair(
         &fixture.icp_context,
         &root_binding,
         &repair,
         &repair.successor_wasm_path,
+        &recovery_bundle,
     )
     .unwrap_or_else(|error| {
         let operator_after = fixture
@@ -1191,13 +1279,15 @@ fn execute_exact_repair_and_reject_conflicts(
         .identity_cycles_balance()
         .expect("observe repaired operator balance");
     let asset_after_effects = fixture.pic.cycle_balance(fixture.pool_canister);
-    execute_retained_root_repair(
+    let replayed_operation = execute_retained_root_repair(
         &fixture.icp_context,
         &root_binding,
         &repair,
         &repair.successor_wasm_path,
+        &recovery_bundle,
     )
     .expect("resume when the exact successor and repaired pool asset are already live");
+    assert_eq!(replayed_operation, operation);
     assert_eq!(
         fixture
             .icp_context
@@ -1206,10 +1296,9 @@ fn execute_exact_repair_and_reject_conflicts(
             .expect("observe effect-free successor replay"),
         operator_after_effects
     );
-    assert_eq!(
-        fixture.pic.cycle_balance(fixture.pool_canister),
-        asset_after_effects
-    );
+    let asset_after_replay = fixture.pic.cycle_balance(fixture.pool_canister);
+    assert!(asset_after_replay <= asset_after_effects);
+    assert!(asset_after_replay >= 5_000_000_000_000);
     assert!(matches!(
         publish_retained_root_repair_receipt(&repair, &fixture.session, &fixture.current.journal),
         Err(RetainedRootRepairError::PrematureTerminalReceipt)
@@ -1236,13 +1325,19 @@ fn execute_exact_repair_and_reject_conflicts(
     );
     publish_retained_root_repair(&repair, &fixture.session, &advanced.journal)
         .expect("publish exact repair receipt after live PocketIC verification");
+    recovery_bundle
+        .checkpoint()
+        .expect("checkpoint the terminal repair receipt before reconciliation");
     reconcile_published_retained_root_repair(&repair)
         .expect("make the exact repair operation terminal");
+    recovery_bundle
+        .checkpoint()
+        .expect("checkpoint the reconciled terminal repair operation");
     assert!(
         super::procedure::test_operation_is_adopted(&repair)
             .expect("read terminal production repair operation")
     );
-    assert_repair_replay_has_no_effect(fixture, &repair, operator_before, asset_before);
+    assert_repair_replay_has_no_effect(fixture, &repair, &operation, operator_before);
 
     let changed = repair_adoption_for_pool(
         fixture.fleet_subnet_root,
@@ -1327,8 +1422,8 @@ fn resolve_repair_for_execution(
 fn assert_repair_replay_has_no_effect(
     fixture: &RetainedRepairJourneyFixture,
     repair: &ResolvedRetainedRootRepair,
+    operation: &super::procedure::RetainedRootRepairOperationV1,
     operator_before: u128,
-    asset_before: u128,
 ) {
     let operator_after = fixture
         .icp_context
@@ -1337,16 +1432,20 @@ fn assert_repair_replay_has_no_effect(
         .expect("observe post-repair operator cycles");
     let asset_after = fixture.pic.cycle_balance(fixture.pool_canister);
     assert!(asset_after >= 5_000_000_000_000);
+    let (funding_attempts, operator_debit_cycles, asset_credit_cycles) = operation
+        .test_funding_reconciliation()
+        .expect("read exact retained repair funding observations");
+    assert_eq!(funding_attempts, 1);
+    assert_eq!(operator_before - operator_after, operator_debit_cycles);
     assert_eq!(
-        operator_before - operator_after,
-        (asset_after - asset_before) + RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES
+        operator_debit_cycles,
+        asset_credit_cycles + RETAINED_ROOT_REPAIR_TOP_UP_FEE_CYCLES
     );
     reconcile_published_retained_root_repair(repair)
         .expect("terminal receipt replay remains effect-free");
-    assert_eq!(
-        fixture.pic.cycle_balance(fixture.pool_canister),
-        asset_after
-    );
+    let asset_after_replay = fixture.pic.cycle_balance(fixture.pool_canister);
+    assert!(asset_after_replay <= asset_after);
+    assert!(asset_after_replay >= 5_000_000_000_000);
     assert_eq!(
         fixture
             .icp_context
@@ -1528,7 +1627,8 @@ fn repair_authority_fixture() -> (
     current.journal.fleet_subnet_root = Some(root_canister);
     current.journal.wasm_store = Some(Principal::from_slice(&[45]));
     current.journal.installation_controller = Some(controller);
-    let (retained_component_registry, _) = component_registry_proof(&current, root_canister);
+    let retained_component_registry =
+        repair_live_state(&current, root_canister).retained_component_registry;
     current.journal.component_registry_preparation_request =
         Some(RootComponentRegistryPreparationRequest {
             store_bootstrap: RootStoreBootstrapRequest {

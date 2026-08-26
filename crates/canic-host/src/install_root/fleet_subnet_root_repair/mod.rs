@@ -14,6 +14,7 @@ mod tests;
 
 pub(super) use procedure::{
     execute_retained_root_repair, reconcile_published_retained_root_repair,
+    retained_root_repair_operation_path, validate_recovery_bundle_repair_operation_bytes,
 };
 
 use super::{
@@ -422,6 +423,37 @@ pub(super) fn publish_retained_root_repair_authority(
     Ok(())
 }
 
+pub(super) fn validate_recovery_bundle_repair_authority_bytes(
+    path: &Path,
+    bytes: &[u8],
+    session: &FleetInstallSession,
+    journal: &FleetSubnetRootInstallJournal,
+) -> Result<RetainedRootRepairAuthorityV1, RetainedRootRepairError> {
+    let authority = serde_json::from_slice::<RetainedRootRepairAuthorityV1>(bytes)
+        .map_err(|error| invalid(path, error.to_string()))?;
+    validate_authority(path, &authority, session, journal, None)?;
+    if encode_authority(path, &authority)? != bytes {
+        return Err(invalid(path, "repair authority bytes are not canonical"));
+    }
+    Ok(authority)
+}
+
+pub(super) fn validate_recovery_bundle_repair_receipt_bytes(
+    path: &Path,
+    bytes: &[u8],
+    authority: &RetainedRootRepairAuthorityV1,
+    session: &FleetInstallSession,
+    journal: &FleetSubnetRootInstallJournal,
+) -> Result<(), RetainedRootRepairError> {
+    let receipt = serde_json::from_slice::<RetainedRootRepairTerminalReceiptV1>(bytes)
+        .map_err(|error| invalid(path, error.to_string()))?;
+    validate_terminal_receipt(path, &receipt, authority, session, journal)?;
+    if encode_receipt(path, &receipt)? != bytes {
+        return Err(invalid(path, "repair receipt bytes are not canonical"));
+    }
+    Ok(())
+}
+
 /// Compile and publish the terminal receipt only after normal replay has reached the protected
 /// Component Registry proof boundary.
 pub(super) fn publish_retained_root_repair_receipt(
@@ -774,7 +806,11 @@ fn require_retained_artifact_digest(
     Ok(())
 }
 
-fn retained_artifact_path(journal_path: &Path, digest: [u8; 32], extension: &str) -> PathBuf {
+pub(super) fn retained_artifact_path(
+    journal_path: &Path,
+    digest: [u8; 32],
+    extension: &str,
+) -> PathBuf {
     journal_path
         .parent()
         .expect("Root journal has one parent")
@@ -1270,11 +1306,11 @@ fn encode_authority(
     })
 }
 
-fn repair_authority_path(journal_path: &Path) -> PathBuf {
+pub(super) fn repair_authority_path(journal_path: &Path) -> PathBuf {
     journal_path.with_file_name(REPAIR_AUTHORITY_FILE)
 }
 
-fn repair_receipt_path(journal_path: &Path) -> PathBuf {
+pub(super) fn repair_receipt_path(journal_path: &Path) -> PathBuf {
     journal_path.with_file_name(REPAIR_RECEIPT_FILE)
 }
 

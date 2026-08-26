@@ -3,12 +3,27 @@ use crate::{
     fleet_install_plan::{
         FleetInstallPlan, PlannedCanisterCreationFunding, PlannedFleetCoordinator,
     },
+    install_root::fleet_subnet_root_install_journal::{
+        begin_root_creation, begin_root_install, begin_store_adoption, begin_store_bootstrap,
+        begin_store_staging, begin_wasm_store_creation, begin_wasm_store_install,
+        expected_root_authority, expected_wasm_store_authority, record_infrastructure_verified,
+        record_root_created, record_root_installed, record_store_adopted,
+        record_store_bootstrapped, record_store_staged, record_wasm_store_created,
+        record_wasm_store_installed,
+    },
     release_build::{
         finalize_release_build_from_manifest, plan_release_build, release_build_plan_path,
     },
 };
 use candid::Principal;
-use canic_core::ids::{CanonicalNetworkId, FleetBinding, FleetId, FleetKey, SubnetId};
+use canic_core::{
+    dto::{
+        fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
+        root_store::{RootStoreBootstrapResponse, RootStoreCatalogEntry},
+    },
+    ids::{CanisterRole, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, SubnetId},
+    role_contract::ProtocolProfileDigest,
+};
 
 #[expect(
     clippy::too_many_lines,
@@ -112,6 +127,7 @@ fn bundle_fixture() -> (PathBuf, FleetInstallRecoveryBundleV1, Vec<u8>) {
         fresh_fleet_plan_digest: session.fresh_fleet_plan_digest,
         fleet_install_plan_digest,
         install_operation_id: session.operation_id,
+        root_checkpoints: Vec::new(),
         files,
     };
     let manifest_path = bundle.join(MANIFEST_FILE);
@@ -200,8 +216,12 @@ fn checkpoint_captures_all_authority_roots_and_excludes_its_own_storage() {
 }
 
 #[test]
-fn verified_bundle_import_survives_deleted_source_workspace() {
+fn pre_effect_zero_root_bundle_import_survives_deleted_source_workspace() {
     let (bundle, manifest, payload) = bundle_fixture();
+    assert!(
+        manifest.root_checkpoints.is_empty(),
+        "the minimal three-file bundle is valid only for the explicit zero-Root pre-effect case"
+    );
     let report = verify_fleet_install_recovery_bundle(&bundle).expect("verify complete bundle");
     assert_eq!(report.file_count, 3);
 
@@ -328,4 +348,190 @@ fn bundle_rejects_newer_schema_before_import() {
         verify_fleet_install_recovery_bundle(&bundle),
         Err(FleetInstallRecoveryBundleError::InvalidManifest { .. })
     ));
+}
+
+#[test]
+fn bundle_completeness_is_derived_from_the_exact_retained_root_phase() {
+    let (root, bundle) = retained_root_phase_bundle_fixture();
+    let report = verify_fleet_install_recovery_bundle(&bundle)
+        .expect("verify phase-complete retained Root bundle");
+    assert!(report.file_count > 3);
+    let manifest_path = bundle.join(MANIFEST_FILE);
+    let mut manifest = serde_json::from_slice::<FleetInstallRecoveryBundleV1>(
+        &fs::read(&manifest_path).expect("read phase-complete bundle manifest"),
+    )
+    .expect("decode phase-complete bundle manifest");
+    assert_eq!(manifest.root_checkpoints.len(), 1);
+    let journal = manifest.root_checkpoints[0]
+        .journal
+        .as_ref()
+        .expect("retained Root journal checkpoint");
+    assert_eq!(journal.sequence, 15);
+    assert_eq!(
+        journal.phase,
+        FleetSubnetRootInstallPhase::StoreBootstrapped
+    );
+    let journal_entry = manifest
+        .files
+        .iter()
+        .find(|entry| entry.sha256 == journal.sha256)
+        .expect("phase-15 Root journal bundle entry")
+        .clone();
+    fs::remove_dir_all(&root).expect("delete the original retained-install workspace");
+    verify_fleet_install_recovery_bundle(&bundle)
+        .expect("verify phase-complete bundle after source-workspace loss");
+    let imported_root = crate::test_support::temp_dir("fleet-install-phase-bundle-import");
+    import_fleet_install_recovery_bundle(&bundle, &imported_root)
+        .expect("import the exact phase-15 retained Root authority");
+    assert_eq!(
+        fs::read(imported_root.join(&journal_entry.logical_path))
+            .expect("read imported phase-15 Root journal"),
+        fs::read(object_path(&bundle, journal_entry.sha256))
+            .expect("read bundled phase-15 Root journal")
+    );
+
+    manifest
+        .files
+        .retain(|entry| !entry.logical_path.ends_with("/root-install-args.bin"));
+    write_bytes(
+        &manifest_path,
+        &encode_manifest(&manifest_path, &manifest).expect("encode incomplete phase manifest"),
+    )
+    .expect("write incomplete phase manifest");
+    assert!(matches!(
+        verify_fleet_install_recovery_bundle(&bundle),
+        Err(FleetInstallRecoveryBundleError::InvalidManifest { .. })
+    ));
+    assert!(!root.exists());
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one fixture establishes the exact phase-15 journal evidence bundle verification consumes"
+)]
+fn retained_root_phase_bundle_fixture() -> (PathBuf, PathBuf) {
+    let root = crate::test_support::temp_dir("fleet-install-phase-bound-bundle");
+    let planned_release = plan_release_build(&root).expect("plan retained release build");
+    let release_manifest = root.join("release-set.json");
+    write_bytes(&release_manifest, b"retained release set").expect("write release-set manifest");
+    let finalized_release = finalize_release_build_from_manifest(
+        &root,
+        planned_release.record.release_build_id,
+        &release_manifest,
+    )
+    .expect("finalize retained release build");
+    let session = FleetInstallSession {
+        schema_version: 1,
+        fleet_name: "primary".parse().expect("Fleet name"),
+        fleet: FleetBinding {
+            app: "app".into(),
+            fleet: FleetKey {
+                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                fleet_id: FleetId::from_generated_bytes([0x22; 32]),
+            },
+        },
+        release_build_id: finalized_release.record.release_build_id,
+        release_build_plan_digest: [0x34; 32],
+        release_set_manifest_digest: [0x35; 32],
+        decision_release_build_id: None,
+        fresh_fleet_plan_digest: "44".repeat(32),
+        operation_id: [0x66; 32],
+    };
+    let session_path = super::session_path(
+        &root,
+        session.fleet.fleet.canonical_network_id,
+        &session.fleet_name,
+    );
+    write_bytes(
+        &session_path,
+        &encode_canonical_json(&session, CanonicalJsonStyle::Compact, MAX_BUNDLE_FILE_BYTES)
+            .expect("encode retained session"),
+    )
+    .expect("retain exact Fleet install session");
+    let (planned, plan) = crate::install_root::fleet_subnet_root_install_journal::tests::planned_repair_fixture_with_root_artifact(
+        &root,
+        &session,
+        Principal::from_slice(&[33]),
+        |_| {},
+    );
+    let fleet_subnet_root = Principal::from_slice(&[44]);
+    let wasm_store = Principal::from_slice(&[55]);
+    let controller = Principal::from_slice(&[56]);
+    let creating = begin_root_creation(&planned, controller).expect("retain Root creation intent");
+    let root_created =
+        record_root_created(&creating, fleet_subnet_root).expect("retain created Root");
+    let store_creating =
+        begin_wasm_store_creation(&root_created).expect("retain Store creation intent");
+    let store_created =
+        record_wasm_store_created(&store_creating, wasm_store).expect("retain created Store");
+    let store_installing =
+        begin_wasm_store_install(&store_created).expect("retain Store install intent");
+    let store_installed = record_wasm_store_installed(
+        &store_installing,
+        store_installing.journal.expected_wasm_store_module_hash,
+    )
+    .expect("retain installed Store");
+    let root_installing = begin_root_install(&store_installed).expect("retain Root install intent");
+    let root_installed = record_root_installed(
+        &root_installing,
+        root_installing.journal.expected_root_module_hash,
+    )
+    .expect("retain installed Root");
+    let root_authority =
+        expected_root_authority(&root_installed.journal).expect("retained Root authority");
+    let store_authority =
+        expected_wasm_store_authority(&root_installed.journal).expect("retained Store authority");
+    let infrastructure =
+        record_infrastructure_verified(&root_installed, root_authority, store_authority.clone())
+            .expect("retain verified infrastructure");
+    let staging = begin_store_staging(&infrastructure).expect("retain Store staging intent");
+    let staged = record_store_staged(&staging).expect("retain staged Store artifacts");
+    let adopting = begin_store_adoption(&staged).expect("retain Store adoption intent");
+    let mut temporary_controllers = vec![controller, fleet_subnet_root];
+    temporary_controllers.sort();
+    let adopted = record_store_adopted(
+        &adopting,
+        FleetSubnetWasmStoreAdoptionResponse {
+            operation_id: crate::install_root::root_store_adoption_operation_id(
+                session.operation_id,
+            ),
+            authority: store_authority,
+            temporary_controllers,
+            final_controllers: vec![fleet_subnet_root],
+            adopted_at_ns: 1,
+        },
+    )
+    .expect("retain adopted Store");
+    let bootstrapping = begin_store_bootstrap(&adopted).expect("retain Store bootstrap intent");
+    let bootstrapped = record_store_bootstrapped(
+        &bootstrapping,
+        RootStoreBootstrapResponse {
+            fleet_subnet_root,
+            wasm_store,
+            release_set: bootstrapping.journal.root_plan.initial_release_set,
+            catalog: vec![RootStoreCatalogEntry {
+                role: CanisterRole::from("project_hub"),
+                raw_module_hash: [8; 32],
+                candid_sha256: [10; 32],
+                protocol_profile_digest: ProtocolProfileDigest::from_bytes([11; 32]),
+                payload_hash: [9; 32],
+                payload_size_bytes: 1_024,
+            }],
+        },
+    )
+    .expect("retain sequence-15 Store bootstrap result");
+    assert_eq!(bootstrapped.journal.sequence, 15);
+    let journal_directory = bootstrapped.path.parent().expect("Root journal directory");
+    for (file, bytes) in [
+        ("root-create-result.json", b"{}".as_slice()),
+        ("wasm-store-create-result.json", b"{}".as_slice()),
+        ("wasm-store-install-args.bin", b"store".as_slice()),
+        ("root-install-args.bin", b"root".as_slice()),
+    ] {
+        write_bytes(&journal_directory.join(file), bytes).expect("retain Root phase sidecar");
+    }
+    let bundle = crate::test_support::temp_dir("fleet-install-phase-bound-bundle-copy");
+    checkpoint_bundle_at(&root, &session, &plan, &bundle)
+        .expect("checkpoint retained phase-15 bundle");
+    (root, bundle)
 }

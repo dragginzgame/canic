@@ -9,9 +9,19 @@
 #[cfg(test)]
 mod tests;
 
+use super::fleet_install_session::{FleetInstallSession, session_path};
 use super::{
-    PlannedCurrentFleetInstall,
-    fleet_install_session::{FleetInstallSession, session_path},
+    fleet_subnet_root_install_journal::{
+        FleetSubnetRootInstallJournal, FleetSubnetRootInstallPhase,
+        fleet_subnet_root_install_journal_path,
+        validate_retained_fleet_subnet_root_install_journal_bytes,
+    },
+    fleet_subnet_root_repair::{
+        repair_authority_path, repair_receipt_path, retained_artifact_path,
+        retained_root_repair_operation_path, validate_recovery_bundle_repair_authority_bytes,
+        validate_recovery_bundle_repair_operation_bytes,
+        validate_recovery_bundle_repair_receipt_bytes,
+    },
 };
 use crate::{
     durable_io::{
@@ -54,7 +64,23 @@ struct FleetInstallRecoveryBundleV1 {
     fresh_fleet_plan_digest: String,
     fleet_install_plan_digest: [u8; 32],
     install_operation_id: [u8; 32],
+    root_checkpoints: Vec<FleetInstallRecoveryBundleRootCheckpointV1>,
     files: Vec<FleetInstallRecoveryBundleFileV1>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FleetInstallRecoveryBundleRootCheckpointV1 {
+    placement_subnet: String,
+    journal: Option<FleetInstallRecoveryBundleRootJournalV1>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FleetInstallRecoveryBundleRootJournalV1 {
+    sequence: u64,
+    phase: FleetSubnetRootInstallPhase,
+    sha256: [u8; 32],
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -122,12 +148,69 @@ pub enum FleetInstallRecoveryBundleError {
     },
 }
 
-/// Persist a stable checkpoint before the first remote effect and after every governed phase.
-pub(super) fn checkpoint_current_fleet_install_recovery_bundle(
-    icp_root: &Path,
-    planned: &PlannedCurrentFleetInstall,
-) -> Result<PathBuf, FleetInstallRecoveryBundleError> {
-    checkpoint_bundle(icp_root, &planned.session, &planned.plan)
+/// Stable operator-owned checkpoint boundary shared by the Fleet install phase owners.
+///
+/// The boundary deliberately retains only immutable references. Every caller must complete a
+/// checkpoint after publishing local authority and before starting its associated remote effect.
+pub(super) enum FleetInstallRecoveryBundleCheckpoint<'a> {
+    Persistent {
+        icp_root: &'a Path,
+        session: &'a FleetInstallSession,
+        plan: &'a PersistedFleetInstallPlan,
+    },
+    #[cfg(test)]
+    PersistentAt {
+        icp_root: &'a Path,
+        session: &'a FleetInstallSession,
+        plan: &'a PersistedFleetInstallPlan,
+        bundle_path: PathBuf,
+    },
+}
+
+impl<'a> FleetInstallRecoveryBundleCheckpoint<'a> {
+    pub(super) const fn new(
+        icp_root: &'a Path,
+        session: &'a FleetInstallSession,
+        plan: &'a PersistedFleetInstallPlan,
+    ) -> Self {
+        Self::Persistent {
+            icp_root,
+            session,
+            plan,
+        }
+    }
+
+    pub(super) fn checkpoint(&self) -> Result<PathBuf, FleetInstallRecoveryBundleError> {
+        match self {
+            Self::Persistent {
+                icp_root,
+                session,
+                plan,
+            } => checkpoint_bundle(icp_root, session, plan),
+            #[cfg(test)]
+            Self::PersistentAt {
+                icp_root,
+                session,
+                plan,
+                bundle_path,
+            } => checkpoint_bundle_at(icp_root, session, plan, bundle_path),
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) const fn persistent_at(
+        icp_root: &'a Path,
+        session: &'a FleetInstallSession,
+        plan: &'a PersistedFleetInstallPlan,
+        bundle_path: PathBuf,
+    ) -> Self {
+        Self::PersistentAt {
+            icp_root,
+            session,
+            plan,
+            bundle_path,
+        }
+    }
 }
 
 fn checkpoint_bundle(
@@ -151,6 +234,8 @@ fn checkpoint_bundle_at(
     for source in sources {
         collect_source(icp_root, &source, bundle_path, &mut files, &mut total_bytes)?;
     }
+    let files = files.into_values().collect::<Vec<_>>();
+    let root_checkpoints = derive_root_checkpoints(icp_root, bundle_path, plan, &files)?;
     let manifest = FleetInstallRecoveryBundleV1 {
         schema_version: BUNDLE_SCHEMA_VERSION,
         canonical_network_id: session.fleet.fleet.canonical_network_id.to_string(),
@@ -161,7 +246,8 @@ fn checkpoint_bundle_at(
         fresh_fleet_plan_digest: session.fresh_fleet_plan_digest.clone(),
         fleet_install_plan_digest: plan.digest,
         install_operation_id: session.operation_id,
-        files: files.into_values().collect(),
+        root_checkpoints,
+        files,
     };
     validate_manifest(bundle_path, &manifest)?;
     let manifest_path = bundle_path.join(MANIFEST_FILE);
@@ -222,9 +308,10 @@ pub fn verify_fleet_install_recovery_bundle(
             maximum_bytes: MAX_BUNDLE_TOTAL_BYTES,
         });
     }
-    require_session_binding(bundle_path, &manifest)?;
-    require_plan_binding(bundle_path, &manifest)?;
+    let session = require_session_binding(bundle_path, &manifest)?;
+    let plan = require_plan_binding(bundle_path, &manifest)?;
     require_release_build_binding(bundle_path, &manifest)?;
+    require_root_checkpoint_binding(bundle_path, &manifest, &session, &plan)?;
     require_confined_authority_paths(bundle_path, &manifest)?;
     Ok(report(bundle_path, &manifest, total_bytes))
 }
@@ -232,7 +319,7 @@ pub fn verify_fleet_install_recovery_bundle(
 fn require_session_binding(
     bundle_path: &Path,
     manifest: &FleetInstallRecoveryBundleV1,
-) -> Result<(), FleetInstallRecoveryBundleError> {
+) -> Result<FleetInstallSession, FleetInstallRecoveryBundleError> {
     let sessions = manifest
         .files
         .iter()
@@ -271,13 +358,13 @@ fn require_session_binding(
             "bundle session differs from its network, Fleet, plan, release-build or operation binding",
         ));
     }
-    Ok(())
+    Ok(session)
 }
 
 fn require_plan_binding(
     bundle_path: &Path,
     manifest: &FleetInstallRecoveryBundleV1,
-) -> Result<(), FleetInstallRecoveryBundleError> {
+) -> Result<FleetInstallPlan, FleetInstallRecoveryBundleError> {
     let prefix = format!(
         ".canic/recovery/fleet-install-plans/{}/{}/{}/",
         manifest.canonical_network_id, manifest.fleet_id, manifest.release_build_id
@@ -315,7 +402,7 @@ fn require_plan_binding(
             "bundle Fleet install plan differs from its network, Fleet, release-build or plan binding",
         ));
     }
-    Ok(())
+    Ok(plan)
 }
 
 fn require_release_build_binding(
@@ -369,6 +456,312 @@ fn require_confined_authority_paths(
     Ok(())
 }
 
+fn derive_root_checkpoints(
+    icp_root: &Path,
+    bundle_path: &Path,
+    plan: &PersistedFleetInstallPlan,
+    files: &[FleetInstallRecoveryBundleFileV1],
+) -> Result<Vec<FleetInstallRecoveryBundleRootCheckpointV1>, FleetInstallRecoveryBundleError> {
+    plan.plan
+        .fleet_subnet_roots
+        .iter()
+        .map(|root| {
+            let journal_path =
+                fleet_subnet_root_install_journal_path(&plan.path, root.placement_subnet);
+            let logical_path = logical_path_under_root(icp_root, &journal_path)?;
+            let journal = optional_entry(files, &logical_path)
+                .map(|entry| {
+                    let bytes = read_bounded(
+                        &object_path(bundle_path, entry.sha256),
+                        MAX_BUNDLE_FILE_BYTES,
+                    )?;
+                    let journal = validate_retained_fleet_subnet_root_install_journal_bytes(
+                        &journal_path,
+                        &bytes,
+                    )
+                    .map_err(|error| invalid(&journal_path, error.to_string()))?;
+                    require_root_journal_authority(plan, root, &journal, &journal_path)?;
+                    Ok(FleetInstallRecoveryBundleRootJournalV1 {
+                        sequence: journal.sequence,
+                        phase: journal.phase,
+                        sha256: entry.sha256,
+                    })
+                })
+                .transpose()?;
+            Ok(FleetInstallRecoveryBundleRootCheckpointV1 {
+                placement_subnet: root.placement_subnet.to_string(),
+                journal,
+            })
+        })
+        .collect()
+}
+
+fn require_root_checkpoint_binding(
+    bundle_path: &Path,
+    manifest: &FleetInstallRecoveryBundleV1,
+    session: &FleetInstallSession,
+    plan: &FleetInstallPlan,
+) -> Result<(), FleetInstallRecoveryBundleError> {
+    if manifest.root_checkpoints.len() != plan.fleet_subnet_roots.len() {
+        return Err(invalid(
+            &bundle_path.join(MANIFEST_FILE),
+            "bundle Root checkpoint catalog differs from its retained Fleet plan",
+        ));
+    }
+    let plan_path = PathBuf::from(format!(
+        ".canic/recovery/fleet-install-plans/{}/{}/{}/plan.json",
+        manifest.canonical_network_id, manifest.fleet_id, manifest.release_build_id
+    ));
+    let persisted = PersistedFleetInstallPlan {
+        plan: plan.clone(),
+        digest: manifest.fleet_install_plan_digest,
+        path: plan_path,
+        root_release_sets: Vec::new(),
+    };
+    let mut admitted_root_directories = Vec::with_capacity(plan.fleet_subnet_roots.len());
+
+    for (root, checkpoint) in plan
+        .fleet_subnet_roots
+        .iter()
+        .zip(&manifest.root_checkpoints)
+    {
+        if checkpoint.placement_subnet != root.placement_subnet.to_string() {
+            return Err(invalid(
+                &bundle_path.join(MANIFEST_FILE),
+                "bundle Root checkpoints are not in exact Fleet-plan order",
+            ));
+        }
+        let journal_path =
+            fleet_subnet_root_install_journal_path(&persisted.path, root.placement_subnet);
+        let journal_logical = logical_path_string(&journal_path)?;
+        admitted_root_directories.push(
+            journal_path
+                .parent()
+                .expect("Root journal has an identity directory")
+                .to_path_buf(),
+        );
+        match (
+            &checkpoint.journal,
+            optional_entry(&manifest.files, &journal_logical),
+        ) {
+            (None, None) => {}
+            (Some(checkpoint), Some(entry)) if checkpoint.sha256 == entry.sha256 => {
+                let bytes = entry_bytes(bundle_path, entry)?;
+                let journal = validate_retained_fleet_subnet_root_install_journal_bytes(
+                    &journal_path,
+                    &bytes,
+                )
+                .map_err(|error| invalid(&journal_path, error.to_string()))?;
+                require_root_journal_authority(&persisted, root, &journal, &journal_path)?;
+                if journal.install_operation_id != manifest.install_operation_id
+                    || journal.sequence != checkpoint.sequence
+                    || journal.phase != checkpoint.phase
+                {
+                    return Err(invalid(
+                        &journal_path,
+                        "bundle Root checkpoint differs from its exact durable journal",
+                    ));
+                }
+                require_phase_files(bundle_path, manifest, session, &journal_path, &journal)?;
+            }
+            _ => {
+                return Err(invalid(
+                    &journal_path,
+                    "bundle Root checkpoint and durable journal presence differ",
+                ));
+            }
+        }
+    }
+
+    let root_prefix = persisted
+        .path
+        .parent()
+        .expect("Fleet plan has an identity directory")
+        .join("fleet-subnet-root-installs");
+    if manifest.files.iter().any(|entry| {
+        let path = Path::new(&entry.logical_path);
+        path.starts_with(&root_prefix)
+            && !admitted_root_directories
+                .iter()
+                .any(|directory| path.starts_with(directory))
+    }) {
+        return Err(invalid(
+            &bundle_path.join(MANIFEST_FILE),
+            "bundle contains Root evidence outside its exact Fleet-plan participant set",
+        ));
+    }
+    Ok(())
+}
+
+fn require_root_journal_authority(
+    plan: &PersistedFleetInstallPlan,
+    root: &crate::fleet_install_plan::PlannedFleetSubnetRoot,
+    journal: &FleetSubnetRootInstallJournal,
+    path: &Path,
+) -> Result<(), FleetInstallRecoveryBundleError> {
+    let exact = journal.fleet_install_plan_digest == plan.digest
+        && journal.release_build_id == plan.plan.release_build_id
+        && journal.root_plan == *root
+        && journal.authority.binding.fleet == plan.plan.fleet
+        && journal.authority.binding.coordinator_subnet == plan.plan.coordinator.coordinator_subnet;
+    if exact {
+        Ok(())
+    } else {
+        Err(invalid(
+            path,
+            "bundle Root journal differs from its Fleet plan or placement authority",
+        ))
+    }
+}
+
+fn require_phase_files(
+    bundle_path: &Path,
+    manifest: &FleetInstallRecoveryBundleV1,
+    session: &FleetInstallSession,
+    journal_path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+) -> Result<(), FleetInstallRecoveryBundleError> {
+    let directory = journal_path
+        .parent()
+        .expect("Root journal has an identity directory");
+    for (required, file) in [
+        (
+            journal.phase.requires_root_creation_result(),
+            "root-create-result.json",
+        ),
+        (
+            journal.phase.requires_wasm_store_creation_result(),
+            "wasm-store-create-result.json",
+        ),
+        (
+            journal.phase.requires_wasm_store_install_args(),
+            "wasm-store-install-args.bin",
+        ),
+        (
+            journal.phase.requires_root_install_args(),
+            "root-install-args.bin",
+        ),
+    ] {
+        if required {
+            exact_entry(
+                bundle_path,
+                manifest,
+                &logical_path_string(&directory.join(file))?,
+            )?;
+        }
+    }
+    require_repair_files(bundle_path, manifest, session, journal_path, journal)
+}
+
+fn require_repair_files(
+    bundle_path: &Path,
+    manifest: &FleetInstallRecoveryBundleV1,
+    session: &FleetInstallSession,
+    journal_path: &Path,
+    journal: &FleetSubnetRootInstallJournal,
+) -> Result<(), FleetInstallRecoveryBundleError> {
+    let authority_path = repair_authority_path(journal_path);
+    let authority_logical = logical_path_string(&authority_path)?;
+    let Some(authority_entry) = optional_entry(&manifest.files, &authority_logical) else {
+        let directory = journal_path
+            .parent()
+            .expect("Root journal has an identity directory");
+        if manifest.files.iter().any(|entry| {
+            let path = Path::new(&entry.logical_path);
+            is_repair_evidence_path(path, directory)
+        }) {
+            return Err(invalid(
+                &authority_path,
+                "bundle repair residue omitted its exact provisional authority",
+            ));
+        }
+        return Ok(());
+    };
+    let authority_bytes = entry_bytes(bundle_path, authority_entry)?;
+    let authority = validate_recovery_bundle_repair_authority_bytes(
+        &authority_path,
+        &authority_bytes,
+        session,
+        journal,
+    )
+    .map_err(|error| invalid(&authority_path, error.to_string()))?;
+    for (path, expected_sha256, expected_size) in [
+        (
+            retained_artifact_path(
+                journal_path,
+                authority.upgrade_predecessor_module_sha256,
+                "wasm",
+            ),
+            authority.upgrade_predecessor_module_sha256,
+            Some(authority.upgrade_predecessor_wasm_size_bytes),
+        ),
+        (
+            retained_artifact_path(journal_path, authority.successor_module_sha256, "wasm"),
+            authority.successor_module_sha256,
+            Some(authority.successor_wasm_size_bytes),
+        ),
+        (
+            retained_artifact_path(
+                journal_path,
+                authority.upgrade_predecessor_candid_sha256,
+                "did",
+            ),
+            authority.upgrade_predecessor_candid_sha256,
+            None,
+        ),
+        (
+            retained_artifact_path(journal_path, authority.successor_candid_sha256, "did"),
+            authority.successor_candid_sha256,
+            None,
+        ),
+    ] {
+        let entry = exact_entry(bundle_path, manifest, &logical_path_string(&path)?)?;
+        if entry.sha256 != expected_sha256
+            || expected_size.is_some_and(|size| entry.size_bytes != size)
+        {
+            return Err(invalid(
+                &path,
+                "bundle retained repair artifact differs from its exact hash or size authority",
+            ));
+        }
+    }
+
+    let operation_path = retained_root_repair_operation_path(journal_path);
+    let operation_logical = logical_path_string(&operation_path)?;
+    if let Some(entry) = optional_entry(&manifest.files, &operation_logical) {
+        validate_recovery_bundle_repair_operation_bytes(
+            &operation_path,
+            &entry_bytes(bundle_path, entry)?,
+            &authority,
+        )
+        .map_err(|error| invalid(&operation_path, error.to_string()))?;
+    }
+    let receipt_path = repair_receipt_path(journal_path);
+    let receipt_logical = logical_path_string(&receipt_path)?;
+    if let Some(entry) = optional_entry(&manifest.files, &receipt_logical) {
+        exact_entry(bundle_path, manifest, &operation_logical)?;
+        validate_recovery_bundle_repair_receipt_bytes(
+            &receipt_path,
+            &entry_bytes(bundle_path, entry)?,
+            &authority,
+            session,
+            journal,
+        )
+        .map_err(|error| invalid(&receipt_path, error.to_string()))?;
+    }
+    Ok(())
+}
+
+fn is_repair_evidence_path(path: &Path, root_directory: &Path) -> bool {
+    let is_root_repair_file = path.parent() == Some(root_directory)
+        && path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("root-repair-"));
+    let is_retained_artifact = path.starts_with(root_directory.join("root-repair-artifacts"));
+    is_root_repair_file || is_retained_artifact
+}
+
 fn exact_entry<'a>(
     bundle_path: &Path,
     manifest: &'a FleetInstallRecoveryBundleV1,
@@ -386,6 +779,44 @@ fn exact_entry<'a>(
         ));
     };
     Ok(entry)
+}
+
+fn optional_entry<'a>(
+    files: &'a [FleetInstallRecoveryBundleFileV1],
+    logical_path: &str,
+) -> Option<&'a FleetInstallRecoveryBundleFileV1> {
+    files
+        .binary_search_by(|entry| entry.logical_path.as_str().cmp(logical_path))
+        .ok()
+        .map(|index| &files[index])
+}
+
+fn entry_bytes(
+    bundle_path: &Path,
+    entry: &FleetInstallRecoveryBundleFileV1,
+) -> Result<Vec<u8>, FleetInstallRecoveryBundleError> {
+    read_bounded(
+        &object_path(bundle_path, entry.sha256),
+        MAX_BUNDLE_FILE_BYTES,
+    )
+}
+
+fn logical_path_under_root(
+    icp_root: &Path,
+    path: &Path,
+) -> Result<String, FleetInstallRecoveryBundleError> {
+    let relative =
+        path.strip_prefix(icp_root)
+            .map_err(|_| FleetInstallRecoveryBundleError::UnsafePath {
+                path: path.to_path_buf(),
+            })?;
+    logical_path_string(relative)
+}
+
+fn logical_path_string(path: &Path) -> Result<String, FleetInstallRecoveryBundleError> {
+    Ok(checked_logical_path(&path.to_string_lossy())?
+        .to_string_lossy()
+        .replace('\\', "/"))
 }
 
 /// Import missing exact files into an operator root after complete no-effect bundle verification.
@@ -616,6 +1047,17 @@ fn validate_manifest(
             path,
             "unsupported bundle schema; use the matching Canic release to export a supported bundle",
         ));
+    }
+    if manifest.root_checkpoints.len() > 4_096
+        || manifest.root_checkpoints.iter().any(|checkpoint| {
+            checkpoint.placement_subnet.is_empty()
+                || checkpoint
+                    .journal
+                    .as_ref()
+                    .is_some_and(|journal| journal.sha256 == [0; 32])
+        })
+    {
+        return Err(invalid(path, "bundle Root checkpoint catalog is invalid"));
     }
     if manifest.canonical_network_id.is_empty()
         || manifest.fleet_name.is_empty()

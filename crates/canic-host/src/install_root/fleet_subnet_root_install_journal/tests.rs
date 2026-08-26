@@ -30,7 +30,8 @@ use crate::{
     },
     test_support::temp_dir,
 };
-use std::path::Path;
+use sha2::{Digest, Sha256};
+use std::{fs, path::Path};
 
 use candid::Principal;
 use canic_core::{
@@ -750,11 +751,27 @@ pub fn planned_repair_fixture(root: &Path) -> super::ResolvedFleetSubnetRootInst
     plan(&fixture).expect("plan repair fixture")
 }
 
+#[test]
+fn recovery_sidecar_requirements_begin_only_after_their_effects_complete() {
+    assert!(!FleetSubnetRootInstallPhase::Planned.requires_root_creation_result());
+    assert!(FleetSubnetRootInstallPhase::RootCreationInFlight.requires_root_creation_result());
+    assert!(
+        !FleetSubnetRootInstallPhase::WasmStoreInstallInFlight.requires_wasm_store_install_args()
+    );
+    assert!(FleetSubnetRootInstallPhase::WasmStoreInstalled.requires_wasm_store_install_args());
+    assert!(!FleetSubnetRootInstallPhase::RootInstallInFlight.requires_root_install_args());
+    assert!(FleetSubnetRootInstallPhase::RootInstalled.requires_root_install_args());
+}
+
 pub fn planned_repair_fixture_with_root_artifact(
     root: &Path,
     session: &crate::install_root::fleet_install_session::FleetInstallSession,
+    coordinator: Principal,
     configure: impl FnOnce(&mut CanicInfrastructureArtifactEntry),
-) -> super::ResolvedFleetSubnetRootInstall {
+) -> (
+    super::ResolvedFleetSubnetRootInstall,
+    PersistedFleetInstallPlan,
+) {
     let mut fixture = fixture(root);
     fixture.plan.plan.fleet = session.fleet.clone();
     fixture.plan.plan.fresh_fleet_plan_digest = session.fresh_fleet_plan_digest.clone();
@@ -776,15 +793,33 @@ pub fn planned_repair_fixture_with_root_artifact(
         .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
         .expect("repair fixture Root artifact");
     configure(artifact);
-    plan_fleet_subnet_root_install(PlanFleetSubnetRootInstallRequest {
+    fixture.plan.path = root
+        .join(".canic/recovery/fleet-install-plans")
+        .join(session.fleet.fleet.canonical_network_id.to_string())
+        .join(session.fleet.fleet.fleet_id.to_string())
+        .join(session.release_build_id.to_string())
+        .join("plan.json");
+    let plan_bytes = serde_json::to_vec(&fixture.plan.plan).expect("encode repair Fleet plan");
+    fixture.plan.digest = Sha256::digest(&plan_bytes).into();
+    fs::create_dir_all(
+        fixture
+            .plan
+            .path
+            .parent()
+            .expect("repair Fleet plan directory"),
+    )
+    .expect("create repair Fleet plan directory");
+    fs::write(&fixture.plan.path, plan_bytes).expect("retain repair Fleet plan");
+    let planned = plan_fleet_subnet_root_install(PlanFleetSubnetRootInstallRequest {
         fleet_install_plan: &fixture.plan,
         infrastructure_manifest: &fixture.manifest,
-        coordinator: Principal::from_slice(&[33]),
+        coordinator,
         install_operation_id: session.operation_id,
         component_topology: fixture.topology,
         root_plan: &fixture.plan.plan.fleet_subnet_roots[0],
     })
-    .expect("plan repair fixture with exact session and Root artifact")
+    .expect("plan repair fixture with exact session and Root artifact");
+    (planned, fixture.plan)
 }
 
 fn topology() -> ComponentTopology {

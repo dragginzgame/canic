@@ -137,7 +137,7 @@ pub(super) fn activate_and_verify_fleet_subnet_root_registry_mirrors(
     Ok(())
 }
 
-fn drive_root_mirror_activation(
+pub(super) fn drive_root_mirror_activation(
     icp_context: &InstallIcpContext,
     mut current: ResolvedFleetSubnetRootInstall,
     request: FleetSubnetRootRegistryMirrorActivationRequest,

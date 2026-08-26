@@ -199,9 +199,7 @@ fn drive_store_bootstrap(
                 record_store_bootstrapped(&current, evidence)?
             }
             FleetSubnetRootInstallPhase::StoreBootstrapped => {
-                let evidence =
-                    query_store_bootstrap_status(icp_context, &current, request.clone())?;
-                record_store_verified(&current, evidence)?
+                verify_retained_store_bootstrap(icp_context, &current, request.clone())?
             }
             FleetSubnetRootInstallPhase::StoreVerified
             | FleetSubnetRootInstallPhase::RegistryJoinInFlight
@@ -226,6 +224,15 @@ fn drive_store_bootstrap(
         };
     }
     Err(RootStoreBootstrapError::TransitionBoundExceeded.into())
+}
+
+pub(super) fn verify_retained_store_bootstrap(
+    icp_context: &InstallIcpContext,
+    current: &ResolvedFleetSubnetRootInstall,
+    request: RootStoreBootstrapRequest,
+) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
+    let evidence = query_store_bootstrap_status(icp_context, current, request)?;
+    record_store_verified(current, evidence).map_err(Into::into)
 }
 
 fn adopt_store(

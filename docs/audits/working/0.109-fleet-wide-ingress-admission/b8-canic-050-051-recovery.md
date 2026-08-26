@@ -1,7 +1,8 @@
 # CANIC-050/051 Retained-Install Recovery Evidence
 
-Status: open 0.109.9 candidate; maintainer validation passes and publication
-remains pending.
+Status: open 0.109.9 candidate; final targeted and governed proof passes. The
+earlier complete maintainer gate predates the final durability correction and
+must be rerun before publication.
 
 ## Failure
 
@@ -43,9 +44,14 @@ remained intact.
   uses that Canic-owned successor path.
 - A separate schema-v1 recovery bundle checkpoints all exact Canic-owned
   install state, finalized artifacts and receipts before the first remote
-  effect and after each governed phase. Its manifest is bound to network,
-  Fleet, App, plan, release build and install operation. Every logical path is
-  confined below `.canic`; each object is addressed and checked by SHA-256.
+  effect and after each governed phase. Every repair intent/observation is
+  checkpointed immediately after its durable transition and before the
+  upgrade, top-up or protected reinspection it authorizes. Its manifest is
+  bound to network, Fleet, App, plan, release build and install operation.
+  Root checkpoint entries bind the exact typed phase and derive its required
+  journal, creation/install sidecars, repair authority/operation/receipt and
+  retained Wasm/Candid objects. Every logical path is confined below `.canic`;
+  each object is addressed and checked by SHA-256.
 
 ## Negative boundary
 
@@ -71,23 +77,25 @@ cargo test -p canic-cli deploy --lib
 
 The focused host proof covers typed phase bounds, phase regression, premature
 terminal publication, immutable authority changes, content-addressed artifact
-replay after caller-path deletion, terminal replay and bundle
-tamper/incomplete/mixed/path/schema/import conflicts.
+replay after caller-path deletion, terminal replay, phase-derived bundle
+completeness and bundle tamper/incomplete/mixed/path/schema/import conflicts.
 
 The governed production-boundary test now starts from the canonical sequence-15
 checkpoint, upgrades the same live Root, funds and re-inspects the same pool
 asset through PocketIC's Cycles Ledger, replays the already-live successor
-without another debit, restarts from every intermediate durable Root-journal
-phase, re-observes the protected advanced Component Registry, publishes the
-terminal receipt only at sequence 28, installs a Component, publishes the Fleet
-catalog and closes the session. The final replay leaves the Root module,
-operator balance and pool balance unchanged. It passed through the repository
-runner in 48 seconds; the shared PocketIC high-water mark was 301,968 kB and 20
+without another debit, restarts between the production Store, Registry join/
+sync/activation/mirror and Component Registry phase drivers, re-observes the
+protected advanced Component Registry, publishes the terminal receipt only at
+sequence 28, installs a Component, publishes the Fleet catalog and closes the
+session. The final replay retains one funding attempt and an unchanged operator
+balance; ordinary canister execution may consume a bounded amount from the
+still-sufficient pool asset. It passed through the targeted repository runner
+in 20 seconds; the shared PocketIC high-water mark was 353,556 kB and 20
 threads.
 
-## Complete validation evidence
+## Complete validation evidence pending refresh
 
-The unmodified maintainer command passed on the corrected source candidate:
+The unmodified maintainer command passed on the prior source candidate:
 
 ```text
 make validate
@@ -104,8 +112,10 @@ blob-storage, payload-limit and instruction-audit PocketIC suites also passed.
 The shared PocketIC server reported a 4,950,116 kB high-water mark and 257
 threads. Formatting, layering/invariant guards, dependency risk, secret scan,
 ShellCheck, role/feature compilation, release-integrity documentation and
-warning-denied workspace Clippy all passed in that same command. No remote IC
-operation was run.
+warning-denied workspace Clippy all passed in that same command. That evidence
+predates the final write-through checkpoint and phase-derived bundle
+correction, so release governance requires the maintainer to rerun it on the
+final immutable candidate. No remote IC operation was run.
 
 Versioning, immutable publication and the downstream exact-session resume are
 maintainer/downstream-owned and remain pending.

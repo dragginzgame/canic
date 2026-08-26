@@ -202,7 +202,7 @@ pub(super) fn prepare_and_verify_fleet_subnet_root_component_registries(
     Ok(())
 }
 
-fn drive_component_registry_preparation(
+pub(super) fn drive_component_registry_preparation(
     icp_context: &InstallIcpContext,
     mut current: ResolvedFleetSubnetRootInstall,
     request: RootComponentRegistryPreparationRequest,

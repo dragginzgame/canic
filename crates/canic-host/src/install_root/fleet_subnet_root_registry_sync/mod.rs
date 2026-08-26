@@ -227,7 +227,7 @@ fn root_acknowledgements_match(
             .all(|(ack, root)| ack.fleet_subnet_root == root && &ack.version == joining_version)
 }
 
-fn drive_root_sync(
+pub(super) fn drive_root_sync(
     icp_context: &InstallIcpContext,
     mut current: ResolvedFleetSubnetRootInstall,
     request: FleetSubnetRootRegistrySyncRequest,

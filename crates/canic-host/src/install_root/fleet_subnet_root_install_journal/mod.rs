@@ -150,6 +150,43 @@ impl FleetSubnetRootInstallPhase {
             _ => false,
         }
     }
+
+    pub(super) const fn requires_root_creation_result(self) -> bool {
+        !matches!(self, Self::Planned)
+    }
+
+    pub(super) const fn requires_wasm_store_creation_result(self) -> bool {
+        !matches!(
+            self,
+            Self::Planned | Self::RootCreationInFlight | Self::RootCreated
+        )
+    }
+
+    pub(super) const fn requires_wasm_store_install_args(self) -> bool {
+        !matches!(
+            self,
+            Self::Planned
+                | Self::RootCreationInFlight
+                | Self::RootCreated
+                | Self::WasmStoreCreationInFlight
+                | Self::WasmStoreCreated
+                | Self::WasmStoreInstallInFlight
+        )
+    }
+
+    pub(super) const fn requires_root_install_args(self) -> bool {
+        !matches!(
+            self,
+            Self::Planned
+                | Self::RootCreationInFlight
+                | Self::RootCreated
+                | Self::WasmStoreCreationInFlight
+                | Self::WasmStoreCreated
+                | Self::WasmStoreInstallInFlight
+                | Self::WasmStoreInstalled
+                | Self::RootInstallInFlight
+        )
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -330,6 +367,27 @@ pub(super) fn has_fleet_subnet_root_install_journal(
 ) -> Result<bool, FleetSubnetRootInstallJournalError> {
     load_optional_journal(&journal_path(plan_path, placement_subnet))
         .map(|journal| journal.is_some())
+}
+
+#[must_use]
+pub(super) fn fleet_subnet_root_install_journal_path(
+    plan_path: &Path,
+    placement_subnet: SubnetId,
+) -> PathBuf {
+    journal_path(plan_path, placement_subnet)
+}
+
+pub(super) fn validate_retained_fleet_subnet_root_install_journal_bytes(
+    path: &Path,
+    bytes: &[u8],
+) -> Result<FleetSubnetRootInstallJournal, FleetSubnetRootInstallJournalError> {
+    let journal = serde_json::from_slice::<FleetSubnetRootInstallJournal>(bytes)
+        .map_err(|error| invalid(path, error.to_string()))?;
+    validate_journal(path, &journal)?;
+    if encode_journal(path, &journal)? != bytes {
+        return Err(invalid(path, "journal bytes are not canonical"));
+    }
+    Ok(journal)
 }
 
 pub(super) fn begin_root_creation(

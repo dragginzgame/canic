@@ -13,9 +13,11 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md).
 
 Source development: published `v0.109.8` is the immutable predecessor. Open
-`0.109.9` corrects CANIC-050/051 and has completed the unmodified maintainer
-validation gate; versioning and publication remain maintainer-owned and have
-not occurred.
+`0.109.9` corrects CANIC-050/051. Its final durability follow-up has passing
+focused host and governed PocketIC proof; the earlier candidate completed the
+unmodified maintainer validation gate, but that result predates the final
+production correction and must be rerun by the maintainer before versioning.
+Versioning and publication remain maintainer-owned and have not occurred.
 
 Release governance: source development state; no validated release candidate is staged.
 
@@ -90,17 +92,20 @@ Release governance: source development state; no validated release candidate is 
   repair operation terminal. Exact predecessor/successor Wasm and Candid bytes
   are retained by digest before repair effects. A Canic-owned operator-state
   bundle checkpoints the session, plans, journals, intents, receipts and
-  finalized artifacts before the first remote effect and after each governed
-  phase; local-only `canic deploy recovery verify|import` rejects partial,
-  mixed, tampered, unconfined, newer-schema or conflicting evidence. Focused
-  host/CLI proof and the governed sequence-15-to-terminal production-boundary
-  journey pass. The complete unmodified `make validate` gate also passes:
-  check in 49 seconds, warning-denied workspace Clippy in 69 seconds and the
-  complete test graph in 1,540 seconds. The 39-target inventory ran 30
-  ordinary targets before nine serial PocketIC targets; the ordered internal
-  PocketIC suite passed in 684 seconds, the retained-Root repair journey in
-  137 seconds and the complete shared-server high-water mark was 4,950,116 kB
-  with 257 threads. Publication and the exact retained-session downstream
+  finalized artifacts before the first remote effect, after every local
+  repair transition and before its associated upgrade, top-up or protected
+  reinspection effect. Manifest completeness is derived from each exact Root
+  journal phase; repair authority requires both exact Wasms and Candid
+  sidecars, while each published operation or terminal receipt must match that
+  authority exactly. Local-only
+  `canic deploy recovery verify|import` rejects partial, mixed, tampered,
+  unconfined, newer-schema or conflicting evidence. Five focused bundle tests,
+  nine ordinary repair tests and the governed sequence-15-to-terminal journey
+  pass; the 20-second governed run used the production Store, Registry and
+  Component Registry phase drivers and reported a 353,556 kB/20-thread local
+  PocketIC high-water mark. The earlier candidate's complete `make validate`
+  run passed, but it predates this final durability correction and is not the
+  final release gate. Publication and the exact retained-session downstream
   resume remain deliberately unperformed.
 - The root `Cargo.toml` is the sole live workspace package-version authority;
   this handoff deliberately does not mirror its value. Immutable local and

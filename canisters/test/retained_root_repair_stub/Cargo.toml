@@ -9,6 +9,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
+canic-control-plane = { workspace = true, features = [
+    "fleet-coordinator-canister",
+    "root-control-plane",
+] }
 canic-core = { workspace = true }
 ic-cdk = { workspace = true }
 serde = { workspace = true }

@@ -4,6 +4,9 @@
 //! deliberately implements only the protected calls exercised by the host repair procedure.
 
 use candid::{CandidType, Nat, Principal};
+use canic_control_plane::dto::root::{
+    RootOperationStatusResponse, RootRegistrySynchronizationOperationStatus,
+};
 use canic_core::{
     cdk::types::Cycles,
     diagnostics::codes::{AUTHORITY_UNAUTHORIZED, PLATFORM_FAILED},
@@ -12,12 +15,19 @@ use canic_core::{
             RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
         },
         error::Error,
+        fleet_registry::{
+            FleetRegistry, FleetRegistryActivationResponse, FleetRegistryManifest,
+            FleetRegistryVersion, FleetSubnetRootJoinResponse,
+            FleetSubnetRootSnapshotAcknowledgement,
+        },
         fleet_subnet_root::FleetSubnetRootAuthority,
         pool::{
             CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus,
             CanisterPoolResponse, CanisterPoolStatusRequest, PoolCanisterRequest,
             PoolImportResponse,
         },
+        role::{OperationReceipt, OperationStatusRequest},
+        root_store::RootStoreBootstrapResponse,
     },
 };
 use serde::Deserialize;
@@ -29,6 +39,18 @@ struct RepairStubInit {
     pool_canister: Principal,
     pool_cycles: u128,
     component_registry: RootComponentRegistryStatusResponse,
+    store_bootstrap_operation_id: [u8; 32],
+    registry_sync_operation_id: [u8; 32],
+    store_bootstrap: RootStoreBootstrapResponse,
+    registry_synchronization: RootRegistrySynchronizationOperationStatus,
+    joining_registry: FleetRegistry,
+    active_registry: FleetRegistry,
+    joining_manifest: FleetRegistryManifest,
+    active_manifest: FleetRegistryManifest,
+    joining_version: FleetRegistryVersion,
+    active_version: FleetRegistryVersion,
+    join_response: FleetSubnetRootJoinResponse,
+    root_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
 }
 
 #[derive(CandidType, Clone, Deserialize)]
@@ -37,6 +59,19 @@ struct RepairStubState {
     pool_canister: Principal,
     pool_cycles: u128,
     component_registry: RootComponentRegistryStatusResponse,
+    store_bootstrap_operation_id: [u8; 32],
+    registry_sync_operation_id: [u8; 32],
+    store_bootstrap: RootStoreBootstrapResponse,
+    registry_synchronization: RootRegistrySynchronizationOperationStatus,
+    joining_registry: FleetRegistry,
+    active_registry: FleetRegistry,
+    joining_manifest: FleetRegistryManifest,
+    active_manifest: FleetRegistryManifest,
+    joining_version: FleetRegistryVersion,
+    active_version: FleetRegistryVersion,
+    join_response: FleetSubnetRootJoinResponse,
+    root_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
+    registry_active: bool,
 }
 
 thread_local! {
@@ -44,27 +79,43 @@ thread_local! {
 }
 
 #[derive(CandidType, Deserialize)]
-enum RootCommand {
+enum StubCommand {
     ImportPoolCanister(PoolCanisterRequest),
     PrepareComponentRegistry(Box<RootComponentRegistryPreparationRequest>),
+    JoinRoot(canic_core::dto::fleet_registry::FleetSubnetRootJoinRequest),
+    ActivateRegistry(canic_core::dto::fleet_registry::FleetRegistryActivationRequest),
+    SynchronizeRegistry(canic_core::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest),
 }
 
 #[derive(CandidType, Deserialize)]
-enum RootCommandResponse {
+enum StubCommandResponse {
     ImportPoolCanister(PoolImportResponse),
     PrepareComponentRegistry(Box<RootComponentRegistryStatusResponse>),
+    JoinRoot(FleetSubnetRootJoinResponse),
+    ActivateRegistry(FleetRegistryActivationResponse),
+    OperationAccepted(OperationReceipt),
 }
 
 #[derive(CandidType, Deserialize)]
-enum RootStatusRequest {
+enum StubStatusRequest {
     FleetAuthority,
     Pool(CanisterPoolStatusRequest),
+    Operation(OperationStatusRequest),
+    Registry,
+    RegistryManifest,
+    RegistryVersion,
+    RootAcknowledgements,
 }
 
 #[derive(CandidType, Deserialize)]
-enum RootStatusResponse {
+enum StubStatusResponse {
     FleetAuthority(Box<FleetSubnetRootAuthority>),
     Pool(Box<CanisterPoolResponse>),
+    Operation(RootOperationStatusResponse),
+    Registry(FleetRegistry),
+    RegistryManifest(FleetRegistryManifest),
+    RegistryVersion(FleetRegistryVersion),
+    RootAcknowledgements(Vec<FleetSubnetRootSnapshotAcknowledgement>),
 }
 
 #[derive(CandidType)]
@@ -92,6 +143,19 @@ fn init(args: RepairStubInit) {
             pool_canister: args.pool_canister,
             pool_cycles: args.pool_cycles,
             component_registry: args.component_registry,
+            store_bootstrap_operation_id: args.store_bootstrap_operation_id,
+            registry_sync_operation_id: args.registry_sync_operation_id,
+            store_bootstrap: args.store_bootstrap,
+            registry_synchronization: args.registry_synchronization,
+            joining_registry: args.joining_registry,
+            active_registry: args.active_registry,
+            joining_manifest: args.joining_manifest,
+            active_manifest: args.active_manifest,
+            joining_version: args.joining_version,
+            active_version: args.active_version,
+            join_response: args.join_response,
+            root_acknowledgements: args.root_acknowledgements,
+            registry_active: false,
         });
     });
 }
@@ -112,15 +176,15 @@ fn post_upgrade() {
 }
 
 #[ic_cdk::query]
-fn canic_status(request: RootStatusRequest) -> Result<RootStatusResponse, Error> {
+fn canic_status(request: StubStatusRequest) -> Result<StubStatusResponse, Error> {
     require_controller()?;
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("repair stub initialized");
         Ok(match request {
-            RootStatusRequest::FleetAuthority => {
-                RootStatusResponse::FleetAuthority(Box::new(state.authority.clone()))
+            StubStatusRequest::FleetAuthority => {
+                StubStatusResponse::FleetAuthority(Box::new(state.authority.clone()))
             }
-            RootStatusRequest::Pool(request) => {
+            StubStatusRequest::Pool(request) => {
                 let entries = request
                     .start_after
                     .is_none_or(|start_after| state.pool_canister > start_after)
@@ -128,7 +192,7 @@ fn canic_status(request: RootStatusRequest) -> Result<RootStatusResponse, Error>
                     .into_iter()
                     .take(usize::from(request.limit))
                     .collect();
-                RootStatusResponse::Pool(Box::new(CanisterPoolResponse {
+                StubStatusResponse::Pool(Box::new(CanisterPoolResponse {
                     config: state.authority.binding.limits.canister_pool.clone(),
                     tracked: 1,
                     store: 0,
@@ -149,16 +213,56 @@ fn canic_status(request: RootStatusRequest) -> Result<RootStatusResponse, Error>
                     next_start_after: None,
                 }))
             }
+            StubStatusRequest::Operation(request) => {
+                if request.operation_id == state.store_bootstrap_operation_id {
+                    StubStatusResponse::Operation(RootOperationStatusResponse::BootstrapStore(
+                        state.store_bootstrap.clone(),
+                    ))
+                } else if request.operation_id == state.registry_sync_operation_id {
+                    StubStatusResponse::Operation(RootOperationStatusResponse::SynchronizeRegistry(
+                        state.registry_synchronization.clone(),
+                    ))
+                } else {
+                    return Err(Error::from_registered(PLATFORM_FAILED));
+                }
+            }
+            StubStatusRequest::Registry => StubStatusResponse::Registry(
+                if state.registry_active {
+                    &state.active_registry
+                } else {
+                    &state.joining_registry
+                }
+                .clone(),
+            ),
+            StubStatusRequest::RegistryManifest => StubStatusResponse::RegistryManifest(
+                if state.registry_active {
+                    &state.active_manifest
+                } else {
+                    &state.joining_manifest
+                }
+                .clone(),
+            ),
+            StubStatusRequest::RegistryVersion => StubStatusResponse::RegistryVersion(
+                if state.registry_active {
+                    &state.active_version
+                } else {
+                    &state.joining_version
+                }
+                .clone(),
+            ),
+            StubStatusRequest::RootAcknowledgements => {
+                StubStatusResponse::RootAcknowledgements(state.root_acknowledgements.clone())
+            }
         })
     })
 }
 
 #[ic_cdk::update]
-async fn canic_command(command: RootCommand) -> Result<RootCommandResponse, Error> {
+async fn canic_command(command: StubCommand) -> Result<StubCommandResponse, Error> {
     require_controller()?;
     match command {
-        RootCommand::PrepareComponentRegistry(_) => STATE.with_borrow(|state| {
-            Ok(RootCommandResponse::PrepareComponentRegistry(Box::new(
+        StubCommand::PrepareComponentRegistry(_) => STATE.with_borrow(|state| {
+            Ok(StubCommandResponse::PrepareComponentRegistry(Box::new(
                 state
                     .as_ref()
                     .expect("repair stub initialized")
@@ -166,7 +270,7 @@ async fn canic_command(command: RootCommand) -> Result<RootCommandResponse, Erro
                     .clone(),
             )))
         }),
-        RootCommand::ImportPoolCanister(request) => {
+        StubCommand::ImportPoolCanister(request) => {
             let expected = STATE.with_borrow(|state| {
                 state
                     .as_ref()
@@ -198,11 +302,36 @@ async fn canic_command(command: RootCommand) -> Result<RootCommandResponse, Erro
             STATE.with_borrow_mut(|state| {
                 state.as_mut().expect("repair stub initialized").pool_cycles = cycles;
             });
-            Ok(RootCommandResponse::ImportPoolCanister(
+            Ok(StubCommandResponse::ImportPoolCanister(
                 PoolImportResponse::Imported {
                     canister_id: request.canister_id,
                 },
             ))
+        }
+        StubCommand::JoinRoot(request) => STATE.with_borrow(|state| {
+            let state = state.as_ref().expect("repair stub initialized");
+            if request.entry != state.join_response.entry {
+                return Err(Error::from_registered(PLATFORM_FAILED));
+            }
+            Ok(StubCommandResponse::JoinRoot(state.join_response.clone()))
+        }),
+        StubCommand::ActivateRegistry(request) => STATE.with_borrow_mut(|state| {
+            let state = state.as_mut().expect("repair stub initialized");
+            if request.expected_registry != state.joining_version {
+                return Err(Error::from_registered(PLATFORM_FAILED));
+            }
+            state.registry_active = true;
+            Ok(StubCommandResponse::ActivateRegistry(
+                FleetRegistryActivationResponse {
+                    previous_version: state.joining_version.clone(),
+                    version: state.active_version.clone(),
+                },
+            ))
+        }),
+        StubCommand::SynchronizeRegistry(request) => {
+            Ok(StubCommandResponse::OperationAccepted(OperationReceipt {
+                operation_id: request.operation_id,
+            }))
         }
     }
 }

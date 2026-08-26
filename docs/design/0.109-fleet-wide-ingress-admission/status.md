@@ -87,10 +87,14 @@ Last updated: 2026-08-26
   to re-observe live state. Open 0.109.9 separates typed provisional module
   authority from terminal proof, retains exact Wasm/Candid bytes by content
   digest and checkpoints complete install evidence into a path-confined
-  operator-state bundle. The governed sequence-15-to-close PocketIC proof now
-  passes, as does the complete unmodified maintainer gate. B8 remains open on
-  immutable publication, exact-session resume and deployed-state/admission
-  evidence.
+  operator-state bundle. The final correction checkpoints every repair
+  write-before-effect transition, derives required bundle contents from the
+  exact Root journal phase and drives sequence 15 through the production
+  Store, Registry and Component Registry phase owners. Focused and governed
+  PocketIC proof passes. The earlier complete maintainer gate predates that
+  final correction and must be rerun before immutable publication. B8 remains
+  open on that gate, publication, exact-session resume and deployed-state/
+  admission evidence.
 - Outcome: one Coordinator-owned, bounded Fleet admission policy projected and
   enforced locally by every managed instance whose exact role declares
   `fleet_admission = true`.
@@ -142,7 +146,7 @@ B8 correction evidence:
 | B5 | Composed-framework adapter | Synchronous managed-projection caller guard and generic IcyDB-style fixture | Native parity and direct-ingress PocketIC journey | Ready |
 | B6 | Runtime convergence | Pre-effect catalog reserve/release, fence/activate/open journals, participant fences, exact retry and forward recovery | Stale-catalog, interruption, unavailable-target, add/remove and new-Component PocketIC matrix | Ready |
 | B7 | Security closeout and propagation | Docs/generated surfaces, residue cleanup, measurements and read-only Toko adoption review | Targeted repository gates and adversarial multi-Root journey | Ready |
-| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment and interrupted-install recovery blockers through `CANIC-051`, including `CANIC-028`'s ineffective named-environment artifact advice; publish immutable matching `canic`/`canic-cli` 0.109 pairs, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, finalized-artifact reuse without predecessor-workspace rejection, monotonic first-status, Directory publication and runtime-activation reconciliation, exact pool-demand and Ready-refresh recovery checks, provisional successor authority followed by canonical sequence-15-to-28 replay, terminal repair proof, content-addressed recovery-bundle loss/import, exact terminal-journal session closure, exact cycle diagnostics, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/recovery evidence | Active: published 0.109.8 owns the coalesced Directory correction; open 0.109.9 corrects CANIC-050/051, its governed recovery journey and complete gate pass, while immutable publication, exact-session resume and deployed-state/admission evidence remain |
+| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment and interrupted-install recovery blockers through `CANIC-051`, including `CANIC-028`'s ineffective named-environment artifact advice; publish immutable matching `canic`/`canic-cli` 0.109 pairs, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, finalized-artifact reuse without predecessor-workspace rejection, monotonic first-status, Directory publication and runtime-activation reconciliation, exact pool-demand and Ready-refresh recovery checks, provisional successor authority followed by canonical sequence-15-to-28 replay, terminal repair proof, content-addressed recovery-bundle loss/import, exact terminal-journal session closure, exact cycle diagnostics, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/recovery evidence | Active: published 0.109.8 owns the coalesced Directory correction; open 0.109.9 corrects CANIC-050/051 and its final governed recovery journey passes, while the final maintainer gate, immutable publication, exact-session resume and deployed-state/admission evidence remain |
 | B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Accepted; blocked on B8 |
 | B10 | Published managed-App qualification support | One bounded downstream test-support surface for exact managed init/activation, admission fencing, fresh install and same-release recovery without private `canic-core`/`ic-testkit` reconstruction | Public-package consumer build plus managed/standalone lifecycle qualification and Toko adapter removal | Scheduled; blocked on B9 |
 
