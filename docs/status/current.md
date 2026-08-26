@@ -30,6 +30,9 @@ current Root. Generic information, environment, endpoint, metrics and cycle
 surfaces consume the complete Coordinator-anchored inventory. The soft
 12-release guideline is recorded as planned-design cadence; necessary
 correctness and recovery follow-ups to a published line may exceed it.
+Patch versioning now rewrites the labeled source-lineage paragraph without
+requiring one exact development sentence, preventing equivalent truthful prose
+from rejecting an otherwise validated candidate.
 
 Candidate evidence: focused host resolver, CLI inventory/environment/help and
 affected auth, backup, blob, cycles, endpoint, inspect, metrics and token tests

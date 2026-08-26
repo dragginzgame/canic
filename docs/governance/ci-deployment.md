@@ -215,9 +215,10 @@ source. Current and committed version queries must use the shared pinned
 `cargo-get` reader; release scripts must not maintain parallel manifest
 parsers. The governed bump is the one exception: after validating one exact
 clean source commit, it seals the matching detailed changelog draft with the
-release date, converts the exact open predecessor/target statement into a
-sealed release-lineage statement, and writes that source commit into one
-machine-checked current-status release marker. The release commit may then
+release date, rewrites the labeled source-lineage paragraph into a sealed
+release-lineage statement without requiring one exact development sentence,
+and writes that source commit into one machine-checked current-status release
+marker. The release commit may then
 differ from the validated source only in the enumerated version, lock,
 installer, changelog and status surfaces. The cheap current-document semantics
 gate still rejects volatile
