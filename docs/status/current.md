@@ -13,9 +13,10 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.12` at
-`513d628ff4fb3ba6882ae3db32be8bcf84dbe1b8` is the immutable predecessor of
-the open `0.109.13` hard cut.
+Published `v0.109.13` at
+`134db535d8314d72fa117158cc5f59ade10c1785` is the immutable predecessor of
+the open `0.109.14` generator, managed-App support and release-governance
+batch.
 
 Release versioning no longer treats that descriptive lineage prose as a
 machine authority. Uniform package versions, the immutable tag and the exact
@@ -90,6 +91,9 @@ bootstrap, deterministic Coordinator Registry joins, Root synchronization,
 Registry activation, Root-mirror activation, exact local Component Registry
 preparation, then Component provisioning and Fleet-catalog publication. Every
 response remains issued until its exact protected status proves terminal state.
+The terminal observation calculation extends its Component-derived bound only
+for `ProvisionComponents`; every preceding supported Fleet protocol action
+retains the accumulated bound rather than entering a Component-only branch.
 Store adoption retains the protected operator plus owning Root as its one
 terminal controller set. An explicitly seeded retained Store may begin
 Root-only; the Root durably records the exact current authority, adds only the
@@ -110,10 +114,13 @@ Fleet. The exact seeded Coordinator is the deterministic default treasury; a
 separate treasury must likewise be explicitly seeded and observed. No project
 mapping, removed plan or historical journal is an identity oracle.
 Generation binds both child digests in the finalized complete release set,
-reads infrastructure Candid sidecars without following links, rejects
+derives each infrastructure Candid sidecar from the manifest-bound Wasm path,
+reads it without following links and verifies the retained digest, rejects
 duplicate retained identities and unexpected co-controllers, and checks the
-complete live Fleet/Coordinator/Root/Store relationship before create-once
-output. The maintained path deliberately adopts an explicitly seeded
+complete live Fleet/Coordinator/Root/Store relationship before output. Output
+is create-once by default; a changed generated document requires the exact
+current file SHA-256 through `--replace`, rejects concurrent drift and is
+published atomically. The maintained path deliberately adopts an explicitly seeded
 controlled treasury; it does not claim to bootstrap a literally empty estate.
 Every paid Root-owned asset must be seeded and remain inside the observed
 conservation total through idle, claimed and workload lifecycle states. An
@@ -134,9 +141,15 @@ nonterminal action or update effect. The control-plane convergence evidence gap
 is closed without restoring a deleted install or recovery owner.
 
 The composed-framework lifecycle fixture resolves the exact published IcyDB
-0.245.1 runtime and model family without a compatibility path. Its dependency
-declarations are confined to the two unpublished fixture packages, while
-published Canic package graphs remain IcyDB-free.
+0.245.1 runtime and model family without a compatibility path. Dependency edges
+into that family are confined to the two unpublished fixture packages, while
+published Canic package graphs remain IcyDB-free. The host-only published
+`canic::testing` feature now owns the generic managed-App test boundary: exact
+grouped init and Directory authority, initial fencing/activation, protected
+status, successor fencing, same-release upgrade and standalone-local install.
+It exposes no runtime storage, endpoint, timer or lifecycle authority and
+removes the need for downstream test adapters to pin private `canic-core` or
+`ic-testkit` construction APIs.
 
 `app config`, admission, auth-renewal status, backup, blob-storage, cycles,
 funding status, `info endpoints`, `info env`, `info list`, `info metrics`,
@@ -166,12 +179,23 @@ not active contracts.
 
 ## Validation State
 
-Release validation: `0.109.13` was validated from source `4c973883dbcc795196585d65e75ebb7583303976` on `2026-08-27`; the release commit may differ only in governed release surfaces.
+<!-- canic-release-state: source-development -->
 Current operator-surface rebinding, focused governed runtime
 qualification and active sediment/documentation reconciliation are complete.
 
 Targeted evidence on the dirty source candidate:
 
+- The published managed-App support has two pure authority-compilation tests
+  passing with warning-denied `canic` Clippy. A composed-framework PocketIC
+  consumer builds through the public facade and is assigned to the governed
+  targeted lifecycle tier; downstream application-specific assertion cleanup
+  remains downstream-owned after publication.
+- The focused release remote-state fixture uses a local bare `origin` and
+  proves accepted fast-forward state, rejection after concurrent branch
+  advancement, rejection of an occupied planned tag, idempotent acceptance of
+  an identical published tag and rejection of a conflicting tag object. The
+  release-integrity contract binds the guard immediately before version
+  mutation and before atomic push readiness.
 - Focused `canic-host` Fleet-ensure tests pass, including lost responses at all
   seven mutation kinds,
   conservation, unsafe-retirement rejection, plan-tamper rejection, and a
@@ -213,8 +237,44 @@ Targeted evidence on the dirty source candidate:
   adoption-only estate, and keeps observation/update burn as measured
   conservative ceilings. The public generator journey uses a process-backed
   deterministic live-observation adapter; the separate governed PocketIC case
-  proves the real current control-plane graph. The maintainer-owned broad and
-  deployed gates remain intentionally unrun.
+  proves the real current control-plane graph.
+- CANIC-065's public retained multi-Component generator journey plans a Store
+  protocol action before Component provisioning, retains one canonical plan
+  digest and performs zero mutations before apply. This directly guards the
+  terminal-observation bound against treating every typed Fleet protocol action
+  as Component provisioning.
+- The first complete-gate run passed every cheap invariant, workspace check and
+  warning-denied Clippy tier, then stopped at the ordinary-test barrier before
+  PocketIC. It exposed four propagation defects: the host-only public `testing`
+  feature was being compared with canister-role features, Fleet subcommands
+  were not declared in ASCII order, read-only CLI timer inspection was absent
+  from the ownership inventory, and release-flow fixture repositories did not
+  install the new remote-state guard. Focused regressions for all four now pass.
+  A subsequent rerun exposed an exact-sentence check for the downstream minor
+  block; that prose coupling is removed. The maintained 0.110 status and
+  closeout audit still carry the actual no-mutation boundary.
+  The adjacent guard audit also removes historical sentence/value assertions,
+  runbook and validation-matrix heading/command inventories, README badge prose,
+  root-changelog summary formatting and subjective pending-narrative scans.
+  Source-development and validated-source authority now use structured status
+  markers rather than exact English sentences. Structured release headers,
+  package versions,
+  schemas, hashes, executable command ownership, immutable audit fingerprints,
+  support cells and required file/link presence remain enforced.
+  The following complete-gate ordinary tier found one stale internal Fleet
+  subcommand-order expectation after the public help ordering had already been
+  corrected. The expectation now uses the same ASCII order and its focused
+  unit and recursive help regressions pass; PocketIC was skipped on that failed
+  run as designed.
+  The final PocketIC tier then exposed one stale Store test that still expected
+  the protected operator to lose mutation authority. The maintained endpoint
+  and current Fleet Ensure contract retain the exact Root plus operator set;
+  the journey now proves both callers and continues to reject anonymous access.
+  Its exact targeted PocketIC rerun passed in 63 seconds.
+  The next complete-gate ordinary tier stopped before PocketIC on one redundant
+  test-only clone; that warning-denied Clippy finding is corrected.
+  Release readiness is determined by the final unmodified `make validate`
+  outcome on this exact source, reported in the maintainer handoff.
 - The multi-Root generator now indexes policy Roots, retained identity Roots
   and compiled topology Roots by exact parsed `SubnetId` before joining them.
   Its focused two-Root regression deliberately uses Principals whose text and
@@ -247,24 +307,19 @@ Targeted evidence on the dirty source candidate:
   seconds. It reached terminal runtime activation and Fleet-catalog publication,
   then proved an immediate replay issued no update. Reported shared-server
   high-water RSS was 421,668 kB with 19 threads.
-- The first maintainer `release-patch` attempt stopped in `check-invariants`
+- The earlier `0.109.13` maintainer `release-patch` attempt stopped in `check-invariants`
   before the broad compile/test tiers because the active operations index
   omitted the recovery-runbook link. The link and its missing current
   `pending_send` ICP-refill procedure are restored, the exact focused runbook
   guard passes, and the top-level changelog now has the one canonical
-  `0.109.13` summary required by versioning. The complete maintainer gate still
-  requires a fresh run.
+  `0.109.13` summary required by versioning.
 - The IcyDB 0.245.1 lifecycle fixture passes targeted compilation plus its
   direct-ingress and same-release transition/recovery PocketIC proofs. The
   cold fixture proof passed in 49 seconds; its cached recovery proof passed in
   5 seconds.
 - Earlier warning-denied package Clippy and maintained layering, timer,
   current-status, release-matrix, release-integrity and local v1 readiness
-  checks passed. They likewise require maintainer-owned final validation after
-  the protocol blocker closes.
-
-The broad workspace and complete `make validate` gate remain human-owned and
-have not been run by the automated implementation pass.
+  checks passed.
 
 No version, commit, tag, package publication, push, deployment, identity
 switch, Ledger call, live canister call, or sibling-repository mutation was
@@ -272,7 +327,6 @@ performed.
 
 ## Next Action
 
-The complete planned `0.109.13` implementation batch is ready for the human
-maintainer's broad validation, versioning and publication workflow. The
-automated pass intentionally did not run the broad workspace or complete
-`make validate` gate. Do not begin 0.110. Do not begin 0.111 from this batch.
+Use the final complete-gate result reported in the handoff for the human
+maintainer's `0.109.14` versioning and publication workflow.
+Do not begin 0.110. Do not begin 0.111 from this batch.

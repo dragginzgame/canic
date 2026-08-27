@@ -369,6 +369,8 @@ For each release:
 4. The maintainer commits the completed implementation and changelog batch.
 5. The maintainer runs the governed version target, which performs the explicit
    `make validate` workflow before updating package and release version files.
+   Immediately before that mutation, it refreshes the current `origin` branch
+   and rejects non-fast-forward ancestry or an occupied target release tag.
    The same transaction replaces the exact target patch's `Unreleased` suffix
    with the release date and binds current status to the validated source
    commit. A missing or duplicate draft fails before version mutation.
@@ -380,6 +382,7 @@ Order must be preserved.
 The normal human patch flow is `make patch`, review, `make release-stage`,
 `make release-commit`, and `make release-push`; `make release-patch` is the
 one-shot equivalent from a clean release-ready commit. `make release-push`
+rechecks remote ancestry and exact tag state before its atomic update and
 performs no hidden formatting, compilation, testing, validation, or cleanup.
 
 ---

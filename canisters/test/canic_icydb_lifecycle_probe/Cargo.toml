@@ -17,12 +17,12 @@ candid = { workspace = true }
 canic = { workspace = true, features = [] }
 ic-cdk = { workspace = true }
 ic-timers = { workspace = true }
-icydb = { version = "0.245", default-features = false }
+icydb = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
 canic-icydb-lifecycle-schema = { workspace = true }
-icydb = { version = "0.245", default-features = false }
+icydb = { workspace = true }
 
 [lints]
 workspace = true

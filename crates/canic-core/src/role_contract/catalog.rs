@@ -1,6 +1,6 @@
 //! Module: role_contract::catalog
 //!
-//! Responsibility: own typed Canic feature, capability, and allocation policy tables.
+//! Responsibility: own typed Canic role feature, capability, and allocation policy tables.
 //! Does not own: Cargo parsing, stable records, state descriptors, or report labels.
 //! Boundary: pure role policy consumes these tables; Cargo parity tests mirror them.
 
@@ -136,6 +136,11 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
         CanicFeatureEffect::StateBearing,
     ),
 ];
+
+// Public facade features that do not participate in a compiled canister role.
+// Keep this closed so a host-only support surface cannot silently become role
+// authority, while Cargo/catalog parity still detects an unclassified feature.
+const NON_ROLE_PUBLIC_FEATURES: &[&str] = &["testing"];
 
 const DEFAULT_FEATURES: &[CanicFeatureKey] = &[];
 
@@ -596,6 +601,18 @@ pub const fn feature_definitions() -> &'static [FeatureDefinition] {
     FEATURE_DEFINITIONS
 }
 
+/// Public `canic` Cargo features that are intentionally outside role compilation.
+#[must_use]
+pub const fn non_role_public_features() -> &'static [&'static str] {
+    NON_ROLE_PUBLIC_FEATURES
+}
+
+/// Whether one public `canic` Cargo feature is intentionally outside role compilation.
+#[must_use]
+pub fn is_non_role_public_feature(name: &str) -> bool {
+    NON_ROLE_PUBLIC_FEATURES.contains(&name)
+}
+
 #[must_use]
 pub const fn default_features() -> &'static [CanicFeatureKey] {
     DEFAULT_FEATURES
@@ -649,6 +666,21 @@ pub fn validate_catalog() -> Result<(), RoleContractFinding> {
     if keys.len() != FEATURE_DEFINITIONS.len() || keys.len() != CanicFeatureKey::ALL.len() {
         return Err(RoleContractFinding::CatalogInvalid {
             reason: "public Canic features are not defined exactly once".to_string(),
+        });
+    }
+
+    let non_role_features = NON_ROLE_PUBLIC_FEATURES
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    if non_role_features.len() != NON_ROLE_PUBLIC_FEATURES.len()
+        || FEATURE_DEFINITIONS
+            .iter()
+            .any(|definition| non_role_features.contains(definition.cargo_name))
+    {
+        return Err(RoleContractFinding::CatalogInvalid {
+            reason: "non-role public features must be unique and disjoint from role features"
+                .to_string(),
         });
     }
 

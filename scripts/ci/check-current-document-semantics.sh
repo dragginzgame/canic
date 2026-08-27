@@ -136,8 +136,7 @@ actual_idea_topics="$(
     find "$design_ideas" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
 )"
 indexed_idea_topics="$(
-    sed -n '/^## Current Topics$/,/^## /p' "$idea_index" |
-        sed -n 's/^- `\([^`]*\)\/`$/\1/p' |
+    sed -n 's/^- `\([^`]*\)\/`$/\1/p' "$idea_index" |
         sort
 )"
 if [[ "$actual_idea_topics" != "$indexed_idea_topics" ]]; then
@@ -165,123 +164,14 @@ for idea_dir in "$design_ideas"/*; do
     done < <(find "$idea_dir" -maxdepth 1 -type f -name '*.md' | sort)
 done
 
-require_texts "$STATUS" "$GUARD_LABEL" \
-    "## Current Decision" \
-    "## Validation State" \
-    "## Next Action" \
-    'Published `v0.109.12`' \
-    'canic fleet ensure' \
-    "## Cycle-Safety Boundary" \
-    "CANIC-059" \
-    "Do not begin 0.110."
-if ! rg -F \
-    "Release governance: source development state; no validated release candidate is staged." \
-    "$STATUS" >/dev/null \
+if ! rg -q \
+    '^<!-- canic-release-state: source-development -->$' \
+    "$STATUS" \
     && ! rg -q \
-        '^Release validation: `[0-9]+\.[0-9]+\.[0-9]+` was validated from source `[0-9a-f]{40}` on `[0-9]{4}-[0-9]{2}-[0-9]{2}`; the release commit may differ only in governed release surfaces\.$' \
+        '^<!-- canic-release-validation: version=[0-9]+\.[0-9]+\.[0-9]+ source=[0-9a-f]{40} date=[0-9]{4}-[0-9]{2}-[0-9]{2} -->$' \
         "$STATUS"; then
     echo "current status omits its governed development or release-validation marker" >&2
     exit 1
 fi
-require_texts "$COMPLEXITY_AUDIT" "$GUARD_LABEL" \
-    "closeout_verdict: fail" \
-    "CANIC-109-GOLIVE-001" \
-    "CANIC-109-GOLIVE-002" \
-    "CANIC-109-GOLIVE-003" \
-    "B9 remediation must not begin" \
-    "until B8 closes." \
-    "Until then, 0.110 is not authorized."
-require_texts "$ADMISSION_STATUS" "$GUARD_LABEL" \
-    "../../audits/release-lines/0.109-post-implementation-complexity-audit.md" \
-    "| B8 | Release and downstream go-live support |" \
-    "| B9 | Post-adoption complexity contraction |" \
-    "CANIC-109-GOLIVE-001" \
-    "CANIC-109-GOLIVE-002" \
-    "CANIC-109-GOLIVE-003"
-require_texts "$ADMISSION_DESIGN" "$GUARD_LABEL" \
-    "| B8 | Release and downstream go-live support |" \
-    "| B9 | Post-adoption complexity contraction |" \
-    '`CANIC-109-GOLIVE-001` through `003`'
-require_texts "$ESTATE_STATUS" "$GUARD_LABEL" \
-    "../../audits/release-lines/0.109-post-implementation-complexity-audit.md" \
-    "No 0.110 mutation is authorized."
-require_text "$ESTATE_DESIGN" \
-    "../../audits/release-lines/0.109-post-implementation-complexity-audit.md" \
-    "$GUARD_LABEL"
-forbid_text "$STATUS" "## Historical Release Detail" "$GUARD_LABEL"
-forbid_texts "$STATUS" "$GUARD_LABEL" \
-    "latest published release" \
-    "latest published package" \
-    "Release-truth warning:" \
-    "not published or package-versioned"
-
-forbid_texts "$TIMER_DESIGN" "$GUARD_LABEL" \
-    "B7 is authorized" \
-    "B8 remains blocked" \
-    "Blocked on B7"
-forbid_texts "$TIMER_STATUS" "$GUARD_LABEL" \
-    "Keep the open 0.104.0" \
-    "open 0.104.1 changelog" \
-    "only remaining action is maintainer closeout review" \
-    'Published `v0.104.1` contains that correction and closes the line.' \
-    "not part of either published tag" \
-    'bounded `0.104.2` corrective candidate' \
-    "1.1750% raw" \
-    "1.9779% gzip"
-require_texts "$TIMER_STATUS" "$GUARD_LABEL" \
-    '`v0.104.2` freezes exact registration actions' \
-    "No 0.104 implementation work remains." \
-    "not canonical release-identity evidence"
-require_texts "$TIMER_EVIDENCE" "$GUARD_LABEL" \
-    "not acceptance evidence" \
-    "19,424,848" \
-    "19,124,317" \
-    "19,424,589" \
-    "19,123,930" \
-    "19,123,917" \
-    "not canonical release-identity evidence" \
-    "controlled causal percentage"
-require_texts "$TIMER_GUIDE" "$GUARD_LABEL" \
-    "Provider inventory is volatile." \
-    "Provider inventory is not durable business demand." \
-    "Provider inventory is not an application recovery record."
-require_text "$TIMER_CHANGELOG" \
-    "## [0.104.2] - 2026-08-19 - Closeout Audit Correction" \
-    "$GUARD_LABEL"
-require_text "$TIMER_CHANGELOG" \
-    "## [0.104.1] - 2026-08-19 - Closeout Evidence Correction" \
-    "$GUARD_LABEL"
-
-for detailed_changelog in "$ROOT"/docs/changelog/*.md; do
-    forbid_text "$detailed_changelog" "Release truth:" "$GUARD_LABEL"
-done
-
-for layer_doc in "$AGENTS" "$ARCHITECTURE" "$HYGIENE"; do
-    forbid_text "$layer_doc" \
-        "endpoints -> workflow -> policy -> ops -> model" \
-        "$GUARD_LABEL"
-done
-require_texts "$AGENTS" "$GUARD_LABEL" \
-    "workflow may call" \
-    "Policy never calls ops."
-require_text "$ARCHITECTURE" "policy does not call ops." "$GUARD_LABEL"
-require_text "$HYGIENE" "Policy never calls ops." "$GUARD_LABEL"
-
-require_text "$CI_GOVERNANCE" \
-    "Automated agents must never change release version numbers directly." \
-    "$GUARD_LABEL"
-forbid_text "$AGENTS" \
-    "unless the maintainer explicitly asks for a version bump" \
-    "$GUARD_LABEL"
-
-if rg -ni '\bproject\b' "$ROOT/docs/governance/code-hygiene/example-crate/src" "$HYGIENE" >/dev/null; then
-    echo "code-hygiene examples reintroduce Project as a Canic-owned identity" >&2
-    exit 1
-fi
-forbid_texts "$AUTH_DESIGN" "$GUARD_LABEL" \
-    "local project id" \
-    "local project accepts" \
-    "local project does not accept"
-forbid_text "$AUTH_CONTRACT" "local project" "$GUARD_LABEL"
 
 echo "current document semantics guard passed"

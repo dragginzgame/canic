@@ -501,6 +501,7 @@ dependencies = [
  "canic-core",
  "canic-macros",
  "ic-cdk",
+ "ic-testkit",
  "ic0",
  "serde",
  "toml 1.1.4+spec-1.1.0",

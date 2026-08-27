@@ -19,6 +19,7 @@ use crate::{
     },
     output, version_text,
 };
+use canic_core::cdk::utils::hash::sha256_hex;
 use canic_core::ids::ReleaseBuildId;
 use canic_host::{
     fleet_ensure::{
@@ -39,8 +40,8 @@ use thiserror::Error as ThisError;
 
 const FLEET_HELP_AFTER: &str = "\
 Examples:
-  canic fleet generate staging --app-config apps/demo/canic.toml --release-build <sha256>
   canic fleet ensure staging --desired fleets/staging.toml
+  canic fleet generate staging --app-config apps/demo/canic.toml --release-build <sha256>
 
 Planning is read-only. Review `plan_sha256`, then repeat the command with
 `--apply <plan_sha256>`. Historical install and recovery state is not read.";
@@ -79,6 +80,19 @@ pub enum FleetCommandError {
     #[error("generated Fleet output already exists with different contents: {0}")]
     OutputConflict(PathBuf),
 
+    #[error(
+        "generated Fleet output digest changed at {}: expected {expected}, actual {actual}",
+        path.display()
+    )]
+    OutputDigestMismatch {
+        actual: String,
+        expected: String,
+        path: PathBuf,
+    },
+
+    #[error("generated Fleet output replacement requires an existing file: {0}")]
+    OutputMissingForReplacement(PathBuf),
+
     #[error(transparent)]
     TomlSerialize(#[from] toml::ser::Error),
 }
@@ -91,6 +105,7 @@ struct GenerateOptions {
     icp: String,
     output: PathBuf,
     release_build: ReleaseBuildId,
+    replace: Option<String>,
     seed: PathBuf,
     source: PathBuf,
 }
@@ -116,6 +131,10 @@ impl GenerateOptions {
                 PathBuf::from,
             ),
             release_build: required_typed(generate, "release-build"),
+            replace: string_option(generate, "replace")
+                .map(|value| parse_digest(&value))
+                .transpose()
+                .map_err(FleetCommandError::Usage)?,
             seed: string_option(generate, "seed").map_or_else(
                 || PathBuf::from("deployments").join(format!("{fleet}.estate.toml")),
                 PathBuf::from,
@@ -170,8 +189,8 @@ fn fleet_command() -> Command {
         .about("Converge one Fleet from current desired state")
         .disable_help_flag(true)
         .subcommand_required(true)
-        .subcommand(generate_command())
         .subcommand(ensure_command())
+        .subcommand(generate_command())
         .after_help(FLEET_HELP_AFTER)
 }
 
@@ -197,6 +216,7 @@ fn generate_command() -> Command {
                 .help("Finalized current release build emitted by a complete canic build"),
         )
         .arg(value_arg("output").long("output").value_name("PATH").help("Generated desired TOML; defaults to fleets/<fleet>.toml"))
+        .arg(value_arg("replace").long("replace").value_name("EXPECTED_SHA256").help("Replace existing output only when its exact SHA-256 matches"))
         .arg(value_arg("seed").long("seed").value_name("PATH").help("Explicit retained identity seed; defaults to deployments/<fleet>.estate.toml"))
         .arg(value_arg("source").long("source").value_name("PATH").help("Protected Fleet policy input; defaults to deployments/<fleet>.toml"))
         .arg(internal_environment_arg())
@@ -314,7 +334,7 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
     })?;
     let output = resolve_from_root(&root, &options.output);
     let bytes = toml::to_string_pretty(&generated.desired)?.into_bytes();
-    publish_generated(&output, &bytes)?;
+    publish_generated(&output, &bytes, options.replace.as_deref())?;
     println!("fleet: {}", options.fleet);
     println!("release_build: {}", generated.release_build_id);
     println!("observed_canisters: {}", generated.observed_canisters);
@@ -334,10 +354,36 @@ fn resolve_from_root(root: &std::path::Path, path: &std::path::Path) -> PathBuf 
     }
 }
 
-fn publish_generated(path: &std::path::Path, bytes: &[u8]) -> Result<(), FleetCommandError> {
+fn publish_generated(
+    path: &std::path::Path,
+    bytes: &[u8],
+    expected_sha256: Option<&str>,
+) -> Result<(), FleetCommandError> {
     match fs::read(path) {
-        Ok(existing) if existing == bytes => return Ok(()),
-        Ok(_) => return Err(FleetCommandError::OutputConflict(path.to_path_buf())),
+        Ok(existing) if existing == bytes && expected_sha256.is_none() => return Ok(()),
+        Ok(existing) => {
+            let actual = sha256_hex(&existing);
+            let Some(expected) = expected_sha256 else {
+                return Err(FleetCommandError::OutputConflict(path.to_path_buf()));
+            };
+            if actual != expected {
+                return Err(FleetCommandError::OutputDigestMismatch {
+                    actual,
+                    expected: expected.to_string(),
+                    path: path.to_path_buf(),
+                });
+            }
+            if existing == bytes {
+                return Ok(());
+            }
+            canic_host::durable_io::write_bytes(path, bytes)?;
+            return Ok(());
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound && expected_sha256.is_some() => {
+            return Err(FleetCommandError::OutputMissingForReplacement(
+                path.to_path_buf(),
+            ));
+        }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }

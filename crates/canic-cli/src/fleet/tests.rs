@@ -8,7 +8,7 @@ fn fleet_commands_are_current_generation_and_lexicographically_ordered() {
         .get_subcommands()
         .map(clap::Command::get_name)
         .collect::<Vec<_>>();
-    assert_eq!(names, ["generate", "ensure"]);
+    assert_eq!(names, ["ensure", "generate"]);
 }
 
 #[test]
@@ -30,6 +30,7 @@ fn generate_defaults_to_policy_seed_and_desired_paths() {
         PathBuf::from("deployments/staging.estate.toml")
     );
     assert_eq!(options.output, PathBuf::from("fleets/staging.toml"));
+    assert_eq!(options.replace, None);
 }
 
 #[test]
@@ -53,16 +54,46 @@ fn ensure_requires_canonical_apply_digest() {
 }
 
 #[test]
-fn generated_desired_output_is_idempotent_but_never_overwritten() {
+fn generated_desired_output_requires_exact_digest_for_replacement() {
     let root = temp_dir("canic-fleet-generated-output");
     let path = root.join("fleets/staging.toml");
 
-    publish_generated(&path, b"first").expect("create generated output");
-    publish_generated(&path, b"first").expect("repeat exact output");
+    publish_generated(&path, b"first", None).expect("create generated output");
+    publish_generated(&path, b"first", None).expect("repeat exact output");
     assert!(matches!(
-        publish_generated(&path, b"second"),
+        publish_generated(&path, b"second", None),
         Err(FleetCommandError::OutputConflict(conflict)) if conflict == path
+    ));
+    assert!(matches!(
+        publish_generated(&path, b"second", Some(&"00".repeat(32))),
+        Err(FleetCommandError::OutputDigestMismatch { path: conflict, .. }) if conflict == path
+    ));
+    publish_generated(&path, b"second", Some(&sha256_hex(b"first")))
+        .expect("replace exact reviewed output");
+    assert_eq!(fs::read(&path).expect("read replaced output"), b"second");
+
+    let missing = root.join("fleets/missing.toml");
+    assert!(matches!(
+        publish_generated(&missing, b"first", Some(&sha256_hex(b"absent"))),
+        Err(FleetCommandError::OutputMissingForReplacement(path)) if path == missing
     ));
 
     fs::remove_dir_all(root).expect("remove test directory");
+}
+
+#[test]
+fn generate_replace_requires_canonical_digest() {
+    let release = "01".repeat(32);
+    let error = GenerateOptions::parse([
+        OsString::from("generate"),
+        OsString::from("staging"),
+        OsString::from("--app-config"),
+        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--release-build"),
+        OsString::from(release),
+        OsString::from("--replace"),
+        OsString::from("not-a-digest"),
+    ])
+    .expect_err("reject invalid replacement digest");
+    assert!(matches!(error, FleetCommandError::Usage(_)));
 }

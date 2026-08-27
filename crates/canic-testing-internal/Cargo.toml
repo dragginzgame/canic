@@ -15,7 +15,7 @@ ignored = ["serde"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = [] }
+canic = { workspace = true, features = ["testing"] }
 canic-control-plane = { workspace = true, features = [
     "root-control-plane",
     "wasm-store-canister",

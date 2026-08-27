@@ -29,4 +29,7 @@ tag_commit="$(git rev-list -n 1 "$tag")"
 [ "$tag_commit" = "$head_commit" ] ||
     fail "$tag does not identify HEAD"
 
+bash scripts/ci/check-release-remote-state.sh before-push "$version" ||
+    fail "remote branch or release tag is no longer push-compatible"
+
 echo "✅ Release push is ready: $branch at $head_commit with $tag"

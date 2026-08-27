@@ -21,7 +21,8 @@ under `docs/architecture/`, and operator procedures remain under
 - [Scaling and placement](scaling-and-placement/README.md) — Component Specs,
   Groups, services, children, sharding, scaling, and limits.
 - [Builds and evidence](build-and-evidence/README.md) — artifacts, provenance,
-  evidence envelopes, comparison, and policy gates.
+  evidence envelopes, comparison, policy gates, and the published managed-App
+  qualification surface.
 - [Backup domain](backup-and-restore/README.md) — retained Rust contracts; the
   former CLI workflow is not part of the current hard-cut surface.
 - [Blob storage](blob-storage/README.md) — optional product-data storage and

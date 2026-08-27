@@ -1326,7 +1326,7 @@ fn terminal_protocol_observation_bound(
             ..
         } = current.as_ref()
         else {
-            unreachable!("matched Component provisioning action")
+            return Ok(bound);
         };
         request
             .plan

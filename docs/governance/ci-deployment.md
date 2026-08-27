@@ -31,6 +31,15 @@ failed-target logs are retained under
 `target/validation-failures/`; the terminal summary repeats bounded failure
 detail and the exact failed target list.
 
+Release-blocking guards validate machine-relevant facts, not editorial prose.
+Exact checks are appropriate for structured records, identifiers, versions,
+digests, schemas, executable command ownership and required file/link
+presence. They must not freeze explanatory sentences, line wrapping,
+illustrative values, a full heading inventory or ordinary readiness narrative.
+If a documentation fact must drive automation, represent it as a dedicated
+machine-readable field. Documentation gates remain lightweight and must not
+turn wording cleanup into a failed compile/test release cycle.
+
 Make-based work shares the repository `target/`. When `sccache` is available
 and no explicit `RUSTC_WRAPPER` is set, Make selects it and disables Rust
 incremental compilation so compiler results remain cacheable. Without a
@@ -217,7 +226,10 @@ parsers. The governed bump is the one exception: after validating one exact
 clean source commit, it seals the matching detailed changelog draft with the
 release date and writes that source commit into one machine-checked
 current-status release marker. Lineage prose is descriptive and is not a
-versioning or publication authority. The release commit may then
+versioning or publication authority. Immediately before changing version
+files, the bump transaction fetches the current `origin` branch, requires it
+to remain an ancestor of the validated local source, and requires the exact
+planned release tag to be absent remotely. The release commit may then
 differ from the validated source only in the enumerated version, lock,
 installer, changelog and status surfaces. The cheap current-document semantics
 gate still rejects volatile
@@ -251,8 +263,10 @@ never sweeps a shared path or another concurrent invocation's scratch. Canic
 scripts must clean their own temporary files; explicit cleanup must not sweep
 unrelated repository scratch or global `/tmp` content.
 Before its final atomic network update, `make release-push` verifies the exact
-release commit/tag pair from committed `HEAD`. It does not format, compile,
-test, validate, or clean. Local
+release commit/tag pair from committed `HEAD`, refreshes the current `origin`
+branch, requires fast-forward ancestry and rejects any conflicting remote tag.
+An idempotent retry may observe the exact same annotated tag object. It does
+not format, compile, test, validate, or clean. Local
 staged, unstaged and untracked changes neither block the push nor join it; they
 remain local. The release version is read from `HEAD`'s committed `Cargo.toml`,
 so a later local manifest edit cannot redirect tag selection. Test scratch has

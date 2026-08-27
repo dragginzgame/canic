@@ -27,6 +27,12 @@ with this file, the code is wrong.
 - Follow `docs/governance/ci-deployment.md`; it is the authoritative policy for
   commands, git boundaries, versioning, release, network selection, and
   automation language rules. Do not duplicate its rules here.
+- Release-blocking guards must validate executable behavior, structured
+  records, exact identifiers, hashes, versions, schemas, or document/link
+  presence. Do not make a release depend on exact explanatory prose, sentence
+  wording, line wrapping, illustrative values, heading inventories, or the
+  absence of ordinary narrative. When a fact needs machine enforcement, give
+  it a machine-readable field instead of parsing prose.
 
 ## Delivery Cadence
 - Follow `docs/governance/delivery-cadence.md`; it is the authoritative policy
