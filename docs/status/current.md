@@ -182,6 +182,13 @@ Targeted evidence on the dirty source candidate:
   seconds. It reached terminal runtime activation and Fleet-catalog publication,
   then proved an immediate replay issued no update. Reported shared-server
   high-water RSS was 421,668 kB with 19 threads.
+- The first maintainer `release-patch` attempt stopped in `check-invariants`
+  before the broad compile/test tiers because the active operations index
+  omitted the recovery-runbook link. The link and its missing current
+  `pending_send` ICP-refill procedure are restored, the exact focused runbook
+  guard passes, and the top-level changelog now has the one canonical
+  `0.109.13` summary required by versioning. The complete maintainer gate still
+  requires a fresh run.
 - The IcyDB 0.245.1 lifecycle fixture passes targeted compilation plus its
   direct-ingress and same-release transition/recovery PocketIC proofs. The
   cold fixture proof passed in 49 seconds; its cached recovery proof passed in

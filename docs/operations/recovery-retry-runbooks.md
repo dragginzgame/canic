@@ -178,6 +178,20 @@ Each runbook uses the same fields:
 | Relevant validation command | `cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture` |
 | Escalation criteria | Escalate if the verified caller/issuer binding cannot be reconstructed from available logs or request records. |
 
+### ICP Project Root Pending ICP Refill
+
+| Field | Guidance |
+| --- | --- |
+| Symptom | `canic cycles convert` reports that it reused a pending operation identity, or `.canic/operations/pending.json` under the selected ICP project root retains a `pending_send` ICP-refill record. |
+| Likely cause | The CLI durably reserved the exact refill operation before sending it, but the process or transport ended before the terminal response was recorded locally. |
+| Safety invariant | The same ICP project root, environment, Fleet, Root, source subaccount and amount must reuse the exact retained operation identity. |
+| Safe operator action | Preserve the pending file and repeat the exact conversion command from the same ICP project root and authenticated identity. Confirm protected Root funding status before starting any competing refill. |
+| Unsafe operator action | Deleting or editing the pending file, changing its operation identity, switching the Root/subaccount/amount, or sending a second refill while the retained outcome is uncertain. |
+| Diagnostic, log, or public error to check | `.canic/operations/pending.json`, the printed operation-ID source, `canic cycles funding <fleet> --json`, and the Root's retained ICP-refill result. |
+| Retry/idempotency rule | An exact retry reuses the pending identity. Changed input is a different logical operation and must not bypass unresolved retained work. |
+| Relevant validation command | `cargo test --locked -p canic-cli cycles::convert --lib -- --nocapture` |
+| Escalation criteria | Escalate before another value transfer when the pending log and protected Root status cannot prove whether Ledger transfer or CMC notification completed. |
+
 ### ICP Refill Recovery-Required State
 
 | Field | Guidance |
