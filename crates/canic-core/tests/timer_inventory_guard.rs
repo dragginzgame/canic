@@ -598,31 +598,9 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
     assert!(workspace_manifest.contains("ic-timers = \"=0.6.1\""));
-    assert!(!workspace_manifest.lines().any(is_icydb_dependency));
+    assert!(workspace_manifest.contains("icydb = { version = \"0.245\""));
+    assert!(workspace_manifest.contains("icydb-model = \"0.245\""));
     assert!(!workspace_manifest.contains("ic-cdk-timers ="));
-
-    let icydb_fixture_manifest = read_source(
-        &root,
-        "canisters/test/canic_icydb_lifecycle_probe/Cargo.toml",
-    );
-    assert_eq!(
-        icydb_fixture_manifest
-            .lines()
-            .filter(|line| {
-                line.trim() == "icydb = { version = \"0.245\", default-features = false }"
-            })
-            .count(),
-        2
-    );
-    let icydb_schema_manifest = read_source(
-        &root,
-        "canisters/test/canic_icydb_lifecycle_probe/schema/Cargo.toml",
-    );
-    assert!(
-        icydb_schema_manifest
-            .lines()
-            .any(|line| line.trim() == "icydb-model = \"0.245\"")
-    );
 
     let mut timer_consumers = BTreeSet::from(["Cargo.toml".to_string()]);
     let mut raw_provider_consumers = BTreeSet::new();
@@ -650,11 +628,6 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     assert_eq!(timer_consumers, expected_timer_manifest_consumers());
     assert!(raw_provider_consumers.is_empty());
-}
-
-fn is_icydb_dependency(line: &str) -> bool {
-    let line = line.trim_start();
-    line.starts_with("icydb =") || line.starts_with("icydb-model =")
 }
 
 #[test]
@@ -969,6 +942,7 @@ fn expected_ownership_inventory() -> BTreeMap<&'static str, OwnershipClass> {
         .chain(core_boundary_ownership())
         .chain(core_recovery_ownership())
         .chain(core_consumer_ownership())
+        .chain(operator_projection_ownership())
         .chain(facade_ownership())
         .collect()
 }
@@ -1230,6 +1204,12 @@ const fn facade_ownership() -> [(&'static str, OwnershipClass); 2] {
         ("crates/canic/src/macros/endpoints/wasm_store.rs", Lifecycle),
         ("crates/canic/src/macros/start.rs", Lifecycle),
     ]
+}
+
+const fn operator_projection_ownership() -> [(&'static str, OwnershipClass); 1] {
+    use OwnershipClass::DtoOrMetricsProjection as Projection;
+
+    [("crates/canic-cli/src/inspect/mod.rs", Projection)]
 }
 
 fn expected_timer_manifest_consumers() -> BTreeSet<String> {

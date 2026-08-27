@@ -28,7 +28,9 @@ fn catalog_matches_canic_cargo_features() {
 
     let cargo_public_features = canic_features
         .keys()
-        .filter(|name| name.as_str() != "default")
+        .filter(|name| {
+            name.as_str() != "default" && !catalog::is_non_role_public_feature(name.as_str())
+        })
         .cloned()
         .collect::<BTreeSet<_>>();
     let catalog_public_features = catalog::feature_definitions()
@@ -36,6 +38,17 @@ fn catalog_matches_canic_cargo_features() {
         .map(|definition| definition.cargo_name.to_string())
         .collect::<BTreeSet<_>>();
     assert_eq!(catalog_public_features, cargo_public_features);
+
+    let cargo_non_role_features = canic_features
+        .keys()
+        .filter(|name| catalog::is_non_role_public_feature(name.as_str()))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let catalog_non_role_features = catalog::non_role_public_features()
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(catalog_non_role_features, cargo_non_role_features);
 
     let cargo_defaults = feature_members(canic_features, "default")
         .into_iter()

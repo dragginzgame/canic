@@ -64,6 +64,13 @@ fn install_version_reader(root: &Path) {
     write_executable(root, "scripts/ci/read-workspace-version.sh", &source);
 }
 
+fn install_remote_state_guard(root: &Path) {
+    let source =
+        fs::read_to_string(workspace_root().join("scripts/ci/check-release-remote-state.sh"))
+            .expect("release remote-state guard should be readable");
+    write_executable(root, "scripts/ci/check-release-remote-state.sh", &source);
+}
+
 fn commit_all(root: &Path, message: &str) {
     run_git(root, &["add", "."]);
     run_git(
@@ -108,8 +115,47 @@ fn create_release_repo(name: &str) -> PathBuf {
     );
     write_file(&root, "Cargo.lock", "# initial\n");
     install_version_reader(&root);
+    install_remote_state_guard(&root);
     commit_all(&root, "implementation");
+    let origin = root.join(".git/fixture-origin.git");
+    run_git(
+        &root,
+        &[
+            "init",
+            "--bare",
+            origin.to_str().expect("origin path should be UTF-8"),
+        ],
+    );
+    run_git(
+        &root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            origin.to_str().expect("origin path should be UTF-8"),
+        ],
+    );
+    let branch = git_output(&root, &["branch", "--show-current"]);
+    run_git(&root, &["push", "--set-upstream", "origin", &branch]);
     root
+}
+
+fn git_output(root: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("git should run");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout)
+        .expect("git output should be UTF-8")
+        .trim()
+        .to_string()
 }
 
 fn create_release_commit(root: &Path) {
@@ -143,7 +189,11 @@ fn create_candidate_repo(name: &str) -> (PathBuf, String) {
         "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.92.7\"\n",
     );
     write_file(&root, "Cargo.lock", "# lock\n");
-    write_file(&root, "CHANGELOG.md", "- `0.92.8` fixture release\n");
+    write_file(
+        &root,
+        "CHANGELOG.md",
+        "# Descriptive root changelog without a release-summary schema\n",
+    );
     write_file(
         &root,
         "docs/changelog/0.92.md",
@@ -152,7 +202,7 @@ fn create_candidate_repo(name: &str) -> (PathBuf, String) {
     write_file(
         &root,
         "docs/status/current.md",
-        "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.\n\nRelease governance: source development state; no validated release candidate is staged.\n",
+        "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.\n\n<!-- canic-release-state: source-development -->\n",
     );
     write_file(
         &root,
@@ -200,7 +250,7 @@ fn create_candidate_repo(name: &str) -> (PathBuf, String) {
         &root,
         "docs/status/current.md",
         &format!(
-            "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\nRelease validation: `0.92.8` was validated from source `{source}` on `2026-08-25`; the release commit may differ only in governed release surfaces.\n"
+            "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\n<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 -->\n"
         ),
     );
     (root, source)
@@ -308,13 +358,17 @@ fn failed_version_surface_sync_restores_every_mutated_file() {
     write_file(&root, "Cargo.toml", cargo_toml);
     write_file(&root, "crates/demo/Cargo.toml", member_toml);
     write_file(&root, "Cargo.lock", cargo_lock);
-    write_file(&root, "CHANGELOG.md", "- `0.92.8` fixture release\n");
+    write_file(
+        &root,
+        "CHANGELOG.md",
+        "# Descriptive root changelog without a release-summary schema\n",
+    );
     write_file(
         &root,
         "docs/changelog/0.92.md",
         "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
     );
-    let status_document = "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.\n\nRelease governance: source development state; no validated release candidate is staged.\n";
+    let status_document = "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.\n\n<!-- canic-release-state: source-development -->\n";
     write_file(&root, "docs/status/current.md", status_document);
     write_file(&root, "scripts/dev/install_dev.sh", install_script);
     install_version_reader(&root);
@@ -374,6 +428,11 @@ fn failed_version_surface_sync_restores_every_mutated_file() {
 }
 
 fn install_failing_release_fixture_commands(root: &Path) {
+    write_executable(
+        root,
+        "scripts/ci/check-release-remote-state.sh",
+        "#!/usr/bin/env bash\nexit 0\n",
+    );
     write_executable(
         root,
         "scripts/ci/sync-release-surface-version.sh",
@@ -456,10 +515,15 @@ fn release_candidate_rejects_unsealed_changelog_and_late_source_change() {
 }
 
 #[test]
-fn release_candidate_rejects_pending_terminal_release_narrative() {
+fn release_candidate_does_not_parse_descriptive_release_prose() {
     let (root, source) = create_candidate_repo("candidate-pending-narrative");
+    write_file(
+        &root,
+        "CHANGELOG.md",
+        "# Descriptive root changelog without a release-summary schema\n",
+    );
     let validation_marker = format!(
-        "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\nRelease validation: `0.92.8` was validated from source `{source}` on `2026-08-25`; the release commit may differ only in governed release surfaces."
+        "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\n<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 -->"
     );
     for pending_status in [
         "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.",
@@ -473,10 +537,10 @@ fn release_candidate_rejects_pending_terminal_release_narrative() {
             &format!("{validation_marker}\n\n{pending_status}\n"),
         );
         let status = run_candidate_guard(&root);
-        assert!(!status.status.success());
         assert!(
+            status.status.success(),
+            "descriptive status prose must not override sealed release facts: {}",
             output_text(&status)
-                .contains("terminal release narrative remains pending in docs/status/current.md")
         );
     }
 
@@ -491,28 +555,10 @@ fn release_candidate_rejects_pending_terminal_release_narrative() {
         "# Fixture changelog\n\n## 0.92.8 - 2026-08-25\n\n## Complete validation evidence pending refresh\n",
     );
     let changelog = run_candidate_guard(&root);
-    assert!(!changelog.status.success());
     assert!(
+        changelog.status.success(),
+        "descriptive changelog prose must not override sealed release facts: {}",
         output_text(&changelog)
-            .contains("terminal release narrative remains pending in docs/changelog/0.92.md")
-    );
-
-    write_file(
-        &root,
-        "docs/changelog/0.92.md",
-        "# Fixture changelog\n\n## 0.92.8 - 2026-08-25\n",
-    );
-    write_file(
-        &root,
-        "docs/audits/working/recovery.md",
-        "Status: open 0.92.8 candidate; publication remains unperformed.\n",
-    );
-    let audit = run_candidate_guard(&root);
-    assert!(!audit.status.success());
-    assert!(
-        output_text(&audit).contains(
-            "terminal release narrative remains pending in docs/audits/working/recovery.md"
-        )
     );
     let _ = fs::remove_dir_all(root);
 }

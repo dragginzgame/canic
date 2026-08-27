@@ -21,46 +21,23 @@ require_files "$GUARD_LABEL" \
     "$PACKAGED_CANISTER" \
     "$MAKEFILE"
 
-require_texts "$OPERATIONS_INDEX" "$GUARD_LABEL" \
-    "release-validation-matrix.md" \
-    "release-package-install-validation.md"
-require_texts "$CI_GOVERNANCE" "$GUARD_LABEL" "release-validation-matrix.md"
+for document in "$MATRIX" "$PACKAGE_CHECKLIST" "$OPERATIONS_INDEX" "$CI_GOVERNANCE"; do
+    rg -q '^# ' "$document" || {
+        echo "release validation document lacks a Markdown title: $(guard_path "$document")" >&2
+        exit 1
+    }
+done
 
-require_texts "$MATRIX" "$GUARD_LABEL" \
-    "## Required Slice Gates" \
-    "## Required CI Gates" \
-    "## Focused Replay, Auth, And Cost Gates" \
-    "## Package And Install Gates" \
-    "## Reporting Format" \
-    "cargo test --locked -p canic --test changelog_governance -- --nocapture" \
-    "git diff --check" \
-    "use only the guards that directly own" \
-    "The active workflow is the source of truth." \
-    "Do not reproduce its step-by-step" \
-    "job counts or step adjacency." \
-    "make validate" \
-    "make package" \
-    "current desired-state qualification evidence."
-
-require_texts "$PACKAGE_CHECKLIST" "$GUARD_LABEL" \
-    "## Scope" \
-    "## Existing Package and Install Gates" \
-    "## Artifact Verification Expectations" \
-    "## Environment and Ownership" \
-    "## Release Flow Boundary" \
-    "## Required RC Gates" \
-    "## Outcome Summary" \
-    "make package" \
-    "make test-installed-canic-cli" \
-    "make test-packaged-downstream-cli" \
-    "make test-packaged-downstream-wasm-store" \
-    'packaged `build!`, `start!` and `finish!`' \
-    "MSRV/local/IC boundary" \
-    "cargo build --release --workspace --locked" \
-    "canic fleet ensure" \
-    "Automated agents must never change release versions" \
-    "Package validation must not leave committed package artifacts" \
-    "This checklist does not issue a release verdict."
+for linked_document in release-validation-matrix.md release-package-install-validation.md; do
+    rg -q "\\([^)]*$linked_document\\)" "$OPERATIONS_INDEX" || {
+        echo "operations index does not link $linked_document" >&2
+        exit 1
+    }
+done
+rg -q '\([^)]*release-validation-matrix\.md\)' "$CI_GOVERNANCE" || {
+    echo "CI governance does not link the release validation matrix" >&2
+    exit 1
+}
 
 require_texts "$PACKAGED_CANISTER" "$GUARD_LABEL" \
     'cargo +1.91.0 build --offline --locked' \

@@ -1499,10 +1499,7 @@ fn candid_sidecar(
     artifact: &CanicInfrastructureArtifactEntry,
 ) -> Result<String, FleetGenerateError> {
     let wasm = root.join(&artifact.wasm_relative_path);
-    let parent = wasm.parent().ok_or_else(|| {
-        FleetGenerateError::Candid(format!("invalid Wasm path {}", wasm.display()))
-    })?;
-    let path = parent.join(format!("{}.did", artifact.role.as_str()));
+    let path = wasm.with_extension("did");
     let bytes = match read_optional_regular_bytes(&path) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {

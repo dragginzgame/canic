@@ -4395,7 +4395,7 @@ mod tests {
             )),
             payload_hash: payload_hash.clone(),
             payload_size_bytes: payload.len() as u64,
-            chunk_hashes: vec![payload_hash],
+            chunk_hashes: vec![payload_hash.clone()],
         };
         let prepared = store_prepare_as(
             &pic,
@@ -4412,7 +4412,7 @@ mod tests {
             &pic,
             fixture.response.wasm_store,
             Principal::anonymous(),
-            prepare.clone(),
+            prepare,
         );
         assert_eq!(
             denied
@@ -4421,22 +4421,32 @@ mod tests {
             canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
 
-        let former_installation_controller = fixture
+        let retained_installation_controller = fixture
             .init_args
             .authority
             .wasm_store_authority
             .installation_controller;
-        let denied = store_prepare_as(
+        let controller_prepare = TemplateChunkSetPrepareInput {
+            template_id: TemplateId::owned("canary:operator-update".to_string()),
+            version: TemplateVersion::from(format!(
+                "{}-operator-update",
+                env!("CARGO_PKG_VERSION")
+            )),
+            payload_hash: payload_hash.clone(),
+            payload_size_bytes: payload.len() as u64,
+            chunk_hashes: vec![payload_hash],
+        };
+        let prepared = store_prepare_as(
             &pic,
             fixture.response.wasm_store,
-            former_installation_controller,
-            prepare,
+            retained_installation_controller,
+            controller_prepare.clone(),
         );
         assert_eq!(
-            denied
-                .expect_err("former installation controller must lose Store mutation authority")
-                .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+            prepared
+                .expect("retained installation controller must keep Store mutation authority")
+                .chunk_hashes,
+            controller_prepare.chunk_hashes
         );
         assert_prepared(&pic, fixture.root_id);
     }

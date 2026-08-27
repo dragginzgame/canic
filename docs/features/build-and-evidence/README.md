@@ -29,4 +29,5 @@ or adopt discovered resources. Fleet mutation remains solely in the reviewed
 - [Build artifact architecture](../../architecture/build-artifacts.md)
 - [Evidence envelopes](../../architecture/evidence-envelopes.md)
 - [CI policy gates](../../architecture/ci-policy-gates.md)
+- [Managed-App qualification](managed-app-qualification.md)
 - [Operator walkthrough](../../architecture/v1-operator-walkthrough.md)

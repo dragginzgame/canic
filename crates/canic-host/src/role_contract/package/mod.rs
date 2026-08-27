@@ -19,7 +19,10 @@ use canic_core::{
     ids::CanisterRole,
     role_contract::{
         BuiltInRoleKind, CanicFeatureKey, RoleContractFinding,
-        catalog::{default_features, feature_definitions, implied_features, validate_catalog},
+        catalog::{
+            default_features, feature_definitions, implied_features, is_non_role_public_feature,
+            validate_catalog,
+        },
     },
 };
 use std::{
@@ -1426,7 +1429,7 @@ fn validate_cargo_catalog_parity(
     let cargo_public_features = canic_package
         .features
         .keys()
-        .filter(|name| name.as_str() != "default")
+        .filter(|name| name.as_str() != "default" && !is_non_role_public_feature(name.as_str()))
         .cloned()
         .collect::<BTreeSet<_>>();
     let catalog_public_features = feature_definitions()

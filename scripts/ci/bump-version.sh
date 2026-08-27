@@ -57,7 +57,7 @@ esac
 PLANNED_MINOR_LINE="${PLANNED%.*}"
 DETAILED_CHANGELOG="docs/changelog/$PLANNED_MINOR_LINE.md"
 STATUS_DOCUMENT="docs/status/current.md"
-SOURCE_STATUS_MARKER="Release governance: source development state; no validated release candidate is staged."
+SOURCE_STATUS_MARKER="<!-- canic-release-state: source-development -->"
 
 [[ -f "$DETAILED_CHANGELOG" ]] || {
   echo "❌ Missing detailed changelog for planned release $PLANNED: $DETAILED_CHANGELOG" >&2
@@ -71,14 +71,16 @@ SOURCE_STATUS_MARKER="Release governance: source development state; no validated
   echo "❌ $DETAILED_CHANGELOG must contain exactly one open $PLANNED draft." >&2
   exit 1
 }
-[[ "$(rg -c -F -- "- \`$PLANNED\`" CHANGELOG.md)" -eq 1 ]] || {
-  echo "❌ CHANGELOG.md must contain exactly one $PLANNED release summary." >&2
-  exit 1
-}
 [[ "$(rg -c -F "$SOURCE_STATUS_MARKER" "$STATUS_DOCUMENT")" -eq 1 ]] || {
   echo "❌ Current status does not declare the governed source-development state." >&2
   exit 1
 }
+
+# Refresh remote state after validation and immediately before any version file
+# changes. A stale source branch or occupied tag must not leave a local release
+# commit/tag that cannot be pushed normally.
+bash scripts/ci/check-release-remote-state.sh before-version "$PLANNED"
+
 TRANSACTION_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-bump.XXXXXX")"
 BACKUP_ARCHIVE="$TRANSACTION_DIR/release-surfaces.tar"
 mapfile -t RELEASE_SURFACES < <(
@@ -138,7 +140,7 @@ RELEASE_DATE="${CANIC_RELEASE_DATE:-$(date -u +%F)}"
 sed -i \
   "s/^## $NEW - Unreleased$/## $NEW - $RELEASE_DATE/" \
   "$DETAILED_CHANGELOG"
-VALIDATION_STATUS_MARKER="Release validation: \`$NEW\` was validated from source \`$CURRENT_HEAD\` on \`$RELEASE_DATE\`; the release commit may differ only in governed release surfaces."
+VALIDATION_STATUS_MARKER="<!-- canic-release-validation: version=$NEW source=$CURRENT_HEAD date=$RELEASE_DATE -->"
 sed -i \
   "s#^$SOURCE_STATUS_MARKER\$#$VALIDATION_STATUS_MARKER#" \
   "$STATUS_DOCUMENT"

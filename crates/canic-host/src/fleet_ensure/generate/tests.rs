@@ -2,8 +2,8 @@ use super::*;
 use crate::{
     fleet_ensure::{
         model::{
-            CanisterRuntimeStatus, EffectRecord, EnsureAction, FleetEnsureStateRecord,
-            FleetObservation, LiveCanister, RootOwnedCanisterLifecycle,
+            CanisterRuntimeStatus, CurrentFleetProtocolAction, EffectRecord, EnsureAction,
+            FleetEnsureStateRecord, FleetObservation, LiveCanister, RootOwnedCanisterLifecycle,
         },
         ops::{EffectObservation, EffectOutcome, EnsurePlatform},
         workflow,
@@ -16,15 +16,29 @@ use crate::{
     },
     test_support::temp_dir,
 };
+use canic_control_plane::{
+    dto::template::TemplateChunkSetPrepareInput,
+    ids::{TemplateId, TemplateVersion},
+};
 use canic_core::{
     cdk::utils::hash::{hex_bytes, sha256_hex},
     dto::pool::{CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus},
-    ids::{CanisterRole, FleetRegistryAuthority, FleetSubnetRootReleaseSet, ReleaseSetDigest},
+    dto::{
+        component_provisioning::{
+            FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
+            FleetComponentProvisioningPrepareRequest,
+        },
+        fleet_registry::FleetRegistryVersion,
+    },
+    ids::{
+        CanisterRole, ComponentDeploymentConfigurationDigest, FleetCoordinatorBinding, FleetKey,
+        FleetRegistryAuthority, FleetSubnetRootReleaseSet, ReleaseSetDigest,
+    },
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
 };
 use flate2::{Compression, GzBuilder};
 #[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{PermissionsExt, symlink};
 use std::{collections::BTreeSet, fs, io, io::Write as _};
 
 #[test]
@@ -481,8 +495,50 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(desired.ledger_fee_cycles, "100000000");
     assert_eq!(desired.management_creation_fee_cycles, "0");
 
-    let mut platform = RetainedEnsurePlatform::new(&desired, &observed, &pool_one);
     let source_digest = "42".repeat(32);
+    let mut no_apply_desired = desired.clone();
+    no_apply_desired.fleet = "retained-multi-component-no-apply".to_string();
+    let mut no_apply_platform =
+        RetainedEnsurePlatform::new(&no_apply_desired, &observed, &pool_one)
+            .with_terminal_observation_protocol();
+    let no_apply = workflow::plan(
+        &root,
+        &no_apply_desired,
+        &source_digest,
+        &no_apply_desired.fleet,
+        1_800_000_000_000_000_000,
+        &mut no_apply_platform,
+    )
+    .expect("plan public generated estate with the complete typed protocol");
+    assert_eq!(
+        no_apply.plan.plan_sha256,
+        crate::fleet_ensure::policy::expected_plan_sha256(&no_apply.plan)
+    );
+    assert_eq!(no_apply.plan.plan_sha256.len(), 64);
+    let provision_index = no_apply
+        .plan
+        .protocol_actions
+        .iter()
+        .position(|action| {
+            matches!(
+                action,
+                EnsureAction::FleetProtocol { action, .. }
+                    if matches!(action.as_ref(), CurrentFleetProtocolAction::ProvisionComponents { .. })
+            )
+        })
+        .expect("Component provisioning action");
+    assert!(
+        no_apply.plan.protocol_actions[..provision_index]
+            .iter()
+            .any(|action| matches!(action, EnsureAction::FleetProtocol { .. })),
+        "a non-Component typed protocol action precedes Component provisioning"
+    );
+    assert_eq!(
+        no_apply_platform.mutations, 0,
+        "public generation and planning remain effect-free"
+    );
+
+    let mut platform = RetainedEnsurePlatform::new(&desired, &observed, &pool_one);
     let planned = workflow::plan(
         &root,
         &desired,
@@ -567,6 +623,7 @@ struct RetainedEnsurePlatform {
     ledger_fee_cycles: u128,
     live: BTreeMap<String, LiveCanister>,
     mutations: u32,
+    terminal_observation_protocol: bool,
 }
 
 impl RetainedEnsurePlatform {
@@ -615,7 +672,13 @@ impl RetainedEnsurePlatform {
             ledger_fee_cycles: desired.ledger_fee_cycles.parse().expect("ledger fee"),
             live,
             mutations: 0,
+            terminal_observation_protocol: false,
         }
+    }
+
+    fn with_terminal_observation_protocol(mut self) -> Self {
+        self.terminal_observation_protocol = true;
+        self
     }
 
     fn total_cycles(&self) -> u128 {
@@ -651,6 +714,20 @@ impl EnsurePlatform for RetainedEnsurePlatform {
             operator_cycles: 1_000_000_000_000_000,
             protocol_ready: BTreeMap::new(),
         })
+    }
+
+    fn protocol_actions(
+        &mut self,
+        operation_id: &str,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Vec<EnsureAction>, Self::Error> {
+        if !self.terminal_observation_protocol {
+            return Ok(Vec::new());
+        }
+        Ok(terminal_observation_protocol_actions(
+            &self.desired,
+            operation_id,
+        ))
     }
 
     fn observe_effect(
@@ -776,6 +853,90 @@ impl EnsurePlatform for RetainedEnsurePlatform {
             receipt: Some(format!("installed:{principal}")),
         })
     }
+}
+
+fn terminal_observation_protocol_actions(
+    desired: &DesiredFleet,
+    operation_id: &str,
+) -> Vec<EnsureAction> {
+    let bootstrap = desired.bootstrap.as_ref().expect("generated bootstrap");
+    let protocol = desired.protocol.as_ref().expect("generated protocol");
+    let coordinator = desired
+        .canisters
+        .iter()
+        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+        .and_then(|canister| canister.principal.clone())
+        .expect("generated Coordinator Principal");
+    let store = desired
+        .canisters
+        .iter()
+        .find(|canister| canister.kind == DesiredCanisterKind::Store)
+        .and_then(|canister| canister.principal.clone())
+        .expect("generated Store Principal");
+    let operation_id = canic_core::cdk::utils::hash::decode_hex(operation_id)
+        .ok()
+        .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
+        .expect("Fleet ensure operation ID");
+    let fleet = FleetBinding {
+        fleet: FleetKey {
+            canonical_network_id: bootstrap.canonical_network_id,
+            fleet_id: bootstrap.fleet_id,
+        },
+        app: bootstrap.app.clone(),
+    };
+    let registry_authority = FleetRegistryAuthority {
+        binding: FleetCoordinatorBinding {
+            fleet: fleet.clone(),
+            coordinator_subnet: bootstrap.coordinator_subnet,
+            coordinator: coordinator.parse().expect("Coordinator Principal"),
+        },
+        epoch: 1,
+    };
+    vec![
+        EnsureAction::FleetProtocol {
+            action: Box::new(CurrentFleetProtocolAction::PrepareStoreChunkSet {
+                request: TemplateChunkSetPrepareInput {
+                    template_id: TemplateId::from("root"),
+                    version: TemplateVersion::from("current"),
+                    payload_hash: vec![1; 32],
+                    payload_size_bytes: 1,
+                    chunk_hashes: vec![vec![2; 32]],
+                },
+            }),
+            candid: protocol.store_candid.clone(),
+            candid_sha256: "11".repeat(32),
+            maximum_execution_burn_cycles: 1,
+            name: "store-chunk-preparation".to_string(),
+            principal: store,
+        },
+        EnsureAction::FleetProtocol {
+            action: Box::new(CurrentFleetProtocolAction::ProvisionComponents {
+                request: FleetComponentProvisioningPrepareRequest {
+                    operation_id,
+                    plan: FleetComponentProvisioningPlan {
+                        fleet,
+                        fleet_registry: FleetRegistryVersion {
+                            authority: registry_authority,
+                            revision: 1,
+                            content_hash: [3; 32],
+                        },
+                        configuration_digest: ComponentDeploymentConfigurationDigest::from_bytes(
+                            [4; 32],
+                        ),
+                        operation: FleetComponentProvisioningOperation::FreshInstall,
+                        directory_confirmation_roots: Vec::new(),
+                        batches: Vec::new(),
+                    },
+                },
+                plan_hash: [5; 32],
+            }),
+            candid: protocol.coordinator_candid.clone(),
+            candid_sha256: "12".repeat(32),
+            maximum_execution_burn_cycles: 1,
+            name: "fleet-component-provisioning".to_string(),
+            principal: coordinator,
+        },
+    ]
 }
 
 fn multi_component_config() -> &'static str {
@@ -1335,20 +1496,14 @@ fn infrastructure_artifacts(
     .enumerate()
     .map(|(index, role)| {
         let marker = u8::try_from(index).expect("three infrastructure artifacts");
-        let path = format!("artifacts/{}.wasm", role.as_str());
+        let artifact_name = role.protocol_role_name();
+        let path = format!("artifacts/{artifact_name}/{artifact_name}.wasm");
         let bytes = [b"\0asm\x01\0\0\0".as_slice(), &[marker]].concat();
         let absolute = root.join(&path);
         fs::create_dir_all(absolute.parent().expect("artifact parent"))
             .expect("create artifact parent");
         fs::write(&absolute, &bytes).expect("write artifact");
-        fs::write(
-            absolute
-                .parent()
-                .expect("artifact parent")
-                .join(format!("{}.did", role.as_str())),
-            b"service : {};",
-        )
-        .expect("write Candid");
+        fs::write(absolute.with_extension("did"), b"service : {};").expect("write Candid");
         CanicInfrastructureArtifactEntry {
             role,
             package: role.as_str().to_string(),
@@ -1367,6 +1522,60 @@ fn infrastructure_artifacts(
         }
     })
     .collect()
+}
+
+#[test]
+fn candid_sidecar_uses_the_manifest_bound_wasm_basename() {
+    let root = temp_dir("canic-generate-candid-sidecar");
+    let release_build_id = "91".repeat(32).parse().expect("release build ID");
+    let artifacts = infrastructure_artifacts(&root, release_build_id);
+    let root_artifact = artifacts
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .expect("Root artifact");
+
+    assert_eq!(root_artifact.wasm_relative_path, "artifacts/root/root.wasm");
+    assert_eq!(
+        candid_sidecar(&root, root_artifact).expect("resolve Root sidecar"),
+        "artifacts/root/root.did"
+    );
+
+    let sidecar = root.join("artifacts/root/root.did");
+    fs::rename(&sidecar, sidecar.with_file_name("renamed.did")).expect("rename sidecar");
+    assert!(matches!(
+        candid_sidecar(&root, root_artifact),
+        Err(FleetGenerateError::Candid(reason)) if reason.contains("is missing")
+    ));
+    fs::write(&sidecar, b"service : { changed : () -> (); };").expect("write changed sidecar");
+    assert!(matches!(
+        candid_sidecar(&root, root_artifact),
+        Err(FleetGenerateError::Candid(reason)) if reason.contains("digest differs")
+    ));
+
+    fs::remove_dir_all(root).expect("remove fixture root");
+}
+
+#[cfg(unix)]
+#[test]
+fn candid_sidecar_rejects_a_symbolic_link() {
+    let root = temp_dir("canic-generate-candid-sidecar-link");
+    let release_build_id = "92".repeat(32).parse().expect("release build ID");
+    let artifacts = infrastructure_artifacts(&root, release_build_id);
+    let root_artifact = artifacts
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .expect("Root artifact");
+    let sidecar = root.join("artifacts/root/root.did");
+    let target = root.join("artifacts/root/target.did");
+    fs::rename(&sidecar, &target).expect("move real sidecar");
+    symlink(&target, &sidecar).expect("link sidecar");
+
+    assert!(matches!(
+        candid_sidecar(&root, root_artifact),
+        Err(FleetGenerateError::Candid(reason)) if reason.contains("not a regular no-follow file")
+    ));
+
+    fs::remove_dir_all(root).expect("remove fixture root");
 }
 
 fn principal_text(byte: u8) -> String {

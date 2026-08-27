@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.14` resolves infrastructure Candid from exact finalized artifact
+  paths, adds guarded SHA-256 replacement for generated desired Fleet
+  documents, keeps complete typed protocol graphs inside Fleet Ensure's
+  terminal observation bound, publishes the managed-App qualification facade,
+  and checks remote branch ancestry/exact tags immediately before version
+  mutation and atomic release push. Release gates retain machine-shaped safety
+  checks without parsing explanatory documentation prose. Generated output cannot be overwritten
+  after concurrent drift, ordinary pre-Component protocol actions cannot panic
+  planning, and known stale-remote releases no longer leave an unpushable local
+  commit and tag.
+
 - `0.109.13` replaces fresh-install and historical recovery
   owners with one reviewed, cycle-conserving and interruption-safe
   `canic fleet ensure` reconciler and hard-cuts their compatibility surfaces.
@@ -42,9 +53,9 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   reconciliation are complete, including rebinding `canic info subnets` to
   current terminal authority instead of the removed install cache. The
   composed-framework lifecycle fixture now qualifies exact published IcyDB
-  0.245.1. IcyDB is declared only by that unpublished test fixture, and the
-  resolved graphs of published Canic crates remain IcyDB-free; broad validation
-  remains maintainer-owned.
+  0.245.1. Only that unpublished test fixture has dependency edges into the
+  IcyDB family, and the resolved graphs of published Canic crates remain
+  IcyDB-free; broad validation remains maintainer-owned.
 - `0.109.12` restores bounded Coordinator-anchored installed-Fleet inventory,
   completes reviewed retained-Root threshold funding and makes Registry-mirror
   recovery bound stalled observations rather than successful progress; necessary

@@ -89,9 +89,21 @@ On IC mainnet, every Fiduciary placement must carry an exact
 `acknowledge_fiduciary_cost = true`; non-Fiduciary placements must not claim
 that acknowledgement.
 
-Generated output is create-once and content-exact. Repeating generation with
-the same bytes succeeds; different bytes at the same output path require an
-explicit operator decision instead of being overwritten.
+Generated output is content-exact. Repeating generation with the same bytes
+succeeds without rewriting the file. A changed document is never overwritten
+implicitly; replace it only by supplying the SHA-256 of the file already on
+disk:
+
+```bash
+canic fleet generate staging \
+  --app-config apps/demo/canic.toml \
+  --release-build <release-build-id> \
+  --replace <current-fleets-staging-toml-sha256>
+```
+
+The guarded replacement rejects a missing output, a changed current digest, or
+an invalid digest before writing. Publication uses the same atomic durable-file
+boundary as current Fleet operator state.
 
 ## Desired State
 

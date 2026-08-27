@@ -1032,6 +1032,89 @@ mod tests {
         );
     }
 
+    #[test]
+    fn published_managed_app_support_drives_composed_lifecycle() {
+        let workspace_root = workspace_root();
+        let target_dir = test_target_dir(&workspace_root, "pic-canic-icydb-lifecycle-wasm");
+        build_combined_canister_once(&workspace_root);
+        let wasm = read_wasm(
+            &target_dir,
+            "canic_icydb_lifecycle_probe",
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        );
+        let admitted = Fake::principal(15);
+        let input = canic::testing::ManagedAppQualificationInput::new(
+            include_str!("../../../../canisters/test/canic_icydb_lifecycle_probe/canic.toml"),
+            "test",
+            "test",
+            super::super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.1,
+            vec![admitted],
+            wasm,
+        );
+        let fixture = canic::testing::install_managed_app(input)
+            .expect("install through published managed-App support");
+
+        assert_eq!(
+            fixture
+                .admission_status()
+                .expect("prepared admission status")
+                .phase,
+            FleetAdmissionProjectionPhase::Fenced
+        );
+        let prepared: Result<Result<ComposedFrameworkAdmissionReceipt, Error>, _> =
+            fixture.pic().update_candid_as(
+                fixture.app(),
+                admitted,
+                "composed_framework_admission_probe",
+                (),
+            );
+        assert!(prepared.is_err());
+
+        fixture
+            .configure_and_wait_until_active(30)
+            .expect("activate through published managed-App support");
+        for _ in 0..3 {
+            fixture.pic().advance_time(Duration::from_secs(1));
+            fixture.pic().tick();
+        }
+        assert_eq!(
+            fixture
+                .admission_status()
+                .expect("open admission status")
+                .phase,
+            FleetAdmissionProjectionPhase::Open
+        );
+        let admitted_result: Result<ComposedFrameworkAdmissionReceipt, Error> =
+            fixture.pic().update_candid_as_or_panic(
+                fixture.app(),
+                admitted,
+                "composed_framework_admission_probe",
+                (),
+            );
+        assert!(admitted_result.is_ok());
+
+        fixture
+            .upgrade_same_release(Duration::from_mins(5))
+            .expect("same-release managed-App upgrade");
+        assert_eq!(
+            fixture
+                .admission_status()
+                .expect("restored admission status")
+                .phase,
+            FleetAdmissionProjectionPhase::Open
+        );
+        fixture
+            .prepare_admission_successor([0x94; 32], vec![admitted, Fake::principal(16)])
+            .expect("fence successor through published managed-App support");
+        assert_eq!(
+            fixture
+                .admission_status()
+                .expect("fenced successor status")
+                .phase,
+            FleetAdmissionProjectionPhase::Fenced
+        );
+    }
+
     fn activate_projection(
         pic: &PocketIc,
         canister: Principal,
@@ -1131,6 +1214,10 @@ mod tests {
             (
                 "managed admission target transition",
                 managed_admission_target_transition_replays_and_recovers_forward,
+            ),
+            (
+                "published managed-App support",
+                published_managed_app_support_drives_composed_lifecycle,
             ),
         ]
     }

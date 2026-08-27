@@ -27,6 +27,8 @@ mod instructions;
 mod macros; // private implementation boundary
 pub mod prelude;
 pub mod protocol;
+#[cfg(all(feature = "testing", not(target_arch = "wasm32")))]
+pub mod testing;
 
 #[doc(hidden)]
 pub mod __internal {

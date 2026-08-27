@@ -7,7 +7,7 @@ publish = false
 description = "IcyDB schema fixture for Canic lifecycle composition tests"
 
 [dependencies]
-icydb-model = "0.245"
+icydb-model = { workspace = true }
 
 [lints]
 workspace = true

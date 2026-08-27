@@ -49,11 +49,20 @@ not selected through a facade feature.
 | `auth-issuer-canister-sig-verify` | No | Issuer canister-signature token-proof verification. |
 | `auth-delegated-token-verify` | No | Delegated-token verification, including required chain-key and issuer-signature verification support. |
 | `internal-test-fixtures` | No | Repository qualification helpers that are excluded from product-role builds and grant no runtime capability. |
+| `testing` | No | Host-only managed-App and standalone-local PocketIC qualification support; never compiled into Wasm roles and grants no runtime capability. |
 
 The `control-plane` feature is the normal root-role selection. The narrower
 `fleet-coordinator-canister` and `wasm-store-canister` features exist for
 Canic-owned infrastructure packages; neither is an alternate application or
 root configuration.
+
+Downstream App test packages may enable `testing` on their development-only
+`canic` dependency. `canic::testing` constructs the exact managed init and
+runtime-directory authority from the App's checked-in `canic.toml`, drives
+fencing/activation and same-release upgrade, and re-exports the bounded
+PocketIC call surface needed for application-specific assertions. Downstreams
+do not need direct `canic-core` or `ic-testkit` dependencies. See the
+[managed-App qualification guide](../../docs/features/build-and-evidence/managed-app-qualification.md).
 
 ## Config-Driven Auth Features
 

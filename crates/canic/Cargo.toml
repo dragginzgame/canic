@@ -29,6 +29,7 @@ auth-issuer-canister-sig-create = ["canic-core/auth-issuer-canister-sig-create"]
 auth-issuer-canister-sig-verify = ["canic-core/auth-issuer-canister-sig-verify"]
 auth-delegated-token-verify = ["canic-core/auth-delegated-token-verify"]
 internal-test-fixtures = ["canic-core/internal-test-fixtures"]
+testing = ["dep:ic-testkit"]
 
 [dependencies]
 candid = { workspace = true }
@@ -40,6 +41,7 @@ ic0 = { workspace = true }
 serde = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ic-testkit = { workspace = true, optional = true }
 toml = { workspace = true }
 
 [dev-dependencies]

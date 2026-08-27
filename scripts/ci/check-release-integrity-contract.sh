@@ -16,7 +16,6 @@ GIT_HOOK_INSTALLER="$ROOT/scripts/dev/install-git-hooks.sh"
 PRE_COMMIT_HOOK="$ROOT/.githooks/pre-commit"
 ICP_UPDATE="$ROOT/scripts/dev/update-icp-cli-pin.sh"
 INSTALLING="$ROOT/INSTALLING.md"
-README="$ROOT/README.md"
 SECRET_SCAN="$ROOT/scripts/ci/run-secret-scan.sh"
 GITLEAKS_IGNORE="$ROOT/.gitleaksignore"
 DEPENDENCY_RISK_GATE="$ROOT/scripts/ci/check-dependency-risk-inventory.sh"
@@ -33,6 +32,8 @@ TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
 POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 RELEASE_PUSH_READY="$ROOT/scripts/ci/check-release-push-ready.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
+RELEASE_REMOTE_STATE="$ROOT/scripts/ci/check-release-remote-state.sh"
+RELEASE_REMOTE_STATE_TEST="$ROOT/scripts/ci/test-release-remote-state.sh"
 POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
 WORKSPACE_TEST_INVENTORY_GATE="$ROOT/scripts/ci/check-workspace-test-inventory.sh"
@@ -54,7 +55,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -468,6 +469,8 @@ rg -F 'CANIC_RELEASE_VALIDATED' "$BUMP_VERSION" >/dev/null ||
     fail "direct release version mutation is not guarded by completed validation"
 rg -F 'CANIC_RELEASE_VALIDATED_HEAD' "$BUMP_VERSION" >/dev/null ||
     fail "release version mutation is not bound to the exact validated revision"
+rg -F 'check-release-remote-state.sh before-version "$PLANNED"' "$BUMP_VERSION" >/dev/null ||
+    fail "release version mutation does not refresh remote ancestry and tag state"
 rg -F 'cargo metadata --locked --offline --format-version 1 --no-deps' "$RELEASE_CANDIDATE" >/dev/null ||
     fail "post-bump release candidate does not verify locked offline metadata"
 rg -F 'still says Unreleased' "$RELEASE_CANDIDATE" >/dev/null ||
@@ -507,6 +510,18 @@ for release_push_script in "$RELEASE_PUSH_READY" "$RELEASE_PUSH"; do
     rg -F -- '--committed' "$release_push_script" >/dev/null ||
         fail "release push does not derive its version from committed HEAD"
 done
+rg -F 'check-release-remote-state.sh before-push "$version"' "$RELEASE_PUSH_READY" >/dev/null ||
+    fail "release push readiness does not refresh remote ancestry and tag state"
+rg -F 'git fetch --quiet --no-tags "$REMOTE"' "$RELEASE_REMOTE_STATE" >/dev/null ||
+    fail "release remote-state check does not fetch the current branch"
+rg -F 'git merge-base --is-ancestor "$REMOTE_HEAD" "$LOCAL_HEAD"' \
+    "$RELEASE_REMOTE_STATE" >/dev/null ||
+    fail "release remote-state check does not enforce fast-forward ancestry"
+rg -F 'git ls-remote --exit-code --refs "$REMOTE" "refs/tags/$TAG"' \
+    "$RELEASE_REMOTE_STATE" >/dev/null ||
+    fail "release remote-state check does not inspect the exact remote tag"
+bash "$RELEASE_REMOTE_STATE_TEST" >/dev/null ||
+    fail "release remote-state regression fixture failed"
 rg -F 'cargo get --entry "$entry" workspace.package.version' "$VERSION_READER" >/dev/null ||
     fail "workspace-version reader does not use cargo-get"
 rg -F 'git show HEAD:Cargo.toml' "$VERSION_READER" >/dev/null ||
@@ -600,10 +615,6 @@ rg -F "CANIC_INTERNAL_TOOLCHAIN: $rust_toolchain" "$CI" >/dev/null ||
     fail "CI internal Rust does not match rust-toolchain.toml"
 rg -F "CANIC_RUST_TOOLCHAIN=\"\${CANIC_RUST_TOOLCHAIN:-$rust_toolchain}\"" "$DEV_INSTALL" >/dev/null ||
     fail "developer bootstrap Rust does not match rust-toolchain.toml"
-rg -F "internal%20rust-$rust_toolchain-orange.svg" "$README" >/dev/null ||
-    fail "README internal Rust badge does not match rust-toolchain.toml"
-rg -F 'pins internal Rust `'"$rust_toolchain"'`' "$README" >/dev/null ||
-    fail "README internal Rust text does not match rust-toolchain.toml"
 
 icp_cli_required="$({
     sed -n 's/^pub(super) const REQUIRED_ICP_CLI_VERSION: &str = "\([^"]*\)";$/\1/p' "$ICP_MODEL"
