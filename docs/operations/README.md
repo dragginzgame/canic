@@ -13,6 +13,8 @@ validation notes.
   unvalidated installer branches.
 - [Fleet ensure](../features/operations/fleet-ensure.md) documents the sole
   current convergence and interruption-replay workflow.
+- [Recovery and retry runbooks](recovery-retry-runbooks.md) define the current
+  same-release replay, ambiguous-result and operator retry safety procedures.
 - [Release package and install validation](release-package-install-validation.md)
   records package, install, artifact, smoke-test, and environment-specific
   release gates.

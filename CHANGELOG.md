@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
-- The open `0.109.13` draft replaces fresh-install and historical recovery
+- `0.109.13` replaces fresh-install and historical recovery
   owners with one reviewed, cycle-conserving and interruption-safe
   `canic fleet ensure` reconciler and hard-cuts their compatibility surfaces.
   Retirement requires matching source-debit and treasury-credit proof, and
