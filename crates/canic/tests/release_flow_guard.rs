@@ -71,6 +71,13 @@ fn install_remote_state_guard(root: &Path) {
     write_executable(root, "scripts/ci/check-release-remote-state.sh", &source);
 }
 
+fn install_fast_patch_guard(root: &Path) {
+    let source =
+        fs::read_to_string(workspace_root().join("scripts/ci/check-fast-patch-eligibility.sh"))
+            .expect("fast patch guard should be readable");
+    write_executable(root, "scripts/ci/check-fast-patch-eligibility.sh", &source);
+}
+
 fn commit_all(root: &Path, message: &str) {
     run_git(root, &["add", "."]);
     run_git(
@@ -262,6 +269,52 @@ fn run_candidate_guard(root: &Path) -> Output {
         .current_dir(root)
         .output()
         .expect("candidate guard should run")
+}
+
+fn create_fast_patch_repo(name: &str) -> PathBuf {
+    let root = unique_temp_repo(name);
+    fs::create_dir_all(&root).expect("temp repo should be created");
+    run_git(&root, &["init"]);
+    write_file(
+        &root,
+        "Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.92.7\"\n",
+    );
+    write_file(
+        &root,
+        "Cargo.lock",
+        "[[package]]\nname = \"transitive\"\nversion = \"0.10.1\"\nchecksum = \"old\"\n",
+    );
+    write_file(
+        &root,
+        "docs/status/current.md",
+        "<!-- canic-release-state: source-development -->\n",
+    );
+    install_version_reader(&root);
+    install_fast_patch_guard(&root);
+    commit_all(&root, "validated source");
+    let source = git_output(&root, &["rev-parse", "HEAD"]);
+    write_file(
+        &root,
+        "docs/status/current.md",
+        &format!(
+            "<!-- canic-release-validation: version=0.92.7 source={source} date=2026-08-27 gate=complete -->\n"
+        ),
+    );
+    commit_all(&root, "Release 0.92.7");
+    tag_release(&root, "0.92.7");
+    root
+}
+
+fn run_fast_patch_eligibility(root: &Path) -> Output {
+    Command::new("bash")
+        .args([
+            "scripts/ci/check-fast-patch-eligibility.sh",
+            "--eligibility-only",
+        ])
+        .current_dir(root)
+        .output()
+        .expect("fast patch eligibility should run")
 }
 
 #[test]
@@ -484,6 +537,111 @@ fn release_candidate_accepts_only_sealed_release_mutation_after_validation() {
 }
 
 #[test]
+fn release_candidate_accepts_explicit_fast_validation_receipt() {
+    let (root, source) = create_candidate_repo("candidate-fast-receipt");
+    write_file(
+        &root,
+        "docs/status/current.md",
+        &format!(
+            "<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 gate=fast -->\n"
+        ),
+    );
+
+    let output = run_candidate_guard(&root);
+
+    assert!(
+        output.status.success(),
+        "guard should accept the explicit fast receipt\n{}",
+        output_text(&output)
+    );
+    assert!(output_text(&output).contains("fast gate"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn fast_patch_eligibility_accepts_docs_and_rejects_runtime_source() {
+    let root = create_fast_patch_repo("fast-eligibility");
+    write_file(&root, "docs/note.md", "non-runtime correction\n");
+    commit_all(&root, "documentation correction");
+
+    let accepted = run_fast_patch_eligibility(&root);
+    assert!(
+        accepted.status.success(),
+        "documentation-only patch should be eligible\n{}",
+        output_text(&accepted)
+    );
+
+    write_file(&root, "src/lib.rs", "pub fn runtime_change() {}\n");
+    commit_all(&root, "runtime change");
+    let rejected = run_fast_patch_eligibility(&root);
+    assert!(!rejected.status.success());
+    assert!(output_text(&rejected).contains("runtime, build, package, protocol"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn fast_patch_eligibility_accepts_only_patch_compatible_lock_changes() {
+    let root = create_fast_patch_repo("fast-lock-eligibility");
+    write_file(
+        &root,
+        "Cargo.lock",
+        "[[package]]\nname = \"transitive\"\nversion = \"0.10.2\"\nchecksum = \"new\"\n",
+    );
+    commit_all(&root, "compatible lock correction");
+
+    let accepted = run_fast_patch_eligibility(&root);
+    assert!(
+        accepted.status.success(),
+        "patch-compatible lock change should be eligible\n{}",
+        output_text(&accepted)
+    );
+
+    write_file(
+        &root,
+        "Cargo.lock",
+        "[[package]]\nname = \"transitive\"\nversion = \"0.11.0\"\nchecksum = \"other\"\n",
+    );
+    commit_all(&root, "incompatible lock correction");
+    let rejected = run_fast_patch_eligibility(&root);
+    assert!(!rejected.status.success());
+    assert!(output_text(&rejected).contains("is not patch-compatible"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn fast_patch_eligibility_reuses_complete_receipt_through_a_fast_release() {
+    let root = create_fast_patch_repo("fast-receipt-chain");
+    write_file(&root, "docs/first.md", "first fast patch\n");
+    commit_all(&root, "first fast source");
+    let first_source = git_output(&root, &["rev-parse", "HEAD"]);
+    write_file(
+        &root,
+        "Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.92.8\"\n",
+    );
+    write_file(
+        &root,
+        "docs/status/current.md",
+        &format!(
+            "<!-- canic-release-validation: version=0.92.8 source={first_source} date=2026-08-27 gate=fast -->\n"
+        ),
+    );
+    commit_all(&root, "Release 0.92.8");
+    tag_release(&root, "0.92.8");
+    write_file(&root, "docs/second.md", "second fast patch\n");
+    commit_all(&root, "second fast source");
+
+    let accepted = run_fast_patch_eligibility(&root);
+    assert!(
+        accepted.status.success(),
+        "fast release should retain its complete ancestor basis\n{}",
+        output_text(&accepted)
+    );
+    assert!(output_text(&accepted).contains("complete basis v0.92.7"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn release_candidate_rejects_unsealed_changelog_and_late_source_change() {
     let (root, _) = create_candidate_repo("candidate-rejections");
     write_file(
@@ -572,6 +730,12 @@ fn make_release_targets_are_sequential_and_push_is_guarded() {
     assert!(
         makefile.contains(release_patch),
         "release-patch must invoke each phase sequentially"
+    );
+
+    let release_patch_fast = "release-patch-fast:\n\t@$(MAKE) patch-fast\n\t@$(MAKE) release-stage\n\t@$(MAKE) release-commit\n\t@$(MAKE) release-push";
+    assert!(
+        makefile.contains(release_patch_fast),
+        "release-patch-fast must use the targeted gate and normal publication phases"
     );
 
     let release_commit = "release-commit:\n\t@scripts/ci/check-release-index.sh\n\t@$(MAKE) --no-print-directory release-candidate";

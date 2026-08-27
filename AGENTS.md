@@ -45,6 +45,14 @@ with this file, the code is wrong.
   separate mutation ceremony. This does not authorize broad validation,
   versioning, Git publication, deployment, destructive actions or external
   effects; those boundaries retain their own rules.
+- An unambiguous maintainer instruction in the current conversation is the
+  authority for the exact Git, version, release, publication or deployment
+  action it names. Ordinary language is sufficient; never require a magic
+  phrase, a second confirmation, or the maintainer to run the command by hand.
+  Use the active repository, release and environment context when it identifies
+  the target uniquely. Ask once only when the target or effect is genuinely
+  ambiguous. Generic continuation and push-readiness wording still do not
+  authorize those effects.
 - Minor boundaries are the exception: after the final batch, stop at
   closeout-audit readiness. Do not begin the next minor until the human
   maintainer explicitly requests that exact minor's closeout audit and accepts
@@ -172,15 +180,20 @@ policy and ops independently; ops may call model. Policy never calls ops.
   batch`, `make it push-ready`, or `keep going until we can push` never counts
   as an explicit request for a broad gate. Do not infer authorization for
   `make validate` or any equivalent full-suite command from those requests.
-- The human-owned deployment, version, and release flow runs `make test` and
-  the complete validation gate at its chosen boundary. Automated agents must
-  not pre-run those broad gates while coding; they hand off after the relevant
-  targeted checks pass.
-- The maintainer owns full deployment and publish validation. After targeted
-  checks pass, agents should state whether the complete planned release batch,
-  not merely the latest slice, is ready to push and whether its
+- The maintainer-directed deployment, version, and release flow chooses its
+  validation boundary. Automated agents must not pre-run broad gates while
+  coding, but may execute the exact broad or targeted release command the
+  maintainer explicitly requests.
+- After targeted checks pass, agents should state whether the complete planned
+  release batch, not merely the latest slice, is ready to push and whether its
   changelog/version surfaces are ready to publish; an unrun full suite is not,
   by itself, a blocker.
+- A patch containing no runtime, build, package, protocol or fixture source
+  change may use `make patch-fast` or `make release-patch-fast`. That governed
+  lane reuses the immutable published validation receipt, rejects ineligible
+  paths, runs targeted release/dependency/locked-compile checks, and records a
+  `fast` release-validation marker. It never runs PocketIC. Do not describe a
+  fast-lane result as complete workspace validation.
 - Unit tests live next to code; integration tests live in `tests/`.
 - Canister creation/install/upgrade/inter-canister tests must use PocketIC.
 - Do not add production `cfg(test)` behavior to fake IC management.

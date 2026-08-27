@@ -23,7 +23,7 @@ This checklist covers:
 - current desired-state Fleet convergence qualification;
 - release artifact verification expectations;
 - environment-specific gate ownership;
-- the boundary between implementation slices and human-owned release flow.
+- the boundary between implementation slices and maintainer-directed release flow.
 
 This checklist does not change runtime behavior, Candid, CLI output,
 JSON/output formats, package manifests, dependencies, lockfiles, fixtures,
@@ -97,7 +97,7 @@ Package/install gates may be expensive or environment-specific.
 | Installed CLI smoke | Installs into a temporary root and isolates `HOME`, `CARGO_HOME`, `CARGO_TARGET_DIR`, and `TMPDIR` under the proof root. | RC/final release owner or CI environment with local install support. |
 | Packaged downstream probes | Use package archives and temporary downstream roots; they intentionally reuse caller Cargo/Rust caches for offline package execution. | RC/final release owner or CI environment with package cache support. |
 | Fleet ensure PocketIC qualification | Runs inside the maintained workspace test graph and requires the pinned PocketIC server. | RC validation owner or CI. |
-| Release versioning targets | `make patch`, `make minor`, `make major`, `make release-stage`, `make release-commit`, and `make release-push` are human-owned release flow. | Maintainer only. |
+| Release versioning targets | Complete releases use `make patch`, `make minor`, or `make major`; eligible non-runtime patches may use `make patch-fast`. Staging, candidate verification, commit, immutable tag and atomic push remain the same. | Maintainer or explicitly authorized agent. |
 
 If a package/install gate is not run locally, the RC audit must record:
 
@@ -109,10 +109,13 @@ If a package/install gate is not run locally, the RC audit must record:
 
 ## Release Flow Boundary
 
-Automated agents must never change release versions, install URLs, package
-versions, workspace dependency versions, or release-script default versions.
+Release mutation and publication require an explicit maintainer instruction.
+An automated agent may execute that instruction without a second confirmation.
+Absent that direct authority, it must not change release versions, install
+URLs, package versions, workspace dependency versions or release-script
+defaults.
 
-Human-owned release flow remains:
+Complete release flow remains:
 
 ```text
 make patch
@@ -122,6 +125,10 @@ make release-stage
 make release-commit
 make release-push
 ```
+
+An eligible non-runtime patch may substitute `make patch-fast` for `make
+patch`, or use the one-shot `make release-patch-fast`. That lane skips broad
+tests and PocketIC but records an explicit fast validation receipt.
 
 The package/install validation gates are release-readiness evidence. They do
 not authorize an automated version bump, tag, publish, or package-artifact

@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.15` adds an auditable fast release lane for non-runtime patches,
+  accepts direct maintainer authorization without repeated Git/release
+  ceremony, and replaces the yanked compatible `chacha20` lock entry.
 - `0.109.14` resolves infrastructure Candid from exact finalized artifact
   paths, adds guarded SHA-256 replacement for generated desired Fleet
   documents, keeps complete typed protocol graphs inside Fleet Ensure's

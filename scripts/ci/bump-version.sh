@@ -4,8 +4,8 @@ set -euo pipefail
 BUMP_TYPE=${1:-patch}
 
 if [[ "${CANIC_RELEASE_VALIDATED:-}" != "1" ]]; then
-  echo "❌ Refusing to bump before make validate passes." >&2
-  echo "Use make patch, make minor, or make major." >&2
+  echo "❌ Refusing to bump before a governed release validation lane passes." >&2
+  echo "Use make patch, make patch-fast, make minor, or make major." >&2
   exit 1
 fi
 
@@ -24,6 +24,20 @@ ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 VERSION_READER="$ROOT_DIR/scripts/ci/read-workspace-version.sh"
 CURRENT_HEAD="$(git rev-parse HEAD)"
+VALIDATION_KIND="${CANIC_RELEASE_VALIDATION_KIND:-complete}"
+
+case "$VALIDATION_KIND" in
+  complete | fast) ;;
+  *)
+    echo "❌ Unsupported release validation kind: $VALIDATION_KIND" >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$BUMP_TYPE" != "patch" && "$VALIDATION_KIND" != "complete" ]]; then
+  echo "❌ Fast validation is available only for patch releases." >&2
+  exit 1
+fi
 
 if [[ "$CANIC_RELEASE_VALIDATED_HEAD" != "$CURRENT_HEAD" ]]; then
   echo "❌ Validated source revision is stale or mismatched." >&2
@@ -140,7 +154,7 @@ RELEASE_DATE="${CANIC_RELEASE_DATE:-$(date -u +%F)}"
 sed -i \
   "s/^## $NEW - Unreleased$/## $NEW - $RELEASE_DATE/" \
   "$DETAILED_CHANGELOG"
-VALIDATION_STATUS_MARKER="<!-- canic-release-validation: version=$NEW source=$CURRENT_HEAD date=$RELEASE_DATE -->"
+VALIDATION_STATUS_MARKER="<!-- canic-release-validation: version=$NEW source=$CURRENT_HEAD date=$RELEASE_DATE gate=$VALIDATION_KIND -->"
 sed -i \
   "s#^$SOURCE_STATUS_MARKER\$#$VALIDATION_STATUS_MARKER#" \
   "$STATUS_DOCUMENT"

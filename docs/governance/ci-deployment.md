@@ -13,6 +13,7 @@ versioning, releases, and deployment-adjacent automation.
 - Repository invariants: `make check-invariants`
 - Shell automation lint: `make shellcheck`
 - Complete local validation: `make validate`
+- Eligible non-runtime patch validation and bump: `make patch-fast`
 - Release-cadence advisory: `make release-cadence`
 
 Primitive targets perform only the operation they name. They do not configure
@@ -30,6 +31,24 @@ independent Cargo processes do not contend for the same build graph. Complete
 failed-target logs are retained under
 `target/validation-failures/`; the terminal summary repeats bounded failure
 detail and the exact failed target list.
+
+## Command Authority
+
+An unambiguous maintainer instruction in the current conversation authorizes
+the exact Git, version, release, publication or deployment action it names.
+Natural language is enough; automation must not require a magic phrase, a
+second confirmation or a hand-executed command. The active repository,
+version, Fleet and environment context may resolve the target when only one is
+possible. Ask once when the target or external effect remains genuinely
+ambiguous. Generic continuation, readiness and audit requests do not authorize
+external effects.
+
+Before an authorized network effect, retain the checks that prevent actual
+damage: exact network and identity, exact reviewed plan digest, maximum debit,
+cycle conservation and duplicate-effect protection. If those facts still
+match the reviewed plan, do not add another ceremony gate. A changed digest,
+environment, identity, debit bound or destructive disposition requires a new
+plan or maintainer decision.
 
 Release-blocking guards validate machine-relevant facts, not editorial prose.
 Exact checks are appropriate for structured records, identifiers, versions,
@@ -153,8 +172,8 @@ Validation is tiered:
   compile commands that exercise the touched code and relevant invariant.
 - Human/CI batch validation may add wider package checks when cross-cutting
   behavior warrants them.
-- The human-owned deployment/version/release flow owns workspace-wide,
-  release-matrix, broad PocketIC and complete `make validate` gates.
+- The maintainer-directed deployment/version/release flow chooses whether the
+  complete gate or the governed fast patch lane is appropriate.
 
 For documentation-only governance changes, use docs-appropriate validation such
 as formatting, whitespace, link-shape review, and `git diff --check`. Do not run
@@ -174,46 +193,37 @@ outside a declared and validated cell do not create support claims.
 
 ## Git Boundary
 
-Automated agents must never run:
-
-- `git add`
-- `git commit`
-- `git push`
-
-Agents may inspect state with read-only commands such as `git status`,
-`git diff`, `git log`, and `git show`. Humans own staging, commits, pushes,
-tags, and history.
+Automated agents may stage, commit, tag and push when the maintainer explicitly
+requests those actions in the current conversation. The instruction need not
+use prescribed wording and may authorize the normal sequential release command
+as one action. Without that instruction, agents remain read-only for Git
+publication and may inspect state with commands such as `git status`,
+`git diff`, `git log`, and `git show`.
 
 Do not rewrite history or tags. Do not revert user changes unless explicitly
 requested.
 
 ## Versioning and Release
 
-Automated agents must never change release version numbers directly.
+Version mutation, tagging, publication and push require an explicit maintainer
+instruction, but an automated agent may execute them once instructed. A direct
+request such as “publish 0.109.15” is sufficient authority for the normal
+version, stage, commit, tag, push and package-publication sequence in the named
+repository. Do not ask the maintainer to repeat it or run intermediate commands
+by hand. Do not infer the same authority from “continue,” “finish,” “ready to
+push,” an audit request or a request to prepare a candidate.
 
-Do not run:
-
-- `cargo set-version`
-- `scripts/ci/sync-release-surface-version.sh`
-- `scripts/ci/bump-version.sh`
-- `make patch`
-- `make release-patch`
-- `make minor`
-- `make release-minor`
-- `make major`
-- `make release-major`
-
-Release bumps are human-owned. The normal human release path is `make patch`,
-`make minor`, or `make major`, followed by review of generated changes. Once
-reviewed, humans finish the release with `make release-stage`,
-`make release-commit`, and `make release-push`.
+The normal complete patch path is `make patch`, followed by
+`make release-stage`, `make release-commit`, and `make release-push`; the
+one-shot form is `make release-patch`. Minor and major releases use their
+corresponding commands.
 Before patch validation and version mutation, `make patch` prints the
 read-only `make release-cadence` advisory. The advisory reports when the next
 release would exceed the soft 12-release minor-line guideline but never blocks
 or expands the maintainer's release authority.
-The Make version targets require a clean source tree, run the same explicit
-`make validate` workflow and recheck tracked cleanliness before changing
-package versions. They do
+The complete Make version targets require a clean source tree, run the same
+explicit `make validate` workflow and recheck tracked cleanliness before
+changing package versions. They do
 not mutate source formatting; the pre-commit hook handles routine formatting,
 while validation's `make fmt-check` catches bypassed hooks. Any failed target
 leaves the version unchanged. The underlying bump script rejects direct
@@ -241,6 +251,31 @@ non-release change after the validated source, and checks locked offline Cargo
 metadata, uniform workspace package versions and the installed-CLI default
 without repeating the already completed full source validation.
 
+### Fast non-runtime patch lane
+
+`make patch-fast` is a governed alternative only when the current workspace
+version has an exact immutable published tag and every attributable change
+after that tag is confined to documentation/governance, the lockfile, or the
+release tooling that owns this lane. Runtime, build, package, protocol,
+generated, Candid, configuration and product-fixture changes reject before
+version mutation. `make release-patch-fast` performs the same eligible gate and
+then uses the normal stage, candidate, commit, tag and atomic push path.
+
+The fast lane verifies the immutable tag's structured validation receipt,
+requires that receipt or its fast-release chain to retain a complete validated
+release ancestor, and checks ancestry, diff hygiene, current-document and
+release-matrix semantics. It runs
+the release integrity and release-flow checks when tooling changed. A lockfile
+change additionally runs the dependency-risk gate, locked offline metadata and
+a locked workspace all-targets check. It deliberately skips workspace tests
+and PocketIC. The sealed status marker records `gate=fast`; it is not evidence
+that `make validate` ran on that patch.
+
+Use the fast lane for a compatible patch-only lock correction, documentation/governance
+correction or release-tooling correction whose production source is unchanged.
+Any ineligible path, missing receipt, non-ancestor tag or targeted failure
+falls back to the complete path; there is no override flag.
+
 When an accepted release batch declares an exact downstream pre-publication
 qualification gate, freeze one clean source commit before running that gate.
 Build the candidate executable from that commit and run the declared no-effect
@@ -248,7 +283,7 @@ preflight before version mutation or publication. A source change invalidates
 the downstream result and requires a new candidate commit; release-only
 version surfaces do not change the qualified source. Run focused checks while
 editing, the one declared production-boundary journey before review, and the
-complete `make validate` gate once through the normal human version target
+complete `make validate` gate once through the normal maintainer-directed version target
 after the source candidate is frozen. Publication may proceed only when the
 downstream preflight and normal release gate both identify that unchanged
 source candidate.
@@ -290,11 +325,11 @@ new `main` release commit owns one CI result containing preflight, security,
 MSRV, Rust checks, ordinary tests, serial PocketIC tests and the conditional
 release-profile workspace build. A green tag must never coexist with a red CI
 result for the same source merely because the tag ran a weaker job graph.
-For one-shot releases, humans may run `make release-patch`,
-`make release-minor`, or `make release-major`, which perform those steps in
-order.
-Minor and major release bumps require interactive command-line confirmation
-before running `make validate`.
+For one-shot releases, the maintainer or an explicitly authorized agent may run
+`make release-patch`, `make release-patch-fast`, `make release-minor`, or
+`make release-major`, which perform those steps in order.
+Minor and major release commands do not add an interactive confirmation after
+the maintainer has already issued the explicit command.
 
 Publishing first re-runs the release-candidate guard, then verifies that every
 crate in the governed publish order exposes the same workspace version before
