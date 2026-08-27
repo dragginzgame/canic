@@ -5,21 +5,27 @@
 //! Boundary: the workflow calls one method only after persisting its exact action identity.
 
 use crate::{
+    canister_protocol::query_with_candid,
     fleet_ensure::{
         model::{
-            CanisterRuntimeStatus, DesiredFleet, EffectRecord, EnsureAction,
+            CanisterRuntimeStatus, DesiredCanisterKind, DesiredFleet, EffectRecord, EnsureAction,
             FleetEnsureStateRecord, FleetObservation, InstallMode, LiveCanister,
             RetirementTransferBalances, RetirementTransferInvariantError,
-            RetirementTransferReconciliation, reconcile_retirement_transfer,
+            RetirementTransferReconciliation, RootOwnedCanisterLifecycle,
+            reconcile_retirement_transfer,
         },
         ops::{
-            EffectObservation, EffectOutcome, EnsurePlatform, TerminalFleetInventory,
-            current_protocol, protocol,
+            EffectObservation, EffectOutcome, EnsurePlatform, TerminalFleetInventory, canic_init,
+            current_protocol, protocol, root_owned_lifecycle,
         },
     },
     icp::{IcpCandidCallError, IcpCli, IcpCommandError, IcpDiagnostic, run_status},
 };
 use candid::{CandidType, Nat, Principal};
+use canic_core::{
+    dto::pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
+    protocol as canic_protocol,
+};
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
@@ -40,6 +46,16 @@ struct DrainRequest {
 enum DrainResponse {
     Accepted { transferred_cycles: Nat },
     Replayed { transferred_cycles: Nat },
+}
+
+#[derive(CandidType)]
+enum RootPoolStatusRequest {
+    Pool(CanisterPoolStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootPoolStatusResponse {
+    Pool(Box<CanisterPoolResponse>),
 }
 
 #[derive(CandidType)]
@@ -239,6 +255,9 @@ pub enum IcpEnsurePlatformError {
     CurrentProtocol(#[from] current_protocol::CurrentProtocolError),
 
     #[error(transparent)]
+    CanicInit(#[from] canic_init::CanicInitError),
+
+    #[error(transparent)]
     Protocol(#[from] protocol::ProtocolEffectError),
 }
 
@@ -386,8 +405,123 @@ impl IcpEnsurePlatform {
             cycles,
             module_sha256: report.module_hash.map(|hash| normalize_hash(&hash)),
             principal: principal.to_string(),
+            root_owned_lifecycle: None,
             status,
         }))
+    }
+
+    fn observe_configured_canister(
+        &self,
+        configured: &crate::fleet_ensure::model::DesiredCanister,
+        principal: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        if configured.kind == DesiredCanisterKind::Pool {
+            return self.observe_root_owned_canister(configured, principal, state);
+        }
+        match self.status_optional(principal) {
+            Ok(observed) => Ok(observed),
+            Err(error)
+                if matches!(
+                    configured.kind,
+                    DesiredCanisterKind::Store | DesiredCanisterKind::Pool
+                ) && !matches!(
+                    error,
+                    IcpEnsurePlatformError::Icp(ref source)
+                        if matches!(
+                            source.diagnostic(),
+                            Some(IcpDiagnostic::CanisterNotFound { .. })
+                        )
+                ) =>
+            {
+                self.observe_root_owned_canister(configured, principal, state)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn observe_root_owned_canister(
+        &self,
+        configured: &crate::fleet_ensure::model::DesiredCanister,
+        principal: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        let protocol_intent = self.desired.protocol.as_ref().ok_or_else(|| {
+            current_protocol::CurrentProtocolError::Configuration(
+                "Root-owned observation requires typed Fleet protocol".to_string(),
+            )
+        })?;
+        let parent = configured.parent.as_deref().ok_or_else(|| {
+            current_protocol::CurrentProtocolError::Configuration(format!(
+                "Root-owned canister {} has no Root parent",
+                configured.name
+            ))
+        })?;
+        let root = self.current_principal(state, parent).ok_or_else(|| {
+            current_protocol::CurrentProtocolError::Configuration(format!(
+                "Root-owned canister {} has no resolved Root",
+                configured.name
+            ))
+        })?;
+        let candid = resolve_path(&self.root, &protocol_intent.root_candid);
+        let target = parse_principal("Root-owned canister", principal)?;
+        let mut start_after = None;
+        loop {
+            let response: RootPoolStatusResponse = query_with_candid(
+                &self.icp,
+                &candid,
+                parse_principal("Fleet Subnet Root", root)?,
+                canic_protocol::CANIC_STATUS,
+                &RootPoolStatusRequest::Pool(CanisterPoolStatusRequest {
+                    start_after,
+                    limit: 256,
+                }),
+            )
+            .map_err(current_protocol::CurrentProtocolError::from)?;
+            let RootPoolStatusResponse::Pool(page) = response;
+            if let Some(asset) = page
+                .entries
+                .into_iter()
+                .find(|asset| asset.canister_id == target)
+            {
+                let Some(root_owned_lifecycle) =
+                    root_owned_lifecycle(configured.kind, &asset.status)
+                else {
+                    return Err(current_protocol::CurrentProtocolError::Configuration(format!(
+                        "Root-owned canister {} has a live pool role incompatible with desired {:?}",
+                        configured.name, configured.kind
+                    ))
+                    .into());
+                };
+                return Ok(Some(LiveCanister {
+                    controllers: vec![root.to_string()],
+                    cycles: asset.cycles.to_u128(),
+                    module_sha256: None,
+                    principal: principal.to_string(),
+                    root_owned_lifecycle: Some(root_owned_lifecycle),
+                    status: match root_owned_lifecycle {
+                        RootOwnedCanisterLifecycle::Store
+                        | RootOwnedCanisterLifecycle::Workload => CanisterRuntimeStatus::Running,
+                        RootOwnedCanisterLifecycle::Claimed | RootOwnedCanisterLifecycle::Idle => {
+                            CanisterRuntimeStatus::Stopped
+                        }
+                    },
+                }));
+            }
+            let next = page.next_start_after;
+            if next.is_none() {
+                return Ok(None);
+            }
+            if next == start_after {
+                return Err(
+                    current_protocol::CurrentProtocolError::Configuration(format!(
+                        "Root {parent} pool cursor did not advance"
+                    ))
+                    .into(),
+                );
+            }
+            start_after = next;
+        }
     }
 
     fn apply_create(
@@ -494,6 +628,7 @@ impl IcpEnsurePlatform {
         &self,
         operation_id: &str,
         principals: &BTreeMap<String, String>,
+        canic_init: Option<&crate::fleet_ensure::model::DesiredCanisterInit>,
         init_arg: Option<&str>,
         init_arg_sha256: Option<&str>,
         init_candid: Option<&str>,
@@ -512,7 +647,21 @@ impl IcpEnsurePlatform {
         });
         command.args(["--yes", "--wasm"]);
         command.arg(resolve_path(&self.root, wasm));
-        let generated_init = if let Some(init_arg) = init_arg {
+        let generated_init = if let Some(canic_init) = canic_init {
+            let path = canic_init::write_arguments(canic_init::CanicInitRequest {
+                desired: &self.desired,
+                init: canic_init,
+                operation_id,
+                principals,
+                root: &self.root,
+                wasm,
+                wasm_sha256,
+            })?;
+            command.arg("--args-file");
+            command.arg(&path);
+            command.args(["--args-format", "bin"]);
+            Some(path)
+        } else if let Some(init_arg) = init_arg {
             let expected =
                 init_arg_sha256.ok_or_else(|| IcpEnsurePlatformError::ArtifactDigestMismatch {
                     actual: "missing".to_string(),
@@ -641,7 +790,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
         for configured in &self.desired.canisters {
             let observed = self
                 .current_principal(state, &configured.name)
-                .map(|principal| self.status_optional(principal))
+                .map(|principal| self.observe_configured_canister(configured, principal, state))
                 .transpose()?
                 .flatten();
             canisters.insert(configured.name.clone(), observed);
@@ -702,6 +851,16 @@ impl EnsurePlatform for IcpEnsurePlatform {
         if self.desired.protocol.is_none() {
             return Ok(Vec::new());
         }
+        let store_control = current_protocol::compile_store_control_actions(
+            &self.icp,
+            &self.root,
+            &self.desired,
+            operation_id,
+            state,
+        )?;
+        if !store_control.is_empty() {
+            return Ok(store_control);
+        }
         let coordinator = self
             .desired
             .canisters
@@ -713,15 +872,15 @@ impl EnsurePlatform for IcpEnsurePlatform {
             })
             .expect("typed topology validation requires one Coordinator");
         let Some(principal) = self.current_principal(state, &coordinator.name) else {
-            return Ok(Vec::new());
+            return Ok(store_control);
         };
         let Some(live) = self.status_optional(principal)? else {
-            return Ok(Vec::new());
+            return Ok(store_control);
         };
         if let Some(wasm) = &coordinator.wasm {
             let expected = artifact_hash(&resolve_path(&self.root, wasm))?;
             if live.module_sha256.as_deref() != Some(expected.as_str()) {
-                return Ok(Vec::new());
+                return Ok(store_control);
             }
         }
         current_protocol::compile(&self.icp, &self.root, &self.desired, operation_id, state)
@@ -979,6 +1138,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 Self::action_principal(state, principal)?,
             ),
             EnsureAction::Install {
+                canic_init,
                 init_arg,
                 init_arg_sha256,
                 init_candid,
@@ -991,6 +1151,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             } => self.apply_install(
                 operation_id,
                 &self.protocol_principals(state),
+                canic_init.as_ref(),
                 init_arg.as_deref(),
                 init_arg_sha256.as_deref(),
                 init_candid.as_deref(),
@@ -1058,19 +1219,46 @@ impl EnsurePlatform for IcpEnsurePlatform {
         action: &EnsureAction,
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error> {
-        let principal = match action {
+        let (name, principal) = match action {
             EnsureAction::Create { .. } => return Ok(None),
-            EnsureAction::Delete { principal, .. }
-            | EnsureAction::FleetProtocol { principal, .. }
-            | EnsureAction::Fund { principal, .. }
-            | EnsureAction::Install { principal, .. }
-            | EnsureAction::Protocol { principal, .. }
-            | EnsureAction::SetControllers { principal, .. }
-            | EnsureAction::Start { principal, .. }
-            | EnsureAction::Stop { principal, .. }
-            | EnsureAction::Transfer { principal, .. } => Self::action_principal(state, principal)?,
+            EnsureAction::Delete {
+                name, principal, ..
+            }
+            | EnsureAction::FleetProtocol {
+                name, principal, ..
+            }
+            | EnsureAction::Fund {
+                name, principal, ..
+            }
+            | EnsureAction::Install {
+                name, principal, ..
+            }
+            | EnsureAction::Protocol {
+                name, principal, ..
+            }
+            | EnsureAction::SetControllers {
+                name, principal, ..
+            }
+            | EnsureAction::Start {
+                name, principal, ..
+            }
+            | EnsureAction::Stop {
+                name, principal, ..
+            }
+            | EnsureAction::Transfer {
+                name, principal, ..
+            } => (name, Self::action_principal(state, principal)?),
         };
-        Ok(self.status_optional(principal)?.map(|live| live.cycles))
+        let observed = self
+            .desired
+            .canisters
+            .iter()
+            .find(|configured| configured.name == *name)
+            .map_or_else(
+                || self.status_optional(principal),
+                |configured| self.observe_configured_canister(configured, principal, state),
+            )?;
+        Ok(observed.map(|live| live.cycles))
     }
 
     fn action_destination_cycles(
@@ -1226,5 +1414,67 @@ const fn rejection_code_name(code: RejectionCode) -> &'static str {
         RejectionCode::SysFatal => "sys_fatal",
         RejectionCode::SysTransient => "sys_transient",
         RejectionCode::Unknown => "unknown",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use canic_core::dto::pool::CanisterPoolAssetStatus;
+
+    #[test]
+    fn root_owned_observation_classifies_bootstrap_and_workload_lifecycle() {
+        assert_eq!(
+            root_owned_lifecycle(DesiredCanisterKind::Store, &CanisterPoolAssetStatus::Store),
+            Some(RootOwnedCanisterLifecycle::Store)
+        );
+        assert_eq!(
+            root_owned_lifecycle(DesiredCanisterKind::Pool, &CanisterPoolAssetStatus::Ready),
+            Some(RootOwnedCanisterLifecycle::Idle)
+        );
+        assert_eq!(
+            root_owned_lifecycle(
+                DesiredCanisterKind::Pool,
+                &CanisterPoolAssetStatus::Claimed {
+                    claim: canic_core::dto::pool::CanisterPoolClaim {
+                        component: canic_core::ids::ComponentInstanceId::from_generated_bytes(
+                            [1; 32]
+                        ),
+                        operation_id: [2; 32],
+                    },
+                }
+            ),
+            Some(RootOwnedCanisterLifecycle::Claimed)
+        );
+        assert_eq!(
+            root_owned_lifecycle(
+                DesiredCanisterKind::Pool,
+                &CanisterPoolAssetStatus::Workload {
+                    claim: canic_core::dto::pool::CanisterPoolClaim {
+                        component: canic_core::ids::ComponentInstanceId::from_generated_bytes(
+                            [1; 32]
+                        ),
+                        operation_id: [2; 32],
+                    },
+                }
+            ),
+            Some(RootOwnedCanisterLifecycle::Workload)
+        );
+        assert_eq!(
+            root_owned_lifecycle(
+                DesiredCanisterKind::Pool,
+                &CanisterPoolAssetStatus::HandingOff {
+                    recipient: Principal::anonymous(),
+                }
+            ),
+            None
+        );
+        assert_eq!(
+            root_owned_lifecycle(
+                DesiredCanisterKind::Store,
+                &CanisterPoolAssetStatus::PendingReset
+            ),
+            None
+        );
     }
 }

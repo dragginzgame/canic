@@ -34,7 +34,10 @@ use canic_core::{
         model::replay::CommandKind,
         ops::{
             cost_guard::{CostGuardPermit, CostGuardRequest},
-            ic::{IcOps, mgmt::MgmtOps},
+            ic::{
+                IcOps,
+                mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
+            },
             icp_refill::IcpRefillStoreOps,
             root_draining_reservation::FleetSubnetRootDrainingReservationOps,
         },
@@ -101,8 +104,6 @@ struct ComponentRegistrySourceAuthority<'a> {
 
 #[derive(Eq, PartialEq)]
 struct SiblingWasmStoreLiveEvidence {
-    running: bool,
-    module_hash: Option<Vec<u8>>,
     controllers: Vec<Principal>,
 }
 
@@ -131,7 +132,9 @@ pub async fn adopt_wasm_store(
     )?;
 
     let observed = observe_sibling_wasm_store(&authority).await?;
-    require_sibling_wasm_store_controllers(&observed, &controllers)?;
+    prepare_sibling_wasm_store_controllers(&authority, &observed, &controllers).await?;
+    let prepared = observe_sibling_wasm_store(&authority).await?;
+    require_sibling_wasm_store_controllers(&prepared, &controllers)?;
     RootWasmStoreStateOps::commit_sibling_wasm_store_adoption(
         request.operation_id,
         authority,
@@ -187,21 +190,43 @@ fn sibling_wasm_store_controllers(authority: &FleetSubnetWasmStoreAuthority) -> 
 async fn observe_sibling_wasm_store(
     authority: &FleetSubnetWasmStoreAuthority,
 ) -> Result<SiblingWasmStoreLiveEvidence, InternalError> {
-    use canic_core::control_plane_support::ops::ic::mgmt::CanisterStatusType;
-
     let status = MgmtOps::canister_status(authority.wasm_store).await?;
     let mut controllers = status.settings.controllers;
     controllers.sort();
-    let evidence = SiblingWasmStoreLiveEvidence {
-        running: status.status == CanisterStatusType::Running,
-        module_hash: status.module_hash,
-        controllers,
-    };
-    let module_is_exact = evidence.module_hash.as_deref() == Some(&authority.wasm_module_hash);
-    if !evidence.running || !module_is_exact {
-        return Err(InternalError::conflict());
+    Ok(SiblingWasmStoreLiveEvidence { controllers })
+}
+
+async fn prepare_sibling_wasm_store_controllers(
+    authority: &FleetSubnetWasmStoreAuthority,
+    observed: &SiblingWasmStoreLiveEvidence,
+    expected: &[Principal],
+) -> Result<(), InternalError> {
+    if !sibling_wasm_store_requires_controller_update(authority, observed, expected)? {
+        return Ok(());
     }
-    Ok(evidence)
+    MgmtOps::update_settings(&UpdateSettingsArgs {
+        canister_id: authority.wasm_store,
+        settings: CanisterSettings {
+            controllers: Some(expected.to_vec()),
+            ..CanisterSettings::default()
+        },
+        sender_canister_version: None,
+    })
+    .await
+}
+
+fn sibling_wasm_store_requires_controller_update(
+    authority: &FleetSubnetWasmStoreAuthority,
+    observed: &SiblingWasmStoreLiveEvidence,
+    expected: &[Principal],
+) -> Result<bool, InternalError> {
+    if observed.controllers == expected {
+        return Ok(false);
+    }
+    if observed.controllers == [authority.fleet_subnet_root] {
+        return Ok(true);
+    }
+    Err(InternalError::conflict())
 }
 
 fn require_sibling_wasm_store_controllers(
@@ -1700,14 +1725,26 @@ mod tests {
     fn sibling_store_controllers_accept_only_exact_reconciler_authority() {
         let authority = authority().wasm_store_authority;
         let expected = sibling_wasm_store_controllers(&authority);
-        let evidence = |controllers| SiblingWasmStoreLiveEvidence {
-            running: true,
-            module_hash: Some(authority.wasm_module_hash.to_vec()),
-            controllers,
-        };
+        let evidence = |controllers| SiblingWasmStoreLiveEvidence { controllers };
 
         require_sibling_wasm_store_controllers(&evidence(expected.clone()), &expected)
             .expect("exact current controllers");
+        assert!(
+            !sibling_wasm_store_requires_controller_update(
+                &authority,
+                &evidence(expected.clone()),
+                &expected,
+            )
+            .expect("exact controllers are already prepared")
+        );
+        assert!(
+            sibling_wasm_store_requires_controller_update(
+                &authority,
+                &evidence(vec![authority.fleet_subnet_root]),
+                &expected,
+            )
+            .expect("Root-only ownership is the one accepted preparation source")
+        );
         assert!(
             require_sibling_wasm_store_controllers(
                 &evidence(vec![candid::Principal::anonymous()]),
@@ -1715,6 +1752,15 @@ mod tests {
             )
             .is_err(),
             "foreign controllers must fail closed",
+        );
+        assert!(
+            sibling_wasm_store_requires_controller_update(
+                &authority,
+                &evidence(vec![candid::Principal::anonymous()]),
+                &expected,
+            )
+            .is_err(),
+            "foreign controllers cannot be replaced",
         );
     }
 

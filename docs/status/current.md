@@ -87,8 +87,40 @@ Registry activation, Root-mirror activation, exact local Component Registry
 preparation, then Component provisioning and Fleet-catalog publication. Every
 response remains issued until its exact protected status proves terminal state.
 Store adoption retains the protected operator plus owning Root as its one
-direct controller set; the obsolete temporary/final controller transition is
-removed.
+terminal controller set. An explicitly seeded retained Store may begin
+Root-only; the Root durably records the exact current authority, adds only the
+protected operator, and re-observes the final set before the Store install can
+run. Foreign controller sets fail closed, and no temporary/final compatibility
+schema is retained.
+
+The high-level `canic fleet generate <fleet>` owner now compiles the low-level
+desired document from protected Fleet policy, an exact finalized complete
+release set and one explicit live estate seed. Release authority owns Wasm,
+Candid and typed Coordinator/Root/Store init contracts; it cannot invent
+Principals. Seeded Coordinator, Root, Store, pool and treasury identities are
+verified against the active operator, Registry-backed placement, direct
+management evidence and protected Root inventory before create-once output.
+The explicit seed retains the exact live Fleet ID, so changing the workspace
+environment, Fleet label or protected operator cannot silently rename the live
+Fleet. The exact seeded Coordinator is the deterministic default treasury; a
+separate treasury must likewise be explicitly seeded and observed. No project
+mapping, removed plan or historical journal is an identity oracle.
+Generation binds both child digests in the finalized complete release set,
+reads infrastructure Candid sidecars without following links, rejects
+duplicate retained identities and unexpected co-controllers, and checks the
+complete live Fleet/Coordinator/Root/Store relationship before create-once
+output. The maintained path deliberately adopts an explicitly seeded
+controlled treasury; it does not claim to bootstrap a literally empty estate.
+Every paid Root-owned asset must be seeded and remain inside the observed
+conservation total through idle, claimed and workload lifecycle states. An
+active Component asset receives no idle-pool minimum top-up and its Root and
+terminal Registry observations are deduplicated conservatively. Missing seeded
+canisters fail closed rather than being recreated. Retained Root identity is
+exact; old init-only policy may differ only when the current artifact reinstall
+will converge it, while drift on an already-current Root fails closed. The
+generated retained contract queries and binds the live Cycles Ledger fee,
+carries zero canister-creation fee authority, and treats its observation/update
+burn values as conservative measured ceilings.
 
 The governed production five-Component PocketIC journey now begins from a
 fresh estate and traverses that complete typed graph through terminal catalog
@@ -155,6 +187,30 @@ Targeted evidence on the dirty source candidate:
   Store/Registry/Component Registry convergence, terminal runtime activation,
   Fleet-catalog publication and an effect-free immediate replay. Peak reported
   RSS was 414,212 kB with 19 threads.
+- The generator/current-release follow-up has targeted checks passing: seven
+  focused public-generator tests within the 36 `canic-host` Fleet-ensure tests,
+  the current-release manifest test, five
+  `canic-cli` Fleet parsing/publication tests, and the focused control-plane
+  Store-controller test. Targeted locked checks for `canic-host`,
+  `canic-control-plane` and `canic-cli`, plus warning-denied Clippy for those
+  changed packages, also pass. These prove create-once generation, no invented
+  Fleet or treasury identity, exact retained-identity/controller sets,
+  Root-owned idle/claimed/workload classification, exact Root-only-to-
+  Root/operator Store preparation and foreign-controller rejection. The added
+  retained multi-Component public-generator-to-workflow journey binds the live
+  random Fleet ID, admits old 2T policy only behind the current Root reinstall,
+  retains both paid assets while one is a 4.9T workload under the desired 5T
+  policy, applies only three exact infrastructure reinstalls, emits no workload
+  top-up, conserves the full observed balance and proves an immediate zero-
+  effect replay. Generated Coordinator, Root and Store init
+  bytes round-trip against every authority-bearing field; a missing seeded
+  identity rejects instead of becoming a replacement creation. The generator
+  now binds the queried live Ledger fee, authorizes no creation fee for its
+  adoption-only estate, and keeps observation/update burn as measured
+  conservative ceilings. The public generator journey uses a process-backed
+  deterministic live-observation adapter; the separate governed PocketIC case
+  proves the real current control-plane graph. The maintainer-owned broad and
+  deployed gates remain intentionally unrun.
 - Six focused current-protocol compiler tests now also prove deterministic
   Registry-chain construction, exact Root/Store authority rejection,
   path-confined qualified Store bytes, content-bound chunk publication and

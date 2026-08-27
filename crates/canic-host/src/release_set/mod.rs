@@ -3,6 +3,7 @@
 mod application;
 mod artifact;
 mod config;
+mod current;
 mod infrastructure;
 mod paths;
 
@@ -22,6 +23,10 @@ pub use config::{
     ConfiguredRoleLifecycle, DeclaredAppRole, RenamedAppRole, attach_app_role, declare_app_role,
     plan_attach_app_role, plan_declare_app_role, plan_rename_app_role, read_app_config_identity,
     rename_app_role,
+};
+pub use current::{
+    CurrentReleaseSetManifest, CurrentReleaseSetManifestError, PersistedCurrentReleaseSetManifest,
+    compile_and_persist_current_release_set_manifest, load_persisted_current_release_set_manifest,
 };
 pub use infrastructure::{
     CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactEntry,

@@ -4,6 +4,7 @@
 //! Does not own: plan decisions or multi-step orchestration.
 //! Boundary: workflow persists an intent here before invoking one platform effect.
 
+mod canic_init;
 mod current_inventory;
 pub(super) mod current_protocol;
 mod platform;
@@ -15,12 +16,13 @@ use crate::{
         read_optional_regular_bytes, write_bytes,
     },
     fleet_ensure::model::{
-        DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
+        DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
         FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureJournalRecord, FleetEnsurePlan,
         FleetEnsureStateRecord, FleetObservation, ProtocolArtifactDigests,
+        RootOwnedCanisterLifecycle,
     },
 };
-use canic_core::cdk::utils::hash::sha256_hex;
+use canic_core::{cdk::utils::hash::sha256_hex, dto::pool::CanisterPoolAssetStatus};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
     collections::BTreeMap,
@@ -31,6 +33,26 @@ use std::{
 use thiserror::Error as ThisError;
 
 pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
+
+pub(crate) const fn root_owned_lifecycle(
+    kind: DesiredCanisterKind,
+    status: &CanisterPoolAssetStatus,
+) -> Option<RootOwnedCanisterLifecycle> {
+    match kind {
+        DesiredCanisterKind::Store if matches!(status, CanisterPoolAssetStatus::Store) => {
+            Some(RootOwnedCanisterLifecycle::Store)
+        }
+        DesiredCanisterKind::Pool => match status {
+            CanisterPoolAssetStatus::Ready
+            | CanisterPoolAssetStatus::PendingReset
+            | CanisterPoolAssetStatus::Failed { .. } => Some(RootOwnedCanisterLifecycle::Idle),
+            CanisterPoolAssetStatus::Claimed { .. } => Some(RootOwnedCanisterLifecycle::Claimed),
+            CanisterPoolAssetStatus::Workload { .. } => Some(RootOwnedCanisterLifecycle::Workload),
+            _ => None,
+        },
+        _ => None,
+    }
+}
 
 /// Successful evidence returned by one exact effect or exact replay.
 

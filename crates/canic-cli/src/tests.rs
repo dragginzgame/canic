@@ -87,6 +87,7 @@ fn current_command_help_and_versions_return_ok() {
         &["diagnostic", "--help"],
         &["evidence", "--help"],
         &["fleet", "--help"],
+        &["fleet", "generate", "--help"],
         &["fleet", "ensure", "--help"],
         &["info", "--help"],
         &["inspect", "--help"],

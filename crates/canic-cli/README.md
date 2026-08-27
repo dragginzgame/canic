@@ -73,6 +73,29 @@ on `PATH`.
 ## Fleet Ensure
 
 `canic fleet ensure` is the sole Fleet installation and convergence workflow.
+Generate its low-level desired document from protected Fleet policy, one
+finalized release build, and an explicit live-verified estate seed:
+
+```bash
+canic fleet generate staging \
+  --app-config apps/demo/canic.toml \
+  --release-build <release-build-id>
+```
+
+The release set supplies artifacts and typed init contracts; it never invents
+retained Principals. The seed supplies the exact live Fleet ID and exact
+Coordinator, Root, Store, pool and treasury identities, which Canic verifies
+through live management and protected Root inventory evidence. Fleet identity
+does not derive from the environment name or operator. The treasury is one
+explicitly adopted, already-present controlled canister; a missing identity
+fails closed. This adoption path does not invent a treasury for a literally
+empty estate. Every paid Root-owned pool asset must be seeded, including idle,
+claimed and workload assets, so no controlled balance falls outside the
+reviewed conservation equation. A workload remains the same conserved identity
+without receiving idle-pool funding or being counted again by terminal
+inventory. The generated contract binds the live Cycles Ledger fee and has zero
+creation-fee authority: a missing seeded canister is a blocker, never a request
+to create a replacement.
 The first invocation observes current state and retains a reviewed plan without
 executing Fleet mutations:
 

@@ -149,6 +149,7 @@ impl MockPlatform {
                         cycles: retained_cycles,
                         module_sha256: None,
                         principal: principal.clone(),
+                        root_owned_lifecycle: None,
                         status: CanisterRuntimeStatus::Running,
                     },
                 );
@@ -569,6 +570,28 @@ fn live_ledger_fee_drift_rejects_before_intent_or_effect() {
         workflow::EnsureWorkflowError::Policy(
             crate::fleet_ensure::policy::EnsurePolicyError::LedgerFeeDrift { .. }
         )
+    ));
+    assert_eq!(fixture.platform.mutations.values().sum::<u32>(), 0);
+}
+
+#[test]
+fn missing_exact_retained_identity_rejects_instead_of_creating_replacement() {
+    let mut fixture = fixture();
+    fixture.platform.live.remove(OLD_APP);
+    let error = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"8".repeat(64),
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect_err("missing seeded identity must fail closed");
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::Policy(
+            crate::fleet_ensure::policy::EnsurePolicyError::MissingObservation { name }
+        ) if name == "app"
     ));
     assert_eq!(fixture.platform.mutations.values().sum::<u32>(), 0);
 }
@@ -1178,6 +1201,13 @@ fn typed_fleet_protocol_is_issued_once_and_requires_terminal_status() {
         root_candid: "root.did".to_string(),
         store_candid: "store.did".to_string(),
     });
+    fixture
+        .desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+        .expect("fixture Coordinator")
+        .wasm = None;
     fixture.platform.desired = fixture.desired.clone();
     fixture.platform.protocol_command_only = true;
     fixture.platform.typed_protocol = true;
@@ -1323,6 +1353,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
                     .module_hash
                     .map(canic_core::cdk::utils::hash::hex_bytes),
                 principal: principal.to_string(),
+                root_owned_lifecycle: None,
                 status: match format!("{:?}", status.status).as_str() {
                     "Running" => CanisterRuntimeStatus::Running,
                     "Stopped" => CanisterRuntimeStatus::Stopped,
@@ -1650,6 +1681,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
     .expect("stop partial Root");
 
     let mut canisters = vec![DesiredCanister {
+        canic_init: None,
         controllers: vec![CONTROLLER.to_string()],
         drain: None,
         initial_cycles: "0".to_string(),
@@ -1668,8 +1700,11 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
     }];
     let mut root_desired =
         desired_canister("root", Some(&root_canister.to_string()), false, &wasm, None);
-    root_desired.kind = DesiredCanisterKind::Root;
-    root_desired.parent = Some("coordinator".to_string());
+    // This fixture exercises the generic effect/conservation engine with
+    // minimal Wasm, not the typed Canic control plane. The production typed
+    // journey owns Coordinator/Root/Store initialization separately.
+    root_desired.kind = DesiredCanisterKind::Auxiliary;
+    root_desired.parent = None;
     root_desired.initial_cycles = "1000000000000".to_string();
     root_desired.minimum_cycles = "1000000000000".to_string();
     canisters.push(root_desired);
@@ -1683,20 +1718,18 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
         "users",
     ] {
         let mut canister = desired_canister(role, None, false, &wasm, None);
-        canister.kind = match role {
-            "coordinator" => DesiredCanisterKind::Coordinator,
-            "store" => DesiredCanisterKind::Store,
-            _ => DesiredCanisterKind::Component,
+        canister.kind = if role == "coordinator" {
+            DesiredCanisterKind::Coordinator
+        } else {
+            DesiredCanisterKind::Auxiliary
         };
-        canister.parent = match canister.kind {
-            DesiredCanisterKind::Store | DesiredCanisterKind::Component => Some("root".to_string()),
-            _ => None,
-        };
+        canister.parent = None;
         canister.initial_cycles = "1000000000000".to_string();
         canister.minimum_cycles = "500000000000".to_string();
         canisters.push(canister);
     }
     let desired = DesiredFleet {
+        bootstrap: None,
         canisters,
         cycles_ledger: LEDGER.to_string(),
         environment: "local".to_string(),
@@ -1800,11 +1833,13 @@ fn fixture() -> Fixture {
     fs::write(&wasm, b"current-wasm").expect("write Wasm");
     fs::write(&candid, b"service : {};").expect("write Candid");
     let desired = DesiredFleet {
+        bootstrap: None,
         canisters: vec![
             desired_canister("treasury", Some(TREASURY), false, &wasm, None),
             desired_canister("created", None, false, &wasm, None),
             desired_canister("app", Some(OLD_APP), false, &wasm, None),
             DesiredCanister {
+                canic_init: None,
                 controllers: vec![CONTROLLER.to_string()],
                 drain: Some(drain(&candid)),
                 initial_cycles: "0".to_string(),
@@ -1861,6 +1896,7 @@ fn desired_canister(
     drain_candid: Option<&Path>,
 ) -> DesiredCanister {
     DesiredCanister {
+        canic_init: None,
         controllers: vec![CONTROLLER.to_string()],
         drain: drain_candid.map(drain),
         initial_cycles: "20".to_string(),
@@ -2022,6 +2058,7 @@ fn live(
         cycles,
         module_sha256: module_sha256.map(str::to_string),
         principal: principal.to_string(),
+        root_owned_lifecycle: None,
         status: if running {
             CanisterRuntimeStatus::Running
         } else {

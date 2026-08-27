@@ -13,7 +13,85 @@ exact retained plan digest.
 > terminal inventory and exact protocol bindings. That inventory is rebuilt
 > from terminal protected control-plane evidence, including protocol-created
 > Components, pool assets and bounded descendants. Focused implementation
-> qualification is complete; broad validation remains maintainer-owned.
+> qualification, including retained-estate generation through an effect-free
+> second ensure, is complete; broad validation remains maintainer-owned.
+
+## Generate Current Desired State
+
+Do not hand-author the low-level Coordinator/Root/Store authority document.
+After a complete `canic build`, generate it from the protected high-level Fleet
+policy, the finalized release-build ID printed by that build, and an explicit
+current-estate identity seed in `deployments/<fleet>.estate.toml`:
+
+```toml
+schema_version = 1
+fleet_id = "<retained-live-fleet-id>"
+coordinator = "<retained-coordinator-principal>"
+cycles_ledger = "um5iw-rqaaa-aaaaq-qaaba-cai"
+
+# Optional; omit to adopt the Coordinator as treasury.
+[treasury]
+principal = "<retained-controlled-treasury-principal>"
+subnet = "<treasury-subnet-principal>"
+
+[[roots]]
+placement_subnet = "<subnet-principal>"
+root = "<retained-root-principal>"
+store = "<retained-store-principal>"
+pool_imports = ["<retained-root-owned-canister-principal>"]
+```
+
+`fleet_id` is the exact live Fleet identity. It is explicit retained authority,
+not a value derived from the environment name or operator, so operator rotation
+cannot rename the Fleet. Every paid canister controlled by each Root must be
+listed. In particular, `pool_imports` must contain every retained pool asset,
+including idle, claimed and workload assets; omitting one fails closed rather
+than leaving its cycles outside the reviewed estate.
+
+Generate the current document without a Fleet mutation:
+
+```bash
+canic fleet generate staging \
+  --app-config apps/demo/canic.toml \
+  --release-build <release-build-id>
+```
+
+The generator does not infer Principals from release metadata, project
+mappings, removed install plans, or canister ancestry. Release authority
+supplies exact Wasm, Candid, artifact identities and typed infrastructure init
+contracts. The seed supplies identities only. Canic then verifies the active
+operator, controller and role relationships, Registry-backed placement,
+protected Root pool inventory and exact cycle balances before publishing
+`fleets/<fleet>.toml`. A Root-owned Store or pool asset is resolved through the
+Root's protected inventory; a retained Store controller handoff accepts only
+Root-only ownership or the exact Root-plus-operator set before installation.
+The live Root's identity authority must match exactly. Init-only policy fields
+may differ only when the reviewed current Root artifact will be reinstalled to
+converge them; an already-current Root with policy drift fails closed. A seeded
+pool identity remains in the conservation set as it moves from idle bootstrap
+capacity through claimed state to a Component workload, without receiving pool
+minimum top-ups or being counted twice.
+
+The treasury policy is explicit adoption, not discovery: it must name an
+already-present, non-replaceable controlled canister. Omitting `treasury`
+selects the exact seeded Coordinator. This generator intentionally rejects a
+literally empty estate; an operator must first provide a separately reviewed
+controlled treasury bootstrap, then seed that observed identity. Canic does
+not silently invent or globally search for one. Missing, foreign, duplicate,
+unseeded or conflicting identities and unexpected co-controllers fail closed.
+If an exact seeded identity is no longer observable, planning rejects instead
+of creating a substitute. The generator queries the configured Cycles Ledger's
+current fee and binds it into the desired document. Because this retained
+contract cannot create a missing seeded canister, its management creation-fee
+authority is zero. Observation and update burn values are distinct conservative
+ceilings checked against measured terminal conservation, not assumed fees.
+On IC mainnet, every Fiduciary placement must carry an exact
+`acknowledge_fiduciary_cost = true`; non-Fiduciary placements must not claim
+that acknowledgement.
+
+Generated output is create-once and content-exact. Repeating generation with
+the same bytes succeeds; different bytes at the same output path require an
+explicit operator decision instead of being overwritten.
 
 ## Desired State
 
@@ -26,8 +104,8 @@ environment = "local"
 treasury = "<controlled-treasury-principal>"
 operator = "<operator-principal>"
 cycles_ledger = "<cycles-ledger-principal>"
-ledger_fee_cycles = "100000000"
-management_creation_fee_cycles = "500000000000"
+ledger_fee_cycles = "100000000" # example; generated from the live Ledger
+management_creation_fee_cycles = "0" # retained generation cannot create
 material_cycle_threshold = "1000000"
 maximum_observation_burn_cycles = "10000000"
 maximum_update_burn_cycles = "100000000000"
@@ -66,11 +144,12 @@ minimum_cycles = "1000000000000"
 wasm = "artifacts/fleet_coordinator.wasm"
 ```
 
-The optional `[protocol]` block enables Canic-owned control-plane
-choreography. It names only the checked-in App configuration, exact
+The generated `[bootstrap]` and `[protocol]` blocks enable Canic-owned
+infrastructure initialization and control-plane choreography. They name only the checked-in App configuration, exact
 Coordinator/Root/Store Candid contracts, and typed deployment placements.
 Operators do not provide Candid methods, argument documents or expected
-response bytes. Canic compiles Store artifact staging/bootstrap, deterministic
+response bytes, and missing infrastructure init arguments never silently
+degrade to `()`. Canic compiles Store artifact staging/bootstrap, deterministic
 Registry joins, Root synchronization, Registry and Root-mirror activation, and
 exact local Component Registry preparation before Component provisioning in
 that order. Every configured initial placement must appear once and every
@@ -82,11 +161,13 @@ are hashed into the reviewed plan and rechecked immediately before their
 effect. Fleet/environment labels are path-safe before Canic accesses operator
 state. Authority Principals must be valid and non-anonymous. The configured
 treasury must already be present and is always reused, never replaced. The
-active ICP identity must equal `operator`, and every present
-canister retains that Principal as a direct controller so interrupted effects
-remain observable and resumable. A Store additionally retains its exact owning
-Root as a direct controller; Root adoption records policy ownership without
-removing the protected operator.
+active ICP identity must equal `operator`, and every host-controlled canister
+retains that Principal as a direct controller so interrupted effects remain
+observable and resumable. Root-owned pool assets remain solely under their
+Root and are observed through its protected bounded inventory. A Store retains
+its exact owning Root and protected operator; when a retained Store is still
+Root-only, the Root durably prepares that exact controller set before the host
+installs the current Store artifact.
 
 ## Plan And Apply
 

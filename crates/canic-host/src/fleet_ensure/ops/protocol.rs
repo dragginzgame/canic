@@ -426,7 +426,7 @@ const fn require_argument_bound(bytes: &[u8]) -> Result<(), ProtocolEffectError>
     Ok(())
 }
 
-fn write_argument_file(bytes: &[u8]) -> Result<PathBuf, ProtocolEffectError> {
+pub(super) fn write_argument_file(bytes: &[u8]) -> Result<PathBuf, ProtocolEffectError> {
     require_argument_bound(bytes)?;
     for _ in 0..MAX_TEMP_ATTEMPTS {
         let sequence = NEXT_TEMP_FILE.fetch_add(1, Ordering::Relaxed);
