@@ -23,7 +23,7 @@ The release cadence is therefore outcome-based rather than time-based.
 - An **open patch draft** is the changelog description of the current release
   batch. It remains open until the maintainer chooses to publish and tag it.
 - A **published patch** is an immutable versioned release created by the
-  human-owned release flow.
+  maintainer-directed release flow.
 
 A slice, commit, agent turn, changelog edit and published patch are not
 interchangeable concepts.
@@ -111,8 +111,10 @@ Until the human maintainer accepts that closeout:
   to cross the boundary; and
 - report the exact closeout audit as the next required action.
 
-Human-owned versioning, tagging and publication retain their separate command
-authority. An emergency publication or explicit boundary exception must name
+Versioning, tagging and publication retain their separate explicit maintainer
+authority. An unambiguous natural-language instruction is sufficient and may
+authorize an agent to execute the complete sequence; no magic phrase or second
+confirmation is required. An emergency publication or explicit boundary exception must name
 the exact minor and does not silently waive the next minor's own closeout.
 
 Generic continuation does not approve an unaccepted design or scope expansion,
@@ -126,7 +128,7 @@ An agent should report a batch as ready to push only when:
 2. its direct positive, negative and recovery evidence passes;
 3. its required propagation and cleanup are complete;
 4. status and the open changelog draft describe the whole batch; and
-5. only maintainer-owned broad release validation remains.
+5. only the maintainer-selected complete or eligible fast release gate remains.
 
 If those conditions are not met, the handoff should say what remains in the
 open batch instead of recommending another patch release.
@@ -198,7 +200,7 @@ requires explicit maintainer approval and a deliberate guard update; a new
 implementation slice must use its owning numbered design/status instead.
 
 Use stable batch labels such as `B1`, `B2` and `B3` while planning. Do not
-invent patch numbers. A patch number belongs to the maintainer-owned release
+invent patch numbers. A patch number belongs to the maintainer-directed release
 decision, except where an already-open draft is being extended.
 
 Each tracker row records:

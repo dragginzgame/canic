@@ -14,7 +14,7 @@ There is no standing RC-readiness audit or evergreen no-blocker conclusion.
 | Slice closeout | Prove one bounded change and its invariant. | Targeted checks pass; diff and skipped wider gates are recorded. |
 | Implementation closeout | Decide whether current accepted findings/slices are complete. | Required focused gates pass; remaining work is explicitly RC/final validation. |
 | RC promotion | Account for the full maintained local/CI/package/environment matrix. | Every required gate passes or is assigned with a concrete limitation. |
-| Final release/tag | Validate the exact release commit, packages, artifacts, and tag path. | Human-owned release flow and final gates pass. |
+| Final release/tag | Validate the exact release commit, packages, artifacts, and tag path. | The maintainer-selected complete or eligible fast release flow passes. |
 
 Each slice declares impact on runtime behavior, CLI/text, Candid, JSON/config,
 stable state, package features, dependencies/lockfile, fixtures/generated
@@ -59,9 +59,21 @@ ordinary suites finish first and any ordinary failure skips the serial
 PocketIC suites. The primitive targets remain independently runnable and do
 not invoke unrelated validation operations.
 
+An eligible non-runtime patch may instead use:
+
+```text
+make patch-fast
+```
+
+This lane reuses the immutable published release receipt, rejects runtime,
+build, package, protocol, generated and fixture changes, and runs targeted
+release/dependency/locked-compile checks. It does not run workspace tests or
+PocketIC and records `gate=fast` in the release marker.
+
 ## Required Local RC Gates
 
-Before RC promotion, the maintainer runs or explicitly assigns:
+Before RC promotion, the maintainer selects or explicitly assigns the complete
+gate, unless the patch satisfies the fast non-runtime boundary above:
 
 ```text
 make validate
@@ -163,7 +175,7 @@ after their executable gate wiring is removed.
 
 ## Final Release And Artifact Gates
 
-Final release accounting includes:
+Final release accounting for production-source changes includes:
 
 ```text
 make validate
@@ -171,11 +183,16 @@ cargo build --release --workspace --locked
 make package
 ```
 
+An eligible non-runtime patch substitutes `make patch-fast` for `make
+validate`; package publication still uses the normal candidate and matching
+package-set checks. The fast receipt must remain explicit in the status marker.
+
 It also records the exact source commit/tree, lockfile/toolchain/features,
 artifact checksums and provenance, package/install probes, supported
 host/target matrix, and any authorized environment-specific validation.
-Versioning, staging, commits, tags, pushes, publish, and deployment remain
-human-owned.
+Versioning, staging, commits, tags, pushes, publish and deployment require an
+explicit maintainer instruction. An agent may execute them when that direct
+authority is present.
 
 ## Reporting Format
 

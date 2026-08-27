@@ -1,5 +1,5 @@
-.PHONY: help version tags patch minor major \
-        release-patch release-minor release-major \
+.PHONY: help version tags patch patch-fast minor major \
+        release-patch release-patch-fast release-minor release-major \
         release-stage release-candidate release-commit release-push release-cadence package publish \
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
@@ -64,12 +64,14 @@ help:
 	@echo "Version Management:"
 	@echo "  version          Show current version"
 	@echo "  tags             List available git tags"
-	@echo "  patch            Validate, then bump patch version files (0.0.x)"
-	@echo "  minor            Confirm, validate, then bump minor version files (0.x.0)"
-	@echo "  major            Confirm, validate, then bump major version files (x.0.0)"
-	@echo "  release-patch    Bump, stage, commit, tag, and push a patch release"
-	@echo "  release-minor    Confirm, bump, stage, commit, tag, and push a minor release"
-	@echo "  release-major    Confirm, bump, stage, commit, tag, and push a major release"
+	@echo "  patch            Completely validate, then bump patch version files (0.0.x)"
+	@echo "  patch-fast       Target-check an eligible non-runtime patch, then bump (0.0.x)"
+	@echo "  minor            Validate, then bump minor version files (0.x.0)"
+	@echo "  major            Validate, then bump major version files (x.0.0)"
+	@echo "  release-patch    Completely validate, bump, stage, commit, tag, and push a patch release"
+	@echo "  release-patch-fast  Target-check and publish an eligible non-runtime patch release"
+	@echo "  release-minor    Bump, stage, commit, tag, and push a minor release"
+	@echo "  release-major    Bump, stage, commit, tag, and push a major release"
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-candidate Verify post-bump package-version and lock consistency"
 	@echo "  release-commit   Commit and tag the staged release"
@@ -171,8 +173,17 @@ patch:
 		CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head" \
 			scripts/ci/bump-version.sh patch
 
+patch-fast:
+	@$(MAKE) --no-print-directory release-cadence
+	@$(MAKE) ensure-clean
+	+@validated_head="$$(git rev-parse HEAD)"; \
+		bash scripts/ci/check-fast-patch-eligibility.sh; \
+		$(MAKE) ensure-clean; \
+		test "$$validated_head" = "$$(git rev-parse HEAD)"; \
+		CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head" \
+			CANIC_RELEASE_VALIDATION_KIND=fast scripts/ci/bump-version.sh patch
+
 minor:
-	@scripts/ci/confirm-version-bump.sh minor
 	@$(MAKE) ensure-clean
 	+@validated_head="$$(git rev-parse HEAD)"; \
 		$(MAKE) --no-print-directory validate; \
@@ -182,7 +193,6 @@ minor:
 			scripts/ci/bump-version.sh minor
 
 major:
-	@scripts/ci/confirm-version-bump.sh major
 	@$(MAKE) ensure-clean
 	+@validated_head="$$(git rev-parse HEAD)"; \
 		$(MAKE) --no-print-directory validate; \
@@ -193,6 +203,12 @@ major:
 
 release-patch:
 	@$(MAKE) patch
+	@$(MAKE) release-stage
+	@$(MAKE) release-commit
+	@$(MAKE) release-push
+
+release-patch-fast:
+	@$(MAKE) patch-fast
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push

@@ -37,9 +37,26 @@ if [ "$head_subject" = "Release $workspace_version" ]; then
 else
     validated_source="$(git -C "$ROOT" rev-parse HEAD)"
 fi
-validation_marker="<!-- canic-release-validation: version=$workspace_version source=$validated_source date=$release_date -->"
-[ "$(rg -c -F "$validation_marker" "$STATUS_DOCUMENT")" -eq 1 ] ||
-    fail "current status is not bound to the exact validated source and release"
+legacy_validation_marker="<!-- canic-release-validation: version=$workspace_version source=$validated_source date=$release_date -->"
+complete_validation_marker="<!-- canic-release-validation: version=$workspace_version source=$validated_source date=$release_date gate=complete -->"
+fast_validation_marker="<!-- canic-release-validation: version=$workspace_version source=$validated_source date=$release_date gate=fast -->"
+marker_count() {
+    local count
+    count="$(rg -c -F "$1" "$STATUS_DOCUMENT" || true)"
+    printf '%s\n' "${count:-0}"
+}
+validation_marker_count="$((
+    $(marker_count "$legacy_validation_marker")
+    + $(marker_count "$complete_validation_marker")
+    + $(marker_count "$fast_validation_marker")
+))"
+[ "$validation_marker_count" -eq 1 ] ||
+    fail "current status is not bound to one exact validated source, release, and gate"
+if rg -F "$fast_validation_marker" "$STATUS_DOCUMENT" >/dev/null; then
+    validation_kind=fast
+else
+    validation_kind=complete
+fi
 
 is_release_only_path() {
     case "$1" in
@@ -82,4 +99,4 @@ expected_cli_version="CANIC_CLI_VERSION=\"\${CANIC_CLI_VERSION:-$workspace_versi
 [ "$(rg -c -F "$expected_cli_version" "$INSTALL_DEV")" -eq 1 ] ||
     fail "install_dev.sh does not contain exactly one $workspace_version CLI default"
 
-echo "release candidate guard passed ($workspace_version; validated source $validated_source; locked offline metadata)"
+echo "release candidate guard passed ($workspace_version; validated source $validated_source; $validation_kind gate; locked offline metadata)"

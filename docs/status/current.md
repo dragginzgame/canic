@@ -13,10 +13,10 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.13` at
-`134db535d8314d72fa117158cc5f59ade10c1785` is the immutable predecessor of
-the open `0.109.14` generator, managed-App support and release-governance
-batch.
+Published `v0.109.14` at
+`412ca5dbb373d907448210e5854d6acdacab1bcf` is the immutable predecessor of
+the open `0.109.15` release-efficiency and compatible dependency-lock
+correction.
 
 Release versioning no longer treats that descriptive lineage prose as a
 machine authority. Uniform package versions, the immutable tag and the exact
@@ -179,11 +179,27 @@ not active contracts.
 
 ## Validation State
 
-<!-- canic-release-validation: version=0.109.14 source=a7b0af049969b550732036e6bc704d3e8f639cf0 date=2026-08-27 -->
+<!-- canic-release-state: source-development -->
+The open `0.109.15` patch adds a governed fast release lane for exact
+non-runtime changes. It preserves immutable-tag ancestry, targeted release and
+dependency checks, locked compilation, candidate sealing and atomic push while
+skipping the workspace/PocketIC matrix. Its release receipt records
+`gate=fast`, so it cannot be confused with complete validation. The same batch
+updates the compatible yanked `chacha20` transitive lock entry from `0.10.1` to
+`0.10.2` without changing Canic production source.
+
+Targeted `0.109.15` evidence passes: 13 release-flow regressions, changelog
+governance, current-document and release-matrix semantics, ShellCheck, the
+release-integrity contract, zero-vulnerability dependency risk, locked offline
+metadata and the locked workspace all-targets check. The last check compiled
+the corrected `chacha20 0.10.2` graph in 43 seconds. No PocketIC or complete
+workspace test gate was run, matching the maintained fast-lane boundary.
+
+Published `0.109.14` qualification evidence follows.
 Current operator-surface rebinding, focused governed runtime
 qualification and active sediment/documentation reconciliation are complete.
 
-Targeted evidence on the dirty source candidate:
+Targeted evidence for the published source candidate:
 
 - The published managed-App support has two pure authority-compilation tests
   passing with warning-denied `canic` Clippy. A composed-framework PocketIC
@@ -327,6 +343,7 @@ performed.
 
 ## Next Action
 
-Use the final complete-gate result reported in the handoff for the human
-maintainer's `0.109.14` versioning and publication workflow.
+The open `0.109.15` source batch is ready for its source commit. Once committed,
+`make release-patch-fast` may seal and publish it when the maintainer explicitly
+requests that action.
 Do not begin 0.110. Do not begin 0.111 from this batch.

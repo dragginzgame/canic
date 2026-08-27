@@ -168,7 +168,7 @@ if ! rg -q \
     '^<!-- canic-release-state: source-development -->$' \
     "$STATUS" \
     && ! rg -q \
-        '^<!-- canic-release-validation: version=[0-9]+\.[0-9]+\.[0-9]+ source=[0-9a-f]{40} date=[0-9]{4}-[0-9]{2}-[0-9]{2} -->$' \
+        '^<!-- canic-release-validation: version=[0-9]+\.[0-9]+\.[0-9]+ source=[0-9a-f]{40} date=[0-9]{4}-[0-9]{2}-[0-9]{2}( gate=(complete|fast))? -->$' \
         "$STATUS"; then
     echo "current status omits its governed development or release-validation marker" >&2
     exit 1

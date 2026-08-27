@@ -22,8 +22,8 @@ DEPENDENCY_RISK_GATE="$ROOT/scripts/ci/check-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_TEST="$ROOT/scripts/ci/test-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
-CONFIRM_VERSION_BUMP="$ROOT/scripts/ci/confirm-version-bump.sh"
 RELEASE_CANDIDATE="$ROOT/scripts/ci/check-release-candidate.sh"
+FAST_PATCH_GATE="$ROOT/scripts/ci/check-fast-patch-eligibility.sh"
 RELEASE_CADENCE="$ROOT/scripts/dev/report-release-cadence.sh"
 VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
 PUBLISH_WORKSPACE="$ROOT/scripts/ci/publish-workspace.sh"
@@ -55,7 +55,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -457,6 +457,29 @@ for mode in patch minor major; do
     rg -F "scripts/ci/bump-version.sh $mode" <<<"$mode_recipe" >/dev/null ||
         fail "the $mode version target omits its governed bump"
 done
+patch_fast_recipe="$(sed -n '/^patch-fast:/,/^$/p' "$MAKEFILE")"
+rg -F 'bash scripts/ci/check-fast-patch-eligibility.sh' <<<"$patch_fast_recipe" >/dev/null ||
+    fail "the fast patch target omits its eligibility and targeted-validation gate"
+rg -F 'CANIC_RELEASE_VALIDATION_KIND=fast scripts/ci/bump-version.sh patch' \
+    <<<"$patch_fast_recipe" >/dev/null ||
+    fail "the fast patch target does not bind version mutation to the fast validation receipt"
+if rg -F '$(MAKE) --no-print-directory validate' <<<"$patch_fast_recipe" >/dev/null; then
+    fail "the fast patch target repeats the complete validation gate"
+fi
+rg -F 'runtime, build, package, protocol, fixture, or unrelated path changed' \
+    "$FAST_PATCH_GATE" >/dev/null ||
+    fail "the fast patch gate does not reject production or unrelated source drift"
+for fast_patch_boundary in \
+    'no complete validated release ancestor' \
+    'Cargo.lock fast patches may change only compatible package versions and checksums' \
+    'cargo fmt --all -- --check' \
+    'cargo test --locked -p canic --test release_flow_guard' \
+    'bash scripts/ci/check-dependency-risk-inventory.sh' \
+    'cargo check --locked --workspace --all-targets' \
+    'PocketIC was not run'; do
+    rg -F "$fast_patch_boundary" "$FAST_PATCH_GATE" >/dev/null ||
+        fail "the fast patch gate omits boundary: $fast_patch_boundary"
+done
 patch_recipe="$(sed -n '/^patch:/,/^$/p' "$MAKEFILE")"
 rg -F '$(MAKE) --no-print-directory release-cadence' <<<"$patch_recipe" >/dev/null ||
     fail "the patch release flow omits its read-only cadence advisory"
@@ -482,7 +505,6 @@ rg -F 'Verified complete matching Canic package set' "$PUBLISH_WORKSPACE" >/dev/
 for version_consumer in \
     "$MAKEFILE" \
     "$BUMP_VERSION" \
-    "$CONFIRM_VERSION_BUMP" \
     "$RELEASE_CANDIDATE" \
     "$RELEASE_CADENCE" \
     "$PUBLISH_WORKSPACE" \
