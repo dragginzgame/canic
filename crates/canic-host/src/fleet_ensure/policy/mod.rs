@@ -9,7 +9,7 @@ use crate::fleet_ensure::model::{
     CurrentFleetProtocolAction, CycleConservation, DesiredCanisterKind, DesiredFleet,
     DesiredFleetArtifacts, DesiredPresence, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION,
     FleetEnsurePlan, FleetObservation, InstallMode, LiveCanister, MAX_FLEET_ENSURE_CANISTERS,
-    MAX_FLEET_ENSURE_PROTOCOL_STEPS,
+    MAX_FLEET_ENSURE_PROTOCOL_STEPS, RootOwnedCanisterLifecycle,
 };
 use candid::Principal;
 use canic_core::ids::FleetName;
@@ -115,6 +115,18 @@ pub enum EnsurePolicyError {
 
     #[error("controlled canister {0} must configure init_arg and init_candid together")]
     IncompleteInitTemplate(String),
+
+    #[error("Canic infrastructure canister {name} requires one exact typed bootstrap initializer")]
+    MissingCanicInitializer { name: String },
+
+    #[error("Canic infrastructure canister {name} has conflicting typed and generic initializers")]
+    ConflictingCanicInitializer { name: String },
+
+    #[error("retained pool asset {name} is missing; no replacement was created")]
+    MissingPoolAsset { name: String },
+
+    #[error("retained pool asset {name} has no exact Root-owned lifecycle observation")]
+    MissingPoolLifecycle { name: String },
 
     #[error("desired Fleet topology is invalid for {name}: {reason}")]
     InvalidTopology { name: String, reason: &'static str },
@@ -324,7 +336,9 @@ pub fn compile_plan(
                 DesiredCanisterKind::Coordinator => protocol.coordinator_candid.as_str(),
                 DesiredCanisterKind::Root => protocol.root_candid.as_str(),
                 DesiredCanisterKind::Store => protocol.store_candid.as_str(),
-                DesiredCanisterKind::Auxiliary | DesiredCanisterKind::Component => return false,
+                DesiredCanisterKind::Auxiliary
+                | DesiredCanisterKind::Component
+                | DesiredCanisterKind::Pool => return false,
             };
             candid == expected_candid
         });
@@ -485,17 +499,29 @@ fn compile_canister(
             CanisterDisposition::Delete,
             accumulator,
         ),
-        (DesiredPresence::Present, None) => create_plan(
-            desired,
-            artifacts,
-            configured,
-            cycle_policy,
-            bounds,
-            created_at_time,
-            CanisterDisposition::Create,
-            accumulator,
-            None,
-        ),
+        (DesiredPresence::Present, None) => {
+            if configured.kind == DesiredCanisterKind::Pool {
+                return Err(EnsurePolicyError::MissingPoolAsset {
+                    name: configured.name.clone(),
+                });
+            }
+            if configured.principal.is_some() {
+                return Err(EnsurePolicyError::MissingObservation {
+                    name: configured.name.clone(),
+                });
+            }
+            create_plan(
+                desired,
+                artifacts,
+                configured,
+                cycle_policy,
+                bounds,
+                created_at_time,
+                CanisterDisposition::Create,
+                accumulator,
+                None,
+            )
+        }
         (DesiredPresence::Present, Some(live))
             if configured.replace
                 && configured.principal.as_deref() == Some(live.principal.as_str()) =>
@@ -553,8 +579,10 @@ fn create_plan(
         subnet: configured.subnet.clone(),
     }];
     if let Some(wasm) = &configured.wasm {
+        require_install_initializer(desired, configured)?;
         let wasm_sha256 = wasm_sha256(artifacts, &configured.name)?;
         actions.push(EnsureAction::Install {
+            canic_init: configured.canic_init.clone(),
             init_arg: configured.init_arg.clone(),
             init_arg_sha256: optional_init_arg_sha256(artifacts, configured)?,
             init_candid: configured.init_candid.clone(),
@@ -605,7 +633,17 @@ fn reuse_plan(
 ) -> Result<CanisterPlan, EnsurePolicyError> {
     accumulator.retained = checked_add(accumulator.retained, live.cycles, "retained cycles")?;
     let mut actions = Vec::new();
-    if live.cycles < cycle_policy.minimum_cycles {
+    if configured.kind == DesiredCanisterKind::Pool && live.root_owned_lifecycle.is_none() {
+        return Err(EnsurePolicyError::MissingPoolLifecycle {
+            name: configured.name.clone(),
+        });
+    }
+    let active_pool_asset = configured.kind == DesiredCanisterKind::Pool
+        && matches!(
+            live.root_owned_lifecycle,
+            Some(RootOwnedCanisterLifecycle::Claimed | RootOwnedCanisterLifecycle::Workload)
+        );
+    if !active_pool_asset && live.cycles < cycle_policy.minimum_cycles {
         let target = cycle_policy
             .minimum_cycles
             .checked_add(observation_funding_margin(desired, bounds)?)
@@ -627,7 +665,9 @@ fn reuse_plan(
     if let Some(wasm) = &configured.wasm {
         let wasm_sha256 = wasm_sha256(artifacts, &configured.name)?;
         if live.module_sha256.as_deref() != Some(wasm_sha256.as_str()) {
+            require_install_initializer(desired, configured)?;
             actions.push(EnsureAction::Install {
+                canic_init: configured.canic_init.clone(),
                 init_arg: configured.init_arg.clone(),
                 init_arg_sha256: optional_init_arg_sha256(artifacts, configured)?,
                 init_candid: configured.init_candid.clone(),
@@ -646,7 +686,8 @@ fn reuse_plan(
             disposition = CanisterDisposition::Reinstall;
         }
     }
-    if live.status != CanisterRuntimeStatus::Running {
+    if configured.kind != DesiredCanisterKind::Pool && live.status != CanisterRuntimeStatus::Running
+    {
         actions.push(EnsureAction::Start {
             name: configured.name.clone(),
             principal: live.principal.clone(),
@@ -657,7 +698,7 @@ fn reuse_plan(
     actual_controllers.sort();
     let mut desired_controllers = configured.controllers.clone();
     desired_controllers.sort();
-    if actual_controllers != desired_controllers {
+    if configured.kind != DesiredCanisterKind::Pool && actual_controllers != desired_controllers {
         actions.push(EnsureAction::SetControllers {
             controllers: desired_controllers,
             name: configured.name.clone(),
@@ -812,6 +853,13 @@ fn validate_authority(
     let mut names = BTreeSet::new();
     let mut principals = BTreeSet::new();
     for configured in &desired.canisters {
+        if configured.canic_init.is_some()
+            && (configured.init_arg.is_some() || configured.init_candid.is_some())
+        {
+            return Err(EnsurePolicyError::ConflictingCanicInitializer {
+                name: configured.name.clone(),
+            });
+        }
         if configured.init_arg.is_some() != configured.init_candid.is_some() {
             return Err(EnsurePolicyError::IncompleteInitTemplate(
                 configured.name.clone(),
@@ -859,9 +907,26 @@ fn validate_authority(
         }
         if configured.presence == DesiredPresence::Present
             && !configured.controllers.contains(&desired.operator)
+            && configured.kind != DesiredCanisterKind::Pool
         {
             return Err(EnsurePolicyError::MissingOperatorController {
                 name: configured.name.clone(),
+            });
+        }
+        validate_canic_initializer(desired, configured)?;
+        if configured.kind == DesiredCanisterKind::Pool
+            && (configured.presence != DesiredPresence::Present
+                || configured.principal.is_none()
+                || configured.replace
+                || configured.wasm.is_some()
+                || configured.drain.is_some()
+                || configured.init_arg.is_some()
+                || configured.init_candid.is_some()
+                || configured.canic_init.is_some())
+        {
+            return Err(EnsurePolicyError::InvalidTopology {
+                name: configured.name.clone(),
+                reason: "pool assets must be exact present non-replaceable identities without independent runtime authority",
             });
         }
     }
@@ -892,6 +957,84 @@ fn validate_authority(
     }) {
         return Err(EnsurePolicyError::TreasuryReplacement {
             treasury: desired.treasury.clone(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_canic_initializer(
+    desired: &DesiredFleet,
+    configured: &crate::fleet_ensure::model::DesiredCanister,
+) -> Result<(), EnsurePolicyError> {
+    use crate::fleet_ensure::model::DesiredCanisterInit;
+
+    let matches_kind = matches!(
+        (&configured.kind, &configured.canic_init),
+        (_, None)
+            | (
+                DesiredCanisterKind::Coordinator,
+                Some(DesiredCanisterInit::Coordinator)
+            )
+            | (
+                DesiredCanisterKind::Root,
+                Some(DesiredCanisterInit::Root { .. })
+            )
+            | (
+                DesiredCanisterKind::Store,
+                Some(DesiredCanisterInit::Store { .. })
+            )
+    );
+    let infrastructure_artifact = desired.protocol.is_some()
+        && configured.wasm.is_some()
+        && matches!(
+            configured.kind,
+            DesiredCanisterKind::Coordinator
+                | DesiredCanisterKind::Root
+                | DesiredCanisterKind::Store
+        );
+    if !matches_kind
+        || (configured.canic_init.is_some() && desired.bootstrap.is_none())
+        || (infrastructure_artifact && configured.canic_init.is_none())
+    {
+        return Err(EnsurePolicyError::MissingCanicInitializer {
+            name: configured.name.clone(),
+        });
+    }
+    if let (Some(bootstrap), Some(initializer)) = (&desired.bootstrap, &configured.canic_init) {
+        let bound = match initializer {
+            DesiredCanisterInit::Coordinator => configured.name == bootstrap.coordinator,
+            DesiredCanisterInit::Root { root } => {
+                root == &configured.name && bootstrap.roots.iter().any(|entry| entry.root == *root)
+            }
+            DesiredCanisterInit::Store { root } => bootstrap
+                .roots
+                .iter()
+                .any(|entry| entry.root == *root && entry.store == configured.name),
+        };
+        if !bound {
+            return Err(EnsurePolicyError::MissingCanicInitializer {
+                name: configured.name.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn require_install_initializer(
+    desired: &DesiredFleet,
+    configured: &crate::fleet_ensure::model::DesiredCanister,
+) -> Result<(), EnsurePolicyError> {
+    if desired.protocol.is_some()
+        && matches!(
+            configured.kind,
+            DesiredCanisterKind::Coordinator
+                | DesiredCanisterKind::Root
+                | DesiredCanisterKind::Store
+        )
+        && configured.canic_init.is_none()
+    {
+        return Err(EnsurePolicyError::MissingCanicInitializer {
+            name: configured.name.clone(),
         });
     }
     Ok(())
@@ -943,6 +1086,7 @@ fn validate_typed_topology(desired: &DesiredFleet) -> Result<(), EnsurePolicyErr
             DesiredCanisterKind::Store | DesiredCanisterKind::Component => {
                 Some(DesiredCanisterKind::Root)
             }
+            DesiredCanisterKind::Pool => Some(DesiredCanisterKind::Root),
             DesiredCanisterKind::Auxiliary | DesiredCanisterKind::Coordinator => None,
         };
         let Some(required_parent_kind) = required_parent_kind else {

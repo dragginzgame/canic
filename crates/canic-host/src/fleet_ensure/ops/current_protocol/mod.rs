@@ -7,7 +7,10 @@
 #[cfg(test)]
 mod tests;
 
-use super::{EffectObservation, EffectOutcome};
+use super::{
+    EffectObservation, EffectOutcome,
+    canic_init::{self, CanicInitError},
+};
 use crate::{
     canister_protocol::{CanisterProtocolError, call_with_candid, query_with_candid},
     fleet_ensure::model::{
@@ -221,7 +224,65 @@ pub enum CurrentProtocolError {
     AppConfig(#[from] crate::release_set::AppConfigError),
 
     #[error(transparent)]
+    Init(#[from] CanicInitError),
+
+    #[error(transparent)]
     Transport(#[from] CanisterProtocolError),
+}
+
+/// Compile the Root-mediated Store controller preparation required before a
+/// retained Store can be installed by the protected operator.
+pub(super) fn compile_store_control_actions(
+    icp: &IcpCli,
+    root: &Path,
+    desired: &DesiredFleet,
+    operation_id: &str,
+    state: &FleetEnsureStateRecord,
+) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
+    let Some(protocol_intent) = &desired.protocol else {
+        return Ok(Vec::new());
+    };
+    let principals = desired
+        .canisters
+        .iter()
+        .filter_map(|canister| {
+            retained_principal(desired, state, &canister.name)
+                .map(|principal| (canister.name.clone(), principal))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let operation_id = operation_bytes(operation_id)?;
+    canic_init::compile_root_authorities(root, desired, &principals)?
+        .into_iter()
+        .map(|(root_name, authority)| {
+            let target = authority.binding.fleet_subnet_root;
+            let request = FleetSubnetWasmStoreAdoptionRequest {
+                operation_id: derived_operation_id(operation_id, b"store-adoption", target),
+                authority: authority.wasm_store_authority,
+            };
+            bind_action(
+                root,
+                desired,
+                state,
+                protocol_intent,
+                CurrentFleetProtocolAction::AdoptStore { request },
+                target,
+                format!("root-store-control:{root_name}"),
+                desired.maximum_update_burn_cycles.parse().map_err(|_| {
+                    CurrentProtocolError::Configuration(
+                        "maximum_update_burn_cycles is not an exact integer".to_string(),
+                    )
+                })?,
+            )
+        })
+        .filter_map(|action| match action {
+            Ok(action) => match observe(icp, root, &action) {
+                Ok(observed) if observed.applied => None,
+                Ok(_) => Some(Ok(action)),
+                Err(error) => Some(Err(error)),
+            },
+            Err(error) => Some(Err(error)),
+        })
+        .collect()
 }
 
 /// Compile the complete current Store, Registry, Root-mirror, and Component sequence.
@@ -659,7 +720,9 @@ fn bind_action(
         DesiredCanisterKind::Coordinator => &protocol_intent.coordinator_candid,
         DesiredCanisterKind::Root => &protocol_intent.root_candid,
         DesiredCanisterKind::Store => &protocol_intent.store_candid,
-        DesiredCanisterKind::Auxiliary | DesiredCanisterKind::Component => {
+        DesiredCanisterKind::Auxiliary
+        | DesiredCanisterKind::Component
+        | DesiredCanisterKind::Pool => {
             return Err(CurrentProtocolError::Configuration(
                 "typed protocol selected a non-infrastructure target".to_string(),
             ));

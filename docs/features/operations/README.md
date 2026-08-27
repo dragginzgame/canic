@@ -9,6 +9,8 @@ automated workflows without merging their authority.
 
 - App creation, role scaffolding, attachment, and configuration inspection
 - canonical network enrollment and local replica lifecycle
+- current desired-state generation from release authority and explicit
+  live-verified estate identities
 - one reviewed `canic fleet ensure` plan/apply workflow
 - exact canister dispositions and cycle-conservation bounds
 - deployment evidence and passive policy gates
@@ -18,6 +20,7 @@ Useful orientation commands are:
 
 ```bash
 canic help
+canic fleet generate staging --app-config canic.toml --release-build <sha256>
 canic fleet ensure staging
 ```
 

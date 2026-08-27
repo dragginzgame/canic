@@ -427,6 +427,7 @@ fn store_sequence_binds_qualified_bytes_and_deterministic_replay_identities() {
 
 fn desired(placements: Vec<DesiredComponentGroupPlacement>) -> DesiredFleet {
     DesiredFleet {
+        bootstrap: None,
         canisters: vec![
             canister(
                 "coordinator",
@@ -504,6 +505,7 @@ fn canister(
         controllers.sort();
     }
     DesiredCanister {
+        canic_init: None,
         controllers,
         drain: None,
         initial_cycles: "0".to_string(),

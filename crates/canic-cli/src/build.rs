@@ -18,7 +18,7 @@ use crate::{
     evidence_support::current_evidence_timestamp,
     output,
 };
-use canic_core::ids::{BuildNetwork, CanisterRole};
+use canic_core::ids::{BuildNetwork, CanisterRole, ReleaseBuildId};
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
 use canic_host::canister_build::{
     CanisterBuildProfile, ConfiguredCanisterArtifactBuildOutput, WorkspaceBuildContext,
@@ -33,9 +33,14 @@ use canic_host::{
     },
     format::wasm_size_label,
     icp_config::{resolve_current_canic_icp_root, resolve_icp_build_network_from_root},
+    release_build::{finalize_release_build_from_manifest, plan_release_build_for_profile},
     release_set::{
-        AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, display_workspace_path,
-        workspace_root,
+        AppConfigError, AppConfigSnapshot, ApplicationArtifactBuildTarget,
+        ApplicationArtifactFileBuildOutput, CanicInfrastructureArtifactBuildOutput,
+        CanicInfrastructureRole, WorkspaceDiscoveryError,
+        compile_and_persist_application_artifact_union,
+        compile_and_persist_canic_infrastructure_artifact_manifest,
+        compile_and_persist_current_release_set_manifest, display_workspace_path, workspace_root,
     },
     table::{ColumnAlign, render_bordered_table},
     terminal::{TerminalActivity, TerminalStyle},
@@ -174,7 +179,7 @@ where
     };
     let config_path = resolve_build_config_path(&options)?.canonicalize()?;
     let roles = selected_build_roles(&options, &config_path)?;
-    let context = resolve_build_context(&options, config_path, &roles[0])?;
+    let mut context = resolve_build_context(&options, config_path, &roles[0])?;
 
     if let Some(role) = &options.role {
         print_workspace_build_context_once(&context)?;
@@ -187,6 +192,9 @@ where
         );
         println!("{}", output.wasm_gz_path.display());
     } else {
+        let release = plan_release_build_for_profile(&context.icp_root, context.profile)
+            .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+        context = context.with_release_build_id(release.record.release_build_id);
         build_app(&options, &context, &roles, started_at)?;
     }
     Ok(())
@@ -313,6 +321,9 @@ fn build_app(
     println!("Root Wasm: App-config-bound | Subnet-unbound until Fleet ensure");
     println!();
 
+    let release_build_id = context
+        .release_build_id
+        .expect("complete App builds own one durable release-build identity");
     let mut infrastructure = build_builtin_infrastructure(context)?;
 
     let configured_started_at = Instant::now();
@@ -329,12 +340,14 @@ fn build_app(
     infrastructure.insert(
         1,
         InfrastructureCanisterArtifactBuildOutput {
-            role: artifacts.fleet_subnet_root.role,
+            role: artifacts.fleet_subnet_root.role.clone(),
             deployment_scope: InfrastructureDeploymentScope::FleetSubnet,
-            output: artifacts.fleet_subnet_root.output,
+            output: artifacts.fleet_subnet_root.output.clone(),
             timing: InfrastructureArtifactTiming::SharedConfiguredBatch(configured_elapsed),
         },
     );
+    let release_manifest =
+        persist_complete_release_set(context, release_build_id, &artifacts, &infrastructure)?;
 
     style.print_section(
         "Infrastructure Wasm",
@@ -368,10 +381,127 @@ fn build_app(
         ),
     );
     println!(
-        "Artifacts: {}",
-        context.icp_root.join(".icp/local/canisters").display()
+        "Release build: {release_build_id}\nArtifacts: {}",
+        context
+            .icp_root
+            .join(".canic/release-builds")
+            .join(release_build_id.to_string())
+            .join("artifacts")
+            .display()
     );
+    println!("Release manifest: {}", release_manifest.display());
     Ok(())
+}
+
+fn persist_complete_release_set(
+    context: &WorkspaceBuildContext,
+    release_build_id: ReleaseBuildId,
+    artifacts: &ConfiguredArtifactClassification,
+    infrastructure: &[InfrastructureCanisterArtifactBuildOutput],
+) -> Result<PathBuf, BuildCommandError> {
+    let config = AppConfigSnapshot::load(&context.config_path)?;
+    let application_targets = artifacts
+        .application
+        .iter()
+        .map(|built| application_target(&context.icp_root, built))
+        .collect::<Result<Vec<_>, _>>()?;
+    let application_outputs = artifacts
+        .application
+        .iter()
+        .map(|built| ApplicationArtifactFileBuildOutput {
+            role: CanisterRole::from(built.role.clone()),
+            package: built.output.package_name.clone(),
+            release_build_id,
+            wasm_path: built.output.wasm_path.clone(),
+            wasm_gz_path: built.output.wasm_gz_path.clone(),
+            candid_sha256: built.output.candid_sha256,
+            protocol_profile_digest: built.output.protocol_profile_digest,
+        })
+        .collect::<Vec<_>>();
+    let application = compile_and_persist_application_artifact_union(
+        &context.icp_root,
+        config.component_topology(),
+        release_build_id,
+        &application_targets,
+        &application_outputs,
+    )
+    .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    let infrastructure_outputs = infrastructure
+        .iter()
+        .map(|built| infrastructure_output(release_build_id, built))
+        .collect::<Result<Vec<_>, _>>()?;
+    let infrastructure = compile_and_persist_canic_infrastructure_artifact_manifest(
+        &context.icp_root,
+        release_build_id,
+        &infrastructure_outputs,
+    )
+    .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    let complete = compile_and_persist_current_release_set_manifest(
+        &context.icp_root,
+        release_build_id,
+        &application,
+        &infrastructure,
+    )
+    .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    finalize_release_build_from_manifest(&context.icp_root, release_build_id, &complete.path)
+        .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    Ok(complete.path)
+}
+
+fn application_target(
+    icp_root: &Path,
+    built: &ConfiguredCanisterArtifactBuildOutput,
+) -> Result<ApplicationArtifactBuildTarget, BuildCommandError> {
+    Ok(ApplicationArtifactBuildTarget {
+        role: CanisterRole::from(built.role.clone()),
+        package: built.output.package_name.clone(),
+        wasm_relative_path: artifact_relative_path(icp_root, &built.output.wasm_path)?,
+        wasm_gz_relative_path: artifact_relative_path(icp_root, &built.output.wasm_gz_path)?,
+    })
+}
+
+fn infrastructure_output(
+    release_build_id: ReleaseBuildId,
+    built: &InfrastructureCanisterArtifactBuildOutput,
+) -> Result<CanicInfrastructureArtifactBuildOutput, BuildCommandError> {
+    let role = match built.role.as_str() {
+        "fleet_coordinator" => CanicInfrastructureRole::FleetCoordinator,
+        "root" => CanicInfrastructureRole::FleetSubnetRoot,
+        "wasm_store" => CanicInfrastructureRole::WasmStore,
+        role => {
+            return Err(BuildCommandError::Build(
+                format!("unexpected infrastructure build role {role}").into(),
+            ));
+        }
+    };
+    Ok(CanicInfrastructureArtifactBuildOutput {
+        role,
+        package: built.output.package_name.clone(),
+        protocol_release_identity: built.output.protocol_release_identity.clone(),
+        protocol_role: built.output.protocol_role.clone(),
+        protocol_capabilities: built.output.protocol_capabilities.clone(),
+        release_build_id,
+        wasm_path: built.output.wasm_path.clone(),
+        wasm_gz_path: built.output.wasm_gz_path.clone(),
+        candid_sha256: built.output.candid_sha256,
+        protocol_profile_digest: built.output.protocol_profile_digest,
+    })
+}
+
+fn artifact_relative_path(icp_root: &Path, path: &Path) -> Result<String, BuildCommandError> {
+    path.strip_prefix(icp_root)
+        .map_err(|_| {
+            BuildCommandError::Build(
+                format!("build artifact is outside the ICP root: {}", path.display()).into(),
+            )
+        })?
+        .to_str()
+        .map(str::to_string)
+        .ok_or_else(|| {
+            BuildCommandError::Build(
+                format!("build artifact path is not UTF-8: {}", path.display()).into(),
+            )
+        })
 }
 
 fn build_builtin_infrastructure(

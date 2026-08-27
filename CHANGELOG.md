@@ -18,7 +18,17 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   Retirement requires matching source-debit and treasury-credit proof, and
   protocol update responses remain issued until an exact status query proves
   completion. Current read-only Fleet info is rebound to terminal ensure
-  inventory without restoring the install cache. Typed Store bootstrap,
+  inventory without restoring the install cache. A no-effect Fleet generator
+  combines protected policy, finalized release artifacts and an explicit
+  live-verified estate identity seed; release metadata never invents retained
+  Principals, Fleet identity or treasury authority. The seed retains the exact
+  live Fleet ID independently of operator rotation. Root init-policy drift is
+  converged only by a reviewed current-artifact reinstall. Every paid Root-owned
+  asset remains explicit as it moves from idle pool capacity to a Component
+  workload, without a duplicate balance or pool-minimum top-up. Missing seeded
+  identities fail instead of being recreated, and the generated economic
+  contract binds the live Ledger fee with zero retained-estate creation
+  authority. Typed infrastructure init, Store bootstrap,
   Registry convergence, local Component Registry preparation and Component
   provisioning are now one ordered current protocol graph. Its fresh-estate
   governed PocketIC journey reaches catalog publication and immediately

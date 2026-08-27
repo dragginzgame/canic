@@ -5,6 +5,7 @@
 //! Boundary: current desired state plus live IC observation are the only planning authorities.
 
 pub mod dto;
+mod generate;
 mod inventory;
 pub mod model;
 pub mod ops;
@@ -15,6 +16,9 @@ pub mod workflow;
 mod tests;
 
 pub use dto::{DesiredFleetLoadError, LoadedDesiredFleet, load_desired_fleet};
+pub use generate::{
+    FleetGenerateError, FleetGenerateRequest, GeneratedDesiredFleet, generate_desired_fleet,
+};
 pub use inventory::{
     CurrentFleetInventory, CurrentFleetInventoryError, CurrentFleetRegistry,
     CurrentFleetResolution, CurrentFleetTopology, read_current_fleet_inventory,

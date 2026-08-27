@@ -289,6 +289,7 @@ fn default_role(kind: DesiredCanisterKind, name: &str) -> String {
         DesiredCanisterKind::Coordinator => "fleet_coordinator".to_string(),
         DesiredCanisterKind::Root => "root".to_string(),
         DesiredCanisterKind::Store => "wasm_store".to_string(),
+        DesiredCanisterKind::Pool => "canister_pool_asset".to_string(),
         DesiredCanisterKind::Auxiliary | DesiredCanisterKind::Component => name.to_string(),
     }
 }

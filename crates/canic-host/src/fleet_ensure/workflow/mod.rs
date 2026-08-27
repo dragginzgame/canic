@@ -123,7 +123,7 @@ where
         let inventory = platform
             .terminal_inventory(&prior.operation_id, &state)
             .map_err(EnsureWorkflowError::Platform)?;
-        observation.additional_controlled_cycles = inventory.controlled_cycles_by_principal;
+        attach_terminal_cycles(&mut observation, inventory.controlled_cycles_by_principal)?;
     }
     let protocol_actions = platform
         .protocol_actions(&operation_id, &state)
@@ -506,21 +506,31 @@ fn attach_terminal_cycles<E>(
 where
     E: std::error::Error + 'static,
 {
-    let desired_principals = observation
-        .canisters
-        .values()
-        .filter_map(Option::as_ref)
-        .map(|canister| canister.principal.as_str())
-        .collect::<std::collections::BTreeSet<_>>();
-    if additional
-        .keys()
-        .any(|principal| desired_principals.contains(principal.as_str()))
-    {
-        return Err(EnsureWorkflowError::TerminalInventory(
-            "terminal cycle observation duplicates a configured canister".to_string(),
-        ));
+    let mut retained = BTreeMap::new();
+    for (principal, cycles) in additional {
+        let Some(configured) = observation
+            .canisters
+            .values_mut()
+            .filter_map(Option::as_mut)
+            .find(|canister| canister.principal == principal)
+        else {
+            retained.insert(principal, cycles);
+            continue;
+        };
+        if configured.root_owned_lifecycle
+            != Some(crate::fleet_ensure::model::RootOwnedCanisterLifecycle::Workload)
+        {
+            return Err(EnsureWorkflowError::TerminalInventory(
+                "terminal cycle observation duplicates a configured canister outside its exact Root-owned workload lifecycle"
+                    .to_string(),
+            ));
+        }
+        // Both protected observations identify the same Root-owned workload, but execution
+        // may burn cycles between them. Retaining the lower balance is conservative in both
+        // planning and terminal conservation regardless of observation order.
+        configured.cycles = configured.cycles.min(cycles);
     }
-    observation.additional_controlled_cycles = additional;
+    observation.additional_controlled_cycles = retained;
     Ok(())
 }
 
@@ -754,7 +764,16 @@ where
                     crate::fleet_ensure::model::DesiredCanisterKind::Auxiliary
                 }
             },
-            |topology| topology.kind,
+            |topology| {
+                if topology.kind == crate::fleet_ensure::model::DesiredCanisterKind::Pool
+                    && entry.module_hash.is_some()
+                    && entry.protocol_binding.is_some()
+                {
+                    crate::fleet_ensure::model::DesiredCanisterKind::Component
+                } else {
+                    topology.kind
+                }
+            },
         );
         state.principals.insert(name.clone(), entry.pid);
         state.topology.insert(
@@ -793,12 +812,24 @@ fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
     actions.sort_by_key(|action| match action {
         EnsureAction::Create { .. } => 0,
         EnsureAction::Fund { .. } => 1,
+        EnsureAction::Install {
+            canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Store { .. }),
+            ..
+        } => 4,
         EnsureAction::Install { .. } => 2,
-        EnsureAction::SetControllers { .. } | EnsureAction::Start { .. } => 3,
-        EnsureAction::FleetProtocol { .. } | EnsureAction::Protocol { .. } => 4,
-        EnsureAction::Transfer { .. } => 5,
-        EnsureAction::Stop { .. } => 6,
-        EnsureAction::Delete { .. } => 7,
+        EnsureAction::FleetProtocol { action, .. }
+            if matches!(
+                action.as_ref(),
+                crate::fleet_ensure::model::CurrentFleetProtocolAction::AdoptStore { .. }
+            ) =>
+        {
+            3
+        }
+        EnsureAction::SetControllers { .. } | EnsureAction::Start { .. } => 5,
+        EnsureAction::FleetProtocol { .. } | EnsureAction::Protocol { .. } => 6,
+        EnsureAction::Transfer { .. } => 7,
+        EnsureAction::Stop { .. } => 8,
+        EnsureAction::Delete { .. } => 9,
     });
     actions
 }

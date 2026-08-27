@@ -20,7 +20,19 @@ pub struct LiveCanister {
     pub cycles: u128,
     pub module_sha256: Option<String>,
     pub principal: String,
+    pub root_owned_lifecycle: Option<RootOwnedCanisterLifecycle>,
     pub status: CanisterRuntimeStatus,
+}
+
+/// Root-owned lifecycle of one explicitly seeded paid canister.
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RootOwnedCanisterLifecycle {
+    Claimed,
+    Idle,
+    Store,
+    Workload,
 }
 
 /// Management status relevant to reconciliation.
@@ -71,6 +83,8 @@ pub struct DrainAuthority {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DesiredCanister {
+    #[serde(default)]
+    pub canic_init: Option<DesiredCanisterInit>,
     pub controllers: Vec<String>,
     pub drain: Option<DrainAuthority>,
     pub initial_cycles: String,
@@ -96,8 +110,18 @@ pub enum DesiredCanisterKind {
     Auxiliary,
     Component,
     Coordinator,
+    Pool,
     Root,
     Store,
+}
+
+/// Canic-owned typed initialization role for one infrastructure canister.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case", tag = "role")]
+pub enum DesiredCanisterInit {
+    Coordinator,
+    Root { root: String },
+    Store { root: String },
 }
 
 /// One current-only idempotent protocol transition owned by the Fleet journal.
@@ -125,6 +149,8 @@ pub(crate) struct DesiredProtocolStep {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DesiredFleet {
+    #[serde(default)]
+    pub bootstrap: Option<DesiredFleetBootstrap>,
     pub canisters: Vec<DesiredCanister>,
     pub cycles_ledger: String,
     pub environment: String,
@@ -142,6 +168,37 @@ pub struct DesiredFleet {
     pub(crate) protocol_steps: Vec<DesiredProtocolStep>,
     pub schema_version: u16,
     pub treasury: String,
+}
+
+/// Complete current-generation Canic initialization authority generated from App and Fleet input.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DesiredFleetBootstrap {
+    pub admission: canic_core::ids::FleetAdmissionPolicyTemplate,
+    pub app: canic_core::ids::AppId,
+    pub canonical_network_id: canic_core::ids::CanonicalNetworkId,
+    pub component_deployment_configuration:
+        canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+    pub coordinator: String,
+    pub coordinator_subnet: canic_core::ids::SubnetId,
+    pub fleet_id: canic_core::ids::FleetId,
+    pub release_build_id: canic_core::ids::ReleaseBuildId,
+    pub root_funding: Option<canic_core::ids::FleetCoordinatorRootFundingPolicy>,
+    pub roots: Vec<DesiredFleetBootstrapRoot>,
+}
+
+/// One Root/Store pair's generated immutable initialization authority.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DesiredFleetBootstrapRoot {
+    pub canister_pool_imports: Vec<String>,
+    pub component_admissions: Vec<canic_core::ids::ComponentSpecAdmission>,
+    pub component_topology_digest: canic_core::ids::ComponentTopologyDigest,
+    pub funding: canic_core::ids::FleetSubnetRootFundingAuthority,
+    pub limits: canic_core::ids::FleetSubnetRootLimits,
+    pub placement_subnet: canic_core::ids::SubnetId,
+    pub root: String,
+    pub store: String,
 }
 
 /// Current Canic-owned control-plane intent compiled from one App topology.
@@ -227,6 +284,7 @@ pub enum EnsureAction {
         principal: String,
     },
     Install {
+        canic_init: Option<DesiredCanisterInit>,
         init_arg: Option<String>,
         init_arg_sha256: Option<String>,
         init_candid: Option<String>,
