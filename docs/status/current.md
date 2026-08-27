@@ -179,7 +179,7 @@ not active contracts.
 
 ## Validation State
 
-<!-- canic-release-state: source-development -->
+<!-- canic-release-validation: version=0.109.14 source=a7b0af049969b550732036e6bc704d3e8f639cf0 date=2026-08-27 -->
 Current operator-surface rebinding, focused governed runtime
 qualification and active sediment/documentation reconciliation are complete.
 
