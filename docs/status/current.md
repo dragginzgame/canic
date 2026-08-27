@@ -166,7 +166,7 @@ not active contracts.
 
 ## Validation State
 
-Release governance: source development state; no validated release candidate is staged.
+Release validation: `0.109.13` was validated from source `4c973883dbcc795196585d65e75ebb7583303976` on `2026-08-27`; the release commit may differ only in governed release surfaces.
 Current operator-surface rebinding, focused governed runtime
 qualification and active sediment/documentation reconciliation are complete.
 
