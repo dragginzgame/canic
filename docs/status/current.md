@@ -179,7 +179,7 @@ not active contracts.
 
 ## Validation State
 
-<!-- canic-release-state: source-development -->
+<!-- canic-release-validation: version=0.109.15 source=9b490f2ac2d8e029d56390d23ade8b04077d2c59 date=2026-08-27 gate=complete -->
 The open `0.109.15` patch adds a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while
