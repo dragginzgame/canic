@@ -1,5 +1,5 @@
 use crate::{
-    install_root::{
+    config_discovery::{
         ConfigDiscoveryError, current_canic_workspace_root,
         discover_workspace_canic_config_choices, workspace_app_roots,
     },
@@ -226,7 +226,7 @@ fn discover_project_spec(
     let choices = discover_workspace_canic_config_choices(root)?;
     if choices.is_empty() {
         return Err(IcpConfigError::Config(format!(
-            "no Canic App configs found under {}\nCreate apps/<app>/canic.toml, then add matching entries to icp.yaml and rerun `canic status`.",
+            "no Canic App configs found under {}\nCreate apps/<app>/canic.toml, add matching entries to icp.yaml, then retry the requested command.",
             display_workspace_app_roots(root)
         )));
     }

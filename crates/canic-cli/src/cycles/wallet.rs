@@ -11,13 +11,10 @@ use crate::{
 };
 use canic_core::cdk::types::Principal;
 use canic_host::{
+    fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
     format::cycles_tc,
     icp::{command_display, run_output_with_stderr},
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{
-        InstalledFleetRequest, resolve_installed_fleet_coordinator_from_root,
-        resolve_installed_fleet_from_root, resolve_installed_fleet_root_from_root,
-    },
     registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
@@ -92,10 +89,10 @@ Usage: canic cycles <command> [OPTIONS]
 
 Commands:
   balance   Display the selected identity cycles balance
-  convert   Convert ICP held by an installed Fleet Subnet Root to cycles for that root
-  funding   Inspect protected Coordinator and Root funding headroom
+  convert   Convert ICP held by a current Fleet Subnet Root to cycles for that root
+  funding   Inspect protected current Coordinator and Root funding headroom
   mint      Convert ICP to cycles
-  topup     Top up an installed Fleet Coordinator or Root
+  topup     Top up a current Fleet Coordinator or Root
   transfer  Transfer cycles to a principal or Canic Fleet target
   help      Print this message or the help of the given subcommand(s)
 
@@ -373,14 +370,10 @@ fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
 
 fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    let request = InstalledFleetRequest {
-        fleet: options.fleet.clone(),
-        environment: options.target.environment.clone(),
-    };
+    let current = resolve_current_fleet(&root, &options.target.environment, &options.fleet)?;
     let target = if options.infrastructure_target == "coordinator" {
-        let installed = resolve_installed_fleet_coordinator_from_root(&request, &root)?;
         ResolvedCanisterTarget {
-            canister_id: installed.coordinator_canister_id.to_text(),
+            canister_id: current.topology.coordinator_canister_id,
             role: Some("coordinator".to_string()),
         }
     } else {
@@ -388,9 +381,19 @@ fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
             .infrastructure_target
             .parse::<Principal>()
             .map_err(|_| CyclesCommandError::Usage(topup_usage()))?;
-        let installed = resolve_installed_fleet_root_from_root(&request, selected_root, &root)?;
+        let selected_root = selected_root.to_text();
+        if !current
+            .topology
+            .fleet_subnet_root_canister_ids
+            .contains(&selected_root)
+        {
+            return Err(CyclesCommandError::UnknownTarget {
+                fleet: options.fleet.clone(),
+                target: selected_root,
+            });
+        }
         ResolvedCanisterTarget {
-            canister_id: installed.root_canister_id.to_text(),
+            canister_id: selected_root,
             role: Some("root".to_string()),
         }
     };
@@ -475,16 +478,8 @@ pub(super) fn resolve_fleet(
     target: &IcpTargetOptions,
     root: &Path,
     fleet: &str,
-) -> Result<canic_host::installed_fleet::InstalledFleetResolution, CyclesCommandError> {
-    resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: fleet.to_string(),
-            environment: target.environment.clone(),
-        },
-        &target.icp,
-        root,
-    )
-    .map_err(CyclesCommandError::from)
+) -> Result<CurrentFleetResolution, CyclesCommandError> {
+    resolve_current_fleet(root, &target.environment, fleet).map_err(CyclesCommandError::from)
 }
 
 fn resolve_role_principal(
@@ -669,7 +664,7 @@ fn transfer_command() -> ClapCommand {
 fn topup_command() -> ClapCommand {
     ClapCommand::new(WalletCommandKind::Topup.label())
         .bin_name("canic cycles topup")
-        .about("Top up one installed Fleet Coordinator or explicit Root")
+        .about("Top up one current Fleet Coordinator or explicit Root")
         .disable_help_flag(true)
         .arg(value_arg(FLEET_ARG).value_name(FLEET_ARG).required(true))
         .arg(

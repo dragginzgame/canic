@@ -274,7 +274,7 @@ fn nested_commands_discover_outer_project_root_with_apps() {
     fs::write(root.join("icp.yaml"), "").expect("write icp config");
     fs::write(&config, "[app]\nname = \"toko\"\n").expect("write config");
 
-    let icp_root = crate::install_root::discover_canic_workspace_root_from(&nested)
+    let icp_root = crate::config_discovery::discover_canic_workspace_root_from(&nested)
         .expect("discover project root")
         .expect("project root is present");
 
@@ -297,7 +297,7 @@ fn outer_project_root_wins_over_nested_apps() {
     fs::write(&outer_config, "[app]\nname = \"toko\"\n").expect("write outer config");
     fs::write(&nested_config, "[app]\nname = \"toko\"\n").expect("write nested config");
 
-    let icp_root = crate::install_root::discover_canic_workspace_root_from(&nested)
+    let icp_root = crate::config_discovery::discover_canic_workspace_root_from(&nested)
         .expect("discover project root")
         .expect("project root is present");
 

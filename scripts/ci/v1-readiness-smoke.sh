@@ -48,13 +48,13 @@ EOF
   },
   "canic_version": "0.55.0",
   "command": {
-    "name": "canic app adoption report",
-    "argv_normalized": ["canic", "app", "adoption", "report", "demo"],
+    "name": "canic evidence gate",
+    "argv_normalized": ["canic", "evidence", "gate"],
     "argv_redactions": [],
     "format": "envelope-json"
   },
   "target": {
-    "kind": "app_adoption",
+    "kind": "policy_gate",
     "app": "demo",
     "fleet": "demo",
     "role": null,
@@ -65,9 +65,9 @@ EOF
   "source_config": null,
   "inputs": [],
   "payload_schema": {
-    "id": "canic.adoption_report.v1",
+    "id": "canic.policy_gate_report.v1",
     "version": "1",
-    "stability": "experimental"
+    "stability": "stable"
   },
   "payload_sha256": "payloadpayloadpayloadpayloadpayloadpayloadpayloadpayloadpayloadpayloadpayl",
   "payload": {
@@ -107,7 +107,7 @@ main() {
     "$CANIC_BIN" app role inspect demo store > inspect-declared.txt
     "$CANIC_BIN" app role attach demo store --component-spec default > attach-store.txt
     "$CANIC_BIN" app role inspect demo store > inspect-attached.txt
-    "$CANIC_BIN" --environment ic deploy inspect catalog list --json --output catalog.json
+    "$CANIC_BIN" fleet ensure --help > fleet-ensure-help.txt
     "$CANIC_BIN" evidence gate \
         --policy policy.toml \
         --envelope envelope.json \
@@ -121,7 +121,7 @@ main() {
     assert_contains attach-store.txt "state: attached"
     assert_contains inspect-attached.txt "state: attached"
     assert_contains inspect-attached.txt "deploy artifact: eligible"
-    assert_contains catalog.json "\"entries\": []"
+    assert_contains fleet-ensure-help.txt "Plan or apply one idempotent Fleet convergence"
     assert_contains gate.json "\"policy_status\": \"passed\""
     assert_contains gate.json "\"gate_exit_class\": \"success\""
 

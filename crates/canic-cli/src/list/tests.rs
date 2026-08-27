@@ -59,13 +59,13 @@ fn parses_live_list_options() {
 
 #[test]
 fn missing_list_fleet_preserves_canonical_typed_error() {
-    let error = ListCommandError::from(InstalledFleetError::NoInstalledFleet {
+    let error = ListCommandError::from(CurrentFleetInventoryError::NotConverged {
         environment: "local".to_string(),
         fleet: "demo-local".to_string(),
     });
     std::assert_matches!(
         error,
-        ListCommandError::InstalledFleet(InstalledFleetError::NoInstalledFleet {
+        ListCommandError::CurrentFleet(CurrentFleetInventoryError::NotConverged {
             environment,
             fleet,
         }) if environment == "local" && fleet == "demo-local"
@@ -139,7 +139,7 @@ fn list_and_config_usage_explain_app_and_subtree_options() {
     assert!(list.contains("List the live Coordinator-anchored canister tree"));
     assert!(list.contains("Usage: canic info list [OPTIONS] <fleet>"));
     assert!(list.contains("<fleet>"));
-    assert!(list.contains("Installed Fleet name to inspect"));
+    assert!(list.contains("Current Fleet name to inspect"));
     assert!(list.contains("--subtree <name-or-principal>"));
     assert!(list.contains("--verbose"));
     assert!(config.contains("Usage: canic app config [OPTIONS] <app>"));

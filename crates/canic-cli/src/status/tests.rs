@@ -20,7 +20,7 @@ fn parses_status_options() {
     assert_eq!(options.icp, "/tmp/icp");
 }
 
-// Ensure App configs and installed Fleets render as independent inventories.
+// Ensure App configs and current Fleets render as independent inventories.
 #[test]
 fn renders_status_report() {
     let report = StatusReport {

@@ -6,8 +6,8 @@ mod render;
 
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError, install_root::ConfigDiscoveryError,
-    installed_fleet::InstalledFleetError, release_set::AppConfigError,
+    config_discovery::ConfigDiscoveryError, fleet_ensure::CurrentFleetInventoryError,
+    icp::IcpCommandError, icp_config::IcpConfigError, release_set::AppConfigError,
 };
 use config::{load_config_role_rows, missing_config_roles};
 use live::{
@@ -43,7 +43,7 @@ pub enum ListCommandError {
     Icp(#[from] IcpCommandError),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error("failed to resolve ICP project root: {0}")]
     IcpRoot(#[from] IcpConfigError),

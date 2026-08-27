@@ -10,7 +10,6 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 #[derive(Clone, Copy)]
 enum ComponentRoleScope {
-    Release,
     Deployable,
 }
 
@@ -74,11 +73,6 @@ pub(in crate::release_set) fn configured_pool_expectations_from_config(
     }
 
     pools.into_values().collect()
-}
-
-// Project ordinary release members from one already-validated configuration snapshot.
-pub fn configured_release_roles_from_config(config: &ConfigModel) -> Vec<String> {
-    configured_component_roles(config, ComponentRoleScope::Release)
 }
 
 // Enumerate deployable roles across all Component Specs except implicit Wasm stores.

@@ -442,6 +442,12 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    pub fn local_component_registry_status(
+        request: RootComponentRegistryPreparationRequest,
+    ) -> Result<RootComponentRegistryStatusResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::local_status(request).map_err(Into::into)
+    }
+
     pub async fn reserve_component_allocation(
         request: RootComponentAllocationRequest,
     ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {

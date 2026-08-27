@@ -6,10 +6,7 @@ use super::{
         blob_storage_medic_error_check, candid_declares_blob_storage_billing,
     },
     command::{medic_subcommand_help_requested, usage},
-    fleet::{
-        check_coordinator_canister_id, check_coordinator_readiness_not_evaluated,
-        check_fleet_registry_not_evaluated, fleet_environment_selection,
-    },
+    fleet::fleet_environment_selection,
     render::{MEDIC_REPORT_WIDTH, render_medic_ci_text, render_medic_json, render_medic_text},
     report::{MedicStatus, aggregate_status},
     role_contract::workspace_config_quality_checks,
@@ -24,12 +21,10 @@ use crate::{
 };
 use std::{ffi::OsString, fs};
 
-use canic_core::ids::{AppId, CanisterRole, CanonicalNetworkId, FleetId};
+use canic_core::ids::CanisterRole;
 use canic_host::{
-    fleet_catalog::{FleetCatalogEntryV1, FleetCatalogError},
-    fleet_install_plan::PlannedCanisterCreationFunding,
+    fleet_ensure::CurrentFleetInventoryError,
     icp::local_canister_candid_path,
-    installed_fleet::InstalledFleetError,
     state_manifest::{StateAuditStatus, build_state_audit_report},
 };
 use serde_json::Value as JsonValue;
@@ -117,7 +112,7 @@ fn parses_fleet_auth_renewal_medic_target() {
 fn medic_usage_includes_top_level_examples() {
     let text = usage();
 
-    assert!(text.contains("Diagnose local workspace and installed-Fleet readiness"));
+    assert!(text.contains("Diagnose local workspace and current-Fleet readiness"));
     assert!(text.contains("Usage: canic medic"));
     assert!(text.contains("canic medic"));
     assert!(text.contains("canic medic --ci"));
@@ -435,9 +430,9 @@ fn fleet_environment_selection_prefers_explicit_environment() {
     assert_eq!(check.source, MedicSource::Command);
 }
 
-// Ensure missing installed targets point operators at the no-mutation planner.
+// Ensure missing current targets point operators at the no-effect ensure planner.
 #[test]
-fn fleet_missing_points_to_deploy_plan() {
+fn fleet_missing_points_to_current_ensure_plan() {
     let root = temp_dir("canic-cli-medic-missing-target-plan");
     fs::create_dir_all(&root).expect("create temp root");
     let options = MedicOptions {
@@ -466,87 +461,17 @@ fn fleet_missing_points_to_deploy_plan() {
     let checks = run_fleet_checks(&options, &context);
     let missing = checks
         .iter()
-        .find(|check| check.code == "fleet_missing")
+        .find(|check| check.code == "current_fleet_not_converged")
         .expect("missing Fleet check");
 
     assert_eq!(missing.status, MedicStatus::Fail);
     assert!(
         missing
             .next
-            .contains("canic deploy plan demo --app <app> --fleet-input <path>")
-    );
-    assert!(
-        missing
-            .next
-            .contains("canic install <app> <fleet> --fleet-input <path>")
+            .contains("canic fleet ensure demo --desired fleets/demo.toml")
     );
 
     fs::remove_dir_all(root).expect("remove temp root");
-}
-
-#[test]
-fn retained_recovery_names_exact_authority_without_fresh_install_advice() {
-    let plan = FreshFleetInstallRecoveryPlanV1 {
-        schema_version: 1,
-        classification:
-            canic_host::install_root::FreshFleetInstallRecoveryClassificationV1::PaidEffectRecovery,
-        fleet_install_operation_id: "11".repeat(32),
-        release_build_id: "22".repeat(32).parse().expect("release build"),
-        decision_release_build_id: None,
-        retained_builder_version: "0.109.1".to_string(),
-        retained_plan_contract:
-            canic_host::install_root::RetainedInstallPlanContractV1::HistoricalPoolV1,
-        fresh_fleet_plan_digest: "33".repeat(32),
-        effects_started: true,
-        original_maximum_operator_debit: PlannedCanisterCreationFunding::Cycles {
-            cycles: 310_000_300_000_000,
-        },
-        remaining_operator_debit: PlannedCanisterCreationFunding::Cycles { cycles: 0 },
-        retained_root_repair_funding: None,
-        fenced_operator_creations: 3,
-        total_operator_creations: 3,
-        uncertain_creation_outcomes: Vec::new(),
-        next_replay_phase: "component_registry_preparation_verified".to_string(),
-    };
-    let summary = RetainedFleetInstallSessionSummaryV1 {
-        fleet_name: "staging".parse().expect("Fleet name"),
-        app: AppId::from("app"),
-        release_build_id: plan.release_build_id,
-        fresh_fleet_plan_digest: plan.fresh_fleet_plan_digest.clone(),
-        operation_id: [0x11; 32],
-    };
-
-    let check = retained_recovery_check("staging", &summary, Some(&plan), None);
-
-    assert_eq!(check.code, "fleet_recovery_pending");
-    assert_eq!(check.status, MedicStatus::Warn);
-    assert!(check.detail.contains("retained_builder=0.109.1"));
-    assert!(check.detail.contains("fenced_creations=3/3"));
-    assert!(
-        check
-            .detail
-            .contains("verified live state is monotonically ahead")
-    );
-    assert!(check.detail.contains(&"33".repeat(32)));
-    assert!(check.next.contains("--expected-plan-digest"));
-    assert!(check.next.contains("--release-build"));
-    assert!(
-        check
-            .next
-            .contains("do not start a fresh or replacement Fleet")
-    );
-    assert!(!check.next.contains("reinstall"));
-
-    let source_drift = retained_recovery_check(
-        "staging",
-        &summary,
-        None,
-        Some("current workspace source no longer compiles the retained decision"),
-    );
-    assert!(source_drift.detail.contains("detailed_plan_unavailable="));
-    assert!(source_drift.detail.contains("operation=111111"));
-    assert!(source_drift.next.contains(&"33".repeat(32)));
-    assert!(!source_drift.next.contains("reinstall"));
 }
 
 // Ensure workspace-only environment warnings do not duplicate Fleet-scoped checks.
@@ -570,59 +495,6 @@ fn workspace_environment_selection_check_is_workspace_only() {
     assert_eq!(workspace_check.code, "local_environment_implicit");
     assert_eq!(workspace_check.status, MedicStatus::Warn);
     assert!(workspace_environment_selection_check(&fleet).is_none());
-}
-
-// Ensure missing Coordinator IDs are caught before medic attempts a live query.
-#[test]
-fn coordinator_canister_id_check_classifies_present_and_missing_ids() {
-    let mut fleet = sample_fleet_catalog_entry();
-    let present = check_coordinator_canister_id(&fleet);
-
-    assert_eq!(present.status, MedicStatus::Pass);
-    assert_eq!(present.code, "coordinator_canister_id_present");
-    assert_eq!(present.detail, "aaaaa-aa");
-
-    fleet.coordinator_principal = "  ".to_string();
-    let missing = check_coordinator_canister_id(&fleet);
-
-    assert_eq!(missing.status, MedicStatus::Fail);
-    assert_eq!(missing.code, "coordinator_canister_id_missing");
-    assert!(
-        missing
-            .detail
-            .contains("does not record a Coordinator principal")
-    );
-}
-
-// Ensure skipped Coordinator readiness is explicit when the catalog binding is missing.
-#[test]
-fn coordinator_readiness_not_evaluated_explains_skipped_live_query() {
-    let missing_coordinator = check_coordinator_readiness_not_evaluated(false);
-
-    assert_eq!(missing_coordinator.status, MedicStatus::NotEvaluated);
-    assert_eq!(
-        missing_coordinator.code,
-        "coordinator_readiness_not_evaluated"
-    );
-    assert!(
-        missing_coordinator
-            .detail
-            .contains("no Coordinator principal")
-    );
-}
-
-// Ensure Fleet Registry observation is skipped behind the Coordinator gate.
-#[test]
-fn fleet_registry_not_evaluated_explains_skipped_live_query() {
-    let missing_coordinator = check_fleet_registry_not_evaluated(false);
-
-    assert_eq!(missing_coordinator.status, MedicStatus::NotEvaluated);
-    assert_eq!(missing_coordinator.code, "fleet_registry_not_evaluated");
-    assert!(
-        missing_coordinator
-            .detail
-            .contains("no Coordinator principal")
-    );
 }
 
 // Ensure workspace medic validates package-role metadata without spawning Cargo.
@@ -1102,9 +974,10 @@ fn auth_renewal_medic_error_check_classifies_invalid_issuer() {
         "not a principal",
     );
     let generic = auth_renewal_medic_error_check(
-        AuthCommandError::InstalledFleet(InstalledFleetError::FleetCatalog(
-            FleetCatalogError::UnsupportedPlatform("test"),
-        )),
+        AuthCommandError::CurrentFleet(CurrentFleetInventoryError::NotConverged {
+            environment: "local".to_string(),
+            fleet: "demo".to_string(),
+        }),
         "demo",
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );
@@ -1205,8 +1078,8 @@ fn wraps_long_medic_report_fields() {
             "fleet_missing",
             "fleet",
             "this is a deliberately long diagnostic message that should wrap across multiple indented lines instead of widening a terminal table",
-            "run canic install <app> <fleet> --fleet-input <path>",
-            MedicSource::InstalledFleet,
+            "run canic fleet ensure demo --desired fleets/demo.toml",
+            MedicSource::CurrentEnsure,
         )],
     ));
 
@@ -1234,7 +1107,7 @@ fn wraps_unbroken_long_medic_report_fields() {
             "fleet",
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            MedicSource::InstalledFleet,
+            MedicSource::CurrentEnsure,
         )],
     ));
 
@@ -1268,19 +1141,6 @@ fn sample_check(status: MedicStatus) -> MedicCheck {
         "next",
         MedicSource::Command,
     )
-}
-
-fn sample_fleet_catalog_entry() -> FleetCatalogEntryV1 {
-    FleetCatalogEntryV1 {
-        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-        fleet_id: FleetId::from_generated_bytes([5; 32]),
-        fleet_name: "demo".parse().expect("Fleet name"),
-        app: AppId::from("demo"),
-        environment: "local".to_string(),
-        deployed_at_unix_secs: 1,
-        release_build_id: "01".repeat(32).parse().expect("release build"),
-        coordinator_principal: "aaaaa-aa".to_string(),
-    }
 }
 
 fn write_candid(root: &std::path::Path, environment: &str, role: &str, candid: &str) {

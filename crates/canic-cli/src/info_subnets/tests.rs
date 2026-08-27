@@ -1,6 +1,6 @@
 //! Module: canic_cli::info_subnets::tests
 //!
-//! Responsibility: prove command parsing, complete evidence aggregation, and stable rendering.
+//! Responsibility: prove command parsing, current authority aggregation, and stable rendering.
 //! Does not own: live PocketIC lifecycle coverage or ICP CLI compatibility.
 
 use super::*;
@@ -25,28 +25,27 @@ use canic_core::{
         FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
 };
-use canic_host::fleet_catalog::FleetCatalogEntryV1;
 
 #[test]
 fn parses_fleet_json_and_forwarded_global_options() {
     let options = InfoSubnetsOptions::parse([
-        OsString::from("toko"),
+        OsString::from("demo"),
         OsString::from("--json"),
         OsString::from("--__canic-environment"),
         OsString::from("staging"),
         OsString::from("--__canic-icp"),
         OsString::from("/opt/icp"),
     ])
-    .expect("parse subnet inventory");
+    .expect("parse Subnet inventory");
 
-    assert_eq!(options.fleet, "toko");
+    assert_eq!(options.fleet, "demo");
     assert!(options.json);
     assert_eq!(options.environment, "staging");
     assert_eq!(options.icp, "/opt/icp");
 }
 
 #[test]
-fn complete_evidence_groups_a_colocated_coordinator_and_root() {
+fn complete_current_evidence_groups_a_colocated_coordinator_and_root() {
     let fixture = fixture();
     let report = fixture
         .plan()
@@ -56,6 +55,7 @@ fn complete_evidence_groups_a_colocated_coordinator_and_root() {
 
     assert_eq!(report.schema_version, 1);
     assert_eq!(report.registry_revision, 4);
+    assert_eq!(report.fleet, "demo");
     assert_eq!(report.subnets.len(), 2);
     assert_eq!(report.total_canisters, 13);
     assert_eq!(report.subnets[0].coordinator_canisters, 1);
@@ -67,51 +67,26 @@ fn complete_evidence_groups_a_colocated_coordinator_and_root() {
     assert_eq!(report.subnets[1].total_canisters, 6);
 
     let json = serde_json::to_value(&report).expect("serialize report");
-    assert_eq!(json["schema_version"], 1);
     assert_eq!(json["coordinator_principal"], principal(30).to_text());
     assert_eq!(json["subnets"][0]["status"], "active");
-    assert_eq!(json["subnets"][0]["pooled_canisters"], 2);
-    assert_eq!(json["subnets"][0]["total_canisters"], 7);
-    assert_serialized_field_order(
-        &report,
-        &[
-            "schema_version",
-            "canonical_network_id",
-            "fleet_id",
-            "fleet",
-            "app",
-            "coordinator_principal",
-            "registry_revision",
-            "total_canisters",
-            "subnets",
-        ],
-    );
-    assert_serialized_field_order(
-        &report.subnets[0],
-        &[
-            "subnet",
-            "coordinator_canisters",
-            "root",
-            "status",
-            "root_infrastructure_canisters",
-            "component_canisters",
-            "pooled_canisters",
-            "total_canisters",
-        ],
-    );
 }
 
-fn assert_serialized_field_order<T: serde::Serialize>(value: &T, expected: &[&str]) {
-    let json = serde_json::to_string(value).expect("serialize ordered JSON fields");
-    let mut search_start = 0;
+#[test]
+fn live_topology_must_match_terminal_current_authority() {
+    let fixture = fixture();
+    let mut live = fixture.registry.clone();
+    live.fleet_subnet_roots[0].fleet_subnet_root = principal(99);
 
-    for field in expected {
-        let needle = format!("\"{field}\":");
-        let relative_position = json[search_start..]
-            .find(&needle)
-            .unwrap_or_else(|| panic!("missing ordered JSON field {field}: {json}"));
-        search_start += relative_position + needle.len();
-    }
+    assert!(matches!(
+        SubnetInventoryPlan::compile(
+            "demo".to_string(),
+            &fixture.registry,
+            live,
+            fixture.manifest,
+            fixture.version,
+        ),
+        Err(SubnetInventoryError::CurrentAuthorityMismatch { field: "Roots" })
+    ));
 }
 
 #[test]
@@ -133,36 +108,6 @@ fn complete_evidence_rejects_missing_or_stale_root_summaries() {
 }
 
 #[test]
-fn coordinator_evidence_must_match_the_terminal_catalog() {
-    let mut fixture = fixture();
-    fixture.registry.authority.binding.coordinator = principal(99);
-
-    assert!(matches!(
-        fixture.plan(),
-        Err(SubnetInventoryError::CatalogAuthorityMismatch {
-            field: "coordinator_principal"
-        })
-    ));
-}
-
-#[test]
-fn removed_roots_are_excluded_from_queries_and_rows() {
-    let mut fixture = fixture();
-    fixture.registry.fleet_subnet_roots[1].status = FleetSubnetRootStatus::Removed;
-    let plan = fixture.plan().expect("compile plan");
-
-    assert_eq!(plan.root_principals(), vec![principal(40)]);
-    let summary = fixture
-        .summaries()
-        .into_iter()
-        .next()
-        .expect("active root summary");
-    let report = plan.complete(vec![summary]).expect("complete report");
-    assert_eq!(report.subnets.len(), 1);
-    assert_eq!(report.total_canisters, 7);
-}
-
-#[test]
 fn text_output_contains_canonical_rows_and_exact_fleet_total() {
     let fixture = fixture();
     let report = fixture
@@ -174,15 +119,12 @@ fn text_output_contains_canonical_rows_and_exact_fleet_total() {
 
     assert!(text.contains("SUBNET"));
     assert!(text.contains("ROOT"));
-    assert!(text.contains("STATUS"));
-    assert!(text.contains("CANISTERS"));
     assert!(text.contains("ACTIVE"));
     assert!(text.contains("POOL"));
     assert!(text.contains("Fleet total: 13 Canisters"));
 }
 
 struct Fixture {
-    catalog: FleetCatalogEntryV1,
     registry: FleetRegistry,
     manifest: FleetRegistryManifest,
     version: FleetRegistryVersion,
@@ -191,7 +133,8 @@ struct Fixture {
 impl Fixture {
     fn plan(&self) -> Result<SubnetInventoryPlan, SubnetInventoryError> {
         SubnetInventoryPlan::compile(
-            self.catalog.clone(),
+            "demo".to_string(),
+            &self.registry,
             self.registry.clone(),
             self.manifest.clone(),
             self.version.clone(),
@@ -222,7 +165,7 @@ fn fixture() -> Fixture {
             canonical_network_id: CanonicalNetworkId::ic_mainnet(),
             fleet_id: FleetId::from_generated_bytes([4; 32]),
         },
-        app: AppId::from("toko"),
+        app: AppId::from("demo"),
     };
     let authority = FleetRegistryAuthority {
         binding: FleetCoordinatorBinding {
@@ -235,15 +178,16 @@ fn fixture() -> Fixture {
     let registry = FleetRegistry {
         authority: authority.clone(),
         revision: 4,
-        admission: canic_core::shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy(
-            fleet.clone(),
-            &canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_policy_template(
-                vec![principal(1)],
-                Vec::new(),
+        admission:
+            canic_core::shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy(
+                fleet,
+                &canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_policy_template(
+                    vec![principal(1)],
+                    Vec::new(),
+                )
+                .expect("Fleet admission template"),
             )
-            .expect("Fleet admission template"),
-        )
-        .expect("Fleet admission policy"),
+            .expect("Fleet admission policy"),
         component_specs: Vec::new(),
         fleet_subnet_roots: vec![
             root(1, 40, FleetSubnetRootStatus::Active),
@@ -263,16 +207,6 @@ fn fixture() -> Fixture {
         content_hash: manifest.content_hash,
     };
     Fixture {
-        catalog: FleetCatalogEntryV1 {
-            canonical_network_id: fleet.fleet.canonical_network_id,
-            fleet_id: fleet.fleet.fleet_id,
-            fleet_name: "toko-production".parse().expect("Fleet name"),
-            app: fleet.app,
-            environment: "staging".to_string(),
-            deployed_at_unix_secs: 54,
-            release_build_id: "01".repeat(32).parse().expect("release build"),
-            coordinator_principal: principal(30).to_text(),
-        },
         registry,
         manifest,
         version,

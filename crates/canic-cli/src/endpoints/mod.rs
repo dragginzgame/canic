@@ -104,7 +104,7 @@ impl EndpointsOptions {
     }
 }
 
-/// Run the installed-Fleet endpoint listing command.
+/// Run the current-Fleet endpoint listing command.
 pub fn run_info<I>(args: I) -> Result<(), EndpointsCommandError>
 where
     I: IntoIterator<Item = OsString>,

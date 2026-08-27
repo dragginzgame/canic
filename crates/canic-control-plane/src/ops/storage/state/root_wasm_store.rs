@@ -32,8 +32,7 @@ use canic_core::{
 pub struct SiblingWasmStoreAdoptionPlan {
     pub operation_id: [u8; 32],
     pub authority: FleetSubnetWasmStoreAuthority,
-    pub temporary_controllers: Vec<Principal>,
-    pub final_controllers: Vec<Principal>,
+    pub controllers: Vec<Principal>,
 }
 
 ///
@@ -106,8 +105,7 @@ impl RootWasmStoreStateOps {
             operation_id: plan.operation_id,
             wasm_store: plan.authority.wasm_store,
             expected_module_hash: plan.authority.wasm_module_hash,
-            temporary_controllers: plan.temporary_controllers.clone(),
-            final_controllers: plan.final_controllers.clone(),
+            controllers: plan.controllers.clone(),
             phase: SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight,
             adopted_at_ns: None,
         })
@@ -317,8 +315,7 @@ struct SiblingWasmStoreAdoptionAuthority {
     operation_id: [u8; 32],
     wasm_store: Principal,
     expected_module_hash: [u8; 32],
-    temporary_controllers: Vec<Principal>,
-    final_controllers: Vec<Principal>,
+    controllers: Vec<Principal>,
 }
 
 fn adoption_response(
@@ -333,8 +330,7 @@ fn adoption_response(
     Ok(FleetSubnetWasmStoreAdoptionResponse {
         operation_id: record.operation_id,
         authority,
-        temporary_controllers: record.temporary_controllers,
-        final_controllers: record.final_controllers,
+        controllers: record.controllers,
         adopted_at_ns,
     })
 }
@@ -344,24 +340,22 @@ fn validate_adoption_authority(
     operation_id: [u8; 32],
     authority: &FleetSubnetWasmStoreAuthority,
 ) -> Result<(), InternalError> {
-    let mut temporary_controllers = vec![
+    let mut controllers = vec![
         authority.installation_controller,
         authority.fleet_subnet_root,
     ];
-    temporary_controllers.sort();
+    controllers.sort();
     let expected = SiblingWasmStoreAdoptionAuthority {
         operation_id,
         wasm_store: authority.wasm_store,
         expected_module_hash: authority.wasm_module_hash,
-        temporary_controllers,
-        final_controllers: vec![authority.fleet_subnet_root],
+        controllers,
     };
     let observed = SiblingWasmStoreAdoptionAuthority {
         operation_id: record.operation_id,
         wasm_store: record.wasm_store,
         expected_module_hash: record.expected_module_hash,
-        temporary_controllers: record.temporary_controllers.clone(),
-        final_controllers: record.final_controllers.clone(),
+        controllers: record.controllers.clone(),
     };
     if observed != expected {
         return Err(InternalError::conflict());

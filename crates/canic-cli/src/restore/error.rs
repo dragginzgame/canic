@@ -1,4 +1,3 @@
-use crate::backup::BackupCommandError;
 use canic_backup::{
     artifacts::ArtifactChecksumError,
     persistence::PersistenceError,
@@ -215,8 +214,11 @@ pub enum RestoreCommandError {
     #[error(transparent)]
     Persistence(#[from] PersistenceError),
 
-    #[error(transparent)]
-    Backup(Box<BackupCommandError>),
+    #[error("backup reference {reference} was not found")]
+    BackupReferenceNotFound { reference: String },
+
+    #[error("backup reference {reference} is ambiguous")]
+    BackupReferenceAmbiguous { reference: String },
 
     #[error(transparent)]
     RestorePlan(#[from] RestorePlanError),
@@ -229,12 +231,6 @@ pub enum RestoreCommandError {
 
     #[error(transparent)]
     RestorePersistence(#[from] RestorePersistenceError),
-}
-
-impl From<BackupCommandError> for RestoreCommandError {
-    fn from(error: BackupCommandError) -> Self {
-        Self::Backup(Box::new(error))
-    }
 }
 
 impl From<RestoreRunnerError> for RestoreCommandError {

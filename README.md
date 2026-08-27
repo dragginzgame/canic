@@ -84,29 +84,30 @@ dynamic child trees, sharding pools, scaling pools, and reduction-only limits.
 
 ### Builds, Provenance, And Evidence
 
-Role-aware Wasm builds, build provenance, passive deployment evidence,
-policy gates, adoption reports, and network-scoped Fleet catalogs.
+Role-aware Wasm builds, stable build provenance, evidence comparison, and
+passive policy gates.
 
 [Explore builds and evidence](docs/features/build-and-evidence/README.md)
 
 ### Backup And Restore
 
-Topology-aware canister snapshots, manifests, checksums, resumable download
-journals, verified restore plans, and guarded execution from the host CLI.
+The host backup domain and current `canic backup` / `canic restore` workflows
+remain available. They resolve exact canisters from terminal current ensure
+inventory rather than historical install or recovery evidence.
 
 [Explore backup and restore](docs/features/backup-and-restore/README.md)
 
 ### Blob Storage
 
-Optional runtime APIs and operator tooling for product blob storage, with the
-non-billing integration kept separate from Cashier-backed billing support.
+Optional runtime APIs for product blob storage, with the non-billing
+integration kept separate from Cashier-backed billing support.
 
 [Explore blob storage](docs/features/blob-storage/README.md)
 
 ### Operations And Diagnostics
 
-App and Fleet setup, network trust, local replicas, installation, status,
-inspection, medic checks, recovery guidance, and automation-friendly output.
+App setup, network trust, local replicas, builds, evidence, diagnostics and the
+reviewed Fleet ensure workflow.
 
 [Explore operations and diagnostics](docs/features/operations/README.md)
 
@@ -135,9 +136,9 @@ vendor game code or make canonical infrastructure depend on the demo.
 - A **Fleet Subnet Root** owns lifecycle effects for Components on its physical
   Subnet. The Fleet Coordinator owns Fleet-wide planning and publication.
 
-See [CONFIG.md](CONFIG.md) for the complete configuration vocabulary and
-[fleet-install-input.md](docs/architecture/fleet-install-input.md) for the
-separate operator-owned installation input.
+See [CONFIG.md](CONFIG.md) for the App vocabulary and
+[Fleet ensure](docs/features/operations/fleet-ensure.md) for the separate
+operator-owned desired Fleet contract.
 
 ## Repository Map
 
@@ -147,8 +148,8 @@ separate operator-owned installation input.
 - [crates/canic-control-plane](crates/canic-control-plane/) — root,
   Coordinator, and Store runtime support
 - [crates/canic-cli](crates/canic-cli/) — published `canic` operator binary
-- [crates/canic-host](crates/canic-host/) — host-side build, install, and Fleet
-  orchestration
+- [crates/canic-host](crates/canic-host/) — host-side build and Fleet
+  reconciliation
 - [crates/canic-backup](crates/canic-backup/) — backup and restore domain
   contracts
 - [apps](apps/) — reference App configurations and canister packages

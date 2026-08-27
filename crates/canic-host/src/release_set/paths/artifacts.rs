@@ -1,8 +1,6 @@
 use std::path::{Path, PathBuf};
 use thiserror::Error as ThisError;
 
-use super::super::ROOT_RELEASE_SET_MANIFEST_FILE;
-
 /// Failure to locate the exact artifact root for a selected artifact environment.
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum ArtifactRootError {
@@ -60,12 +58,4 @@ pub fn artifact_root_path(icp_root: &Path, artifact_environment: &str) -> PathBu
         .join(".icp")
         .join(artifact_environment)
         .join("canisters")
-}
-
-/// Return the canonical manifest path for the staged root release set.
-#[must_use]
-pub fn root_release_set_manifest_path(artifact_root: &Path) -> PathBuf {
-    artifact_root
-        .join("root")
-        .join(ROOT_RELEASE_SET_MANIFEST_FILE)
 }

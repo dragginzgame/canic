@@ -9,7 +9,7 @@ use serde::{Serialize, Serializer};
 pub(super) const BLOB_STORAGE_JSON_SCHEMA_VERSION: u16 = 1;
 pub(super) const BLOB_STORAGE_STATUS_KIND: &str = "blob_storage_status";
 pub(super) const BLOB_STORAGE_ERROR_KIND: &str = "blob_storage_error";
-pub(super) const BLOB_STORAGE_CANDID_SOURCE_INSTALLED_FLEET: &str = "installed_fleet";
+pub(super) const BLOB_STORAGE_CANDID_SOURCE_CURRENT_ENSURE: &str = "current_ensure_inventory";
 pub(super) const BLOB_STORAGE_READINESS_BLOCKED: &str = "blocked";
 pub(super) const BLOB_STORAGE_READINESS_READY: &str = "ready";
 const BLOB_STORAGE_READINESS_WARNING: &str = "warning";
@@ -52,7 +52,7 @@ pub(super) struct BlobStorageTarget {
 }
 
 impl BlobStorageTarget {
-    pub(super) fn from_installed_fleet(
+    pub(super) fn from_current_ensure(
         input: &str,
         role: Option<String>,
         canister_id: &str,
@@ -61,7 +61,7 @@ impl BlobStorageTarget {
             input: input.to_string(),
             role,
             canister_id: canister_id.to_string(),
-            candid_source: Some(BlobStorageCandidSource::InstalledFleet),
+            candid_source: Some(BlobStorageCandidSource::CurrentEnsureInventory),
         }
     }
 }
@@ -92,13 +92,13 @@ impl BlobStorageMethodMode {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum BlobStorageCandidSource {
-    InstalledFleet,
+    CurrentEnsureInventory,
 }
 
 impl BlobStorageCandidSource {
     pub(super) const fn label(self) -> &'static str {
         match self {
-            Self::InstalledFleet => BLOB_STORAGE_CANDID_SOURCE_INSTALLED_FLEET,
+            Self::CurrentEnsureInventory => BLOB_STORAGE_CANDID_SOURCE_CURRENT_ENSURE,
         }
     }
 }

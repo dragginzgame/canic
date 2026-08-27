@@ -1,7 +1,7 @@
 //! Module: canic_cli::status
 //!
 //! Responsibility: render the quick local Canic workspace status summary.
-//! Does not own: installed Fleet state, replica lifecycle, or App config parsing.
+//! Does not own: current Fleet state, replica lifecycle, or App config parsing.
 //! Boundary: reads host/workspace state and formats the operator-facing status view.
 
 #[cfg(test)]
@@ -15,13 +15,13 @@ use crate::{
     version_text,
 };
 use canic_host::{
+    config_discovery::{ConfigDiscoveryError, discover_workspace_canic_config_choices},
     fleet_catalog::{FleetCatalogEntryV1, FleetCatalogRequest, build_fleet_catalog_report},
     icp::IcpCli,
     icp_config::{
         DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port_from_root,
         inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root,
     },
-    install_root::{ConfigDiscoveryError, discover_workspace_canic_config_choices},
     release_set::{AppConfigSnapshot, display_workspace_path},
     replica_query,
     table::{ColumnAlign, render_table},

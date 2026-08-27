@@ -8,17 +8,10 @@
 //! and filesystem syncs behind replace and create-new modes; document helpers add only bounded
 //! encoding, reads and exact replacement reconciliation.
 
-mod document;
-
 #[cfg(test)]
 mod tests;
 
 use std::{fs, io, path::Path};
-
-pub(crate) use document::{
-    BoundedRegularFileReadError, CanonicalJsonEncodeError, CanonicalJsonStyle, ExactReplaceError,
-    encode_canonical_json, read_optional_bounded_regular_bytes, replace_bytes_exact,
-};
 
 #[derive(Debug)]
 pub(crate) enum RegularFileReadError {

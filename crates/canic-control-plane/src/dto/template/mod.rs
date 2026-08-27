@@ -25,7 +25,7 @@ use serde::Deserialize;
 // TemplateManifestInput
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct TemplateManifestInput {
     pub template_id: TemplateId,
     pub role: CanisterRole,
@@ -61,7 +61,7 @@ pub struct TemplateManifestResponse {
 // TemplateChunkSetPrepareInput
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct TemplateChunkSetPrepareInput {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
@@ -74,7 +74,7 @@ pub struct TemplateChunkSetPrepareInput {
 // TemplateChunkInput
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct TemplateChunkInput {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
@@ -211,7 +211,7 @@ pub enum StoreCommandResponse {
 }
 
 /// Closed Store observation selector carried by its single status query.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum StoreStatusRequest {
     Authority,
     Catalog,
@@ -220,6 +220,7 @@ pub enum StoreStatusRequest {
     Operation(OperationStatusRequest),
     Overview,
     Storage,
+    Template(TemplateLookupRequest),
 }
 
 /// Store-owned durable operation detail selected by one operation ID.
@@ -243,6 +244,7 @@ pub enum StoreStatusResponse {
     Operation(StoreOperationStatusResponse),
     Overview(RoleOverviewResponse),
     Storage(WasmStoreStatusResponse),
+    Template(TemplateStagingStatusResponse),
 }
 
 /// Minimum operational headroom retained above the live freezing reserve while
@@ -327,19 +329,18 @@ pub struct WasmStoreOverviewResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-#[cfg(test)]
 pub struct TemplateStagingStatusResponse {
-    pub role: CanisterRole,
     pub template_id: TemplateId,
     pub version: TemplateVersion,
-    pub store_binding: WasmStoreBinding,
-    pub chunking_mode: TemplateChunkingMode,
-    pub payload_size_bytes: u64,
-    pub payload_size: String,
+    pub manifest: Option<TemplateManifestResponse>,
     pub chunk_set_present: bool,
     pub expected_chunk_count: u32,
+    pub expected_chunk_hashes: Vec<Vec<u8>>,
+    pub payload_hash: Option<Vec<u8>>,
+    pub payload_size_bytes: Option<u64>,
+    pub stored_chunk_hashes: Vec<Option<Vec<u8>>>,
     pub stored_chunk_count: u32,
-    pub publishable: bool,
+    pub complete: bool,
 }
 
 //
@@ -395,6 +396,10 @@ mod tests {
             }),
             StoreStatusRequest::Overview,
             StoreStatusRequest::Storage,
+            StoreStatusRequest::Template(TemplateLookupRequest {
+                template_id: TemplateId::new("embedded:app"),
+                version: TemplateVersion::new("current"),
+            }),
         ];
 
         for request in requests {

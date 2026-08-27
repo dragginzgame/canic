@@ -11,34 +11,24 @@ mod tests;
 use crate::{
     cli::clap::{
         flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, render_usage,
-        required_string, required_typed, string_option_or_else, typed_values,
+        required_string,
     },
-    cli::defaults::local_environment,
-    cli::globals::internal_environment_arg,
     cli::help::print_help_or_version,
     cli::render::append_dry_run_footer,
     version_text,
 };
-use candid::Principal;
-use canic_core::ids::{FleetFundingProfile, SubnetId};
 use canic_core::shared_support::is_ascii_snake_case;
 use canic_host::{
-    durable_io::write_bytes,
-    fleet_install_input::{
-        FleetFundingProfileRootScaffold, FleetFundingProfileScaffold,
-        PROFILE_CYCLE_ROUNDING_QUANTUM, STANDARD_PROFILE_NODE_COUNT,
-        resolve_fleet_funding_profile_node_counts, scaffold_fleet_funding_profile,
-    },
-    install_root::{
+    config_discovery::{
         ConfigDiscoveryError, current_canic_workspace_root,
         discover_workspace_canic_config_choices, select_discovered_app_config_path,
     },
+    durable_io::write_bytes,
     release_set::{
-        AppConfigError, declare_app_role, display_workspace_path, icp_root as resolve_icp_root,
-        plan_declare_app_role,
+        AppConfigError, declare_app_role, display_workspace_path, plan_declare_app_role,
     },
 };
-use clap::{Arg, ArgAction, Command as ClapCommand};
+use clap::{Arg, Command as ClapCommand};
 use std::{
     ffi::OsString,
     fs,
@@ -56,31 +46,15 @@ Examples:
 const SCAFFOLD_HELP_AFTER: &str = "\
 Examples:
   canic scaffold canister demo store
-  canic scaffold fleet-input preview_multi_subnet --coordinator-node-count 34 --root-node-count 13
 
 Mutation notes:
   canic scaffold canister writes a new local role crate, appends the workspace
   Cargo.toml member when present, and declares the role in canic.toml.
-  canic scaffold fleet-input is a funding-policy authoring aid; it reads no
-  identity or balance and writes no files.
   Use --dry-run to validate and preview without changing files.";
 const SCAFFOLD_CANISTER_HELP_AFTER: &str = "\
 Examples:
   canic scaffold canister demo store
   canic scaffold canister demo store --dry-run";
-const SCAFFOLD_FLEET_INPUT_HELP_AFTER: &str = "\
-Examples:
-  canic --environment ic scaffold fleet-input preview_multi_subnet --coordinator-subnet <id> --root-subnet <id>
-  canic scaffold fleet-input preview_multi_subnet --coordinator-node-count 34 --root-node-count 13
-
-This command materializes exact node-scaled funding values and the fee-complete
-maximum operator debit without reading an ICP identity or ledger balance. On
-IC, exact Subnet IDs resolve node counts from Canic's trusted Registry catalog;
---refresh-catalog refreshes missing or invalid evidence. Explicit node counts
-remain available for offline authoring. The emitted TOML is a funding fragment;
-add topology, admissions, limits, pool policy and exact Subnet IDs, then use
-canic deploy plan for live identity, balance and install admission.";
-
 ///
 /// ScaffoldCommandError
 ///
@@ -110,12 +84,6 @@ pub enum ScaffoldCommandError {
 
     #[error(transparent)]
     AppConfig(#[from] AppConfigError),
-
-    #[error(transparent)]
-    FleetFundingProfile(#[from] canic_host::fleet_install_input::FleetFundingProfileScaffoldError),
-
-    #[error(transparent)]
-    FleetInstallInput(#[from] canic_host::fleet_install_input::FleetInstallInputError),
 
     #[error(transparent)]
     Host(#[from] Box<dyn std::error::Error>),
@@ -150,30 +118,6 @@ struct CanisterScaffoldOptions {
     app: String,
     role: String,
     dry_run: bool,
-}
-
-///
-/// FleetInputScaffoldOptions
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct FleetInputScaffoldOptions {
-    profile: FleetFundingProfile,
-    node_counts: FleetInputScaffoldNodeCounts,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum FleetInputScaffoldNodeCounts {
-    Explicit {
-        coordinator: u64,
-        roots: Vec<u64>,
-    },
-    Registry {
-        environment: String,
-        coordinator_subnet: SubnetId,
-        root_subnets: Vec<SubnetId>,
-        refresh_catalog: bool,
-    },
 }
 
 impl ScaffoldOptions {
@@ -230,70 +174,6 @@ impl CanisterScaffoldOptions {
     }
 }
 
-impl FleetInputScaffoldOptions {
-    #[cfg(test)]
-    fn parse<I>(args: I) -> Result<Self, ScaffoldCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse_with(
-            args,
-            scaffold_fleet_input_command(),
-            scaffold_fleet_input_usage,
-        )
-    }
-
-    fn parse_with<I>(
-        args: I,
-        command: ClapCommand,
-        usage: fn() -> String,
-    ) -> Result<Self, ScaffoldCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches =
-            parse_matches(command, args).map_err(|_| ScaffoldCommandError::Usage(usage()))?;
-        let profile = required_typed(&matches, "profile");
-        let coordinator_node_count = matches.get_one::<u64>("coordinator-node-count").copied();
-        let root_node_counts = typed_values(&matches, "root-node-count");
-        let coordinator_subnet = matches.get_one::<SubnetId>("coordinator-subnet").copied();
-        let root_subnets = typed_values(&matches, "root-subnet");
-        let refresh_catalog = matches.get_flag("refresh-catalog");
-        let environment = string_option_or_else(&matches, "environment", local_environment);
-        let node_counts = match (
-            coordinator_node_count,
-            root_node_counts.as_slice(),
-            coordinator_subnet,
-            root_subnets.as_slice(),
-        ) {
-            (Some(coordinator), [_, ..], None, []) if !refresh_catalog => {
-                FleetInputScaffoldNodeCounts::Explicit {
-                    coordinator,
-                    roots: root_node_counts,
-                }
-            }
-            (None, [], Some(coordinator_subnet), [_, ..]) => {
-                FleetInputScaffoldNodeCounts::Registry {
-                    environment,
-                    coordinator_subnet,
-                    root_subnets,
-                    refresh_catalog,
-                }
-            }
-            _ => {
-                return Err(ScaffoldCommandError::Usage(format!(
-                    "choose either Coordinator/Root Subnet IDs or Coordinator/Root node counts; do not mix the two modes\n\n{}",
-                    usage()
-                )));
-            }
-        };
-        Ok(Self {
-            profile,
-            node_counts,
-        })
-    }
-}
-
 /// Run the top-level scaffold command.
 pub fn run<I>(args: I) -> Result<(), ScaffoldCommandError>
 where
@@ -313,7 +193,6 @@ where
         }
         Some((command, args)) => match command.as_str() {
             "canister" => run_canister(args),
-            "fleet-input" => run_fleet_input(args),
             _ => unreachable!("scaffold dispatch command only defines known commands"),
         },
     }
@@ -368,57 +247,6 @@ where
         "  canic app role attach {} {} --component-spec <component-spec>",
         result.app, result.role
     );
-    println!(
-        "  if medic reports required auth features, edit {} manually",
-        result.canister_dir.join("Cargo.toml").display()
-    );
-    Ok(())
-}
-
-fn run_fleet_input<I>(args: I) -> Result<(), ScaffoldCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, scaffold_fleet_input_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = FleetInputScaffoldOptions::parse_with(
-        args,
-        scaffold_fleet_input_command(),
-        scaffold_fleet_input_usage,
-    )?;
-    let (coordinator_node_count, root_node_counts, source) = match options.node_counts {
-        FleetInputScaffoldNodeCounts::Explicit { coordinator, roots } => {
-            (coordinator, roots, "explicit_node_counts")
-        }
-        FleetInputScaffoldNodeCounts::Registry {
-            environment,
-            coordinator_subnet,
-            root_subnets,
-            refresh_catalog,
-        } => {
-            let icp_root =
-                resolve_icp_root().map_err(|error| ScaffoldCommandError::Host(Box::new(error)))?;
-            let resolution = resolve_fleet_funding_profile_node_counts(
-                &icp_root,
-                &environment,
-                options.profile,
-                coordinator_subnet,
-                &root_subnets,
-                refresh_catalog,
-            )?;
-            (
-                resolution.coordinator_node_count,
-                resolution.root_node_counts,
-                "trusted_ic_registry_catalog",
-            )
-        }
-    };
-    let scaffold =
-        scaffold_fleet_funding_profile(options.profile, coordinator_node_count, &root_node_counts)?;
-    println!("{}", render_fleet_input_scaffold(&scaffold, source));
     Ok(())
 }
 
@@ -442,9 +270,10 @@ fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     println!();
     println!("Next:");
     println!("  edit icp.yaml");
+    println!("  canic app check {}", options.name);
+    println!("  canic build {}", options.name);
     println!("  canic medic --ci");
-    println!("  canic status");
-    println!("  canic install {} <fleet>", options.name);
+    println!("  canic fleet ensure <fleet> --desired fleets/<fleet>.toml");
     Ok(())
 }
 
@@ -897,16 +726,11 @@ fn find_members_array_offset(section: &str) -> Option<usize> {
 fn scaffold_command() -> ClapCommand {
     ClapCommand::new("scaffold")
         .bin_name("canic scaffold")
-        .about("Scaffold Canic source files and deployment input")
+        .about("Scaffold Canic source roles")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
             ClapCommand::new("canister")
                 .about("Create a declared-only canister role")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("fleet-input")
-                .about("Materialize node-scaled Fleet funding input")
                 .disable_help_flag(true),
         ))
         .after_help(SCAFFOLD_HELP_AFTER)
@@ -965,57 +789,6 @@ fn scaffold_canister_command() -> ClapCommand {
         .after_help(SCAFFOLD_CANISTER_HELP_AFTER)
 }
 
-fn scaffold_fleet_input_command() -> ClapCommand {
-    ClapCommand::new("fleet-input")
-        .bin_name("canic scaffold fleet-input")
-        .about("Materialize node-scaled Fleet funding input")
-        .disable_help_flag(true)
-        .arg(
-            Arg::new("profile")
-                .value_name("single_subnet|preview_multi_subnet|multi_subnet")
-                .required(true)
-                .value_parser(clap::builder::ValueParser::new(parse_funding_profile))
-                .help("Protected funding profile to materialize"),
-        )
-        .arg(
-            Arg::new("coordinator-node-count")
-                .long("coordinator-node-count")
-                .value_name("COUNT")
-                .value_parser(clap::value_parser!(u64).range(1..))
-                .help("Explicit current Coordinator node count for offline authoring"),
-        )
-        .arg(
-            Arg::new("coordinator-subnet")
-                .long("coordinator-subnet")
-                .value_name("SUBNET")
-                .value_parser(clap::builder::ValueParser::new(parse_subnet_id))
-                .help("IC Coordinator Subnet resolved through trusted Registry evidence"),
-        )
-        .arg(
-            Arg::new("root-node-count")
-                .long("root-node-count")
-                .value_name("COUNT")
-                .action(ArgAction::Append)
-                .value_parser(clap::value_parser!(u64).range(1..))
-                .help("Explicit current node count for one Root; repeat per Root"),
-        )
-        .arg(
-            Arg::new("root-subnet")
-                .long("root-subnet")
-                .value_name("SUBNET")
-                .action(ArgAction::Append)
-                .value_parser(clap::builder::ValueParser::new(parse_subnet_id))
-                .help("IC Root Subnet resolved through trusted Registry evidence; repeat per Root"),
-        )
-        .arg(
-            flag_arg("refresh-catalog")
-                .long("refresh-catalog")
-                .help("Refresh missing or invalid trusted Registry evidence in Subnet-ID mode"),
-        )
-        .arg(internal_environment_arg())
-        .after_help(SCAFFOLD_FLEET_INPUT_HELP_AFTER)
-}
-
 fn usage() -> String {
     render_usage(scaffold_command)
 }
@@ -1026,21 +799,6 @@ pub fn app_create_usage() -> String {
 
 fn scaffold_canister_usage() -> String {
     render_usage(scaffold_canister_command)
-}
-
-fn scaffold_fleet_input_usage() -> String {
-    render_usage(scaffold_fleet_input_command)
-}
-
-fn parse_subnet_id(value: &str) -> Result<SubnetId, String> {
-    let principal = Principal::from_text(value)
-        .map_err(|error| format!("invalid Subnet principal {value:?}: {error}"))?;
-    if principal == Principal::anonymous() || principal.to_text() != value {
-        return Err(format!(
-            "Subnet principal must be canonical and non-anonymous: {value:?}"
-        ));
-    }
-    Ok(SubnetId::from_principal(principal))
 }
 
 fn render_scaffold_app_plan(plan: &ScaffoldAppPlan) -> String {
@@ -1081,148 +839,6 @@ fn render_canister_scaffold_plan(plan: &CanisterScaffoldPlan) -> String {
     lines.join("\n")
 }
 
-fn render_fleet_input_scaffold(
-    scaffold: &FleetFundingProfileScaffold,
-    node_count_source: &str,
-) -> String {
-    let mut lines = vec![
-        "Fleet-input funding scaffold:".to_string(),
-        "  authority: authoring_only".to_string(),
-        "  funded_identity_required: false".to_string(),
-        format!(
-            "  funding_profile: {}",
-            funding_profile_name(scaffold.profile)
-        ),
-        format!(
-            "  coordinator_node_count: {}",
-            scaffold.coordinator_node_count
-        ),
-        format!("  root_count: {}", scaffold.roots.len()),
-        format!("  node_count_source: {node_count_source}"),
-        format!("  standard_node_count: {STANDARD_PROFILE_NODE_COUNT}"),
-        format!("  rounding_quantum_cycles: {PROFILE_CYCLE_ROUNDING_QUANTUM}"),
-        format!(
-            "  operator_creation_amount_cycles: {}",
-            scaffold.operator_creation_amount_cycles
-        ),
-        format!(
-            "  operator_creation_count: {}",
-            scaffold.operator_creation_count
-        ),
-        format!(
-            "  operator_creation_fee_cycles: {}",
-            scaffold.operator_creation_fee_cycles
-        ),
-        format!(
-            "  maximum_operator_debit_cycles: {}",
-            scaffold.maximum_operator_debit_cycles
-        ),
-        String::new(),
-        "Formulas:".to_string(),
-    ];
-    lines.extend(scaffold.formulas.iter().map(|formula| {
-        format!(
-            "  {} = {} = {} cycles",
-            formula.field, formula.expression, formula.result
-        )
-    }));
-    lines.extend([
-        String::new(),
-        "Exact funding TOML:".to_string(),
-        "# Funding-only authoring fragment; this is not an install-admission result.".to_string(),
-        format!(
-            "funding_profile = \"{}\"",
-            funding_profile_name(scaffold.profile)
-        ),
-        String::new(),
-        "[coordinator.creation_funding]".to_string(),
-        "kind = \"cycles\"".to_string(),
-        format!("cycles = \"{}\"", scaffold.coordinator.creation_cycles),
-        String::new(),
-        "[coordinator.root_funding]".to_string(),
-        format!(
-            "minimum_reserve_cycles = \"{}\"",
-            scaffold.coordinator.minimum_reserve_cycles
-        ),
-        format!("window_secs = {}", scaffold.coordinator.window_secs),
-        format!(
-            "maximum_cycles = \"{}\"",
-            scaffold.coordinator.maximum_cycles
-        ),
-        format!(
-            "maximum_automatic_grants = {}",
-            scaffold.coordinator.maximum_automatic_grants
-        ),
-        format!(
-            "maximum_automatic_cycles = \"{}\"",
-            scaffold.coordinator.maximum_automatic_cycles
-        ),
-    ]);
-    for (index, root) in scaffold.roots.iter().enumerate() {
-        append_fleet_input_root_toml(&mut lines, index, root);
-    }
-    lines.extend([
-        String::new(),
-        "Next:".to_string(),
-        "  merge this fragment with exact operator, Subnet, admission, pool and limit authority"
-            .to_string(),
-        "  run canic deploy plan with the complete Fleet input for live admission".to_string(),
-    ]);
-    lines.join("\n")
-}
-
-fn append_fleet_input_root_toml(
-    lines: &mut Vec<String>,
-    index: usize,
-    root: &FleetFundingProfileRootScaffold,
-) {
-    lines.extend([
-        String::new(),
-        format!("# Root {}: node_count={}", index + 1, root.node_count),
-        "[[fleet_subnet_roots]]".to_string(),
-        String::new(),
-        "[fleet_subnet_roots.root_funding]".to_string(),
-        format!("request_threshold = \"{}\"", root.request_threshold_cycles),
-        format!("target_balance = \"{}\"", root.target_balance_cycles),
-        format!("cooldown_secs = {}", root.cooldown_secs),
-        format!("window_secs = {}", root.window_secs),
-        format!("maximum_cycles = \"{}\"", root.maximum_cycles),
-        format!(
-            "maximum_automatic_grants = {}",
-            root.maximum_automatic_grants
-        ),
-        format!(
-            "maximum_automatic_cycles = \"{}\"",
-            root.maximum_automatic_cycles
-        ),
-        String::new(),
-        "[fleet_subnet_roots.root_creation_funding]".to_string(),
-        "kind = \"cycles\"".to_string(),
-        format!("cycles = \"{}\"", root.root_creation_cycles),
-        String::new(),
-        "[fleet_subnet_roots.wasm_store_creation_funding]".to_string(),
-        "kind = \"cycles\"".to_string(),
-        format!("cycles = \"{}\"", root.wasm_store_creation_cycles),
-    ]);
-}
-
-fn parse_funding_profile(value: &str) -> Result<FleetFundingProfile, String> {
-    match value {
-        "single_subnet" => Ok(FleetFundingProfile::SingleSubnet),
-        "preview_multi_subnet" => Ok(FleetFundingProfile::PreviewMultiSubnet),
-        "multi_subnet" => Ok(FleetFundingProfile::MultiSubnet),
-        _ => Err(format!("unknown funding profile {value:?}")),
-    }
-}
-
-const fn funding_profile_name(profile: FleetFundingProfile) -> &'static str {
-    match profile {
-        FleetFundingProfile::SingleSubnet => "single_subnet",
-        FleetFundingProfile::PreviewMultiSubnet => "preview_multi_subnet",
-        FleetFundingProfile::MultiSubnet => "multi_subnet",
-    }
-}
-
 fn confirm_scaffold<R, W>(
     options: &ScaffoldOptions,
     workspace_root: &Path,
@@ -1243,7 +859,7 @@ where
     writeln!(writer, "Create Canic app?")?;
     writeln!(writer, "  app:     {}", options.name)?;
     writeln!(writer, "  target:  {}", app_root.display())?;
-    writeln!(writer, "  install: canic install {} <fleet>", options.name)?;
+    writeln!(writer, "  ensure: canic fleet ensure <fleet>")?;
     write!(writer, "Continue? [y/N] ")?;
     writer.flush()?;
 

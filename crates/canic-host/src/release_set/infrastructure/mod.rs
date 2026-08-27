@@ -22,7 +22,6 @@ use thiserror::Error as ThisError;
 
 use super::{GZIP_MAGIC, WASM_MAGIC, valid_package_name, validate_release_artifact_relative_path};
 
-pub use persistence::INFRASTRUCTURE_ARTIFACT_MANIFEST_FILE;
 pub use persistence::{
     CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactPersistenceError,
     PersistedCanicInfrastructureArtifactManifest,

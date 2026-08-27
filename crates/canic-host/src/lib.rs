@@ -1,4 +1,4 @@
-//! Host-side App build, Fleet install, deployment, and release-set helpers for Canic workspaces.
+//! Host-side App build and desired-state Fleet reconciliation for Canic workspaces.
 
 use std::{
     io,
@@ -10,7 +10,6 @@ use std::{
 const EXECUTABLE_BUSY_RETRY_ATTEMPTS: usize = 8;
 const EXECUTABLE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
 
-pub mod adoption;
 mod artifact_io;
 mod bootstrap_candid;
 mod bootstrap_coordinator;
@@ -28,21 +27,17 @@ pub use canister_protocol::{
 pub mod canister_ready;
 mod cargo_metadata;
 pub mod component_topology;
+pub mod config_discovery;
 pub mod cycle_balance;
-pub mod deployment_truth;
 pub mod diagnostics;
 pub mod durable_io;
 mod entropy;
 pub mod evidence_envelope;
 pub mod fleet_catalog;
-pub mod fleet_install_input;
-pub mod fleet_install_plan;
-pub mod fleet_subnet_root_deletion;
+pub mod fleet_ensure;
 pub mod format;
 pub mod icp;
 pub mod icp_config;
-pub mod install_root;
-pub mod installed_fleet;
 pub mod network;
 pub mod policy_gate;
 pub mod protocol_binding;
@@ -52,7 +47,7 @@ pub mod release_set;
 pub mod replica_query;
 pub mod role_contract;
 pub mod state_manifest;
-mod subnet_catalog;
+pub mod subnet_catalog;
 pub mod table;
 pub mod terminal;
 #[cfg(test)]

@@ -28,7 +28,6 @@ pub use model::{
 pub(super) use mutation::{
     attach_app_role_source, declare_app_role_source, rename_app_role_source,
 };
-pub use projection::configured_release_roles_from_config;
 pub(super) use projection::{
     app_identity_from_source, configured_bootstrap_roles_from_config,
     configured_deployable_roles_from_config, configured_pool_expectations_from_config,

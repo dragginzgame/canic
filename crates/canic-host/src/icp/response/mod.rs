@@ -48,7 +48,6 @@ pub enum IcpJsonResponseError {
 }
 
 /// Decode a plain Candid value from the canonical ICP CLI JSON envelope.
-#[cfg(test)]
 pub fn decode_json_response<T>(output: &str) -> Result<T, IcpJsonResponseError>
 where
     T: CandidType + DeserializeOwned,
@@ -68,7 +67,7 @@ where
     response.map_err(IcpJsonResponseError::Rejected)
 }
 
-fn response_bytes(output: &str) -> Result<Vec<u8>, IcpJsonResponseError> {
+pub fn response_bytes(output: &str) -> Result<Vec<u8>, IcpJsonResponseError> {
     let envelope = serde_json::from_str::<IcpJsonResponseEnvelope>(output)
         .map_err(IcpJsonResponseError::Json)?;
     let response_bytes = envelope

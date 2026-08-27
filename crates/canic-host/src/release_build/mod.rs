@@ -1,7 +1,7 @@
 //! Module: release_build
 //!
 //! Responsibility: create, validate, finalize, and hash one durable release-build plan.
-//! Does not own: artifact compilation, release-set manifest construction, or deployment recovery.
+//! Does not own: artifact compilation, release-set manifest construction, or Fleet convergence.
 //! Boundary: a random nonce is durable before building and finalization binds exact manifest bytes.
 
 #[cfg(test)]
@@ -57,8 +57,8 @@ pub struct ReleaseBuildPlanRecord {
 /// PlannedReleaseBuild
 ///
 /// Exact durable record and path supplied to the artifact builder.
-/// The record is newly planned for a fresh install or already finalized when
-/// a same-release Fleet install session is being recovered.
+/// The record is newly built for current desired state or already finalized for
+/// an idempotent current-Fleet ensure replay.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -70,7 +70,7 @@ pub struct PlannedReleaseBuild {
 ///
 /// FinalizedReleaseBuild
 ///
-/// Immutable post-build evidence admitted by fresh-install recovery.
+/// Immutable post-build evidence admitted by current-Fleet ensure.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,7 +134,7 @@ pub enum ReleaseBuildPlanError {
     #[error("could not allocate a unique release-build identity after {RANDOM_ATTEMPTS} attempts")]
     IdentityAllocationExhausted,
 
-    #[error("normal install cannot mutate a canister without a finalized release-build plan")]
+    #[error("Fleet ensure cannot mutate a canister without a finalized release-build plan")]
     MissingFinalizedAuthority,
 }
 
@@ -173,24 +173,7 @@ pub fn load_release_build_plan(
     Ok(record)
 }
 
-/// Validate canonical retained release-build bytes without resolving a caller workspace path.
-pub(crate) fn validate_retained_release_build_plan_bytes(
-    path: &Path,
-    bytes: &[u8],
-    release_build_id: ReleaseBuildId,
-) -> Result<(), ReleaseBuildPlanError> {
-    let record = decode_record(path, bytes)?;
-    validate_record_identity(release_build_id, &record)?;
-    if !matches!(record.state, ReleaseBuildPlanState::Finalized { .. }) {
-        return Err(ReleaseBuildPlanError::InvalidDocument {
-            path: path.to_path_buf(),
-            reason: "retained release-build evidence remained planned".to_string(),
-        });
-    }
-    Ok(())
-}
-
-/// Load one immutable finalized record for deployment-recovery admission.
+/// Load one immutable finalized record for current-Fleet admission.
 pub fn load_finalized_release_build(
     root: &Path,
     release_build_id: ReleaseBuildId,
@@ -270,15 +253,6 @@ fn plan_release_build_with_nonce_and_builder(
         source,
     })?;
     Ok(PlannedReleaseBuild { record, path })
-}
-
-#[cfg(test)]
-pub(crate) fn plan_test_release_build_for_builder(
-    root: &Path,
-    builder_version: &str,
-    build_profile: CanisterBuildProfile,
-) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
-    plan_release_build_with_nonce_and_builder(root, random_nonce()?, build_profile, builder_version)
 }
 
 fn finalize_release_build(

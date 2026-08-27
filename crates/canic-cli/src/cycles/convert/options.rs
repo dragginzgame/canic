@@ -84,7 +84,7 @@ fn parse_fixed_32_hex(field: &'static str, value: &str) -> Result<[u8; 32], Stri
 fn command() -> ClapCommand {
     ClapCommand::new("convert")
         .bin_name("canic cycles convert")
-        .about("Convert ICP held by an installed Fleet Subnet Root to cycles for that root")
+        .about("Convert ICP held by a current Fleet Subnet Root to cycles for that root")
         .disable_help_flag(true)
         .arg(value_arg(FLEET_ARG).value_name(FLEET_ARG).required(true))
         .arg(

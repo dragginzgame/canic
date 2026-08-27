@@ -11,10 +11,10 @@
         lint-workflows recovery-runbooks-gate release-integrity-contract-gate \
         release-validation-matrix-gate validation-runner-gate \
         dependency-risk-gate gitleaks-scan shellcheck \
-        install install-dev install-hooks update-dev test-fleet-install \
+        install install-dev install-hooks update-dev \
         ensure-clean test-unit test-unit-fast test-ordinary test-pocketic workspace-test-inventory-gate \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
-        test-canisters cloc
+        cloc
 
 CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
@@ -82,7 +82,6 @@ help:
 	@echo "  test-installed-canic-cli  Verify the installed canic binary with the v1 readiness smoke"
 	@echo ""
 	@echo "Development:"
-	@echo "  test-fleet-install  Install the full local test/reference topology with fast wasm by default"
 	@echo "  test             Run workspace tests (PocketIC/Cargo only)"
 	@echo "  test-wasm        Run fast non-PocketIC tests for wasm iteration"
 	@echo "  test-auth        Run focused delegated-auth, role-attestation, and protocol auth gates"
@@ -258,10 +257,6 @@ test-installed-canic-cli:
 # Tests
 #
 
-test-fleet-install:
-	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
-		bash scripts/ci/test-fleet-install.sh
-
 test: test-unit
 
 # Fast iteration path for wasm work.
@@ -416,9 +411,6 @@ test-cli:
 	$(CARGO_ENV) cargo test --locked -p canic --test reference_surface
 
 test-runtime-fast: test-unit-fast
-
-test-canisters: test-fleet-install
-	icp canister -e "$(ICP_ENVIRONMENT)" call test test
 
 #
 # Development commands

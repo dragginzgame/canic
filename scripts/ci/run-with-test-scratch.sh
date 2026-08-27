@@ -67,7 +67,6 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 export CANIC_TEST_SCRATCH="$TEST_SCRATCH"
-export CANIC_OPERATOR_STATE_ROOT="$TEST_SCRATCH/operator-state"
 export TMPDIR="$TEST_SCRATCH"
 
 "$@"

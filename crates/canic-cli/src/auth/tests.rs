@@ -130,7 +130,7 @@ fn renewal_status_queries_root_status_endpoint() {
     );
     let json = serde_json::to_value(&result).expect("serialize auth renewal result");
     assert_eq!(json["kind"], "auth_renewal_status");
-    assert_eq!(json["target"]["candid_source"], "installed_fleet");
+    assert_eq!(json["target"]["candid_source"], "current_ensure_inventory");
     assert_eq!(json["status"], "issuer_unregistered");
     assert_eq!(json["issuer_observation"]["status"], "unavailable");
     assert_eq!(runtime.called_methods(), vec![CANIC_STATUS]);
@@ -465,7 +465,7 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
                 input: ROOT_ROLE.to_string(),
                 role: ROOT_ROLE.to_string(),
                 canister_id: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
-                candid_source: AuthRenewalCandidSource::InstalledFleet,
+                candid_source: AuthRenewalCandidSource::CurrentEnsureInventory,
             },
             candid_path: PathBuf::from(".icp/local/canisters/root/root.did"),
             icp_root: PathBuf::from("."),
@@ -511,7 +511,7 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
                     input: issuer_pid.to_string(),
                     role: Some("issuer".to_string()),
                     canister_id: issuer_pid.to_string(),
-                    candid_source: AuthRenewalCandidSource::InstalledFleet,
+                    candid_source: AuthRenewalCandidSource::CurrentEnsureInventory,
                 },
                 candid_path: PathBuf::from(".icp/local/canisters/issuer/issuer.did"),
                 icp_root: PathBuf::from("."),

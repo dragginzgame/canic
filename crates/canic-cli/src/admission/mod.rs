@@ -2,7 +2,7 @@
 //!
 //! Responsibility: plan, apply, and inspect one protected Fleet-admission mutation.
 //! Does not own: admission policy decisions, canister journals, or participant convergence.
-//! Boundary: verified installed authority and live protected status bind one no-effect plan.
+//! Boundary: terminal current ensure authority and live protected status bind one no-effect plan.
 
 #[cfg(test)]
 mod tests;
@@ -56,19 +56,15 @@ use canic_core::{
 use canic_host::{
     CanisterProtocolError, call_canister_with_arg,
     durable_io::write_bytes,
+    fleet_ensure::{CurrentFleetInventoryError, CurrentFleetResolution, resolve_current_fleet},
     icp::IcpCli,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetFundingResolution, InstalledFleetRequest,
-        resolve_installed_fleet_funding_from_root,
-    },
-    protocol_binding::{ResolvedProtocolBinding, resolve_infrastructure_protocol_binding},
+    protocol_binding::{ResolvedProtocolBinding, resolve_registry_protocol_binding},
     query_canister_with_arg,
-    release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use clap::{ArgGroup, Command as ClapCommand};
 use serde::{Deserialize, Serialize};
-use std::{ffi::OsString, fs, path::PathBuf};
+use std::{collections::BTreeMap, ffi::OsString, fs, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const FLEET_ARG: &str = "fleet";
@@ -97,7 +93,7 @@ pub enum AdmissionCommandError {
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error(transparent)]
     Protocol(#[from] CanisterProtocolError),
@@ -111,7 +107,7 @@ pub enum AdmissionCommandError {
     #[error("invalid Fleet-admission mutation: {0}")]
     InvalidMutation(String),
 
-    #[error("installed Fleet-admission authority is invalid: {0}")]
+    #[error("current Fleet-admission authority is invalid: {0}")]
     Authority(String),
 
     #[error("Fleet-admission request rejected: {0}")]
@@ -205,10 +201,10 @@ struct AdmissionParticipantCatalog {
 }
 
 struct AdmissionConnection {
-    installed: InstalledFleetFundingResolution,
+    coordinator: Principal,
     icp: IcpCli,
     coordinator_binding: ResolvedProtocolBinding,
-    root_binding: ResolvedProtocolBinding,
+    root_bindings: BTreeMap<Principal, ResolvedProtocolBinding>,
     registry: FleetRegistry,
     registry_version: FleetRegistryVersion,
     admission: FleetAdmissionStatusResponse,
@@ -323,7 +319,7 @@ fn run_apply(options: AdmissionApplyOptions) -> Result<(), AdmissionCommandError
     let response: Result<RemoteCoordinatorCommandResponse, Error> = call_canister_with_arg(
         &connection.icp,
         &connection.coordinator_binding,
-        connection.installed.coordinator_canister_id,
+        connection.coordinator,
         canic_core::protocol::CANIC_COMMAND,
         &RemoteCoordinatorCommand::MutateAdmission(plan.request.clone()),
     )?;
@@ -366,8 +362,8 @@ pub fn collect_status(
     let connection = connect(fleet, target)?;
     let mut roots = Vec::new();
     for root in connection
-        .installed
-        .roots
+        .registry
+        .fleet_subnet_roots
         .iter()
         .filter(|root| root.status != FleetSubnetRootStatus::Removed)
     {
@@ -389,7 +385,7 @@ pub fn collect_status(
     Ok(AdmissionStatusReport {
         fleet: fleet.to_string(),
         environment: target.environment.clone(),
-        coordinator: connection.installed.coordinator_canister_id,
+        coordinator: connection.coordinator,
         registry_revision: connection.registry_version.revision,
         generation: connection.admission.active.generation,
         policy_digest: hex_bytes(connection.admission.active.policy_digest),
@@ -460,46 +456,64 @@ fn connect(
     target: &IcpTargetOptions,
 ) -> Result<AdmissionConnection, AdmissionCommandError> {
     let root = resolve_current_canic_icp_root().map_err(AdmissionCommandError::IcpRoot)?;
-    let installed = resolve_installed_fleet_funding_from_root(
-        &InstalledFleetRequest {
-            fleet: fleet.to_string(),
-            environment: target.environment.clone(),
-        },
-        &root,
-    )?;
-    let manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        &root,
-        installed.fleet.release_build_id,
-    )
-    .map_err(|error| authority_error(error.to_string()))?;
-    let coordinator_binding = infrastructure_binding(
-        &root,
-        &target.environment,
-        &manifest.manifest.entries,
-        CanicInfrastructureRole::FleetCoordinator,
-    )?;
-    let root_binding = infrastructure_binding(
-        &root,
-        &target.environment,
-        &manifest.manifest.entries,
-        CanicInfrastructureRole::FleetSubnetRoot,
-    )?;
+    let current = resolve_current_fleet(&root, &target.environment, fleet)?;
+    let initial_registry = current.initial_active_registry(fleet)?.clone();
+    let coordinator = initial_registry.authority.binding.coordinator;
+    let coordinator_binding =
+        current_binding(&current, &root, &target.environment, &coordinator, fleet)?;
+    let mut root_bindings = BTreeMap::new();
+    for fleet_subnet_root in &current.topology.fleet_subnet_root_canister_ids {
+        let fleet_subnet_root = fleet_subnet_root
+            .parse::<Principal>()
+            .map_err(|error| authority_error(error.to_string()))?;
+        root_bindings.insert(
+            fleet_subnet_root,
+            current_binding(
+                &current,
+                &root,
+                &target.environment,
+                &fleet_subnet_root,
+                fleet,
+            )?,
+        );
+    }
     let icp = target.icp_cli(&root);
-    let coordinator = installed.coordinator_canister_id;
     let registry = query_coordinator_registry(&icp, &coordinator_binding, coordinator)?;
     let registry_version =
         query_coordinator_registry_version(&icp, &coordinator_binding, coordinator)?;
     let admission = query_coordinator_admission(&icp, &coordinator_binding, coordinator)?;
-    validate_live_authority(&installed, &registry, &registry_version, &admission)?;
+    validate_live_authority(&initial_registry, &registry, &registry_version, &admission)?;
     Ok(AdmissionConnection {
-        installed,
+        coordinator,
         icp,
         coordinator_binding,
-        root_binding,
+        root_bindings,
         registry,
         registry_version,
         admission,
     })
+}
+
+fn current_binding(
+    current: &CurrentFleetResolution,
+    root: &std::path::Path,
+    environment: &str,
+    principal: &Principal,
+    fleet: &str,
+) -> Result<ResolvedProtocolBinding, AdmissionCommandError> {
+    let principal = principal.to_text();
+    let entry = current
+        .registry
+        .entries
+        .iter()
+        .find(|entry| entry.pid == principal)
+        .ok_or_else(|| {
+            authority_error(format!(
+                "Fleet {fleet} omits current participant {principal}"
+            ))
+        })?;
+    resolve_registry_protocol_binding(root, environment, entry)
+        .map_err(|error| authority_error(error.to_string()))
 }
 
 fn build_plan(
@@ -551,7 +565,7 @@ fn build_plan(
         schema_version: ADMISSION_PLAN_SCHEMA_VERSION,
         fleet: fleet.to_string(),
         environment: environment.to_string(),
-        coordinator: connection.installed.coordinator_canister_id,
+        coordinator: connection.coordinator,
         predecessor_registry: connection.registry_version.clone(),
         predecessor_policy: predecessor.clone(),
         successor_policy: successor.clone(),
@@ -650,8 +664,8 @@ fn validate_live_plan(
     connection: &AdmissionConnection,
     plan: &AdmissionPlanFile,
 ) -> Result<(), AdmissionCommandError> {
-    if connection.installed.coordinator_canister_id != plan.coordinator {
-        return Err(authority_error("plan names another installed Coordinator"));
+    if connection.coordinator != plan.coordinator {
+        return Err(authority_error("plan names another current Coordinator"));
     }
     if exact_retained_operation(&connection.admission, plan) {
         return Ok(());
@@ -700,12 +714,11 @@ fn exact_retained_operation(
 }
 
 fn validate_live_authority(
-    installed: &InstalledFleetFundingResolution,
+    initial: &FleetRegistry,
     registry: &FleetRegistry,
     version: &FleetRegistryVersion,
     admission: &FleetAdmissionStatusResponse,
 ) -> Result<(), AdmissionCommandError> {
-    let catalog = &installed.fleet;
     let fleet = &registry.authority.binding.fleet;
     let narrower_references = registry
         .admission
@@ -741,17 +754,15 @@ fn validate_live_authority(
     };
     let exact = registry.authority == version.authority
         && registry.revision == version.revision
-        && registry.authority.binding.coordinator == installed.coordinator_canister_id
-        && fleet.fleet.canonical_network_id == catalog.canonical_network_id
-        && fleet.fleet.fleet_id == catalog.fleet_id
-        && fleet.app == catalog.app
+        && registry.authority == initial.authority
+        && registry.fleet_subnet_roots == initial.fleet_subnet_roots
         && admission.fleet == fleet.clone()
         && registry_policy_matches_status;
     if exact {
         Ok(())
     } else {
         Err(authority_error(
-            "live Coordinator Registry and admission status disagree with installed authority",
+            "live Coordinator Registry and admission status disagree with current ensure authority",
         ))
     }
 }
@@ -847,9 +858,13 @@ fn query_root_status(
     let mut retained: Option<FleetAdmissionRootStatusResponse> = None;
     let mut participants = Vec::new();
     loop {
+        let binding = connection
+            .root_bindings
+            .get(&root)
+            .ok_or_else(|| authority_error("Root is absent from current ensure authority"))?;
         let response: Result<RemoteRootStatusResponse, Error> = query_canister_with_arg(
             &connection.icp,
-            &connection.root_binding,
+            binding,
             root,
             canic_core::protocol::CANIC_STATUS,
             &RemoteRootStatusRequest::Admission(PageRequest {
@@ -1293,25 +1308,6 @@ fn rejected(error: Error) -> AdmissionCommandError {
 
 fn authority_error(message: impl Into<String>) -> AdmissionCommandError {
     AdmissionCommandError::Authority(message.into())
-}
-
-fn infrastructure_binding(
-    root: &std::path::Path,
-    environment: &str,
-    entries: &[canic_host::release_set::CanicInfrastructureArtifactEntry],
-    role: CanicInfrastructureRole,
-) -> Result<ResolvedProtocolBinding, AdmissionCommandError> {
-    let artifact = entries
-        .iter()
-        .find(|entry| entry.role == role)
-        .ok_or_else(|| {
-            authority_error(format!(
-                "installed release is missing {} protocol metadata",
-                role.as_str()
-            ))
-        })?;
-    resolve_infrastructure_protocol_binding(root, environment, artifact)
-        .map_err(|error| authority_error(error.to_string()))
 }
 
 fn hex_bytes(bytes: [u8; 32]) -> String {

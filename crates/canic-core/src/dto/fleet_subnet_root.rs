@@ -60,8 +60,7 @@ pub struct FleetSubnetWasmStoreAdoptionRequest {
 pub struct FleetSubnetWasmStoreAdoptionResponse {
     pub operation_id: [u8; 32],
     pub authority: FleetSubnetWasmStoreAuthority,
-    pub temporary_controllers: Vec<Principal>,
-    pub final_controllers: Vec<Principal>,
+    pub controllers: Vec<Principal>,
     pub adopted_at_ns: u64,
 }
 

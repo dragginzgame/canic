@@ -78,8 +78,7 @@ pub struct SiblingWasmStoreAdoptionRecord {
     pub operation_id: [u8; 32],
     pub wasm_store: Principal,
     pub expected_module_hash: [u8; 32],
-    pub temporary_controllers: Vec<Principal>,
-    pub final_controllers: Vec<Principal>,
+    pub controllers: Vec<Principal>,
     pub phase: SiblingWasmStoreAdoptionPhaseRecord,
     pub adopted_at_ns: Option<u64>,
 }
@@ -110,20 +109,13 @@ pub enum RootStoreBootstrapCommitError {
 
 #[cfg(feature = "root-control-plane")]
 fn sibling_wasm_store_adoption_record_is_valid(record: &SiblingWasmStoreAdoptionRecord) -> bool {
-    let canonical_temporary = record.temporary_controllers.len() == 2
-        && record
-            .temporary_controllers
-            .windows(2)
-            .all(|pair| pair[0] < pair[1]);
-    let [final_controller] = record.final_controllers.as_slice() else {
-        return false;
-    };
+    let canonical_controllers = record.controllers.len() == 2
+        && record.controllers.windows(2).all(|pair| pair[0] < pair[1]);
     [
         record.operation_id != [0; 32],
         record.wasm_store != Principal::anonymous(),
         record.expected_module_hash != [0; 32],
-        canonical_temporary,
-        record.temporary_controllers.contains(final_controller),
+        canonical_controllers,
         record.phase == SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight,
         record.adopted_at_ns.is_none(),
     ]
@@ -727,14 +719,13 @@ mod tests {
         let pid = Principal::from_slice(&[8; 29]);
         let root = Principal::from_slice(&[9; 29]);
         let installer = Principal::from_slice(&[10; 29]);
-        let mut temporary_controllers = vec![root, installer];
-        temporary_controllers.sort();
+        let mut controllers = vec![root, installer];
+        controllers.sort();
         let intent = SiblingWasmStoreAdoptionRecord {
             operation_id: [1; 32],
             wasm_store: pid,
             expected_module_hash: [2; 32],
-            temporary_controllers,
-            final_controllers: vec![root],
+            controllers,
             phase: SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight,
             adopted_at_ns: None,
         };

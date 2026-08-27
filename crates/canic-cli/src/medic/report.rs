@@ -298,8 +298,8 @@ pub(super) enum MedicSource {
     IcpConfig,
     #[serde(rename = "app_config")]
     AppConfig,
-    #[serde(rename = "installed_fleet")]
-    InstalledFleet,
+    #[serde(rename = "current_ensure")]
+    CurrentEnsure,
     #[serde(rename = "blob_storage_readiness")]
     BlobStorageReadiness,
     #[serde(rename = "auth_renewal")]
@@ -316,7 +316,7 @@ impl MedicSource {
             Self::IcpCli => "icp_cli",
             Self::IcpConfig => "icp_config",
             Self::AppConfig => "app_config",
-            Self::InstalledFleet => "installed_fleet",
+            Self::CurrentEnsure => "current_ensure",
             Self::BlobStorageReadiness => "blob_storage_readiness",
             Self::AuthRenewal => "auth_renewal",
             Self::StateManifest => "state_manifest",

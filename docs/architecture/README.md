@@ -12,13 +12,12 @@ runtime/wire contracts belong in `docs/contracts/`.
 
 Current architecture notes:
 
-- [Adoption Profiles](adoption-profiles.md)
 - [Authentication](authentication.md)
 - [Build Artifacts](build-artifacts.md)
 - [Build Provenance CI Policy](build-provenance-ci-policy.md)
 - [CI Policy Gates](ci-policy-gates.md)
 - [Evidence Envelopes](evidence-envelopes.md)
-- [Fleet Installation Input](fleet-install-input.md)
+- [Fleet Ensure](../features/operations/fleet-ensure.md)
 - [V1 Readiness Checklist](v1-readiness-checklist.md)
 - [V1 Operator Walkthrough](v1-operator-walkthrough.md)
 
@@ -31,8 +30,6 @@ Current implementation design and handoff:
 Historical/superseded notes:
 
 - [Authentication Subnet-State Addendum](authentication-subnet-state-addendum.md)
-- [0.55 V1 Local Smoke](../operations/0.55-v1-local-smoke.md)
 
-Operational runbooks:
-
-- [Root Proof Provisioning](../operations/root-proof-provisioning.md)
+Operational guidance starts at
+[Fleet ensure](../features/operations/fleet-ensure.md).

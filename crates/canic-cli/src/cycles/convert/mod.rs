@@ -7,10 +7,8 @@ mod response;
 use crate::cycles::{CyclesCommandError, wallet::ResolvedCanisterTarget};
 use canic_core::cdk::utils::hash::hex_bytes;
 use canic_host::{
-    icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_root_from_root},
-    protocol_binding::resolve_infrastructure_protocol_binding,
-    release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
+    fleet_ensure::resolve_current_fleet, icp_config::resolve_current_canic_icp_root,
+    protocol_binding::resolve_registry_protocol_binding,
 };
 use operation::{
     OperationIdSource, current_unix_nanos, mark_pending_operation_completed,
@@ -37,16 +35,29 @@ pub(super) fn usage() -> String {
 
 fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    let installed = resolve_installed_fleet_root_from_root(
-        &InstalledFleetRequest {
+    let current = resolve_current_fleet(&root, &options.target.environment, &options.fleet)?;
+    let selected_root = options.root_principal.to_text();
+    if !current
+        .topology
+        .fleet_subnet_root_canister_ids
+        .contains(&selected_root)
+    {
+        return Err(CyclesCommandError::UnknownTarget {
             fleet: options.fleet.clone(),
-            environment: options.target.environment.clone(),
-        },
-        options.root_principal,
-        &root,
-    )?;
+            target: selected_root,
+        });
+    }
+    let root_entry = current
+        .registry
+        .entries
+        .iter()
+        .find(|entry| entry.pid == selected_root)
+        .ok_or_else(|| CyclesCommandError::UnknownTarget {
+            fleet: options.fleet.clone(),
+            target: selected_root.clone(),
+        })?;
     let root_target = ResolvedCanisterTarget {
-        canister_id: installed.root_canister_id.to_text(),
+        canister_id: selected_root,
         role: Some("root".to_string()),
     };
     let icp = options.target.icp_cli(&root);
@@ -61,23 +72,8 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     )?;
     let request_arg =
         root_refill_command_arg(operation_id, options.source_subaccount, options.amount_e8s);
-    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        &root,
-        installed.fleet.release_build_id,
-    )
-    .map_err(|error| CyclesCommandError::Usage(error.to_string()))?;
-    let root_artifact = infrastructure_manifest
-        .manifest
-        .entries
-        .iter()
-        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
-        .ok_or_else(|| {
-            CyclesCommandError::Usage(
-                "installed release is missing root protocol metadata".to_string(),
-            )
-        })?;
     let root_binding =
-        resolve_infrastructure_protocol_binding(&root, &options.target.environment, root_artifact)
+        resolve_registry_protocol_binding(&root, &options.target.environment, root_entry)
             .map_err(|error| CyclesCommandError::Usage(error.to_string()))?;
     if options.dry_run {
         let command = icp.canister_call_arg_output_display_with_candid(

@@ -106,10 +106,3 @@ pub enum ArtifactTransformOutcome {
     ToolUnavailable,
     NotRequested,
 }
-
-/// One successful role output from the current complete-build invocation.
-#[derive(Clone, Debug)]
-pub struct CurrentCanisterArtifactBuildOutput {
-    pub(crate) role: String,
-    pub(crate) output: CanisterArtifactBuildOutput,
-}

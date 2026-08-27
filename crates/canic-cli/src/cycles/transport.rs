@@ -22,11 +22,9 @@ use crate::{
 };
 use canic_host::{
     cycle_balance::{CycleBalanceQueryError, query_cycle_balance},
+    fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{
-        InstalledFleetRequest, InstalledFleetResolution, resolve_installed_fleet_from_root,
-    },
     protocol_binding::ResolvedProtocolBinding,
     registry::RegistryEntry,
 };
@@ -535,17 +533,10 @@ fn current_unix_seconds() -> u64 {
 
 fn resolve_cycles_fleet(
     options: &CyclesOptions,
-) -> Result<InstalledFleetResolution, CyclesCommandError> {
+) -> Result<CurrentFleetResolution, CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.fleet.clone(),
-            environment: options.environment.clone(),
-        },
-        &options.icp,
-        &root,
-    )
-    .map_err(CyclesCommandError::from)
+    resolve_current_fleet(&root, &options.environment, &options.fleet)
+        .map_err(CyclesCommandError::from)
 }
 
 #[cfg(test)]

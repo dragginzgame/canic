@@ -269,6 +269,7 @@ type StoreStatusRequest = variant {
   CycleHistory : PageRequest;
   Operation : OperationReceipt;
   Authority;
+  Template : TemplateLookupRequest;
   Catalog;
   CycleBalance;
 };
@@ -279,6 +280,7 @@ type StoreStatusResponse = variant {
   CycleHistory : Page;
   Operation : StoreOperationStatusResponse;
   Authority : FleetSubnetWasmStoreAuthority;
+  Template : TemplateStagingStatusResponse;
   Catalog : vec WasmStoreCatalogEntryResponse;
   CycleBalance : CycleBalanceStatusResponse;
 };
@@ -325,6 +327,19 @@ type TemplateManifestInput = record {
 // TemplateManifestState
 //
 type TemplateManifestState = variant { Blocked; Staged; Approved };
+type TemplateStagingStatusResponse = record {
+  expected_chunk_hashes : vec blob;
+  expected_chunk_count : nat32;
+  stored_chunk_hashes : vec opt blob;
+  payload_size_bytes : opt nat64;
+  stored_chunk_count : nat32;
+  template_id : text;
+  version : text;
+  complete : bool;
+  chunk_set_present : bool;
+  manifest : opt TemplateManifestInput;
+  payload_hash : opt blob;
+};
 type TopologyChildren = record {
   children : vec TopologyDirectChild;
   parent_pid : principal;

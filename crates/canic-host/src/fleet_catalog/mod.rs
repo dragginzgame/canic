@@ -1,7 +1,7 @@
 //! Module: fleet_catalog
 //!
 //! Responsibility: commit, read, and project the network-scoped Fleet discovery catalog.
-//! Does not own: terminal-install validation, Registry mutation, or Fleet identity allocation.
+//! Does not own: terminal-ensure validation, Registry mutation, or Fleet identity allocation.
 //! Boundary: one network lock serializes atomic Coordinator-anchored publication; readers fail
 //! closed.
 
@@ -71,7 +71,7 @@ pub struct FleetCatalogEntryV1 {
     pub fleet_id: FleetId,
     pub fleet_name: FleetName,
     pub app: AppId,
-    /// Non-authoritative environment-profile provenance from installation.
+    /// Non-authoritative environment-profile provenance from Fleet ensure.
     pub environment: String,
     pub deployed_at_unix_secs: u64,
     pub release_build_id: ReleaseBuildId,
@@ -89,11 +89,11 @@ struct FleetCatalogRecord {
 ///
 /// CommittedFleetCatalog
 ///
-/// Exact durable catalog result returned to the terminal-install publication workflow.
+/// Exact durable catalog result returned to the terminal-ensure publication workflow.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct CommittedFleetCatalog {
+pub struct CommittedFleetCatalog {
     pub entry: FleetCatalogEntryV1,
     pub catalog_hash: [u8; 32],
     pub advanced: bool,
@@ -211,7 +211,7 @@ pub fn read_fleet_catalog_entry_from_root(
 }
 
 /// Commit one exact Coordinator-anchored row after the caller validates terminal evidence.
-pub(crate) fn commit_fleet_catalog_entry(
+pub fn commit_fleet_catalog_entry(
     workspace_root: &Path,
     entry: FleetCatalogEntryV1,
 ) -> Result<CommittedFleetCatalog, FleetCatalogError> {
@@ -242,8 +242,13 @@ pub(crate) fn commit_fleet_catalog_entry(
     );
     if let Some(existing_entry) = existing_authority(&catalog.entries, &entry)? {
         let bytes = existing
-            .expect("existing authority came from an existing catalog")
-            .bytes;
+            .as_ref()
+            .ok_or_else(|| FleetCatalogError::Invalid {
+                path: path.clone(),
+                reason: "retained catalog authority has no source document".to_string(),
+            })?
+            .bytes
+            .clone();
         return Ok(CommittedFleetCatalog {
             entry: existing_entry.clone(),
             catalog_hash: Sha256::digest(bytes).into(),

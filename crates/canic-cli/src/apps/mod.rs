@@ -1,22 +1,19 @@
-mod adoption_report;
 mod command;
 mod options;
 mod render;
 
-use crate::{
-    cli::clap::parse_subcommand, cli::help::print_help_or_version,
-    evidence_support::current_evidence_timestamp, scaffold, version_text,
-};
-use adoption_report::{build_adoption_report_from_config_path, write_adoption_report};
 #[cfg(test)]
-use adoption_report::{cargo_metadata_package_path, render_adoption_report};
+mod tests;
+
+use crate::{
+    cli::clap::parse_subcommand, cli::help::print_help_or_version, scaffold, version_text,
+};
 use canic_host::{
-    adoption::AdoptionReportError,
-    icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
-    install_root::{
+    config_discovery::{
         ConfigDiscoveryError, current_canic_workspace_root, discover_current_canic_config_choices,
         select_discovered_app_config_path, workspace_app_roots,
     },
+    icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     release_set::{
         AppConfigError, AppConfigSnapshot, attach_app_role, declare_app_role,
         display_workspace_path, plan_attach_app_role, plan_declare_app_role, plan_rename_app_role,
@@ -24,18 +21,14 @@ use canic_host::{
     },
 };
 use command::{
-    adoption_report_usage, adoption_usage, app_adoption_command, app_command, app_role_command,
-    check_usage, create_usage, delete_usage, list_usage, role_attach_usage, role_declare_usage,
-    role_inspect_usage, role_list_usage, role_rename_usage, role_usage, usage,
+    app_command, app_role_command, check_usage, create_usage, delete_usage, list_usage,
+    role_attach_usage, role_declare_usage, role_inspect_usage, role_list_usage, role_rename_usage,
+    role_usage, usage,
 };
-#[cfg(test)]
-use options::AdoptionReportFormat;
 use options::{
-    AdoptionReportOptions, AppCheckOptions, AppOptions, DeleteAppOptions, RoleAttachOptions,
-    RoleDeclareOptions, RoleInspectOptions, RoleListOptions, RoleRenameOptions,
+    AppCheckOptions, AppOptions, DeleteAppOptions, RoleAttachOptions, RoleDeclareOptions,
+    RoleInspectOptions, RoleListOptions, RoleRenameOptions,
 };
-#[cfg(test)]
-use render::{AppListRow, render_app_rows};
 use render::{
     render_app_list, render_attached_role, render_declared_role, render_planned_attached_role,
     render_planned_declared_role, render_planned_delete, render_planned_renamed_role,
@@ -83,9 +76,6 @@ pub enum AppCommandError {
     Config(#[source] Box<crate::list::ListCommandError>),
 
     #[error(transparent)]
-    AdoptionReport(#[from] AdoptionReportError),
-
-    #[error(transparent)]
     IcpConfig(#[from] IcpConfigError),
 
     #[error("failed to discover Canic workspace App configs: {0}")]
@@ -125,7 +115,6 @@ where
             Ok(())
         }
         Some((command, args)) => match command.as_str() {
-            "adoption" => run_adoption(args),
             "check" => run_check(args),
             "config" => run_config(args),
             "create" => run_create(args),
@@ -137,43 +126,11 @@ where
     }
 }
 
-fn run_adoption<I>(args: I) -> Result<(), AppCommandError>
+fn run_config<I>(args: I) -> Result<(), AppCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, adoption_usage, version_text()) {
-        return Ok(());
-    }
-
-    match parse_subcommand(app_adoption_command(), args)
-        .map_err(|_| AppCommandError::Usage(adoption_usage()))?
-    {
-        None => {
-            println!("{}", adoption_usage());
-            Ok(())
-        }
-        Some((command, args)) => match command.as_str() {
-            "report" => run_adoption_report(args),
-            _ => unreachable!("app adoption dispatch command only defines known commands"),
-        },
-    }
-}
-
-fn run_adoption_report<I>(args: I) -> Result<(), AppCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, adoption_report_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = AdoptionReportOptions::parse(args)?;
-    let config_path = selected_app_config_path(&options.app)?;
-    let generated_at = current_evidence_timestamp()?;
-    let report = build_adoption_report_from_config_path(&config_path, &options, &generated_at)?;
-    write_adoption_report(&config_path, &options, &report)
+    crate::list::run_config(args).map_err(AppCommandError::from)
 }
 
 fn run_role<I>(args: I) -> Result<(), AppCommandError>
@@ -399,13 +356,6 @@ where
     Ok(())
 }
 
-fn run_config<I>(args: I) -> Result<(), AppCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    crate::list::run_config(args).map_err(AppCommandError::from)
-}
-
 fn run_delete<I>(args: I) -> Result<(), AppCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -545,6 +495,3 @@ fn print_config_report(report: &IcpProjectConfigReport) {
         println!("  issue: {issue}");
     }
 }
-
-#[cfg(test)]
-mod tests;

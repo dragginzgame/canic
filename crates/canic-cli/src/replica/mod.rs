@@ -78,12 +78,12 @@ pub enum ReplicaCommandError {
     ForeignLocalReplicaReachable,
 
     #[error(
-        "ICP project config is missing for this directory.\nCreate or repair icp.yaml from the project root, then run `canic status` to check it."
+        "ICP project config is missing for this directory.\nCreate or repair icp.yaml from the workspace root, then retry the replica command."
     )]
     ProjectManifestMissing,
 
     #[error(
-        "ICP project config is incomplete:\n{details}\nEdit icp.yaml, then run `canic status` to check it."
+        "ICP project config is incomplete:\n{details}\nEdit icp.yaml, then retry the replica command."
     )]
     ProjectConfigIncomplete { details: String },
 

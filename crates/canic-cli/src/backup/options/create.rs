@@ -59,7 +59,7 @@ pub(in crate::backup) fn backup_create_command() -> ClapCommand {
             value_arg("fleet")
                 .value_name("fleet")
                 .required(true)
-                .help("Installed Fleet name to back up"),
+                .help("Converged Fleet name to back up"),
         )
         .arg(
             value_arg("subtree")

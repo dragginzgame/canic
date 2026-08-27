@@ -1,27 +1,21 @@
-use super::artifact::{read_release_artifact, resolve_release_artifact_path};
 use super::config::{
     attach_app_role_source, configured_bootstrap_roles_from_config,
-    configured_deployable_roles_from_config, configured_pool_expectations_from_config,
-    configured_release_roles_from_config, configured_role_auto_create_from_config,
+    configured_pool_expectations_from_config, configured_role_auto_create_from_config,
     configured_role_details_from_config, configured_role_kinds_from_config,
     configured_role_lifecycle_from_config, configured_role_metrics_profiles_from_config,
     configured_role_topups_from_config, declare_app_role_source, rename_app_role_source,
 };
 use super::{
-    ArtifactRootError, app_sources_root, artifact_root_path, config_path, plan_attach_app_role,
-    plan_declare_app_role, plan_rename_app_role, resolve_artifact_root, resolve_artifact_root_path,
-    root_release_set_manifest_path,
+    app_sources_root, config_path, plan_attach_app_role, plan_declare_app_role,
+    plan_rename_app_role,
 };
 use crate::test_support::temp_dir;
 use canic_core::bootstrap::{compiled::ConfigModel, parse_config_model};
-use flate2::{Compression, write::GzEncoder};
 use std::{
     fs,
-    io::Write,
     path::{Path, PathBuf},
 };
 
-mod artifacts;
 mod config;
 mod mutations;
 mod paths;
@@ -82,47 +76,6 @@ maximum_instances = 1
 
 [component_specs.scale_hub]
 component_role = "scale_hub"
-maximum_instances = 1
-"#;
-
-const MULTI_COMPONENT_CONFIG: &str = r#"
-[app]
-name = "demo"
-init_mode = "enabled"
-
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.alpha]
-kind = "canister"
-package = "alpha"
-
-[roles.beta]
-kind = "canister"
-package = "beta"
-
-[component_specs.alpha]
-component_role = "alpha"
-maximum_instances = 1
-
-[component_specs.beta]
-component_role = "beta"
-maximum_instances = 1
-"#;
-
-const NO_ROOT_CONFIG: &str = r#"
-[app]
-name = "demo"
-init_mode = "enabled"
-
-
-[roles.user_hub]
-kind = "canister"
-package = "user_hub"
-[component_specs.user_hub]
-component_role = "user_hub"
 maximum_instances = 1
 "#;
 

@@ -58,10 +58,8 @@ pub struct EvidenceTargetV1 {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EvidenceTargetKindV1 {
-    Deployment,
     App,
     Fleet,
-    AppAdoption,
     Artifact,
     PolicyGate,
     Unknown,
@@ -295,8 +293,6 @@ pub const fn evidence_summary_exit_class(
 }
 
 pub const EVIDENCE_ENVELOPE_SCHEMA_ID: &str = "canic.evidence_envelope.v1";
-pub const ADOPTION_REPORT_SCHEMA_ID: &str = "canic.adoption_report.v1";
-pub const DEPLOYMENT_CHECK_SCHEMA_ID: &str = "canic.deployment_check.v1";
 pub const POLICY_GATE_REPORT_SCHEMA_ID: &str = "canic.policy_gate_report.v1";
 pub const PROJECT_EVIDENCE_MANIFEST_SCHEMA_ID: &str = "canic.project_evidence_manifest.v1";
 pub const PROJECT_EVIDENCE_GATE_REPORT_SCHEMA_ID: &str = "canic.project_evidence_gate_report.v1";
@@ -304,16 +300,6 @@ pub const PROJECT_EVIDENCE_GATE_REPORT_SCHEMA_ID: &str = "canic.project_evidence
 #[must_use]
 pub fn evidence_envelope_schema() -> PayloadSchemaRefV1 {
     PayloadSchemaRefV1::stable(EVIDENCE_ENVELOPE_SCHEMA_ID, "1")
-}
-
-#[must_use]
-pub fn adoption_report_schema() -> PayloadSchemaRefV1 {
-    PayloadSchemaRefV1::experimental(ADOPTION_REPORT_SCHEMA_ID, "1")
-}
-
-#[must_use]
-pub fn deployment_check_schema() -> PayloadSchemaRefV1 {
-    PayloadSchemaRefV1::internal(DEPLOYMENT_CHECK_SCHEMA_ID, "1")
 }
 
 #[must_use]

@@ -16,18 +16,18 @@ under `docs/architecture/`, and operator procedures remain under
   calls, timers, and metrics.
 - [Authentication](authentication/README.md) — endpoint guards, delegated
   tokens, proof renewal, and role attestation.
-- [Fleet orchestration](fleet-orchestration/README.md) — Coordinator, roots,
-  Stores, registries, installation, and lifecycle authority.
+- [Fleet orchestration](fleet-orchestration/README.md) — desired-state
+  reconciliation, exact effects, cycle conservation, and lifecycle authority.
 - [Scaling and placement](scaling-and-placement/README.md) — Component Specs,
   Groups, services, children, sharding, scaling, and limits.
 - [Builds and evidence](build-and-evidence/README.md) — artifacts, provenance,
-  evidence envelopes, policy gates, adoption, and catalogs.
-- [Backup and restore](backup-and-restore/README.md) — snapshots, manifests,
-  journals, verification, planning, and restore execution.
+  evidence envelopes, comparison, and policy gates.
+- [Backup domain](backup-and-restore/README.md) — retained Rust contracts; the
+  former CLI workflow is not part of the current hard-cut surface.
 - [Blob storage](blob-storage/README.md) — optional product-data storage and
   billing integration.
-- [Operations and diagnostics](operations/README.md) — CLI workflows, network
-  trust, local replicas, inspection, medic, and recovery.
+- [Operations and diagnostics](operations/README.md) — current CLI workflows,
+  network trust, local replicas, evidence, and Fleet ensure.
 
 For the exact delivery boundary of work in progress, see
 [Current Status](../status/current.md).

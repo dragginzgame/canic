@@ -68,9 +68,8 @@ only `[build-dependencies]`.
 | `auth.delegated_token_issuer = true` | that issuer role | `auth-issuer-canister-sig-create`, `auth-delegated-token-verify` |
 | `auth.delegated_token_verifier = true` | that verifier role | `auth-delegated-token-verify` |
 
-Run `canic medic project --ci` for concise fail-only diagnostics, or
-`canic medic project --json` for automation-friendly check rows such as
-`role_required_canic_feature_missing`.
+Run `canic build <app> <role>` to validate the selected role contract and its
+required runtime features through the maintained generated build path.
 
 ## Typical Use
 

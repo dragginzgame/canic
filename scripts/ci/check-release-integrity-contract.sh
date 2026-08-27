@@ -11,7 +11,6 @@ MATRIX="$ROOT/docs/governance/supported-platforms.md"
 VERIFY="$ROOT/scripts/ci/verify-file-checksum.sh"
 ICP_REQUIRE="$ROOT/scripts/ci/require_icp.sh"
 ICP_MODEL="$ROOT/crates/canic-host/src/icp/model.rs"
-ICP_PROOF="$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
 DEV_INSTALL="$ROOT/scripts/dev/install_dev.sh"
 GIT_HOOK_INSTALLER="$ROOT/scripts/dev/install-git-hooks.sh"
 PRE_COMMIT_HOOK="$ROOT/.githooks/pre-commit"
@@ -55,7 +54,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -533,8 +532,6 @@ rg -F 'mktemp -d "$TEST_SCRATCH_PARENT/test-runtime.XXXXXX"' "$TEST_SCRATCH_RUNN
     fail "test scratch runner does not allocate one private repository directory"
 rg -F 'CANIC_TEST_SCRATCH="$TEST_SCRATCH"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
     fail "test scratch runner does not pass exact cleanup ownership"
-rg -F 'CANIC_OPERATOR_STATE_ROOT="$TEST_SCRATCH/operator-state"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
-    fail "test scratch runner does not confine retained recovery bundles to invocation-owned scratch"
 test_scratch_runner_count="$(rg -c 'bash scripts/ci/run-with-test-scratch\.sh' "$MAKEFILE")"
 [ "$test_scratch_runner_count" -gt 0 ] ||
     fail "temporary-file test targets do not use private scratch ownership"
@@ -625,8 +622,6 @@ fi
 next_icp_major=$((required_icp_major + 1))
 rg -F "ICP_CLI_SUPPORTED_VERSION_RANGE: &str = \">=$icp_cli_required, <$next_icp_major.0.0\"" "$ICP_MODEL" >/dev/null ||
     fail "host ICP CLI range does not match its independent minimum"
-rg -F "echo \"icp-cli $icp_cli_required\"" "$ICP_PROOF" >/dev/null ||
-    fail "CLI proof fixture does not report the supported ICP CLI floor"
 rg -F 'maintainer toolchain currently pins `'"$CANIC_ICP_CLI_VERSION"'`' "$INSTALLING" >/dev/null ||
     fail "installation guidance does not report the pinned ICP CLI version"
 rg -F 'bash scripts/dev/update-icp-cli-pin.sh' "$MAKEFILE" >/dev/null ||

@@ -39,7 +39,7 @@ remain incremental while `release` and `fast` artifacts stay non-incremental.
 Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values
 remain authoritative. Canic artifact builds keep incremental compilation
 disabled for deterministic Wasm output and independently discover `sccache`
-for `canic build` and `canic install` when no wrapper was supplied.
+for `canic build` when no wrapper was supplied.
 
 CI uses the same runner for its preflight, security and Rust-check jobs. Tool
 installation and version verification remain immediate prerequisites, after

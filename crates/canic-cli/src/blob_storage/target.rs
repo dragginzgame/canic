@@ -12,13 +12,10 @@ use crate::blob_storage::{
 use candid::Principal;
 use canic_host::{
     candid_endpoints::{EndpointMode, parse_candid_service_endpoints},
+    fleet_ensure::resolve_current_fleet,
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
-    protocol_binding::{
-        resolve_infrastructure_protocol_binding, resolve_registry_protocol_binding,
-    },
+    protocol_binding::resolve_registry_protocol_binding,
     registry::RegistryEntry,
-    release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use std::{
     fs,
@@ -45,7 +42,7 @@ struct ResolvedBlobStorageTarget {
     input: String,
     role: Option<String>,
     canister_id: String,
-    registry_entry: Option<RegistryEntry>,
+    registry_entry: RegistryEntry,
 }
 
 pub(super) fn resolve_blob_storage_call_target(
@@ -55,16 +52,8 @@ pub(super) fn resolve_blob_storage_call_target(
     method: &str,
 ) -> Result<BlobStorageCallTarget, BlobStorageCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(BlobStorageCommandError::IcpRoot)?;
-    let installed = resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: fleet.to_string(),
-            environment: options.environment.clone(),
-        },
-        &options.icp,
-        &icp_root,
-    )
-    .map_err(BlobStorageCommandError::from)?;
-    let root_canister_id = installed
+    let current = resolve_current_fleet(&icp_root, &options.environment, fleet)?;
+    let root_canister_id = current
         .topology
         .unique_fleet_subnet_root(fleet)?
         .to_string();
@@ -72,36 +61,13 @@ pub(super) fn resolve_blob_storage_call_target(
         fleet,
         selector,
         &root_canister_id,
-        &installed.registry.entries,
+        &current.registry.entries,
     )?;
-    let binding = if resolved.canister_id == root_canister_id {
-        let manifest = load_persisted_canic_infrastructure_artifact_manifest(
-            &icp_root,
-            installed.fleet.release_build_id,
-        )
-        .map_err(|_| BlobStorageCommandError::CandidUnavailable {
-            fleet: fleet.to_string(),
-            target: selector.to_string(),
-        })?;
-        let artifact = manifest
-            .manifest
-            .entries
-            .iter()
-            .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
-            .ok_or_else(|| BlobStorageCommandError::CandidUnavailable {
-                fleet: fleet.to_string(),
-                target: selector.to_string(),
-            })?;
-        resolve_infrastructure_protocol_binding(&icp_root, &options.environment, artifact)
-    } else {
-        let entry = resolved.registry_entry.as_ref().ok_or_else(|| {
-            BlobStorageCommandError::CandidUnavailable {
-                fleet: fleet.to_string(),
-                target: selector.to_string(),
-            }
-        })?;
-        resolve_registry_protocol_binding(&icp_root, &options.environment, entry)
-    }
+    let binding = resolve_registry_protocol_binding(
+        &icp_root,
+        &options.environment,
+        &resolved.registry_entry,
+    )
     .map_err(|_| BlobStorageCommandError::CandidUnavailable {
         fleet: fleet.to_string(),
         target: selector.to_string(),
@@ -115,7 +81,7 @@ pub(super) fn resolve_blob_storage_call_target(
     let method_mode = blob_storage_method_mode(&candid_path, &candid, method)?;
 
     Ok(BlobStorageCallTarget {
-        target: BlobStorageTarget::from_installed_fleet(
+        target: BlobStorageTarget::from_current_ensure(
             &resolved.input,
             resolved.role,
             &resolved.canister_id,
@@ -133,11 +99,18 @@ fn resolve_blob_storage_target(
     registry: &[RegistryEntry],
 ) -> Result<ResolvedBlobStorageTarget, BlobStorageCommandError> {
     if selector == "root" || selector == root_canister_id {
+        let entry = registry
+            .iter()
+            .find(|entry| entry.pid == root_canister_id)
+            .ok_or_else(|| BlobStorageCommandError::UnknownTarget {
+                fleet: fleet.to_string(),
+                target: selector.to_string(),
+            })?;
         return Ok(ResolvedBlobStorageTarget {
             input: selector.to_string(),
             role: Some("root".to_string()),
             canister_id: root_canister_id.to_string(),
-            registry_entry: None,
+            registry_entry: entry.clone(),
         });
     }
 
@@ -145,11 +118,9 @@ fn resolve_blob_storage_target(
         if let Some(entry) = registry.iter().find(|entry| entry.pid == selector) {
             return Ok(resolved_from_entry(selector, entry));
         }
-        return Ok(ResolvedBlobStorageTarget {
-            input: selector.to_string(),
-            role: None,
-            canister_id: selector.to_string(),
-            registry_entry: None,
+        return Err(BlobStorageCommandError::UnknownTarget {
+            fleet: fleet.to_string(),
+            target: selector.to_string(),
         });
     }
 
@@ -182,7 +153,7 @@ fn resolved_from_entry(selector: &str, entry: &RegistryEntry) -> ResolvedBlobSto
         input: selector.to_string(),
         role: entry.role.clone(),
         canister_id: entry.pid.clone(),
-        registry_entry: Some(entry.clone()),
+        registry_entry: entry.clone(),
     }
 }
 
@@ -224,14 +195,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn principal_resolution_wins_before_role_match() {
+    fn unregistered_principal_cannot_match_a_role_shaped_name() {
         let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
         let entry = registry_entry("ryjl3-tyaaa-aaaaa-aaaba-cai", Some(principal));
-        let target = resolve_blob_storage_target("local", principal, "aaaaa-aa", &[entry])
-            .expect("principal-like target should resolve as canister id");
+        let error = resolve_blob_storage_target("local", principal, "aaaaa-aa", &[entry])
+            .expect_err("an unregistered principal must fail closed");
 
-        assert_eq!(target.role, None);
-        assert_eq!(target.canister_id, principal);
+        assert!(matches!(
+            error,
+            BlobStorageCommandError::UnknownTarget { target, .. } if target == principal
+        ));
     }
 
     #[test]
@@ -246,13 +219,15 @@ mod tests {
     }
 
     #[test]
-    fn direct_canister_id_without_registry_entry_has_no_role() {
+    fn direct_canister_id_without_current_inventory_entry_rejects() {
         let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
-        let target = resolve_blob_storage_target("local", principal, "aaaaa-aa", &[])
-            .expect("direct principal should resolve");
+        let error = resolve_blob_storage_target("local", principal, "aaaaa-aa", &[])
+            .expect_err("unregistered direct principal rejected");
 
-        assert_eq!(target.role, None);
-        assert_eq!(target.canister_id, principal);
+        assert!(matches!(
+            error,
+            BlobStorageCommandError::UnknownTarget { target, .. } if target == principal
+        ));
     }
 
     #[test]

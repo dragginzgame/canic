@@ -6,16 +6,15 @@ mod blob_storage;
 mod build;
 mod cli;
 mod cycles;
-mod deploy;
 mod diagnostic;
 mod endpoints;
 mod evidence;
 mod evidence_support;
+mod fleet;
 mod info;
 mod info_env;
 mod info_subnets;
 mod inspect;
-mod install;
 mod list;
 mod medic;
 mod metrics;
@@ -55,15 +54,6 @@ pub enum CliError {
     #[error("admission: {0}")]
     Admission(#[source] Box<admission::AdmissionCommandError>),
 
-    #[error("backup: {0}")]
-    Backup(#[source] Box<backup::BackupCommandError>),
-
-    #[error("auth: {0}")]
-    Auth(#[source] Box<auth::AuthCommandError>),
-
-    #[error("blob-storage: {0}")]
-    BlobStorage(#[source] Box<blob_storage::BlobStorageCommandError>),
-
     #[error(transparent)]
     Clap(#[from] clap::Error),
 
@@ -73,8 +63,14 @@ pub enum CliError {
     #[error("cycles: {0}")]
     Cycles(#[source] Box<cycles::CyclesCommandError>),
 
-    #[error("deploy: {0}")]
-    Deploy(#[from] deploy::DeployCommandError),
+    #[error("backup: {0}")]
+    Backup(#[source] Box<backup::BackupCommandError>),
+
+    #[error("auth: {0}")]
+    Auth(#[source] Box<auth::AuthCommandError>),
+
+    #[error("blob-storage: {0}")]
+    BlobStorage(#[source] Box<blob_storage::BlobStorageCommandError>),
 
     #[error("diagnostic: {0}")]
     Diagnostic(#[from] diagnostic::DiagnosticCommandError),
@@ -82,17 +78,17 @@ pub enum CliError {
     #[error("evidence: {0}")]
     Evidence(#[from] evidence::EvidenceCommandError),
 
-    #[error("install: {0}")]
-    Install(#[from] install::InstallCommandError),
-
-    #[error("inspect: {0}")]
-    Inspect(#[source] Box<inspect::InspectCommandError>),
+    #[error("fleet: {0}")]
+    Fleet(#[source] Box<fleet::FleetCommandError>),
 
     #[error("info: {0}")]
     Info(#[from] info::InfoCommandError),
 
+    #[error("inspect: {0}")]
+    Inspect(#[source] Box<inspect::InspectCommandError>),
+
     #[error("medic: {0}")]
-    Medic(#[from] medic::MedicCommandError),
+    Medic(#[source] Box<medic::MedicCommandError>),
 
     #[error("network: {0}")]
     Network(#[from] network::NetworkCommandError),
@@ -103,25 +99,25 @@ pub enum CliError {
     #[error("state: {0}")]
     State(#[from] state::StateCommandError),
 
-    #[error("scaffold: {0}")]
-    Scaffold(#[from] scaffold::ScaffoldCommandError),
-
-    #[error("restore: {0}")]
-    Restore(#[from] restore::RestoreCommandError),
-
-    #[error("replica: {0}")]
-    Replica(#[from] replica::ReplicaCommandError),
-
     #[error("status: {0}")]
     Status(#[from] status::StatusCommandError),
 
     #[error("token: {0}")]
     Token(#[source] Box<token::TokenCommandError>),
+
+    #[error("scaffold: {0}")]
+    Scaffold(#[from] scaffold::ScaffoldCommandError),
+
+    #[error("replica: {0}")]
+    Replica(#[from] replica::ReplicaCommandError),
+
+    #[error("restore: {0}")]
+    Restore(#[from] restore::RestoreCommandError),
 }
 
-impl From<backup::BackupCommandError> for CliError {
-    fn from(error: backup::BackupCommandError) -> Self {
-        Self::Backup(Box::new(error))
+impl From<apps::AppCommandError> for CliError {
+    fn from(error: apps::AppCommandError) -> Self {
+        Self::Apps(Box::new(error))
     }
 }
 
@@ -137,6 +133,12 @@ impl From<auth::AuthCommandError> for CliError {
     }
 }
 
+impl From<backup::BackupCommandError> for CliError {
+    fn from(error: backup::BackupCommandError) -> Self {
+        Self::Backup(Box::new(error))
+    }
+}
+
 impl From<blob_storage::BlobStorageCommandError> for CliError {
     fn from(error: blob_storage::BlobStorageCommandError) -> Self {
         Self::BlobStorage(Box::new(error))
@@ -149,15 +151,21 @@ impl From<cycles::CyclesCommandError> for CliError {
     }
 }
 
+impl From<fleet::FleetCommandError> for CliError {
+    fn from(error: fleet::FleetCommandError) -> Self {
+        Self::Fleet(Box::new(error))
+    }
+}
+
 impl From<inspect::InspectCommandError> for CliError {
     fn from(error: inspect::InspectCommandError) -> Self {
         Self::Inspect(Box::new(error))
     }
 }
 
-impl From<apps::AppCommandError> for CliError {
-    fn from(error: apps::AppCommandError) -> Self {
-        Self::Apps(Box::new(error))
+impl From<medic::MedicCommandError> for CliError {
+    fn from(error: medic::MedicCommandError) -> Self {
+        Self::Medic(Box::new(error))
     }
 }
 
@@ -224,12 +232,11 @@ where
         "blob-storage" => blob_storage::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
         "cycles" => cycles::run(tail).map_err(CliError::from),
-        "deploy" => deploy::run(tail).map_err(CliError::from),
         "diagnostic" => diagnostic::run(tail).map_err(CliError::from),
         "evidence" => evidence::run(tail).map_err(CliError::from),
+        "fleet" => fleet::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),
         "inspect" => inspect::run(tail).map_err(CliError::from),
-        "install" => install::run(tail).map_err(CliError::from),
         "medic" => medic::run(tail).map_err(CliError::from),
         "network" => network::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
@@ -254,7 +261,6 @@ pub fn render_cli_error(error: &CliError) -> String {
         CliError::Build(build::BuildCommandError::Clap(err)) | CliError::Clap(err) => {
             err.to_string().trim_end().to_string()
         }
-        CliError::Deploy(err) if err.suppress_stderr() => String::new(),
         CliError::Inspect(err) if err.suppress_stderr() => String::new(),
         CliError::Medic(err) if err.suppress_stderr() => String::new(),
         CliError::State(err) if err.suppress_stderr() => String::new(),
@@ -269,7 +275,6 @@ pub fn cli_error_exit_code(err: &CliError) -> i32 {
         CliError::BlobStorage(err) => i32::from(err.exit_code()),
         CliError::Build(err) => err.exit_code(),
         CliError::Clap(err) => err.exit_code(),
-        CliError::Deploy(err) => i32::from(err.exit_code()),
         CliError::Info(err) => i32::from(err.exit_code()),
         CliError::Inspect(err) => i32::from(err.exit_code()),
         CliError::Medic(err) => i32::from(err.exit_code()),

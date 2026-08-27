@@ -12,7 +12,8 @@ use crate::{
 #[cfg(feature = "wasm-store-canister")]
 use crate::{
     dto::template::{
-        StoreOperationStatusResponse, TemplateChunkResponse, WasmStoreCatalogEntryResponse,
+        StoreOperationStatusResponse, TemplateChunkResponse, TemplateLookupRequest,
+        TemplateStagingStatusResponse, WasmStoreCatalogEntryResponse,
         WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
         WasmStoreGcOperationStatus, WasmStoreStatusResponse,
     },
@@ -38,8 +39,7 @@ use canic_core::dto::root_store::{RootStoreBootstrapRequest, RootStoreBootstrapR
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::{log, log::Topic};
 
-/// Admit Store mutations from the exact Root, or from the exact installation controller while
-/// that controller still controls the fresh Store before Root adoption.
+/// Admit Store mutations from the exact Root or retained exact installation controller.
 #[cfg(feature = "wasm-store-canister")]
 pub struct WasmStoreMutationCallerPredicate;
 
@@ -63,7 +63,7 @@ impl canic_core::access::expr::AsyncAccessPredicate for WasmStoreMutationCallerP
     }
 
     fn name(&self) -> &'static str {
-        "caller_is_root_or_pre_adoption_installation_controller"
+        "caller_is_root_or_retained_installation_controller"
     }
 }
 
@@ -184,6 +184,16 @@ impl WasmStoreCanisterApi {
         version: TemplateVersion,
     ) -> Result<TemplateChunkSetInfoResponse, Error> {
         local_template_info(template_id, version)
+    }
+
+    // Return exact manifest and staged-chunk evidence for one release.
+    pub fn staging_status(
+        request: TemplateLookupRequest,
+    ) -> Result<TemplateStagingStatusResponse, Error> {
+        Ok(TemplateChunkedOps::staging_status_response(
+            &request.template_id,
+            &request.version,
+        ))
     }
 
     // Return occupied-byte and retention state for this local wasm store.

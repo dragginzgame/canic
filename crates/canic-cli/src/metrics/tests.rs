@@ -95,13 +95,13 @@ fn metrics_report_json_uses_fleet_identity_field() {
 
 #[test]
 fn missing_metrics_fleet_preserves_canonical_typed_error() {
-    let error = MetricsCommandError::from(InstalledFleetError::NoInstalledFleet {
+    let error = MetricsCommandError::from(CurrentFleetInventoryError::NotConverged {
         environment: "local".to_string(),
         fleet: "demo-local".to_string(),
     });
     std::assert_matches!(
         error,
-        MetricsCommandError::InstalledFleet(InstalledFleetError::NoInstalledFleet {
+        MetricsCommandError::CurrentFleet(CurrentFleetInventoryError::NotConverged {
             environment,
             fleet,
         }) if environment == "local" && fleet == "demo-local"

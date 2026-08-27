@@ -594,13 +594,35 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.6.1"]);
     assert_eq!(locked_package_versions(&lock, "ic-cdk-timers"), ["1.0.0"]);
-    assert_eq!(locked_package_versions(&lock, "icydb"), ["0.240.1"]);
+    assert_eq!(locked_package_versions(&lock, "icydb"), ["0.245.1"]);
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
     assert!(workspace_manifest.contains("ic-timers = \"=0.6.1\""));
-    assert!(workspace_manifest.contains("icydb = { version = \"0.240\""));
-    assert!(workspace_manifest.contains("icydb-model = \"0.240\""));
+    assert!(!workspace_manifest.lines().any(is_icydb_dependency));
     assert!(!workspace_manifest.contains("ic-cdk-timers ="));
+
+    let icydb_fixture_manifest = read_source(
+        &root,
+        "canisters/test/canic_icydb_lifecycle_probe/Cargo.toml",
+    );
+    assert_eq!(
+        icydb_fixture_manifest
+            .lines()
+            .filter(|line| {
+                line.trim() == "icydb = { version = \"0.245\", default-features = false }"
+            })
+            .count(),
+        2
+    );
+    let icydb_schema_manifest = read_source(
+        &root,
+        "canisters/test/canic_icydb_lifecycle_probe/schema/Cargo.toml",
+    );
+    assert!(
+        icydb_schema_manifest
+            .lines()
+            .any(|line| line.trim() == "icydb-model = \"0.245\"")
+    );
 
     let mut timer_consumers = BTreeSet::from(["Cargo.toml".to_string()]);
     let mut raw_provider_consumers = BTreeSet::new();
@@ -628,6 +650,11 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     assert_eq!(timer_consumers, expected_timer_manifest_consumers());
     assert!(raw_provider_consumers.is_empty());
+}
+
+fn is_icydb_dependency(line: &str) -> bool {
+    let line = line.trim_start();
+    line.starts_with("icydb =") || line.starts_with("icydb-model =")
 }
 
 #[test]
@@ -1042,10 +1069,9 @@ fn expected_native_registration_actions() -> BTreeMap<String, BTreeMap<String, u
     .collect()
 }
 
-const fn application_ownership() -> [(&'static str, OwnershipClass); 6] {
+const fn application_ownership() -> [(&'static str, OwnershipClass); 5] {
     use OwnershipClass::{
-        DtoOrMetricsProjection as Projection, IndependentApplicationCustody as Application,
-        PrivateLifecycleConsumer as Lifecycle,
+        IndependentApplicationCustody as Application, PrivateLifecycleConsumer as Lifecycle,
     };
 
     [
@@ -1060,7 +1086,6 @@ const fn application_ownership() -> [(&'static str, OwnershipClass); 6] {
         ),
         ("canisters/test/intent_authority/src/lib.rs", Lifecycle),
         ("canisters/test/runtime_probe/src/lib.rs", Application),
-        ("crates/canic-cli/src/inspect/mod.rs", Projection),
     ]
 }
 
@@ -1255,16 +1280,6 @@ fn expected_wait_inventory() -> BTreeMap<String, usize> {
         ),
         ("crates/canic-host/src/icp/command.rs".to_string(), 1),
         ("crates/canic-host/src/lib.rs".to_string(), 1),
-        (
-            "crates/canic-host/src/install_root/fleet_component_provisioning_install/mod.rs"
-                .to_string(),
-            1,
-        ),
-        (
-            "crates/canic-host/src/install_root/fleet_subnet_root_store_bootstrap/mod.rs"
-                .to_string(),
-            1,
-        ),
         ("crates/canic-host/src/terminal/activity.rs".to_string(), 1),
     ])
 }

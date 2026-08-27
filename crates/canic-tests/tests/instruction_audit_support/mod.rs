@@ -348,9 +348,9 @@ fn method_artifact(metadata: &AuditMetadata) -> MethodArtifact {
         counter_source: PERF_COUNTER_SOURCE.to_string(),
         measured_unit: "local_instructions".to_string(),
         counter_semantics: "Local WebAssembly instruction counter for the current call context; excludes other canisters and is not a cycle-charge measurement.".to_string(),
-        normalization: "MetricsKind::Runtime perf rows are normalized into canonical endpoint rows. Update lanes use persisted before/after perf deltas; a measured endpoint may retain count > 0 with a zero exclusive total when nested/checkpoint scopes own the instruction attribution. The install lane groups retained root-bootstrap checkpoint deltas without inventing an endpoint total.".to_string(),
+        normalization: "MetricsKind::Runtime perf rows are normalized into canonical endpoint rows. Update lanes use persisted before/after perf deltas; a measured endpoint may retain count > 0 with a zero exclusive total when nested/checkpoint scopes own the instruction attribution. The install lane groups Root-bootstrap checkpoint deltas without inventing an endpoint total.".to_string(),
         freshness_rule: "One fresh authoritative root harness per scenario (`topology`, `capability`, `scaling`, or `sharding`); no scenario shares mutable PocketIC state.".to_string(),
-        checkpoint_rule: "Update checkpoint deltas are diffed before/after the sampled call. Root bootstrap uses checkpoint rows retained by the completed fresh install and reports their sum as a checkpoint-group flow row.".to_string(),
+        checkpoint_rule: "Update checkpoint deltas are diffed before/after the sampled call. Root bootstrap uses checkpoint rows retained by the completed Fleet bootstrap and reports their sum as a checkpoint-group flow row.".to_string(),
     }
 }
 

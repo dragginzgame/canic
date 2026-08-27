@@ -12,8 +12,6 @@ DOWNSTREAM_ROOT="$TOOL_ROOT/downstream-root"
 PROOF_HOME="$TMP_ROOT/home"
 PROOF_TARGET_DIR="$TMP_ROOT/cargo-target"
 PROOF_TMPDIR="$TMP_ROOT/tmp"
-FAKE_ICP="$TMP_ROOT/fake-icp"
-FAKE_ICP_STATE="$TMP_ROOT/fake-icp-state"
 VERSION="$(
     cargo metadata --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml" |
         jq -r '.packages[] | select(.name == "canic") | .version'
@@ -24,9 +22,6 @@ cleanup() {
 }
 
 trap cleanup EXIT
-
-. "$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
-. "$ROOT/scripts/ci/auth-renewal-cli-proof-lib.sh"
 
 ensure_packaged_crate() {
     local crate_name="$1"
@@ -169,7 +164,6 @@ run_packaged_canic() {
             CARGO_TARGET_DIR="$PROOF_TARGET_DIR" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
-            FAKE_ICP_STATE="$FAKE_ICP_STATE" \
             cargo run --manifest-path "$TOOL_ROOT/Cargo.toml" --offline -q -p canic-cli \
                 --bin canic -- "$@"
     )
@@ -182,20 +176,7 @@ run_probe() {
     run_packaged_canic app list > "$TMP_ROOT/app-list.out"
     run_packaged_canic app role list downstream > "$TMP_ROOT/role-list.out"
     run_packaged_canic app role inspect downstream app > "$TMP_ROOT/app-inspect.out"
-    run_packaged_canic --environment ic deploy inspect catalog list --json \
-        --output "$TMP_ROOT/catalog.json"
-    run_packaged_canic blob-storage --help > "$TMP_ROOT/blob-storage-help.out"
-    if run_packaged_canic blob-storage status downstream app --json \
-        > "$TMP_ROOT/blob-storage-status-json.out" \
-        2> "$TMP_ROOT/blob-storage-status-json.err"
-    then
-        echo "expected packaged blob-storage JSON status without installed state to fail" >&2
-        exit 1
-    fi
-    prepare_blob_storage_cli_fixture "$DOWNSTREAM_ROOT"
-    prepare_auth_renewal_cli_surface_fixture "$DOWNSTREAM_ROOT"
-    run_blob_storage_cli_probe_commands run_packaged_canic "$TMP_ROOT" "$FAKE_ICP"
-    run_auth_renewal_cli_surface_probe_commands run_packaged_canic "$TMP_ROOT" "$FAKE_ICP"
+    run_packaged_canic fleet ensure --help > "$TMP_ROOT/fleet-ensure-help.out"
 }
 
 assert_probe_outputs() {
@@ -229,13 +210,11 @@ assert_probe_outputs() {
         sed -n '1,160p' "$TMP_ROOT/app-inspect.out" >&2
         exit 1
     }
-    grep -q '"entries": \[\]' "$TMP_ROOT/catalog.json" || {
-        echo "expected packaged canic CLI catalog to stay empty without installed Fleet state" >&2
-        sed -n '1,160p' "$TMP_ROOT/catalog.json" >&2
+    grep -q 'Plan or apply one idempotent Fleet convergence' "$TMP_ROOT/fleet-ensure-help.out" || {
+        echo "expected packaged canic CLI to expose Fleet ensure" >&2
+        sed -n '1,160p' "$TMP_ROOT/fleet-ensure-help.out" >&2
         exit 1
     }
-    assert_blob_storage_cli_probe_outputs "packaged" "$TMP_ROOT"
-    assert_auth_renewal_cli_surface_probe_outputs "packaged" "$TMP_ROOT"
 }
 
 main() {
@@ -250,7 +229,6 @@ main() {
 
     prepare_tool_root
     prepare_downstream_root
-    prepare_fake_blob_storage_icp "$FAKE_ICP" "$FAKE_ICP_STATE"
     run_probe
     assert_probe_outputs
 

@@ -81,12 +81,12 @@ pub(super) enum ListSource {
 
 fn list_command(bin_name: &'static str, help_after: &'static str) -> ClapCommand {
     base_list_options(ClapCommand::new("list").bin_name(bin_name))
-        .about("List the live Coordinator-anchored canister tree for an installed Fleet")
+        .about("List the live Coordinator-anchored canister tree for a current Fleet")
         .arg(
             value_arg("fleet")
                 .value_name("fleet")
                 .required(true)
-                .help("Installed Fleet name to inspect"),
+                .help("Current Fleet name to inspect"),
         )
         .arg(
             value_arg("subtree")

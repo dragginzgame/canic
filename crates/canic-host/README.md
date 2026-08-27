@@ -1,161 +1,67 @@
 # canic-host
 
-Host-side build, install, deployment, App-source, and multi-root staging
-tooling for Canic workspaces.
+`canic-host` owns operator-machine artifact builds, current desired-state Fleet
+reconciliation, network/ICP transport, evidence policy and supporting local
+state. It is not a canister runtime.
 
-## When to use it
+Normal operators use the installed `canic` binary. Direct Rust consumers may
+use the build and `fleet_ensure` modules when embedding the same current
+contract.
 
-Use this crate directly when you need:
-
-- Canic build/install backend code in CI or local automation
-- Coordinator/root/Store staging from published backend APIs
-- the lower-level host library surface without cloning the full repo
-
-For normal local setup, prefer the root
-[`INSTALLING.md`](../../INSTALLING.md) guide. From a Canic checkout, use the
-maintainer setup target:
+## Build
 
 ```bash
-make install-dev
+canic build <app> <role> --profile release
 ```
 
-That path requires Rustup and Cargo, then installs the pinned internal
-toolchain, the `canic` CLI, wasm/Candid utilities, and checksum-bound external
-executables.
-This README documents the lower-level host library surface.
+Every managed package declares exact App/role metadata. Artifact builds are
+non-incremental for deterministic Wasm. An explicit `RUSTC_WRAPPER` wins;
+otherwise the host discovers `sccache` on `PATH`.
 
-## What this crate is not
+## Fleet Ensure
 
-This crate is not a general deployment framework and it is not the main Canic
-application facade. It owns host-side build/install/Fleet/staging utilities
-for standard Canic Coordinator/root/Store flows. For normal operator use, prefer
-the installed `canic` CLI and the compact v1 workflow documented in
-`docs/architecture/v1-operator-walkthrough.md`; use install commands only for
-the local managed-fleet flows that document them explicitly.
+The only maintained Fleet mutation owner is:
 
-It is also separate from:
-
-- `canic-backup`, which owns backup/restore manifests, journals, topology
-  snapshots, backup layout validation, and restore planning.
-- `canic-core` and `canic-control-plane`, which run inside canisters or provide
-  canister-runtime support. `canic-host` runs on the operator machine and may
-  call Cargo, `icp`, and the local filesystem.
-
-Maintained installation flow:
-
-- compile the App's complete Component Topology and resolve the required
-  operator Fleet input before effects
-- build and freeze the exact Fleet Coordinator, Fleet Subnet Root, and Wasm
-  Store infrastructure artifacts
-- build one topology-qualified application artifact union and project an exact
-  admitted release set for every planned root
-- journal, create, install, and independently verify the Coordinator first
-- journal, create, install, and independently verify every planned Fleet
-  Subnet Root
-- stage each root's exact release set, bootstrap one root-local Store, and
-  verify its live catalog independently
-- register and independently verify every root as Registry `Joining`
-- stage and independently verify the exact all-`Joining` snapshot and
-  Coordinator acknowledgement at every root
-- atomically commit and independently verify the complete Coordinator
-  Registry as all-`Active`
-- atomically activate and independently verify every root's exact all-`Active`
-  Registry Mirror and Registry-derived Fleet Directory
-- provision and activate configured initial Components through root-local
-  journals, then seal each root's exact initial inventory
-- independently activate every selected root and publish the terminal
-  Coordinator-anchored Fleet catalog only after every root is reverified
-
-The local driver permits one clean local `icp` restart attempt when
-`icp ping local` fails. Exact journals own same-release interruption recovery;
-the host does not fall back to the removed single-root installer.
-
-Build profile selection:
-
-- `canic build <app> --profile debug|fast|release` batches every attached role,
-  then builds Fleet Coordinator and Wasm Store infrastructure separately
-- `canic build <app> <role> --profile debug` builds one raw debug wasm
-- `canic build <app> <role> --profile fast` builds one shrunk local/test/demo artifact
-- `canic build <app> <role> --profile release` builds one shipping/install artifact
-
-If omitted, CLI builds default to `release`.
-
-When the Rust workspace root and ICP CLI/project root differ, pass
-`--workspace`, `--icp-root`, and `--config` to `canic build`. The low-level
-`build_artifact` example takes those three paths after its role and profile.
-
-If canister crates live outside the default `apps/` directory, host
-discovery first tries Cargo workspace metadata. Every Canic-managed canister
-package must declare the App-scoped role it implements in Cargo metadata:
-
-```toml
-[package.metadata.canic]
-app = "example"
-role = "ledger"
+```bash
+canic fleet ensure <fleet> --desired <path>
+canic fleet ensure <fleet> --desired <path> --apply <plan_sha256>
 ```
 
-For `canic install`, the implicit environment default is always `local`; use
-`--environment <name>` for one command against another environment. The public
-CLI requires `canic install <app> <fleet> --fleet-input <path>`, uses
-`apps/<app>/canic.toml` for reusable App topology, and reads concrete
-placement, admission, limit, and funding policy only from the separate Fleet
-input.
-
-Canonical network identity is trust-derived rather than environment-derived.
-IC mainnet profiles resolve from Canic's compiled DER root key. Pre-existing
-local and connected profiles resolve only through the exact root key and
-enrollment record under `.canic/networks/<canonical-network-id>/`; the
-environment profile is revalidated as a non-authoritative lookup on every
-resolution.
-
-## Disposable physical-root deletion proof
-
-The `empty_fleet_subnet_root_retirement` and
-`fleet_subnet_root_deletion` examples exist for the bounded 0.100 real-network
-proof. They are not general operator commands. The first helper fences an
-empty root by submitting one Coordinator `RemoveRoot` command. The Root then
-autonomously publishes its logical removal, hands prepaid Canister assets to
-the surviving Coordinator, reclaims cycles and physically deletes the sibling
-Store. The host retains only the final management-controller stop/delete
-effect after Root status contains durable deletion-preparation evidence.
-
-Begin only with a disposable root whose Component Registry inventory is empty.
-Use one fresh nonzero operation ID throughout:
+The host modules follow the strict boundary:
 
 ```text
-cargo run -p canic-host --example empty_fleet_subnet_root_retirement -- \
-  --confirm-disposable-empty-root \
-  icp . <environment> <coordinator> <root> \
-  <64-hex-operation-id>
+CLI -> workflow -> policy
+                +-> ops -> model
 ```
 
-If autonomous preparation is still in progress, repeat the exact command with
-the same operation ID. Exact retry reuses the durable operation; it does not
-replay completed phases. Run physical-root preparation and execution as
-separate processes when specifically proving recovery from remote authority.
-`execute` refuses to synthesize a missing execution intent, so the durable
-Coordinator receipt from `prepare` is a mandatory phase boundary:
+- `model` owns the current `v1` plan, journal and conservation records.
+- `policy` validates desired/live inputs and compiles the immutable plan.
+- `ops` owns artifact hashing, current state files and one platform effect.
+- `workflow` persists intent, reconciles replay and publishes terminal state.
 
-```text
-cargo run -p canic-host --example fleet_subnet_root_deletion -- \
-  prepare --confirm-disposable-root-deletion \
-  icp . <environment> <coordinator> <root> <64-hex-operation-id>
+Historical install plans, release-pair loaders, role journals, repair receipts,
+recovery bundles, adoption paths and installed-Fleet caches are not read.
 
-cargo run -p canic-host --example fleet_subnet_root_deletion -- \
-  execute --confirm-disposable-root-deletion \
-  icp . <environment> <coordinator> <root> <64-hex-operation-id>
-```
+## Cycle Safety
 
-The prepare output is the exact Coordinator execution receipt. The execute
-output is its terminal deletion receipt. Run the same execute command again to
-verify exact replay: it returns that same terminal receipt without another root
-effect.
+The plan records exact controlled balances, canister dispositions, scheduled
+transfers, fees, funding and bounded burn. Every mutating platform call has a
+durable intent first. Ledger and configured drain effects use exact replay
+identities. Apply refuses a changed plan, unsafe live drift or a debit/burn
+above the reviewed maximum.
 
-## Password-encrypted ICP identities
+A controller cannot pull cycles from an arbitrary canister. Material
+replacement/deletion therefore requires an exact treasury-bound idempotent
+drain endpoint. Without it, policy returns `NoSafeDrain` and leaves the
+canister untouched. Stop and delete remain separate effects with fresh status
+and residual-balance checks.
 
-When the active ICP CLI identity uses password storage, set
-`CANIC_ICP_IDENTITY_PASSWORD_FILE` to an absolute operator-owned password file
-for the individual Canic command. Canic relays the path as ICP CLI's global
-`--identity-password-file` option to every subprocess; it does not read, copy,
-persist or render the password contents. Keep the file outside the repository,
-restrict it to the current user and remove it after the operation.
+The complete desired document and operator procedure are documented in
+[Fleet ensure](../../docs/features/operations/fleet-ensure.md).
+
+## ICP Identity
+
+When ICP CLI uses password storage, pass its supported identity password file
+through the individual operator environment. Canic forwards the path to ICP
+CLI and does not read or render the password contents. Keep credentials outside
+the repository.

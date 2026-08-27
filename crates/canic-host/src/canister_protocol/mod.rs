@@ -92,9 +92,9 @@ where
     I: CandidType,
     O: CandidType + DeserializeOwned,
 {
-    invoke_with_arg(
+    invoke_with_candid(
         icp,
-        binding,
+        &binding.candid_path,
         canister,
         method,
         input,
@@ -113,9 +113,9 @@ where
     I: CandidType,
     O: CandidType + DeserializeOwned,
 {
-    invoke_with_arg(
+    invoke_with_candid(
         icp,
-        binding,
+        &binding.candid_path,
         canister,
         method,
         input,
@@ -123,9 +123,55 @@ where
     )
 }
 
-fn invoke_with_arg<I, O>(
+/// Invoke one typed current-generation call after its exact Candid bytes were
+/// independently bound into the reviewed Fleet action.
+pub fn call_with_candid<I, O>(
     icp: &IcpCli,
-    binding: &ResolvedProtocolBinding,
+    candid_path: &std::path::Path,
+    canister: Principal,
+    method: &'static str,
+    input: &I,
+) -> Result<O, CanisterProtocolError>
+where
+    I: CandidType,
+    O: CandidType + DeserializeOwned,
+{
+    invoke_with_candid(
+        icp,
+        candid_path,
+        canister,
+        method,
+        input,
+        ProtocolCallMode::Update,
+    )
+}
+
+/// Query one typed current-generation status after its exact Candid bytes were
+/// independently bound into the reviewed Fleet action.
+pub fn query_with_candid<I, O>(
+    icp: &IcpCli,
+    candid_path: &std::path::Path,
+    canister: Principal,
+    method: &'static str,
+    input: &I,
+) -> Result<O, CanisterProtocolError>
+where
+    I: CandidType,
+    O: CandidType + DeserializeOwned,
+{
+    invoke_with_candid(
+        icp,
+        candid_path,
+        canister,
+        method,
+        input,
+        ProtocolCallMode::Query,
+    )
+}
+
+fn invoke_with_candid<I, O>(
+    icp: &IcpCli,
+    candid_path: &std::path::Path,
     canister: Principal,
     method: &'static str,
     input: &I,
@@ -154,14 +200,14 @@ where
             method,
             &args_path,
             Some(ICP_JSON_OUTPUT),
-            Some(&binding.candid_path),
+            Some(candid_path),
         ),
         ProtocolCallMode::Update => icp.canister_call_binary_args_output_with_candid(
             &canister_text,
             method,
             &args_path,
             Some(ICP_JSON_OUTPUT),
-            Some(&binding.candid_path),
+            Some(candid_path),
         ),
     };
     let cleanup = fs::remove_file(&args_path);

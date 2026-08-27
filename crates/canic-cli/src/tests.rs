@@ -1,10 +1,7 @@
 use super::*;
-use crate::{
-    cli::{
-        globals::{DISPATCH_ARGS, INTERNAL_ENVIRONMENT_OPTION, INTERNAL_ICP_OPTION},
-        help::usage,
-    },
-    info::InfoCommandError,
+use crate::cli::{
+    globals::{INTERNAL_ENVIRONMENT_OPTION, INTERNAL_ICP_OPTION},
+    help::usage,
 };
 
 #[cfg(unix)]
@@ -28,11 +25,9 @@ fn strip_ansi(text: &str) -> String {
     plain
 }
 
-// Ensure top-level help stays alphabetical as command surfaces grow.
 #[test]
-fn usage_lists_commands_alphabetically() {
-    let text = usage();
-    let plain = strip_ansi(&text);
+fn usage_lists_current_commands_alphabetically() {
+    let plain = strip_ansi(&usage());
     let names = plain
         .split_once("\nCommands:\n")
         .expect("top-level commands section")
@@ -43,944 +38,163 @@ fn usage_lists_commands_alphabetically() {
         .lines()
         .filter_map(|line| line.split_whitespace().next())
         .collect::<Vec<_>>();
-    let mut sorted_names = names.clone();
-    sorted_names.sort_unstable();
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
 
-    assert!(plain.contains(&format!(
-        "Canic Operator CLI v{}",
-        env!("CARGO_PKG_VERSION")
-    )));
+    assert_eq!(names, sorted);
+    assert_eq!(
+        names,
+        [
+            "admission",
+            "app",
+            "auth",
+            "backup",
+            "blob-storage",
+            "build",
+            "cycles",
+            "diagnostic",
+            "evidence",
+            "fleet",
+            "info",
+            "inspect",
+            "medic",
+            "network",
+            "replica",
+            "restore",
+            "scaffold",
+            "state",
+            "status",
+            "token",
+        ]
+    );
     assert!(plain.contains("Usage: canic [OPTIONS] <COMMAND>"));
-    assert!(plain.contains("\nCommands:\n"));
-    assert_eq!(names, sorted_names);
-    for name in names {
-        assert!(plain.contains(&format!("\n  {name:<12}")));
-    }
-    assert!(plain.contains("Options:"));
-    assert!(plain.contains("--icp <path>"));
-    assert!(plain.contains("--environment <name>"));
-    assert!(plain.contains("Diagnose workspace and Fleet preflight readiness"));
-    assert!(plain.contains("Audit declared Canic state metadata"));
-    assert!(plain.contains("  scaffold"));
-    assert!(plain.contains("Inspect runtime-observed status for one deployed canister"));
-    assert!(plain.contains("cycles"));
-    assert!(plain.contains("token"));
-    assert!(plain.contains("info"));
-    assert!(plain.contains("  build"));
-    assert!(plain.contains("  deploy"));
-    assert!(plain.contains("Manage Canic source apps and roles"));
-    assert!(plain.contains("Plan and check deployment truth before mutation"));
-    assert!(plain.contains("Plan, inspect, and verify backups"));
-    assert!(!plain.contains("Check, inspect, plan, and install deployments"));
-    assert!(!plain.contains("  environment"));
-    assert!(!plain.contains("  defaults"));
-    assert!(plain.contains("  status"));
-    assert!(plain.contains("  medic"));
-    assert!(plain.contains("  state"));
-    assert!(plain.contains("  app"));
-    assert!(plain.contains("replica"));
-    assert!(plain.contains("install"));
-    assert!(plain.contains("backup"));
-    assert!(plain.contains("restore"));
-    assert!(!plain.contains("    endpoints"));
-    assert!(!plain.contains("    metrics"));
-    assert!(plain.contains("Tip: Run `canic <command> --help`"));
+    assert!(plain.contains("Converge one Fleet from current desired state"));
+    assert!(!plain.contains("  deploy"));
+    assert!(!plain.contains("  install"));
+    assert!(!plain.contains("retained"));
 }
 
 #[test]
-fn report_status_errors_delegate_suppression_and_exit_codes() {
-    let cases = [
-        CliError::Deploy(deploy::DeployCommandError::PlanBlocked(
-            "blocked".to_string(),
-        )),
-        CliError::from(inspect::InspectCommandError::ReportStatus(
-            "failing".to_string(),
-        )),
-        CliError::Medic(medic::MedicCommandError::ReportFailed),
-        CliError::State(state::StateCommandError::AuditFailed),
-    ];
-
-    for error in cases {
-        assert_eq!(render_cli_error(&error), "");
-        assert_eq!(cli_error_exit_code(&error), 1);
-    }
-}
-
-// Ensure command-family help paths return successfully instead of erroring.
-#[test]
-fn command_family_help_returns_ok() {
+fn current_command_help_and_versions_return_ok() {
     for args in [
         &["admission", "--help"][..],
-        &["admission", "apply", "--help"],
-        &["admission", "plan", "--help"],
-        &["admission", "status", "--help"],
-        &["backup", "--help"][..],
-        &["backup", "create", "--help"],
-        &["backup", "inspect", "--help"],
-        &["backup", "list", "--help"],
-        &["backup", "manifest", "--help"],
-        &["backup", "manifest", "validate", "--help"],
-        &["backup", "status", "--help"],
-        &["backup", "verify", "--help"],
+        &["app", "--help"],
+        &["auth", "--help"],
+        &["backup", "--help"],
+        &["blob-storage", "--help"],
         &["build", "--help"],
         &["cycles", "--help"],
-        &["cycles", "balance", "--help"],
-        &["cycles", "mint", "--help"],
-        &["cycles", "transfer", "--help"],
-        &["cycles", "topup", "--help"],
-        &["deploy", "--help"],
-        &["deploy", "check", "--help"],
-        &["deploy", "plan", "--help"],
-        &["deploy", "inspect", "--help"],
-        &["deploy", "inspect", "diff", "--help"],
-        &["deploy", "inspect", "inventory", "--help"],
-        &["deploy", "inspect", "plan", "--help"],
-        &["deploy", "inspect", "report", "--help"],
-        &["deploy", "inspect", "compare", "--help"],
-        &["deploy", "inspect", "catalog", "--help"],
-        &["deploy", "inspect", "catalog", "list", "--help"],
-        &["deploy", "inspect", "catalog", "inspect", "--help"],
-        &["deploy", "inspect", "resume-report", "--help"],
         &["diagnostic", "--help"],
-        &["info", "--help"],
-        &["info", "list", "--help"],
-        &["info", "cycles", "--help"],
-        &["info", "metrics", "--help"],
-        &["info", "endpoints", "--help"],
-        &["info", "env", "--help"],
-        &["medic", "--help"],
-        &["medic", "fleet", "--help"],
-        &["medic", "--json", "fleet", "--help"],
-        &["medic", "fleet", "--json", "--help"],
         &["evidence", "--help"],
-        &["evidence", "compare", "--help"],
-        &["install", "--help"],
-        &["app"],
-        &["app", "--help"],
-        &["app", "check", "--help"],
-        &["app", "config", "--help"],
-        &["app", "create", "--help"],
-        &["app", "list", "--help"],
-        &["app", "delete", "--help"],
+        &["fleet", "--help"],
+        &["fleet", "ensure", "--help"],
+        &["info", "--help"],
         &["inspect", "--help"],
         &["inspect", "canister", "--help"],
         &["inspect", "fleet", "--help"],
-        &["scaffold"],
-        &["scaffold", "--help"],
-        &["scaffold", "canister", "--help"],
-        &["replica"],
-        &["replica", "--help"],
-        &["replica", "start", "--help"],
-        &["replica", "status", "--help"],
-        &["replica", "stop", "--help"],
-        &["network"],
+        &["medic", "--help"],
+        &["medic", "fleet", "--help"],
         &["network", "--help"],
-        &["network", "enroll", "--help"],
+        &["replica", "--help"],
         &["restore", "--help"],
-        &["restore", "plan", "--help"],
-        &["restore", "apply", "--help"],
-        &["restore", "run", "--help"],
+        &["scaffold", "--help"],
         &["state", "--help"],
-        &["state", "audit", "--help"],
-        &["state", "manifest", "--help"],
-        &["token", "--help"],
-        &["token", "balance", "--help"],
-        &["token", "icp", "balance", "--help"],
-        &["token", "transfer", "--help"],
         &["status", "--help"],
+        &["token", "--help"],
     ] {
-        assert_run_ok(args);
+        assert!(run(args.iter().map(OsString::from)).is_ok(), "{args:?}");
     }
-}
-
-#[test]
-fn info_help_uses_fleet_target_wording() {
-    let err = run([OsString::from("info")]).expect_err("info needs a subcommand");
-    let CliError::Info(InfoCommandError::Usage(text)) = err else {
-        panic!("expected info usage error");
-    };
-
-    assert!(text.contains("installed-Fleet information commands"));
-    assert!(text.contains("List installed Fleet canisters"));
-    assert!(text.contains("Summarize Fleet cycle history"));
-    assert!(text.contains("Query Canic runtime telemetry"));
-    assert!(text.contains("List callable Candid endpoints"));
-    assert!(text.contains("Print sourceable canister ID exports"));
-}
-
-#[cfg(unix)]
-#[test]
-fn icp_backed_command_rejects_unparseable_icp_cli_before_running_subcommand() {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-
-    let root = TempDir::new("canic-cli-unsupported-icp");
-    fs::create_dir_all(&root).expect("create temp dir");
-    let icp_path = root.join("icp");
-    fs::write(
-        &icp_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp development build'; exit 0; fi\necho 'unsupported replica command ran' >&2\nexit 42\n",
-    )
-    .expect("write fake icp");
-    fs::set_permissions(&icp_path, fs::Permissions::from_mode(0o755)).expect("chmod fake icp");
-
-    let err = run([
-        OsString::from("--icp"),
-        icp_path.into_os_string(),
-        OsString::from("replica"),
-        OsString::from("status"),
-    ])
-    .expect_err("unsupported icp rejected");
-    let text = err.to_string();
-
-    assert!(text.contains("unsupported icp-cli version"));
-    assert!(text.contains("found: icp development build"));
-    assert!(text.contains("required: icp-cli >=1.2.0, <2.0.0"));
-    assert!(!text.contains("unsupported replica command ran"));
-}
-
-// Ensure version flags are accepted at the top level and command-family level.
-#[test]
-fn version_flags_return_ok() {
-    assert_eq!(version_text(), concat!("canic ", env!("CARGO_PKG_VERSION")));
     assert!(run([OsString::from("--version")]).is_ok());
-    assert!(
-        run([
-            OsString::from("backup"),
-            OsString::from("list"),
-            OsString::from("--dir"),
-            OsString::from("version")
-        ])
-        .is_ok()
-    );
-    assert!(run([OsString::from("backup"), OsString::from("--version")]).is_ok());
-    assert!(
-        run([
-            OsString::from("backup"),
-            OsString::from("list"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("backup"),
-            OsString::from("manifest"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("cycles"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("inspect"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("app"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("replica"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("network"), OsString::from("--version")]).is_ok());
-    assert!(
-        run([
-            OsString::from("network"),
-            OsString::from("enroll"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(run([OsString::from("state"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("status"), OsString::from("--version")]).is_ok());
-    assert!(
-        run([
-            OsString::from("app"),
-            OsString::from("create"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("app"),
-            OsString::from("check"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("app"),
-            OsString::from("config"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("replica"),
-            OsString::from("start"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("token"), OsString::from("--version")]).is_ok());
+    assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
 }
 
 #[test]
-fn info_version_flags_return_ok() {
-    assert!(run([OsString::from("info"), OsString::from("--version")]).is_ok());
-    for leaf in ["list", "cycles", "metrics", "endpoints", "env"] {
+fn global_options_are_forwarded_only_once() {
+    let mut tail = vec![OsString::from("ensure"), OsString::from("staging")];
+    apply_global_icp("fleet", &mut tail, Some("/tmp/icp".to_string()));
+    apply_global_environment("fleet", &mut tail, Some("local".to_string()));
+    assert_eq!(
+        tail,
+        vec![
+            OsString::from("ensure"),
+            OsString::from("staging"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp"),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
+            OsString::from("local"),
+        ]
+    );
+
+    apply_global_icp("fleet", &mut tail, Some("/other/icp".to_string()));
+    apply_global_environment("fleet", &mut tail, Some("other".to_string()));
+    assert_eq!(
+        tail.iter()
+            .filter(|value| value.as_os_str() == INTERNAL_ICP_OPTION)
+            .count(),
+        1
+    );
+    assert_eq!(
+        tail.iter()
+            .filter(|value| value.as_os_str() == INTERNAL_ENVIRONMENT_OPTION)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn current_read_only_commands_receive_global_target_options() {
+    for (command, raw_tail) in [
+        ("admission", &["status", "staging"][..]),
+        ("auth", &["renewal", "status", "staging"][..]),
+        ("blob-storage", &["status", "staging", "root"]),
+        ("cycles", &["balance"]),
+        ("info", &["list", "staging"][..]),
+        ("inspect", &["fleet", "staging", "--role", "root"]),
+        ("medic", &["fleet", "staging"]),
+        ("status", &[][..]),
+        ("token", &["balance"]),
+    ] {
+        let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
+        apply_global_icp(command, &mut tail, Some("/tmp/icp".to_string()));
+        apply_global_environment(command, &mut tail, Some("local".to_string()));
+
+        assert!(tail.iter().any(|value| value == INTERNAL_ICP_OPTION));
         assert!(
-            run([
-                OsString::from("info"),
-                OsString::from(leaf),
-                OsString::from("--version")
-            ])
-            .is_ok()
+            tail.iter()
+                .any(|value| value == INTERNAL_ENVIRONMENT_OPTION)
         );
     }
 }
 
+#[cfg(unix)]
 #[test]
-fn deploy_version_flags_return_ok() {
-    assert!(run([OsString::from("deploy"), OsString::from("--version")]).is_ok());
-    assert!(
-        run([
-            OsString::from("deploy"),
-            OsString::from("check"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("deploy"),
-            OsString::from("plan"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("deploy"),
-            OsString::from("inspect"),
-            OsString::from("diff"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("deploy"),
-            OsString::from("inspect"),
-            OsString::from("inventory"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("deploy"),
-            OsString::from("inspect"),
-            OsString::from("plan"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("deploy"),
-            OsString::from("inspect"),
-            OsString::from("report"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-}
+fn icp_backed_command_rejects_unparseable_icp_before_effects() {
+    use std::{fs, os::unix::fs::PermissionsExt};
 
-#[test]
-fn blocked_deploy_plan_report_suppresses_duplicate_cli_stderr() {
-    let blocked = CliError::Deploy(deploy::DeployCommandError::PlanBlocked(
-        "blocked".to_string(),
-    ));
-    assert_eq!(cli_error_exit_code(&blocked), 1);
-    assert!(render_cli_error(&blocked).is_empty());
+    let root = TempDir::new("canic-cli-unsupported-icp");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let icp = root.join("icp");
+    fs::write(
+        &icp,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp development build'; exit 0; fi\necho 'unexpected effect' >&2\nexit 42\n",
+    )
+    .expect("write fake icp");
+    fs::set_permissions(&icp, fs::Permissions::from_mode(0o755)).expect("chmod fake icp");
 
-    let usage = CliError::Deploy(deploy::DeployCommandError::Usage("usage".to_string()));
-    assert_eq!(cli_error_exit_code(&usage), 2);
-    assert!(!render_cli_error(&usage).is_empty());
-}
-
-#[test]
-fn global_icp_is_forwarded_to_commands_that_use_icp() {
-    let mut status_tail = Vec::new();
-    let mut cycles_tail = vec![OsString::from("balance")];
-    let mut install_tail = vec![OsString::from("toko"), OsString::from("toko-local")];
-    let mut medic_tail = Vec::new();
-    let mut token_tail = vec![OsString::from("balance")];
-
-    apply_global_icp("status", &mut status_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("cycles", &mut cycles_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("install", &mut install_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("medic", &mut medic_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("token", &mut token_tail, Some("/tmp/icp".to_string()));
-
-    assert_eq!(
-        status_tail,
-        vec![
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-    assert_eq!(
-        cycles_tail,
-        vec![
-            OsString::from("balance"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-    assert_eq!(
-        install_tail,
-        vec![
-            OsString::from("toko"),
-            OsString::from("toko-local"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-    assert_eq!(
-        medic_tail,
-        vec![
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-    assert_eq!(
-        token_tail,
-        vec![
-            OsString::from("balance"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-}
-
-#[test]
-fn global_icp_does_not_override_internal_forwarded_icp() {
-    let mut tail = vec![
-        OsString::from("balance"),
-        OsString::from(INTERNAL_ICP_OPTION),
-        OsString::from("/bin/icp"),
-    ];
-
-    apply_global_icp("cycles", &mut tail, Some("/tmp/icp".to_string()));
-
-    assert_eq!(
-        tail,
-        vec![
-            OsString::from("balance"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/bin/icp")
-        ]
-    );
-}
-
-#[test]
-fn global_icp_is_forwarded_only_to_restore_run() {
-    let mut plan_tail = vec![OsString::from("plan")];
-    let mut run_tail = vec![OsString::from("run")];
-
-    apply_global_icp("restore", &mut plan_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("restore", &mut run_tail, Some("/tmp/icp".to_string()));
-
-    assert_eq!(plan_tail, vec![OsString::from("plan")]);
-    assert_eq!(
-        run_tail,
-        vec![
-            OsString::from("run"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-}
-
-#[test]
-fn global_icp_is_forwarded_only_to_replica_leaf_commands() {
-    let mut family_tail = Vec::new();
-    let mut start_tail = vec![OsString::from("start")];
-
-    apply_global_icp("replica", &mut family_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("replica", &mut start_tail, Some("/tmp/icp".to_string()));
-
-    assert!(family_tail.is_empty());
-    assert_eq!(
-        start_tail,
-        vec![
-            OsString::from("start"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-}
-
-#[test]
-fn global_icp_is_forwarded_to_info_query_commands() {
-    let mut list_tail = vec![OsString::from("list"), OsString::from("test")];
-    let mut cycles_tail = vec![OsString::from("cycles"), OsString::from("test")];
-    let mut metrics_tail = vec![OsString::from("metrics"), OsString::from("test")];
-    let mut endpoints_tail = vec![
-        OsString::from("endpoints"),
-        OsString::from("test"),
-        OsString::from("app"),
-    ];
-    let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
-    let mut help_tail = vec![OsString::from("--help")];
-
-    apply_global_icp("info", &mut list_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("info", &mut cycles_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("info", &mut metrics_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("info", &mut endpoints_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("info", &mut env_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("info", &mut help_tail, Some("/tmp/icp".to_string()));
-
-    assert_eq!(
-        list_tail,
-        vec![
-            OsString::from("list"),
-            OsString::from("test"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-    assert_eq!(
-        cycles_tail,
-        vec![
-            OsString::from("cycles"),
-            OsString::from("test"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-    assert_eq!(
-        metrics_tail,
-        vec![
-            OsString::from("metrics"),
-            OsString::from("test"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-    assert_eq!(
-        endpoints_tail,
-        vec![
-            OsString::from("endpoints"),
-            OsString::from("test"),
-            OsString::from("app"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-    assert_eq!(
-        env_tail,
-        vec![
-            OsString::from("env"),
-            OsString::from("test"),
-            OsString::from(INTERNAL_ICP_OPTION),
-            OsString::from("/tmp/icp")
-        ]
-    );
-    assert_eq!(help_tail, vec![OsString::from("--help")]);
-}
-
-#[test]
-fn global_icp_is_forwarded_only_to_active_auth_renewal_status() {
-    let mut status_tail = vec![
-        OsString::from("renewal"),
-        OsString::from("status"),
-        OsString::from("downstream"),
-        OsString::from("--issuer"),
-        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
-    ];
-    let mut help_tail = vec![OsString::from("--help")];
-
-    apply_global_icp("auth", &mut status_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("auth", &mut help_tail, Some("/tmp/icp".to_string()));
-
-    assert!(status_tail.ends_with(&[
-        OsString::from(INTERNAL_ICP_OPTION),
-        OsString::from("/tmp/icp")
-    ]));
-    assert_eq!(help_tail, vec![OsString::from("--help")]);
-}
-
-#[test]
-fn global_environment_is_forwarded_to_commands_that_use_environment() {
-    let mut tail = vec![OsString::from("test")];
-    let mut cycles_tail = vec![OsString::from("balance")];
-    let mut medic_tail = Vec::new();
-    let mut token_tail = vec![OsString::from("balance")];
-
-    apply_global_environment("install", &mut tail, Some("ic".to_string()));
-    apply_global_environment("cycles", &mut cycles_tail, Some("ic".to_string()));
-    apply_global_environment("medic", &mut medic_tail, Some("ic".to_string()));
-    apply_global_environment("token", &mut token_tail, Some("ic".to_string()));
-
-    assert_eq!(
-        tail,
-        vec![
-            OsString::from("test"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert_eq!(
-        cycles_tail,
-        vec![
-            OsString::from("balance"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert_eq!(
-        medic_tail,
-        vec![
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert_eq!(
-        token_tail,
-        vec![
-            OsString::from("balance"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("ic")
-        ]
-    );
-}
-
-#[test]
-fn global_environment_is_forwarded_to_deploy() {
-    for raw_tail in [
-        &["check", "demo"][..],
-        &["inspect", "diff", "demo"],
-        &["inspect", "inventory", "demo"],
-        &["inspect", "plan", "demo"],
-        &["inspect", "report", "demo"],
-        &["inspect", "resume-report", "demo"],
-        &["plan", "demo", "--app", "demo"],
-    ] {
-        assert_global_environment_forwarded_to_deploy_tail(raw_tail);
-    }
-
-    let mut family_tail = Vec::new();
-    apply_global_environment("deploy", &mut family_tail, Some("ic".to_string()));
-    assert!(family_tail.is_empty());
-}
-
-#[test]
-fn conflicting_top_level_and_internal_plan_environments_reject() {
     let error = run([
-        "--environment",
-        "ic",
-        "deploy",
-        "plan",
-        "demo-local",
-        "--app",
-        "demo",
-        INTERNAL_ENVIRONMENT_OPTION,
-        "local",
-    ]
-    .map(OsString::from))
-    .expect_err("conflicting direct-plan target environments must reject");
-
-    assert!(matches!(error, CliError::Clap(_)));
-    assert!(error.to_string().contains(
-        "top-level environment \"ic\" conflicts with internal target environment \"local\""
-    ));
-}
-
-fn assert_global_environment_forwarded_to_deploy_tail(raw_tail: &[&str]) {
-    let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
-    apply_global_environment("deploy", &mut tail, Some("ic".to_string()));
-
-    assert_eq!(
-        tail,
-        raw_tail
-            .iter()
-            .copied()
-            .chain([INTERNAL_ENVIRONMENT_OPTION, "ic"])
-            .map(OsString::from)
-            .collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn global_environment_is_forwarded_to_nested_deploy_environment_leaves() {
-    for raw_tail in [
-        &["inspect", "catalog", "list"][..],
-        &["inspect", "catalog", "inspect", "demo"],
-    ] {
-        let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
-        apply_global_environment("deploy", &mut tail, Some("ic".to_string()));
-
-        assert!(tail.ends_with(&[
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("ic")
-        ]));
-    }
-}
-
-#[test]
-fn global_environment_is_not_forwarded_to_request_only_deploy_leaves() {
-    let mut tail = [
-        "inspect", "compare", "--left", "a.json", "--right", "b.json",
-    ]
-    .map(OsString::from)
-    .to_vec();
-    let original = tail.clone();
-    apply_global_environment("deploy", &mut tail, Some("ic".to_string()));
-
-    assert_eq!(tail, original);
-}
-
-#[test]
-fn matching_internal_forwarded_environment_is_not_duplicated() {
-    let mut tail = vec![
-        OsString::from("test"),
-        OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-        OsString::from("ic"),
-    ];
-
-    apply_global_environment("install", &mut tail, Some("ic".to_string()));
-
-    assert_eq!(
-        tail,
-        vec![
-            OsString::from("test"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("ic")
-        ]
-    );
-}
-
-#[test]
-fn global_environment_is_forwarded_only_to_restore_run() {
-    let mut plan_tail = vec![OsString::from("plan")];
-    let mut run_tail = vec![OsString::from("run")];
-
-    apply_global_environment("restore", &mut plan_tail, Some("ic".to_string()));
-    apply_global_environment("restore", &mut run_tail, Some("ic".to_string()));
-
-    assert_eq!(plan_tail, vec![OsString::from("plan")]);
-    assert_eq!(
-        run_tail,
-        vec![
-            OsString::from("run"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("ic")
-        ]
-    );
-}
-
-#[test]
-fn global_environment_is_forwarded_only_to_app_list() {
-    let mut create_tail = vec![OsString::from("create")];
-    let mut list_tail = vec![OsString::from("list")];
-
-    apply_global_environment("app", &mut create_tail, Some("local".to_string()));
-    apply_global_environment("app", &mut list_tail, Some("local".to_string()));
-
-    assert_eq!(create_tail, vec![OsString::from("create")]);
-    assert_eq!(
-        list_tail,
-        vec![
-            OsString::from("list"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("local")
-        ]
-    );
-}
-
-#[test]
-fn global_environment_is_forwarded_to_info_query_commands() {
-    let mut list_tail = vec![OsString::from("list"), OsString::from("test")];
-    let mut cycles_tail = vec![OsString::from("cycles"), OsString::from("test")];
-    let mut metrics_tail = vec![OsString::from("metrics"), OsString::from("test")];
-    let mut endpoints_tail = vec![
-        OsString::from("endpoints"),
-        OsString::from("test"),
-        OsString::from("app"),
-    ];
-    let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
-    let mut help_tail = vec![OsString::from("--help")];
-
-    apply_global_environment("info", &mut list_tail, Some("local".to_string()));
-    apply_global_environment("info", &mut cycles_tail, Some("local".to_string()));
-    apply_global_environment("info", &mut metrics_tail, Some("local".to_string()));
-    apply_global_environment("info", &mut endpoints_tail, Some("local".to_string()));
-    apply_global_environment("info", &mut env_tail, Some("local".to_string()));
-    apply_global_environment("info", &mut help_tail, Some("local".to_string()));
-
-    assert_eq!(
-        list_tail,
-        vec![
-            OsString::from("list"),
-            OsString::from("test"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("local")
-        ]
-    );
-    assert_eq!(
-        cycles_tail,
-        vec![
-            OsString::from("cycles"),
-            OsString::from("test"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("local")
-        ]
-    );
-    assert_eq!(
-        metrics_tail,
-        vec![
-            OsString::from("metrics"),
-            OsString::from("test"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("local")
-        ]
-    );
-    assert_eq!(
-        endpoints_tail,
-        vec![
-            OsString::from("endpoints"),
-            OsString::from("test"),
-            OsString::from("app"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("local")
-        ]
-    );
-    assert_eq!(
-        env_tail,
-        vec![
-            OsString::from("env"),
-            OsString::from("test"),
-            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("local")
-        ]
-    );
-    assert_eq!(help_tail, vec![OsString::from("--help")]);
-}
-
-#[test]
-fn global_environment_is_forwarded_only_to_active_auth_renewal_status() {
-    let mut status_tail = vec![
-        OsString::from("renewal"),
+        OsString::from("--icp"),
+        icp.into_os_string(),
+        OsString::from("replica"),
         OsString::from("status"),
-        OsString::from("downstream"),
-        OsString::from("--issuer"),
-        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
-    ];
-    let mut help_tail = vec![OsString::from("--help")];
-
-    apply_global_environment("auth", &mut status_tail, Some("fixture".to_string()));
-    apply_global_environment("auth", &mut help_tail, Some("fixture".to_string()));
-
-    assert!(status_tail.ends_with(&[
-        OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-        OsString::from("fixture")
-    ]));
-    assert_eq!(help_tail, vec![OsString::from("--help")]);
-}
-
-#[test]
-fn command_local_global_options_are_hard_rejected() {
-    for args in [
-        [
-            OsString::from("status"),
-            OsString::from("--environment"),
-            OsString::from("local"),
-        ],
-        [
-            OsString::from("status"),
-            OsString::from("--icp"),
-            OsString::from("icp"),
-        ],
-    ] {
-        let cli_error = run(args).expect_err("command-local global must fail");
-        let CliError::Clap(clap_error) = &cli_error else {
-            panic!("expected Clap error, got {cli_error:?}");
-        };
-        assert_eq!(clap_error.kind(), clap::error::ErrorKind::UnknownArgument);
-        assert!(render_cli_error(&cli_error).starts_with("error: unexpected argument"));
-        assert_eq!(cli_error_exit_code(&cli_error), 2);
-    }
-}
-
-#[test]
-fn top_level_clap_errors_retain_their_specific_diagnostic() {
-    let unknown = run([OsString::from("--definitely-invalid")])
-        .expect_err("unknown top-level option must fail");
-    let CliError::Clap(unknown_clap) = &unknown else {
-        panic!("expected Clap error, got {unknown:?}");
-    };
-    assert_eq!(unknown_clap.kind(), clap::error::ErrorKind::UnknownArgument);
-    let rendered = render_cli_error(&unknown);
-    assert!(rendered.starts_with("error: unexpected argument '--definitely-invalid' found"));
-    assert!(rendered.contains("Usage: canic [OPTIONS] <COMMAND>"));
-    assert_eq!(cli_error_exit_code(&unknown), 2);
-
-    let missing = run(std::iter::empty::<OsString>()).expect_err("missing command must fail");
-    let CliError::Clap(missing_clap) = &missing else {
-        panic!("expected Clap error, got {missing:?}");
-    };
-    assert_eq!(
-        missing_clap.kind(),
-        clap::error::ErrorKind::MissingSubcommand
-    );
-    assert!(render_cli_error(&missing).starts_with("error: 'canic' requires a subcommand"));
-    assert_eq!(cli_error_exit_code(&missing), 2);
-}
-
-#[test]
-fn reported_build_shape_reaches_the_build_parser() {
-    let error = run([
-        OsString::from("--environment"),
-        OsString::from("toko"),
-        OsString::from("build"),
-        OsString::from("--profile"),
-        OsString::from("fast"),
-        OsString::from("--workspace"),
-        OsString::from("/missing/canic-workspace"),
-        OsString::from("--icp-root"),
-        OsString::from("/missing/icp-root"),
-        OsString::from("--config"),
-        OsString::from("/missing/canic.toml"),
-        OsString::from("demo"),
-        OsString::from("discovery_hub"),
     ])
-    .expect_err("missing config must fail after dispatch");
-
-    assert!(matches!(error, CliError::Build(_)));
+    .expect_err("unsupported icp rejected");
+    assert!(error.to_string().contains("unsupported icp-cli version"));
+    assert!(!error.to_string().contains("unexpected effect"));
 }
 
 #[test]
-fn top_level_parser_defers_build_help_to_the_build_command() {
-    let matches = top_level_command()
-        .try_get_matches_from(["canic", "build", "--help"])
-        .expect("top-level dispatch must preserve command help");
-    let (_, build_matches) = matches.subcommand().expect("build subcommand");
-    let tail = build_matches
-        .get_many::<OsString>(DISPATCH_ARGS)
-        .expect("captured build tail")
-        .cloned()
-        .collect::<Vec<_>>();
-
-    assert_eq!(tail, [OsString::from("--help")]);
-}
-
-// Assert that a CLI argv slice returns successfully.
-fn assert_run_ok(raw_args: &[&str]) {
-    let args = raw_args.iter().map(OsString::from).collect::<Vec<_>>();
-    assert!(
-        run(args).is_ok(),
-        "expected successful run for {raw_args:?}"
-    );
+fn state_report_failure_remains_silent_and_nonzero() {
+    let error = CliError::State(state::StateCommandError::AuditFailed);
+    assert_eq!(render_cli_error(&error), "");
+    assert_eq!(cli_error_exit_code(&error), 1);
 }

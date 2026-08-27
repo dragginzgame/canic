@@ -1,174 +1,133 @@
 # canic-cli
 
-`canic-cli` publishes the `canic` operator binary. It is the command-line
-surface for App setup, role lifecycle inspection, artifact builds, stable
-evidence output, passive Fleet catalog inspection, policy gates, local Fleet
-installs, snapshots, backup validation, and guarded restores.
+`canic-cli` publishes the `canic` operator binary. The maintained command
+families are:
 
-The compact operator path is deliberately explicit: create or select an App,
-scaffold and attach roles, build attached roles with provenance, check saved
-deployment evidence, gate that evidence with policy, and inspect known Fleets
-in the selected canonical network catalog. Backup and restore commands remain available for
-snapshot workflows; where they perform live snapshot or restore mutations,
-Canic owns topology selection, manifests, journals, readiness checks, restore
-ordering, and runner state around the underlying `icp` calls.
+```text
+admission
+app
+auth
+backup
+blob-storage
+build
+cycles
+diagnostic
+evidence
+fleet
+info
+inspect
+medic
+network
+replica
+restore
+scaffold
+state
+status
+token
+```
 
-`canic-cli` intentionally keeps a narrow Rust library surface: external callers
-should treat the installed `canic` binary as the operator interface. Host-side
-build/install/fleet helpers live in `canic-host`, and backup/restore contracts
-live in `canic-backup`.
+Commands removed by the pre-1.0 hard cut have no aliases or fallback parser.
+In particular, fresh install, deployment-plan, adoption, retained recovery,
+retained Root repair, and recovery-bundle modes are not accepted. Current
+Authority-bearing Fleet commands read only a terminal `fleet ensure` inventory
+and its exact Registry protocol bindings; they do not consult a former install
+cache. This includes `info subnets`, which requires a complete agreeing live
+Coordinator Registry and Root-summary snapshot. `cycles funding` is protected
+current status only. Its former
+install-plan-owned policy-rotation flags are not retained.
 
 ## Install
 
-Install from a checkout:
+From a checkout:
 
 ```bash
 cargo install --locked --path crates/canic-cli
 canic help
 ```
 
-Install from crates.io after a release:
+From crates.io after publication:
 
 ```bash
 cargo install --locked canic-cli --version <version>
 ```
 
-Downstream repositories should install the same `canic-cli` version as their
-`canic` crate dependency.
+Downstream workspaces should use the same `canic-cli` version as their `canic`
+crate graph. The supported ICP CLI range is documented in the root
+`INSTALLING.md`.
 
-Canic uses the installed `icp` binary for local replica, canister, snapshot,
-and restore operations. If a command reports an unsupported ICP CLI, check
-`icp --version`; `icp network update` updates the local network launcher, not
-the `icp` CLI binary. The supported version range and upgrade command are in
-the root `INSTALLING.md` guide.
+## App And Build
 
-## Compact V1 Operator Surface
-
-The maintained v1 command set keeps setup, build, evidence, policy, and local
-catalog inspection separate:
+Create an App, declare or attach exact roles, and build deterministic Wasm:
 
 ```bash
 canic app create <app>
-canic scaffold canister <app> <role>
 canic app role attach <app> <role> --component-spec <component-spec>
-canic build <app>
-canic build <app> <role> --provenance artifacts/<role>-provenance.json
-canic deploy check <fleet> --evidence-envelope
-canic deploy recovery verify <bundle-path>
-canic deploy recovery import <bundle-path> --into <icp-root>
-canic evidence gate --policy policy.toml --envelope evidence.json
-canic evidence gate --policy policy.toml --manifest evidence-manifest.json
-canic deploy inspect catalog list
-canic deploy inspect catalog inspect <fleet>
-```
-
-Catalog lookup resolves `--environment` to a canonical network identity and
-reads `.canic/networks/<network-id>/fleets/catalog.json`; it never scans the
-removed environment-scoped deployment-state path.
-
-These commands do not imply one-command deployment, controller mutation,
-artifact registry import, teardown, deployment groups, or signing. The only
-topology mutation in that list is the explicit `app role attach` command.
-
-The installed binary also includes the artifact builder:
-
-```bash
-canic build <app>
-canic build <app> <role>
-```
-
-Standalone builds default to the fast Wasm profile for iteration. Use
-`--profile release` explicitly for production-optimized artifacts. Install and
-deployment planning retain their release defaults.
-
-Canic keeps Wasm compilation non-incremental so content-addressed artifacts are
-reproducible. Child Cargo builds preserve an explicit `RUSTC_WRAPPER`; when no
-wrapper is supplied, `canic build` and `canic install` automatically use an
-executable `sccache` found on `PATH`. `make install-dev` installs and verifies
-the repository-pinned cache version.
-
-The App-only form builds the canonical Fleet Coordinator and Wasm Store first,
-then batches the configured Fleet Subnet Root with every attached Component
-role. The final output presents infrastructure before application Wasm and
-shows whether each infrastructure artifact is instantiated per Fleet or per
-Fleet Subnet. The root row reports the duration of its shared configured batch,
-not a fabricated isolated duration. The root is App-config-bound but remains
-Subnet-unbound until operator-owned Fleet input selects placement during
-install. Supplying a role keeps the focused build used by ICP custom builds and
-role-scoped provenance. Both tables show the exact resolved Cargo package
-version.
-
-To archive CI-friendly build provenance next to an artifact, request an
-explicit provenance file:
-
-```bash
 canic build <app> <role> --provenance artifacts/<role>-provenance.json
 ```
 
-For downstream repos where the Cargo workspace and ICP project root differ,
-pass paths as command options instead of exporting Canic build environment
-variables:
+Standalone builds default to the fast profile; select `--profile release` for
+production artifacts. Canic keeps Wasm compilation non-incremental and uses an
+explicit `RUSTC_WRAPPER`; when no wrapper is supplied, it discovers `sccache`
+on `PATH`.
+
+## Fleet Ensure
+
+`canic fleet ensure` is the sole Fleet installation and convergence workflow.
+The first invocation observes current state and retains a reviewed plan without
+executing Fleet mutations:
 
 ```bash
-canic build \
-  --profile fast \
-  --workspace <cargo-workspace-dir> \
-  --icp-root <icp-project-dir> \
-  --config apps/<app>/canic.toml \
-  <app> \
-  root
+canic fleet ensure staging --desired fleets/staging.toml
 ```
 
-When diagnosing whether a wrapper launched the expected executable with the
-expected argument boundaries, opt into a single invocation's pre-parse trace:
+Review `plan_sha256`, all canister dispositions, the maximum operator debit,
+fees, funding and burn, and the cycle-conservation equation. Then apply exactly
+that plan:
 
 ```bash
-CANIC_TRACE_ARGV=1 canic --environment local build demo app --profile fast
+canic fleet ensure staging \
+  --desired fleets/staging.toml \
+  --apply <plan_sha256>
 ```
 
-The trace writes the process ID, resolved executable, argument count, and every
-indexed OS argument to stderr before Clap parses anything. It prints arguments
-verbatim, so do not enable it for commands containing secrets or retain the
-output in broadly visible CI logs.
+Use `--json` for the complete stable report. The current desired-state schema
+and retirement drain contract are documented in
+[Fleet ensure](../../docs/features/operations/fleet-ensure.md).
 
-For a full local development setup, including ICP CLI, helper tools, and the
-`canic` CLI, use the root `INSTALLING.md` guide.
+The reconciler writes only current-generation state under:
 
-## Helper Tools
-
-Canic uses the configured `icp` CLI for local replica and canister operations.
-Standalone NNS inspection helpers are optional and documented outside
-`canic-cli`.
-
-For password-protected ICP CLI PEM identities, use
-`icp settings session-length <duration>` and
-`icp identity reauth <identity-name> --duration <duration>` to reduce repeated
-password prompts during operator sessions. This affects the local ICP CLI
-identity session only.
-
-## Diagnostic Lookup
-
-Look up one compact diagnostic using either its canonical uppercase form or raw
-decimal number:
-
-```bash
-canic diagnostic E123
-canic diagnostic 123
+```text
+.canic/fleet-ensure/<environment>/<fleet>/
 ```
 
-Current allocations show their label, class, semantic origin, typed
-disposition, summary and action. Retired allocations retain their former label
-and last summary; never-allocated values remain lossless and are reported as
-unknown. Labels, lowercase prefixes, signs and surrounding whitespace are not
-accepted as code input.
+It does not scan or import former plan, deployment, recovery, or bundle paths.
+An interrupted apply resumes the retained operation and reconciles the exact
+effect before retry. A terminal immediate rerun produces no mutation actions.
 
-## Local Install And Fleet Inspection Commands
+## Cycle Safety
 
-For local managed-Fleet workflows, the CLI also exposes install, inspection,
-replica, backup, and restore commands.
+The reviewed plan separates:
 
-Before Fleet planning can use a pre-existing local or connected ICP network,
-enroll its exact DER root trust anchor:
+- observed cycles in the controlled estate;
+- cycles retained in reused canisters;
+- cycles scheduled for treasury transfer;
+- Cycles Ledger and management creation fees;
+- bounded observation and update burn;
+- requested new funding and maximum operator debit;
+- create, reuse, reinstall, replace, and delete dispositions.
+
+Apply stops if the selected account cannot cover the reviewed maximum, if the
+plan or live authority drifts, or if actual debit/burn would exceed its bound.
+A material canister cannot be replaced or deleted without an exact configured
+treasury-bound drain endpoint. If the IC cannot recover those cycles safely,
+Canic leaves the canister untouched and returns a typed blocker.
+The update response alone is insufficient: stop and deletion remain fenced
+until fresh observations prove both the bounded source debit and exact
+treasury credit.
+
+## Network, Replica, Evidence And State
+
+Enroll exact network trust before connected operation:
 
 ```bash
 sha256sum ./root-key.der
@@ -177,408 +136,19 @@ canic network enroll local \
   --fingerprint <64-lowercase-hex>
 ```
 
-Canic verifies the supplied fingerprint before writing anything. The root key
-and enrollment record are the durable authority under
-`.canic/networks/<canonical-network-id>/`; the environment profile is only a
-lookup pointer. Repeating the exact enrollment is idempotent, while changing
-the anchor for an existing profile is rejected. IC mainnet environments such
-as `ic`, or named profiles backed by `ic`, use Canic's compiled pinned root key
-and are not enrolled.
+The `replica` group owns local launcher lifecycle. `evidence` validates and
+gates stable evidence documents. `state` audits declared Canic metadata. Use
+leaf `--help` output for the current grammar.
 
-Install planning requires a separate operator-owned Fleet input:
+## Diagnostics
+
+Look up one compact diagnostic by canonical code or decimal value:
 
 ```bash
-canic install test test-local \
-  --fleet-input deployments/test-local.toml \
-  --profile fast
+canic diagnostic E123
+canic diagnostic 123
 ```
 
-The input selects exact Coordinator/root Subnets, Component admissions,
-root-local limits, and creation funding. See
-[`fleet-install-input.md`](../../docs/architecture/fleet-install-input.md) for
-the bounded schema.
-
-The command builds, creates, installs, and verifies the Coordinator, every
-planned Fleet Subnet Root, each root's exact local Store, the complete active
-Registry, and every root's exact Mirror and Directories. It then provisions
-and activates configured initial Components, seals root inventory, activates
-every selected root, and publishes the terminal Coordinator-anchored Fleet
-catalog. An interruption before that boundary is not a partially successful
-Fleet; rerun the exact command for reconciliation under the retained typed
-session and journal contracts. Terminal catalog publication closes the install
-session. Later code changes must wait for and use a separately supported
-managed-upgrade workflow; they cannot reopen fresh-install recovery.
-
-An exceptional retained session whose Root was already repaired with a
-state-preserving upgrade, or still requires that exact repair, can authorize
-one plan-bound procedure:
-
-```bash
-canic install <app> <fleet> \
-  --fleet-input <path> \
-  --expected-plan-digest <sha256> \
-  --release-build <release-build-id> \
-  --preflight \
-  --adopt-retained-root-repair \
-    <root-principal>,<pool-canister-principal>=\
-<live-raw-root-wasm>,<successor-raw-root-wasm>
-```
-
-Run that preflight from the exact frozen Canic source candidate before
-versioning or publishing it. Preflight is available only for an existing
-incomplete retained install session. It executes the production installer
-through finalized-artifact selection, exact Root/Store resolution, both
-repair Candid sidecars, content-addressed Wasm/Candid retention, the
-non-operational repair candidate and a fully verified recovery-bundle
-checkpoint. It then returns before pre-root receipt publication, operational
-repair authority or any IC update. Read-only ICP observations and the named
-local candidate/bundle writes still occur, so this is not a generic dry-run.
-After the preflight succeeds and the candidate is published, omit
-`--preflight` to resume the separately authorized installation.
-
-Retained Root funding is reported separately from the remaining fresh-Fleet
-creation debit. Before a protected reinspection has established the exact
-post-burn balance, preflight reports the bounded possible debit across every
-remaining repair attempt. If the live imported asset is already in the exact
-below-threshold failed state, query-only preflight retains that observation and
-prints the raw actual, required and deficit values, the exact next request and
-maximum operator debit, the cumulative remaining authority and a digest bound
-to the retained operation, Root, pool asset and protected operator. The same
-preflight output records the current operator balance and whether it covers the
-exact next debit. It does not run an upgrade, protected reinspection or cycles
-transfer.
-
-Review the structured no-effect report after preflight:
-
-```bash
-canic deploy plan <fleet> \
-  --app <app> \
-  --fleet-input <path> \
-  --release-build <release-build-id> \
-  --json
-```
-
-Only after the named operator has enough cycles for
-`next_maximum_operator_debit_cycles`, resume with the original exact repair
-arguments plus:
-
-```text
---authorize-retained-root-repair-funding <authorization_digest>
-```
-
-The digest authorizes one exact next attempt, not the cumulative cap. Any
-changed balance or completed attempt requires another no-effect plan and a new
-digest. Insufficient balance fails before Canic retains a payment intent or
-calls the Cycles Ledger.
-
-Canic hashes both raw Wasms and resolves each deterministic adjacent `.did`
-sidecar. The historical finalized predecessor sidecar is mandatory; a
-successor build output may use `candid-extractor` only when the sidecar is
-absent and the Wasm actually exports `get_candid_pointer`. Both resolved
-sidecars must preserve the retained Root Candid exactly. Canic retains the
-Wasm and Candid bytes content-addressed before repair effects, rechecks the
-retained controller and protected Fleet authority, and either performs the
-one state-preserving Root upgrade or verifies that the exact successor is
-already live. It reads the named retained pool asset, persists one bounded
-top-up intent before any debit, re-reads the operator Ledger and target balance
-after the effect, and protectedly re-inspects the same asset until its raw
-balance satisfies the exact initial Component requirement. It then invokes the
-existing protected preparation command's status-like, non-mutating replay
-path, binds the Root's immutable Component Registry preparation authority and
-allows only valid provisioning progress before publishing a separate immutable
-repair receipt and resuming the retained install. Drift, an uncertain upgrade,
-an unrelated pool asset, or an unaccounted funding result fails closed; the
-procedure never reinstalls the Root, creates a replacement Root or adds a pool
-asset.
-
-When the exact successor and an adequately funded asset are already live,
-`reinspection_in_flight` may retain zero funding attempts and restart through
-the same protected reinspection without an operator debit. A bundle candidate
-does not become the active `manifest.json` until its complete semantic
-verification passes under the bundle lock; a rejected candidate leaves the
-previous verified manifest active. The maintained repair form requires the
-retained pool Principal, exact currently live raw Wasm and exact successor raw
-Wasm shown above, so upgrade, funding, reinspection and adoption share one
-operation authority. This exceptional surface does not edit the original
-install journal and is not a general cross-release adoption path.
-
-Once an install has finalized its release build, another fresh Fleet under the
-same ICP root can reuse those exact artifacts without running Cargo again:
-
-```bash
-canic install test test-second \
-  --fleet-input deployments/test-second.toml \
-  --release-build <release-build-id>
-```
-
-The install output prints the release-build ID. Exact interrupted retries reuse
-their recorded finalized build automatically. Explicit reuse revalidates the
-stored Canic builder version and profile, current App topology, package
-identities, manifests and bytes; it does not adopt or rebuild changed source.
-
-The following commands require a terminal installed Fleet:
-
-```bash
-canic --environment local info list test
-canic --environment local info env test
-```
-
-`canic info list <name>` verifies the selected Fleet's live Coordinator
-Registry and walks the bounded canister trees owned by every current Root.
-Use `--subtree <name-or-principal>` to print one application subtree with that
-node as the rendered root. Removed Roots and unbound or contradictory child
-records are never projected into the result.
-`canic info env <name>` prints sourceable `CANIC_<ROLE>` canister ID exports
-for scripts and local shell helpers, including the exact
-`CANIC_FLEET_COORDINATOR`; repeated roles such as multiple Roots receive
-deterministic numeric suffixes.
-Live list sources query `canic_status(Readiness)` for each listed canister and
-include a `READY` column with `yes`, `no`, or `error`, plus a `CYCLES` balance
-column.
-
-`canic info subnets <fleet> [--json]` resolves the terminal
-Coordinator-anchored Fleet catalog, validates current Registry/root evidence,
-and reports exact Fleet-owned Canister counts grouped by physical Subnet. It
-fails without output if any non-removed root is unreachable or contradictory,
-and it never infers counts from an incomplete install journal.
-
-The `canic install <app> <fleet> --fleet-input <path>` surface keeps the source
-App under `apps/<app>/canic.toml`, the installed Fleet label, and concrete
-operator deployment policy separate. Canic has no third Project identity: an
-App is source/configuration, a Fleet is one installed App instance, and a
-workspace is the local checkout containing `apps/`, `icp.yaml`, `.icp/`, and
-`.canic/`.
-
-The selected install config must include an App source identity:
-
-```toml
-[app]
-name = "test"
-```
-
-Only complete activation publishes a terminal Fleet row
-under `.canic/networks/<canonical-network-id>/fleets/catalog.json`. That row is
-Coordinator-anchored and binds the Fleet ID, Fleet name, App, canonical
-network, and verified terminal evidence. `canic app config <name>` shows
-source intent; live `canic info` commands resolve deployment truth from the
-terminal Fleet. Commands use environment `local` unless you pass
-`--environment <name>`.
-
-The local ICP CLI replica does not persist canister state across stop/start.
-If `canic status` reports a local fleet as `lost`, reinstall the fleet before
-running backup or restore commands against that local environment. `canic status`
-and `canic replica status` show the configured local gateway port; use
-`canic replica start --port <port>` to require this workspace's `icp.yaml`
-`gateway.port` to match before starting. Use `canic replica status --json` when
-scripts need the structured ICP CLI local-network status payload.
-App configs live under the workspace-root `apps/` directory. Commands
-launched from nested directories discover that outer workspace root and keep
-ICP config plus `.icp/` and `.canic/` state there.
-
-List saved App configs:
-
-```bash
-canic app list
-canic app delete demo
-canic --environment ic app list
-```
-
-Create a new Fleet source App, then provide its separate deployment input:
-
-```bash
-canic app create my_app --yes
-canic install my_app my-local --fleet-input deployments/my-local.toml
-```
-
-Diagnose workspace setup, or explicitly diagnose one installed Fleet:
-
-```bash
-canic medic
-canic medic fleet test
-```
-
-For downstream repositories that combine Canic commands with raw `icp` calls on a
-named local target such as `academic`, use the
-[local academic fleet runbook](../../docs/getting-started/local-academic-fleet.md).
-It covers target selection, canister ID helper naming, sourced shell helpers,
-sharded calls, metrics checks, and install versus upgrade decisions.
-
-Run command-specific help when you need exact flags:
-
-```bash
-canic <command> help
-```
-
-The installed CLI version is visible in top-level help and from `canic
---version`. The version flag is accepted at any command depth, so `canic backup
-verify --version` reports the binary version instead of running the command.
-
-## Backup Happy Path
-
-Create a topology-aware backup:
-
-```bash
-canic backup create test
-canic backup list
-```
-
-Non-dry-run captures recompute the selected topology immediately before
-snapshot creation and fail if the topology hash changed since discovery. This
-keeps subtree backups from silently crossing a registry change.
-
-ICP CLI creates snapshots only for stopped canisters. Canic stops selected
-members, creates snapshots, restarts them, downloads artifacts, verifies
-checksums, and writes manifest/journal state under the backup directory.
-
-Verify the captured backup directory:
-
-```bash
-canic backup verify 1
-```
-
-Verification is no-mutation. It validates the manifest, journal agreement,
-durable artifact paths, and checksums before restore planning.
-
-## Backup Checks
-
-Use these commands after capture and before restore planning:
-
-- `canic backup manifest validate` checks manifest shape, topology hash inputs,
-  and backup units.
-- `canic backup status` summarizes resumable download journal progress.
-- `canic backup verify` validates the backup layout and artifact checksums.
-
-For the normal operator restore path, prepare the selected backup row once,
-inspect the prepared journal, then advance it with the guarded runner:
-
-```bash
-canic restore prepare 1 --require-verified --require-restore-ready
-canic restore status 1 --require-no-attention
-canic restore run 1 --dry-run
-canic restore run 1 --execute --max-steps 1 --require-no-attention
-canic restore status 1 --require-complete --require-no-attention
-```
-
-`restore prepare` writes `restore-plan.json` and
-`restore-apply-journal.json` inside the selected backup directory, so later
-restore commands can use the same backup row number from `canic backup list`.
-Preparing the same exact pristine documents again is idempotent. Canic never
-replaces a different plan or a journal that already contains recovery
-progress; inspect and resume that journal instead.
-For deeper no-mutation checks, use `canic restore plan`,
-`canic restore apply --dry-run`, and `canic restore run --dry-run` directly.
-
-## Restore Planning
-
-Restore starts from a manifest, not from loose snapshot files:
-
-```bash
-canic restore plan \
-  1 \
-  --mapping restore-map.json \
-  --out restore-plan.json \
-  --require-verified \
-  --require-restore-ready
-```
-
-Planning performs no mutations. It validates mapping, identity mode, snapshot
-provenance, verification coverage, artifact checksums when requested, and
-restore ordering. Plans include operation counts and parent-before-child
-ordering metadata so operators can see the intended restore sequence before any
-target is touched.
-
-Render operations and create an apply journal:
-
-```bash
-canic restore prepare \
-  1 \
-  --mapping restore-map.json \
-  --require-verified \
-  --require-restore-ready
-```
-
-`restore prepare` is a convenience wrapper around verified planning and apply
-journal creation. `restore apply` still exists for explicit plan-file
-workflows and currently requires `--dry-run`; direct mutation through that
-command is intentionally disabled. The generated journal is the input to the
-guarded runner.
-
-## Guarded Runner
-
-Preview the maintained runner path without calling `icp`:
-
-```bash
-canic --environment local restore run \
-  1 \
-  --dry-run \
-  --out restore-run-dry-run.json
-```
-
-Execute a cautious one-step batch:
-
-```bash
-canic --environment local restore run \
-  1 \
-  --execute \
-  --max-steps 1 \
-  --out restore-run.json \
-  --require-no-attention
-```
-
-The native runner checks journal readiness, claims the next operation, runs the
-generated `icp` command, marks the operation completed or failed, and persists
-the journal after each transition. A normal ready journal includes snapshot
-upload, canister stop, snapshot load, canister start, and verification
-operations. `--max-steps 1` is the safest operational mode while validating a
-new restore path. Snapshot load operations first run `icp canister status` and
-fail before loading unless the target is visibly stopped.
-
-If a previous runner stopped after claiming work, rerun execution to classify
-the interruption. Canic refuses to overlap a live command tree. Once the old
-tree is quiescent, it reconciles lifecycle operations from target status and
-snapshot upload from an exclusive inventory delta; an exact stopped-target
-load can safely resume, and read-only verification can repeat. Ambiguous or
-mismatched evidence fails closed without inventing a receipt:
-
-```bash
-canic restore run \
-  1 \
-  --execute \
-  --out restore-run-recovery.json
-```
-
-If an operation failed and you have inspected the failure, move it back to
-ready before rerunning execution:
-
-```bash
-canic restore run \
-  1 \
-  --retry-failed \
-  --out restore-run-retry.json
-```
-
-## Restore Journal Tools
-
-Use `canic restore run --dry-run` to inspect the journal produced by
-`restore apply --dry-run`. The runner preview includes progress, blocked work,
-pending claims, failed operations, completion counts, and the next command
-preview.
-
-`canic restore run` is also the only maintained command for advancing a restore
-journal. It owns command preview, claiming, execution, completion/failure
-records, and pending-operation recovery.
-
-## Safety Model
-
-- Directory data may select a root, but topology defines membership.
-- Captures fail closed when the selected topology hash changes before snapshot
-  creation.
-- Backup manifests carry topology, unit, identity, snapshot, artifact,
-  provenance, and verification metadata.
-- Restore planning is no-mutation and must prove mapping, ordering, checksum,
-  verification, and snapshot-restore readiness before execution.
-- Runner summaries and journals are durable audit artifacts; failures still
-  write status before returning a nonzero exit code.
-- `canic backup prune --keep <count>` deletes only older completed backups.
-  Failed, incomplete, and otherwise recoverable layouts are never prune
-  candidates.
+For argument-boundary debugging, `CANIC_TRACE_ARGV=1` prints every raw argument
+before parsing. It may disclose secrets and should not be retained in shared
+logs.

@@ -6,6 +6,8 @@ use super::{WasmStoreGcExecutionStats, WasmStoreLimits, input_to_record};
 #[cfg(feature = "wasm-store-canister")]
 use crate::dto::template::TemplateManifestInput;
 #[cfg(any(test, feature = "wasm-store-canister"))]
+use crate::dto::template::TemplateStagingStatusResponse;
+#[cfg(any(test, feature = "wasm-store-canister"))]
 use crate::{
     dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput},
     storage::stable::template::TemplateChunkRecord,
@@ -16,11 +18,6 @@ use crate::{
     storage::stable::template::{
         TemplateChunkSetRecord, TemplateChunkSetStateStore, TemplateChunkStore,
     },
-};
-#[cfg(test)]
-use crate::{
-    dto::template::{TemplateManifestResponse, TemplateStagingStatusResponse},
-    ids::TemplateChunkingMode,
 };
 #[cfg(feature = "wasm-store-canister")]
 use crate::{
@@ -42,8 +39,6 @@ use canic_core::control_plane_support::format::byte_size;
 use canic_core::control_plane_support::ops::ic::mgmt::MgmtOps;
 #[cfg(feature = "wasm-store-canister")]
 use ic_cdk::api::canister_self;
-#[cfg(test)]
-use sha2::{Digest, Sha256};
 #[cfg(any(test, feature = "wasm-store-canister"))]
 use std::collections::BTreeMap;
 #[cfg(feature = "wasm-store-canister")]
@@ -117,34 +112,67 @@ impl TemplateChunkedOps {
     }
 
     // Return deterministic staged-chunk progress for one approved manifest.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     #[must_use]
     pub fn staging_status_response(
-        manifest: &TemplateManifestResponse,
-        chunk_counts: &BTreeMap<TemplateReleaseKey, u32>,
+        template_id: &TemplateId,
+        version: &TemplateVersion,
     ) -> TemplateStagingStatusResponse {
-        let release =
-            TemplateReleaseKey::new(manifest.template_id.clone(), manifest.version.clone());
+        let release = TemplateReleaseKey::new(template_id.clone(), version.clone());
+        let manifest = TemplateManifestOps::approved_manifest_response(template_id, version);
         let chunk_set = TemplateChunkSetStateStore::get(&release);
         let expected_chunk_count = chunk_set.as_ref().map_or(0, |record| record.chunk_count);
-        let stored_chunk_count = chunk_counts.get(&release).copied().unwrap_or(0);
-        let publishable = manifest.chunking_mode == TemplateChunkingMode::Chunked
-            && chunk_set.is_some()
-            && stored_chunk_count == expected_chunk_count
-            && Self::validate_staged_release(manifest).is_ok();
+        let expected_chunk_hashes = chunk_set
+            .as_ref()
+            .map_or_else(Vec::new, |record| record.chunk_hashes.clone());
+        let stored_chunk_hashes = (0..expected_chunk_count)
+            .map(|chunk_index| {
+                TemplateChunkStore::get(&TemplateChunkKey::new(release.clone(), chunk_index))
+                    .map(|record| wasm_hash(&record.bytes))
+            })
+            .collect::<Vec<_>>();
+        let stored_chunk_count = u32::try_from(
+            stored_chunk_hashes
+                .iter()
+                .filter(|hash| hash.is_some())
+                .count(),
+        )
+        .unwrap_or(u32::MAX);
+        let complete = chunk_set.as_ref().is_some_and(|record| {
+            let Ok(payload_capacity) = usize::try_from(record.payload_size_bytes) else {
+                return false;
+            };
+            let mut payload = Vec::with_capacity(payload_capacity);
+            for (index, expected_hash) in record.chunk_hashes.iter().enumerate() {
+                let Ok(chunk_index) = u32::try_from(index) else {
+                    return false;
+                };
+                let Some(chunk) =
+                    TemplateChunkStore::get(&TemplateChunkKey::new(release.clone(), chunk_index))
+                else {
+                    return false;
+                };
+                if wasm_hash(&chunk.bytes) != *expected_hash {
+                    return false;
+                }
+                payload.extend_from_slice(&chunk.bytes);
+            }
+            payload.len() as u64 == record.payload_size_bytes
+                && wasm_hash(&payload) == record.payload_hash
+        });
 
         TemplateStagingStatusResponse {
-            role: manifest.role.clone(),
-            template_id: manifest.template_id.clone(),
-            version: manifest.version.clone(),
-            store_binding: manifest.store_binding.clone(),
-            chunking_mode: manifest.chunking_mode,
-            payload_size_bytes: manifest.payload_size_bytes,
-            payload_size: byte_size(manifest.payload_size_bytes),
+            template_id: template_id.clone(),
+            version: version.clone(),
+            manifest,
             chunk_set_present: chunk_set.is_some(),
             expected_chunk_count,
+            expected_chunk_hashes,
+            payload_hash: chunk_set.as_ref().map(|record| record.payload_hash.clone()),
+            payload_size_bytes: chunk_set.as_ref().map(|record| record.payload_size_bytes),
+            stored_chunk_hashes,
             stored_chunk_count,
-            publishable,
+            complete,
         }
     }
 
@@ -332,49 +360,6 @@ impl TemplateChunkedOps {
             return Err(TemplateManifestOpsError::PayloadHashMismatch(release).into());
         }
         Ok(payload)
-    }
-
-    // Verify that one approved chunked manifest has a complete staged payload with matching hashes.
-    #[cfg(test)]
-    pub fn validate_staged_release(
-        manifest: &TemplateManifestResponse,
-    ) -> Result<(), InternalError> {
-        let info = Self::chunk_set_info_response(&manifest.template_id, &manifest.version)?;
-        let release =
-            TemplateReleaseKey::new(manifest.template_id.clone(), manifest.version.clone());
-
-        if info.chunk_hashes.is_empty() {
-            return Err(TemplateManifestOpsError::TemplateChunkSetEmpty(release).into());
-        }
-
-        let mut payload_hasher = Sha256::new();
-        let mut payload_size_bytes = 0_u64;
-
-        for (chunk_index, expected_hash) in info.chunk_hashes.iter().enumerate() {
-            let chunk_index = u32::try_from(chunk_index)
-                .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
-            let response =
-                Self::chunk_response(&manifest.template_id, &manifest.version, chunk_index)?;
-            let actual_hash = wasm_hash(&response.bytes);
-            let chunk_key = TemplateChunkKey::new(release.clone(), chunk_index);
-
-            if &actual_hash != expected_hash {
-                return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
-            }
-
-            payload_size_bytes = payload_size_bytes.saturating_add(response.bytes.len() as u64);
-            payload_hasher.update(&response.bytes);
-        }
-
-        if payload_size_bytes != manifest.payload_size_bytes {
-            return Err(TemplateManifestOpsError::PayloadSizeMismatch(release).into());
-        }
-
-        if payload_hasher.finalize().to_vec() != manifest.payload_hash {
-            return Err(TemplateManifestOpsError::PayloadHashMismatch(release).into());
-        }
-
-        Ok(())
     }
 
     // Clear all local template metadata and chunk bytes for store-local GC execution.
@@ -733,7 +718,7 @@ mod tests {
             template_id: release.template_id.clone(),
             version: release.version.clone(),
             chunk_index: 0,
-            bytes: old_chunk,
+            bytes: old_chunk.clone(),
         })
         .unwrap();
 
@@ -755,22 +740,13 @@ mod tests {
             err.public_error().code(),
             canic_core::diagnostics::codes::DIGEST_CONFLICT.raw_code()
         );
-        let staging = TemplateChunkedOps::staging_status_response(
-            &TemplateManifestResponse {
-                template_id: release.template_id.clone(),
-                role: CanisterRole::new("app"),
-                version: release.version.clone(),
-                payload_hash: wasm_hash(&new_chunk),
-                payload_size_bytes: new_chunk.len() as u64,
-                store_binding: WasmStoreBinding::new("primary"),
-                chunking_mode: TemplateChunkingMode::Chunked,
-                manifest_state: TemplateManifestState::Approved,
-                approved_at: Some(78),
-                created_at: 78,
-            },
-            &TemplateChunkStore::count_by_release(),
+        let staging =
+            TemplateChunkedOps::staging_status_response(&release.template_id, &release.version);
+        assert!(!staging.complete);
+        assert_eq!(
+            staging.stored_chunk_hashes,
+            vec![Some(wasm_hash(&old_chunk))]
         );
-        assert!(!staging.publishable);
 
         TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
             template_id: release.template_id.clone(),
@@ -784,6 +760,13 @@ mod tests {
             TemplateChunkedOps::chunk_response(&release.template_id, &release.version, 0)
                 .expect("new chunk should satisfy current metadata");
         assert_eq!(response.bytes, new_chunk);
+        let staging =
+            TemplateChunkedOps::staging_status_response(&release.template_id, &release.version);
+        assert!(staging.complete);
+        assert_eq!(
+            staging.stored_chunk_hashes,
+            vec![Some(wasm_hash(&response.bytes))]
+        );
     }
 
     #[cfg(feature = "root-control-plane")]

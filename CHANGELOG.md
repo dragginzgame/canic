@@ -12,6 +12,29 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- The open `0.109.13` draft replaces fresh-install and historical recovery
+  owners with one reviewed, cycle-conserving and interruption-safe
+  `canic fleet ensure` reconciler and hard-cuts their compatibility surfaces.
+  Retirement requires matching source-debit and treasury-credit proof, and
+  protocol update responses remain issued until an exact status query proves
+  completion. Current read-only Fleet info is rebound to terminal ensure
+  inventory without restoring the install cache. Typed Store bootstrap,
+  Registry convergence, local Component Registry preparation and Component
+  provisioning are now one ordered current protocol graph. Its fresh-estate
+  governed PocketIC journey reaches catalog publication and immediately
+  recompiles with no effect. Admission, auth, blob, cycles/funding status,
+  inspection, Medic and token operations now resolve through the same terminal
+  inventory and exact protocol bindings. That inventory is reconstructed from
+  the terminal Registry, Root operation receipts, Component Registry
+  partitions, pool rows and bounded descendant pages, so protocol-created
+  canisters and their cycles remain authoritative across an effect-free
+  successor plan. The focused governed rerun and active sediment
+  reconciliation are complete, including rebinding `canic info subnets` to
+  current terminal authority instead of the removed install cache. The
+  composed-framework lifecycle fixture now qualifies exact published IcyDB
+  0.245.1. IcyDB is declared only by that unpublished test fixture, and the
+  resolved graphs of published Canic crates remain IcyDB-free; broad validation
+  remains maintainer-owned.
 - `0.109.12` restores bounded Coordinator-anchored installed-Fleet inventory,
   completes reviewed retained-Root threshold funding and makes Registry-mirror
   recovery bound stalled observations rather than successful progress; necessary

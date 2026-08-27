@@ -1,8 +1,8 @@
 //! Module: canic_cli::inspect
 //!
-//! Responsibility: inspect one Fleet canister's runtime-observed Canic status.
-//! Does not own: deployment planning, runtime endpoint DTOs, or broad topology fanout.
-//! Boundary: resolves one explicit target, selects `canic_status::Runtime`, and renders a report.
+//! Responsibility: inspect one current Fleet canister's runtime-observed Canic status.
+//! Does not own: ensure planning, runtime endpoint DTOs, or broad topology fanout.
+//! Boundary: resolves one terminal ensure target, selects `canic_status::Runtime`, and renders a report.
 
 use crate::{
     cli::{
@@ -20,11 +20,9 @@ use canic_core::{
     protocol::CANIC_STATUS,
 };
 use canic_host::{
+    fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
-    },
     protocol_binding::ResolvedProtocolBinding,
 };
 use clap::{Arg, Command as ClapCommand};
@@ -42,7 +40,7 @@ Examples:
 
 Inspect is read-only. It queries the guarded canic_status Runtime selector for
 one explicit target and does not fan out across Fleet roles. Use
-`canic deploy inspect` for local deployment-truth artifacts and saved reports.";
+the Fleet form only after one current `fleet ensure` operation converges.";
 
 #[derive(Debug, ThisError)]
 pub enum InspectCommandError {
@@ -59,7 +57,7 @@ pub enum InspectCommandError {
     Target(String),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error("icp command failed: {0}")]
     Icp(#[from] IcpCommandError),
@@ -84,7 +82,7 @@ impl InspectCommandError {
             Self::Usage(_)
             | Self::InvalidPrincipal { .. }
             | Self::Target(_)
-            | Self::InstalledFleet(_)
+            | Self::CurrentFleet(_)
             | Self::Icp(_)
             | Self::InvalidResponse(_)
             | Self::IcpRoot(_)
@@ -156,15 +154,15 @@ impl InspectCommandKind {
 enum InspectSource {
     #[serde(rename = "cli_arg")]
     CliArg,
-    #[serde(rename = "fleet_registry")]
-    FleetRegistry,
+    #[serde(rename = "current_ensure_inventory")]
+    CurrentEnsureInventory,
 }
 
 impl InspectSource {
     const fn label(self) -> &'static str {
         match self {
             Self::CliArg => "cli_arg",
-            Self::FleetRegistry => "fleet_registry",
+            Self::CurrentEnsureInventory => "current_ensure_inventory",
         }
     }
 }
@@ -283,16 +281,8 @@ fn resolve_fleet_target(
     json: bool,
 ) -> Result<ResolvedInspectTarget, InspectCommandError> {
     let root = resolve_current_canic_icp_root().map_err(InspectCommandError::IcpRoot)?;
-    let installed = resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: fleet.to_string(),
-            environment: environment.to_string(),
-        },
-        icp,
-        &root,
-    )
-    .map_err(InspectCommandError::from)?;
-    let matches = installed
+    let current = resolve_current_fleet(&root, environment, fleet)?;
+    let matches = current
         .registry
         .entries
         .iter()
@@ -323,7 +313,7 @@ fn resolve_fleet_target(
         canister_id: entry.pid.clone(),
         environment: environment.to_string(),
         icp: icp.to_string(),
-        source: InspectSource::FleetRegistry,
+        source: InspectSource::CurrentEnsureInventory,
         protocol_binding,
         icp_root: Some(root),
         json,
@@ -521,7 +511,7 @@ fn validate_principal(value: &str) -> Result<(), InspectCommandError> {
 fn command() -> ClapCommand {
     ClapCommand::new("inspect")
         .bin_name("canic inspect")
-        .about("Inspect runtime-observed status for one deployed Canic canister")
+        .about("Inspect runtime-observed status for one current Canic canister")
         .disable_help_flag(true)
         .subcommand_required(true)
         .subcommand(canister_command())
@@ -546,7 +536,7 @@ fn canister_command() -> ClapCommand {
 
 fn fleet_command() -> ClapCommand {
     ClapCommand::new("fleet")
-        .about("Inspect one role in an installed Fleet")
+        .about("Inspect one role in a terminal current Fleet")
         .disable_help_flag(true)
         .arg(
             Arg::new("fleet")
@@ -699,12 +689,12 @@ mod tests {
     }
 
     #[test]
-    fn usage_distinguishes_runtime_inspect_from_deploy_artifacts() {
+    fn usage_binds_fleet_inspection_to_terminal_current_ensure() {
         let text = usage();
 
         assert!(text.contains("guarded canic_status Runtime selector"));
-        assert!(text.contains("canic deploy inspect"));
-        assert!(text.contains("local deployment-truth artifacts"));
+        assert!(text.contains("current `fleet ensure` operation converges"));
+        assert!(!text.contains("canic deploy inspect"));
     }
 
     #[test]
@@ -834,14 +824,17 @@ mod tests {
         report.command = InspectCommandKind::Fleet;
         report.target_resolution.fleet = Some("demo".to_string());
         report.target_resolution.role = Some("root".to_string());
-        report.target_resolution.source = InspectSource::FleetRegistry;
+        report.target_resolution.source = InspectSource::CurrentEnsureInventory;
 
         let value = serde_json::to_value(report).expect("serialize Fleet report");
 
         assert_eq!(value["command"], "canic inspect fleet");
         assert_eq!(value["target_resolution"]["fleet"], "demo");
         assert_eq!(value["target_resolution"]["role"], "root");
-        assert_eq!(value["target_resolution"]["source"], "fleet_registry");
+        assert_eq!(
+            value["target_resolution"]["source"],
+            "current_ensure_inventory"
+        );
     }
 
     #[test]
