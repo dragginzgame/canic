@@ -136,6 +136,78 @@ fn root_policy_drift_requires_the_reviewed_reinstall() {
 }
 
 #[test]
+fn multi_root_generation_joins_topology_by_typed_subnet_identity() {
+    let (first_subnet, second_subnet) = divergent_principal_order_pair();
+    let first_text = first_subnet.to_text();
+    let second_text = second_subnet.to_text();
+    let operator = Principal::from_slice(&[41]).to_text();
+    let coordinator_subnet = Principal::from_slice(&[42]).to_text();
+    let source_template = multi_component_source(&operator, &coordinator_subnet, &first_text)
+        .fleet_subnet_roots
+        .remove(0);
+    let mut sources = vec![source_template.clone(), source_template];
+    sources[0].placement_subnet.clone_from(&first_text);
+    sources[1].placement_subnet.clone_from(&second_text);
+    sources.sort_by(|left, right| left.placement_subnet.cmp(&right.placement_subnet));
+    let mut seeds = vec![
+        RootSeed {
+            placement_subnet: first_text,
+            root: Principal::from_slice(&[43]).to_text(),
+            store: Principal::from_slice(&[44]).to_text(),
+            pool_imports: Vec::new(),
+        },
+        RootSeed {
+            placement_subnet: second_text,
+            root: Principal::from_slice(&[45]).to_text(),
+            store: Principal::from_slice(&[46]).to_text(),
+            pool_imports: Vec::new(),
+        },
+    ];
+    seeds.sort_by(|left, right| left.placement_subnet.cmp(&right.placement_subnet));
+    let mut planned = sources
+        .iter()
+        .enumerate()
+        .map(|(index, source)| PlannedFleetSubnetRootTopology {
+            placement_subnet: parse_subnet("test Root", &source.placement_subnet)
+                .expect("typed test Subnet"),
+            component_admissions: Vec::new(),
+            component_topology_digest: canic_core::ids::ComponentTopologyDigest::from_bytes(
+                [u8::try_from(index + 1).expect("bounded test index"); 32],
+            ),
+            limits: root_limits(source),
+        })
+        .collect::<Vec<_>>();
+    planned.sort_by_key(|root| root.placement_subnet);
+
+    let text_order = sources
+        .iter()
+        .map(|root| root.placement_subnet.clone())
+        .collect::<Vec<_>>();
+    let typed_order = planned
+        .iter()
+        .map(|root| root.placement_subnet.to_string())
+        .collect::<Vec<_>>();
+    assert_ne!(
+        text_order, typed_order,
+        "fixture must exercise divergent orders"
+    );
+
+    let bindings =
+        bind_root_generation_inputs(&sources, &seeds, &planned).expect("exact typed Subnet join");
+    assert_eq!(bindings.len(), 2);
+    for binding in bindings {
+        assert_eq!(
+            binding.source.placement_subnet,
+            binding.planned.placement_subnet.to_string()
+        );
+        assert_eq!(
+            binding.seed.placement_subnet,
+            binding.planned.placement_subnet.to_string()
+        );
+    }
+}
+
+#[test]
 fn separate_treasury_seed_carries_exact_placement() {
     let coordinator = Principal::from_slice(&[8]).to_text();
     let treasury = Principal::from_slice(&[9]).to_text();
@@ -1299,4 +1371,17 @@ fn infrastructure_artifacts(
 
 fn principal_text(byte: u8) -> String {
     Principal::from_slice(&[byte; 29]).to_text()
+}
+
+fn divergent_principal_order_pair() -> (Principal, Principal) {
+    for left_byte in 0_u8..=u8::MAX {
+        let left = Principal::from_slice(&[left_byte]);
+        for right_byte in left_byte.saturating_add(1)..=u8::MAX {
+            let right = Principal::from_slice(&[right_byte]);
+            if left.cmp(&right) != left.to_text().cmp(&right.to_text()) {
+                return (left, right);
+            }
+        }
+    }
+    panic!("Principal fixture set did not contain divergent text and binary ordering")
 }

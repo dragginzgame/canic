@@ -139,42 +139,9 @@ sed -i \
   "s/^## $NEW - Unreleased$/## $NEW - $RELEASE_DATE/" \
   "$DETAILED_CHANGELOG"
 VALIDATION_STATUS_MARKER="Release validation: \`$NEW\` was validated from source \`$CURRENT_HEAD\` on \`$RELEASE_DATE\`; the release commit may differ only in governed release surfaces."
-RELEASE_LINEAGE_MARKER="Release lineage: \`$NEW\` follows immutable \`v$PREV\`."
 sed -i \
   "s#^$SOURCE_STATUS_MARKER\$#$VALIDATION_STATUS_MARKER#" \
   "$STATUS_DOCUMENT"
-LINEAGE_DOCUMENT="$TRANSACTION_DIR/current-status-with-release-lineage.md"
-awk -v replacement="$RELEASE_LINEAGE_MARKER" '
-  BEGIN {
-    replaced = 0
-    skipping = 0
-  }
-  /^Release lineage:/ {
-    if (replaced == 1) {
-      exit 2
-    }
-    print replacement
-    replaced = 1
-    skipping = 1
-    next
-  }
-  skipping == 1 {
-    if ($0 == "") {
-      print
-      skipping = 0
-    }
-    next
-  }
-  {
-    print
-  }
-  END {
-    if (replaced != 1) {
-      exit 3
-    }
-  }
-' "$STATUS_DOCUMENT" >"$LINEAGE_DOCUMENT"
-mv "$LINEAGE_DOCUMENT" "$STATUS_DOCUMENT"
 
 [[ "$(rg -c -F "## $NEW - $RELEASE_DATE" "$DETAILED_CHANGELOG")" -eq 1 ]] || {
   echo "❌ Failed to seal $DETAILED_CHANGELOG for $NEW." >&2
@@ -184,11 +151,6 @@ mv "$LINEAGE_DOCUMENT" "$STATUS_DOCUMENT"
   echo "❌ Failed to bind current status to validated source $CURRENT_HEAD." >&2
   rollback_release_surfaces 1
 }
-[[ "$(rg -c -F "$RELEASE_LINEAGE_MARKER" "$STATUS_DOCUMENT")" -eq 1 ]] || {
-  echo "❌ Failed to seal current status lineage from v$PREV to $NEW." >&2
-  rollback_release_surfaces 1
-}
-
 if git rev-parse "v$NEW" >/dev/null 2>&1; then
   echo "❌ Tag v$NEW already exists. Aborting." >&2
   rollback_release_surfaces 1
