@@ -33,5 +33,5 @@ status before treating every designed scaling surface as complete.
 - [Component configuration](../../../CONFIG.md#component-specs)
 - [Composable Component deployment design](../../design/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md)
 - [0.101 implementation status](../../design/0.101-fleet-authoritative-service-provisioning-and-publication/status.md)
-- [Fleet installation limits](../../architecture/fleet-install-input.md)
+- [Fleet ensure bounds](../operations/fleet-ensure.md)
 - [Academic Fleet walkthrough](../../getting-started/local-academic-fleet.md)

@@ -10,7 +10,6 @@ use crate::{
     },
     scaffold,
 };
-use canic_host::adoption::AdoptionProfileV1;
 use clap::Command as ClapCommand;
 
 const APP_HELP_AFTER: &str = "\
@@ -60,33 +59,12 @@ const APP_ROLE_RENAME_HELP_AFTER: &str = "\
 Examples:
   canic app role rename demo hub router
   canic app role rename demo hub router --dry-run";
-const APP_ADOPTION_HELP_AFTER: &str = "\
-Examples:
-  canic app adoption report demo --profile brownfield
-  canic app adoption report demo --profile minimal --evidence-envelope
-
-Adoption commands are read-only. They report recommendations and never update
-app config, package manifests, topology, deployments, or controllers.";
-const APP_ADOPTION_REPORT_HELP_AFTER: &str = "\
-Examples:
-  canic app adoption report demo --profile brownfield
-  canic app adoption report demo --profile partial --deployment-check check.json
-
-Read-only. Choose at most one deployment-evidence input and one
-package-metadata input.";
-pub(super) const JSON_ARG: &str = "json";
-pub(super) const EVIDENCE_ENVELOPE_ARG: &str = "evidence-envelope";
 
 pub(super) fn app_command() -> ClapCommand {
     ClapCommand::new("app")
         .bin_name("canic app")
         .about("Manage Canic apps")
         .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("adoption")
-                .about("Report safe onboarding recommendations")
-                .disable_help_flag(true),
-        ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("check")
                 .about("Check icp.yaml for one Canic app")
@@ -118,98 +96,6 @@ pub(super) fn app_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(APP_HELP_AFTER)
-}
-
-pub(super) fn app_adoption_command() -> ClapCommand {
-    ClapCommand::new("adoption")
-        .bin_name("canic app adoption")
-        .about("Report safe onboarding recommendations")
-        .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("report")
-                .about("Generate a read-only adoption report")
-                .disable_help_flag(true),
-        ))
-        .after_help(APP_ADOPTION_HELP_AFTER)
-}
-
-pub(super) fn app_adoption_report_command() -> ClapCommand {
-    ClapCommand::new("report")
-        .bin_name("canic app adoption report")
-        .about("Generate a read-only adoption report")
-        .disable_help_flag(true)
-        .arg(
-            value_arg("app")
-                .value_name("app")
-                .required(true)
-                .help("Config-defined app name"),
-        )
-        .arg(
-            clap::Arg::new("profile")
-                .long("profile")
-                .value_name("profile")
-                .required(true)
-                .value_parser(clap::value_parser!(AdoptionProfileV1))
-                .help("Adoption profile to evaluate"),
-        )
-        .arg(
-            flag_arg(JSON_ARG)
-                .long(JSON_ARG)
-                .conflicts_with(EVIDENCE_ENVELOPE_ARG)
-                .help("Print raw adoption report JSON output"),
-        )
-        .arg(
-            flag_arg(EVIDENCE_ENVELOPE_ARG)
-                .long(EVIDENCE_ENVELOPE_ARG)
-                .help("Print the stable CI/GitOps evidence envelope"),
-        )
-        .arg(
-            clap::Arg::new("inventory")
-                .long("inventory")
-                .value_name("path")
-                .conflicts_with("deployment-check")
-                .help("Read DeploymentInventoryV1 JSON evidence from this path"),
-        )
-        .arg(
-            clap::Arg::new("deployment-check")
-                .long("deployment-check")
-                .value_name("path")
-                .help("Read inventory evidence from a DeploymentCheckV1 JSON artifact"),
-        )
-        .arg(
-            clap::Arg::new("artifact-manifest")
-                .long("artifact-manifest")
-                .value_name("path")
-                .help("Read RoleArtifactManifestV1 JSON evidence from this path"),
-        )
-        .arg(
-            clap::Arg::new("package-metadata")
-                .long("package-metadata")
-                .value_name("path")
-                .conflicts_with("cargo-metadata")
-                .help("Read AdoptionPackageMetadataV1 JSON array evidence from this path"),
-        )
-        .arg(
-            clap::Arg::new("cargo-metadata")
-                .long("cargo-metadata")
-                .value_name("path")
-                .help("Read package metadata evidence from cargo metadata JSON"),
-        )
-        .arg(
-            clap::Arg::new("build-provenance")
-                .long("build-provenance")
-                .value_name("path")
-                .help(
-                    "Fingerprint a BuildProvenanceV1 evidence envelope; requires --evidence-envelope",
-                ),
-        )
-        .arg(
-            clap::Arg::new("output")
-                .long("output")
-                .value_name("path")
-                .help("Write the report artifact to this path"),
-        )
-        .after_help(APP_ADOPTION_REPORT_HELP_AFTER)
 }
 
 pub(super) fn app_role_command() -> ClapCommand {
@@ -443,14 +329,6 @@ pub(super) fn delete_usage() -> String {
 
 pub(super) fn role_usage() -> String {
     render_usage(app_role_command)
-}
-
-pub(super) fn adoption_usage() -> String {
-    render_usage(app_adoption_command)
-}
-
-pub(super) fn adoption_report_usage() -> String {
-    render_usage(app_adoption_report_command)
 }
 
 pub(super) fn role_list_usage() -> String {

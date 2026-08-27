@@ -33,7 +33,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "auth",
-        about: "Run delegated-auth operator workflows",
+        about: "Inspect delegated-auth operation state",
     },
     CommandSpec {
         name: "backup",
@@ -41,7 +41,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "blob-storage",
-        about: "Inspect and provision blob-storage billing",
+        about: "Inspect and manage blob-storage billing",
     },
     CommandSpec {
         name: "build",
@@ -49,11 +49,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "cycles",
-        about: "Wrap ICP cycles balance and transfer commands",
-    },
-    CommandSpec {
-        name: "deploy",
-        about: "Plan and check deployment truth before mutation",
+        about: "Inspect and transfer cycles for current Fleets",
     },
     CommandSpec {
         name: "diagnostic",
@@ -64,20 +60,20 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         about: "Evaluate stable evidence envelopes",
     },
     CommandSpec {
+        name: "fleet",
+        about: "Converge one Fleet from current desired state",
+    },
+    CommandSpec {
         name: "info",
-        about: "Query deployed canister information",
+        about: "Inspect one terminal current Fleet",
     },
     CommandSpec {
         name: "inspect",
-        about: "Inspect runtime-observed status for one deployed canister",
-    },
-    CommandSpec {
-        name: "install",
-        about: "Install and bootstrap a Canic fleet",
+        about: "Inspect one current Fleet canister runtime",
     },
     CommandSpec {
         name: "medic",
-        about: "Diagnose workspace and Fleet preflight readiness",
+        about: "Diagnose workspace and current-Fleet readiness",
     },
     CommandSpec {
         name: "network",
@@ -93,7 +89,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "scaffold",
-        about: "Scaffold Canic source files and deployment input",
+        about: "Scaffold Canic source roles",
     },
     CommandSpec {
         name: "state",
@@ -152,7 +148,7 @@ pub fn print_help_or_version(
 pub fn top_level_command() -> Command {
     let command = Command::new("canic")
         .version(env!("CARGO_PKG_VERSION"))
-        .about("Operator CLI for Canic Apps, Fleets, backups, and ICP wallet workflows")
+        .about("Operator CLI for current Canic Apps and Fleets")
         .color(ColorChoice::Always)
         .subcommand_required(true)
         .arg(icp_arg())

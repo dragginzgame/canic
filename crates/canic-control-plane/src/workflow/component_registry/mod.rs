@@ -597,6 +597,18 @@ pub async fn status(
     prepared_status(&authority, root, &request, &prepared)
 }
 
+/// Verify the exact local Component Registry authority without a remote Store lookup.
+///
+/// The Store bootstrap has its own Root-owned terminal proof. This query only proves that the
+/// resulting local registry was prepared against that exact request and remains monotonic.
+pub fn local_status(
+    request: RootComponentRegistryPreparationRequest,
+) -> Result<RootComponentRegistryStatusResponse, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
+    prepared_status(&authority, root, &request, &prepared)
+}
+
 fn prepared_status(
     authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     root: candid::Principal,

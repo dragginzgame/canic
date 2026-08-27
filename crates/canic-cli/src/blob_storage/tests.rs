@@ -239,7 +239,7 @@ fn json_error_codes_distinguish_candid_and_transport_failures() {
 
 #[test]
 fn renders_sync_gateways_dry_run_json_shape() {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -272,7 +272,7 @@ fn renders_sync_gateways_dry_run_json_shape() {
     );
     assert_eq!(
         value["target"]["candid_source"],
-        model::BLOB_STORAGE_CANDID_SOURCE_INSTALLED_FLEET
+        model::BLOB_STORAGE_CANDID_SOURCE_CURRENT_ENSURE
     );
     assert_eq!(
         value["action"]["name"],
@@ -284,7 +284,7 @@ fn renders_sync_gateways_dry_run_json_shape() {
 
 #[test]
 fn renders_sync_gateways_completed_json_shape() {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -340,7 +340,7 @@ fn renders_sync_gateways_completed_json_shape() {
 
 #[test]
 fn renders_fund_dry_run_plain_text() {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -399,7 +399,7 @@ fn parses_funding_report_json_into_stable_cli_shape() {
 
 #[test]
 fn renders_fund_completed_report_json_and_plain_text() {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -441,7 +441,7 @@ fn renders_fund_completed_report_json_and_plain_text() {
 
 #[test]
 fn parses_status_json_into_stable_cli_shape() {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -512,7 +512,7 @@ fn parses_status_json_into_stable_cli_shape() {
 
 #[test]
 fn parses_ready_status_with_warnings_as_warning_state() {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -541,7 +541,7 @@ fn parses_ready_status_with_warnings_as_warning_state() {
 
 #[test]
 fn status_check_ready_fails_with_exit_4_when_upload_not_ready() {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -575,7 +575,7 @@ fn status_check_ready_fails_with_exit_4_when_upload_not_ready() {
 
 #[test]
 fn status_check_ready_failure_message_includes_warnings_without_blockers() {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -706,7 +706,7 @@ fn mutating_commands_warn_when_post_status_diagnostic_fails() {
 
 #[test]
 fn renders_status_plain_text_with_blockers_and_next_actions() {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -754,7 +754,7 @@ fn renders_status_plain_text_with_blockers_and_next_actions() {
 }
 
 fn sample_status_result() -> model::BlobStorageStatusResult {
-    let target = model::BlobStorageTarget::from_installed_fleet(
+    let target = model::BlobStorageTarget::from_current_ensure(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
@@ -829,7 +829,7 @@ impl BlobStorageRuntime for ScriptedBlobStorageRuntime {
         method: &str,
     ) -> Result<target::BlobStorageCallTarget, BlobStorageCommandError> {
         Ok(target::BlobStorageCallTarget {
-            target: model::BlobStorageTarget::from_installed_fleet(
+            target: model::BlobStorageTarget::from_current_ensure(
                 canister,
                 Some(canister.to_string()),
                 "rrkah-fqaaa-aaaaa-aaaaq-cai",

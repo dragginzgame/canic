@@ -1,9 +1,9 @@
 //! Module: canic_cli::info_subnets
 //!
-//! Responsibility: expose the live Fleet Subnet inventory command.
-//! Does not own: Fleet Registry state, root counters, or terminal Fleet discovery.
-//! Boundary: parses operator input, delegates live evidence collection, and renders only a
-//! complete validated report.
+//! Responsibility: expose the live current-Fleet Subnet inventory command.
+//! Does not own: Fleet Registry state, Root counters, or terminal Fleet discovery.
+//! Boundary: resolves one terminal ensure authority, collects exact live evidence, and renders only
+//! a complete validated report.
 
 mod model;
 mod render;
@@ -27,7 +27,8 @@ use crate::{
 use std::{ffi::OsString, io};
 
 use canic_host::{
-    CanisterProtocolError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
+    CanisterProtocolError, fleet_ensure::CurrentFleetInventoryError, icp_config::IcpConfigError,
+    protocol_binding::ProtocolBindingError,
 };
 use clap::Command as ClapCommand;
 use thiserror::Error as ThisError;
@@ -35,24 +36,19 @@ use thiserror::Error as ThisError;
 const HELP_AFTER: &str = "\
 Examples:
   canic info subnets demo-local
-  canic --environment staging info subnets toko --json
+  canic --environment staging info subnets demo --json
 
-The command prints nothing unless the Coordinator Registry and every current
-non-removed Fleet Subnet Root summary form one complete, agreeing snapshot.";
+The command prints nothing unless the terminal current ensure inventory,
+Coordinator Registry and every current non-removed Root summary agree.";
 
-///
-/// InfoSubnetsCommandError
-///
-/// CLI boundary failure for live Fleet Subnet inventory collection.
-///
-
+/// CLI boundary failure for live current-Fleet Subnet inventory collection.
 #[derive(Debug, ThisError)]
 pub enum InfoSubnetsCommandError {
     #[error("failed to resolve ICP project root: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error(transparent)]
     Inventory(#[from] SubnetInventoryError),
@@ -60,8 +56,8 @@ pub enum InfoSubnetsCommandError {
     #[error(transparent)]
     Protocol(#[from] CanisterProtocolError),
 
-    #[error("Subnet summary query worker panicked for Fleet Subnet Root {root}")]
-    SummaryWorkerPanicked { root: String },
+    #[error(transparent)]
+    ProtocolBinding(#[from] ProtocolBindingError),
 
     #[error("{0}")]
     Usage(String),
@@ -73,12 +69,7 @@ pub enum InfoSubnetsCommandError {
     Json(#[from] serde_json::Error),
 }
 
-///
-/// InfoSubnetsOptions
-///
-/// Parsed operator selection for one live Fleet Subnet inventory.
-///
-
+/// Parsed operator selection for one live current-Fleet Subnet inventory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct InfoSubnetsOptions {
     fleet: String,
@@ -103,7 +94,7 @@ impl InfoSubnetsOptions {
     }
 }
 
-/// Query and render one complete live Fleet Subnet inventory.
+/// Query and render one complete live current-Fleet Subnet inventory.
 pub fn run<I>(args: I) -> Result<(), InfoSubnetsCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -129,7 +120,7 @@ fn command() -> ClapCommand {
         .arg(
             value_arg("fleet")
                 .required(true)
-                .help("Installed Fleet name to inspect"),
+                .help("Current Fleet name to inspect"),
         )
         .arg(
             flag_arg("json")

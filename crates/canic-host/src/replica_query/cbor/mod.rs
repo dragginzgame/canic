@@ -4,8 +4,6 @@
 //! Does not own: HTTP transport, Candid reply payloads, or replica targeting.
 //! Boundary: codec-specific values and errors do not escape this module.
 
-use super::nonempty_text;
-use canic_core::cdk::utils::hash::hex_bytes;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
@@ -53,38 +51,6 @@ pub(super) fn decode_query_response(bytes: &[u8]) -> Result<QueryOutcome, CborEr
             code: response.reject_code.unwrap_or_default(),
             message: response.reject_message.unwrap_or_default(),
         }),
-    }
-}
-
-pub(super) fn decode_status_root_key(bytes: &[u8]) -> Result<Option<String>, CborError> {
-    let value = ciborium::de::from_reader::<ciborium::Value, _>(bytes).map_err(cbor_error)?;
-    if matches!(
-        value,
-        ciborium::Value::Bytes(_)
-            | ciborium::Value::Text(_)
-            | ciborium::Value::Array(_)
-            | ciborium::Value::Map(_)
-    ) {
-        return Ok(root_key_from_value(&value));
-    }
-    Err(CborError(
-        "unsupported replica status CBOR shape".to_string(),
-    ))
-}
-
-fn root_key_from_value(value: &ciborium::Value) -> Option<String> {
-    match value {
-        ciborium::Value::Bytes(bytes) => (!bytes.is_empty()).then(|| hex_bytes(bytes)),
-        ciborium::Value::Text(text) => nonempty_text(text),
-        ciborium::Value::Array(values) => values.iter().find_map(root_key_from_value),
-        ciborium::Value::Map(map) => map
-            .iter()
-            .find_map(|(key, value)| match key {
-                ciborium::Value::Text(key) if key == "root_key" => root_key_from_value(value),
-                _ => None,
-            })
-            .or_else(|| map.iter().find_map(|(_, value)| root_key_from_value(value))),
-        _ => None,
     }
 }
 

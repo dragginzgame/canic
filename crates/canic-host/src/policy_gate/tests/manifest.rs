@@ -131,10 +131,10 @@ app = "demo"
 role = "app"
 
 [[evidence]]
-kind = "deployment_check"
+kind = "policy_gate"
 path = " ./build.json "
 required = true
-payload_schema = "canic.deployment_check.v1"
+payload_schema = "canic.policy_gate_report.v1"
 
 [evidence.target]
 fleet = "demo-staging"

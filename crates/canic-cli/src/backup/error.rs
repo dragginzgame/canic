@@ -10,7 +10,7 @@ use canic_backup::{
     persistence::PersistenceError, plan::BackupPlanError, runner::BackupRunnerError,
 };
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
+    fleet_ensure::CurrentFleetInventoryError, icp::IcpCommandError, icp_config::IcpConfigError,
 };
 use thiserror::Error as ThisError;
 
@@ -57,7 +57,12 @@ pub enum BackupCommandError {
     BackupLayoutIncomplete { missing: &'static str },
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
+
+    #[error(
+        "Fleet {fleet} has {root_count} current Roots; select a single-root backup scope explicitly"
+    )]
+    AmbiguousFleetSubnetRoot { fleet: String, root_count: usize },
 
     #[error("failed to read Canic Fleet state: {0}")]
     IcpRoot(#[source] IcpConfigError),

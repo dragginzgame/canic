@@ -1,184 +1,80 @@
 # Installing Canic
 
-This guide covers the normal operator setup and the smallest managed canister
-shape. The short version is:
+Install the operator CLI at the same version as the downstream `canic` crate:
 
 ```bash
 cargo install --locked canic-cli --version <same-version-as-canic>
 canic --version
 ```
 
-When working from this checkout:
+From this checkout:
 
 ```bash
 make install
 ```
 
-For the full maintainer toolchain, including ICP CLI, wasm/Candid tools, and
-repo helper binaries:
+For the complete maintainer toolchain:
 
 ```bash
 make install-dev
 ```
 
-The maintainer setup installs and verifies the pinned `sccache` compiler cache.
-Make-based development and validation keep one repository-owned Cargo target
-directory at `target/`, use `sccache` automatically and disable incremental
-compilation for cacheable compiler work. If no wrapper is available, local
-Make work retains Cargo's profile defaults instead, including incremental
-dev/test work and non-incremental `release`/`fast` builds. `canic build` and
-`canic install` also discover `sccache` for their deterministic non-incremental
-Wasm builds. Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` or
-`RUSTC_WRAPPER` values remain authoritative for isolated package, audit, or
-downstream proof runs.
+The maintainer setup installs the repository-pinned ICP CLI, Wasm/Candid tools
+and `sccache`, and configures the repository pre-commit formatter. Explicit
+`CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values remain
+authoritative. Otherwise Make and Canic artifact builds discover `sccache` and
+keep deterministic Wasm builds non-incremental.
 
-Developer setup also configures Canic's single repository-owned `pre-commit`
-hook. The hook runs only `make fmt`; it never stages files or runs tests,
-Clippy, builds, or release validation. If formatting changes a file, the commit
-stops so the formatted result can be reviewed and staged explicitly. To
-configure only the hook without reinstalling tools, run:
+## ICP CLI
 
-```bash
-make install-hooks
-```
-
-Run `make validate` explicitly when complete local validation is wanted.
-
-## ICP CLI Compatibility
-
-Canic shells out to the installed `icp` binary for local replica and canister
-operations. Canic releases that support the ICP CLI stable line require
-`icp-cli >=1.2.0, <2.0.0`; the maintainer toolchain currently pins `1.3.0`.
-
-ICP CLI requires custom connected-network definitions to declare an
-explicit `root-key`. Canic's maintained workspace configuration uses the managed
-local network and the built-in `ic` network, so no repository configuration
-change is required. Downstream projects with custom connected networks must add
-that key to their own ICP configuration.
-
-Check the resolved binary and version:
+The maintained range is `icp-cli >=1.2.0, <2.0.0`; the maintainer toolchain currently pins `1.3.0`.
 
 ```bash
 which icp
 icp --version
-```
-
-From a Canic checkout, install the checksum-bound pinned CLI:
-
-```bash
 bash scripts/ci/install-icp-cli.sh
 ```
 
-The installer selects the declared Linux/macOS archive, verifies its
-repository-owned SHA-256 identity before extraction, installs `icp` under the
-Cargo binary directory, and rejects a mismatched reported version.
-
-Maintainers can discover the latest stable release in the currently supported
-ICP CLI major line, record its official archive checksums and install the
-resulting repository pin together with the other development tools:
+Custom connected networks must declare their exact root key. Enroll that trust
+through Canic before Fleet observation or mutation:
 
 ```bash
-make update-dev
+sha256sum ./root-key.der
+canic network enroll <environment> \
+  --root-key ./root-key.der \
+  --fingerprint <64-lowercase-hex>
 ```
 
-The update stops for explicit compatibility review instead of automatically
-crossing an ICP CLI major-version boundary.
-
-`icp network update` updates the local network launcher, such as
-`icp-cli-network-launcher`, and does not replace the `icp` CLI binary itself.
-If multiple `icp` binaries are installed, put Cargo's bin directory first on
-`PATH`, or pass top-level `--icp /path/to/icp` for a single Canic command.
-
-Password-protected ICP CLI PEM identities can cache session delegations so
-operators do not re-enter the identity password for every command:
+For password-protected identities, ICP CLI can cache a bounded session:
 
 ```bash
 icp settings session-length 1h
 icp identity reauth <identity-name> --duration 1h
 ```
 
-Use `icp settings session-length disabled` if you need to turn session caching
-off. These commands tune the operator's local ICP CLI identity session; they do
-not change Canic canister auth or delegated-token behavior.
+## Canister Dependencies
 
-## Install The Operator CLI
-
-Install the published operator binary with Cargo:
-
-```bash
-cargo install --locked canic-cli
-canic --version
-```
-
-Pinned downstream projects should install the same `canic-cli` version as their
-`canic` crate dependency:
-
-```bash
-cargo install --locked canic-cli --version <same-version-as-canic>
-```
-
-From a checkout, install the local CLI:
-
-```bash
-make install
-```
-
-The installed binary is named `canic`.
-
-## Add Canic To Canister Crates
-
-Inside each canister crate that uses Canic:
-
-```bash
-cargo add canic
-cargo add candid ic-cdk
-cargo add canic --build
-```
-
-`canic` is needed in `[dependencies]` for runtime macros and
-`[build-dependencies]` for `build.rs`. The `candid` and `ic-cdk` dependencies
-must also be visible to the canister crate because CDK attributes and Candid
-export expand against those crate names.
-
-Each canister crate must also declare the Canic role it implements. This is the
-single source of truth for both `canic::build!` and `canic::start!()`:
-
-```toml
-[package.metadata.canic]
-app = "test"
-role = "app"
-```
-
-Use `role = "root"` for the Fleet Subnet Root package. Ordinary Component and
-potential-descendant roles use their configured App role name, such as `app`,
-`hub`, or `registry`. The `app` metadata value must match the App source
-identity from `[app].name`; it is not a live Fleet name.
-Fleet Subnet Root canisters also need the `control-plane` feature on their
-runtime `canic` dependency. When delegated-token material is enabled, root
-issuers also need
-`auth-root-canister-sig-create`; canisters that issue delegated tokens need
-`auth-issuer-canister-sig-create`; endpoint verifiers need
-`auth-delegated-token-verify`.
-
-For a path checkout:
+Each Canic-managed canister needs runtime and build dependencies plus exact
+package metadata:
 
 ```toml
 [dependencies]
-candid = { version = "<version>", default-features = false }
-canic = { path = "/path/to/canic/crates/canic" }
+candid = "<version>"
+canic = "<same-version-as-cli>"
 ic-cdk = "<version>"
 
 [build-dependencies]
-canic = { path = "/path/to/canic/crates/canic" }
+canic = "<same-version-as-cli>"
 
 [package.metadata.canic]
-app = "test"
+app = "example"
 role = "app"
 ```
 
-## Configure `build.rs`
+The role must exist in the selected App configuration. Root packages use
+`role = "root"` and the required control-plane feature.
 
-Every Canic-managed canister crate has a small `build.rs`:
+The build script remains small:
 
 ```rust
 fn main() {
@@ -186,22 +82,7 @@ fn main() {
 }
 ```
 
-The path is relative to the canister crate directory. A standalone probe with a
-crate-local config can use:
-
-```rust
-fn main() {
-    canic::build!("canic.toml");
-}
-```
-
-## Minimal Canister Shapes
-
-Every normal managed canister uses `canic::start!()`. Root vs non-root behavior
-comes from `[package.metadata.canic] app = "..."` plus `role = "..."` and the
-validated App config.
-
-Non-root `lib.rs`:
+An ordinary managed canister uses the maintained lifecycle facade:
 
 ```rust
 #![expect(clippy::unused_async)]
@@ -217,264 +98,75 @@ async fn canic_upgrade() {}
 canic::finish!();
 ```
 
-Root `lib.rs`:
+Application endpoints belong between `start!` and `finish!` and use Canic's
+endpoint macros. The complete App schema is in [CONFIG.md](CONFIG.md).
 
-```rust
-#![expect(clippy::unused_async)]
-
-canic::start!();
-
-async fn canic_setup() {}
-async fn canic_install() {}
-async fn canic_upgrade() {}
-
-canic::finish!();
-```
-
-`start_local!()` is only for local/dev standalone canisters that synthesize a
-minimal local environment. `start_wasm_store!()` is only for the canonical
-`wasm_store` runtime.
-
-Add application endpoints after `canic::start!()` and before `canic::finish!()`:
-
-```rust
-use canic::{Error, prelude::*};
-
-#[canic_query]
-fn health() -> Result<String, Error> {
-    Ok("ok".to_string())
-}
-```
-
-Use `#[canic_query]` and `#[canic_update]` for Canic-managed application
-methods so endpoint dispatch, metrics, access checks, Candid export, and
-payload inspection stay on the same path as the runtime bundle.
-
-## Define An App
-
-Create `apps/<app>/canic.toml`:
-
-```toml
-[app]
-name = "test"
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.app]
-kind = "canister"
-package = "app"
-
-[component_specs.app]
-component_role = "app"
-maximum_instances = 1
-topup = {}
-```
-
-Every role named in package metadata must exist in this App config.
-Declared-only ordinary roles may compile before topology placement, but only
-Component roles and potential descendants cataloged under
-`[component_specs.*]` can be built as deploy artifacts or enter deployment
-truth. `role = "root"` selects the Fleet Subnet Root lifecycle and endpoint
-bundle; all other roles select the ordinary Fleet lifecycle and non-root
-endpoint bundle.
-
-The full schema lives in [`CONFIG.md`](CONFIG.md).
-
-For a complete Fleet Subnet Root plus two-role Component example, see
-[`docs/getting-started/minimal-managed-fleet.md`](docs/getting-started/minimal-managed-fleet.md).
-For the compact v1-candidate command and evidence checklist, see
-[`docs/architecture/v1-readiness-checklist.md`](docs/architecture/v1-readiness-checklist.md).
-
-## Build And Install Locally
-
-Check that `icp.yaml` contains the matching project config, start the local ICP
-CLI replica, and provide a separate operator-owned Fleet input with exact
-placement, admission, limit, and funding policy:
+## Configure And Build
 
 ```bash
-canic status
+canic app create example
+canic scaffold canister example app
+canic app role attach example app --component-spec example.app
+canic build example app --profile release \
+  --provenance artifacts/example-app-provenance.json
+```
+
+For split Cargo/ICP roots, pass `--workspace`, `--icp-root` and an absolute
+`--config` path explicitly.
+
+## Ensure A Fleet
+
+Start the selected local replica when applicable:
+
+```bash
 canic replica start --background
-canic install test test-local \
-  --fleet-input deployments/test-local.toml \
-  --profile fast
 ```
 
-The Fleet input is required. Its schema is documented in
-[`docs/architecture/fleet-install-input.md`](docs/architecture/fleet-install-input.md).
-On success, installation drives the complete Coordinator-anchored transaction:
-it installs and verifies the Coordinator, roots, and root-local Stores; joins
-and activates the Fleet Registry; synchronizes each root's Mirror and
-Directories; provisions and activates the configured initial Components; and
-publishes the terminal Fleet catalog only after all selected roots are active.
-Rerunning the exact command in the same release reconciles an interrupted
-journal. Changed authority or unresolved paid effects fail closed.
+Write the current desired Fleet contract at `fleets/<fleet>.toml`; its complete
+schema and cycle-safety boundary are in
+[Fleet ensure](docs/features/operations/fleet-ensure.md).
 
-Build one artifact without installing:
+Plan first:
 
 ```bash
-canic build test app
+canic fleet ensure example-local --desired fleets/example-local.toml
 ```
 
-Standalone `canic build` defaults to the fast Wasm profile. Use
-`--profile release` when producing production-optimized artifacts explicitly.
-
-For downstream repos where the Rust workspace and ICP project root differ, pass
-both paths explicitly:
+Review the returned `plan_sha256`, dispositions, transfers, fees, funding,
+maximum debit/burn and conservation equation. Apply only that digest:
 
 ```bash
-canic --environment local build \
-  --workspace /path/to/cargo-workspace \
-  --icp-root /path/to/icp-project \
-  --config /path/to/cargo-workspace/apps/<app>/canic.toml \
-  <app> root
+canic fleet ensure example-local \
+  --desired fleets/example-local.toml \
+  --apply <plan_sha256>
 ```
 
-When passing `--config` explicitly, prefer an absolute path. This keeps path
-dependencies and build scripts from interpreting a relative config path from
-their own crate directories.
+Rerun the same apply command after interruption. The current journal reconciles
+the live result before retry. After terminal convergence, run plan/apply again
+to prove the immediate successor has zero mutation actions.
 
-For build profiles, split workspace/ICP roots, custom canister roots, role
-metadata, and lower-level build/install commands, see
-[`crates/canic-host/README.md`](crates/canic-host/README.md).
+Historical install, deployment, adoption, retained-repair and recovery-bundle
+commands are removed. Do not copy their state into `.canic/fleet-ensure` or
+attempt to migrate it. Any old canister that still holds recoverable cycles
+must appear explicitly in the current desired document for reuse or safe drain.
 
-For downstream projects that use a named local ICP CLI target such as
-`academic`, use
-[`docs/getting-started/local-academic-fleet.md`](docs/getting-started/local-academic-fleet.md)
-for the short runbook on `canic --environment ...`, raw `icp` target hygiene,
-`canic info env` / `CANIC_ROOT`-style canister ID variables, sourced shell
-helpers, sharded calls, metrics checks, and install versus upgrade decisions.
+## Cycle-Recovery Limitation
 
-## App And Fleet Management
+The IC does not let a controller pull cycles from an arbitrary canister. A
+material canister may be replaced or deleted only when it exposes the exact
+configured, idempotent treasury-drain contract. Without it, Canic returns a
+typed blocker and leaves the canister untouched. Never bypass that blocker with
+a raw stop/delete command.
 
-Use `canic app list` to list source Apps and `canic app config <app>` to inspect
-declared config. Live commands continue to select an installed Fleet.
+## Development Validation
+
+Automated coding work runs only targeted package checks. Human maintainers own
+the complete release boundary:
 
 ```bash
-canic app config test
-canic app create demo --yes
-canic app delete demo
-canic info list test
-canic --environment local info subnets test
-canic status
+make validate
 ```
 
-Use `canic medic` when local workspace state, replica ownership, or a named
-Fleet does not look right:
-
-```bash
-canic medic
-canic medic fleet test
-```
-
-For a terminal installed Fleet, use `canic info list <fleet>`,
-`canic info env <fleet>`, and `canic medic fleet <fleet>` before changing
-topology when local state looks wrong. `info list` shows live registered
-Canisters, `info env` prints sourceable `CANIC_<ROLE>` canister ID exports, and
-`app config` shows configured source intent. Live commands require the terminal
-catalog and do not reconstruct or bypass an incomplete installation journal.
-
-Named-fleet commands default to the local ICP CLI environment. Pass top-level
-`--environment <name>` for one command against another configured ICP CLI
-environment. Nonlocal targets must be managed externally.
-
-The local ICP CLI replica does not persist canister state across stop/start. If
-`canic status` shows a local Fleet as `lost`, its recorded Canisters are gone
-from the restarted local replica; rerun
-`canic install <app> <fleet> --fleet-input <path>` with the exact intended
-operator input to recreate it.
-
-App configs live under workspace-root `apps/`. Commands launched from nested
-directories discover the outer workspace root and keep ICP project config plus
-`.icp/` and `.canic/` state there.
-
-## Backup And Restore
-
-Show installed canisters:
-
-```bash
-canic --environment local info list test
-canic --environment local info list test --subtree app
-```
-
-Create and verify a topology-aware backup:
-
-```bash
-canic backup create test
-canic backup list
-canic backup verify 1
-```
-
-Restore work is backup-row and journal driven. `restore prepare 1` writes the
-default plan and apply journal inside the backup layout, `restore status 1`
-checks progress and gates, and `restore run 1 --execute` advances the durable
-journal through upload, stop, snapshot load, start, and verification
-operations.
-Preparing the same pristine documents again is idempotent. A conflicting plan
-or a journal containing progress is preserved and rejected rather than
-overwritten. Rerun `restore run` to reconcile interrupted work after the prior
-command tree has ended.
-
-```bash
-canic restore prepare 1 --require-verified --require-restore-ready
-canic restore status 1 --require-no-attention
-canic restore run 1 --execute --max-steps 1 --require-no-attention
-canic restore status 1 --require-complete --require-no-attention
-```
-
-See [`crates/canic-cli/README.md`](crates/canic-cli/README.md) for the fuller
-operator guide.
-
-## Generated State
-
-The Fleet Coordinator, Fleet Subnet Root, and Wasm Store are separately
-qualified infrastructure artifacts. Ordinary Component and descendant
-artifacts stay outside the root Wasm, are built once as the Fleet-wide
-application union, and are projected into an exact admitted release set for
-each root. Visible canister Candid files are generated under
-`.icp/local/canisters/<role>/<role>.did`. Fleet Coordinator and Wasm Store own
-checked-in canonical interfaces at
-`crates/canic-fleet-coordinator/fleet_coordinator.did` and
-`crates/canic-wasm-store/wasm_store.did`.
-
-Local App-role builds extract Candid from debug Wasm. Infrastructure builds
-copy their canonical contracts without a second debug compile. Both may embed
-public `candid:service` metadata into local Wasm for inspection. Builds
-targeting `ICP_ENVIRONMENT=ic` skip `.did` generation and Candid metadata
-embedding so production Wasm artifacts do not carry local interface metadata.
-
-Canic-managed Candid includes both application methods and Canic runtime
-methods such as readiness, metadata, topology, and management endpoints. When
-migrating a non-Canic canister, compare the application surface separately from
-Canic-owned methods.
-
-## First Install Troubleshooting
-
-- If `canic.toml` uses `[[canisters]]`, rewrite it as one
-  `[component_specs.<name>]` Component plus any direct
-  `[component_specs.<name>.children.<role>]` tables. Canic validates the flat
-  Component shape and bounded instance ceilings.
-- If a lifecycle macro reports
-  `__canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints`,
-  add `canic::finish!()` at the end of the canister crate root after custom
-  endpoint definitions.
-- If a child cannot find its config at build time, check the path passed to
-  `canic::build!`; it is relative to the canister crate directory.
-- If the root canister does not compile or bootstrap delegated-auth material,
-  confirm the runtime dependency enables `control-plane` plus the delegated-auth
-  features required by that role, such as `auth-root-canister-sig-create` for
-  root proof issuance, `auth-issuer-canister-sig-create` for delegated-token
-  issuance, and `auth-delegated-token-verify` for protected endpoint
-  verification.
-- Each canister crate must declare its App-scoped role with
-  `[package.metadata.canic] app = "<app>"` and `role = "<role>"`.
-- If fresh installation stops before terminal Fleet-catalog publication,
-  inspect the typed error and rerun the exact command for same-release journal
-  reconciliation. Do not change Fleet input or use a removed single-root path
-  to bypass the interrupted transaction.
-- If a test manually installs one root and its application canisters, it is not
-  validating the current managed-Fleet path. A current PocketIC journey must
-  start at the Coordinator, install all planned roots and Stores, join them
-  through the Fleet Registry, and resolve application Canisters from
-  Component Registry/Directory authority.
+Versioning, tagging, package publication, pushing and live deployment remain
+separate human-owned actions governed by
+[CI and deployment governance](docs/governance/ci-deployment.md).

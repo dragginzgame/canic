@@ -5,7 +5,6 @@ mod labels;
 mod roles;
 
 pub(in crate::release_set) use app::app_identity_from_source;
-pub use components::configured_release_roles_from_config;
 pub(in crate::release_set) use components::{
     configured_bootstrap_roles_from_config, configured_deployable_roles_from_config,
     configured_pool_expectations_from_config,

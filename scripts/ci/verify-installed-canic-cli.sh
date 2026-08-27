@@ -117,7 +117,7 @@ main() {
         > "$TMP_ROOT/blob-storage-status-json.out" \
         2> "$TMP_ROOT/blob-storage-status-json.err"
     then
-        echo "expected installed blob-storage JSON status without project state to fail" >&2
+        echo "expected installed blob-storage JSON status without workspace state to fail" >&2
         exit 1
     fi
     prepare_blob_storage_workspace

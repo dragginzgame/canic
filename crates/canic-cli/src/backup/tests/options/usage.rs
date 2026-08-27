@@ -6,7 +6,7 @@
 
 use super::super::super::*;
 use crate::backup::manifest::ManifestCommandError;
-use canic_host::installed_fleet::InstalledFleetError;
+use canic_host::fleet_ensure::CurrentFleetInventoryError;
 use std::ffi::OsString;
 
 // Ensure backup help stays at command-family level.
@@ -29,21 +29,21 @@ fn backup_create_usage_uses_fleet_target_wording() {
 
     assert!(text.contains("Usage: canic backup create [OPTIONS] <fleet>"));
     assert!(text.contains("Create a topology-aware deployment backup"));
-    assert!(text.contains("Installed Fleet name to back up"));
+    assert!(text.contains("Converged Fleet name to back up"));
     assert!(text.contains("backups/deployment-<name>-YYYYMMDD-HHMMSS"));
     assert!(!text.contains("backups/fleet-<name>"));
 }
 
 #[test]
 fn missing_backup_fleet_preserves_canonical_typed_error() {
-    let error = BackupCommandError::from(InstalledFleetError::NoInstalledFleet {
+    let error = BackupCommandError::from(CurrentFleetInventoryError::NotConverged {
         environment: "local".to_string(),
         fleet: "demo-local".to_string(),
     });
 
     std::assert_matches!(
         error,
-        BackupCommandError::InstalledFleet(InstalledFleetError::NoInstalledFleet {
+        BackupCommandError::CurrentFleet(CurrentFleetInventoryError::NotConverged {
             environment,
             fleet,
         }) if environment == "local" && fleet == "demo-local"

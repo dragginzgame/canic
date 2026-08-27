@@ -17,8 +17,8 @@ use super::{
 use crate::test_support::temp_dir;
 use canic_host::evidence_envelope::{
     CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
-    EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, adoption_report_schema,
-    evidence_envelope_schema,
+    EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1,
+    evidence_envelope_schema, policy_gate_report_schema,
 };
 use canic_host::policy_gate::PolicyEvaluationStatusV1;
 use serde_json::json;
@@ -357,19 +357,17 @@ fn sample_envelope() -> EvidenceEnvelopeV1 {
         envelope_schema: evidence_envelope_schema(),
         canic_version: env!("CARGO_PKG_VERSION").to_string(),
         command: CommandProvenanceV1 {
-            name: "canic app adoption report".to_string(),
+            name: "canic evidence gate".to_string(),
             argv_normalized: vec![
                 "canic".to_string(),
-                "app".to_string(),
-                "adoption".to_string(),
-                "report".to_string(),
-                "demo".to_string(),
+                "evidence".to_string(),
+                "gate".to_string(),
             ],
             argv_redactions: Vec::new(),
             format: "envelope-json".to_string(),
         },
         target: EvidenceTargetV1 {
-            kind: EvidenceTargetKindV1::AppAdoption,
+            kind: EvidenceTargetKindV1::PolicyGate,
             app: Some("demo".to_string()),
             fleet: None,
             role: None,
@@ -379,7 +377,7 @@ fn sample_envelope() -> EvidenceEnvelopeV1 {
         generated_at: "2026-05-31T00:00:00Z".to_string(),
         source_config: None,
         inputs: Vec::new(),
-        payload_schema: adoption_report_schema(),
+        payload_schema: policy_gate_report_schema(),
         payload_sha256: Some(sample_sha256("payload")),
         payload: json!({ "report_id": "report-1" }),
         summary: EvidenceSummaryV1 {
@@ -410,10 +408,10 @@ name = "demo"
 root = "."
 
 [[evidence]]
-kind = "adoption_report"
+kind = "policy_gate"
 path = "adoption.json"
 required = true
-payload_schema = "canic.adoption_report.v1"
+payload_schema = "canic.policy_gate_report.v1"
 
 [evidence.target]
 app = "demo"

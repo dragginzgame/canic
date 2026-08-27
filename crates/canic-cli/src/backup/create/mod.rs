@@ -11,8 +11,7 @@ use canic_backup::{
     runner::{BackupRunResponse, BackupRunnerConfig, backup_run_execute_with_executor},
 };
 use canic_host::{
-    icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
+    fleet_ensure::read_current_fleet_inventory, icp_config::resolve_current_canic_icp_root,
 };
 #[cfg(test)]
 use std::path::Path;
@@ -32,16 +31,8 @@ pub(super) fn backup_create(
     options: &BackupCreateOptions,
 ) -> Result<BackupCreateReport, BackupCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(BackupCommandError::IcpRoot)?;
-    let installed = resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.fleet.clone(),
-            environment: options.environment.clone(),
-        },
-        &options.icp,
-        &icp_root,
-    )
-    .map_err(BackupCommandError::from)?;
-    let registry = backup_registry_entries(&installed.registry.entries);
+    let inventory = read_current_fleet_inventory(&icp_root, &options.environment, &options.fleet)?;
+    let registry = backup_registry_entries(&inventory.entries);
     let topology_hash = registry_topology_hash(&registry)?;
     let plan_id = backup_plan_id(&options.fleet);
     let run_id = plan_id.replace("plan-", "run-");
@@ -59,16 +50,18 @@ pub(super) fn backup_create(
     } else {
         BackupScopeKind::NonRootDeployment
     };
-    let root_canister_id = installed
-        .topology
-        .unique_fleet_subnet_root(&options.fleet)?
-        .to_string();
+    let [root_canister_id] = inventory.roots.as_slice() else {
+        return Err(BackupCommandError::AmbiguousFleetSubnetRoot {
+            fleet: options.fleet.clone(),
+            root_count: inventory.roots.len(),
+        });
+    };
     let planned = build_backup_plan(BackupPlanBuildInput {
         plan_id,
         run_id,
         fleet: options.fleet.clone(),
         environment: options.environment.clone(),
-        root_canister_id,
+        root_canister_id: root_canister_id.clone(),
         selected_canister_id,
         selected_scope_kind,
         include_descendants: true,

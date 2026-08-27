@@ -1,5 +1,4 @@
 use std::{
-    fs::File,
     io::{self, Read, Write},
     path::Path,
     process::{Command, Stdio},
@@ -19,26 +18,6 @@ use super::{
 pub(super) fn run_output(command: &mut Command) -> Result<String, IcpCommandError> {
     ensure_command_compatible(command)?;
     run_output_unchecked(command)
-}
-
-/// Execute a command with stdout directed to an already-open durable result file.
-pub fn run_output_to_file(command: &mut Command, result: &File) -> Result<(), IcpCommandError> {
-    ensure_command_compatible(command)?;
-    let display = command_display(command);
-    let output = command
-        .stdout(Stdio::from(result.try_clone()?))
-        .stderr(Stdio::piped())
-        .spawn()?
-        .wait_with_output()?;
-    result.sync_all()?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(IcpCommandError::Failed {
-            command: display,
-            stderr: command_stderr(&output),
-        })
-    }
 }
 
 fn run_output_unchecked(command: &mut Command) -> Result<String, IcpCommandError> {

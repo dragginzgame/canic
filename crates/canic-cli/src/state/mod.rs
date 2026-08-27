@@ -19,8 +19,8 @@ use crate::{
 };
 use canic_core::state_contract::StateManifest;
 use canic_host::{
+    config_discovery::{ConfigDiscoveryError, discover_workspace_canic_config_choices},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    install_root::{ConfigDiscoveryError, discover_workspace_canic_config_choices},
     role_contract::finding_detail,
     state_manifest::{
         STATE_AUDIT_COMMAND, STATE_MANIFEST_COMMAND, StateAuditReport, StateAuditStatus,
@@ -43,7 +43,7 @@ Examples:
 
 State commands are diagnostic-only metadata reports. They do not read stable
 memory values, run migrations, repair memory IDs, write generated files, modify
-config, create deployment truth, or mutate canisters.";
+config, create a reviewed Fleet plan, or mutate canisters.";
 
 const AUDIT_HELP_AFTER: &str = "\
 Examples:

@@ -12,11 +12,13 @@ use canic_core::{
     ids::CanisterRole,
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey, derive_protocol_profile_hashes},
 };
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, io, path::PathBuf};
 use thiserror::Error as ThisError;
 
 /// Complete immutable protocol identity selected before one role call.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RegistryProtocolBinding {
     pub release_identity: String,
     pub role: CanisterRole,

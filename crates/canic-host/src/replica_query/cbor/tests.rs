@@ -1,4 +1,4 @@
-use super::{QueryOutcome, decode_query_response, decode_status_root_key, encode_anonymous_query};
+use super::{QueryOutcome, decode_query_response, encode_anonymous_query};
 
 #[test]
 fn anonymous_query_envelope_has_exact_wire_bytes() {
@@ -35,16 +35,6 @@ fn rejected_query_response_has_exact_wire_bytes() {
     ));
 }
 
-#[test]
-fn status_root_key_bytes_have_exact_wire_bytes() {
-    let bytes = fixture("a168726f6f745f6b657943308182");
-
-    assert_eq!(
-        decode_status_root_key(&bytes).expect("decode status root key"),
-        Some("308182".to_string())
-    );
-}
-
 fn fixture(hex: &str) -> Vec<u8> {
     hex.as_bytes()
         .chunks_exact(2)
@@ -57,7 +47,5 @@ fn fixture(hex: &str) -> Vec<u8> {
 
 #[test]
 fn malformed_and_unsupported_cbor_are_rejected() {
-    assert!(decode_status_root_key(&[0xff]).is_err());
-    assert!(decode_status_root_key(&[0xf6]).is_err());
     assert!(decode_query_response(&[0xff]).is_err());
 }

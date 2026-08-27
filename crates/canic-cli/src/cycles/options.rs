@@ -111,7 +111,7 @@ fn info_cycles_command() -> ClapCommand {
 fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
     ClapCommand::new(COMMAND_NAME)
         .bin_name(bin_name)
-        .about("Summarize installed Fleet cycle history")
+        .about("Summarize terminal current Fleet cycle history")
         .disable_help_flag(true)
         .arg(
             value_arg(FLEET_ARG)

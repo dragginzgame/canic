@@ -1,36 +1,32 @@
 # Operations And Diagnostics
 
 The `canic` binary is the operator surface for local workspace setup, builds,
-network trust, Fleet installation, inspection, diagnostics, backup, restore,
-and recovery. Human-readable output and stable JSON modes serve interactive
-and automated workflows without merging their authority.
+network trust, evidence, diagnostics, and current desired-state Fleet
+convergence. Human-readable output and stable JSON modes serve interactive and
+automated workflows without merging their authority.
 
 ## What It Provides
 
 - App creation, role scaffolding, attachment, and configuration inspection
 - canonical network enrollment and local replica lifecycle
-- Fleet installation from explicit placement and funding input
-- `status`, `info`, catalog, and environment inspection
-- workspace and Fleet `medic` checks with CI and JSON modes
+- one reviewed `canic fleet ensure` plan/apply workflow
+- exact canister dispositions and cycle-conservation bounds
 - deployment evidence and passive policy gates
-- recovery guidance for retries, receipts, and ambiguous external effects
-- local-only verification/import of path-confined, content-addressed
-  fresh-install recovery bundles
+- durable intent and exact replay for ambiguous effects
 
 Useful orientation commands are:
 
 ```bash
 canic help
-canic status
-canic medic --ci
+canic fleet ensure staging
 ```
 
 ## Boundary
 
 The CLI may read and write workspace/operator state and invoke the installed
 `icp` binary. Live canisters never gain filesystem or identity-key access.
-Inspection and dry-run commands remain passive; mutations are exposed as
-explicit install, lifecycle, backup, restore, or funding operations.
+Planning has no paid Fleet effect; mutations require the exact reviewed
+`--apply <plan_sha256>` digest.
 
 App, Fleet, and workspace are distinct terms and must not be conflated.
 
@@ -38,6 +34,7 @@ App, Fleet, and workspace are distinct terms and must not be conflated.
 
 - [Installing Canic](../../../INSTALLING.md)
 - [CLI guide](../../../crates/canic-cli/README.md)
+- [Fleet ensure](fleet-ensure.md)
 - [Operations index](../../operations/README.md)
 - [Release validation matrix](../../operations/release-validation-matrix.md)
 - [Recovery and retry runbooks](../../operations/recovery-retry-runbooks.md)

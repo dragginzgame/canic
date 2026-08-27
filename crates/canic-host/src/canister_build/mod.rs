@@ -10,9 +10,6 @@ pub use artifact::{
     build_workspace_canister_artifact, build_workspace_configured_canister_artifacts,
     copy_icp_wasm_output,
 };
-pub(crate) use artifact::{
-    build_workspace_canister_artifacts_from_specs, resolve_canister_artifact_build_specs,
-};
 pub(crate) use candid::extract_candid_bytes;
 pub use context::{
     WorkspaceBuildContext, print_workspace_build_context_once, workspace_build_context_once,
@@ -21,7 +18,6 @@ pub use model::{
     ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
     CanisterArtifactBuildOutput, ConfiguredCanisterArtifactBuildOutput,
 };
-pub(crate) use model::{CanisterArtifactBuildSpec, CurrentCanisterArtifactBuildOutput};
 
 #[cfg(test)]
 use candid::remove_stale_icp_candid_sidecars;

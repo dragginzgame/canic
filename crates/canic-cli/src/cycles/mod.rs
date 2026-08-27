@@ -22,8 +22,8 @@ use crate::{
 use canic_backup::discovery::DiscoveryError;
 use canic_core::{cdk::utils::hash::DecodeHexError, diagnostics::DiagnosticCode};
 use canic_host::{
-    CanisterProtocolError, icp::IcpCommandError, icp_config::IcpConfigError,
-    installed_fleet::InstalledFleetError,
+    CanisterProtocolError, fleet_ensure::CurrentFleetInventoryError, icp::IcpCommandError,
+    icp_config::IcpConfigError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -41,7 +41,7 @@ pub enum CyclesCommandError {
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -73,7 +73,7 @@ pub enum CyclesCommandError {
         diagnostic: String,
     },
 
-    #[error("installed Fleet funding authority is invalid: {0}")]
+    #[error("current Fleet funding authority is invalid: {0}")]
     FundingAuthority(String),
 
     #[error("failed to decode funding status Candid: {0}")]

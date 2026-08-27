@@ -1,8 +1,8 @@
 //! Module: canic_cli::info_env
 //!
-//! Responsibility: render sourceable installed-Fleet canister ID exports.
+//! Responsibility: render sourceable current-Fleet canister ID exports.
 //! Does not own: Fleet state persistence, registry authority, or canister lifecycle changes.
-//! Boundary: reads installed Fleet state and renders shell or JSON output.
+//! Boundary: reads terminal current-Fleet inventory and renders shell or JSON output.
 
 use crate::{
     cli::{
@@ -17,12 +17,9 @@ use crate::{
     output, version_text,
 };
 use canic_host::{
+    fleet_ensure::{CurrentFleetInventoryError, CurrentFleetResolution, resolve_current_fleet},
     icp::IcpCommandError,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
-        resolve_installed_fleet_from_root,
-    },
     registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
@@ -43,7 +40,7 @@ Examples:
 ///
 /// InfoEnvCommandError
 ///
-/// CLI boundary error for resolving installed Fleet state and rendering
+/// CLI boundary error for resolving current Fleet state and rendering
 /// `canic info env` output.
 ///
 
@@ -56,7 +53,7 @@ pub enum InfoEnvCommandError {
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -68,7 +65,7 @@ pub enum InfoEnvCommandError {
     Json(#[from] serde_json::Error),
 }
 
-/// Renderable installed-Fleet canister ID export payload.
+/// Renderable current-Fleet canister ID export payload.
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct InfoEnvReport {
@@ -117,7 +114,7 @@ impl InfoEnvOptions {
     }
 }
 
-/// Run the sourceable installed-Fleet canister ID export command.
+/// Run the sourceable current-Fleet canister ID export command.
 pub fn run<I>(args: I) -> Result<(), InfoEnvCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -141,19 +138,12 @@ fn load_env_report(options: &InfoEnvOptions) -> Result<InfoEnvReport, InfoEnvCom
 fn resolve_info_env_fleet(
     options: &InfoEnvOptions,
     icp_root: &Path,
-) -> Result<InstalledFleetResolution, InfoEnvCommandError> {
-    resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.fleet.clone(),
-            environment: options.environment.clone(),
-        },
-        &options.icp,
-        icp_root,
-    )
-    .map_err(InfoEnvCommandError::from)
+) -> Result<CurrentFleetResolution, InfoEnvCommandError> {
+    resolve_current_fleet(icp_root, &options.environment, &options.fleet)
+        .map_err(InfoEnvCommandError::from)
 }
 
-fn env_report(options: &InfoEnvOptions, resolution: &InstalledFleetResolution) -> InfoEnvReport {
+fn env_report(options: &InfoEnvOptions, resolution: &CurrentFleetResolution) -> InfoEnvReport {
     InfoEnvReport {
         fleet: options.fleet.clone(),
         environment: options.environment.clone(),
@@ -280,7 +270,7 @@ fn usage() -> String {
 fn info_env_command() -> ClapCommand {
     ClapCommand::new("env")
         .bin_name("canic info env")
-        .about("Print sourceable installed Fleet canister ID exports")
+        .about("Print sourceable current Fleet canister ID exports")
         .disable_help_flag(true)
         .arg(
             value_arg("fleet")
@@ -345,7 +335,7 @@ mod tests {
 
         assert!(text.contains("Usage: canic info env [OPTIONS] <fleet>"));
         assert!(text.contains("Installed Fleet name to inspect"));
-        assert!(text.contains("sourceable installed Fleet canister ID exports"));
+        assert!(text.contains("sourceable current Fleet canister ID exports"));
     }
 
     #[test]

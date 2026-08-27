@@ -124,7 +124,7 @@ fn build_provenance_policy_requires_package_identity_to_match_target() {
 #[test]
 fn build_provenance_policy_rejects_wrong_or_invalid_payload() {
     let mut wrong_schema = sample_envelope();
-    wrong_schema.payload_schema = PayloadSchemaRefV1::stable("canic.adoption_report.v1", "1");
+    wrong_schema.payload_schema = PayloadSchemaRefV1::stable("canic.policy_gate_report.v1", "1");
     let wrong_schema_report = evaluate_policy_for_test(BUILD_PROVENANCE_POLICY, wrong_schema);
 
     assert_eq!(

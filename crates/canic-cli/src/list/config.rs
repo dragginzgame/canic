@@ -4,7 +4,7 @@ use super::{
     render::ConfigRoleRow,
 };
 use canic_host::{
-    install_root::{discover_current_canic_config_choices, select_discovered_app_config_path},
+    config_discovery::{discover_current_canic_config_choices, select_discovered_app_config_path},
     registry::RegistryEntry,
     release_set::AppConfigSnapshot,
 };

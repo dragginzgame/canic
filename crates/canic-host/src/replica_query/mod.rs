@@ -30,15 +30,6 @@ use crate::icp_config::{
 };
 
 pub use self::status::local_replica_status_reachable_from_root;
-pub(crate) use self::{
-    status::local_replica_root_key_from_root, transport::local_replica_endpoint_from_root,
-};
-
-fn nonempty_text(text: &str) -> Option<String> {
-    let trimmed = text.trim();
-    (!trimmed.is_empty()).then(|| trimmed.to_string())
-}
-
 fn decode_cycle_balance_response(bytes: &[u8]) -> Result<u128, ReplicaQueryError> {
     let result = Decode!(bytes, Result<RoleStatusResponse, CanicError>)
         .map_err(ReplicaQueryError::Candid)?;

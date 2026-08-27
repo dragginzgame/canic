@@ -1,13 +1,13 @@
 # Fleet Funding Operations
 
-This runbook covers the maintained 0.108 funding paths for an installed Canic
+This runbook covers the maintained funding paths for a terminal current Canic
 Fleet. The Fleet Coordinator normally funds current Fleet Subnet Roots. Direct
 cycle top-up and Root-owned ICP conversion are explicit recovery actions.
 
 ## Observe Before Acting
 
-Read the Coordinator and every current Root through authenticated installed-
-Fleet authority:
+Read the Coordinator and every current Root through the terminal ensure
+inventory, its exact protocol bindings, and the protected live Registry:
 
 ~~~text
 canic cycles funding <fleet>
@@ -22,7 +22,7 @@ The report identifies the exact Coordinator and Root Principals and shows:
   request/target policy, current operation and last Coordinator result;
 - manual/automatic ICP policy, cumulative ICP use and the latest refill result;
   and
-- Fiduciary placement acknowledgement and retained high-cost warnings.
+- each exact Root placement Subnet from the protected Registry.
 
 Automatic funding is the normal path. Do not start a competing recovery action
 while a Root reports `pending=true` or a refill reports `recovery_required`.
@@ -55,57 +55,6 @@ event. Use `multi_subnet` only for the retained high-reserve professional
 profile; choosing a profile never substitutes for the exact required
 Fiduciary cost acknowledgement.
 
-## Explicit Funding-Policy Rotation
-
-A fixed accounting window may renew, but a generation's automatic count and
-cycle caps never do. When a long-lived Fleet has exhausted that finite
-authority, use an explicit policy-generation rotation if continued bounded
-automation is appropriate. Direct top-up remains the immediate recovery path;
-it does not rotate policy.
-
-First write a no-effect proposal from exact live installed authority:
-
-~~~text
-canic cycles funding <fleet> --plan-rotation funding-plan.json
-~~~
-
-Review and edit only the proposed successor Coordinator and Root policy values
-in the JSON file. Preserve the exact Fleet and placement intent, including all
-profile floors and Fiduciary acknowledgements. Re-run the same planning command
-to bind the proposal to current Registry, generation, policy hashes, retained
-usage, topology/node evidence, maximum new automatic exposure, zero apply debit
-and the Coordinator treasury source:
-
-~~~text
-canic cycles funding <fleet> --plan-rotation funding-plan.json
-~~~
-
-Review the new operation ID and digest, then apply that exact file with an
-authenticated Fleet controller:
-
-~~~text
-canic cycles funding <fleet> --apply-rotation funding-plan.json
-~~~
-
-Apply is replay-safe. If the CLI or Coordinator is interrupted, repeat the same
-apply command and file; do not create another proposal. The Coordinator owns
-one durable convergence operation, fences new automatic funding, prepares every
-affected Root, publishes one successor Registry generation and activates each
-Root through idempotent receipts. Monitor `canic cycles funding <fleet>` until
-the rotation is terminal before starting other funding work.
-
-An exact delayed begin, stage or apply command remains replayable from its
-retained checkpoint even after a later rotation completes. Any changed header,
-Root plan, digest or predecessor generation is not a replay and is rejected.
-
-Rotation resets only the new generation's bounded automatic counters. It
-retains predecessor usage, grant sequences, replay evidence, application state
-and descendant funding ownership. Completed history is non-evicting and bounded
-to 4,096 total Root checkpoint entries across all rotations. Status reports the
-remaining capacity; planning fails closed when every affected Root will not
-fit. Capacity is not renewed by time, direct top-up, restart or another policy
-edit.
-
 ## Direct Cycle Top-Up
 
 Direct top-up is the break-glass path when the Coordinator or a Root needs
@@ -123,7 +72,7 @@ Principal from `canic cycles funding`.
 
 A direct top-up changes only the canister balance. It does not reset rolling
 windows, cooldowns, reserved spend, or non-renewing grant/refill caps. Re-run
-`canic cycles funding <fleet>` afterward and allow the retained operation, if
+`canic cycles funding <fleet>` afterward and allow the current operation, if
 any, to reach a terminal state before initiating other funding work.
 
 ## Manual Root ICP Conversion
@@ -164,18 +113,17 @@ plan a fresh reinstall rather than deleting replay evidence.
   funded teardown work remains. At or after that fence no new automatic work
   may begin; retained same-operation recovery must settle before removal.
 - Rolling-window, cooldown and non-renewing cap exhaustion is fail-closed. Wait
-  only for a renewable window/cooldown. A non-renewing cap requires either
-  explicit direct recovery or the controller-reviewed generation-rotation
-  workflow above; it never renews itself and installed authority must not be
-  edited in place.
+  only for a renewable window/cooldown. Use an explicit direct top-up for
+  immediate recovery; it does not renew policy authority. The hard-cut CLI does
+  not expose the deleted install-plan-owned policy-rotation flags.
 - Automatic ICP refill is a terminal emergency fallback, not a parallel funding
   source. It can start only after Coordinator funding cannot restore a Root at
   or below its protected emergency threshold.
 - Per-call/cumulative ICP caps, minimum retained ICP, ledger fee, conversion
   rate floor and exact-target checks refuse the refill before an unsafe value
   transfer. Use direct cycle top-up for immediate recovery or correct policy in
-  a fresh reinstall. Same-release funding-policy rotation does not authorize
-  cross-release state migration; pre-1.0 releases remain reinstall-only.
+  a newly reviewed current desired-state plan. Pre-1.0 releases remain
+  reinstall-only.
 - A Fiduciary placement warning is retained evidence of higher-cost authority,
   not a runtime override. Confirm that its exact acknowledgement matches the
   installed plan before funding the Fleet.

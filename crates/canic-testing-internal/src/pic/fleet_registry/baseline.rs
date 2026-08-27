@@ -34,6 +34,8 @@ mod tests {
         AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
     };
     #[cfg(test)]
+    use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest;
+    #[cfg(test)]
     use canic::dto::pool::{
         CanisterPoolAssetOrigin, CanisterPoolAssetStatus, PoolCanisterRequest, PoolImportResponse,
     };
@@ -79,6 +81,11 @@ mod tests {
     };
     #[cfg(test)]
     use canic_control_plane::dto::root::RootFundingStatusResponse;
+    #[cfg(test)]
+    use canic_control_plane::dto::template::{
+        StoreStatusRequest, StoreStatusResponse, TemplateLookupRequest, TemplateManifestResponse,
+        TemplateStagingStatusResponse,
+    };
     use canic_control_plane::{
         dto::template::{
             StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetInfoResponse,
@@ -137,7 +144,22 @@ mod tests {
         cdk::utils::hash::{hex_bytes, wasm_hash},
         ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingAuthority},
     };
+    #[cfg(test)]
+    use canic_host::fleet_ensure::model::{
+        CurrentFleetProtocolAction, DesiredFleet, FLEET_ENSURE_SCHEMA_VERSION,
+        FleetEnsureStateRecord,
+    };
+    #[cfg(test)]
+    use canic_host::fleet_ensure::{
+        CompiledCurrentComponentProvisioning, CompiledCurrentProtocolStep,
+        CurrentComponentGroupPlacement, CurrentRegistryStage,
+        compile_current_component_provisioning, compile_current_protocol_sequence,
+        compile_current_registry_sequence, compile_current_registry_sequence_with_status,
+        compile_current_store_sequence_from_union,
+    };
     use canic_host::release_set::AppConfigSnapshot;
+    #[cfg(test)]
+    use canic_host::release_set::{ApplicationArtifactEntry, ApplicationArtifactUnion};
     use flate2::{Compression, write::GzEncoder};
     use std::{
         collections::BTreeMap,
@@ -180,15 +202,11 @@ mod tests {
 
     #[cfg(test)]
     use canic::dto::component_provisioning::{
-        ComponentGroupPlacementPlan, ComponentGroupPlanEntry, FleetComponentProvisioningOperation,
-        FleetComponentProvisioningPhase, FleetComponentProvisioningPlan,
-        FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningRetryStage,
-        FleetSubnetRootProvisioningBatch,
+        FleetComponentProvisioningPhase, FleetComponentProvisioningRetryStage,
     };
     #[cfg(test)]
     use canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
     #[cfg(test)]
-    use canic::ids::{ComponentGroupPlacementId, FleetSubnetRootBinding};
     #[cfg(test)]
     use canic_control_plane::dto::fleet_coordinator::{
         CoordinatorFundingStatusResponse, CoordinatorOperationStatusResponse,
@@ -211,6 +229,8 @@ mod tests {
     const QUALIFICATION_WORKLOAD_PACKAGE: &str = "payload_limit_probe";
     #[derive(CandidType)]
     enum RootCommandFragment {
+        #[cfg(test)]
+        AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
         BootstrapStore(RootStoreBootstrapRequest),
         #[cfg(test)]
         ImportPoolCanister(PoolCanisterRequest),
@@ -248,11 +268,20 @@ mod tests {
     }
 
     #[derive(CandidType)]
+    #[cfg_attr(
+        test,
+        expect(
+            clippy::large_enum_variant,
+            reason = "the PocketIC encoder mirrors the direct Root status wire"
+        )
+    )]
     enum RootStatusRequestFragment {
         #[cfg(test)]
         Admission(PageRequest),
         #[cfg(test)]
         AuthorityRestore,
+        #[cfg(test)]
+        ComponentRegistry(RootComponentRegistryPreparationRequest),
         FleetAuthority,
         #[cfg(test)]
         Funding,
@@ -273,6 +302,8 @@ mod tests {
         Admission(FleetAdmissionRootStatusResponse),
         #[cfg(test)]
         AuthorityRestore(AuthorityRestoreFenceStatusResponse),
+        #[cfg(test)]
+        ComponentRegistry(RootComponentRegistryStatusResponse),
         FleetAuthority(FleetSubnetRootAuthority),
         #[cfg(test)]
         Funding(RootFundingStatusResponse),
@@ -1157,6 +1188,16 @@ mod tests {
         response: RootStoreBootstrapResponse,
     }
 
+    struct InstalledRootFixture {
+        root_id: Principal,
+        init_args: FleetSubnetRootInitArgs,
+        coordinator_root_funding: FleetCoordinatorRootFundingPolicy,
+        manifest: RootStoreReleaseSetManifest,
+        artifacts: BTreeMap<CanisterRole, Vec<u8>>,
+        manifest_bytes: Vec<u8>,
+        digest: ReleaseSetDigest,
+    }
+
     struct RootStoreFixture {
         manifest: RootStoreReleaseSetManifest,
         artifacts: BTreeMap<CanisterRole, Vec<u8>>,
@@ -1601,10 +1642,19 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one governed journey proves the full ordered graph and its zero-effect replay"
+    )]
     fn fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let config_path = five_component_root_canister_config_path(&workspace_root);
+        let config = AppConfigSnapshot::load(&config_path).expect("load five-Component config");
+        let configuration = config
+            .model()
+            .compile_component_deployment_configuration()
+            .expect("compile five-Component deployment configuration");
         let root_wasm = build_five_component_root_wasm();
         let coordinator_wasm = build_test_coordinator_wasm();
         let store_fixture =
@@ -1612,7 +1662,7 @@ mod tests {
         let pic = build_pic();
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
-        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
+        let installed = install_current_root_with_config_and_pool_setup(
             &pic,
             root_wasm,
             coordinator,
@@ -1630,61 +1680,694 @@ mod tests {
             &config_path,
             create_prepaid_pool_assets,
         );
-        reset_prepaid_pool_assets(&pic, fixture.root_id);
         let operation_id = [0x6e; 32];
-        begin_fixture_fresh_component_provisioning_with_config(
+        let artifact_root = test_target_dir(&workspace_root, "current-five-component-protocol")
+            .join(format!("artifact-union-{}", std::process::id()));
+        if artifact_root.exists() {
+            std::fs::remove_dir_all(&artifact_root).expect("clear prior artifact-union fixture");
+        }
+        std::fs::create_dir_all(&artifact_root).expect("create artifact-union fixture");
+        let union = fixture_application_artifact_union(&artifact_root, &installed);
+        let store_sequence = compile_current_store_sequence_from_union(
+            &artifact_root,
+            &configuration.component_topology,
+            &installed.init_args.authority,
+            operation_id,
+            &union,
+        )
+        .expect("compile current Store sequence");
+        let fixture = BootstrappedRootFixture {
+            root_id: installed.root_id,
+            init_args: installed.init_args.clone(),
+            coordinator_root_funding: installed.coordinator_root_funding.clone(),
+            request: store_sequence.bootstrap_request.clone(),
+            response: store_sequence.expected_bootstrap.clone(),
+        };
+        install_fixture_coordinator_with_config(
             &pic,
             coordinator,
             coordinator_wasm,
             &fixture,
-            operation_id,
             &config_path,
         );
-
-        let mut last_status = None;
-        for _ in 0..120 {
-            let CoordinatorStatusResponse::Operation(
-                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-            ) = coordinator_status(
+        let CoordinatorStatusResponse::Registry(genesis) =
+            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query current genesis Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
+        let desired = current_protocol_desired(&configuration, coordinator, &installed.init_args);
+        let state = FleetEnsureStateRecord {
+            active_registry: None,
+            fleet: desired.fleet.clone(),
+            pending_principals: BTreeMap::new(),
+            principals: BTreeMap::new(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            topology: BTreeMap::new(),
+        };
+        let authorities = vec![installed.init_args.authority.clone()];
+        let registry_sequence = compile_current_registry_sequence(
+            &desired,
+            &state,
+            &configuration.component_topology,
+            &genesis,
+            &authorities,
+        )
+        .expect("compile current initial Registry sequence");
+        assert_eq!(
+            registry_sequence.current_stage,
+            CurrentRegistryStage::Genesis
+        );
+        let stores = BTreeMap::from([(installed.root_id, store_sequence)]);
+        let actions = compile_current_protocol_sequence(
+            &desired,
+            &state,
+            &configuration,
+            &registry_sequence,
+            &authorities,
+            &stores,
+            operation_id,
+        )
+        .expect("compile complete current Fleet protocol");
+        assert!(
+            actions.is_sorted_by_key(|step| current_protocol_test_stage(&step.action)),
+            "current protocol actions must preserve Store -> join -> sync -> activate -> mirror -> Component order"
+        );
+        for step in &actions {
+            if matches!(
+                step.action,
+                CurrentFleetProtocolAction::ProvisionComponents { .. }
+            ) {
+                reset_prepaid_pool_assets(&pic, fixture.root_id);
+            }
+            issue_current_protocol_step(
                 &pic,
-                coordinator,
-                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
-            )
-            .expect("query terminal fresh Component provisioning")
-            else {
-                panic!("Coordinator returned a differently correlated operation status");
+                step,
+                installed
+                    .init_args
+                    .authority
+                    .wasm_store_authority
+                    .installation_controller,
+            );
+            await_current_protocol_step(
+                &pic,
+                step,
+                installed
+                    .init_args
+                    .authority
+                    .wasm_store_authority
+                    .installation_controller,
+            );
+        }
+
+        let CoordinatorStatusResponse::Registry(terminal_registry) =
+            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query terminal Fleet Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
+        assert_eq!(terminal_registry.revision, 4);
+        let CoordinatorStatusResponse::Operation(
+            CoordinatorOperationStatusResponse::ComponentProvisioning(terminal_status),
+        ) = coordinator_status(
+            &pic,
+            coordinator,
+            CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+        )
+        .expect("query terminal Component operation")
+        else {
+            panic!("Coordinator returned a differently correlated Component operation");
+        };
+        let terminal_sequence = compile_current_registry_sequence_with_status(
+            &desired,
+            &state,
+            &configuration.component_topology,
+            &terminal_registry,
+            &authorities,
+            Some(&terminal_status),
+        )
+        .expect("recognize terminal current Registry");
+        assert_eq!(
+            terminal_sequence.current_stage,
+            CurrentRegistryStage::Provisioned
+        );
+        let replay = compile_current_protocol_sequence(
+            &desired,
+            &state,
+            &configuration,
+            &terminal_sequence,
+            &authorities,
+            &stores,
+            operation_id,
+        )
+        .expect("compile immediate current replay");
+        let nonterminal = replay
+            .iter()
+            .filter(|step| {
+                !current_protocol_step_is_terminal(
+                    &pic,
+                    step,
+                    installed
+                        .init_args
+                        .authority
+                        .wasm_store_authority
+                        .installation_controller,
+                )
+            })
+            .map(|step| step.name.clone())
+            .collect::<Vec<_>>();
+        assert!(
+            nonterminal.is_empty(),
+            "an immediate second ensure must issue no update; nonterminal={nonterminal:?}"
+        );
+        std::fs::remove_dir_all(artifact_root).expect("remove artifact-union fixture");
+    }
+
+    #[cfg(test)]
+    fn fixture_application_artifact_union(
+        root: &Path,
+        installed: &InstalledRootFixture,
+    ) -> ApplicationArtifactUnion {
+        let mut entries = BTreeMap::new();
+        for entry in &installed.manifest.entries {
+            let artifact = &entry.artifact;
+            let compressed = installed
+                .artifacts
+                .get(&artifact.role)
+                .expect("fixture Store artifact");
+            let path = root.join(&artifact.wasm_gz_relative_path);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).expect("create fixture artifact parent");
+            }
+            std::fs::write(path, compressed).expect("write fixture Store artifact");
+            let projected = ApplicationArtifactEntry {
+                role: artifact.role.clone(),
+                package: artifact.package.clone(),
+                release_build_id: artifact.release_build_id,
+                wasm_relative_path: artifact.wasm_relative_path.clone(),
+                wasm_size_bytes: artifact.wasm_size_bytes,
+                wasm_sha256_hex: artifact.wasm_sha256_hex.clone(),
+                wasm_gz_relative_path: artifact.wasm_gz_relative_path.clone(),
+                wasm_gz_size_bytes: artifact.wasm_gz_size_bytes,
+                wasm_gz_sha256_hex: artifact.wasm_gz_sha256_hex.clone(),
+                candid_sha256: artifact.candid_sha256,
+                protocol_profile_digest: artifact.protocol_profile_digest,
             };
-            if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
-                assert_eq!(status.component_count, 5);
-                assert_eq!(status.runtime_activated_root_count, 1);
-                assert!(status.runtimes_activated_at_ns.is_some());
-                assert!(status.pending_root_failure.is_none());
-                assert_eq!(
-                    status
-                        .published_fleet_registry
-                        .as_ref()
-                        .expect("published Fleet service Registry")
-                        .revision,
-                    4
-                );
+            let previous = entries.insert(projected.role.clone(), projected.clone());
+            assert!(
+                previous
+                    .as_ref()
+                    .is_none_or(|existing| existing == &projected),
+                "one current role must retain one exact artifact"
+            );
+        }
+        ApplicationArtifactUnion {
+            release_build_id: installed.manifest.release_build_id,
+            fleet_component_topology_digest: installed.manifest.component_topology_digest,
+            entries: entries.into_values().collect(),
+        }
+    }
+
+    #[cfg(test)]
+    fn current_protocol_desired(
+        configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+        coordinator: Principal,
+        root: &FleetSubnetRootInitArgs,
+    ) -> DesiredFleet {
+        let authority = &root.authority;
+        let root_principal = authority.binding.fleet_subnet_root;
+        let store = authority.wasm_store_authority.wasm_store;
+        let operator = authority.wasm_store_authority.installation_controller;
+        let placements = configuration
+            .deployment_topology
+            .component_group_deployments
+            .iter()
+            .flat_map(|deployment| {
+                (0..deployment.initial_placements).map(move |ordinal| {
+                    serde_json::json!({
+                        "deployment": deployment.deployment.to_string(),
+                        "ordinal": ordinal,
+                        "root": "root",
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+        let desired = serde_json::json!({
+            "canisters": [
+                {
+                    "controllers": [operator.to_string()],
+                    "drain": null,
+                    "initial_cycles": "0",
+                    "init_arg": null,
+                    "init_candid": null,
+                    "kind": "coordinator",
+                    "minimum_cycles": "0",
+                    "name": "coordinator",
+                    "parent": null,
+                    "presence": "present",
+                    "principal": coordinator.to_string(),
+                    "replace": false,
+                    "subnet": authority.binding.authority.binding.coordinator_subnet.to_string(),
+                    "wasm": null,
+                },
+                {
+                    "controllers": [operator.to_string()],
+                    "drain": null,
+                    "initial_cycles": "0",
+                    "init_arg": null,
+                    "init_candid": null,
+                    "kind": "root",
+                    "minimum_cycles": "0",
+                    "name": "root",
+                    "parent": "coordinator",
+                    "presence": "present",
+                    "principal": root_principal.to_string(),
+                    "replace": false,
+                    "subnet": authority.binding.placement_subnet.to_string(),
+                    "wasm": null,
+                },
+                {
+                    "controllers": [operator.to_string(), root_principal.to_string()],
+                    "drain": null,
+                    "initial_cycles": "0",
+                    "init_arg": null,
+                    "init_candid": null,
+                    "kind": "store",
+                    "minimum_cycles": "0",
+                    "name": "store",
+                    "parent": "root",
+                    "presence": "present",
+                    "principal": store.to_string(),
+                    "replace": false,
+                    "subnet": authority.binding.placement_subnet.to_string(),
+                    "wasm": null,
+                }
+            ],
+            "cycles_ledger": operator.to_string(),
+            "environment": "local",
+            "fleet": "current-five-component-protocol",
+            "ledger_fee_cycles": "0",
+            "management_creation_fee_cycles": "0",
+            "material_cycle_threshold": "0",
+            "maximum_observation_burn_cycles": "0",
+            "maximum_stalled_observations": 8,
+            "maximum_update_burn_cycles": "0",
+            "operator": operator.to_string(),
+            "protocol": {
+                "app_config": "canic.toml",
+                "component_group_placements": placements,
+                "coordinator_candid": "coordinator.did",
+                "root_candid": "root.did",
+                "store_candid": "store.did",
+            },
+            "schema_version": FLEET_ENSURE_SCHEMA_VERSION,
+            "treasury": coordinator.to_string(),
+        });
+        serde_json::from_value(desired).expect("decode current desired Fleet fixture")
+    }
+
+    #[cfg(test)]
+    const fn current_protocol_test_stage(action: &CurrentFleetProtocolAction) -> u8 {
+        match action {
+            CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
+            | CurrentFleetProtocolAction::PublishStoreChunk { .. }
+            | CurrentFleetProtocolAction::StageStoreManifest { .. }
+            | CurrentFleetProtocolAction::AdoptStore { .. }
+            | CurrentFleetProtocolAction::BootstrapStore { .. } => 0,
+            CurrentFleetProtocolAction::JoinRoot { .. } => 1,
+            CurrentFleetProtocolAction::SynchronizeRegistry { .. } => 2,
+            CurrentFleetProtocolAction::ActivateRegistry { .. } => 3,
+            CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => 4,
+            CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => 5,
+            CurrentFleetProtocolAction::ProvisionComponents { .. } => 6,
+        }
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one exhaustive fixture issuer mirrors every closed current protocol action"
+    )]
+    fn issue_current_protocol_step(
+        pic: &PocketIc,
+        step: &CompiledCurrentProtocolStep,
+        operator: Principal,
+    ) {
+        match &step.action {
+            CurrentFleetProtocolAction::ActivateRegistry { request, .. } => {
+                let response = coordinator_command(
+                    pic,
+                    step.target,
+                    CoordinatorCommand::ActivateRegistry(request.clone()),
+                )
+                .expect("activate current Registry");
+                assert!(matches!(
+                    response,
+                    CoordinatorCommandResponse::ActivateRegistry(_)
+                ));
+            }
+            CurrentFleetProtocolAction::ActivateRegistryMirror { request, .. }
+            | CurrentFleetProtocolAction::SynchronizeRegistry { request, .. } => {
+                let response = root_command(
+                    pic,
+                    step.target,
+                    RootCommandFragment::SynchronizeRegistry(request.clone()),
+                )
+                .expect("synchronize current Root Registry");
+                assert!(matches!(
+                    response,
+                    RootCommandResponseFragment::OperationAccepted(_)
+                ));
+            }
+            CurrentFleetProtocolAction::AdoptStore { request } => {
+                let response = root_command(
+                    pic,
+                    step.target,
+                    RootCommandFragment::AdoptStore(request.clone()),
+                )
+                .expect("adopt current Store");
+                assert!(matches!(
+                    response,
+                    RootCommandResponseFragment::OperationAccepted(_)
+                ));
+            }
+            CurrentFleetProtocolAction::BootstrapStore { request, .. } => {
+                let response = root_command(
+                    pic,
+                    step.target,
+                    RootCommandFragment::BootstrapStore(request.clone()),
+                )
+                .expect("bootstrap current Store");
+                assert!(matches!(
+                    response,
+                    RootCommandResponseFragment::OperationAccepted(_)
+                ));
+            }
+            CurrentFleetProtocolAction::JoinRoot { request, .. } => {
+                let response = coordinator_command(
+                    pic,
+                    step.target,
+                    CoordinatorCommand::JoinRoot(request.clone()),
+                )
+                .expect("join current Root");
+                assert!(matches!(response, CoordinatorCommandResponse::JoinRoot(_)));
+            }
+            CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
+                store_prepare_as(pic, step.target, operator, request.clone())
+                    .expect("prepare current Store chunk set");
+            }
+            CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
+                let response = root_command(
+                    pic,
+                    step.target,
+                    RootCommandFragment::PrepareComponentRegistry(request.clone()),
+                )
+                .expect("prepare current Component Registry");
+                let RootCommandResponseFragment::PrepareComponentRegistry(observed) = response
+                else {
+                    panic!("Root returned a differently correlated Component Registry response");
+                };
+                assert!(current_component_registry_progresses(expected, &observed));
+            }
+            CurrentFleetProtocolAction::ProvisionComponents { request, .. } => {
+                let response = coordinator_command(
+                    pic,
+                    step.target,
+                    CoordinatorCommand::ProvisionComponents(request.clone()),
+                )
+                .expect("provision current Components");
+                assert!(matches!(
+                    response,
+                    CoordinatorCommandResponse::OperationAccepted(_)
+                ));
+            }
+            CurrentFleetProtocolAction::PublishStoreChunk { request } => {
+                let response: Result<(), Error> = pic
+                    .update_candid_as(
+                        step.target,
+                        operator,
+                        canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+                        (request.clone(),),
+                    )
+                    .expect("publish current Store chunk transport");
+                response.expect("publish current Store chunk");
+            }
+            CurrentFleetProtocolAction::StageStoreManifest { request } => {
+                store_stage_manifest_as(pic, step.target, operator, request.clone())
+                    .expect("stage current Store manifest");
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn await_current_protocol_step(
+        pic: &PocketIc,
+        step: &CompiledCurrentProtocolStep,
+        operator: Principal,
+    ) {
+        for _ in 0..160 {
+            if current_protocol_step_is_terminal(pic, step, operator) {
                 return;
             }
-            last_status = Some(status);
             pic.advance_time(Duration::from_secs(1));
             pic.tick();
         }
+        if let CurrentFleetProtocolAction::ProvisionComponents { request, .. } = &step.action {
+            let status = coordinator_status(
+                pic,
+                step.target,
+                CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                    operation_id: request.operation_id,
+                }),
+            );
+            let detail = match status {
+                Ok(CoordinatorStatusResponse::Operation(
+                    CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+                )) => format!("{status:?}"),
+                Ok(_) => "differently correlated status".to_string(),
+                Err(error) => format!("{error:?}"),
+            };
+            panic!(
+                "current protocol Component step did not converge: {}: {detail}",
+                step.name,
+            );
+        }
+        panic!("current protocol step did not converge: {}", step.name);
+    }
 
-        report_canister_diagnostics_batch(
-            &pic,
-            [
-                ("Coordinator", coordinator, Principal::anonymous()),
-                ("Root", fixture.root_id, Principal::anonymous()),
-            ],
-            "terminal fresh five-Component provisioning",
-        );
-        panic!(
-            "fresh five-Component provisioning did not publish its terminal Fleet catalog: {last_status:?}"
-        );
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the governed fixture mirrors every closed current protocol terminal predicate"
+    )]
+    #[cfg(test)]
+    fn current_protocol_step_is_terminal(
+        pic: &PocketIc,
+        step: &CompiledCurrentProtocolStep,
+        operator: Principal,
+    ) -> bool {
+        match &step.action {
+            CurrentFleetProtocolAction::ActivateRegistry {
+                expected_registry, ..
+            }
+            | CurrentFleetProtocolAction::JoinRoot {
+                expected_registry, ..
+            } => matches!(
+                coordinator_status(pic, step.target, CoordinatorStatusRequest::Registry),
+                Ok(CoordinatorStatusResponse::Registry(observed)) if observed == *expected_registry
+            ),
+            CurrentFleetProtocolAction::ActivateRegistryMirror { expected, request } => {
+                matches!(
+                    root_status(
+                        pic,
+                        step.target,
+                        RootStatusRequestFragment::Operation(OperationStatusRequest {
+                            operation_id: request.operation_id,
+                        }),
+                    ),
+                    Ok(RootStatusResponseFragment::Operation(
+                        RootOperationStatusResponse::SynchronizeRegistry(observed)
+                    )) if observed.activation.as_ref() == Some(expected)
+                )
+            }
+            CurrentFleetProtocolAction::AdoptStore { request } => matches!(
+                root_status(
+                    pic,
+                    step.target,
+                    RootStatusRequestFragment::Operation(OperationStatusRequest {
+                        operation_id: request.operation_id,
+                    }),
+                ),
+                Ok(RootStatusResponseFragment::Operation(
+                    RootOperationStatusResponse::AdoptStore(observed)
+                )) if observed.operation_id == request.operation_id
+                    && observed.authority == request.authority
+                    && observed.controllers == current_store_controllers(&request.authority)
+            ),
+            CurrentFleetProtocolAction::BootstrapStore { expected, request } => matches!(
+                root_status(
+                    pic,
+                    step.target,
+                    RootStatusRequestFragment::Operation(OperationStatusRequest {
+                        operation_id: request.operation_id,
+                    }),
+                ),
+                Ok(RootStatusResponseFragment::Operation(
+                    RootOperationStatusResponse::BootstrapStore(observed)
+                )) if observed == *expected
+            ),
+            CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
+                let status = current_store_staging_status(
+                    pic,
+                    step.target,
+                    operator,
+                    &request.template_id,
+                    &request.version,
+                );
+                status.chunk_set_present
+                    && status.expected_chunk_hashes == request.chunk_hashes
+                    && status.payload_hash.as_deref() == Some(request.payload_hash.as_slice())
+                    && status.payload_size_bytes == Some(request.payload_size_bytes)
+            }
+            CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
+                matches!(
+                    root_status(
+                        pic,
+                        step.target,
+                        RootStatusRequestFragment::ComponentRegistry(request.clone()),
+                    ),
+                    Ok(RootStatusResponseFragment::ComponentRegistry(observed))
+                        if current_component_registry_progresses(expected, &observed)
+                )
+            }
+            CurrentFleetProtocolAction::ProvisionComponents { request, plan_hash } => matches!(
+                coordinator_status(
+                    pic,
+                    step.target,
+                    CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                        operation_id: request.operation_id,
+                    }),
+                ),
+                Ok(CoordinatorStatusResponse::Operation(
+                    CoordinatorOperationStatusResponse::ComponentProvisioning(observed)
+                )) if observed.operation_id == request.operation_id
+                    && observed.plan_hash == *plan_hash
+                    && observed.phase == FleetComponentProvisioningPhase::RuntimesActivated
+                    && observed.published_fleet_registry.is_some()
+                    && observed.pending_root_failure.is_none()
+            ),
+            CurrentFleetProtocolAction::PublishStoreChunk { request } => {
+                let status = current_store_staging_status(
+                    pic,
+                    step.target,
+                    operator,
+                    &request.template_id,
+                    &request.version,
+                );
+                let expected = wasm_hash(&request.bytes);
+                status
+                    .stored_chunk_hashes
+                    .get(request.chunk_index as usize)
+                    .is_some_and(|actual| actual.as_ref() == Some(&expected))
+            }
+            CurrentFleetProtocolAction::StageStoreManifest { request } => {
+                let status = current_store_staging_status(
+                    pic,
+                    step.target,
+                    operator,
+                    &request.template_id,
+                    &request.version,
+                );
+                status.manifest.as_ref() == Some(&current_manifest_response(request))
+            }
+            CurrentFleetProtocolAction::SynchronizeRegistry { expected, request } => {
+                matches!(
+                    root_status(
+                        pic,
+                        step.target,
+                        RootStatusRequestFragment::Operation(OperationStatusRequest {
+                            operation_id: request.operation_id,
+                        }),
+                    ),
+                    Ok(RootStatusResponseFragment::Operation(
+                        RootOperationStatusResponse::SynchronizeRegistry(observed)
+                    )) if observed.synchronization == *expected
+                )
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn current_store_staging_status(
+        pic: &PocketIc,
+        store: Principal,
+        caller: Principal,
+        template_id: &TemplateId,
+        version: &TemplateVersion,
+    ) -> TemplateStagingStatusResponse {
+        let response: Result<StoreStatusResponse, Error> = pic
+            .query_candid_as(
+                store,
+                caller,
+                canic::protocol::CANIC_STATUS,
+                (StoreStatusRequest::Template(TemplateLookupRequest {
+                    template_id: template_id.clone(),
+                    version: version.clone(),
+                }),),
+            )
+            .expect("query current Store staging transport");
+        let StoreStatusResponse::Template(status) = response.expect("query current Store staging")
+        else {
+            panic!("Store returned a differently correlated staging status");
+        };
+        status
+    }
+
+    #[cfg(test)]
+    fn current_component_registry_progresses(
+        expected: &RootComponentRegistryStatusResponse,
+        observed: &RootComponentRegistryStatusResponse,
+    ) -> bool {
+        let authority_matches = observed.fleet_subnet_root == expected.fleet_subnet_root
+            && observed.prepared_against_registry == expected.prepared_against_registry
+            && observed.release_set == expected.release_set
+            && observed.component_topology_digest == expected.component_topology_digest;
+        let counters_are_monotonic = observed.next_allocation_sequence
+            >= expected.next_allocation_sequence
+            && observed.reserved_component_instances >= expected.reserved_component_instances
+            && observed.committed_component_instances >= expected.committed_component_instances
+            && observed.managed_descendants >= expected.managed_descendants
+            && observed.known_created_component_canisters
+                >= expected.known_created_component_canisters
+            && observed.encoded_bytes >= expected.encoded_bytes;
+        authority_matches && counters_are_monotonic
+    }
+
+    #[cfg(test)]
+    fn current_manifest_response(request: &TemplateManifestInput) -> TemplateManifestResponse {
+        TemplateManifestResponse {
+            template_id: request.template_id.clone(),
+            role: request.role.clone(),
+            version: request.version.clone(),
+            payload_hash: request.payload_hash.clone(),
+            payload_size_bytes: request.payload_size_bytes,
+            store_binding: request.store_binding.clone(),
+            chunking_mode: request.chunking_mode,
+            manifest_state: request.manifest_state,
+            approved_at: request.approved_at,
+            created_at: request.created_at,
+        }
+    }
+
+    #[cfg(test)]
+    fn current_store_controllers(
+        authority: &canic_core::ids::FleetSubnetWasmStoreAuthority,
+    ) -> Vec<Principal> {
+        let mut controllers = vec![
+            authority.fleet_subnet_root,
+            authority.installation_controller,
+        ];
+        controllers.sort();
+        controllers
     }
 
     #[test]
@@ -5407,66 +6090,32 @@ mod tests {
     fn fixture_fresh_component_plan(
         config: &canic_core::bootstrap::compiled::ConfigModel,
         registry: &canic::dto::fleet_registry::FleetRegistry,
-    ) -> FleetComponentProvisioningPlan {
+        operation_id: [u8; 32],
+    ) -> CompiledCurrentComponentProvisioning {
         let configuration = config
             .compile_component_deployment_configuration()
             .expect("compile fixture Component deployment configuration");
-        let deployment = configuration
-            .deployment_topology
-            .get(&"issuer_cells".parse().expect("deployment ID"))
-            .expect("issuer deployment");
         let root = registry
             .fleet_subnet_roots
             .first()
-            .expect("one registered Root");
-        let entries: Vec<_> = deployment
-            .members
+            .expect("one registered Root")
+            .fleet_subnet_root;
+        let placements = configuration
+            .deployment_topology
+            .component_group_deployments
             .iter()
-            .map(|member| ComponentGroupPlanEntry {
-                member_path: member.member_path.clone(),
-                component_spec: member.component_spec.clone(),
-                spec_hash: member.component_spec_hash,
-                purpose: member.purpose.clone(),
-                labels: member.labels.clone(),
-                limits: member.limits.clone(),
+            .flat_map(|deployment| {
+                (0..deployment.initial_placements).map(move |ordinal| {
+                    CurrentComponentGroupPlacement {
+                        deployment: deployment.deployment.clone(),
+                        fleet_subnet_root: root,
+                        ordinal,
+                    }
+                })
             })
-            .collect();
-        let placements = (0..deployment.initial_placements)
-            .map(|ordinal| ComponentGroupPlacementPlan {
-                group_placement: ComponentGroupPlacementId {
-                    deployment: deployment.deployment.clone(),
-                    ordinal,
-                },
-                component_group: deployment.component_group.clone(),
-                entries: entries.clone(),
-            })
-            .collect();
-        FleetComponentProvisioningPlan {
-            fleet: registry.authority.binding.fleet.clone(),
-            fleet_registry:
-                canic_core::control_plane_support::ops::fleet_registry::FleetRegistryOps::version(
-                    &registry.authority,
-                    &configuration.component_topology,
-                    registry,
-                )
-                .expect("active Registry version"),
-            configuration_digest: configuration.digest().expect("configuration digest"),
-            operation: FleetComponentProvisioningOperation::FreshInstall,
-            directory_confirmation_roots: vec![root.fleet_subnet_root],
-            batches: vec![FleetSubnetRootProvisioningBatch {
-                root: FleetSubnetRootBinding {
-                    authority: registry.authority.clone(),
-                    placement_subnet: root.placement_subnet,
-                    fleet_subnet_root: root.fleet_subnet_root,
-                    component_admissions: root.component_admissions.clone(),
-                    component_topology_digest: root.component_topology_digest,
-                    limits: root.limits.clone(),
-                    funding: root.funding.clone(),
-                },
-                active_release_set: root.active_release_set,
-                placements,
-            }],
-        }
+            .collect::<Vec<_>>();
+        compile_current_component_provisioning(&configuration, registry, operation_id, &placements)
+            .expect("compile current typed Component provisioning")
     }
 
     #[cfg(test)]
@@ -5501,14 +6150,11 @@ mod tests {
         };
         let config =
             AppConfigSnapshot::load(config_path).expect("load provisioning fixture config");
-        let plan = fixture_fresh_component_plan(config.model(), &registry);
+        let compiled = fixture_fresh_component_plan(config.model(), &registry, operation_id);
         let CoordinatorCommandResponse::OperationAccepted(receipt) = coordinator_command(
             pic,
             coordinator,
-            CoordinatorCommand::ProvisionComponents(FleetComponentProvisioningPrepareRequest {
-                operation_id,
-                plan,
-            }),
+            CoordinatorCommand::ProvisionComponents(compiled.request),
         )
         .expect("begin fresh Component provisioning") else {
             panic!("Coordinator returned a differently correlated provisioning response");
@@ -5970,6 +6616,60 @@ mod tests {
     where
         F: FnOnce(&PocketIc, Principal) -> Vec<Principal>,
     {
+        let InstalledRootFixture {
+            root_id,
+            init_args,
+            coordinator_root_funding,
+            manifest,
+            artifacts,
+            manifest_bytes,
+            digest,
+        } = install_current_root_with_config_and_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            placement,
+            config_path,
+            pool_setup,
+        );
+        let wasm_store = init_args.authority.wasm_store_authority.wasm_store;
+        let installation_controller = init_args
+            .authority
+            .wasm_store_authority
+            .installation_controller;
+        let (request, response) = bootstrap_root_store_release_set(
+            pic,
+            root_id,
+            wasm_store,
+            installation_controller,
+            &init_args,
+            &manifest,
+            artifacts,
+            &manifest_bytes,
+            digest,
+        );
+        BootstrappedRootFixture {
+            root_id,
+            init_args,
+            coordinator_root_funding,
+            request,
+            response,
+        }
+    }
+
+    fn install_current_root_with_config_and_pool_setup<F>(
+        pic: &PocketIc,
+        root_wasm: Vec<u8>,
+        coordinator: Principal,
+        store_fixture: RootStoreFixture,
+        placement: BootstrappedRootPlacement,
+        config_path: &Path,
+        pool_setup: F,
+    ) -> InstalledRootFixture
+    where
+        F: FnOnce(&PocketIc, Principal) -> Vec<Principal>,
+    {
         let RootStoreFixture {
             manifest,
             artifacts,
@@ -6048,25 +6748,16 @@ mod tests {
         );
         let init_bytes = encode_one(&init_args).expect("encode live PocketIC root authority");
         pic.install_canister(root_id, root_wasm, init_bytes, None);
-        let (request, response) = bootstrap_root_store_release_set(
-            pic,
-            root_id,
-            wasm_store,
-            installation_controller,
-            &init_args,
-            &manifest,
-            artifacts,
-            &manifest_bytes,
-            digest,
-        );
-        BootstrappedRootFixture {
+        InstalledRootFixture {
             root_id,
             init_args,
             coordinator_root_funding: placement
                 .coordinator_root_funding
                 .unwrap_or_else(crate::pic::coordinator_root_funding_policy),
-            request,
-            response,
+            manifest,
+            artifacts,
+            manifest_bytes,
+            digest,
         }
     }
 
@@ -6333,17 +7024,21 @@ mod tests {
             existing.as_ref().is_none_or(|bytes| bytes == &compressed),
             "one role must retain one exact artifact payload"
         );
+        let declared_package = &config
+            .roles
+            .get(role)
+            .expect("fixture role declaration")
+            .package;
         RootStoreReleaseSetEntry {
             component_spec: component_spec.clone(),
             kind,
             artifact: RootStoreArtifact {
                 role: role.clone(),
-                package: config
-                    .roles
-                    .get(role)
-                    .expect("fixture role declaration")
-                    .package
-                    .clone(),
+                package: Path::new(declared_package)
+                    .file_name()
+                    .and_then(std::ffi::OsStr::to_str)
+                    .expect("fixture role package has a canonical Cargo identity")
+                    .to_string(),
                 release_build_id,
                 wasm_relative_path: format!("{role}.wasm"),
                 wasm_size_bytes: raw.len() as u64,

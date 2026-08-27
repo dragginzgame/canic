@@ -1,35 +1,32 @@
 # Fleet Orchestration
 
-A Fleet is one installed instance of an App on one network. Canic qualifies
-its infrastructure and application artifacts, then coordinates installation
-through one Fleet Coordinator and a Fleet Subnet Root with a root-local Wasm
-Store on every occupied physical Subnet.
+A Fleet is one live desired-state instance on one network. Canic qualifies its
+artifacts, observes exact configured canisters, and reconciles only the effects
+in one reviewed `canic fleet ensure` plan.
 
 ## What It Provides
 
 - explicit network trust enrollment and canonical network identity
-- operator-owned Fleet installation input separate from App configuration
-- qualified Coordinator, root, Store, and application artifact sets
-- journaled create, install, registration, and activation workflows
-- Coordinator Registry plus independently validated root mirrors/directories
-- root-owned canister lifecycle effects and bounded prepaid inventory
+- operator-owned desired Fleet state separate from App configuration
+- exact create/reuse/reinstall/replace/delete dispositions
+- intent-before-effect creation, funding, transfer and management operations
+- bounded fees, funding, observation/update burn and cycle conservation
+- effect-free immediate replay after convergence
 
-The host CLI orchestrates the workflow while the Coordinator and roots retain
-the durable on-chain authority needed for exact retry and reconciliation.
+The host current-generation journal owns sequencing. Ledger and configured
+drain effects additionally retain exact replay identities.
 
 ## Boundary
 
 Application canisters never receive filesystem, repository, identity-key, or
-operator configuration authority. A root owns platform effects on its Subnet;
-the Coordinator owns Fleet-wide planning and publication. Current release
-transitions are reinstall-only. Scheduled 0.111 defines one exact stop-the-
-world predecessor/successor exception without permitting mixed-version or
-arbitrary historical adoption.
+operator configuration authority. A material canister must explicitly expose
+an idempotent treasury drain before Canic may replace or delete it. Historical
+install and recovery state is not a current authority.
 
 ## Start Here
 
 - [Installing Canic](../../../INSTALLING.md)
-- [Fleet installation input](../../architecture/fleet-install-input.md)
+- [Fleet ensure](../operations/fleet-ensure.md)
 - [Build artifact architecture](../../architecture/build-artifacts.md)
 - [Host library guide](../../../crates/canic-host/README.md)
 - [Current implementation status](../../status/current.md)

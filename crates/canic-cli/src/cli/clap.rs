@@ -132,16 +132,6 @@ where
     typed_option(matches, id).unwrap_or_else(|| panic!("clap requires {id}"))
 }
 
-/// Read zero or more values from one repeatable typed argument.
-pub fn typed_values<T>(matches: &ArgMatches, id: &str) -> Vec<T>
-where
-    T: Clone + Send + Sync + 'static,
-{
-    matches
-        .get_many::<T>(id)
-        .map_or_else(Vec::new, |values| values.cloned().collect())
-}
-
 /// Read an optional path argument from parsed matches.
 pub fn path_option(matches: &ArgMatches, id: &str) -> Option<PathBuf> {
     string_option(matches, id).map(PathBuf::from)
@@ -200,47 +190,5 @@ mod tests {
                 .expect("parse required subcommand");
 
         assert_eq!(parsed, ("run".to_string(), vec![OsString::from("--flag")]));
-    }
-
-    #[test]
-    fn positive_parsers_reject_zero() {
-        assert_eq!(parse_positive_usize("1"), Ok(1));
-        assert_eq!(parse_positive_u64("2"), Ok(2));
-        assert!(parse_positive_usize("0").is_err());
-        assert!(parse_positive_u64("0").is_err());
-    }
-
-    #[test]
-    fn typed_values_collects_repeatable_arguments_or_returns_empty() {
-        let command = Command::new("test").arg(
-            Arg::new("value")
-                .long("value")
-                .action(ArgAction::Append)
-                .value_parser(clap::value_parser!(u64)),
-        );
-        let matches = parse_matches(
-            command,
-            [
-                OsString::from("--value"),
-                OsString::from("1"),
-                OsString::from("--value"),
-                OsString::from("2"),
-            ],
-        )
-        .expect("parse repeatable values");
-
-        assert_eq!(typed_values::<u64>(&matches, "value"), vec![1, 2]);
-
-        let empty = parse_matches(
-            Command::new("test").arg(
-                Arg::new("value")
-                    .long("value")
-                    .action(ArgAction::Append)
-                    .value_parser(clap::value_parser!(u64)),
-            ),
-            [],
-        )
-        .expect("parse omitted repeatable values");
-        assert!(typed_values::<u64>(&empty, "value").is_empty());
     }
 }

@@ -240,25 +240,23 @@ app = "example"
 role = "registry"
 ```
 
-## Install And Inspect
+## Ensure The Fleet
 
-Create a separate operator Fleet input using the exact local application
-Subnet principal. The complete document shape and IC mainnet selectors are in
-[`fleet-install-input.md`](../architecture/fleet-install-input.md).
+Create a desired Fleet document using the exact local Subnet, controllers,
+artifacts and cycle bounds. The complete contract is in
+[Fleet ensure](../features/operations/fleet-ensure.md).
 
-Then exercise the current local installation boundary:
+Then exercise the current reviewed convergence boundary:
 
 ```bash
-canic status
 canic replica start --background
-canic install example example-local --fleet-input deployments/example-local.toml --profile fast
+canic fleet ensure example-local --desired fleets/example-local.toml
+canic fleet ensure example-local --desired fleets/example-local.toml --apply <plan_sha256>
 ```
 
-On success, installation verifies the Coordinator, planned roots, root-local
-Stores, Registry, Mirrors, and Directories; provisions and activates the
-configured initial Components; activates every selected root; and publishes
-the terminal Fleet catalog. `canic info list example-local` becomes applicable
-only after that terminal boundary.
+On success, the reviewed operation has created or reused every configured
+canister, reconciled its funding/controllers/Wasm/runtime state, and recorded
+terminal cycle conservation. An immediate second run has zero mutation actions.
 
 Build one role without installing:
 
@@ -269,35 +267,13 @@ canic build example hub
 If you pass `--workspace`, `--icp-root`, or `--config` explicitly, use absolute
 paths for the explicit roots and config file.
 
-For a terminal installed Fleet, `canic info list example-local` validates its
-Coordinator Registry and shows the bounded live trees under every current
-Root. `canic info subnets example-local [--json]` instead reports exact
-Fleet-owned Canister counts grouped by occupied physical Subnet. Both exit
-without a partial result if current Coordinator/root evidence does not agree.
-
 ## Testing Shape
 
-A managed-fleet PocketIC test should validate the same path as local install:
-
-1. Compile and freeze the complete Component Topology and Fleet install plan.
-2. Install and verify the Coordinator with exact Fleet Registry genesis.
-3. Install every planned Fleet Subnet Root with its protected authority.
-4. Stage each admitted release set and bootstrap exactly one verified local
-   Store per root.
-5. Join every root through the Coordinator Fleet Registry.
-6. Synchronize the final snapshot and activate roots only after Store, Mirror,
-   and Directory evidence agree.
-7. Create the admitted `hub` Component through root-owned Component Registry
-   authority.
-8. Have `hub` request `registry` through the exact compiled spawn grant.
-9. Resolve the child from the revision-bound Component Directory and call its
-   application method directly.
-
-Fresh installation covers steps 1-7. Steps 8-9 are post-install application
-behavior and are exercised through managed-Fleet PocketIC journeys. Installing
-one root, `hub`, and `registry` manually in the same PocketIC instance only
-tests individual lifecycle adapters; it does not validate the
-Coordinator-anchored managed-Fleet journey.
+A managed-Fleet PocketIC test should start from a deliberately inconsistent
+estate, compile the same current desired plan, interrupt after each mutation
+class, reconcile exact live results, reach terminal cycle conservation, and
+prove an immediate second plan/apply performs zero mutation actions. Separate
+runtime tests may then exercise application-specific parent/child behavior.
 
 ## Candid Surface
 

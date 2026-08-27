@@ -4,7 +4,6 @@ canisters/test/canic_icydb_lifecycle_probe/src/lib.rs	independent application cu
 canisters/test/delegation_root_stub/src/lib.rs	independent application custody	Executable Root participant observes exact Canic provider rows	Retained without Canic scheduling authority
 canisters/test/intent_authority/src/lib.rs	private lifecycle consumer	Executable authority fixture initializes the exact nonroot runtime	Retained as lifecycle evidence, not excluded as test source
 canisters/test/runtime_probe/src/lib.rs	independent application custody	Application holds direct native once, interval and capacity registrations	Retained as the maintained downstream adoption fixture
-crates/canic-cli/src/inspect/mod.rs	DTO/metrics projection	CLI renders neutral timer status projections	Retained without registration capability
 crates/canic-control-plane/src/api/fleet_coordinator.rs	private lifecycle consumer	Coordinator initializes the shared runtime and exact snapshot path	Retained without Root or application timer custody
 crates/canic-control-plane/src/api/lifecycle.rs	private lifecycle consumer	Root lifecycle invokes exact pool/snapshot owners and private deferral	Retained without participant registries
 crates/canic-control-plane/src/workflow/canister_pool/mod.rs	native registration custody	Pool owns maintenance and recovery-watchdog registrations	Retained with demand derived from pool journals and Fleet state

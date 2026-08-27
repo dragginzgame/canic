@@ -19,21 +19,17 @@ use crate::{
         globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
     },
+    support::candid::registry_entry_candid_path,
     version_text,
 };
 use canic_core::protocol::CANIC_STATUS;
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
+    fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
-    },
-    protocol_binding::{
-        resolve_infrastructure_protocol_binding, resolve_registry_protocol_binding,
-    },
+    protocol_binding::resolve_registry_protocol_binding,
     registry::RegistryEntry,
-    release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -81,7 +77,7 @@ pub enum AuthCommandError {
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -127,9 +123,9 @@ impl AuthCommandError {
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
-            | Self::MethodModeMismatch { .. } => 1,
-            Self::InstalledFleet(InstalledFleetError::Protocol(_)) | Self::Icp(_) => 2,
-            Self::InstalledFleet(_) => 1,
+            | Self::MethodModeMismatch { .. }
+            | Self::CurrentFleet(_) => 1,
+            Self::Icp(_) => 2,
             Self::ResponseParse(_) => 3,
         }
     }
@@ -236,7 +232,7 @@ fn status_command() -> ClapCommand {
             value_arg(FLEET_ARG)
                 .value_name(FLEET_ARG)
                 .required(true)
-                .help("Installed Fleet name"),
+                .help("Terminal current Fleet name"),
         )
         .arg(
             value_arg(ISSUER_ARG)
@@ -404,8 +400,8 @@ enum AuthRenewalReportKind {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 enum AuthRenewalCandidSource {
-    #[serde(rename = "installed_fleet")]
-    InstalledFleet,
+    #[serde(rename = "current_ensure_inventory")]
+    CurrentEnsureInventory,
 }
 
 ///
@@ -600,32 +596,21 @@ fn resolve_auth_root_call_target(
     method: &str,
 ) -> Result<AuthRootCallTarget, AuthCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(AuthCommandError::IcpRoot)?;
-    let installed = resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: fleet.to_string(),
-            environment: options.environment.clone(),
-        },
-        &options.icp,
-        &icp_root,
-    )
-    .map_err(AuthCommandError::from)?;
-    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        &icp_root,
-        installed.fleet.release_build_id,
-    )
-    .map_err(|_| AuthCommandError::CandidUnavailable {
-        fleet: fleet.to_string(),
-    })?;
-    let root_artifact = infrastructure_manifest
-        .manifest
+    let current = resolve_current_fleet(&icp_root, &options.environment, fleet)?;
+    let root_canister_id = current
+        .topology
+        .unique_fleet_subnet_root(fleet)?
+        .to_string();
+    let root_entry = current
+        .registry
         .entries
         .iter()
-        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .find(|entry| entry.pid == root_canister_id)
         .ok_or_else(|| AuthCommandError::CandidUnavailable {
             fleet: fleet.to_string(),
         })?;
     let candid_path =
-        resolve_infrastructure_protocol_binding(&icp_root, &options.environment, root_artifact)
+        registry_entry_candid_path(Some(icp_root.as_path()), &options.environment, root_entry)
             .map_err(|_| AuthCommandError::CandidUnavailable {
                 fleet: fleet.to_string(),
             })?
@@ -637,21 +622,16 @@ fn resolve_auth_root_call_target(
             source,
         })?;
     validate_auth_query_method(&candid_path, &candid, method)?;
-    let root_canister_id = installed
-        .topology
-        .unique_fleet_subnet_root(fleet)?
-        .to_string();
-
     Ok(AuthRootCallTarget {
         target: AuthRootTarget {
             input: ROOT_ROLE.to_string(),
             role: ROOT_ROLE.to_string(),
             canister_id: root_canister_id,
-            candid_source: AuthRenewalCandidSource::InstalledFleet,
+            candid_source: AuthRenewalCandidSource::CurrentEnsureInventory,
         },
         candid_path,
         icp_root,
-        registry_entries: installed.registry.entries,
+        registry_entries: current.registry.entries,
     })
 }
 
@@ -689,7 +669,7 @@ fn resolve_auth_issuer_call_target(
             input: issuer_pid.to_string(),
             role: entry.role.clone(),
             canister_id: issuer_pid.to_string(),
-            candid_source: AuthRenewalCandidSource::InstalledFleet,
+            candid_source: AuthRenewalCandidSource::CurrentEnsureInventory,
         },
         candid_path,
         icp_root: root_target.icp_root.clone(),

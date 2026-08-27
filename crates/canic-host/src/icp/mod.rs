@@ -1,4 +1,5 @@
 mod balance;
+mod candid;
 mod canister;
 mod command;
 mod diagnostic;
@@ -12,6 +13,7 @@ mod snapshot;
 mod version;
 
 pub use balance::IcpBalanceError;
+pub use candid::IcpCandidCallError;
 pub use command::{
     CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV, add_target_args, command_display,
     existing_local_canister_candid_path, local_canister_candid_path,
@@ -23,8 +25,9 @@ pub use model::{
     IcpCanisterStatusReport, IcpCanisterStatusSettings, IcpCli, IcpRawOutput, IcpSnapshot,
     LocalReplicaTarget,
 };
+pub(crate) use response::response_bytes;
 pub use response::{IcpJsonResponseError, decode_json_result_response};
-pub(crate) use run::{run_output_to_file, run_status, run_success};
+pub(crate) use run::run_status;
 pub use run::{run_output_with_stderr, run_raw_output};
 
 #[cfg(test)]

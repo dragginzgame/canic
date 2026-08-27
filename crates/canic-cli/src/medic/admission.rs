@@ -40,7 +40,7 @@ pub(super) fn check_fleet_admission(
             "admission",
             error.to_string(),
             format!(
-                "run canic admission status {} and recover the retained operation before serving protected ingress",
+                "run canic admission status {} and complete its exact current operation before serving protected ingress",
                 options.fleet_name()
             ),
             MedicSource::AdmissionStatus,
@@ -69,7 +69,7 @@ fn classify_report(report: &AdmissionStatusReport) -> MedicCheck {
                 root.root,
                 root.operation_id.as_deref().unwrap_or("none"),
             ),
-            "do not open protected ingress; recover the exact retained admission operation",
+            "do not open protected ingress; complete the exact current admission operation",
             MedicSource::AdmissionStatus,
         );
     }
@@ -116,7 +116,7 @@ fn classify_report(report: &AdmissionStatusReport) -> MedicCheck {
                 root.open_count,
                 root.participant_count,
             ),
-            "keep protected ingress fenced and recover the retained admission operation",
+            "keep protected ingress fenced and complete the exact current admission operation",
             MedicSource::AdmissionStatus,
         );
     }

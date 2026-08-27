@@ -6,12 +6,10 @@ use canic_host::{
     canic_metadata::query_canic_metadata_version,
     canister_ready::{query_canister_ready, query_local_canister_ready},
     cycle_balance::query_cycle_balance,
+    fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
     format::{cycles_tc, wasm_size_label},
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{
-        InstalledFleetRequest, InstalledFleetResolution, resolve_installed_fleet_from_root,
-    },
     registry::RegistryEntry,
     release_set::artifact_root_path,
     replica_query,
@@ -259,17 +257,10 @@ fn resolve_icp_artifact_root(_options: &ListOptions) -> Result<PathBuf, ListComm
     resolve_live_icp_root()
 }
 
-fn resolve_list_fleet(options: &ListOptions) -> Result<InstalledFleetResolution, ListCommandError> {
+fn resolve_list_fleet(options: &ListOptions) -> Result<CurrentFleetResolution, ListCommandError> {
     let icp_root = resolve_live_icp_root()?;
-    resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.target.clone(),
-            environment: state_environment(options),
-        },
-        &options.icp,
-        &icp_root,
-    )
-    .map_err(ListCommandError::from)
+    resolve_current_fleet(&icp_root, &state_environment(options), &options.target)
+        .map_err(ListCommandError::from)
 }
 
 fn resolve_live_icp_root() -> Result<PathBuf, ListCommandError> {

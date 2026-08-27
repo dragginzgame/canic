@@ -12,8 +12,8 @@ use crate::medic::{
 use std::path::Path;
 
 use canic_host::{
+    config_discovery::discover_workspace_canic_config_choices,
     icp_config::inspect_canic_icp_yaml_from_root,
-    install_root::discover_workspace_canic_config_choices,
     state_manifest::{StateAuditStatus, StateManifestResolution, build_state_audit_report},
 };
 

@@ -35,7 +35,7 @@ its configuration-compiled Fleet Subnet Root under its own directory.
 ## Local Workflow
 
 The test Canisters are wired through `icp.yaml`; custom build steps invoke the
-same host artifact builder used by `canic install`.
+same host artifact builder whose outputs are bound by `canic fleet ensure`.
 
 - Inspect the source topology: `canic app config test --verbose`
 - Build the complete App and Canic infrastructure artifact set:
@@ -43,20 +43,20 @@ same host artifact builder used by `canic install`.
 - Build one role: `canic build test app`
 - Build production-optimized artifacts explicitly:
   `canic build test --profile release`
-- Install the managed test Fleet:
-  `canic install test test-local --fleet-input <path> --profile fast`
+- Review the managed test Fleet:
+  `canic fleet ensure test-local --desired fleets/test-local.toml`
 - Create/build test canisters manually: `icp deploy -e test`
 
-The installer provisions and activates the configured top-level `app`, `test`,
-`user_hub`, and `scale_hub` Components before terminal Fleet publication.
+The desired Fleet reconciler creates or reuses the configured top-level `app`,
+`test`, `user_hub`, and `scale_hub` canisters according to its reviewed plan.
 `user_shard` and `scale_replica` descendants are created only by later
 application/runtime requests. The demo sharding walkthrough is
 `demo_user_hub_plan("alice")`,
 `demo_user_hub_assign("alice")`, then
 `demo_user_shard_describe("alice")` on the returned shard.
 
-The separate Fleet input format is documented in
-[`fleet-install-input.md`](../docs/architecture/fleet-install-input.md).
+The separate desired Fleet format is documented in
+[Fleet ensure](../docs/features/operations/fleet-ensure.md).
 Isolated test probes and PocketIC fixtures live under `canisters/test/`.
 
 Nonlocal targets expect their environment to be managed externally.

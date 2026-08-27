@@ -143,24 +143,18 @@ These checks may require a clean worktree, isolated temporary package roots,
 local caches, or authorized network access. A skipped gate records its owner,
 reason, and target environment.
 
-## Local ICP And Canister Gates
+## Fleet Ensure Qualification
 
 ```text
-make test-fleet-install
-make test-canisters
+cargo test --locked -p canic-host --lib \
+  fleet_ensure::tests::governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects \
+  -- --exact --nocapture
 ```
 
-These are maintained, environment-specific RC gates. `test-fleet-install`
-derives an exact operator Fleet input from the selected local ICP environment,
-requires exactly one Application Subnet, and drives that single-root Fleet to
-terminal installation. `test-canisters` reuses the terminal Fleet and calls the
-test application Canister. Neither target is multi-root qualification evidence.
-
-The current multi-root topology proof is the focused three-Subnet PocketIC
-journey recorded in the active 0.101
-[qualification report](../design/0.101-fleet-authoritative-service-provisioning-and-publication/qualification.md).
-Local ICP gates must require the named environment and must never target
-mainnet as an incidental test default.
+This governed PocketIC journey is current desired-state qualification evidence.
+It starts from an inconsistent multi-role estate, conserves cycles through
+convergence and immediately repeats with zero mutation actions. Removed local
+install and test-canister targets are not maintained release gates.
 
 The two Canic-owned blob inventory gates are temporary product guards. They
 remain required while Canic owns the embedded blob subsystem and retire with

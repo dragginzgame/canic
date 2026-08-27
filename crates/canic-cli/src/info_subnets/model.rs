@@ -1,13 +1,13 @@
 //! Module: canic_cli::info_subnets::model
 //!
-//! Responsibility: validate and aggregate live Fleet Subnet inventory evidence.
-//! Does not own: network queries, catalog persistence, or output rendering.
-//! Boundary: accepts exact catalog/Coordinator/root observations and produces a report only when
-//! the complete authority graph agrees.
+//! Responsibility: validate and aggregate live current-Fleet Subnet evidence.
+//! Does not own: network queries, ensure-state persistence, or output rendering.
+//! Boundary: the retained terminal authority and complete live Coordinator/Root evidence must
+//! agree before a report exists.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use candid::{Principal, types::principal::PrincipalError};
+use candid::Principal;
 use canic_core::{
     dto::{
         fleet_registry::{
@@ -18,19 +18,13 @@ use canic_core::{
     },
     ids::SubnetId,
 };
-use canic_host::fleet_catalog::FleetCatalogEntryV1;
 use serde::Serialize;
 use thiserror::Error as ThisError;
 
 const SUBNET_INVENTORY_SCHEMA_VERSION: u32 = 1;
 const ROOT_LOCAL_INFRASTRUCTURE_CANISTERS: u32 = 2;
 
-///
-/// FleetSubnetInventoryReportV1
-///
 /// Schema-versioned complete live inventory returned by `canic info subnets`.
-///
-
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct FleetSubnetInventoryReportV1 {
     pub schema_version: u32,
@@ -44,12 +38,7 @@ pub(super) struct FleetSubnetInventoryReportV1 {
     pub subnets: Vec<FleetSubnetInventoryRowV1>,
 }
 
-///
-/// FleetSubnetInventoryRowV1
-///
 /// One physical Subnet occupied by the selected Fleet.
-///
-
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct FleetSubnetInventoryRowV1 {
     pub subnet: String,
@@ -62,74 +51,60 @@ pub(super) struct FleetSubnetInventoryRowV1 {
     pub total_canisters: u32,
 }
 
-///
-/// SubnetInventoryError
-///
 /// Typed rejection of incomplete or contradictory live inventory evidence.
-///
-
 #[derive(Debug, ThisError)]
 pub enum SubnetInventoryError {
-    #[error("Fleet catalog Coordinator principal is invalid: {0}")]
-    CatalogCoordinator(#[source] PrincipalError),
+    #[error("live Fleet Registry conflicts with terminal current ensure authority: {field}")]
+    CurrentAuthorityMismatch { field: &'static str },
 
     #[error("Fleet Subnet inventory count overflow")]
     CountOverflow,
 
-    #[error("Fleet Registry authority disagrees with catalog field {field}")]
-    CatalogAuthorityMismatch { field: &'static str },
-
-    #[error("Fleet Registry contains duplicate root principal {root}")]
+    #[error("Fleet Registry contains duplicate Root principal {root}")]
     DuplicateRegistryRoot { root: Principal },
 
-    #[error("Fleet Subnet Root summary repeats root {root}")]
+    #[error("Fleet Subnet Root summary repeats Root {root}")]
     DuplicateSummary { root: Principal },
 
-    #[error("Fleet Subnet Root summary is missing for root {root}")]
+    #[error("Fleet Subnet Root summary is missing for Root {root}")]
     MissingSummary { root: Principal },
 
-    #[error("Fleet Registry root order is not strictly ascending by physical Subnet")]
+    #[error("Fleet Registry Root order is not strictly ascending by physical Subnet")]
     NonCanonicalRootOrder,
 
     #[error("Fleet Registry evidence is inconsistent: {field}")]
     RegistryEvidenceMismatch { field: &'static str },
 
-    #[error("Fleet Registry contains invalid root authority for {root}")]
+    #[error("Fleet Registry contains invalid Root authority for {root}")]
     RegistryRootAuthority { root: Principal },
 
-    #[error("Fleet Subnet Root summary disagrees with Coordinator authority for root {root}")]
+    #[error("Fleet Subnet Root summary disagrees with Coordinator authority for Root {root}")]
     SummaryMismatch { root: Principal },
 
-    #[error("Fleet Subnet Root summary names unknown or removed root {root}")]
+    #[error("Fleet Subnet Root summary names unknown or removed Root {root}")]
     UnexpectedSummary { root: Principal },
 }
 
-///
-/// SubnetInventoryPlan
-///
-/// Validated Coordinator evidence that identifies the exact root summary query set.
-///
-
+/// Validated Coordinator evidence that identifies the exact Root summary query set.
 pub(super) struct SubnetInventoryPlan {
-    catalog: FleetCatalogEntryV1,
+    fleet: String,
     registry: FleetRegistry,
     version: FleetRegistryVersion,
     roots: Vec<FleetSubnetRootEntry>,
 }
 
 impl SubnetInventoryPlan {
-    /// Validate Coordinator evidence before any Fleet Subnet Root is queried.
+    /// Bind live Coordinator evidence to the terminal current ensure authority.
     pub(super) fn compile(
-        catalog: FleetCatalogEntryV1,
+        fleet: String,
+        expected: &FleetRegistry,
         registry: FleetRegistry,
         manifest: FleetRegistryManifest,
         version: FleetRegistryVersion,
     ) -> Result<Self, SubnetInventoryError> {
-        let coordinator = Principal::from_text(&catalog.coordinator_principal)
-            .map_err(SubnetInventoryError::CatalogCoordinator)?;
-        validate_catalog_authority(&catalog, &registry, coordinator)?;
+        validate_current_authority(expected, &registry)?;
         validate_registry_evidence(&registry, &manifest, &version)?;
-        validate_registry_roots(&registry, coordinator)?;
+        validate_registry_roots(&registry)?;
         let roots = registry
             .fleet_subnet_roots
             .iter()
@@ -138,14 +113,14 @@ impl SubnetInventoryPlan {
             .collect();
 
         Ok(Self {
-            catalog,
+            fleet,
             registry,
             version,
             roots,
         })
     }
 
-    /// Return the exact non-removed root principals that must supply summaries.
+    /// Return the exact non-removed Root principals that must supply summaries.
     pub(super) fn root_principals(&self) -> Vec<Principal> {
         self.roots
             .iter()
@@ -160,11 +135,11 @@ impl SubnetInventoryPlan {
     ) -> Result<FleetSubnetInventoryReportV1, SubnetInventoryError> {
         let mut summaries = index_summaries(summaries)?;
         let mut rows = BTreeMap::<SubnetId, FleetSubnetInventoryRowV1>::new();
-        let coordinator_subnet = self.registry.authority.binding.coordinator_subnet;
+        let binding = &self.registry.authority.binding;
         rows.insert(
-            coordinator_subnet,
+            binding.coordinator_subnet,
             FleetSubnetInventoryRowV1 {
-                subnet: coordinator_subnet.to_string(),
+                subnet: binding.coordinator_subnet.to_string(),
                 coordinator_canisters: 1,
                 root: None,
                 status: None,
@@ -195,11 +170,11 @@ impl SubnetInventoryPlan {
         })?;
         Ok(FleetSubnetInventoryReportV1 {
             schema_version: SUBNET_INVENTORY_SCHEMA_VERSION,
-            canonical_network_id: self.catalog.canonical_network_id.to_string(),
-            fleet_id: self.catalog.fleet_id.to_string(),
-            fleet: self.catalog.fleet_name.to_string(),
-            app: self.catalog.app.to_string(),
-            coordinator_principal: self.catalog.coordinator_principal,
+            canonical_network_id: binding.fleet.fleet.canonical_network_id.to_string(),
+            fleet_id: binding.fleet.fleet.fleet_id.to_string(),
+            fleet: self.fleet,
+            app: binding.fleet.app.to_string(),
+            coordinator_principal: binding.coordinator.to_text(),
             registry_revision: self.version.revision,
             total_canisters,
             subnets: rows.into_values().collect(),
@@ -207,37 +182,23 @@ impl SubnetInventoryPlan {
     }
 }
 
-fn validate_catalog_authority(
-    catalog: &FleetCatalogEntryV1,
+fn validate_current_authority(
+    expected: &FleetRegistry,
     registry: &FleetRegistry,
-    coordinator: Principal,
 ) -> Result<(), SubnetInventoryError> {
-    let binding = &registry.authority.binding;
-    if binding.fleet.fleet.canonical_network_id != catalog.canonical_network_id {
-        return Err(SubnetInventoryError::CatalogAuthorityMismatch {
-            field: "canonical_network_id",
+    if expected.authority != registry.authority {
+        return Err(SubnetInventoryError::CurrentAuthorityMismatch { field: "authority" });
+    }
+    if expected.component_specs != registry.component_specs {
+        return Err(SubnetInventoryError::CurrentAuthorityMismatch {
+            field: "Component Specs",
         });
     }
-    if binding.fleet.fleet.fleet_id != catalog.fleet_id {
-        return Err(SubnetInventoryError::CatalogAuthorityMismatch { field: "fleet_id" });
+    if expected.fleet_subnet_roots != registry.fleet_subnet_roots {
+        return Err(SubnetInventoryError::CurrentAuthorityMismatch { field: "Roots" });
     }
-    if binding.fleet.app != catalog.app {
-        return Err(SubnetInventoryError::CatalogAuthorityMismatch { field: "app" });
-    }
-    if binding.coordinator != coordinator {
-        return Err(SubnetInventoryError::CatalogAuthorityMismatch {
-            field: "coordinator_principal",
-        });
-    }
-    if is_reserved_principal(coordinator) {
-        return Err(SubnetInventoryError::CatalogAuthorityMismatch {
-            field: "coordinator_principal",
-        });
-    }
-    if is_reserved_principal(binding.coordinator_subnet.into_principal()) {
-        return Err(SubnetInventoryError::CatalogAuthorityMismatch {
-            field: "coordinator_subnet",
-        });
+    if expected.services != registry.services {
+        return Err(SubnetInventoryError::CurrentAuthorityMismatch { field: "services" });
     }
     Ok(())
 }
@@ -276,10 +237,7 @@ fn validate_registry_evidence(
     Ok(())
 }
 
-fn validate_registry_roots(
-    registry: &FleetRegistry,
-    coordinator: Principal,
-) -> Result<(), SubnetInventoryError> {
+fn validate_registry_roots(registry: &FleetRegistry) -> Result<(), SubnetInventoryError> {
     if registry
         .fleet_subnet_roots
         .windows(2)
@@ -288,6 +246,7 @@ fn validate_registry_roots(
         return Err(SubnetInventoryError::NonCanonicalRootOrder);
     }
 
+    let coordinator = registry.authority.binding.coordinator;
     let mut principals = BTreeSet::new();
     for root in &registry.fleet_subnet_roots {
         let principal = root.fleet_subnet_root;

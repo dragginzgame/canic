@@ -366,11 +366,14 @@ pub(super) fn adopt_sibling_wasm_store(
         panic!("Root returned a differently correlated operation status");
     };
     assert_eq!(adopted.authority, request.authority);
-    assert_eq!(adopted.final_controllers, vec![root]);
-    let live = pic
+    let mut expected_controllers = vec![root, request.authority.installation_controller];
+    expected_controllers.sort();
+    assert_eq!(adopted.controllers, expected_controllers);
+    let mut live_controllers = pic
         .canister_status(request.authority.wasm_store, Some(root))
         .expect("observe adopted sibling Wasm Store controllers");
-    assert_eq!(live.settings.controllers, vec![root]);
+    live_controllers.settings.controllers.sort();
+    assert_eq!(live_controllers.settings.controllers, expected_controllers);
     let RootStatusResponseFragment::Operation(RootOperationStatusResponse::AdoptStore(status)) =
         root_status(
             pic,

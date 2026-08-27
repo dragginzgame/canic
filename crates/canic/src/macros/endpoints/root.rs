@@ -718,6 +718,9 @@ macro_rules! canic_emit_root_status_endpoint {
             ComponentDirectoryPage(
                 ::canic::dto::component_registry::ComponentDirectoryPageRequest,
             ),
+            ComponentRegistry(
+                ::canic::dto::component_registry::RootComponentRegistryPreparationRequest,
+            ),
             ComponentRegistryPartition(
                 ::canic::dto::component_registry::ComponentRegistryPartitionRequest,
             ),
@@ -759,6 +762,9 @@ macro_rules! canic_emit_root_status_endpoint {
             ComponentDirectoryPage(
                 ::canic::dto::component_registry::ComponentDirectoryPageResponse,
             ),
+            ComponentRegistry(
+                ::canic::dto::component_registry::RootComponentRegistryStatusResponse,
+            ),
             ComponentRegistryPartition(
                 ::canic::dto::component_registry::ComponentRegistryPartitionResponse,
             ),
@@ -794,6 +800,7 @@ macro_rules! canic_emit_root_status_endpoint {
                 &request,
                 RootStatusRequest::ComponentDirectoryHead(_)
                     | RootStatusRequest::ComponentDirectoryPage(_)
+                    | RootStatusRequest::ComponentRegistry(_)
                     | RootStatusRequest::ComponentRegistryPartition(_)
                     | RootStatusRequest::FleetAuthority
                     | RootStatusRequest::Operation(_)
@@ -820,6 +827,7 @@ macro_rules! canic_emit_root_status_endpoint {
                 RootStatusRequest::Admission(_)
                 | RootStatusRequest::AuthorityRestore
                 | RootStatusRequest::ComponentDirectoryHead(_)
+                | RootStatusRequest::ComponentRegistry(_)
                 | RootStatusRequest::ComponentRegistryPartition(_)
                 | RootStatusRequest::Config
                 | RootStatusRequest::FleetAuthority
@@ -860,6 +868,10 @@ macro_rules! canic_emit_root_status_endpoint {
                 RootStatusRequest::ComponentDirectoryPage(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_page(request)
                         .map(RootStatusResponse::ComponentDirectoryPage)
+                }
+                RootStatusRequest::ComponentRegistry(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::local_component_registry_status(request)
+                        .map(RootStatusResponse::ComponentRegistry)
                 }
                 RootStatusRequest::ComponentRegistryPartition(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_registry_partition(request)

@@ -20,7 +20,7 @@ This checklist covers:
 - packaged downstream CLI validation, including current shipped operator
   command surfaces;
 - packaged downstream Canister macro/Candid and `wasm_store` bootstrap validation;
-- local ICP install/canister validation;
+- current desired-state Fleet convergence qualification;
 - release artifact verification expectations;
 - environment-specific gate ownership;
 - the boundary between implementation slices and human-owned release flow.
@@ -48,8 +48,7 @@ not add new release behavior.
 | Packaged downstream CLI | `make test-packaged-downstream-cli` | Can packaged Canic crates resolve and run current downstream CLI/read-only/operator commands without repository crate paths? | RC/final release when local Cargo cache/toolchain support is available. |
 | Packaged downstream Canister and wasm store | `make test-packaged-downstream-wasm-store` | Can an ordinary typed Canister use packaged `build!`, `start!` and `finish!` under the MSRV/local/IC boundary, and can both `wasm_store` bootstrap paths build outside the repository package graph? | RC/final release when Wasm/Cargo package support is available. |
 | Release workspace build | `cargo build --release --workspace --locked` | Does the release build shape compile with the locked resolver? | Release-commit `main` CI and RC validation. |
-| Local Fleet install | `make test-fleet-install` | Can an exact-input Coordinator-anchored single-root local Fleet reach terminal activation? | RC/final release in a selected local ICP environment. |
-| Local Canister tests | `make test-canisters` | Can the terminal local Fleet resolve and call the maintained test application surface? | RC/final release after the local Fleet install. |
+| Fleet ensure qualification | governed `canic-host` PocketIC journey in `make validate` | Can `canic fleet ensure` conserve cycles while converging an inconsistent estate, then repeat with zero mutation effects? | RC/final release. |
 
 The retained probe details remain documented in:
 
@@ -73,11 +72,9 @@ RC and final release reports should account for these artifact expectations:
   repository crate paths.
 - Installed CLI proof must execute the temporary installed binary, not
   `target/debug/canic`.
-- Installed and packaged CLI proofs should cover shipped operator command
-  groups that are easy to regress at package boundaries. For blob-storage, the
-  retained proof includes command help and the stable structured JSON error
-  shape for an unresolved target, plus fixture status, live sync, live fund,
-  and final status JSON output from a deployment with local Candid metadata.
+- Installed and packaged CLI proofs should cover the current App/build/Fleet
+  surface, including `canic fleet ensure` help and strict desired-document
+  parsing without invoking a live mutation.
 - Packaged Canister proof must compile one typed endpoint through packaged
   `build!`, `start!` and `finish!` at the MSRV with warnings denied, extract
   that endpoint from local Wasm and prove IC Wasm omits the local export.
@@ -99,7 +96,7 @@ Package/install gates may be expensive or environment-specific.
 | `make package` | Requires a clean worktree and may write under `target/package`. | RC/final release owner. |
 | Installed CLI smoke | Installs into a temporary root and isolates `HOME`, `CARGO_HOME`, `CARGO_TARGET_DIR`, and `TMPDIR` under the proof root. | RC/final release owner or CI environment with local install support. |
 | Packaged downstream probes | Use package archives and temporary downstream roots; they intentionally reuse caller Cargo/Rust caches for offline package execution. | RC/final release owner or CI environment with package cache support. |
-| Local ICP/canister gates | Require local ICP CLI, local replica/canister build environment, and can take longer than ordinary docs-slice validation. | RC validation owner or dedicated local/CI environment. |
+| Fleet ensure PocketIC qualification | Runs inside the maintained workspace test graph and requires the pinned PocketIC server. | RC validation owner or CI. |
 | Release versioning targets | `make patch`, `make minor`, `make major`, `make release-stage`, `make release-commit`, and `make release-push` are human-owned release flow. | Maintainer only. |
 
 If a package/install gate is not run locally, the RC audit must record:
@@ -142,14 +139,11 @@ make test-installed-canic-cli
 make test-packaged-downstream-cli
 make test-packaged-downstream-wasm-store
 cargo build --release --workspace --locked
-make test-fleet-install
-make test-canisters
 ```
 
-The local ICP/canister gates may be assigned to CI or a dedicated RC
-environment when too expensive or environment-specific for an ordinary docs
-slice. Credit them only as single-root local installation/application evidence;
-use the active focused PocketIC qualification for multi-root claims.
+The full validation graph owns the governed Fleet ensure PocketIC journey. It
+must cover current desired-state convergence and an immediate zero-mutation
+second run; removed local install commands are not release evidence.
 
 ## Non-Goals
 

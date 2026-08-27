@@ -15,7 +15,7 @@ use crate::{
 };
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
+    fleet_ensure::CurrentFleetInventoryError, icp::IcpCommandError, icp_config::IcpConfigError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -33,7 +33,7 @@ pub enum MetricsCommandError {
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),

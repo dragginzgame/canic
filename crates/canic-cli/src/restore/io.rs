@@ -1,4 +1,4 @@
-use crate::{backup::resolve_backup_reference, output};
+use crate::output;
 use canic_backup::{
     manifest::DeploymentBackupManifest,
     persistence::BackupLayout,
@@ -74,6 +74,50 @@ fn restore_plan_backup_dir(
     options: &RestorePlanOptions,
 ) -> Result<Option<PathBuf>, RestoreCommandError> {
     restore_backup_dir(options.backup_ref.as_deref(), options.backup_dir.as_deref())
+}
+
+fn resolve_backup_reference(reference: &str) -> Result<PathBuf, RestoreCommandError> {
+    let root = Path::new("backups");
+    let mut entries = if root.is_dir() {
+        std::fs::read_dir(root)?
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .filter(|path| path.is_dir())
+            .filter_map(|path| {
+                BackupLayout::new(path.clone())
+                    .read_manifest()
+                    .ok()
+                    .map(|manifest| (manifest.backup_id, path))
+            })
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    entries.sort_by(|left, right| right.1.cmp(&left.1));
+    if reference.bytes().all(|byte| byte.is_ascii_digit()) {
+        let index = reference.parse::<usize>().unwrap_or_default();
+        return entries
+            .get(index.saturating_sub(1))
+            .map(|(_, path)| path.clone())
+            .ok_or_else(|| RestoreCommandError::BackupReferenceNotFound {
+                reference: reference.to_string(),
+            });
+    }
+    let mut matches = entries
+        .into_iter()
+        .filter(|(backup_id, _)| backup_id == reference)
+        .map(|(_, path)| path)
+        .collect::<Vec<_>>();
+    match matches.len() {
+        0 => Err(RestoreCommandError::BackupReferenceNotFound {
+            reference: reference.to_string(),
+        }),
+        1 => Ok(matches.remove(0)),
+        _ => Err(RestoreCommandError::BackupReferenceAmbiguous {
+            reference: reference.to_string(),
+        }),
+    }
 }
 
 pub(super) fn restore_prepare_backup_dir(
@@ -216,10 +260,7 @@ fn restore_backup_dir(
     if let Some(backup_dir) = backup_dir {
         return Ok(Some(backup_dir.to_path_buf()));
     }
-    backup_ref
-        .map(resolve_backup_reference)
-        .transpose()
-        .map_err(RestoreCommandError::from)
+    backup_ref.map(resolve_backup_reference).transpose()
 }
 
 // Read and decode a backup manifest from disk.

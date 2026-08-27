@@ -31,7 +31,6 @@ operator_docs=(
     "$ROOT/scripts/app/README.md"
     "$ROOT/crates/canic-cli/README.md"
     "$ROOT/crates/canic-host/README.md"
-    "$ROOT/docs/architecture/fleet-install-input.md"
     "$ROOT/docs/getting-started/local-academic-fleet.md"
     "$ROOT/docs/getting-started/minimal-managed-fleet.md"
 )
@@ -168,7 +167,13 @@ done
 
 require_texts "$STATUS" "$GUARD_LABEL" \
     "## Current Decision" \
-    "## Next Action"
+    "## Validation State" \
+    "## Next Action" \
+    'Published `v0.109.12`' \
+    'canic fleet ensure' \
+    "## Cycle-Safety Boundary" \
+    "CANIC-059" \
+    "Do not begin 0.110."
 if ! rg -F \
     "Release governance: source development state; no validated release candidate is staged." \
     "$STATUS" >/dev/null \
@@ -203,11 +208,6 @@ require_texts "$ESTATE_STATUS" "$GUARD_LABEL" \
 require_text "$ESTATE_DESIGN" \
     "../../audits/release-lines/0.109-post-implementation-complexity-audit.md" \
     "$GUARD_LABEL"
-require_texts "$STATUS" "$GUARD_LABEL" \
-    "binding post-implementation complexity audit" \
-    "B8 owns Canic release and downstream" \
-    "B9 owns"
-
 forbid_text "$STATUS" "## Historical Release Detail" "$GUARD_LABEL"
 forbid_texts "$STATUS" "$GUARD_LABEL" \
     "latest published release" \
@@ -232,21 +232,6 @@ require_texts "$TIMER_STATUS" "$GUARD_LABEL" \
     '`v0.104.2` freezes exact registration actions' \
     "No 0.104 implementation work remains." \
     "not canonical release-identity evidence"
-forbid_texts "$STATUS" "$GUARD_LABEL" \
-    "Keep the open 0.104.0" \
-    "bounded closeout correction are complete" \
-    'open `0.104.2` corrective candidate' \
-    "Existing B3 work is paused" \
-    "1.1750% raw" \
-    "1.9779% gzip"
-require_texts "$STATUS" "$GUARD_LABEL" \
-    'Published `v0.104.2` now freezes native registration actions' \
-    "B2-B7 are complete" \
-    "the 0.105 implementation batch is closed"
-forbid_texts "$STATUS" "$GUARD_LABEL" \
-    "B7 is active" \
-    "B7 may proceed" \
-    "final Canic-only recovery and residue qualification remains"
 require_texts "$TIMER_EVIDENCE" "$GUARD_LABEL" \
     "not acceptance evidence" \
     "19,424,848" \

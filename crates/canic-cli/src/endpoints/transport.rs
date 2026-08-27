@@ -7,9 +7,9 @@ use crate::{
 };
 use canic_host::{
     candid_endpoints::parse_candid_service_endpoints,
+    fleet_ensure::resolve_current_fleet,
     icp::{IcpCli, local_canister_candid_path},
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
     registry::RegistryEntry,
 };
 use std::{
@@ -94,13 +94,9 @@ fn resolve_endpoint_target(
 fn load_fleet_registry(
     options: &EndpointsOptions,
 ) -> Result<Vec<RegistryEntry>, Box<dyn std::error::Error>> {
-    let request = InstalledFleetRequest {
-        fleet: options.fleet.clone(),
-        environment: state_environment(options),
-    };
     let root = resolve_endpoint_icp_root()?;
     Ok(
-        resolve_installed_fleet_from_root(&request, &options.icp, &root)?
+        resolve_current_fleet(&root, &state_environment(options), &options.fleet)?
             .registry
             .entries,
     )

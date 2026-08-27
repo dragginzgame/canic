@@ -27,12 +27,12 @@ use canic_host::canister_build::{
 };
 use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
-    format::wasm_size_label,
-    icp_config::{resolve_current_canic_icp_root, resolve_icp_build_network_from_root},
-    install_root::{
+    config_discovery::{
         ConfigDiscoveryError, current_canic_workspace_root,
         discover_workspace_canic_config_choices, select_discovered_app_config_path,
     },
+    format::wasm_size_label,
+    icp_config::{resolve_current_canic_icp_root, resolve_icp_build_network_from_root},
     release_set::{
         AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, display_workspace_path,
         workspace_root,
@@ -310,7 +310,7 @@ fn build_app(
         "App config: {}",
         display_workspace_path(&context.workspace_root, &context.config_path)
     );
-    println!("Root Wasm: App-config-bound | Subnet-unbound until install");
+    println!("Root Wasm: App-config-bound | Subnet-unbound until Fleet ensure");
     println!();
 
     let mut infrastructure = build_builtin_infrastructure(context)?;
@@ -338,7 +338,7 @@ fn build_app(
 
     style.print_section(
         "Infrastructure Wasm",
-        "placement comes from Fleet input during install",
+        "placement comes from current desired Fleet state during ensure",
     );
     println!(
         "{}",

@@ -987,9 +987,12 @@ fn role_status_dispatchers_keep_variant_specific_authority() {
         "the current Store Operation owner is Fleet activation and remains controller-only"
     );
     assert!(
-        store.contains("StoreStatusRequest::Catalog | StoreStatusRequest::Storage")
-            && store.contains("access::auth::is_root(caller)"),
-        "Store catalogue and storage observations remain exact-root-only"
+        store.contains("StoreStatusRequest::Catalog")
+            && store.contains("| StoreStatusRequest::Storage")
+            && store.contains("| StoreStatusRequest::Template(_)")
+            && store.contains("WasmStoreMutationCallerPredicate")
+            && store.contains("EndpointCallKind::Query"),
+        "Store publication observations must remain exact-Root or retained exact installer only"
     );
 
     let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
@@ -1003,6 +1006,20 @@ fn role_status_dispatchers_keep_variant_specific_authority() {
             && root_operation_dispatch.contains("caller,")
             && root_operation_dispatch.contains("is_controller(&caller)"),
         "Root Operation dispatch must pass the caller and controller fact to its durable owner"
+    );
+    let root_component_registry_dispatch = root
+        .split("RootStatusRequest::ComponentRegistry(request) => {")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("RootStatusRequest::ComponentRegistryPartition(request)")
+                .next()
+        })
+        .expect("Root Component Registry dispatch arm");
+    assert!(
+        root.contains("| RootStatusRequest::ComponentRegistry(_)")
+            && root_component_registry_dispatch
+                .contains("LifecycleApi::local_component_registry_status(request)"),
+        "Root Component Registry preparation status must stay controller-protected and delegate to its exact local proof"
     );
 
     let root_operation = read_text(

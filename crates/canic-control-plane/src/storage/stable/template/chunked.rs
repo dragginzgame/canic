@@ -12,8 +12,6 @@ use canic_core::role_contract::allocation::memory::control_plane::{
     TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
 };
 use serde::{Deserialize, Serialize};
-#[cfg(test)]
-use std::collections::BTreeMap as StdBTreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
 const TEMPLATE_CHUNK_REF_RECORD_BYTES: usize = 12;
@@ -455,22 +453,6 @@ impl TemplateChunkStore {
             map.get(chunk_key)
                 .map(|chunk_ref| chunk_entry_size(chunk_key, chunk_ref.payload_len))
         })
-    }
-
-    // Count staged chunks by release without cloning chunk payload bytes.
-    #[cfg(test)]
-    #[must_use]
-    pub fn count_by_release() -> StdBTreeMap<TemplateReleaseKey, u32> {
-        let mut counts: StdBTreeMap<TemplateReleaseKey, u32> = StdBTreeMap::new();
-
-        TEMPLATE_CHUNK_REFS.with_borrow(|map| {
-            for entry in map.iter() {
-                let count = counts.entry(entry.key().release.clone()).or_insert(0);
-                *count = u32::saturating_add(*count, 1);
-            }
-        });
-
-        counts
     }
 
     // Clear the chunk store.

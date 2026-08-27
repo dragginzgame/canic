@@ -188,7 +188,7 @@ fn maps_missing_project_manifest_error() {
 
     std::assert_matches!(error, ReplicaCommandError::ProjectManifestMissing);
     assert!(error.to_string().contains("Create or repair icp.yaml"));
-    assert!(error.to_string().contains("canic status"));
+    assert!(error.to_string().contains("retry the replica command"));
 }
 
 // Ensure owner parsing keeps the ICP network/environment separate from the project path.

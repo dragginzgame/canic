@@ -8,7 +8,8 @@
 /// RegistryEntry
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RegistryEntry {
     pub pid: String,
     pub role: Option<String>,

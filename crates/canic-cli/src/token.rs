@@ -12,11 +12,9 @@ use crate::{
     version_text,
 };
 use canic_host::{
+    fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
     icp::{IcpCommandError, command_display, run_output_with_stderr},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
-    },
     registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
@@ -54,7 +52,7 @@ pub enum TokenCommandError {
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -267,21 +265,13 @@ fn transfer_receiver(
     let Some((fleet, canister_or_role)) = split_fleet_target(receiver)? else {
         return Ok(receiver.to_string());
     };
-    let installed = resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: fleet.to_string(),
-            environment: target.environment.clone(),
-        },
-        &target.icp,
-        root,
-    )
-    .map_err(TokenCommandError::from)?;
-    let root_canister_id = installed.topology.unique_fleet_subnet_root(fleet)?;
+    let current = resolve_current_fleet(root, &target.environment, fleet)?;
+    let root_canister_id = current.topology.unique_fleet_subnet_root(fleet)?;
     resolve_canister_or_role(
         fleet,
         canister_or_role,
         root_canister_id,
-        &installed.registry.entries,
+        &current.registry.entries,
     )
 }
 

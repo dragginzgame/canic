@@ -170,6 +170,24 @@ pub struct WasmStoreGcExecutionStats {
 }
 
 impl TemplateManifestOps {
+    /// Return one exact approved manifest without exposing an unbounded catalog.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
+    #[must_use]
+    pub fn approved_manifest_response(
+        template_id: &TemplateId,
+        version: &crate::ids::TemplateVersion,
+    ) -> Option<TemplateManifestResponse> {
+        let release = TemplateReleaseKey::new(template_id.clone(), version.clone());
+        TemplateManifestStateStore::export()
+            .entries
+            .into_iter()
+            .find(|entry| {
+                entry.release == release
+                    && entry.record.manifest_state == TemplateManifestState::Approved
+            })
+            .map(|entry| record_to_response(entry.release, entry.record))
+    }
+
     // Return all currently approved manifests in deterministic order.
     #[must_use]
     pub fn approved_manifests_response() -> Vec<TemplateManifestResponse> {

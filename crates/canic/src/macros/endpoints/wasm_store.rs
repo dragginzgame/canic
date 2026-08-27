@@ -192,8 +192,19 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                         .await
                         .map_err(::canic::Error::from)?;
                 }
-                StoreStatusRequest::Catalog | StoreStatusRequest::Storage => {
-                    $crate::__internal::core::access::auth::is_root(caller)
+                StoreStatusRequest::Catalog
+                | StoreStatusRequest::Storage
+                | StoreStatusRequest::Template(_) => {
+                    use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
+                    let context = $crate::__internal::core::access::expr::AccessContext {
+                        caller,
+                        call: $crate::__internal::core::ids::EndpointCall {
+                            endpoint: $crate::__internal::core::ids::EndpointId::new("canic_status"),
+                            kind: $crate::__internal::core::ids::EndpointCallKind::Query,
+                        },
+                    };
+                    $crate::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate
+                        .eval(&context)
                         .await
                         .map_err(::canic::Error::from)?;
                 }
@@ -256,6 +267,10 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 StoreStatusRequest::Storage => {
                     ::canic::api::canister::template::WasmStoreCanisterApi::status()
                         .map(StoreStatusResponse::Storage)
+                }
+                StoreStatusRequest::Template(request) => {
+                    ::canic::api::canister::template::WasmStoreCanisterApi::staging_status(request)
+                        .map(StoreStatusResponse::Template)
                 }
             }
         }

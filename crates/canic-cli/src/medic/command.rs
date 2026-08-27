@@ -200,7 +200,7 @@ fn medic_command() -> ClapCommand {
     ClapCommand::new("medic")
         .bin_name("canic medic")
         .disable_help_flag(true)
-        .about("Diagnose local workspace and installed-Fleet readiness")
+        .about("Diagnose local workspace and current-Fleet readiness")
         .arg(
             flag_arg(JSON_ARG)
                 .long(JSON_ARG)
@@ -227,7 +227,7 @@ fn fleet_command() -> ClapCommand {
             value_arg(FLEET_ARG)
                 .value_name(FLEET_ARG)
                 .required(true)
-                .help("Installed Fleet name"),
+                .help("Current Fleet identity"),
         )
         .arg(
             value_arg(BLOB_STORAGE_ARG)

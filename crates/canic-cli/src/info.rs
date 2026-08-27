@@ -1,6 +1,6 @@
 //! Module: canic_cli::info
 //!
-//! Responsibility: dispatch read-only installed-Fleet information subcommands.
+//! Responsibility: dispatch read-only current-Fleet information subcommands.
 //! Does not own: Fleet state, registry state, canister lifecycle, or output formats.
 //! Boundary: parses the `canic info` group and delegates to leaf command modules.
 
@@ -16,23 +16,23 @@ use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const INFO_USAGE: &str = "\
-Group read-only installed-Fleet information commands
+Group read-only current-Fleet information commands
 
 Usage: canic info <command> [OPTIONS]
 
 Commands:
-  cycles     Summarize Fleet cycle history
+  cycles     Summarize current Fleet cycle history
   endpoints  List callable Candid endpoints
   env        Print sourceable canister ID exports
-  list       List installed Fleet canisters
+  list       List current Fleet canisters
   metrics    Query Canic runtime telemetry
-  subnets    Show live Fleet Subnet occupancy and Canister counts
+  subnets    Show live Fleet-owned Canister counts by physical Subnet
   help       Print this message or the help of the given subcommand(s)
 
 Examples:
-  canic info cycles test --subtree scale_hub
+  canic info endpoints test root
   canic info list test --subtree scale_hub
-  canic info subnets test";
+  canic info metrics test runtime";
 const INFO_SUBCOMMANDS: &[&str] = &["cycles", "endpoints", "env", "list", "metrics", "subnets"];
 
 ///
@@ -47,11 +47,11 @@ pub enum InfoCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("cycles: {0}")]
-    Cycles(#[source] Box<cycles::CyclesCommandError>),
-
     #[error("endpoints: {0}")]
     Endpoints(#[from] endpoints::EndpointsCommandError),
+
+    #[error("cycles: {0}")]
+    Cycles(#[source] Box<cycles::CyclesCommandError>),
 
     #[error("env: {0}")]
     Env(#[source] Box<info_env::InfoEnvCommandError>),
@@ -66,15 +66,15 @@ pub enum InfoCommandError {
     Subnets(#[source] Box<info_subnets::InfoSubnetsCommandError>),
 }
 
-impl From<cycles::CyclesCommandError> for InfoCommandError {
-    fn from(error: cycles::CyclesCommandError) -> Self {
-        Self::Cycles(Box::new(error))
-    }
-}
-
 impl From<info_env::InfoEnvCommandError> for InfoCommandError {
     fn from(error: info_env::InfoEnvCommandError) -> Self {
         Self::Env(Box::new(error))
+    }
+}
+
+impl From<cycles::CyclesCommandError> for InfoCommandError {
+    fn from(error: cycles::CyclesCommandError) -> Self {
+        Self::Cycles(Box::new(error))
     }
 }
 
@@ -110,7 +110,7 @@ impl InfoCommandError {
     }
 }
 
-/// Run the installed-Fleet information command group.
+/// Run the current-Fleet information command group.
 pub fn run<I>(args: I) -> Result<(), InfoCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -141,7 +141,7 @@ fn parse_info_command(args: Vec<OsString>) -> Result<(String, Vec<OsString>), In
 fn command() -> ClapCommand {
     let command = ClapCommand::new("info")
         .bin_name("canic info")
-        .about("Group read-only installed-Fleet information commands")
+        .about("Group read-only current-Fleet information commands")
         .disable_help_flag(true);
     INFO_SUBCOMMANDS.iter().fold(command, |command, name| {
         command.subcommand(passthrough_subcommand(ClapCommand::new(*name)))
@@ -197,8 +197,8 @@ mod tests {
     fn info_usage_includes_representative_examples() {
         let text = usage();
 
-        assert!(text.contains("canic info cycles test"));
+        assert!(text.contains("canic info endpoints test"));
         assert!(text.contains("canic info list test"));
-        assert!(text.contains("canic info subnets test"));
+        assert!(text.contains("canic info metrics test"));
     }
 }

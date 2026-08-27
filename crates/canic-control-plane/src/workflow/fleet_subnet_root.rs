@@ -106,13 +106,10 @@ struct SiblingWasmStoreLiveEvidence {
     controllers: Vec<Principal>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SiblingWasmStoreControllerPhase {
-    Temporary,
-    Final,
-}
-
-/// Adopt the independently installed sibling Store under sole root control.
+/// Adopt the independently installed sibling Store under Root policy authority.
+///
+/// The immutable installation controller remains a direct controller so the
+/// current Fleet reconciler can continue proving Store cycles and module state.
 pub async fn adopt_wasm_store(
     request: FleetSubnetWasmStoreAdoptionRequest,
 ) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
@@ -124,41 +121,17 @@ pub async fn adopt_wasm_store(
         return Ok(receipt);
     }
 
-    let temporary_controllers = temporary_sibling_wasm_store_controllers(&authority);
-    let final_controllers = vec![authority.fleet_subnet_root];
+    let controllers = sibling_wasm_store_controllers(&authority);
     RootWasmStoreStateOps::begin_sibling_wasm_store_adoption(
         &crate::ops::storage::state::root_wasm_store::SiblingWasmStoreAdoptionPlan {
             operation_id: request.operation_id,
             authority: authority.clone(),
-            temporary_controllers: temporary_controllers.clone(),
-            final_controllers: final_controllers.clone(),
+            controllers: controllers.clone(),
         },
     )?;
 
     let observed = observe_sibling_wasm_store(&authority).await?;
-    match require_sibling_wasm_store_controller_phase(
-        &observed,
-        &temporary_controllers,
-        &final_controllers,
-    )? {
-        SiblingWasmStoreControllerPhase::Temporary => {
-            MgmtOps::update_settings(
-                &canic_core::control_plane_support::ops::ic::mgmt::UpdateSettingsArgs {
-                    canister_id: authority.wasm_store,
-                    settings: canic_core::control_plane_support::ops::ic::mgmt::CanisterSettings {
-                        controllers: Some(final_controllers.clone()),
-                        ..Default::default()
-                    },
-                    sender_canister_version: None,
-                },
-            )
-            .await?;
-        }
-        SiblingWasmStoreControllerPhase::Final => {}
-    }
-
-    let final_observation = observe_sibling_wasm_store(&authority).await?;
-    require_final_sibling_wasm_store_controllers(&final_observation, &final_controllers)?;
+    require_sibling_wasm_store_controllers(&observed, &controllers)?;
     RootWasmStoreStateOps::commit_sibling_wasm_store_adoption(
         request.operation_id,
         authority,
@@ -202,9 +175,7 @@ fn protected_sibling_wasm_store_authority(
     Ok(root_authority.wasm_store_authority)
 }
 
-fn temporary_sibling_wasm_store_controllers(
-    authority: &FleetSubnetWasmStoreAuthority,
-) -> Vec<Principal> {
+fn sibling_wasm_store_controllers(authority: &FleetSubnetWasmStoreAuthority) -> Vec<Principal> {
     let mut controllers = vec![
         authority.installation_controller,
         authority.fleet_subnet_root,
@@ -233,25 +204,11 @@ async fn observe_sibling_wasm_store(
     Ok(evidence)
 }
 
-fn require_sibling_wasm_store_controller_phase(
+fn require_sibling_wasm_store_controllers(
     observed: &SiblingWasmStoreLiveEvidence,
-    temporary_controllers: &[Principal],
-    final_controllers: &[Principal],
-) -> Result<SiblingWasmStoreControllerPhase, InternalError> {
-    if observed.controllers == temporary_controllers {
-        return Ok(SiblingWasmStoreControllerPhase::Temporary);
-    }
-    if observed.controllers == final_controllers {
-        return Ok(SiblingWasmStoreControllerPhase::Final);
-    }
-    Err(InternalError::conflict())
-}
-
-fn require_final_sibling_wasm_store_controllers(
-    observed: &SiblingWasmStoreLiveEvidence,
-    final_controllers: &[Principal],
+    expected_controllers: &[Principal],
 ) -> Result<(), InternalError> {
-    if observed.controllers != final_controllers {
+    if observed.controllers != expected_controllers {
         return Err(InternalError::conflict());
     }
     Ok(())
@@ -1740,39 +1697,21 @@ mod tests {
     }
 
     #[test]
-    fn sibling_store_controller_phase_accepts_only_planned_temporary_or_final_authority() {
+    fn sibling_store_controllers_accept_only_exact_reconciler_authority() {
         let authority = authority().wasm_store_authority;
-        let temporary = temporary_sibling_wasm_store_controllers(&authority);
-        let final_controllers = vec![authority.fleet_subnet_root];
+        let expected = sibling_wasm_store_controllers(&authority);
         let evidence = |controllers| SiblingWasmStoreLiveEvidence {
             running: true,
             module_hash: Some(authority.wasm_module_hash.to_vec()),
             controllers,
         };
 
-        assert_eq!(
-            require_sibling_wasm_store_controller_phase(
-                &evidence(temporary.clone()),
-                &temporary,
-                &final_controllers,
-            )
-            .expect("planned temporary controllers"),
-            SiblingWasmStoreControllerPhase::Temporary,
-        );
-        assert_eq!(
-            require_sibling_wasm_store_controller_phase(
-                &evidence(final_controllers.clone()),
-                &temporary,
-                &final_controllers,
-            )
-            .expect("planned final controllers"),
-            SiblingWasmStoreControllerPhase::Final,
-        );
+        require_sibling_wasm_store_controllers(&evidence(expected.clone()), &expected)
+            .expect("exact current controllers");
         assert!(
-            require_sibling_wasm_store_controller_phase(
+            require_sibling_wasm_store_controllers(
                 &evidence(vec![candid::Principal::anonymous()]),
-                &temporary,
-                &final_controllers,
+                &expected,
             )
             .is_err(),
             "foreign controllers must fail closed",

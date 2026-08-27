@@ -1,17 +1,19 @@
 //! Module: canic_cli::info_subnets::transport
 //!
 //! Responsibility: collect exact Coordinator and Fleet Subnet Root inventory observations.
-//! Does not own: report aggregation, authority policy, or rendering.
-//! Boundary: validates Coordinator evidence before querying roots and returns no partial report.
+//! Does not own: report aggregation, terminal ensure authority, or rendering.
+//! Boundary: validates terminal current authority before querying Roots and returns no partial
+//! report.
 
-use crate::info_subnets::{
-    InfoSubnetsCommandError, InfoSubnetsOptions,
-    model::{FleetSubnetInventoryReportV1, SubnetInventoryPlan},
+use crate::{
+    info_subnets::{
+        InfoSubnetsCommandError, InfoSubnetsOptions,
+        model::{FleetSubnetInventoryReportV1, SubnetInventoryPlan},
+    },
+    support::candid::registry_entry_candid_path,
 };
 
-use std::thread;
-
-use candid::CandidType;
+use candid::{CandidType, Principal};
 use canic_core::{
     dto::{
         fleet_registry::{FleetRegistry, FleetRegistryManifest, FleetRegistryVersion},
@@ -20,12 +22,8 @@ use canic_core::{
     protocol,
 };
 use canic_host::{
-    icp::IcpCli,
-    icp_config::resolve_current_canic_icp_root,
-    installed_fleet::read_installed_fleet_from_root,
-    protocol_binding::{ResolvedProtocolBinding, resolve_infrastructure_protocol_binding},
-    query_canister_with_arg,
-    release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
+    fleet_ensure::resolve_current_fleet, icp::IcpCli, icp_config::resolve_current_canic_icp_root,
+    query_canister_with_arg, registry::RegistryEntry,
 };
 
 #[derive(CandidType)]
@@ -56,36 +54,18 @@ pub(super) fn load_report(
     options: &InfoSubnetsOptions,
 ) -> Result<FleetSubnetInventoryReportV1, InfoSubnetsCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(InfoSubnetsCommandError::IcpRoot)?;
-    let catalog = read_installed_fleet_from_root(&options.environment, &options.fleet, &icp_root)?;
+    let current = resolve_current_fleet(&icp_root, &options.environment, &options.fleet)?;
+    let expected = current.initial_active_registry(&options.fleet)?.clone();
     let icp = IcpCli::new(&options.icp, Some(options.environment.clone())).with_cwd(&icp_root);
-    let infrastructure_manifest =
-        load_persisted_canic_infrastructure_artifact_manifest(&icp_root, catalog.release_build_id)
-            .map_err(|error| InfoSubnetsCommandError::Usage(error.to_string()))?;
-    let binding = |role| {
-        let artifact = infrastructure_manifest
-            .manifest
-            .entries
-            .iter()
-            .find(|entry| entry.role == role)
-            .ok_or_else(|| {
-                InfoSubnetsCommandError::Usage(format!(
-                    "installed release is missing {} protocol metadata",
-                    role.as_str()
-                ))
-            })?;
-        resolve_infrastructure_protocol_binding(&icp_root, &options.environment, artifact)
-            .map_err(|error| InfoSubnetsCommandError::Usage(error.to_string()))
-    };
-    let coordinator_binding = binding(CanicInfrastructureRole::FleetCoordinator)?;
-    let root_binding = binding(CanicInfrastructureRole::FleetSubnetRoot)?;
-    let coordinator = &catalog.coordinator_principal;
-    let coordinator_principal = candid::Principal::from_text(coordinator).map_err(|_| {
-        InfoSubnetsCommandError::Usage("installed Coordinator Principal is invalid".to_string())
-    })?;
+    let coordinator = parse_principal(&current.topology.coordinator_canister_id)?;
+    let coordinator_entry = exact_entry(&current.registry.entries, coordinator)?;
+    let coordinator_binding =
+        registry_entry_candid_path(Some(&icp_root), &options.environment, coordinator_entry)?;
+
     let CoordinatorStatusResponseFragment::Registry(registry) = query_canister_with_arg(
         &icp,
         &coordinator_binding,
-        coordinator_principal,
+        coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequestFragment::Registry,
     )?
@@ -95,7 +75,7 @@ pub(super) fn load_report(
     let CoordinatorStatusResponseFragment::RegistryManifest(manifest) = query_canister_with_arg(
         &icp,
         &coordinator_binding,
-        coordinator_principal,
+        coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequestFragment::RegistryManifest,
     )?
@@ -105,31 +85,44 @@ pub(super) fn load_report(
     let CoordinatorStatusResponseFragment::RegistryVersion(version) = query_canister_with_arg(
         &icp,
         &coordinator_binding,
-        coordinator_principal,
+        coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequestFragment::RegistryVersion,
     )?
     else {
         return Err(correlation_error());
     };
-    let plan = SubnetInventoryPlan::compile(catalog, *registry, manifest, version)?;
-    let summaries = query_root_summaries(&icp, &root_binding, plan.root_principals())?;
+    let plan = SubnetInventoryPlan::compile(
+        options.fleet.clone(),
+        &expected,
+        *registry,
+        manifest,
+        version,
+    )?;
+    let summaries = query_root_summaries(
+        &icp,
+        &icp_root,
+        &options.environment,
+        &current.registry.entries,
+        plan.root_principals(),
+    )?;
     plan.complete(summaries).map_err(Into::into)
 }
 
 fn query_root_summaries(
     icp: &IcpCli,
-    binding: &ResolvedProtocolBinding,
-    roots: Vec<candid::Principal>,
+    icp_root: &std::path::Path,
+    environment: &str,
+    entries: &[RegistryEntry],
+    roots: Vec<Principal>,
 ) -> Result<Vec<FleetSubnetRootCanisterSummary>, InfoSubnetsCommandError> {
-    let mut handles = Vec::with_capacity(roots.len());
-    for root in roots {
-        let canister = root.to_text();
-        let icp = icp.clone();
-        let binding = binding.clone();
-        let handle = thread::spawn(move || {
+    roots
+        .into_iter()
+        .map(|root| {
+            let entry = exact_entry(entries, root)?;
+            let binding = registry_entry_candid_path(Some(icp_root), environment, entry)?;
             let response: RootStatusResponseFragment = query_canister_with_arg(
-                &icp,
+                icp,
                 &binding,
                 root,
                 protocol::CANIC_STATUS,
@@ -138,22 +131,39 @@ fn query_root_summaries(
             match response {
                 RootStatusResponseFragment::Inventory(summary) => Ok(summary),
             }
-        });
-        handles.push((canister, handle));
-    }
-
-    handles
-        .into_iter()
-        .map(|(root, handle)| {
-            handle
-                .join()
-                .map_err(|_| InfoSubnetsCommandError::SummaryWorkerPanicked { root })?
         })
         .collect()
 }
 
+fn exact_entry(
+    entries: &[RegistryEntry],
+    principal: Principal,
+) -> Result<&RegistryEntry, InfoSubnetsCommandError> {
+    let principal = principal.to_text();
+    let mut matches = entries.iter().filter(|entry| entry.pid == principal);
+    let entry = matches.next().ok_or_else(|| {
+        InfoSubnetsCommandError::Usage(format!(
+            "terminal current inventory is missing canister {principal}"
+        ))
+    })?;
+    if matches.next().is_some() {
+        return Err(InfoSubnetsCommandError::Usage(format!(
+            "terminal current inventory duplicates canister {principal}"
+        )));
+    }
+    Ok(entry)
+}
+
+fn parse_principal(value: &str) -> Result<Principal, InfoSubnetsCommandError> {
+    Principal::from_text(value).map_err(|_| {
+        InfoSubnetsCommandError::Usage(format!(
+            "terminal current inventory contains invalid Principal {value}"
+        ))
+    })
+}
+
 fn correlation_error() -> InfoSubnetsCommandError {
     InfoSubnetsCommandError::Usage(
-        "Coordinator returned a differently correlated status response".to_string(),
+        "Canister returned a differently correlated status response".to_string(),
     )
 }

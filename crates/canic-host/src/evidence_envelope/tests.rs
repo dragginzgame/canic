@@ -87,14 +87,6 @@ fn schema_refs_record_stability() {
             stability: PayloadSchemaStabilityV1::Stable,
         }
     );
-    assert_eq!(
-        adoption_report_schema().stability,
-        PayloadSchemaStabilityV1::Experimental
-    );
-    assert_eq!(
-        deployment_check_schema().stability,
-        PayloadSchemaStabilityV1::Internal
-    );
 }
 
 #[test]

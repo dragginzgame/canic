@@ -40,8 +40,8 @@ use canic_core::protocol::{
 };
 use canic_host::icp::{IcpCli, IcpJsonResponseError};
 use canic_host::{
-    candid_endpoints::CandidEndpointError, icp::IcpCommandError, icp_config::IcpConfigError,
-    installed_fleet::InstalledFleetError,
+    candid_endpoints::CandidEndpointError, fleet_ensure::CurrentFleetInventoryError,
+    icp::IcpCommandError, icp_config::IcpConfigError,
 };
 use std::{ffi::OsString, io, path::PathBuf};
 use thiserror::Error as ThisError;
@@ -65,7 +65,7 @@ pub enum BlobStorageCommandError {
     IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
-    InstalledFleet(#[from] InstalledFleetError),
+    CurrentFleet(#[from] CurrentFleetInventoryError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -139,9 +139,9 @@ impl BlobStorageCommandError {
             | Self::CandidUnavailable { .. }
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
-            | Self::MethodUnavailable { .. } => 1,
-            Self::InstalledFleet(InstalledFleetError::Protocol(_)) | Self::Icp(_) => 2,
-            Self::InstalledFleet(_) => 1,
+            | Self::MethodUnavailable { .. }
+            | Self::CurrentFleet(_) => 1,
+            Self::Icp(_) => 2,
             Self::Response(_) | Self::ResponseValueOutOfRange { .. } => 3,
             Self::ReadinessCheckFailed { .. } => 4,
         }
@@ -166,7 +166,7 @@ impl BlobStorageCommandError {
             Self::Usage(_)
             | Self::Json(_)
             | Self::IcpRoot(_)
-            | Self::InstalledFleet(_)
+            | Self::CurrentFleet(_)
             | Self::UnknownTarget { .. }
             | Self::AmbiguousRole { .. }
             | Self::Icp(IcpCommandError::Io(_)) => BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED,

@@ -1,218 +1,80 @@
 # V1 Readiness Checklist
 
-This checklist is the maintained v1-candidate operator surface. It is a
-readiness checklist, not a new workflow engine. Each command keeps one
-boundary explicit so operators can see what Canic is doing and what it is not
-doing.
+Use this checklist before asking the human maintainer to run the complete
+validation and release workflow.
 
-Use the walkthrough for more explanation:
+## Workspace And App
 
-```text
-docs/architecture/v1-operator-walkthrough.md
+- The selected workspace and App configuration are explicit.
+- Every deployed role is declared or attached through the maintained App
+  surface.
+- Release Wasm and optional binary init arguments are deterministic and present.
+- Exact provenance is retained where the release process requires it.
+- Network trust was enrolled from a reviewed DER root key and fingerprint.
+
+## Desired Fleet
+
+- `schema_version = 1` and the document's Fleet/environment match the command.
+- The treasury is an exact controlled present canister.
+- Every existing controlled canister has its exact Principal.
+- Each missing canister has exact subnet, controllers, initial cycles and Wasm.
+- Initial funding is safely above minimum balance plus expected execution burn.
+- Ledger fee, creation fee, observation burn, update burn and stall bounds are
+  current exact decimal values.
+- A replacement or deletion with material cycles has an exact idempotent drain
+  method, Candid file and treasury destination.
+- No omitted or unknown controlled canister can retain cycles outside the
+  reviewed estate.
+
+## Plan Review
+
+Run:
+
+```bash
+canic fleet ensure <fleet> --desired <path>
 ```
 
-## Names To Keep Separate
+- Planning issued no Fleet mutation.
+- Every canister disposition is expected.
+- Total observed cycles cover the complete controlled estate.
+- Retained and scheduled-transfer totals are credible.
+- Creation funding, Ledger fees and management fees are separate.
+- Maximum observation/update burn is bounded and credible.
+- Maximum new funding and maximum operator debit are acceptable.
+- The expected post-operation conservation equation balances.
+- The exact `plan_sha256` is retained for review.
 
-- `app`: the source definition identified by `[app].name` in `canic.toml`;
-- `role`: the package-backed canister role declared for that App;
-- `tree spec`: one permitted rooted canister topology declared by the App;
-- `fleet`: one live installed App identified within a canonical network.
+## Apply And Recovery
 
-An App source identity is not a live Fleet identity.
+Run only the reviewed digest:
 
-## Required Workspace Files
-
-A small managed App should have:
-
-```text
-apps/<app>/canic.toml
-icp.yaml
-Cargo.toml
-<canister-crate>/Cargo.toml
-<canister-crate>/build.rs
-<canister-crate>/src/lib.rs
+```bash
+canic fleet ensure <fleet> --desired <path> --apply <plan_sha256>
 ```
 
-Each canister package must declare both fields:
+- Apply rejected any changed desired bytes, artifact, authority or unsafe live
+  balance.
+- Intent was durable before every creation, funding, transfer, installation,
+  controller update, start, stop and deletion.
+- An ambiguous response was reconciled before retrying.
+- Operator debit did not exceed the reviewed maximum.
+- No canister was stopped or deleted above the material residual threshold.
+- Terminal measured conservation balances exactly within the reviewed burn
+  ceiling.
+- An immediate second plan and apply contain zero mutation actions.
 
-```toml
-[package.metadata.canic]
-app = "<app>"
-role = "<role>"
-```
+## Unsupported State
 
-Each package-backed role must be declared in `canic.toml`:
+- No historical install/deploy/recovery path is being invoked.
+- No old plan, bundle, journal, compatibility flag or version-pair rule is
+  treated as current authority.
+- If current identities were discarded, all cycle-bearing old canisters are
+  still explicitly represented for safe drain or reuse.
+- Concurrent applies use the same operator-state root; independent state roots
+  are not a distributed lock.
 
-```toml
-[roles.<role>]
-kind = "canister"
-package = "<path>"
-```
+## Validation Boundary
 
-Only attached roles can be built as deployment artifacts:
-
-```toml
-[component_specs.<component-spec>]
-component_role = "<role>"
-maximum_instances = 1
-
-[component_specs.<component-spec>.children.<child-role>]
-kind = "singleton"
-
-[component_specs.<component-spec>.spawn_grants.<component-role>.<child-role>]
-maximum_instances_per_parent = 1
-```
-
-## Command Checklist
-
-Create the App config:
-
-```text
-canic app create <app>
-```
-
-Scaffold an ordinary package-backed role:
-
-```text
-canic scaffold canister <app> <role>
-```
-
-Attach the role when placement is known:
-
-```text
-canic app role attach <app> <role> --component-spec <component-spec>
-```
-
-The first role attached to a new Component Spec becomes its Component. A later
-role attached to that Spec becomes a direct child; use `--kind` to select
-`singleton`, `replica`, `shard`, or `instance`.
-
-Build the configured Fleet Subnet Root, every attached Component role, and
-Canic's Fleet Coordinator and Wasm Store:
-
-```text
-canic build <app>
-```
-
-Build one deployable configured role and write stable build provenance:
-
-```text
-canic build <app> <role> --provenance <path>
-```
-
-Inspect the desired deployment shape without mutation:
-
-```text
-canic deploy plan <fleet> --app <app> --fleet-input <path>
-canic --environment ic deploy plan <fleet> --app <app> --fleet-input <path> --refresh-catalog
-canic deploy plan <fleet> --app <app> --fleet-input <path> --out <path>
-```
-
-`canic deploy plan` emits a no-mutation `DeploymentPlanReport` with
-`schema_version = 1`. It is not an evidence envelope and does not create
-deployment truth. `--out` writes JSON only and does not create parent
-directories. Mainnet planning is cache-only by default. The explicit
-`--refresh-catalog` mode may issue read-only NNS Registry queries and update
-only the private `.canic/ic-query` catalog cache when it is missing or invalid.
-The authoritative plan is compiled from stable validated snapshot authority;
-cache path, collection time and disposition remain separate report provenance
-so the digest stays reproducible during installation.
-
-When one exact fresh-Fleet install session already has effects, the same
-read-only command validates its retained session, original plan, release build
-and creation journals before adding `install_recovery` to the report. That
-section preserves the original maximum debit and names the journal-derived
-remaining debit, fenced creation count, uncertain outcomes and next replay
-phase. Planning does not advance a journal or acquire the install lock. A
-recovery report must be reviewed before a separately authorized resume; it is
-not authority to start another fresh install. After paid effects, generic
-fresh-install proposal labels are suppressed in favor of the exact retained
-next replay phase.
-
-Fresh-install effects are gated by a complete Canic-owned recovery bundle.
-The bundle manifest binds every retained Root's exact typed journal phase and
-rejects missing phase-required journal, install or repair evidence.
-`canic deploy recovery verify <bundle-path>` validates its network, Fleet,
-plan, release build, operation and every path-confined content-addressed file
-without mutation. `canic deploy recovery import <bundle-path> --into
-<icp-root>` creates only missing exact local evidence and rejects partial,
-mixed, tampered, newer-schema or conflicting state before any later plan.
-
-Check a Fleet and save stable deployment evidence:
-
-```text
-canic deploy check <fleet> --evidence-envelope
-```
-
-Evaluate saved evidence against a project policy:
-
-```text
-canic evidence gate --policy <path> --manifest <path>
-```
-
-Inspect the Fleet catalog for the selected canonical network:
-
-```text
-canic deploy inspect catalog list
-canic deploy inspect catalog inspect <fleet>
-```
-
-## Expected Outputs
-
-The v1 surface should produce or read these evidence artifacts:
-
-- `EvidenceEnvelopeV1` for stable automation output;
-- `DeploymentPlanReport` for the 0.79 no-mutation deploy-plan output;
-- `canic.build_provenance.v1` for build provenance payloads;
-- `canic.deployment_check.v1` for deployment-check payloads;
-- `PolicyGateReportV1` or `ProjectEvidenceGateReportV1` for policy results;
-- `FleetCatalogReportV1` for canonical-network Fleet catalog output.
-
-Raw command payloads may be command-specific. CI should prefer stable envelope
-fields and payload schemas that are explicitly marked stable.
-
-## Readiness Boundary
-
-The checklist does not add authority. In particular, it does not:
-
-- install or upgrade Wasm;
-- mutate controllers;
-- attach topology except through the explicit `app role attach` command;
-- import brownfield deployments;
-- register artifacts in `wasm_store`;
-- sign evidence;
-- acquire deployment locks;
-- create deployment groups;
-- perform teardown;
-- make catalog entries live or fresh;
-- turn policy success into deployment truth.
-
-## Local Smoke Expectations
-
-The maintained local smoke is:
-
-```text
-scripts/ci/v1-readiness-smoke.sh
-```
-
-It runs in a temporary workspace and proves the safe local subset of this
-checklist: App creation, canister scaffold, declared-only inspection,
-explicit role attachment, attached inspection, empty network-scoped Fleet catalog,
-and policy evaluation of one saved envelope.
-
-Runbook:
-
-```text
-docs/operations/0.55-v1-local-smoke.md
-```
-
-In a fresh checkout without a Fleet catalog:
-
-```text
-canic deploy inspect catalog list
-canic deploy inspect catalog list --json
-```
-
-should succeed with zero catalog entries. This is expected. Catalog commands
-must not invent Fleets from App names or read removed environment-scoped
-deployment state.
+Automated coding work runs only targeted checks. The human deployment/release
+workflow owns the full workspace tests, broad PocketIC matrix, validation,
+versioning, tagging and publication.

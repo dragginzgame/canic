@@ -1,6 +1,6 @@
 //! Module: metrics::transport
 //!
-//! Responsibility: collect typed metric observations for installed Fleet canisters.
+//! Responsibility: collect typed metric observations for current Fleet canisters.
 //! Does not own: metric DTOs, report rendering, or Fleet registry authority.
 //! Boundary: preserves query causes until projecting per-canister report diagnostics.
 
@@ -15,11 +15,9 @@ use crate::metrics::{
 };
 use crate::support::candid::registry_entry_candid_path;
 use canic_host::{
+    fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
     icp::{IcpCli, IcpCommandError, IcpDiagnostic, IcpJsonResponseError},
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{
-        InstalledFleetRequest, InstalledFleetResolution, resolve_installed_fleet_from_root,
-    },
     registry::RegistryEntry,
 };
 use std::{sync::Arc, thread};
@@ -246,17 +244,10 @@ fn query_metrics(
 
 fn resolve_metrics_fleet(
     options: &MetricsOptions,
-) -> Result<InstalledFleetResolution, MetricsCommandError> {
+) -> Result<CurrentFleetResolution, MetricsCommandError> {
     let root = resolve_current_canic_icp_root().map_err(MetricsCommandError::IcpRoot)?;
-    resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.fleet.clone(),
-            environment: options.environment.clone(),
-        },
-        &options.icp,
-        &root,
-    )
-    .map_err(MetricsCommandError::from)
+    resolve_current_fleet(&root, &options.environment, &options.fleet)
+        .map_err(MetricsCommandError::from)
 }
 
 #[cfg(test)]

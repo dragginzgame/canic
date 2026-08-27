@@ -4,22 +4,13 @@
 //! Does not own: manifest persistence or build orchestration.
 //! Boundary: keeps every artifact read within the canonical ICP project root.
 
-use crate::{
-    durable_io::{RegularFileReadError, read_optional_regular_bytes},
-    release_set::{GZIP_MAGIC, ReleaseSetEntry, WASM_MAGIC},
-};
+use crate::durable_io::{RegularFileReadError, read_optional_regular_bytes};
 use std::{
-    fs,
-    io::{self, Read},
-    path::{Component, Path, PathBuf},
+    fs, io,
+    path::{Component, Path},
 };
 
-use canic_core::{
-    CANIC_WASM_CHUNK_BYTES,
-    cdk::utils::hash::{hex_bytes, wasm_hash_hex},
-    ids::ReleaseBuildId,
-};
-use flate2::read::GzDecoder;
+use canic_core::ids::ReleaseBuildId;
 
 pub(in crate::release_set) struct MaterializedReleaseArtifact {
     pub relative_path: String,
@@ -42,46 +33,6 @@ pub(in crate::release_set) fn contains_release_build_identity(
     let identity = release_build_id.to_string();
     wasm.windows(identity.len())
         .any(|window| window == identity.as_bytes())
-}
-
-// Build one release-set entry from one built ordinary role artifact.
-pub(in crate::release_set) fn build_release_set_entry(
-    icp_root: &Path,
-    role_name: &str,
-    artifact_path: &Path,
-    candid_sha256: [u8; 32],
-    protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest,
-) -> Result<ReleaseSetEntry, Box<dyn std::error::Error>> {
-    let artifact_relative_path = artifact_path
-        .strip_prefix(icp_root)
-        .map_err(|_| {
-            format!(
-                "artifact {} is not under ICP root {}",
-                artifact_path.display(),
-                icp_root.display()
-            )
-        })?
-        .to_string_lossy()
-        .to_string();
-    let artifact_path = resolve_release_artifact_path(icp_root, &artifact_relative_path)?;
-    let artifact = read_release_artifact(&artifact_path)?;
-
-    let chunk_hashes = artifact
-        .chunks(CANIC_WASM_CHUNK_BYTES)
-        .map(wasm_hash_hex)
-        .collect::<Vec<_>>();
-
-    Ok(ReleaseSetEntry {
-        role: role_name.to_string(),
-        template_id: format!("embedded:{role_name}"),
-        artifact_relative_path,
-        candid_sha256_hex: hex_bytes(candid_sha256),
-        protocol_profile_digest_hex: protocol_profile_digest.to_string(),
-        payload_size_bytes: u64::try_from(artifact.len())?,
-        payload_sha256_hex: wasm_hash_hex(&artifact),
-        chunk_size_bytes: u64::try_from(CANIC_WASM_CHUNK_BYTES)?,
-        chunk_sha256_hex: chunk_hashes,
-    })
 }
 
 /// Validate the lexical path contract shared by manifest admission and
@@ -156,70 +107,4 @@ pub(in crate::release_set) fn materialize_qualified_release_artifact(
         relative_path: relative.to_string(),
         bytes,
     })
-}
-
-/// Resolve one manifest artifact path and prove that its canonical target is
-/// contained by the canonical ICP project root.
-pub fn resolve_release_artifact_path(
-    icp_root: &Path,
-    artifact_relative_path: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_release_artifact_relative_path(artifact_relative_path)?;
-    let relative_path = Path::new(artifact_relative_path);
-
-    let canonical_root = icp_root.canonicalize()?;
-    let canonical_artifact = canonical_root.join(relative_path).canonicalize()?;
-    if !canonical_artifact.starts_with(&canonical_root) {
-        return Err(format!(
-            "release artifact path escapes ICP root: {}",
-            canonical_artifact.display()
-        )
-        .into());
-    }
-
-    Ok(canonical_artifact)
-}
-
-// Read one staged release artifact and validate that it is a non-empty gzip stream
-// whose decompressed payload is a real wasm module.
-pub(in crate::release_set) fn read_release_artifact(
-    path: &Path,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let artifact = fs::read(path)?;
-
-    if artifact.is_empty() {
-        return Err(format!("release artifact is empty: {}", path.display()).into());
-    }
-
-    if !artifact.starts_with(&GZIP_MAGIC) {
-        return Err(format!(
-            "release artifact is not gzip-compressed: {}",
-            path.display()
-        )
-        .into());
-    }
-
-    let mut decoder = GzDecoder::new(&artifact[..]);
-    let mut wasm = Vec::new();
-    decoder
-        .read_to_end(&mut wasm)
-        .map_err(|err| format!("failed to decompress {}: {err}", path.display()))?;
-
-    if wasm.is_empty() {
-        return Err(format!(
-            "release artifact decompresses to zero bytes: {}",
-            path.display()
-        )
-        .into());
-    }
-
-    if !wasm.starts_with(&WASM_MAGIC) {
-        return Err(format!(
-            "release artifact does not decompress to a wasm module: {}",
-            path.display()
-        )
-        .into());
-    }
-
-    Ok(artifact)
 }

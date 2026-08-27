@@ -18,7 +18,7 @@ use crate::{
     version_text,
 };
 use canic_host::{
-    install_root::{ConfigDiscoveryError, current_canic_workspace_root},
+    config_discovery::{ConfigDiscoveryError, current_canic_workspace_root},
     network::{
         NetworkEnrollmentOptions, NetworkEnrollmentReport, NetworkIdentityError, enroll_network,
     },

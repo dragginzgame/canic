@@ -11,14 +11,8 @@ validation notes.
 - [Supported host and target matrix](../governance/supported-platforms.md)
   defines the sole release-supported host/native/Wasm cell and distinguishes
   unvalidated installer branches.
-- [Recovery and retry runbooks](recovery-retry-runbooks.md) document safe
-  operator recovery decisions for replay-sensitive failures and uncertain
-  operations.
-- [Fleet funding operations](fleet-funding.md) documents Coordinator-owned Root
-  funding, direct infrastructure top-up, Root ICP conversion and recovery
-  fences.
-- [Destructive reinstall recovery](destructive-reinstall-recovery.md) defines
-  dependency-closure reinstall rules for placement managers and their children.
+- [Fleet ensure](../features/operations/fleet-ensure.md) documents the sole
+  current convergence and interruption-replay workflow.
 - [Release package and install validation](release-package-install-validation.md)
   records package, install, artifact, smoke-test, and environment-specific
   release gates.
@@ -28,20 +22,11 @@ hard-cut during 0.92. Current evidence belongs to dated audit reports and the
 active release-line closeout; this directory retains operator contracts and
 validation procedures only.
 
-## Auth Operations
-
-- [Root proof provisioning runbook](root-proof-provisioning.md)
-  records the active chain-key root proof renewal, issuer lazy-repair, status,
-  and repair guidance.
-
 ## Blob Storage Operations
 
 - [Blob storage integration](blob-storage-integration.md) documents the 0.69
   non-billing gateway endpoint wiring, lifecycle API contract, gateway
   principal handling, and focused validation commands for downstream canisters.
-- [Blob storage billing readiness](blob-storage-billing-readiness.md)
-  documents the operator status, targeted medic, gateway sync, funding, and
-  post-upgrade checks for canisters that host blob-storage billing endpoints.
 - [Blob storage source handoff](blob-storage-source-handoff.md) records the
   source and inventory evidence used to unlock the 0.69 implementation line.
 

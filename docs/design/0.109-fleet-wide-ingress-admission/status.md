@@ -3,6 +3,13 @@
 Date: 2026-08-23
 Last updated: 2026-08-26
 
+> Historical implementation record: retained-Root repair, install preflight,
+> and recovery-bundle claims below describe immutable bridge releases through
+> `v0.109.12`. The maintained source after that tag removes those exceptional
+> surfaces. Current development truth is in
+> [`docs/status/current.md`](../../status/current.md); CANIC-059 owns the
+> separately gated generic Fleet convergence direction.
+
 ## Status
 
 - State: B1-B7 are functionally implementation-complete. B8 now owns the

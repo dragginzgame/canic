@@ -57,20 +57,20 @@ fn parses_duration_selectors() {
 
 #[test]
 fn missing_cycles_fleet_preserves_canonical_typed_error() {
-    let error = CyclesCommandError::from(InstalledFleetError::NoInstalledFleet {
+    let error = CyclesCommandError::from(CurrentFleetInventoryError::NotConverged {
         environment: "local".to_string(),
         fleet: "demo-local".to_string(),
     });
     std::assert_matches!(
         error,
-        CyclesCommandError::InstalledFleet(InstalledFleetError::NoInstalledFleet {
+        CyclesCommandError::CurrentFleet(CurrentFleetInventoryError::NotConverged {
             environment,
             fleet,
         }) if environment == "local" && fleet == "demo-local"
     );
 }
 
-// Ensure cycle summaries can target one installed Fleet subtree by role or principal.
+// Ensure cycle summaries can target one current Fleet subtree by role or principal.
 #[test]
 fn parses_cycles_subtree_option() {
     let options = options::CyclesOptions::parse_info([
@@ -96,7 +96,7 @@ fn cycles_usage_uses_fleet_wording() {
     let text = options::info_usage();
 
     assert!(text.contains("Usage: canic info cycles [OPTIONS] <fleet>"));
-    assert!(text.contains("Summarize installed Fleet cycle history"));
+    assert!(text.contains("Summarize terminal current Fleet cycle history"));
     assert!(text.contains("Installed Fleet name to inspect"));
 }
 
