@@ -17,6 +17,10 @@ Published `v0.109.12` at
 `513d628ff4fb3ba6882ae3db32be8bcf84dbe1b8` is the immutable predecessor of
 the open `0.109.13` hard cut.
 
+Release versioning no longer treats that descriptive lineage prose as a
+machine authority. Uniform package versions, the immutable tag and the exact
+validated-source marker remain the governed release facts.
+
 ## Current Decision
 
 CANIC-059 is now the maintained host architecture. `canic fleet ensure
@@ -211,6 +215,11 @@ Targeted evidence on the dirty source candidate:
   deterministic live-observation adapter; the separate governed PocketIC case
   proves the real current control-plane graph. The maintainer-owned broad and
   deployed gates remain intentionally unrun.
+- The multi-Root generator now indexes policy Roots, retained identity Roots
+  and compiled topology Roots by exact parsed `SubnetId` before joining them.
+  Its focused two-Root regression deliberately uses Principals whose text and
+  typed byte order differ, proving that Root-local authority cannot cross-bind
+  through positional sorting.
 - Six focused current-protocol compiler tests now also prove deterministic
   Registry-chain construction, exact Root/Store authority rejection,
   path-confined qualified Store bytes, content-bound chunk publication and

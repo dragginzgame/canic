@@ -10,8 +10,8 @@ mod tests;
 use crate::{
     canister_protocol::query_with_candid,
     component_topology::{
-        PlannedFleetSubnetRootTopologyInput, RootComponentAdmissionInput,
-        plan_initial_fleet_topology,
+        PlannedFleetSubnetRootTopology, PlannedFleetSubnetRootTopologyInput,
+        RootComponentAdmissionInput, plan_initial_fleet_topology,
     },
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_ensure::model::{
@@ -549,6 +549,66 @@ struct CompileDesiredRequest<'a> {
     ledger_fee_cycles: u128,
 }
 
+struct RootGenerationBinding<'a> {
+    source: &'a RootSource,
+    seed: &'a RootSeed,
+    planned: &'a PlannedFleetSubnetRootTopology,
+}
+
+fn bind_root_generation_inputs<'a>(
+    sources: &'a [RootSource],
+    seeds: &'a [RootSeed],
+    planned_roots: &'a [PlannedFleetSubnetRootTopology],
+) -> Result<Vec<RootGenerationBinding<'a>>, FleetGenerateError> {
+    let mut sources_by_subnet = BTreeMap::new();
+    for source in sources {
+        let placement = parse_subnet("Fleet policy Root", &source.placement_subnet)?;
+        if sources_by_subnet.insert(placement, source).is_some() {
+            return Err(FleetGenerateError::SeedTopology(format!(
+                "Fleet policy repeats Root placement Subnet {placement}"
+            )));
+        }
+    }
+    let mut seeds_by_subnet = BTreeMap::new();
+    for seed in seeds {
+        let placement = parse_subnet("Fleet identity-seed Root", &seed.placement_subnet)?;
+        if seeds_by_subnet.insert(placement, seed).is_some() {
+            return Err(FleetGenerateError::SeedTopology(format!(
+                "Fleet identity seed repeats Root placement Subnet {placement}"
+            )));
+        }
+    }
+    let mut planned_by_subnet = BTreeMap::new();
+    for planned in planned_roots {
+        if planned_by_subnet
+            .insert(planned.placement_subnet, planned)
+            .is_some()
+        {
+            return Err(FleetGenerateError::SeedTopology(format!(
+                "compiled topology repeats Root placement Subnet {}",
+                planned.placement_subnet
+            )));
+        }
+    }
+    let source_subnets = sources_by_subnet.keys().copied().collect::<BTreeSet<_>>();
+    let seed_subnets = seeds_by_subnet.keys().copied().collect::<BTreeSet<_>>();
+    let planned_subnets = planned_by_subnet.keys().copied().collect::<BTreeSet<_>>();
+    if source_subnets != seed_subnets || source_subnets != planned_subnets {
+        return Err(FleetGenerateError::SeedTopology(
+            "Fleet policy, identity-seed and compiled Root placement Subnet sets differ"
+                .to_string(),
+        ));
+    }
+    Ok(planned_by_subnet
+        .into_iter()
+        .map(|(placement, planned)| RootGenerationBinding {
+            source: sources_by_subnet[&placement],
+            seed: seeds_by_subnet[&placement],
+            planned,
+        })
+        .collect())
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one compiler constructs the complete canonical desired document"
@@ -574,26 +634,17 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
     ));
     let mut bootstrap_roots = Vec::new();
     let mut placements = Vec::new();
-    let mut sorted_source = input.source.fleet_subnet_roots.iter().collect::<Vec<_>>();
-    sorted_source.sort_by_key(|root| root.placement_subnet.as_str());
-    let mut sorted_seed = input.seed.roots.iter().collect::<Vec<_>>();
-    sorted_seed.sort_by_key(|root| root.placement_subnet.as_str());
-    if sorted_source.len() != sorted_seed.len()
-        || sorted_source
-            .iter()
-            .zip(&sorted_seed)
-            .any(|(source, seed)| source.placement_subnet != seed.placement_subnet)
-    {
-        return Err(FleetGenerateError::SeedTopology(
-            "Root placement Subnet sets differ".to_string(),
-        ));
-    }
-    for (index, ((source, seed), planned)) in sorted_source
-        .into_iter()
-        .zip(sorted_seed)
-        .zip(&input.topology.fleet_subnet_roots)
-        .enumerate()
-    {
+    let root_bindings = bind_root_generation_inputs(
+        &input.source.fleet_subnet_roots,
+        &input.seed.roots,
+        &input.topology.fleet_subnet_roots,
+    )?;
+    for (index, binding) in root_bindings.into_iter().enumerate() {
+        let RootGenerationBinding {
+            source,
+            seed,
+            planned,
+        } = binding;
         require_cycles_creation(&source.root_creation_funding, "Fleet Subnet Root")?;
         require_cycles_creation(&source.wasm_store_creation_funding, "Wasm Store")?;
         let root_name = format!("root-{index}");

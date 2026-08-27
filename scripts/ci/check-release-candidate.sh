@@ -43,12 +43,6 @@ fi
 validation_marker="Release validation: \`$workspace_version\` was validated from source \`$validated_source\` on \`$release_date\`; the release commit may differ only in governed release surfaces."
 [ "$(rg -c -F "$validation_marker" "$STATUS_DOCUMENT")" -eq 1 ] ||
     fail "current status is not bound to the exact validated source and release"
-lineage_count="$(
-    rg -c "^Release lineage: \`$workspace_version\` follows immutable \`v[0-9]+\.[0-9]+\.[0-9]+\`\.$" \
-        "$STATUS_DOCUMENT" || true
-)"
-[ "${lineage_count:-0}" -eq 1 ] ||
-    fail "current status does not contain one sealed $workspace_version release lineage"
 
 pending_release_narrative() {
     local contents="$1"
