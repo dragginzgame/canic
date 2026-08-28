@@ -461,6 +461,7 @@ fn publish_executable(
             path: stage.clone(),
             source,
         })?;
+        drop(output);
         admit_binaryen_executable(&stage, expected_sha256)?;
         fs::rename(&stage, destination).map_err(|source| BinaryenToolError::Io {
             operation: "publish Binaryen executable",

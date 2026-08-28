@@ -464,6 +464,7 @@ pub fn compile_plan(
         plan_sha256: String::new(),
         planned_at_time: created_at_time,
         protocol_actions,
+        reviewed_desired: Some(Box::new(desired.clone())),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
     };
     plan.plan_sha256 = expected_plan_sha256(&plan);
@@ -487,22 +488,28 @@ pub(crate) fn validate_path_identity(
             expected: requested_fleet.to_string(),
         });
     }
+    validate_path_labels(&desired.environment, requested_fleet)
+}
+
+pub(crate) fn validate_path_labels(
+    environment: &str,
+    requested_fleet: &str,
+) -> Result<(), EnsurePolicyError> {
     requested_fleet
         .parse::<FleetName>()
         .map_err(|_| EnsurePolicyError::UnsafePathLabel {
             field: "fleet",
             value: requested_fleet.to_string(),
         })?;
-    if desired.environment.is_empty()
-        || desired.environment.len() > 64
-        || !desired
-            .environment
+    if environment.is_empty()
+        || environment.len() > 64
+        || !environment
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
     {
         return Err(EnsurePolicyError::UnsafePathLabel {
             field: "environment",
-            value: desired.environment.clone(),
+            value: environment.to_string(),
         });
     }
     Ok(())

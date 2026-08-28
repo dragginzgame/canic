@@ -35,4 +35,4 @@ pub use ops::current_protocol::{
     compile_current_registry_sequence_with_status, compile_current_store_sequence_from_union,
 };
 pub use ops::{EnsurePaths, IcpEnsurePlatform, IcpEnsurePlatformError};
-pub use workflow::{EnsureWorkflowError, apply, plan};
+pub use workflow::{EnsureWorkflowError, apply, plan, retained_in_progress_plan};

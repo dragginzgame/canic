@@ -16,7 +16,8 @@ use crate::fleet_ensure::{
         read_plan, read_state, resolve_desired_artifacts, write_journal, write_plan, write_state,
     },
     policy::{
-        EnsurePolicyError, compile_plan, expected_plan_sha256, operation_id, validate_path_identity,
+        EnsurePolicyError, compile_plan, expected_plan_sha256, operation_id,
+        validate_path_identity, validate_path_labels,
     },
 };
 use std::{collections::BTreeMap, path::Path};
@@ -29,11 +30,13 @@ pub enum EnsureWorkflowError<E>
 where
     E: std::error::Error + 'static,
 {
-    #[error("another reviewed Fleet plan is already in progress: {operation_id}")]
-    ActiveOperation { operation_id: String },
-
     #[error("reviewed Fleet plan digest changed before its first effect")]
     DriftedBeforeApply,
+
+    #[error(
+        "in-progress Fleet plan requires desired input {expected}, but the retained plan predates desired-input retention and the supplied input is {actual}; supply the exact reviewed desired document"
+    )]
+    RetainedDesiredUnavailable { actual: String, expected: String },
 
     #[error("reviewed Fleet plan {expected} does not match retained plan {actual}")]
     PlanDigestMismatch { actual: String, expected: String },
@@ -81,6 +84,32 @@ where
     State(#[from] EnsureStateError),
 }
 
+/// Load and verify the sole immutable in-progress operation for one exact Fleet path.
+pub fn retained_in_progress_plan<E>(
+    root: &Path,
+    environment: &str,
+    requested_fleet: &str,
+) -> Result<Option<FleetEnsurePlan>, EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    validate_path_labels(environment, requested_fleet)?;
+    let paths = EnsurePaths::under(root, environment, requested_fleet);
+    let _lock = lock_operation(&paths)?;
+    let Some(journal) = read_journal(&paths)? else {
+        return Ok(None);
+    };
+    if journal.completion != FleetEnsureCompletion::InProgress {
+        return Ok(None);
+    }
+    let retained = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
+    if retained.environment != environment || retained.fleet != requested_fleet {
+        return Err(EnsureWorkflowError::PlanIntegrity);
+    }
+    verify_journal(&journal, &retained, requested_fleet)?;
+    Ok(Some(retained))
+}
+
 /// Build and retain one read-only plan from current desired state plus live observation.
 pub fn plan<P>(
     root: &Path,
@@ -101,11 +130,6 @@ where
     {
         let retained = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
         verify_journal(&journal, &retained, requested_fleet)?;
-        if retained.desired_sha256 != desired_sha256 {
-            return Err(EnsureWorkflowError::ActiveOperation {
-                operation_id: journal.operation_id,
-            });
-        }
         return Ok(FleetEnsureReport {
             actual_conservation: None,
             effects_applied: applied_count(&journal),
@@ -232,11 +256,47 @@ where
             expected: reviewed_plan_sha256.to_string(),
         });
     }
-    if retained_plan.desired_sha256 != desired_sha256 {
-        return Err(EnsureWorkflowError::DriftedBeforeApply);
-    }
     let mut state = read_state(&paths, requested_fleet)?;
-    let mut journal = match read_journal(&paths)? {
+    let retained_journal = read_journal(&paths)?;
+    let in_progress = retained_journal
+        .as_ref()
+        .is_some_and(|journal| journal.completion == FleetEnsureCompletion::InProgress);
+    if let Some(journal) = retained_journal.as_ref().filter(|_| in_progress) {
+        verify_journal(journal, &retained_plan, requested_fleet)?;
+    }
+    let mut issued_observation_resume = false;
+    let operation_desired = if in_progress {
+        if let Some(reviewed) = retained_plan.reviewed_desired.as_deref() {
+            validate_path_identity(reviewed, requested_fleet)?;
+            if reviewed.environment != retained_plan.environment {
+                return Err(EnsureWorkflowError::PlanIntegrity);
+            }
+            reviewed
+        } else if retained_plan.desired_sha256 == desired_sha256 {
+            desired
+        } else if retained_journal
+            .as_ref()
+            .is_some_and(|journal| safe_issued_observation_resume(&retained_plan, journal, desired))
+        {
+            issued_observation_resume = true;
+            desired
+        } else {
+            return Err(EnsureWorkflowError::RetainedDesiredUnavailable {
+                actual: desired_sha256.to_string(),
+                expected: retained_plan.desired_sha256.clone(),
+            });
+        }
+    } else {
+        if retained_plan.desired_sha256 != desired_sha256 {
+            return Err(EnsureWorkflowError::DriftedBeforeApply);
+        }
+        desired
+    };
+    platform
+        .bind_reviewed_desired(operation_desired)
+        .map_err(EnsureWorkflowError::Platform)?;
+    let operation_desired_sha256 = retained_plan.desired_sha256.as_str();
+    let mut journal = match retained_journal {
         Some(journal) if journal.completion == FleetEnsureCompletion::InProgress => {
             verify_journal(&journal, &retained_plan, requested_fleet)?;
             journal
@@ -244,8 +304,8 @@ where
         _ => {
             let observation = verify_fresh_plan(
                 root,
-                desired,
-                desired_sha256,
+                operation_desired,
+                operation_desired_sha256,
                 requested_fleet,
                 &retained_plan,
                 platform,
@@ -336,7 +396,9 @@ where
                         journal.stalled_observations =
                             journal.stalled_observations.saturating_add(1);
                         write_journal(&paths, &journal)?;
-                        if journal.stalled_observations >= desired.maximum_stalled_observations {
+                        if journal.stalled_observations
+                            >= operation_desired.maximum_stalled_observations
+                        {
                             return Err(EnsureWorkflowError::Stalled {
                                 observations: journal.stalled_observations,
                             });
@@ -371,7 +433,7 @@ where
                 journal.stalled_observations = 0;
             }
             write_journal(&paths, &journal)?;
-            if journal.stalled_observations >= desired.maximum_stalled_observations {
+            if journal.stalled_observations >= operation_desired.maximum_stalled_observations {
                 return Err(EnsureWorkflowError::Stalled {
                     observations: journal.stalled_observations,
                 });
@@ -380,34 +442,36 @@ where
     }
 
     let mut terminal_state = state.clone();
-    publish_terminal_state(desired, &retained_plan, &mut terminal_state);
+    publish_terminal_state(operation_desired, &retained_plan, &mut terminal_state);
     project_current_fleet_inventory(&terminal_state)?;
     let terminal_observation = platform
         .observe(&retained_plan.operation_id, &terminal_state)
         .map_err(EnsureWorkflowError::Platform)?;
-    let artifacts = resolve_desired_artifacts(root, desired)?;
-    let protocol_actions = platform
-        .protocol_actions(&retained_plan.operation_id, &terminal_state)
-        .map_err(EnsureWorkflowError::Platform)?;
-    let converged = compile_plan(
-        desired,
-        &artifacts,
-        &protocol_actions,
-        desired_sha256,
-        requested_fleet,
-        &terminal_observation,
-        retained_plan.planned_at_time,
-    )?;
-    if converged
-        .canisters
-        .iter()
-        .any(|canister| !canister.actions.is_empty())
-        || !converged.protocol_actions.is_empty()
-    {
-        journal.completion = FleetEnsureCompletion::ReplanRequired;
-        journal.stalled_observations = 0;
-        write_journal(&paths, &journal)?;
-        return Err(EnsureWorkflowError::ConvergenceDrift);
+    if !issued_observation_resume {
+        let artifacts = resolve_desired_artifacts(root, operation_desired)?;
+        let protocol_actions = platform
+            .protocol_actions(&retained_plan.operation_id, &terminal_state)
+            .map_err(EnsureWorkflowError::Platform)?;
+        let converged = compile_plan(
+            operation_desired,
+            &artifacts,
+            &protocol_actions,
+            operation_desired_sha256,
+            requested_fleet,
+            &terminal_observation,
+            retained_plan.planned_at_time,
+        )?;
+        if converged
+            .canisters
+            .iter()
+            .any(|canister| !canister.actions.is_empty())
+            || !converged.protocol_actions.is_empty()
+        {
+            journal.completion = FleetEnsureCompletion::ReplanRequired;
+            journal.stalled_observations = 0;
+            write_journal(&paths, &journal)?;
+            return Err(EnsureWorkflowError::ConvergenceDrift);
+        }
     }
     let terminal_inventory = platform
         .terminal_inventory(&retained_plan.operation_id, &terminal_state)
@@ -541,6 +605,7 @@ fn retained_funding_remains_sufficient(
 fn normalized_plan(plan: &FleetEnsurePlan) -> FleetEnsurePlan {
     let mut normalized = plan.clone();
     normalized.plan_sha256.clear();
+    normalized.reviewed_desired = None;
     normalized.conservation = CycleConservation {
         expected_post_operation_cycles: 0,
         maximum_execution_burn_cycles: 0,
@@ -566,6 +631,76 @@ fn normalized_plan(plan: &FleetEnsurePlan) -> FleetEnsurePlan {
         }
     }
     normalized
+}
+
+fn safe_issued_observation_resume(
+    plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+    supplied: &crate::fleet_ensure::model::DesiredFleet,
+) -> bool {
+    if plan.conservation.maximum_new_funding_cycles != 0
+        || plan.conservation.maximum_operator_debit_cycles != 0
+        || plan.conservation.maximum_unavoidable_fee_cycles != 0
+        || plan.canisters.iter().any(|canister| {
+            canister.disposition != CanisterDisposition::Reuse
+                || !canister.actions.is_empty()
+                || canister.principal.is_none()
+        })
+    {
+        return false;
+    }
+    let supplied_principals = supplied
+        .canisters
+        .iter()
+        .filter(|canister| {
+            canister.presence == crate::fleet_ensure::model::DesiredPresence::Present
+                && !canister.replace
+        })
+        .filter_map(|canister| {
+            canister
+                .principal
+                .as_ref()
+                .map(|principal| (canister.name.as_str(), principal.as_str()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    if supplied_principals.len() != plan.canisters.len()
+        || plan.canisters.iter().any(|canister| {
+            canister.principal.as_deref().is_none_or(|principal| {
+                supplied_principals.get(canister.name.as_str()).copied() != Some(principal)
+            })
+        })
+    {
+        return false;
+    }
+    let actions = ordered_actions(plan);
+    if actions.len() != journal.effects.len() || actions.is_empty() {
+        return false;
+    }
+    if actions
+        .iter()
+        .zip(&journal.effects)
+        .any(|(action, effect)| action_sha256(action) != effect.action_sha256)
+    {
+        return false;
+    }
+    let Some((last_action, last_effect)) = actions.last().zip(journal.effects.last()) else {
+        return false;
+    };
+    journal.effects[..journal.effects.len() - 1]
+        .iter()
+        .all(|effect| effect.state == EffectState::Applied)
+        && matches!(
+            last_effect.state,
+            EffectState::Issued | EffectState::Applied
+        )
+        && matches!(
+            last_action,
+            EnsureAction::FleetProtocol { action, .. }
+                if matches!(
+                    action.as_ref(),
+                    crate::fleet_ensure::model::CurrentFleetProtocolAction::ProvisionComponents { .. }
+                )
+        )
 }
 
 fn attach_terminal_cycles<E>(

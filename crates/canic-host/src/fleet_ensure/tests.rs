@@ -278,6 +278,11 @@ impl MockPlatform {
 impl EnsurePlatform for MockPlatform {
     type Error = MockError;
 
+    fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
+        self.desired = desired.clone();
+        Ok(())
+    }
+
     fn observe(
         &mut self,
         _operation_id: &str,
@@ -1416,6 +1421,213 @@ fn protocol_response_is_only_issuance_and_terminal_status_gates_later_actions() 
 }
 
 #[test]
+fn in_progress_operation_resumes_reviewed_desired_before_newer_input() {
+    let mut fixture = fixture();
+    fixture.desired.protocol = Some(DesiredFleetProtocol {
+        app_config: "canic.toml".to_string(),
+        component_group_placements: Vec::new(),
+        coordinator_candid: "coordinator.did".to_string(),
+        root_candid: "root.did".to_string(),
+        store_candid: "store.did".to_string(),
+    });
+    fixture
+        .desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+        .expect("fixture Coordinator")
+        .wasm = None;
+    fixture.platform.desired = fixture.desired.clone();
+    fixture.platform.protocol_command_only = true;
+    fixture.platform.typed_protocol = true;
+    let reviewed_sha256 = "31".repeat(32);
+    let mut platform = fixture.platform;
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &reviewed_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut platform,
+    )
+    .expect("compile reviewed operation");
+    let protocol = planned
+        .plan
+        .protocol_actions
+        .first()
+        .map(crate::fleet_ensure::ops::action_sha256)
+        .expect("protocol action");
+
+    let error = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &reviewed_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut platform,
+    )
+    .expect_err("issued protocol remains nonterminal");
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::Stalled { .. }
+    ));
+    assert_eq!(platform.mutations.get(&protocol), Some(&1));
+
+    let mut newer = fixture.desired.clone();
+    newer.maximum_stalled_observations = 17;
+    let newer_sha256 = "32".repeat(32);
+    platform.desired = newer.clone();
+    let retained = workflow::plan(
+        &fixture.root,
+        &newer,
+        &newer_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut platform,
+    )
+    .expect("return the immutable in-progress operation");
+    assert_eq!(retained.plan.plan_sha256, planned.plan.plan_sha256);
+    assert_eq!(retained.plan.desired_sha256, reviewed_sha256);
+    assert_eq!(
+        retained.plan.reviewed_desired.as_deref(),
+        Some(&fixture.desired)
+    );
+
+    platform
+        .protocol_ready
+        .insert("fleet-component-provisioning".to_string());
+    let terminal = workflow::apply(
+        &fixture.root,
+        &newer,
+        &newer_sha256,
+        "test-fleet",
+        &retained.plan.plan_sha256,
+        &mut platform,
+    )
+    .expect("resume the retained desired operation");
+    assert!(terminal.terminal);
+    assert_eq!(platform.mutations.get(&protocol), Some(&1));
+    assert_eq!(platform.desired, fixture.desired);
+
+    platform.desired = newer.clone();
+    let successor = workflow::plan(
+        &fixture.root,
+        &newer,
+        &newer_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_200,
+        &mut platform,
+    )
+    .expect("consider newer desired only after terminal operation");
+    assert_eq!(successor.plan.desired_sha256, newer_sha256);
+    assert_eq!(successor.plan.reviewed_desired.as_deref(), Some(&newer));
+}
+
+#[test]
+fn pre_snapshot_zero_debit_final_observation_resumes_without_reissuing() {
+    let mut fixture = fixture();
+    fixture
+        .desired
+        .canisters
+        .retain(|canister| canister.name == "treasury");
+    fixture.desired.protocol = Some(DesiredFleetProtocol {
+        app_config: "canic.toml".to_string(),
+        component_group_placements: Vec::new(),
+        coordinator_candid: "coordinator.did".to_string(),
+        root_candid: "root.did".to_string(),
+        store_candid: "store.did".to_string(),
+    });
+    fixture
+        .desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+        .expect("fixture Coordinator")
+        .wasm = None;
+    fixture.platform.desired = fixture.desired.clone();
+    fixture.platform.protocol_command_only = true;
+    fixture.platform.typed_protocol = true;
+    let reviewed_sha256 = "33".repeat(32);
+    let mut platform = fixture.platform;
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &reviewed_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut platform,
+    )
+    .expect("compile reviewed operation");
+    let mut retained = planned.plan;
+    let action_hash = retained
+        .protocol_actions
+        .first()
+        .map(crate::fleet_ensure::ops::action_sha256)
+        .expect("terminal protocol action");
+    retained.reviewed_desired = None;
+    retained.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&retained);
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    crate::fleet_ensure::ops::write_plan(&paths, &retained).expect("retain pre-snapshot plan");
+    fs::remove_file(&paths.state).expect("remove disposable pre-effect identity projection");
+
+    let error = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &reviewed_sha256,
+        "test-fleet",
+        &retained.plan_sha256,
+        &mut platform,
+    )
+    .expect_err("issued protocol remains nonterminal");
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::Stalled { .. }
+    ));
+    assert_eq!(platform.mutations.get(&action_hash), Some(&1));
+
+    let mut newer = fixture.desired.clone();
+    newer.maximum_stalled_observations = 17;
+    let newer_sha256 = "34".repeat(32);
+    let mut mismatched = newer.clone();
+    mismatched.canisters[0].principal = Some(OLD_APP.to_string());
+    let error = workflow::apply(
+        &fixture.root,
+        &mismatched,
+        &newer_sha256,
+        "test-fleet",
+        &retained.plan_sha256,
+        &mut platform,
+    )
+    .expect_err("changed retained Principal cannot supply observation authority");
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::RetainedDesiredUnavailable {
+            actual,
+            expected,
+        } if actual == newer_sha256 && expected == reviewed_sha256
+    ));
+
+    platform
+        .protocol_ready
+        .insert("fleet-component-provisioning".to_string());
+    let terminal = workflow::apply(
+        &fixture.root,
+        &newer,
+        &newer_sha256,
+        "test-fleet",
+        &retained.plan_sha256,
+        &mut platform,
+    )
+    .expect("newer input may observe the exact retained zero-debit terminal action");
+    assert!(terminal.terminal);
+    assert_eq!(platform.mutations.get(&action_hash), Some(&1));
+}
+
+#[test]
 fn typed_fleet_protocol_is_issued_once_and_requires_terminal_status() {
     let mut fixture = fixture();
     fixture.desired.protocol = Some(DesiredFleetProtocol {
@@ -1607,6 +1819,7 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
         plan_sha256: String::new(),
         planned_at_time: 1,
         protocol_actions: actions,
+        reviewed_desired: None,
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
     };
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
@@ -1692,6 +1905,7 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         plan_sha256: String::new(),
         planned_at_time: 1,
         protocol_actions: actions,
+        reviewed_desired: None,
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
     };
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
@@ -2022,6 +2236,11 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
 
     impl EnsurePlatform for PocketPlatform {
         type Error = std::io::Error;
+
+        fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
+            self.desired = desired.clone();
+            Ok(())
+        }
 
         fn observe(
             &mut self,

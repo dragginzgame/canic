@@ -1,5 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
+use std::collections::BTreeMap;
 
 #[test]
 fn fleet_commands_are_current_generation_and_lexicographically_ordered() {
@@ -51,6 +52,111 @@ fn ensure_requires_canonical_apply_digest() {
     ])
     .expect_err("reject invalid digest");
     assert!(matches!(error, FleetCommandError::Usage(_)));
+}
+
+#[test]
+fn ensure_reopens_retained_reviewed_input_when_working_toml_is_missing() {
+    use canic_host::fleet_ensure::{
+        model::{
+            CanisterRuntimeStatus, DesiredFleet, DesiredFleetArtifacts, FleetEnsureCompletion,
+            FleetEnsureJournalRecord, FleetObservation, LiveCanister,
+        },
+        ops::{EnsurePaths, write_journal, write_plan},
+        policy::compile_plan,
+    };
+
+    let root = temp_dir("canic-cli-retained-desired");
+    let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+    let controller = "rdmx6-jaaaa-aaaaa-aaadq-cai";
+    let desired = toml::from_str::<DesiredFleet>(
+        r#"
+cycles_ledger = "um5iw-rqaaa-aaaaq-qaaba-cai"
+environment = "local"
+fleet = "retained"
+ledger_fee_cycles = "0"
+management_creation_fee_cycles = "0"
+material_cycle_threshold = "1"
+maximum_observation_burn_cycles = "1"
+maximum_stalled_observations = 2
+maximum_update_burn_cycles = "1"
+operator = "rdmx6-jaaaa-aaaaa-aaadq-cai"
+schema_version = 1
+treasury = "rrkah-fqaaa-aaaaa-aaaaq-cai"
+
+[[canisters]]
+controllers = ["rdmx6-jaaaa-aaaaa-aaadq-cai"]
+initial_cycles = "20"
+kind = "coordinator"
+minimum_cycles = "20"
+name = "coordinator"
+presence = "present"
+principal = "rrkah-fqaaa-aaaaa-aaaaq-cai"
+replace = false
+subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
+"#,
+    )
+    .expect("parse current desired fixture");
+    let desired_sha256 = "35".repeat(32);
+    let plan = compile_plan(
+        &desired,
+        &DesiredFleetArtifacts::default(),
+        &[],
+        &desired_sha256,
+        "retained",
+        &FleetObservation {
+            additional_controlled_cycles: BTreeMap::new(),
+            canisters: BTreeMap::from([(
+                "coordinator".to_string(),
+                Some(LiveCanister {
+                    canister_version: Some(1),
+                    controllers: vec![controller.to_string()],
+                    cycles: 20,
+                    module_sha256: None,
+                    principal: principal.to_string(),
+                    reinstall_required: false,
+                    root_owned_lifecycle: None,
+                    status: CanisterRuntimeStatus::Running,
+                }),
+            )]),
+            ledger_fee_cycles: 0,
+            operator_cycles: 0,
+            protocol_ready: BTreeMap::new(),
+        },
+        1,
+    )
+    .expect("compile retained desired authority");
+    let paths = EnsurePaths::under(&root, "local", "retained");
+    write_plan(&paths, &plan).expect("retain reviewed plan");
+    write_journal(
+        &paths,
+        &FleetEnsureJournalRecord {
+            completion: FleetEnsureCompletion::InProgress,
+            effects: Vec::new(),
+            fleet: "retained".to_string(),
+            initial_controlled_cycles: 20,
+            initial_operator_cycles: 0,
+            operation_id: plan.operation_id.clone(),
+            plan_sha256: plan.plan_sha256.clone(),
+            schema_version: 1,
+            stalled_observations: 0,
+        },
+    )
+    .expect("retain in-progress journal");
+    let options = EnsureOptions {
+        apply: Some(plan.plan_sha256),
+        desired: PathBuf::from("missing.toml"),
+        environment: Some("local".to_string()),
+        fleet: "retained".to_string(),
+        icp: "icp".to_string(),
+        json: false,
+    };
+
+    let loaded = load_ensure_authority(&root, &root.join("missing.toml"), &options)
+        .expect("load exact retained desired without working TOML");
+    assert_eq!(loaded.desired, desired);
+    assert_eq!(loaded.sha256, desired_sha256);
+
+    fs::remove_dir_all(root).expect("remove test directory");
 }
 
 #[test]

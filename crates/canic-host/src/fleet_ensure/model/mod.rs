@@ -550,6 +550,8 @@ pub struct FleetEnsurePlan {
     pub plan_sha256: String,
     pub planned_at_time: u64,
     pub protocol_actions: Vec<EnsureAction>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewed_desired: Option<Box<DesiredFleet>>,
     pub schema_version: u16,
 }
 

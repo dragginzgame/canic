@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.19` closes the staged Binaryen writer before the public toolchain
+  installer executes and admits the optimizer, and makes in-progress Fleet
+  operations retain and resume their exact reviewed desired authority before
+  considering newer input. The bounded current-schema pre-retention case can
+  observe and close its zero-debit issued terminal action without reissuing it.
 - `0.109.18` makes every current Fleet Ensure protocol action round-trip through
   schema-1 JSON with exact decimal cycle values, preserved plan/effect
   identities and replay-safe issued-journal recovery, hard-cuts inline Wasm

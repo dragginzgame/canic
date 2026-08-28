@@ -946,6 +946,11 @@ impl IcpEnsurePlatform {
 impl EnsurePlatform for IcpEnsurePlatform {
     type Error = IcpEnsurePlatformError;
 
+    fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
+        self.desired = desired.clone();
+        Ok(())
+    }
+
     fn observe(
         &mut self,
         operation_id: &str,
