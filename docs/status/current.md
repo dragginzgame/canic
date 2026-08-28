@@ -341,7 +341,7 @@ packages. The controlled release-Wasm comparison used identical source,
 toolchain, profile, shrink and metadata paths. No broad workspace or PocketIC
 gate was run during this coding slice.
 
-<!-- canic-release-state: source-development -->
+<!-- canic-release-validation: version=0.109.18 source=5174dbd6a4d6c6c3cc8934eab899cef346a9da68 date=2026-08-28 gate=complete -->
 Published `0.109.15` added a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while
