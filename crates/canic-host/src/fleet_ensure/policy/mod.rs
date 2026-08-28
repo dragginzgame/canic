@@ -128,6 +128,12 @@ pub enum EnsurePolicyError {
     #[error("retained pool asset {name} has no exact Root-owned lifecycle observation")]
     MissingPoolLifecycle { name: String },
 
+    #[error("retained pool evidence cannot be fenced by an exact reinstall of {name}")]
+    RecoveryReinstallUnavailable { name: String },
+
+    #[error("Root-owned canister {name} is still awaiting exact current balance observation")]
+    PendingRootOwnedBalance { name: String },
+
     #[error("desired Fleet topology is invalid for {name}: {reason}")]
     InvalidTopology { name: String, reason: &'static str },
 }
@@ -203,6 +209,7 @@ pub fn compile_plan(
     }
     let operation_id = operation_id(desired_sha256, &desired.environment, requested_fleet);
     let mut accumulator = PlanAccumulator::new();
+    let recovery_reinstalls = recovery_reinstall_canisters(desired, observation)?;
 
     for (index, configured) in desired.canisters.iter().enumerate() {
         let observed = observation
@@ -226,9 +233,27 @@ pub fn compile_plan(
             cycle_policy,
             bounds,
             action_time,
+            recovery_reinstalls.contains(&configured.name),
             &mut accumulator,
         )?;
         accumulator.canisters.push(plan);
+    }
+    for name in &recovery_reinstalls {
+        let has_exact_reinstall = accumulator.canisters.iter().any(|canister| {
+            canister.name == *name
+                && canister.actions.iter().any(|action| {
+                    matches!(
+                        action,
+                        EnsureAction::Install {
+                            mode: InstallMode::Reinstall,
+                            ..
+                        }
+                    )
+                })
+        });
+        if !has_exact_reinstall {
+            return Err(EnsurePolicyError::RecoveryReinstallUnavailable { name: name.clone() });
+        }
     }
 
     let mut protocol_actions = Vec::new();
@@ -359,6 +384,21 @@ pub fn compile_plan(
             maximum: MAX_FLEET_ENSURE_PROTOCOL_STEPS,
         });
     }
+    if recovery_reinstalls.is_empty()
+        && protocol_actions.is_empty()
+        && let Some(name) = desired.canisters.iter().find_map(|configured| {
+            observation
+                .canisters
+                .get(&configured.name)
+                .and_then(Option::as_ref)
+                .is_some_and(|live| {
+                    live.root_owned_lifecycle == Some(RootOwnedCanisterLifecycle::Retained)
+                })
+                .then(|| configured.name.clone())
+        })
+    {
+        return Err(EnsurePolicyError::PendingRootOwnedBalance { name });
+    }
 
     let observation_count = maximum_observation_count(
         desired,
@@ -480,6 +520,7 @@ fn compile_canister(
     cycle_policy: CanisterCyclePolicy,
     bounds: CycleBounds,
     created_at_time: u64,
+    force_reinstall: bool,
     accumulator: &mut PlanAccumulator,
 ) -> Result<CanisterPlan, EnsurePolicyError> {
     match (configured.presence, observed) {
@@ -546,6 +587,7 @@ fn compile_canister(
             cycle_policy,
             bounds,
             created_at_time,
+            force_reinstall,
             accumulator,
         ),
     }
@@ -629,6 +671,7 @@ fn reuse_plan(
     cycle_policy: CanisterCyclePolicy,
     bounds: CycleBounds,
     created_at_time: u64,
+    force_reinstall: bool,
     accumulator: &mut PlanAccumulator,
 ) -> Result<CanisterPlan, EnsurePolicyError> {
     accumulator.retained = checked_add(accumulator.retained, live.cycles, "retained cycles")?;
@@ -643,28 +686,12 @@ fn reuse_plan(
             live.root_owned_lifecycle,
             Some(RootOwnedCanisterLifecycle::Claimed | RootOwnedCanisterLifecycle::Workload)
         );
-    if !active_pool_asset && live.cycles < cycle_policy.minimum_cycles {
-        let target = cycle_policy
-            .minimum_cycles
-            .checked_add(observation_funding_margin(desired, bounds)?)
-            .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                field: "funding observation margin",
-            })?;
-        let amount = target - live.cycles;
-        actions.push(EnsureAction::Fund {
-            amount,
-            created_at_time,
-            ledger: desired.cycles_ledger.clone(),
-            name: configured.name.clone(),
-            principal: live.principal.clone(),
-        });
-        accumulator.add_funding(amount)?;
-        accumulator.add_fee(bounds.ledger_fee)?;
-    }
+    let retained_balance_evidence =
+        live.root_owned_lifecycle == Some(RootOwnedCanisterLifecycle::Retained);
     let mut disposition = CanisterDisposition::Reuse;
     if let Some(wasm) = &configured.wasm {
         let wasm_sha256 = wasm_sha256(artifacts, &configured.name)?;
-        if live.module_sha256.as_deref() != Some(wasm_sha256.as_str()) {
+        if force_reinstall || live.module_sha256.as_deref() != Some(wasm_sha256.as_str()) {
             require_install_initializer(desired, configured)?;
             actions.push(EnsureAction::Install {
                 canic_init: configured.canic_init.clone(),
@@ -672,7 +699,7 @@ fn reuse_plan(
                 init_arg_sha256: optional_init_arg_sha256(artifacts, configured)?,
                 init_candid: configured.init_candid.clone(),
                 init_candid_sha256: optional_init_candid_sha256(artifacts, configured)?,
-                mode: if live.module_sha256.is_some() {
+                mode: if force_reinstall || live.module_sha256.is_some() {
                     InstallMode::Reinstall
                 } else {
                     InstallMode::Install
@@ -706,6 +733,17 @@ fn reuse_plan(
         });
         accumulator.add_burn(bounds.update_burn)?;
     }
+    append_target_funding(
+        desired,
+        configured,
+        live,
+        cycle_policy,
+        bounds,
+        created_at_time,
+        active_pool_asset || retained_balance_evidence,
+        &mut actions,
+        accumulator,
+    )?;
     Ok(CanisterPlan {
         actions,
         disposition,
@@ -713,6 +751,97 @@ fn reuse_plan(
         observed_cycles: live.cycles,
         principal: Some(live.principal.clone()),
     })
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the funding step receives one complete target-local economic authority tuple"
+)]
+fn append_target_funding(
+    desired: &DesiredFleet,
+    configured: &crate::fleet_ensure::model::DesiredCanister,
+    live: &LiveCanister,
+    cycle_policy: CanisterCyclePolicy,
+    bounds: CycleBounds,
+    created_at_time: u64,
+    funding_fenced: bool,
+    actions: &mut Vec<EnsureAction>,
+    accumulator: &mut PlanAccumulator,
+) -> Result<(), EnsurePolicyError> {
+    if funding_fenced || live.cycles >= cycle_policy.minimum_cycles {
+        return Ok(());
+    }
+    let target_updates =
+        u128::try_from(actions.len()).map_err(|_| EnsurePolicyError::ArithmeticOverflow {
+            field: "target update count",
+        })?;
+    let update_margin = bounds.update_burn.checked_mul(target_updates).ok_or(
+        EnsurePolicyError::ArithmeticOverflow {
+            field: "target update margin",
+        },
+    )?;
+    let target_margin = bounds.observation_burn.checked_add(update_margin).ok_or(
+        EnsurePolicyError::ArithmeticOverflow {
+            field: "target funding margin",
+        },
+    )?;
+    let funding_deficit_cycles = cycle_policy.minimum_cycles - live.cycles;
+    let amount = funding_deficit_cycles.checked_add(target_margin).ok_or(
+        EnsurePolicyError::ArithmeticOverflow {
+            field: "funding observation margin",
+        },
+    )?;
+    let expected_post_cycles =
+        live.cycles
+            .checked_add(amount)
+            .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                field: "funding post-balance",
+            })?;
+    actions.insert(
+        0,
+        EnsureAction::Fund {
+            amount,
+            created_at_time,
+            expected_post_cycles,
+            funding_deficit_cycles,
+            funding_margin_cycles: target_margin,
+            ledger: desired.cycles_ledger.clone(),
+            name: configured.name.clone(),
+            principal: live.principal.clone(),
+        },
+    );
+    accumulator.add_funding(amount)?;
+    accumulator.add_fee(bounds.ledger_fee)
+}
+
+fn recovery_reinstall_canisters(
+    desired: &DesiredFleet,
+    observation: &FleetObservation,
+) -> Result<BTreeSet<String>, EnsurePolicyError> {
+    let mut reinstalls = BTreeSet::new();
+    for configured in &desired.canisters {
+        let required = observation
+            .canisters
+            .get(&configured.name)
+            .and_then(Option::as_ref)
+            .is_some_and(|live| live.reinstall_required);
+        if !required {
+            continue;
+        }
+        let exact_infrastructure = matches!(
+            configured.kind,
+            DesiredCanisterKind::Coordinator
+                | DesiredCanisterKind::Root
+                | DesiredCanisterKind::Store
+        ) && configured.presence == DesiredPresence::Present;
+        if !exact_infrastructure {
+            return Err(EnsurePolicyError::RecoveryReinstallUnavailable {
+                name: configured.name.clone(),
+            });
+        }
+        reinstalls.insert(configured.name.clone());
+    }
+    Ok(reinstalls)
 }
 
 fn retire_plan(
@@ -1192,30 +1321,6 @@ fn cycle_bounds(desired: &DesiredFleet) -> Result<CycleBounds, EnsurePolicyError
             &desired.maximum_update_burn_cycles,
         )?,
     })
-}
-
-fn observation_funding_margin(
-    desired: &DesiredFleet,
-    bounds: CycleBounds,
-) -> Result<u128, EnsurePolicyError> {
-    let configured = u128::try_from(desired.canisters.len()).map_err(|_| {
-        EnsurePolicyError::ArithmeticOverflow {
-            field: "configured canister count",
-        }
-    })?;
-    let observations = configured
-        .checked_mul(4)
-        .and_then(|value| value.checked_add(u128::from(desired.maximum_stalled_observations)))
-        .and_then(|value| value.checked_add(4))
-        .ok_or(EnsurePolicyError::ArithmeticOverflow {
-            field: "funding observation count",
-        })?;
-    bounds
-        .observation_burn
-        .checked_mul(observations)
-        .ok_or(EnsurePolicyError::ArithmeticOverflow {
-            field: "funding observation margin",
-        })
 }
 
 fn maximum_observation_count(

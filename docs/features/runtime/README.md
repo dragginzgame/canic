@@ -9,7 +9,7 @@ leaving application business logic in the consuming crate.
 - `canic::build!(...)` for compile-time App and role configuration
 - `canic::start!()` for Canic lifecycle restoration and endpoint wiring
 - stable-memory helpers under `canic::memory`
-- one shared cross-framework inventory through `ic-timers 0.6.1`, with
+- one shared cross-framework inventory through `ic-timers 0.7.0`, with
   application timer registrations owned directly by their consuming crate
 - typed inter-canister calls with Canic metrics
 - optional endpoint bundles selected with Cargo features

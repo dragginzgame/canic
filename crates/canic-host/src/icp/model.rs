@@ -67,6 +67,8 @@ pub struct IcpSnapshot {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IcpCanisterStatusReport {
+    #[serde(default, rename = "version", alias = "canister_version")]
+    pub canister_version: Option<u64>,
     pub id: String,
     pub name: Option<String>,
     pub status: String,

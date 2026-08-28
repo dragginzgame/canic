@@ -2,6 +2,7 @@ use super::*;
 
 fn report(id: &str, status: &str) -> IcpCanisterStatusReport {
     IcpCanisterStatusReport {
+        canister_version: Some(1),
         id: id.to_string(),
         name: None,
         status: status.to_string(),

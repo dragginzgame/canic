@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::fleet_ensure::model::{
-    DesiredCanister, DesiredCanisterKind, DesiredComponentGroupPlacement, DesiredFleetProtocol,
-    FLEET_ENSURE_SCHEMA_VERSION,
+    DesiredCanister, DesiredCanisterKind, DesiredComponentGroupPlacement, DesiredFleetBootstrap,
+    DesiredFleetBootstrapRoot, DesiredFleetProtocol, FLEET_ENSURE_SCHEMA_VERSION,
 };
 use canic_core::{
     bootstrap::parse_config_model,
@@ -283,6 +283,8 @@ fn provisioned_registry_requires_its_exact_component_operation_receipt() {
             runtimes_activated_at_ns: Some(6),
         };
 
+    assert_retry_timestamp_is_not_durable_progress(&status);
+
     let sequence = compile_current_registry_sequence_with_status(
         &desired,
         &state,
@@ -318,6 +320,127 @@ fn provisioned_registry_requires_its_exact_component_operation_receipt() {
     assert!(matches!(
         require_component_status_matches(&drifted_status, &compiled.request, compiled.plan_hash),
         Err(CurrentProtocolError::RegistrySequenceConflict(_))
+    ));
+}
+
+fn assert_retry_timestamp_is_not_durable_progress(
+    status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+) {
+    let mut first_failure = status.clone();
+    first_failure.phase = FleetComponentProvisioningPhase::ActivatingRuntimes;
+    first_failure.pending_root_failure = Some(
+        canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure {
+            fleet_subnet_root: principal(10),
+            stage: canic_core::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
+            diagnostic_code: canic_core::diagnostics::codes::STATE_CONFLICT
+                .raw_code()
+                .raw(),
+            failed_at_ns: 10,
+        },
+    );
+    let mut repeated_failure = first_failure.clone();
+    repeated_failure
+        .pending_root_failure
+        .as_mut()
+        .expect("failure")
+        .failed_at_ns = 20;
+    assert_eq!(
+        component_provisioning_observation(false, &first_failure)
+            .expect("first failure identity")
+            .progress_identity,
+        component_provisioning_observation(false, &repeated_failure)
+            .expect("repeated failure identity")
+            .progress_identity,
+    );
+}
+
+#[test]
+fn store_authority_without_operation_receipt_does_not_complete_adoption() {
+    let config = parse_config_model(CONFIG).expect("valid Component deployment config");
+    let registry = active_registry(&config);
+    let authority = root_authorities(&registry)
+        .into_iter()
+        .next()
+        .expect("Root authority")
+        .wasm_store_authority;
+    let request = FleetSubnetWasmStoreAdoptionRequest {
+        operation_id: [44; 32],
+        authority: authority.clone(),
+    };
+
+    assert!(!store_adoption_applied(&request, None));
+    let exact = canic_core::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse {
+        operation_id: request.operation_id,
+        authority: authority.clone(),
+        controllers: expected_store_controllers(&authority),
+        adopted_at_ns: 1,
+    };
+    assert!(store_adoption_applied(&request, Some(&exact)));
+
+    let mut conflicting = exact;
+    conflicting.operation_id[0] ^= 1;
+    assert!(!store_adoption_applied(&request, Some(&conflicting)));
+}
+
+#[test]
+fn current_desired_state_rejects_component_demand_above_pool_target() {
+    let root = crate::test_support::temp_dir("current-protocol-pool-capacity");
+    fs::create_dir_all(&root).expect("create test root");
+    fs::write(root.join("canic.toml"), CONFIG).expect("write App config");
+    let config = parse_config_model(CONFIG).expect("valid Component deployment config");
+    let registry = active_registry(&config);
+    let mut desired = desired(vec![
+        placement("cells", 0, "root-one"),
+        placement("cells", 1, "root-two"),
+    ]);
+    let authorities = root_authorities(&registry);
+    let mut roots = authorities
+        .iter()
+        .map(|authority| DesiredFleetBootstrapRoot {
+            canister_pool_imports: Vec::new(),
+            component_admissions: authority.binding.component_admissions.clone(),
+            component_topology_digest: authority.binding.component_topology_digest,
+            funding: authority.binding.funding.clone(),
+            limits: authority.binding.limits.clone(),
+            placement_subnet: authority.binding.placement_subnet,
+            root: if authority.binding.fleet_subnet_root == principal(20) {
+                "root-one".to_string()
+            } else {
+                "root-two".to_string()
+            },
+            store: if authority.binding.fleet_subnet_root == principal(20) {
+                "store-one".to_string()
+            } else {
+                "store-two".to_string()
+            },
+        })
+        .collect::<Vec<_>>();
+    roots[0].limits.canister_pool.canister_cycles = Cycles::new(4_999_999_999_999);
+    desired.bootstrap = Some(DesiredFleetBootstrap {
+        admission: compile_fleet_admission_policy_template(vec![principal(1)], Vec::new())
+            .expect("Fleet admission template"),
+        app: registry.authority.binding.fleet.app.clone(),
+        canonical_network_id: registry.authority.binding.fleet.fleet.canonical_network_id,
+        component_deployment_configuration: config
+            .compile_component_deployment_configuration()
+            .expect("Component deployment configuration"),
+        coordinator: "coordinator".to_string(),
+        coordinator_subnet: registry.authority.binding.coordinator_subnet,
+        fleet_id: registry.authority.binding.fleet.fleet.fleet_id,
+        release_build_id: authorities[0].initial_release_set.release_build_id,
+        root_funding: None,
+        roots,
+    });
+
+    assert!(matches!(
+        validate_component_pool_capacity(&root, &desired),
+        Err(CurrentProtocolError::ComponentPoolCapacity(
+            crate::component_topology::RootPoolCapacityError::Insufficient {
+                pool_target_cycles: 4_999_999_999_999,
+                required_cycles: 5_000_000_000_000,
+                ..
+            }
+        ))
     ));
 }
 
@@ -568,9 +691,11 @@ fn placement(deployment: &str, ordinal: u32, root: &str) -> DesiredComponentGrou
 fn state() -> FleetEnsureStateRecord {
     FleetEnsureStateRecord {
         active_registry: None,
+        completed_reinstalls: BTreeMap::new(),
         fleet: "protocol-test".to_string(),
         pending_principals: BTreeMap::new(),
         principals: BTreeMap::new(),
+        retained_cycles_by_principal: BTreeMap::new(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         topology: BTreeMap::new(),
     }

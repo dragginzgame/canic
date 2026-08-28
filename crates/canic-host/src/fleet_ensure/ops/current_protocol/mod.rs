@@ -13,6 +13,9 @@ use super::{
 };
 use crate::{
     canister_protocol::{CanisterProtocolError, call_with_candid, query_with_candid},
+    component_topology::{
+        RootPoolCapacityError, RootPoolCapacityInput, validate_root_pool_capacity,
+    },
     fleet_ensure::model::{
         CurrentFleetProtocolAction, DesiredCanisterKind, DesiredFleet, DesiredFleetProtocol,
         DesiredPresence, EnsureAction, FleetEnsureStateRecord,
@@ -213,6 +216,9 @@ pub enum CurrentProtocolError {
     #[error("current Fleet protocol response does not match its reviewed action")]
     ResponseMismatch,
 
+    #[error(transparent)]
+    ComponentPoolCapacity(#[from] RootPoolCapacityError),
+
     #[error("failed to read current Fleet protocol Candid {}: {source}", path.display())]
     ReadCandid {
         path: PathBuf,
@@ -230,10 +236,68 @@ pub enum CurrentProtocolError {
     Transport(#[from] CanisterProtocolError),
 }
 
+/// Validate current desired Root pool targets against release-bound App demand.
+pub(super) fn validate_component_pool_capacity(
+    root: &Path,
+    desired: &DesiredFleet,
+) -> Result<(), CurrentProtocolError> {
+    let Some(protocol) = &desired.protocol else {
+        return Ok(());
+    };
+    let bootstrap = desired.bootstrap.as_ref().ok_or_else(|| {
+        CurrentProtocolError::Configuration(
+            "typed Fleet protocol is missing generated bootstrap authority".to_string(),
+        )
+    })?;
+    let config_path = resolve_path(root, &protocol.app_config);
+    if !config_path.is_file() {
+        return Err(CurrentProtocolError::AppConfigUnavailable(config_path));
+    }
+    let config = AppConfigSnapshot::load(&config_path)?;
+    let compiled = config
+        .model()
+        .compile_component_deployment_configuration()
+        .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+    if compiled != bootstrap.component_deployment_configuration {
+        return Err(CurrentProtocolError::Configuration(
+            "current App config differs from generated bootstrap authority".to_string(),
+        ));
+    }
+    let roots = bootstrap
+        .roots
+        .iter()
+        .map(|entry| RootPoolCapacityInput {
+            component_admissions: entry.component_admissions.clone(),
+            pool_target_cycles: entry.limits.canister_pool.canister_cycles.to_u128(),
+            root: entry.root.clone(),
+        })
+        .collect::<Vec<_>>();
+    validate_root_pool_capacity(config.model(), &roots)?;
+    Ok(())
+}
+
 /// Compile the Root-mediated Store controller preparation required before a
 /// retained Store can be installed by the protected operator.
 pub(super) fn compile_store_control_actions(
     icp: &IcpCli,
+    root: &Path,
+    desired: &DesiredFleet,
+    operation_id: &str,
+    state: &FleetEnsureStateRecord,
+) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
+    compile_store_control_actions_unobserved(root, desired, operation_id, state)?
+        .into_iter()
+        .filter_map(|action| match observe(icp, root, &action) {
+            Ok(observed) if observed.applied => None,
+            Ok(_) => Some(Ok(action)),
+            Err(error) => Some(Err(error)),
+        })
+        .collect()
+}
+
+/// Compile exact Root-mediated Store controller preparation without claiming
+/// that its protected status is currently observable.
+pub(super) fn compile_store_control_actions_unobserved(
     root: &Path,
     desired: &DesiredFleet,
     operation_id: &str,
@@ -273,14 +337,6 @@ pub(super) fn compile_store_control_actions(
                     )
                 })?,
             )
-        })
-        .filter_map(|action| match action {
-            Ok(action) => match observe(icp, root, &action) {
-                Ok(observed) if observed.applied => None,
-                Ok(_) => Some(Ok(action)),
-                Err(error) => Some(Err(error)),
-            },
-            Err(error) => Some(Err(error)),
         })
         .collect()
 }
@@ -788,9 +844,7 @@ pub(super) fn observe(
             let RootOperationStatusResponse::AdoptStore(status) = status else {
                 return Err(CurrentProtocolError::ResponseMismatch);
             };
-            let applied = status.operation_id == request.operation_id
-                && status.authority == request.authority
-                && status.controllers == expected_store_controllers(&request.authority);
+            let applied = store_adoption_applied(request, Some(&status));
             observation(applied, &status)
         }
         CurrentFleetProtocolAction::BootstrapStore { expected, request } => {
@@ -846,7 +900,7 @@ pub(super) fn observe(
             let applied = status.phase == FleetComponentProvisioningPhase::RuntimesActivated
                 && status.published_fleet_registry.is_some()
                 && status.pending_root_failure.is_none();
-            observation(applied, &status)
+            component_provisioning_observation(applied, &status)
         }
         CurrentFleetProtocolAction::PublishStoreChunk { request } => {
             let status =
@@ -882,6 +936,28 @@ pub(super) fn observe(
             observation(status.synchronization == *expected, &status)
         }
     }
+}
+
+fn store_adoption_applied(
+    request: &FleetSubnetWasmStoreAdoptionRequest,
+    status: Option<&canic_core::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse>,
+) -> bool {
+    status.is_some_and(|status| {
+        status.operation_id == request.operation_id
+            && status.authority == request.authority
+            && status.controllers == expected_store_controllers(&request.authority)
+    })
+}
+
+fn component_provisioning_observation(
+    applied: bool,
+    status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+) -> Result<EffectObservation, CurrentProtocolError> {
+    let mut durable_progress = status.clone();
+    if let Some(failure) = &mut durable_progress.pending_root_failure {
+        failure.failed_at_ns = 0;
+    }
+    observation(applied, &durable_progress)
 }
 
 /// Issue one exact typed Coordinator request. Terminal completion remains query-owned.

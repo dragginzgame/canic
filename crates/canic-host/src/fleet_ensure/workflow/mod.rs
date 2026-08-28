@@ -113,11 +113,24 @@ where
             terminal: false,
         });
     }
-    let state = read_state(&paths, requested_fleet)?;
+    let mut state = read_state(&paths, requested_fleet)?;
+    let prior_plan = read_plan(&paths)?.map(verified_plan).transpose()?;
+    if let Some(prior) = prior_plan.as_ref().filter(|prior| {
+        prior.fleet == requested_fleet
+            && prior.environment == desired.environment
+            && prior.desired_sha256 == desired_sha256
+    }) {
+        retain_plan_cycles(&mut state, prior);
+        if let Some(journal) = read_journal(&paths)? {
+            retain_completed_reinstalls(&mut state, prior, &journal);
+        }
+    }
     let operation_id = operation_id(desired_sha256, &desired.environment, requested_fleet);
     let mut observation = platform
         .observe(&operation_id, &state)
         .map_err(EnsureWorkflowError::Platform)?;
+    retain_observed_cycles(&mut state, &observation);
+    write_state(&paths, &state)?;
     if state.active_registry.is_some() {
         let prior = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
         let inventory = platform
@@ -145,6 +158,52 @@ where
         plan,
         terminal: false,
     })
+}
+
+fn retain_completed_reinstalls(
+    state: &mut FleetEnsureStateRecord,
+    plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+) {
+    for (action, effect) in ordered_actions(plan).into_iter().zip(&journal.effects) {
+        let EnsureAction::Install {
+            mode: crate::fleet_ensure::model::InstallMode::Reinstall,
+            name,
+            ..
+        } = action
+        else {
+            continue;
+        };
+        if effect.state == EffectState::Applied
+            && let Some(pre_canister_version) = effect.pre_canister_version
+        {
+            state
+                .completed_reinstalls
+                .insert(name.clone(), pre_canister_version);
+        }
+    }
+}
+
+fn retain_plan_cycles(state: &mut FleetEnsureStateRecord, plan: &FleetEnsurePlan) {
+    for canister in &plan.canisters {
+        if let Some(principal) = &canister.principal {
+            state
+                .retained_cycles_by_principal
+                .entry(principal.clone())
+                .or_insert(canister.observed_cycles);
+        }
+    }
+}
+
+fn retain_observed_cycles(state: &mut FleetEnsureStateRecord, observation: &FleetObservation) {
+    for live in observation.canisters.values().filter_map(Option::as_ref) {
+        state
+            .retained_cycles_by_principal
+            .insert(live.principal.clone(), live.cycles);
+    }
+    state
+        .retained_cycles_by_principal
+        .extend(observation.additional_controlled_cycles.clone());
 }
 
 /// Apply or resume exactly one reviewed plan until it converges or returns a typed blocker.
@@ -218,6 +277,9 @@ where
             let destination_pre_cycles = platform
                 .action_destination_cycles(action, &state)
                 .map_err(EnsureWorkflowError::Platform)?;
+            let pre_canister_version = platform
+                .action_canister_version(action, &state)
+                .map_err(EnsureWorkflowError::Platform)?;
             journal.effects.push(EffectRecord {
                 action_sha256: action_hash.clone(),
                 created_principal: None,
@@ -225,6 +287,7 @@ where
                 destination_pre_cycles,
                 post_cycles: None,
                 pre_cycles,
+                pre_canister_version,
                 progress_identity: None,
                 receipt: None,
                 state: EffectState::Intent,
@@ -491,8 +554,14 @@ fn normalized_plan(plan: &FleetEnsurePlan) -> FleetEnsurePlan {
     for canister in &mut normalized.canisters {
         canister.observed_cycles = 0;
         for action in &mut canister.actions {
-            if let EnsureAction::Fund { amount, .. } = action {
+            if let EnsureAction::Fund {
+                amount,
+                funding_deficit_cycles,
+                ..
+            } = action
+            {
                 *amount = 0;
+                *funding_deficit_cycles = 0;
             }
         }
     }
@@ -802,21 +871,25 @@ fn applied_count(journal: &FleetEnsureJournalRecord) -> u32 {
     .unwrap_or(u32::MAX)
 }
 
-fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
+pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
     let mut actions = plan
         .canisters
         .iter()
         .flat_map(|canister| canister.actions.iter())
         .chain(plan.protocol_actions.iter())
         .collect::<Vec<_>>();
-    actions.sort_by_key(|action| match action {
+    actions.sort_by_key(|action| action_order(action));
+    actions
+}
+
+pub(super) fn action_order(action: &EnsureAction) -> u8 {
+    match action {
         EnsureAction::Create { .. } => 0,
         EnsureAction::Fund { .. } => 1,
         EnsureAction::Install {
-            canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Store { .. }),
+            canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Coordinator),
             ..
-        } => 4,
-        EnsureAction::Install { .. } => 2,
+        } => 2,
         EnsureAction::FleetProtocol { action, .. }
             if matches!(
                 action.as_ref(),
@@ -825,11 +898,15 @@ fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
         {
             3
         }
-        EnsureAction::SetControllers { .. } | EnsureAction::Start { .. } => 5,
-        EnsureAction::FleetProtocol { .. } | EnsureAction::Protocol { .. } => 6,
-        EnsureAction::Transfer { .. } => 7,
-        EnsureAction::Stop { .. } => 8,
-        EnsureAction::Delete { .. } => 9,
-    });
-    actions
+        EnsureAction::Install {
+            canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Store { .. }),
+            ..
+        } => 4,
+        EnsureAction::Install { .. } => 5,
+        EnsureAction::SetControllers { .. } | EnsureAction::Start { .. } => 6,
+        EnsureAction::FleetProtocol { .. } | EnsureAction::Protocol { .. } => 7,
+        EnsureAction::Transfer { .. } => 8,
+        EnsureAction::Stop { .. } => 9,
+        EnsureAction::Delete { .. } => 10,
+    }
 }

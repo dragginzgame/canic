@@ -84,6 +84,34 @@ pub struct PlannedFleetTopology {
     pub fleet_subnet_roots: Vec<PlannedFleetSubnetRootTopology>,
 }
 
+/// Root-local admitted Component demand checked against one empty-pool target.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootPoolCapacityInput {
+    pub component_admissions: Vec<ComponentSpecAdmission>,
+    pub pool_target_cycles: u128,
+    pub root: String,
+}
+
+/// Exact fail-closed mismatch between admitted Component demand and pool capacity.
+#[derive(Debug, Eq, PartialEq, ThisError)]
+pub enum RootPoolCapacityError {
+    #[error(
+        "Root {root} pool target {pool_target_cycles} cycles is below admitted Component Spec '{component_spec}' initial demand {required_cycles} cycles"
+    )]
+    Insufficient {
+        component_spec: ComponentSpecId,
+        pool_target_cycles: u128,
+        required_cycles: u128,
+        root: String,
+    },
+
+    #[error("Root {root} admits unknown Component Spec '{component_spec}'")]
+    UnknownComponentSpec {
+        component_spec: ComponentSpecId,
+        root: String,
+    },
+}
+
 ///
 /// FleetTopologyPlan
 ///
@@ -126,6 +154,34 @@ pub enum FleetTopologyPlanError {
 
     #[error("root input references unknown Component Spec '{component_spec}'")]
     UnknownComponentSpec { component_spec: ComponentSpecId },
+}
+
+/// Reject any admitted Component whose exact initial demand exceeds its Root's pool target.
+pub fn validate_root_pool_capacity(
+    config: &ConfigModel,
+    roots: &[RootPoolCapacityInput],
+) -> Result<(), RootPoolCapacityError> {
+    for root in roots {
+        for admission in &root.component_admissions {
+            let component = config
+                .component_specs
+                .get(&admission.component_spec)
+                .ok_or_else(|| RootPoolCapacityError::UnknownComponentSpec {
+                    component_spec: admission.component_spec.clone(),
+                    root: root.root.clone(),
+                })?;
+            let required_cycles = component.initial_cycles.to_u128();
+            if required_cycles > root.pool_target_cycles {
+                return Err(RootPoolCapacityError::Insufficient {
+                    component_spec: admission.component_spec.clone(),
+                    pool_target_cycles: root.pool_target_cycles,
+                    required_cycles,
+                    root: root.root.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Finalize canonical pre-creation root plans without inventing Canister principals.

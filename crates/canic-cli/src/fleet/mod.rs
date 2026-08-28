@@ -445,6 +445,32 @@ fn render_report(report: &FleetEnsureReport, json: bool) -> Result<(), FleetComm
             canister.actions.len()
         )
     }));
+    lines.extend(report.plan.canisters.iter().flat_map(|canister| {
+        canister.actions.iter().filter_map(|action| {
+            let canic_host::fleet_ensure::model::EnsureAction::Fund {
+                amount,
+                expected_post_cycles,
+                funding_deficit_cycles,
+                funding_margin_cycles,
+                ledger,
+                principal,
+                ..
+            } = action
+            else {
+                return None;
+            };
+            Some(format!(
+                "  native_topup {}: cycles_ledger_withdraw={} ledger={} target={} deficit={} margin={} expected_native_post={}",
+                canister.name,
+                amount,
+                ledger,
+                principal,
+                funding_deficit_cycles,
+                funding_margin_cycles,
+                expected_post_cycles
+            ))
+        })
+    }));
     lines.push(format!(
         "conservation_equation: {} + {} - {} - {} = {}",
         conservation.observed_controlled_cycles,

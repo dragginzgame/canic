@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.16` makes partial current-estate convergence cycle-truthful and
+  replay-safe by ordering Store repair before Root initialization, requiring a
+  newer canister version for same-module reinstalls, retaining exact
+  Root-owned balances while protected status is fenced, and bounding retry and
+  funding decisions by durable target-local progress. Store adoption now
+  requires its exact receipt, and Component demand above a Root's pool target
+  rejects before protocol effects. A Cycles Ledger funding receipt remains
+  incomplete until the target's native post-balance is observed.
+  The shared timer runtime advances to `ic-timers 0.7.0` with policy-specific
+  watchdog reconciliation.
 - `0.109.15` adds an auditable fast release lane for non-runtime patches,
   accepts direct maintainer authorization without repeated Git/release
   ceremony, and replaces the yanked compatible `chacha20` lock entry.
