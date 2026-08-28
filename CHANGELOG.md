@@ -20,8 +20,11 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   requires its exact receipt, and Component demand above a Root's pool target
   rejects before protocol effects. A Cycles Ledger funding receipt remains
   incomplete until the target's native post-balance is observed.
-  The shared timer runtime remains aligned with the composed IcyDB graph on one
-  exact `ic-timers 0.6.1` provider inventory.
+  The shared timer runtime advances to `ic-timers 0.7.0` with policy-specific
+  watchdog reconciliation. The ordinary validation tier compiles its guarded
+  integration inventory in one shared Cargo invocation, and compiler-cache
+  plus slowest-PocketIC timing evidence now makes future performance
+  regressions directly attributable.
 - `0.109.15` adds an auditable fast release lane for non-runtime patches,
   accepts direct maintainer authorization without repeated Git/release
   ceremony, and replaces the yanked compatible `chacha20` lock entry.

@@ -13,8 +13,13 @@ FAILED_LABELS=()
 HEAVY_BUILD_TARGETS_USED=0
 PLAN_ONLY="${CANIC_TEST_PLAN_ONLY:-0}"
 STEP_SUMMARY_INITIALIZED=0
+RUN_STARTED_AT="$SECONDS"
 POCKET_IC_SERVER_TTL_SECONDS=7200
 POCKET_IC_SERVER_PID=""
+SCCACHE_STATS_ACTIVE=0
+SCCACHE_START_REQUESTS=0
+SCCACHE_START_HITS=0
+SCCACHE_START_MISSES=0
 
 case "$MODE" in
     fast | full | ordinary | pocketic) ;;
@@ -43,6 +48,61 @@ esac
 elapsed_seconds() {
     local started_at="$1"
     echo "$((SECONDS - started_at))s"
+}
+
+read_sccache_counts() {
+    local wrapper="$1"
+    local stats
+    stats="$("$wrapper" --show-stats 2>/dev/null)" || return 1
+    awk '
+        $1 == "Compile" && $2 == "requests" && NF == 3 { requests = $3 }
+        $1 == "Cache" && $2 == "hits" && NF == 3 { hits = $3 }
+        $1 == "Cache" && $2 == "misses" && NF == 3 { misses = $3 }
+        END {
+            print requests + 0
+            print hits + 0
+            print misses + 0
+        }
+    ' <<<"$stats"
+}
+
+start_compiler_cache_observation() {
+    if [[ "$PLAN_ONLY" -eq 1 || -z "${RUSTC_WRAPPER:-}" ]]; then
+        return
+    fi
+    local wrapper="$RUSTC_WRAPPER"
+    if [[ "$(basename "$wrapper")" != "sccache" ]]; then
+        echo "==> compiler cache observation: disabled (RUSTC_WRAPPER is not sccache)"
+        return
+    fi
+
+    local counts=()
+    mapfile -t counts < <(read_sccache_counts "$wrapper")
+    if [[ "${#counts[@]}" -ne 3 ]]; then
+        echo "==> compiler cache observation: unavailable" >&2
+        return
+    fi
+    SCCACHE_STATS_ACTIVE=1
+    SCCACHE_START_REQUESTS="${counts[0]}"
+    SCCACHE_START_HITS="${counts[1]}"
+    SCCACHE_START_MISSES="${counts[2]}"
+    echo "==> compiler cache start: requests=$SCCACHE_START_REQUESTS hits=$SCCACHE_START_HITS misses=$SCCACHE_START_MISSES"
+}
+
+report_compiler_cache_observation() {
+    if [[ "$SCCACHE_STATS_ACTIVE" -ne 1 ]]; then
+        return
+    fi
+    local counts=()
+    mapfile -t counts < <(read_sccache_counts "$RUSTC_WRAPPER")
+    if [[ "${#counts[@]}" -ne 3 ]] ||
+        ((counts[0] < SCCACHE_START_REQUESTS)) ||
+        ((counts[1] < SCCACHE_START_HITS)) ||
+        ((counts[2] < SCCACHE_START_MISSES)); then
+        echo "==> compiler cache delta: unavailable (sccache server reset during the run)" >&2
+        return
+    fi
+    echo "==> compiler cache delta: requests=$((counts[0] - SCCACHE_START_REQUESTS)) hits=$((counts[1] - SCCACHE_START_HITS)) misses=$((counts[2] - SCCACHE_START_MISSES))"
 }
 
 report_owned_pocketic_server_output() {
@@ -188,9 +248,11 @@ print_summary() {
             "${SUMMARY_RESULTS[$i]}" \
             "${SUMMARY_LABELS[$i]}"
     done
+    echo "workspace runner wall time: $(elapsed_seconds "$RUN_STARTED_AT")"
 }
 
 finish_test_run() {
+    report_compiler_cache_observation
     print_summary
     if [[ "$PLAN_ONLY" -eq 1 ]]; then
         echo "WORKSPACE TEST PLAN RESOLVED: all requested suites were classified."
@@ -231,6 +293,10 @@ run_test() {
             libtest_args+=("$argument")
         fi
     done
+    local summary_execution="$execution"
+    if [[ "$summary_execution" = "parallel" ]]; then
+        summary_execution="libtest-parallel"
+    fi
     echo "==> $label"
     if [ "$PLAN_ONLY" -eq 1 ]; then
         printf '==> plan: cargo test --locked --no-fail-fast'
@@ -244,7 +310,7 @@ run_test() {
             printf ' %q' "${libtest_args[@]}"
         fi
         printf '\n'
-        record_summary "$label" "0s" "$execution" "PLAN"
+        record_summary "$label" "0s" "$summary_execution" "PLAN"
         return
     fi
     local started_at="$SECONDS"
@@ -269,18 +335,18 @@ run_test() {
         report_owned_pocketic_server_resources "$label"
     fi
     if [[ "$status" -eq 0 ]]; then
-        record_summary "$label" "$elapsed" "$execution" "PASS"
+        record_summary "$label" "$elapsed" "$summary_execution" "PASS"
         echo "==> $label done in $elapsed"
-        append_step_summary "$execution" "$elapsed" "$label" "PASS"
+        append_step_summary "$summary_execution" "$elapsed" "$label" "PASS"
         return
     fi
-    record_summary "$label" "$elapsed" "$execution" "FAIL"
+    record_summary "$label" "$elapsed" "$summary_execution" "FAIL"
     FAILED_LABELS+=("$label")
     echo "==> $label failed in $elapsed (exit $status)" >&2
     if [[ "$execution" = "pocketic-serial" ]]; then
         report_owned_pocketic_server_output
     fi
-    append_step_summary "$execution" "$elapsed" "$label" "FAIL ($status)"
+    append_step_summary "$summary_execution" "$elapsed" "$label" "FAIL ($status)"
     return 0
 }
 
@@ -320,6 +386,40 @@ run_inventory_tests() {
         echo "no $MODE inventory targets selected for $package/$execution/$suite" >&2
         exit 2
     }
+    run_test "$execution" "$label" "${cargo_args[@]}"
+}
+
+run_combined_inventory_tests() {
+    local label="$1"
+    local execution="$2"
+    local suite="$3"
+    shift 3
+    local packages=("$@")
+    local cargo_args=()
+    local -A selected_packages=()
+    local package
+    for package in "${packages[@]}"; do
+        selected_packages["$package"]=1
+        cargo_args+=(-p "$package")
+    done
+
+    local row_package row_target release_lane row_execution row_suite
+    local selected=0
+    while IFS=$'\t' read -r row_package row_target release_lane row_execution row_suite; do
+        [[ -n "${selected_packages[$row_package]:-}" ]] || continue
+        [[ "$row_execution" = "$execution" && "$row_suite" = "$suite" ]] || continue
+        if [[ "$MODE" = "fast" && "$release_lane" != "fast" ]]; then
+            continue
+        fi
+        cargo_args+=(--test "$row_target")
+        selected=$((selected + 1))
+    done < <(tail -n +2 "$INVENTORY")
+
+    [[ "$selected" -gt 0 ]] || {
+        echo "no $MODE inventory targets selected for combined $execution/$suite suite" >&2
+        exit 2
+    }
+    echo "==> combined inventory: $selected targets across ${#packages[@]} packages"
     run_test "$execution" "$label" "${cargo_args[@]}"
 }
 
@@ -402,6 +502,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 bash scripts/ci/check-workspace-test-inventory.sh
+start_compiler_cache_observation
 
 if [ "$PLAN_ONLY" -eq 0 ]; then
     # Role-package contract tests inspect the Wasm graph with locked offline Cargo
@@ -448,14 +549,14 @@ if [[ "$MODE" != "pocketic" && "$MODE" != "targeted-pocketic" ]]; then
     # Every checked-in top-level integration target is classified by the
     # guarded inventory. Parallel-safe targets form an independently runnable
     # CI lane before the expensive PocketIC work.
-    run_inventory_tests "canic-cli integration tests" canic-cli parallel ordinary
-    run_inventory_tests "canic-core integration tests" canic-core parallel ordinary
-    run_inventory_tests \
-        "canic-testing-internal integration tests" \
-        canic-testing-internal \
+    run_combined_inventory_tests \
+        "ordinary integration tests" \
         parallel \
-        ordinary
-    run_inventory_tests "canic integration tests" canic parallel ordinary
+        ordinary \
+        canic-cli \
+        canic-core \
+        canic-testing-internal \
+        canic
 
     if [[ "$MODE" == "ordinary" ]]; then
         finish_test_run
