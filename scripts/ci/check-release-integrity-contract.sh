@@ -486,6 +486,10 @@ rg -F 'set -euo pipefail' "$RELEASE_VALIDATION_LANE" >/dev/null ||
     fail "the release validation owner is not fail-fast"
 rg -F 'make --no-print-directory validate' "$RELEASE_VALIDATION_LANE" >/dev/null ||
     fail "the complete release lane omits validation"
+rg -F 'bash scripts/ci/check-release-draft-ready.sh "$BUMP_TYPE"' "$RELEASE_VALIDATION_LANE" >/dev/null ||
+    fail "the release validation owner does not reject an invalid draft before validation"
+rg -F 'Reusing complete validation receipt' "$RELEASE_VALIDATION_LANE" >/dev/null ||
+    fail "the release validation owner cannot resume an exact validated source"
 rg -F 'bash scripts/ci/check-fast-patch-eligibility.sh' "$RELEASE_VALIDATION_LANE" >/dev/null ||
     fail "the fast release lane omits its eligibility gate"
 release_lane_clean_count="$(rg -c '^make --no-print-directory ensure-clean$' "$RELEASE_VALIDATION_LANE")"
