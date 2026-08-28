@@ -1,6 +1,7 @@
 mod wasm;
 
 use crate::{
+    binaryen::{BinaryenExecutable, resolve_required_binaryen},
     candid_endpoints::parse_candid_service_endpoints,
     canister_build::{
         ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
@@ -22,9 +23,6 @@ use flate2::{Compression, GzBuilder};
 pub use wasm::enforce_wasm_code_section_limit;
 
 pub const IC_WASM_TOOL: &str = "ic-wasm";
-pub const WASM_OPT_TOOL: &str = "wasm-opt";
-const BINARYEN_VERSION: &str = "108";
-const BINARYEN_VERSION_IDENTITY: &str = "wasm-opt version 108 (version_108)";
 const IC_WASM_FEATURE_FLAGS: &[&str] = &[
     "--enable-bulk-memory",
     "--enable-sign-ext",
@@ -311,9 +309,16 @@ fn optimize_release_wasm_artifact(
     profile: CanisterBuildProfile,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    optimize_release_wasm_artifact_with_command(WASM_OPT_TOOL, profile, wasm_path)
+    if profile != CanisterBuildProfile::Release {
+        return Ok(ArtifactTransformOutput::not_requested(
+            ArtifactTransformKind::Optimize,
+        ));
+    }
+    let tool = resolve_required_binaryen()?;
+    optimize_release_wasm_artifact_with_tool(&tool, wasm_path)
 }
 
+#[cfg(test)]
 fn optimize_release_wasm_artifact_with_command(
     command_name: &str,
     profile: CanisterBuildProfile,
@@ -325,7 +330,14 @@ fn optimize_release_wasm_artifact_with_command(
         ));
     }
 
-    let tool_version = required_binaryen_version(command_name)?;
+    let tool = crate::binaryen::resolve_test_binaryen(command_name)?;
+    optimize_release_wasm_artifact_with_tool(&tool, wasm_path)
+}
+
+fn optimize_release_wasm_artifact_with_tool(
+    tool: &BinaryenExecutable,
+    wasm_path: &Path,
+) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
     let before_bytes = fs::read(wasm_path)?;
     let before_contract = wasm::wasm_contract_snapshot(&before_bytes).map_err(|source| {
         format!(
@@ -333,20 +345,20 @@ fn optimize_release_wasm_artifact_with_command(
             wasm_path.display()
         )
     })?;
-    let before_features = derive_wasm_features(command_name, wasm_path)?;
+    let before_features = derive_wasm_features(tool.path(), wasm_path)?;
     let before_gzip = deterministic_gzip_bytes(&before_bytes)?;
     let before_metrics = wasm::wasm_artifact_metrics(&before_bytes, before_gzip.len())?;
 
     let optimized_path = wasm_path.with_extension("wasm.optimized");
     if let Err(source) =
-        run_binaryen_optimizer(command_name, wasm_path, &optimized_path, &before_features)
+        run_binaryen_optimizer(tool.path(), wasm_path, &optimized_path, &before_features)
     {
         let _ = fs::remove_file(&optimized_path);
         return Err(source);
     }
 
     let validation = validate_optimized_wasm(
-        command_name,
+        tool.path(),
         wasm_path,
         &optimized_path,
         &before_contract,
@@ -379,19 +391,20 @@ fn optimize_release_wasm_artifact_with_command(
 
     Ok(ArtifactTransformOutput {
         transform: ArtifactTransformKind::Optimize,
-        tool_version: Some(tool_version),
+        tool_version: Some(tool.version_identity().to_string()),
+        tool_sha256: Some(tool.sha256().to_string()),
         outcome: ArtifactTransformOutcome::Applied,
         metrics: Some(metrics),
     })
 }
 
 fn run_binaryen_optimizer(
-    command_name: &str,
+    command_path: &Path,
     wasm_path: &Path,
     optimized_path: &Path,
     features: &[String],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut command = Command::new(command_name);
+    let mut command = Command::new(command_path);
     command
         .arg(wasm_path)
         .arg("-o")
@@ -419,7 +432,7 @@ fn run_binaryen_optimizer(
 }
 
 fn validate_optimized_wasm(
-    command_name: &str,
+    command_path: &Path,
     wasm_path: &Path,
     optimized_path: &Path,
     before_contract: &wasm::WasmContractSnapshot,
@@ -453,7 +466,7 @@ fn validate_optimized_wasm(
         .into());
     }
 
-    let after_features = derive_wasm_features(command_name, optimized_path)?;
+    let after_features = derive_wasm_features(command_path, optimized_path)?;
     if after_features != before_features {
         return Err(format!(
             "Binaryen optimization changed required Wasm features for {}: before [{}], after [{}]",
@@ -471,44 +484,11 @@ fn validate_optimized_wasm(
     })
 }
 
-fn required_binaryen_version(command_name: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let mut command = Command::new(command_name);
-    command.arg("--version");
-    let output = match output_with_executable_busy_retry(&mut command) {
-        Ok(output) => output,
-        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
-            return Err(format!(
-                "release Wasm optimization requires Binaryen {BINARYEN_VERSION} (`{WASM_OPT_TOOL}` was not found); install the pinned Canic development tools"
-            )
-            .into());
-        }
-        Err(source) => {
-            return Err(format!("failed to inspect Binaryen version: {source}").into());
-        }
-    };
-    if !output.status.success() {
-        return Err(format!(
-            "wasm-opt --version failed with status {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        )
-        .into());
-    }
-    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if version != BINARYEN_VERSION_IDENTITY {
-        return Err(format!(
-            "unsupported Binaryen version for release Wasm optimization: found `{version}`, required `{BINARYEN_VERSION_IDENTITY}`"
-        )
-        .into());
-    }
-    Ok(version)
-}
-
 fn derive_wasm_features(
-    command_name: &str,
+    command_path: &Path,
     wasm_path: &Path,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut command = Command::new(command_name);
+    let mut command = Command::new(command_path);
     command.arg(wasm_path);
     for feature in IC_WASM_FEATURE_FLAGS {
         command.arg(feature);
@@ -560,6 +540,7 @@ const fn transform_output(
     ArtifactTransformOutput {
         transform,
         tool_version,
+        tool_sha256: None,
         outcome,
         metrics: None,
     }

@@ -51,6 +51,15 @@ before the transform and remain the same owners. Provenance records before and
 after raw, deterministic-gzip, code-section, data-section and defined-function
 measurements.
 
+The downstream tool-authority follow-up also binds the exact platform-specific
+`wasm-opt` executable SHA-256 used for transformation, rather than relying on
+the official archive checksum and self-reported version alone. The published
+`canic toolchain install` command downloads and verifies that same authority
+without a source checkout. A conflicting earlier `PATH` entry is not skipped:
+its selected absolute path and actual digest are reported before execution,
+with the public installer named as the repair command. Build provenance retains
+both the exact version identity and executable SHA-256.
+
 The recurring `CANIC-WASM-001/v4` method builds every Canic-owned role twice
 from isolated clean release targets, compares Wasm, gzip, Candid and transform
 metrics byte-for-byte, then builds the debug comparison and retains bounded

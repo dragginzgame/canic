@@ -103,6 +103,10 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         name: "token",
         about: "Wrap ICP token balance and transfer commands",
     },
+    CommandSpec {
+        name: "toolchain",
+        about: "Install checksum-authoritative release tools",
+    },
 ];
 
 fn is_help_arg(arg: &OsString) -> bool {

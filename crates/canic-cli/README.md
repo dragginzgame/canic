@@ -24,6 +24,7 @@ scaffold
 state
 status
 token
+toolchain
 ```
 
 Commands removed by the pre-1.0 hard cut have no aliases or fallback parser.
@@ -54,6 +55,14 @@ cargo install --locked canic-cli --version <version>
 Downstream workspaces should use the same `canic-cli` version as their `canic`
 crate graph. The supported ICP CLI range is documented in the root
 `INSTALLING.md`.
+
+Release builds require Canic's checksum-authoritative Binaryen optimizer. The
+published installer downloads, verifies, and prints its absolute executable
+path without requiring a Canic source checkout:
+
+```bash
+canic toolchain install
+```
 
 ## App And Build
 

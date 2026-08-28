@@ -20,7 +20,10 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   one fail-closed, checksum-bound Binaryen 108 optimization path before gzip,
   artifact identity, release-set and Wasm Store authority, followed by a
   measured cleanup of redundant topology and delegated-auth sort
-  instantiations. A supported feature-selected standalone-local build keeps
+  instantiations. Optimizer admission now binds the exact executable SHA-256
+  and is repairable through the published `canic toolchain install` command.
+  Retained Store objects use a descriptor-preflighted, expected-size-plus-one
+  bounded read. A supported feature-selected standalone-local build keeps
   Candid in a sidecar instead of the deployed runtime.
 - `0.109.17` makes every version lane fail closed before mutation when complete
   validation, fast eligibility, clean-tree or immutable-source proof fails,

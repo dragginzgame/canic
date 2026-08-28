@@ -29,6 +29,7 @@ mod support;
 #[cfg(test)]
 mod test_support;
 mod token;
+mod toolchain;
 
 use crate::cli::{
     argv::trace_if_enabled,
@@ -104,6 +105,9 @@ pub enum CliError {
 
     #[error("token: {0}")]
     Token(#[source] Box<token::TokenCommandError>),
+
+    #[error("toolchain: {0}")]
+    Toolchain(#[from] toolchain::ToolchainCommandError),
 
     #[error("scaffold: {0}")]
     Scaffold(#[from] scaffold::ScaffoldCommandError),
@@ -245,6 +249,7 @@ where
         "state" => state::run(tail).map_err(CliError::from),
         "status" => status::run(tail).map_err(CliError::from),
         "token" => token::run(tail).map_err(CliError::from),
+        "toolchain" => toolchain::run(tail).map_err(CliError::from),
         _ => unreachable!("top-level dispatch command only defines known commands"),
     }
 }

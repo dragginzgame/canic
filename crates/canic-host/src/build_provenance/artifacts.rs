@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use crate::{
-    artifact_io::{IC_WASM_TOOL, WASM_OPT_TOOL},
+    artifact_io::IC_WASM_TOOL,
+    binaryen::{WASM_OPT_TOOL, current_binaryen_authority},
     evidence_envelope::file_input_fingerprint,
 };
 
@@ -46,40 +47,7 @@ pub(super) fn artifact_transform_provenance(
         .transforms
         .iter()
         .map(|transform| {
-            match transform.outcome {
-                ArtifactTransformOutcome::Applied
-                    if transform
-                        .tool_version
-                        .as_deref()
-                        .is_none_or(|version| version.trim().is_empty()) =>
-                {
-                    return Err("applied artifact transform must record a tool version".into());
-                }
-                ArtifactTransformOutcome::ToolUnavailable
-                | ArtifactTransformOutcome::NotRequested
-                    if transform.tool_version.is_some() =>
-                {
-                    return Err(
-                        "unapplied artifact transform must not record a tool version".into(),
-                    );
-                }
-                _ => {}
-            }
-            match (transform.transform, transform.outcome, &transform.metrics) {
-                (ArtifactTransformKind::Optimize, ArtifactTransformOutcome::Applied, None) => {
-                    return Err(
-                        "applied release Wasm optimization must record before/after metrics".into(),
-                    );
-                }
-                (ArtifactTransformKind::Optimize, ArtifactTransformOutcome::Applied, Some(_))
-                | (_, _, None) => {}
-                _ => {
-                    return Err(
-                        "only an applied release Wasm optimization may record transform metrics"
-                            .into(),
-                    );
-                }
-            }
+            validate_transform_output(transform)?;
             Ok(ArtifactTransformProvenanceV1 {
                 role: request.role.clone(),
                 transform: match transform.transform {
@@ -97,6 +65,7 @@ pub(super) fn artifact_transform_provenance(
                 }
                 .to_string(),
                 tool_version: transform.tool_version.clone(),
+                tool_sha256: transform.tool_sha256.clone(),
                 outcome: match transform.outcome {
                     ArtifactTransformOutcome::Applied => ArtifactTransformOutcomeV1::Applied,
                     ArtifactTransformOutcome::ToolUnavailable => {
@@ -128,6 +97,67 @@ pub(super) fn artifact_transform_provenance(
             })
         })
         .collect()
+}
+
+fn validate_transform_output(
+    transform: &crate::canister_build::ArtifactTransformOutput,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match transform.outcome {
+        ArtifactTransformOutcome::Applied
+            if transform
+                .tool_version
+                .as_deref()
+                .is_none_or(|version| version.trim().is_empty()) =>
+        {
+            return Err("applied artifact transform must record a tool version".into());
+        }
+        ArtifactTransformOutcome::ToolUnavailable | ArtifactTransformOutcome::NotRequested
+            if transform.tool_version.is_some() =>
+        {
+            return Err("unapplied artifact transform must not record a tool version".into());
+        }
+        _ => {}
+    }
+    match (transform.transform, transform.outcome) {
+        (ArtifactTransformKind::Optimize, ArtifactTransformOutcome::Applied) => {
+            let Some(sha256) = transform.tool_sha256.as_deref() else {
+                return Err(
+                    "applied release Wasm optimization must record the optimizer SHA-256".into(),
+                );
+            };
+            if sha256.len() != 64
+                || !sha256
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            {
+                return Err(
+                    "release Wasm optimizer SHA-256 must be 64 lowercase hexadecimal characters"
+                        .into(),
+                );
+            }
+            let required = current_binaryen_authority()?.executable_sha256();
+            if sha256 != required {
+                return Err(format!(
+                    "release Wasm optimizer SHA-256 {sha256} does not match required platform authority {required}"
+                )
+                .into());
+            }
+        }
+        (_, _) if transform.tool_sha256.is_some() => {
+            return Err(
+                "only an applied release Wasm optimization may record a tool SHA-256".into(),
+            );
+        }
+        _ => {}
+    }
+    match (transform.transform, transform.outcome, &transform.metrics) {
+        (ArtifactTransformKind::Optimize, ArtifactTransformOutcome::Applied, None) => {
+            Err("applied release Wasm optimization must record before/after metrics".into())
+        }
+        (ArtifactTransformKind::Optimize, ArtifactTransformOutcome::Applied, Some(_))
+        | (_, _, None) => Ok(()),
+        _ => Err("only an applied release Wasm optimization may record transform metrics".into()),
+    }
 }
 
 fn push_existing_artifact(

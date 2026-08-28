@@ -23,6 +23,7 @@ fn missing_ic_wasm_shrink_tool_is_nonfatal() {
     );
     assert_eq!(transform.transform, ArtifactTransformKind::Shrink);
     assert_eq!(transform.tool_version, None);
+    assert_eq!(transform.tool_sha256, None);
     assert_eq!(transform.outcome, ArtifactTransformOutcome::ToolUnavailable);
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -50,6 +51,7 @@ fn successful_ic_wasm_shrink_replaces_artifact() {
         b"shrunk wasm"
     );
     assert_eq!(transform.tool_version.as_deref(), Some("ic-wasm 0.test"));
+    assert_eq!(transform.tool_sha256, None);
     assert_eq!(transform.outcome, ArtifactTransformOutcome::Applied);
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -248,6 +250,7 @@ fn fast_wasm_does_not_request_binaryen_optimization() {
     assert_eq!(transform.transform, ArtifactTransformKind::Optimize);
     assert_eq!(transform.outcome, ArtifactTransformOutcome::NotRequested);
     assert_eq!(transform.tool_version, None);
+    assert_eq!(transform.tool_sha256, None);
     assert_eq!(transform.metrics, None);
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -326,6 +329,12 @@ fn release_wasm_optimization_records_metrics_and_preserves_contract() {
     assert_eq!(
         transform.tool_version.as_deref(),
         Some("wasm-opt version 108 (version_108)")
+    );
+    assert!(
+        transform
+            .tool_sha256
+            .as_deref()
+            .is_some_and(|sha256| sha256.len() == 64)
     );
     let metrics = transform.metrics.expect("optimization metrics");
     assert_eq!(metrics.before, metrics.after);
@@ -406,19 +415,6 @@ fn release_wasm_optimization_rejects_required_feature_drift() {
     assert_eq!(fs::read(&wasm_path).expect("read original Wasm"), original);
     assert!(!wasm_path.with_extension("wasm.optimized").exists());
     fs::remove_dir_all(root).expect("remove temp root");
-}
-
-#[test]
-fn binaryen_runtime_pin_matches_the_repository_tool_pin() {
-    let pins = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tool-versions.env"
-    ));
-
-    assert!(
-        pins.lines()
-            .any(|line| { line == format!("export CANIC_BINARYEN_VERSION={BINARYEN_VERSION}") })
-    );
 }
 
 fn minimal_wasm_with_contract() -> Vec<u8> {

@@ -1,7 +1,10 @@
 use super::*;
 
 #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
-use super::supported::{FileCommitStep, commit_with_hook, publish_create_new_after_error};
+use super::supported::{
+    FileCommitStep, commit_with_hook, publish_create_new_after_error,
+    read_optional_regular_bytes_bounded_with_hook,
+};
 
 use std::{
     fs,
@@ -106,6 +109,57 @@ fn durable_write_rejects_a_target_without_a_file_name() {
     let error = write_bytes(Path::new("/"), b"value").expect_err("directory target must fail");
 
     assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+#[test]
+fn bounded_regular_read_rejects_existing_and_growing_oversize_content() {
+    let root = temp_root("bounded-read-oversize");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("object");
+    fs::write(&path, b"12345").expect("write oversized object");
+
+    assert!(matches!(
+        read_optional_regular_bytes_bounded(&path, 4),
+        Err(BoundedRegularFileReadError::TooLarge)
+    ));
+
+    fs::write(&path, b"1234").expect("write initially bounded object");
+    let growing =
+        read_optional_regular_bytes_bounded_with_hook(&path, 4, || fs::write(&path, b"12345"));
+    assert!(matches!(
+        growing,
+        Err(BoundedRegularFileReadError::TooLarge)
+    ));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+#[test]
+fn bounded_regular_read_preserves_exact_bytes_and_rejects_links() {
+    let root = temp_root("bounded-read-regular");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("object");
+    fs::write(&path, b"1234").expect("write bounded object");
+
+    assert_eq!(
+        read_optional_regular_bytes_bounded(&path, 4).expect("bounded read"),
+        Some(b"1234".to_vec())
+    );
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&path, root.join("linked-object")).expect("create object link");
+        assert!(matches!(
+            read_optional_regular_bytes_bounded(&root.join("linked-object"), 4),
+            Err(BoundedRegularFileReadError::Read(
+                RegularFileReadError::NotRegular
+            ))
+        ));
+    }
+
+    fs::remove_dir_all(root).expect("remove temp root");
 }
 
 #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]

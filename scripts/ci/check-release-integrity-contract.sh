@@ -119,6 +119,13 @@ rg -F 'bash scripts/ci/install-ic-wasm.sh' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound ic-wasm installer"
 rg -F 'bash scripts/ci/install-binaryen.sh' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound Binaryen installer"
+for binaryen_platform in DARWIN_ARM64 DARWIN_X64 LINUX_X64; do
+    rg -q "^export CANIC_BINARYEN_WASM_OPT_SHA256_${binaryen_platform}=[0-9a-f]{64}$" "$TOOLS" ||
+        fail "tool authority does not pin the Binaryen executable for ${binaryen_platform}"
+    rg -F "CANIC_BINARYEN_WASM_OPT_SHA256_${binaryen_platform}" \
+        "$ROOT/scripts/ci/install-binaryen.sh" >/dev/null ||
+        fail "Binaryen installer does not verify the executable for ${binaryen_platform}"
+done
 for single_use_tool in \
     'cargo install candid-extractor' \
     'bash scripts/ci/install-icp-cli.sh' \
