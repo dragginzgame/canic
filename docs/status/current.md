@@ -384,7 +384,7 @@ slice.
 The adjacent version-rollback regression also passes using exact restored file
 bytes and clean repository state rather than brittle console prose.
 
-<!-- canic-release-state: source-development -->
+<!-- canic-release-validation: version=0.109.19 source=cae1e9da047b3121b579c97d324789a82d2e1d06 date=2026-08-28 gate=complete -->
 Published `0.109.15` added a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while
