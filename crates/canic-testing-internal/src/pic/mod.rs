@@ -123,16 +123,10 @@ fn run_governed_test_cases(cases: Vec<GovernedTestCase>) {
         let elapsed = started_at.elapsed().as_secs_f64();
         timings.push((name, elapsed));
         if failed {
-            eprintln!(
-                "[canic-testing-internal] FAIL {name} elapsed={:.3}s",
-                elapsed
-            );
+            eprintln!("[canic-testing-internal] FAIL {name} elapsed={elapsed:.3}s");
             failures.push(name);
         } else {
-            eprintln!(
-                "[canic-testing-internal] PASS {name} elapsed={:.3}s",
-                elapsed
-            );
+            eprintln!("[canic-testing-internal] PASS {name} elapsed={elapsed:.3}s");
         }
     }
 

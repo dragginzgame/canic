@@ -237,13 +237,16 @@ Before patch validation and version mutation, `make patch` prints the
 read-only `make release-cadence` advisory. The advisory reports when the next
 release would exceed the soft 12-release minor-line guideline but never blocks
 or expands the maintainer's release authority.
-The complete Make version targets require a clean source tree, run the same
-explicit `make validate` workflow and recheck tracked cleanliness before
-changing package versions. They do
-not mutate source formatting; the pre-commit hook handles routine formatting,
-while validation's `make fmt-check` catches bypassed hooks. Any failed target
-leaves the version unchanged. The underlying bump script rejects direct
-invocation without the private validation marker supplied by those targets.
+The complete and fast Make version targets delegate to one fail-fast release
+validation owner. It checks source cleanliness before the gate, propagates any
+nonzero validation or eligibility result immediately, checks cleanliness again,
+and proves that `HEAD` is unchanged before granting version-mutation authority.
+The complete lane runs the same explicit `make validate` workflow. It does not
+mutate source formatting; the pre-commit hook handles routine formatting, while
+validation's `make fmt-check` catches bypassed hooks. Any failed target leaves
+the version unchanged. An executable release-integrity regression proves that a
+failed gate cannot invoke the bump script. The underlying bump script rejects
+direct invocation without the private validation marker supplied by the owner.
 The root `Cargo.toml` is the sole live workspace package-version authority;
 ordinary status and planning prose must not act as a parallel package-version
 source. Current and committed version queries must use the shared pinned

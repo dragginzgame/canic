@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.17` makes every version lane fail closed before mutation when complete
+  validation, fast eligibility, clean-tree or immutable-source proof fails,
+  and corrects the warning-denied governed timing output. It supersedes the
+  unqualified `0.109.16` publication.
 - `0.109.16` makes partial current-estate convergence cycle-truthful and
   replay-safe by ordering Store repair before Root initialization, requiring a
   newer canister version for same-module reinstalls, retaining exact
@@ -24,7 +28,9 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   watchdog reconciliation. The ordinary validation tier compiles its guarded
   integration inventory in one shared Cargo invocation, and compiler-cache
   plus slowest-PocketIC timing evidence now makes future performance
-  regressions directly attributable.
+  regressions directly attributable. Its release gate stopped at Clippy, but a
+  release-flow defect continued through tagging and publication; it is not a
+  qualified release.
 - `0.109.15` adds an auditable fast release lane for non-runtime patches,
   accepts direct maintainer authorization without repeated Git/release
   ceremony, and replaces the yanked compatible `chacha20` lock entry.

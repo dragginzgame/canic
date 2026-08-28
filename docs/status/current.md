@@ -13,9 +13,18 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.15` at
-`f402cf3dc75dd33c942c9c8a08a770f7f654b492` is the immutable predecessor of
-the open `0.109.16` current-estate convergence correction.
+Published `v0.109.16` at
+`045f131224506bfadabfdb258471cd9b9745d8c8` is immutable but unqualified: its
+complete gate stopped at warning-denied Clippy, while the former release shell
+continued through versioning, tagging, push and package publication. The open
+`0.109.17` correction is the maintained successor; downstream adoption of
+`0.109.16` is blocked.
+
+The interrupted registry publication exposed six immutable `0.109.16`
+packages (`canic-backup`, `canic-core`, `canic-control-plane`, `canic-macros`,
+`canic`, and `canic-fleet-coordinator`). `canic-host`, `canic-cli`, and
+`canic-wasm-store` were not published at that version when reconciled. No yank
+or further `0.109.16` publication was performed by this correction pass.
 
 Release versioning no longer treats that descriptive lineage prose as a
 machine authority. Uniform package versions, the immutable tag and the exact
@@ -215,7 +224,14 @@ ownership guards and changelog governance. The combined IcyDB fixture was not
 rerun or awaited; its maintained one-package guard remains fail-closed until
 the matching timer-aligned IcyDB release is selected.
 
-<!-- canic-release-validation: version=0.109.16 source=d7b6a4055f5ec3df10f4baec204d6148452dc11c date=2026-08-28 gate=complete -->
+The `0.109.17` release correction centralizes complete and fast versioning in
+one `set -euo pipefail` owner. Validation failure, fast-eligibility failure,
+dirty state or source drift now exits before the version bumper receives its
+validated-source environment. Its executable fixture proves each negative path
+and the exact successful authority handoff. The two timing-report format calls
+that stopped `0.109.16` Clippy use the maintained inline argument form.
+
+<!-- canic-release-state: source-development -->
 Published `0.109.15` added a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while
