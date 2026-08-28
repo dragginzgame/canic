@@ -47,6 +47,7 @@ export SCCACHE_IDLE_TIMEOUT
 endif
 export RUSTC_WRAPPER
 VALIDATION_RUNNER := bash scripts/ci/run-validation-targets.sh
+RELEASE_VALIDATION_LANE := bash scripts/ci/run-release-validation-lane.sh
 
 # Check for clean git state
 ensure-clean:
@@ -169,41 +170,17 @@ tags:
 
 patch:
 	@$(MAKE) --no-print-directory release-cadence
-	@$(MAKE) ensure-clean
-	+@validated_head="$$(git rev-parse HEAD)"; \
-		$(MAKE) --no-print-directory validate; \
-		$(MAKE) ensure-clean; \
-		test "$$validated_head" = "$$(git rev-parse HEAD)"; \
-		CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head" \
-			scripts/ci/bump-version.sh patch
+	+@$(RELEASE_VALIDATION_LANE) complete patch
 
 patch-fast:
 	@$(MAKE) --no-print-directory release-cadence
-	@$(MAKE) ensure-clean
-	+@validated_head="$$(git rev-parse HEAD)"; \
-		bash scripts/ci/check-fast-patch-eligibility.sh; \
-		$(MAKE) ensure-clean; \
-		test "$$validated_head" = "$$(git rev-parse HEAD)"; \
-		CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head" \
-			CANIC_RELEASE_VALIDATION_KIND=fast scripts/ci/bump-version.sh patch
+	+@$(RELEASE_VALIDATION_LANE) fast patch
 
 minor:
-	@$(MAKE) ensure-clean
-	+@validated_head="$$(git rev-parse HEAD)"; \
-		$(MAKE) --no-print-directory validate; \
-		$(MAKE) ensure-clean; \
-		test "$$validated_head" = "$$(git rev-parse HEAD)"; \
-		CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head" \
-			scripts/ci/bump-version.sh minor
+	+@$(RELEASE_VALIDATION_LANE) complete minor
 
 major:
-	@$(MAKE) ensure-clean
-	+@validated_head="$$(git rev-parse HEAD)"; \
-		$(MAKE) --no-print-directory validate; \
-		$(MAKE) ensure-clean; \
-		test "$$validated_head" = "$$(git rev-parse HEAD)"; \
-		CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head" \
-			scripts/ci/bump-version.sh major
+	+@$(RELEASE_VALIDATION_LANE) complete major
 
 release-patch:
 	@$(MAKE) patch

@@ -26,6 +26,8 @@ RELEASE_CANDIDATE="$ROOT/scripts/ci/check-release-candidate.sh"
 FAST_PATCH_GATE="$ROOT/scripts/ci/check-fast-patch-eligibility.sh"
 RELEASE_CADENCE="$ROOT/scripts/dev/report-release-cadence.sh"
 VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
+RELEASE_VALIDATION_LANE="$ROOT/scripts/ci/run-release-validation-lane.sh"
+RELEASE_VALIDATION_LANE_TEST="$ROOT/scripts/ci/test-release-validation-lane.sh"
 PUBLISH_WORKSPACE="$ROOT/scripts/ci/publish-workspace.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
@@ -55,7 +57,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$RELEASE_VALIDATION_LANE" "$RELEASE_VALIDATION_LANE_TEST" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -460,22 +462,26 @@ for mode in patch minor major; do
     if rg -F '$(MAKE) --no-print-directory fmt' <<<"$mode_recipe" >/dev/null; then
         fail "the $mode version target must not mutate formatting"
     fi
-    rg -F '$(MAKE) --no-print-directory validate' <<<"$mode_recipe" >/dev/null ||
-        fail "the $mode version target does not run the explicit validation workflow"
-    rg -F 'CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$$validated_head"' <<<"$mode_recipe" >/dev/null ||
-        fail "the $mode version target does not bind mutation to the exact validated revision"
-    rg -F "scripts/ci/bump-version.sh $mode" <<<"$mode_recipe" >/dev/null ||
-        fail "the $mode version target omits its governed bump"
+    rg -F "\$(RELEASE_VALIDATION_LANE) complete $mode" <<<"$mode_recipe" >/dev/null ||
+        fail "the $mode version target does not use the fail-closed complete validation owner"
 done
 patch_fast_recipe="$(sed -n '/^patch-fast:/,/^$/p' "$MAKEFILE")"
-rg -F 'bash scripts/ci/check-fast-patch-eligibility.sh' <<<"$patch_fast_recipe" >/dev/null ||
-    fail "the fast patch target omits its eligibility and targeted-validation gate"
-rg -F 'CANIC_RELEASE_VALIDATION_KIND=fast scripts/ci/bump-version.sh patch' \
-    <<<"$patch_fast_recipe" >/dev/null ||
-    fail "the fast patch target does not bind version mutation to the fast validation receipt"
+rg -F '$(RELEASE_VALIDATION_LANE) fast patch' <<<"$patch_fast_recipe" >/dev/null ||
+    fail "the fast patch target does not use the fail-closed fast validation owner"
 if rg -F '$(MAKE) --no-print-directory validate' <<<"$patch_fast_recipe" >/dev/null; then
     fail "the fast patch target repeats the complete validation gate"
 fi
+rg -F 'set -euo pipefail' "$RELEASE_VALIDATION_LANE" >/dev/null ||
+    fail "the release validation owner is not fail-fast"
+rg -F 'make --no-print-directory validate' "$RELEASE_VALIDATION_LANE" >/dev/null ||
+    fail "the complete release lane omits validation"
+rg -F 'bash scripts/ci/check-fast-patch-eligibility.sh' "$RELEASE_VALIDATION_LANE" >/dev/null ||
+    fail "the fast release lane omits its eligibility gate"
+release_lane_clean_count="$(rg -c '^make --no-print-directory ensure-clean$' "$RELEASE_VALIDATION_LANE")"
+[[ "$release_lane_clean_count" -eq 2 ]] ||
+    fail "the release validation owner must verify cleanliness before and after validation"
+bash "$RELEASE_VALIDATION_LANE_TEST" >/dev/null ||
+    fail "the release validation lane does not fail closed before version mutation"
 rg -F 'runtime, build, package, protocol, fixture, or unrelated path changed' \
     "$FAST_PATCH_GATE" >/dev/null ||
     fail "the fast patch gate does not reject production or unrelated source drift"
@@ -526,12 +532,6 @@ done
 release_commit_recipe="$(sed -n '/^release-commit:/,/^$/p' "$MAKEFILE")"
 rg -F '$(MAKE) --no-print-directory release-candidate' <<<"$release_commit_recipe" >/dev/null ||
     fail "release commit does not verify the exact post-bump candidate"
-for release_target in patch minor major; do
-    release_recipe="$(sed -n "/^$release_target:/,/^$/p" "$MAKEFILE")"
-    clean_count="$(rg -c '\$\(MAKE\) ensure-clean' <<<"$release_recipe")"
-    [ "$clean_count" -eq 2 ] ||
-        fail "make $release_target must verify cleanliness before and after validation"
-done
 release_push_recipe="$(sed -n '/^release-push:/,/^$/p' "$MAKEFILE")"
 expected_release_push_recipe=$'release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh'
 [ "$release_push_recipe" = "$expected_release_push_recipe" ] ||
