@@ -13,15 +13,19 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.17` at
-`0f28b200865912d172dc2b09f04949938244b2af` is the immutable maintained
+Published `v0.109.18` at
+`9d695598e6b3a959e527d29bed244d7657882b21` is the immutable maintained
 release. Published `v0.109.16` at
 `045f131224506bfadabfdb258471cd9b9745d8c8` remains immutable but unqualified:
 its complete gate stopped at warning-denied Clippy while the former release
 shell continued through versioning, tagging, push and package publication.
-The open `0.109.18` patch corrects current Fleet Ensure plan JSON round trips
-and carries the timer-aligned IcyDB fixture; downstream adoption of `0.109.16`
-remains blocked.
+The open `0.109.19` patch closes the public Binaryen installer's staged writer
+before executing the checksum-admitted candidate, correcting Linux `ETXTBSY`
+without weakening optimizer authority. It also makes an in-progress Fleet
+operation self-sufficient: new plans digest and retain their reviewed desired
+authority, and the exact current-schema zero-debit operation already issued by
+the downstream staging Fleet can be observed and closed without a second
+command before newer desired state is planned separately.
 
 The interrupted registry publication exposed six immutable `0.109.16`
 packages (`canic-backup`, `canic-core`, `canic-control-plane`, `canic-macros`,
@@ -45,9 +49,10 @@ owners are removed rather than adapted.
 
 The current contract is schema `v1` and reads no historical operator evidence.
 Its only local authorities are the current desired Fleet document and
-`.canic/fleet-ensure/<environment>/<fleet>/` current-generation plan, journal,
-identity map, and operation lock. Unknown schemas, changed desired/artifact
-digests, changed authority, and unreviewed balance drift fail closed.
+`.canic/fleet-ensure/<environment>/<fleet>/` current-generation plan, retained
+reviewed desired authority, journal, identity map, and operation lock. Unknown
+schemas, changed desired/artifact digests, changed authority, and unreviewed
+balance drift fail closed.
 
 Every mutating action has a retained intent before the platform call. Lost
 responses are resolved by exact live-state reconciliation or an idempotent
@@ -55,6 +60,19 @@ Ledger/drain operation identity before retry. The stall count is consecutive
 and resets only on durable progress. A terminal invocation completes in the
 same call; its immediate successor plan has no mutation actions when the live
 estate already equals desired state.
+
+New plans retain their normalized reviewed desired input inside the plan hash.
+An in-progress plan is returned before newer working-file bytes are considered,
+and every platform adapter must rebind to the retained input before observation
+or effect handling. With an explicit environment, the CLI can reopen that
+authority even if the working desired TOML is absent. Plans created before this
+retention field fail closed unless the exact original input is supplied, except
+for one current-schema no-debit terminal boundary: an all-reused plan whose
+preceding actions are applied and whose final typed Component-provisioning
+action is issued may use a current document only to prove the exact retained
+name/Principal set and query terminal state. That path cannot issue an update,
+funding or canister effect; protected terminal inventory and cycle conservation
+remain mandatory before the journal closes.
 
 ## Cycle-Safety Boundary
 
@@ -341,7 +359,19 @@ packages. The controlled release-Wasm comparison used identical source,
 toolchain, profile, shrink and metadata paths. No broad workspace or PocketIC
 gate was run during this coding slice.
 
-<!-- canic-release-validation: version=0.109.18 source=5174dbd6a4d6c6c3cc8934eab899cef346a9da68 date=2026-08-28 gate=complete -->
+The open `0.109.19` CANIC-081/082 slice has focused evidence passing for the
+real Linux staged-executable publication path, all Binaryen host tests, both
+CLI toolchain tests, retained desired round-trip and changed-input resumption,
+the bounded pre-retention zero-debit final observation, typed protocol replay,
+current plan JSON round-trip, and CLI recovery with the working TOML absent.
+An ignored evidence test also copied and reopened the exact downstream
+37,131,114-byte plan and 8,448-byte issued journal in isolated temporary state;
+their original bytes remained unchanged. Locked host/CLI checking,
+warning-denied host/CLI Clippy, scoped formatting and diff hygiene pass. No
+broad workspace or PocketIC gate was run, as required for an implementation
+slice.
+
+<!-- canic-release-state: source-development -->
 Published `0.109.15` added a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while

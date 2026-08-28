@@ -24,8 +24,8 @@ use canic_core::ids::ReleaseBuildId;
 use canic_host::{
     fleet_ensure::{
         DesiredFleetLoadError, EnsureWorkflowError, FleetEnsureReport, FleetGenerateError,
-        FleetGenerateRequest, IcpEnsurePlatform, IcpEnsurePlatformError, apply,
-        generate_desired_fleet, load_desired_fleet, plan,
+        FleetGenerateRequest, IcpEnsurePlatform, IcpEnsurePlatformError, LoadedDesiredFleet, apply,
+        generate_desired_fleet, load_desired_fleet, plan, retained_in_progress_plan,
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
@@ -245,7 +245,7 @@ fn ensure_command() -> Command {
             value_arg("desired")
                 .long("desired")
                 .value_name("PATH")
-                .help("Current desired Fleet TOML; defaults to fleets/<fleet>.toml"),
+                .help("Current desired TOML; an in-progress plan uses its retained reviewed input"),
         )
         .arg(
             value_arg("json")
@@ -287,15 +287,7 @@ where
     } else {
         root.join(&options.desired)
     };
-    let loaded = load_desired_fleet(&desired_path)?;
-    if let Some(selected) = &options.environment
-        && selected != &loaded.desired.environment
-    {
-        return Err(FleetCommandError::EnvironmentMismatch {
-            desired: loaded.desired.environment,
-            selected: selected.clone(),
-        });
-    }
+    let loaded = load_ensure_authority(&root, &desired_path, &options)?;
     let mut platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root);
     let report = if let Some(digest) = &options.apply {
         apply(
@@ -317,6 +309,44 @@ where
         )?
     };
     render_report(&report, options.json)
+}
+
+fn load_ensure_authority(
+    root: &std::path::Path,
+    desired_path: &std::path::Path,
+    options: &EnsureOptions,
+) -> Result<LoadedDesiredFleet, FleetCommandError> {
+    if let Some(environment) = options.environment.as_deref()
+        && let Some(plan) =
+            retained_in_progress_plan::<IcpEnsurePlatformError>(root, environment, &options.fleet)?
+        && let Some(desired) = plan.reviewed_desired
+    {
+        return Ok(LoadedDesiredFleet {
+            desired: *desired,
+            sha256: plan.desired_sha256,
+        });
+    }
+    let current = load_desired_fleet(desired_path)?;
+    if let Some(selected) = &options.environment
+        && selected != &current.desired.environment
+    {
+        return Err(FleetCommandError::EnvironmentMismatch {
+            desired: current.desired.environment,
+            selected: selected.clone(),
+        });
+    }
+    if let Some(plan) = retained_in_progress_plan::<IcpEnsurePlatformError>(
+        root,
+        &current.desired.environment,
+        &options.fleet,
+    )? && let Some(desired) = plan.reviewed_desired
+    {
+        return Ok(LoadedDesiredFleet {
+            desired: *desired,
+            sha256: plan.desired_sha256,
+        });
+    }
+    Ok(current)
 }
 
 fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {

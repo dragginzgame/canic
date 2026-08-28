@@ -85,6 +85,11 @@ pub struct TerminalFleetInventory {
 pub trait EnsurePlatform {
     type Error: std::error::Error + Send + Sync + 'static;
 
+    /// Bind every observation and effect to the desired input retained by the
+    /// reviewed operation. Production adapters must replace any newer caller
+    /// input before resuming an in-progress journal.
+    fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error>;
+
     fn observe(
         &mut self,
         operation_id: &str,

@@ -72,6 +72,33 @@ fn admitted_executable_records_exact_path_version_and_digest() {
     fs::remove_dir_all(root).expect("remove test root");
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn staged_installer_closes_its_writer_before_executable_admission() {
+    let root = temp_root("staged-admission");
+    fs::create_dir_all(&root).expect("create test root");
+    let candidate = root.join("candidate-wasm-opt");
+    fs::write(
+        &candidate,
+        "#!/bin/sh\nprintf 'wasm-opt version 108 (version_108)\\n'\n",
+    )
+    .expect("write fake optimizer candidate");
+    fs::set_permissions(&candidate, fs::Permissions::from_mode(0o755))
+        .expect("make fake optimizer candidate runnable");
+    let digest = sha256_file(&candidate).expect("hash fake optimizer candidate");
+    let destination = root.join("bin/wasm-opt");
+
+    publish_executable(&candidate, &destination, &digest)
+        .expect("publish and admit closed staged executable");
+    let admitted =
+        admit_binaryen_executable(&destination, &digest).expect("admit published executable");
+
+    assert_eq!(admitted.path(), destination);
+    assert_eq!(admitted.version_identity(), BINARYEN_VERSION_IDENTITY);
+    assert_eq!(admitted.sha256(), digest);
+    fs::remove_dir_all(root).expect("remove test root");
+}
+
 fn temp_root(label: &str) -> PathBuf {
     let nanos = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)

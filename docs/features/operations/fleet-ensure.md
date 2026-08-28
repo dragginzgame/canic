@@ -206,9 +206,13 @@ canic fleet ensure staging \
   --apply <plan_sha256>
 ```
 
-If desired bytes, artifacts, authority-bearing live state, funding sufficiency,
-the live Cycles Ledger fee, or bounded cycle observations changed, apply stops
-before effects and requires a new plan.
+Before the first effect, changed desired bytes, artifacts, authority-bearing
+live state, funding sufficiency, the live Cycles Ledger fee, or bounded cycle
+observations stop apply and require a new plan. Once the journal is in progress,
+the plan's digest-bound reviewed desired input is authoritative: newer working
+bytes cannot alter or supersede it, and an explicit environment lets the CLI
+resume even if the working TOML is missing. After terminal closure, rerun the
+planner to review the current working desired state as a separate successor.
 If an accepted effect produces less live state than reviewed, Canic closes that
 completed action journal, refuses to call the Fleet converged, and requires a
 new plan from the resulting live estate; it never guesses a compensating debit.
@@ -217,6 +221,14 @@ the successor plan reuses that canister instead of issuing another creation.
 An interrupted invocation retains one intent per action under
 `.canic/fleet-ensure/<environment>/<fleet>/` and resumes that action before
 opening another. The stall budget counts only consecutive non-progress.
+
+A schema-`v1` plan created before reviewed-input retention normally requires
+its exact original desired document. The bounded no-debit terminal case is
+recoverable without inventing that input: all canisters must be reused under
+the same exact names and Principals, every earlier action must already be
+applied, and the final issued action must be typed Component provisioning.
+Canic may only observe that action, never reissue it, and must validate the
+protected terminal inventory and conservation equation before closure.
 
 When a partial current-control-plane reset makes a Root's protected pool status
 return `STATE_CONFLICT` or `STATE_UNAVAILABLE`, planning does not invent an

@@ -1003,6 +1003,11 @@ impl RetainedEnsurePlatform {
 impl EnsurePlatform for RetainedEnsurePlatform {
     type Error = io::Error;
 
+    fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
+        self.desired = desired.clone();
+        Ok(())
+    }
+
     fn observe(
         &mut self,
         _operation_id: &str,
