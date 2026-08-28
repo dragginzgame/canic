@@ -18,14 +18,14 @@ package identity:
 
 ```toml
 [dependencies]
-ic-timers = "=0.7.0"
+ic-timers = "=0.6.1"
 ```
 
 Check the composed graph, not only each direct manifest:
 
 ```text
 cargo tree -d
-cargo tree -i ic-timers@0.7.0
+cargo tree -i ic-timers@0.6.1
 ```
 
 Two resolved versions contain two independent sets of library statics and
@@ -110,16 +110,6 @@ Use the policy that matches the failure boundary:
 - `Watchdog` pre-arms a successor in a separate scheduler message before
   synchronous work. Use it only when that stronger recovery protocol is
   required.
-
-`ic-timers 0.7` gives Watchdog lifecycle reconstruction its own
-`WatchdogReconcileState`. Use `ScheduledImmediately`,
-`ensure_scheduled_immediately()` or `WatchdogDecision::ContinueImmediately`
-only when durable authority proves actionable work should continue without a
-cadence delay. The immediate scheduler and its work still execute as later
-replicated messages, and the request replaces the one pre-armed successor
-rather than adding another handle. Retain cadence `Scheduled`/`Continue` for
-quiescent polling, retry delay or a bounded pass that has already dispatched
-all currently actionable work.
 
 ## Keep Custody Semantics Explicit
 

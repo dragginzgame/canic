@@ -16,8 +16,8 @@ use crate::{
 use ic_timers::{
     DeclarationLifetime, OnceContext, OnceRegistration, ScheduleError, TimerCadence,
     TimerCompletion, TimerDirective, TimerError as ProviderError, TimerIdentity,
-    TimerIdentityError, TimerRegistrationStatus, TimerRunResult, TimerSchedule, TimerSnapshot,
-    WatchdogReconcileState, WatchdogRegistration, WatchdogRunResult, initialize_runtime,
+    TimerIdentityError, TimerReconcileState, TimerRegistrationStatus, TimerRunResult,
+    TimerSchedule, TimerSnapshot, WatchdogRegistration, WatchdogRunResult, initialize_runtime,
     reconcile_watchdog, register_once, timer_inventory,
 };
 use std::{
@@ -112,7 +112,7 @@ impl TimerAuthorityWorkflow {
             return Ok(());
         }
         reconcile_core_recovery_watchdog(
-            WatchdogReconcileState::Scheduled,
+            TimerReconcileState::Scheduled,
             Self::recover_expired_async_jobs,
         )
     }
@@ -122,7 +122,7 @@ impl TimerAuthorityWorkflow {
     {
         require_active()?;
         reconcile_core_recovery_watchdog(
-            WatchdogReconcileState::Scheduled,
+            TimerReconcileState::Scheduled,
             Self::recover_expired_async_jobs_with_automatic_topup,
         )
     }
@@ -274,7 +274,7 @@ fn require_no_active_async_job_attempts() -> Result<(), TimerError> {
 }
 
 fn reconcile_core_recovery_watchdog(
-    desired: WatchdogReconcileState,
+    desired: TimerReconcileState,
     recover: fn(u64) -> u64,
 ) -> Result<(), TimerError> {
     let identity = recovery_watchdog_identity()?;
