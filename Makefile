@@ -39,7 +39,11 @@ endif
 endif
 ifneq ($(filter sccache,$(notdir $(RUSTC_WRAPPER))),)
 CARGO_INCREMENTAL ?= 0
+SCCACHE_CACHE_SIZE ?= 40G
+SCCACHE_IDLE_TIMEOUT ?= 7200
 export CARGO_INCREMENTAL
+export SCCACHE_CACHE_SIZE
+export SCCACHE_IDLE_TIMEOUT
 endif
 export RUSTC_WRAPPER
 VALIDATION_RUNNER := bash scripts/ci/run-validation-targets.sh

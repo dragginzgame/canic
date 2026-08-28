@@ -176,6 +176,11 @@ policy and ops independently; ops may call model. Policy never calls ops.
   not run full workspace, release-matrix, or broad PocketIC suites such as
   `make test`, `make clippy`, `make validate`, or workspace-wide Cargo
   test/Clippy commands.
+- Before starting a targeted Cargo or Make compile/test command, automated
+  agents must check whether another Canic command is actively using the shared
+  repository `target/`. Do not compete for that build lock or alter source and
+  lockfiles beneath an active validation run; wait for the owner to finish or
+  report the conflict. Read-only plan and source checks may continue.
 - Generic continuation or readiness wording such as `continue`, `finish the
   batch`, `make it push-ready`, or `keep going until we can push` never counts
   as an explicit request for a broad gate. Do not infer authorization for

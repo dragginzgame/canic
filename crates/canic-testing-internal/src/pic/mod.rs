@@ -115,21 +115,31 @@ fn acquire_pic_unit_test_serial_guard() -> MutexGuard<'static, ()> {
 #[cfg(test)]
 fn run_governed_test_cases(cases: Vec<GovernedTestCase>) {
     let mut failures = Vec::new();
+    let mut timings = Vec::new();
     for (name, test) in cases {
         let started_at = Instant::now();
         eprintln!("[canic-testing-internal] START {name}");
-        if std::panic::catch_unwind(AssertUnwindSafe(test)).is_err() {
+        let failed = std::panic::catch_unwind(AssertUnwindSafe(test)).is_err();
+        let elapsed = started_at.elapsed().as_secs_f64();
+        timings.push((name, elapsed));
+        if failed {
             eprintln!(
                 "[canic-testing-internal] FAIL {name} elapsed={:.3}s",
-                started_at.elapsed().as_secs_f64()
+                elapsed
             );
             failures.push(name);
         } else {
             eprintln!(
                 "[canic-testing-internal] PASS {name} elapsed={:.3}s",
-                started_at.elapsed().as_secs_f64()
+                elapsed
             );
         }
+    }
+
+    timings.sort_by(|left, right| right.1.total_cmp(&left.1));
+    eprintln!("[canic-testing-internal] slowest governed cases:");
+    for (name, elapsed) in timings.into_iter().take(10) {
+        eprintln!("[canic-testing-internal] SLOW {name} elapsed={elapsed:.3}s");
     }
 
     assert!(

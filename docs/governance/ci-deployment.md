@@ -68,6 +68,12 @@ Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values
 remain authoritative. Canic artifact builds keep incremental compilation
 disabled for deterministic Wasm output and independently discover `sccache`
 for `canic build` when no wrapper was supplied.
+Do not run a second Canic Cargo/check/test process against the same repository
+`target/` during validation. Cargo will serialize parts of those graphs on its
+build-directory lock while both processes still compete for CPU and memory;
+changing source or `Cargo.lock` underneath the validating process can also turn
+an otherwise quick immutability assertion into a late failure. Read-only plan
+inspection remains safe while the owned validation finishes.
 
 CI uses the same runner for its preflight, security and Rust-check jobs. Tool
 installation and version verification remain immediate prerequisites, after
@@ -98,6 +104,15 @@ current resident memory, resident high-water mark and thread count from the
 release-supported Linux process boundary. `make test-wasm` is the fast lane and
 runs only its classified release-surface integrations, never the PocketIC
 suites.
+The ordinary integration inventory is resolved into one multi-package Cargo invocation so
+its shared dependency graph is compiled once rather than once per owning
+package. Unit/lib/bin coverage and the internal fast harness remain separate
+where their target and fixture contracts differ. Timing output calls this
+`libtest-parallel` to distinguish parallelism inside one Cargo invocation from
+concurrent suite execution. When Make selects `sccache`, the runner reports
+request/hit/miss deltas, retains the server through the complete two-hour test
+envelope and uses a 40 GiB local cache; a reset is reported rather than
+silently presenting zero requests as cache evidence.
 Cargo continues across independently selected test binaries inside each cost
 tier, and the workspace runner records every failed suite before returning one
 nonzero result. A failed ordinary tier is a hard barrier in the combined local
@@ -107,7 +122,8 @@ PocketIC-only mode remains independently runnable. In CI, one ignored governed
 `canic-testing-internal` harness calls every internal PocketIC case in explicit
 order inside one Rust process. Fleet deployment restore and autonomous Root
 removal are the first two cases; the harness reports each result immediately,
-catches failures through the suite boundary and retains the process-local Fleet
+prints the ten slowest cases, catches failures through the suite boundary and
+retains the process-local Fleet
 baseline and artifact owners. The restore proof uses that baseline, while the
 destructive Root-removal case uses an exclusive fresh instance because canister
 deletion is outside the snapshot-reset contract. The matching pure internal

@@ -441,8 +441,18 @@ CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" fast >/dev/null ||
     fail "the fast workspace test plan cannot be resolved"
 CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
     fail "the full workspace test plan cannot be resolved"
-CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" ordinary >/dev/null ||
+ordinary_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" ordinary)" ||
     fail "the ordinary workspace test plan cannot be resolved"
+ordinary_cargo_invocations="$(rg -c '^==> plan: cargo test ' <<<"$ordinary_test_plan")"
+[[ "$ordinary_cargo_invocations" -gt 0 && "$ordinary_cargo_invocations" -le 3 ]] ||
+    fail "the ordinary workspace plan must compile through at most three Cargo invocations"
+ordinary_inventory_count="$(awk -F '\t' 'NR > 1 && $4 == "parallel" && $5 == "ordinary" { count++ } END { print count + 0 }' "$WORKSPACE_TEST_INVENTORY")"
+ordinary_package_count="$(awk -F '\t' 'NR > 1 && $4 == "parallel" && $5 == "ordinary" { print $1 }' "$WORKSPACE_TEST_INVENTORY" | sort -u | wc -l)"
+rg -F "==> combined inventory: $ordinary_inventory_count targets across $ordinary_package_count packages" \
+    <<<"$ordinary_test_plan" >/dev/null ||
+    fail "the ordinary integration inventory is not compiled as one multi-package batch"
+rg -F 'libtest-parallel' <<<"$ordinary_test_plan" >/dev/null ||
+    fail "ordinary timing output does not distinguish libtest parallelism from suite concurrency"
 CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" pocketic >/dev/null ||
     fail "the PocketIC workspace test plan cannot be resolved"
 for mode in patch minor major; do
