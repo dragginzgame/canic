@@ -537,8 +537,69 @@ pub struct ActualCycleConservation {
     pub received_new_funding_cycles: u128,
 }
 
-/// Immutable reviewed plan produced from desired state plus one live observation.
+/// Exact normalized desired input retained by one in-progress operation.
+///
+/// The public desired document cannot declare internal protocol steps. This
+/// wrapper persists those Canic-owned steps without making them an input
+/// surface and restores them before any resumed observation or effect.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReviewedDesiredFleetRecord {
+    desired: DesiredFleet,
+}
 
+impl ReviewedDesiredFleetRecord {
+    pub(crate) fn capture(desired: &DesiredFleet) -> Self {
+        Self {
+            desired: desired.clone(),
+        }
+    }
+
+    /// Borrow the complete normalized desired input, including internal steps.
+    #[must_use]
+    pub const fn desired(&self) -> &DesiredFleet {
+        &self.desired
+    }
+
+    /// Consume the retained authority as the complete normalized desired input.
+    #[must_use]
+    pub fn into_desired(self) -> DesiredFleet {
+        self.desired
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+struct ReviewedDesiredFleetRecordProjection {
+    desired: DesiredFleet,
+    protocol_steps: Vec<DesiredProtocolStep>,
+}
+
+impl Serialize for ReviewedDesiredFleetRecord {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        ReviewedDesiredFleetRecordProjection {
+            desired: self.desired.clone(),
+            protocol_steps: self.desired.protocol_steps.clone(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ReviewedDesiredFleetRecord {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let mut projection = ReviewedDesiredFleetRecordProjection::deserialize(deserializer)?;
+        projection.desired.protocol_steps = projection.protocol_steps;
+        Ok(Self {
+            desired: projection.desired,
+        })
+    }
+}
+
+/// Immutable reviewed plan produced from desired state plus one live observation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetEnsurePlan {
     pub canisters: Vec<CanisterPlan>,
@@ -551,7 +612,7 @@ pub struct FleetEnsurePlan {
     pub planned_at_time: u64,
     pub protocol_actions: Vec<EnsureAction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reviewed_desired: Option<Box<DesiredFleet>>,
+    pub reviewed_desired: Option<Box<ReviewedDesiredFleetRecord>>,
     pub schema_version: u16,
 }
 

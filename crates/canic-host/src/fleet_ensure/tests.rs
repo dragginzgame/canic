@@ -1488,10 +1488,7 @@ fn in_progress_operation_resumes_reviewed_desired_before_newer_input() {
     .expect("return the immutable in-progress operation");
     assert_eq!(retained.plan.plan_sha256, planned.plan.plan_sha256);
     assert_eq!(retained.plan.desired_sha256, reviewed_sha256);
-    assert_eq!(
-        retained.plan.reviewed_desired.as_deref(),
-        Some(&fixture.desired)
-    );
+    assert_eq!(reviewed_desired(&retained.plan), Some(&fixture.desired));
 
     platform
         .protocol_ready
@@ -1520,7 +1517,7 @@ fn in_progress_operation_resumes_reviewed_desired_before_newer_input() {
     )
     .expect("consider newer desired only after terminal operation");
     assert_eq!(successor.plan.desired_sha256, newer_sha256);
-    assert_eq!(successor.plan.reviewed_desired.as_deref(), Some(&newer));
+    assert_eq!(reviewed_desired(&successor.plan), Some(&newer));
 }
 
 #[test]
@@ -1859,7 +1856,7 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         crate::fleet_ensure::ops::EnsurePaths::under(&root, "staging", "content-addressed-plan");
     let template_id = TemplateId::owned("component:app".to_string());
     let version = TemplateVersion::owned("22".repeat(32));
-    let bytes = vec![0, 1, 2, 3, 127, 128, 254, 255];
+    let bytes = vec![42; 4_096];
     let chunk_hash = canic_core::cdk::utils::hash::wasm_hash(&bytes);
     let actions = vec![
         fleet_protocol_action(
@@ -1910,8 +1907,26 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
     };
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
 
-    crate::fleet_ensure::ops::write_plan(&paths, &plan).expect("write hash-only current plan");
+    fs::create_dir_all(paths.plan.parent().expect("plan state directory"))
+        .expect("create inline-plan directory");
+    fs::write(
+        &paths.plan,
+        crate::fleet_ensure::json::to_vec(&plan).expect("encode former inline plan"),
+    )
+    .expect("retain former inline plan");
+    let inline_size = fs::metadata(&paths.plan)
+        .expect("inspect former inline plan")
+        .len();
+    let inline = crate::fleet_ensure::ops::read_plan(&paths)
+        .expect("read former inline current plan")
+        .expect("former inline current plan");
+    assert_eq!(inline, plan);
+    assert!(
+        crate::fleet_ensure::ops::compact_inline_plan(&paths, &inline)
+            .expect("compact former inline current plan")
+    );
     let encoded = fs::read_to_string(&paths.plan).expect("read hash-only current plan");
+    assert!(encoded.len() as u64 * 2 < inline_size);
     assert!(!encoded.contains("\"bytes\""));
     assert!(encoded.contains("\"bytes_sha256\""));
     assert!(encoded.contains("\"chunk_hashes\""));
@@ -1930,6 +1945,10 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
     assert_eq!(
         crate::fleet_ensure::policy::expected_plan_sha256(&reopened),
         plan.plan_sha256
+    );
+    assert!(
+        !crate::fleet_ensure::ops::compact_inline_plan(&paths, &reopened)
+            .expect("leave canonical current plan unchanged")
     );
 
     let partial_paths = crate::fleet_ensure::ops::EnsurePaths::under(
@@ -2020,6 +2039,22 @@ fn retained_current_plan_and_issued_journal_round_trip_from_an_isolated_copy() {
             .iter()
             .map(|effect| effect.action_sha256.clone())
             .collect::<Vec<_>>()
+    );
+    assert!(
+        crate::fleet_ensure::ops::compact_inline_plan(&paths, &plan)
+            .expect("compact isolated retained plan before resumed effects")
+    );
+    let compacted_retained = fs::read(&paths.plan).expect("read compacted retained plan");
+    assert!(compacted_retained.len() < original_plan.len() / 10);
+    assert_eq!(
+        crate::fleet_ensure::ops::read_plan(&paths)
+            .expect("reopen compacted retained plan")
+            .expect("compacted retained plan"),
+        plan
+    );
+    assert_eq!(
+        fs::read(&paths.journal).expect("reread isolated retained journal"),
+        original_journal
     );
 
     let (registry_authority, root_entry) = plan
@@ -2866,6 +2901,12 @@ fn current_protocol_variants(plan: &FleetEnsurePlan) -> BTreeSet<&'static str> {
             _ => None,
         })
         .collect()
+}
+
+fn reviewed_desired(plan: &FleetEnsurePlan) -> Option<&DesiredFleet> {
+    plan.reviewed_desired
+        .as_deref()
+        .map(crate::fleet_ensure::model::ReviewedDesiredFleetRecord::desired)
 }
 
 fn typed_protocol_action(operation_id: &str) -> EnsureAction {

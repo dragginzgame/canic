@@ -322,7 +322,7 @@ fn load_ensure_authority(
         && let Some(desired) = plan.reviewed_desired
     {
         return Ok(LoadedDesiredFleet {
-            desired: *desired,
+            desired: desired.into_desired(),
             sha256: plan.desired_sha256,
         });
     }
@@ -342,7 +342,7 @@ fn load_ensure_authority(
     )? && let Some(desired) = plan.reviewed_desired
     {
         return Ok(LoadedDesiredFleet {
-            desired: *desired,
+            desired: desired.into_desired(),
             sha256: plan.desired_sha256,
         });
     }

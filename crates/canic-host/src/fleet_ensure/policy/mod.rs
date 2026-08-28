@@ -464,7 +464,9 @@ pub fn compile_plan(
         plan_sha256: String::new(),
         planned_at_time: created_at_time,
         protocol_actions,
-        reviewed_desired: Some(Box::new(desired.clone())),
+        reviewed_desired: Some(Box::new(
+            crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(desired),
+        )),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
     };
     plan.plan_sha256 = expected_plan_sha256(&plan);

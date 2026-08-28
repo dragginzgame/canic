@@ -64,6 +64,17 @@ pub(super) fn remove_inline_bytes(projection: &mut Value) -> Result<(), EnsureSt
     Ok(())
 }
 
+pub(super) fn contains_inline_bytes(projection: &Value) -> Result<bool, EnsureStateError> {
+    for action in protocol_actions(projection)? {
+        if fleet_protocol_action_kind(action)? == Some("publish_store_chunk")
+            && request(action)?.contains_key("bytes")
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub(super) fn hydrate(paths: &EnsurePaths, projection: &mut Value) -> Result<(), EnsureStateError> {
     let authorities = projected_chunk_authorities(projection)?;
     for action in protocol_actions_mut(projection)? {

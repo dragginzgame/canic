@@ -74,6 +74,12 @@ name/Principal set and query terminal state. That path cannot issue an update,
 funding or canister effect; protected terminal inventory and cycle conservation
 remain mandatory before the journal closes.
 
+The same verified pre-retention path compacts any inline Store chunks into the
+maintained content-addressed projection before its first resumed platform call.
+The logical plan digest and journal remain unchanged, so the retained 37 MiB
+projection disappears without weakening replay authority or waiting for a
+later successor plan.
+
 ## Cycle-Safety Boundary
 
 The plan reports the complete observed controlled balance, retained balance,
@@ -366,10 +372,17 @@ the bounded pre-retention zero-debit final observation, typed protocol replay,
 current plan JSON round-trip, and CLI recovery with the working TOML absent.
 An ignored evidence test also copied and reopened the exact downstream
 37,131,114-byte plan and 8,448-byte issued journal in isolated temporary state;
-their original bytes remained unchanged. Locked host/CLI checking,
+its compacted copy is less than one tenth of the original, retains the exact
+plan/action identities and leaves the copied journal plus original evidence
+unchanged. The focused 25-test Fleet Ensure module, including the governed
+Toko-shaped PocketIC case, passes after retaining Canic-owned generic protocol
+steps in the reviewed authority. Locked host/CLI checking,
 warning-denied host/CLI Clippy, scoped formatting and diff hygiene pass. No
 broad workspace or PocketIC gate was run, as required for an implementation
 slice.
+
+The adjacent version-rollback regression also passes using exact restored file
+bytes and clean repository state rather than brittle console prose.
 
 <!-- canic-release-state: source-development -->
 Published `0.109.15` added a governed fast release lane for exact

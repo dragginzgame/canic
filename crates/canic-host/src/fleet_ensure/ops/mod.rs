@@ -284,6 +284,25 @@ pub fn read_plan(paths: &EnsurePaths) -> Result<Option<FleetEnsurePlan>, EnsureS
     validate_schema(Some(value), &paths.plan, |record| record.schema_version)
 }
 
+pub(crate) fn compact_inline_plan(
+    paths: &EnsurePaths,
+    plan: &FleetEnsurePlan,
+) -> Result<bool, EnsureStateError> {
+    let Some(bytes) = read_document_bytes(&paths.plan)? else {
+        return Ok(false);
+    };
+    let projection: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|source| EnsureStateError::Decode {
+            path: paths.plan.clone(),
+            source,
+        })?;
+    if !plan_content::contains_inline_bytes(&projection)? {
+        return Ok(false);
+    }
+    write_plan(paths, plan)?;
+    Ok(true)
+}
+
 pub fn read_state(
     paths: &EnsurePaths,
     fleet: &str,
