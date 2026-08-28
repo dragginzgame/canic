@@ -453,10 +453,8 @@ fn failed_version_surface_sync_restores_every_mutated_file() {
         .env("PATH", path)
         .output()
         .expect("bump script should run");
-    let text = output_text(&output);
 
     assert!(!output.status.success(), "the fixture sync must fail");
-    assert!(text.contains("restored all release surfaces to 0.92.7"));
     assert_eq!(
         fs::read_to_string(root.join("Cargo.toml")).unwrap(),
         cargo_toml
@@ -477,10 +475,25 @@ fn failed_version_surface_sync_restores_every_mutated_file() {
         fs::read_to_string(root.join("docs/status/current.md")).unwrap(),
         status_document
     );
+    let status = Command::new("git")
+        .args(["status", "--short"])
+        .current_dir(&root)
+        .output()
+        .expect("restored fixture status should resolve");
+    assert!(status.status.success());
+    assert!(
+        status.stdout.is_empty(),
+        "rollback must restore a clean repo"
+    );
     let _ = fs::remove_dir_all(root);
 }
 
 fn install_failing_release_fixture_commands(root: &Path) {
+    write_executable(
+        root,
+        "scripts/ci/check-release-draft-ready.sh",
+        "#!/usr/bin/env bash\nexit 0\n",
+    );
     write_executable(
         root,
         "scripts/ci/check-release-remote-state.sh",

@@ -221,6 +221,12 @@ the successor plan reuses that canister instead of issuing another creation.
 An interrupted invocation retains one intent per action under
 `.canic/fleet-ensure/<environment>/<fleet>/` and resumes that action before
 opening another. The stall budget counts only consecutive non-progress.
+If a verified current-schema in-progress plan still uses the former inline
+Store-chunk projection, apply first publishes those exact bytes to the
+content-addressed object store and atomically rewrites `plan.json` to hashes
+and bounded sizes. This local compaction preserves the plan digest, operation
+identity and journal bytes and completes before any platform observation or
+remote effect.
 
 A schema-`v1` plan created before reviewed-input retention normally requires
 its exact original desired document. The bounded no-debit terminal case is

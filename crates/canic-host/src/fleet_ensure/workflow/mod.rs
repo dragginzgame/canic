@@ -12,8 +12,9 @@ use crate::fleet_ensure::{
         FleetEnsurePlan, FleetEnsureReport, FleetEnsureStateRecord, FleetObservation,
     },
     ops::{
-        EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256, lock_operation, read_journal,
-        read_plan, read_state, resolve_desired_artifacts, write_journal, write_plan, write_state,
+        EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256, compact_inline_plan,
+        lock_operation, read_journal, read_plan, read_state, resolve_desired_artifacts,
+        write_journal, write_plan, write_state,
     },
     policy::{
         EnsurePolicyError, compile_plan, expected_plan_sha256, operation_id,
@@ -263,10 +264,12 @@ where
         .is_some_and(|journal| journal.completion == FleetEnsureCompletion::InProgress);
     if let Some(journal) = retained_journal.as_ref().filter(|_| in_progress) {
         verify_journal(journal, &retained_plan, requested_fleet)?;
+        compact_inline_plan(&paths, &retained_plan)?;
     }
     let mut issued_observation_resume = false;
     let operation_desired = if in_progress {
         if let Some(reviewed) = retained_plan.reviewed_desired.as_deref() {
+            let reviewed = reviewed.desired();
             validate_path_identity(reviewed, requested_fleet)?;
             if reviewed.environment != retained_plan.environment {
                 return Err(EnsureWorkflowError::PlanIntegrity);
