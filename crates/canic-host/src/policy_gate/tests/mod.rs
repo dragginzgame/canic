@@ -198,6 +198,7 @@ fn sample_build_provenance_payload() -> BuildProvenanceV1 {
             transform: ArtifactTransformKindV1::Shrink,
             tool: "ic-wasm".to_string(),
             tool_version: Some("ic-wasm 0.test".to_string()),
+            tool_sha256: None,
             outcome: ArtifactTransformOutcomeV1::Applied,
             metrics: None,
         }],

@@ -22,6 +22,12 @@ pub(crate) enum RegularFileReadError {
 }
 
 #[derive(Debug)]
+pub(crate) enum BoundedRegularFileReadError {
+    Read(RegularFileReadError),
+    TooLarge,
+}
+
+#[derive(Debug)]
 pub(crate) enum RegularFileLockError {
     NotRegular,
     Io(io::Error),
@@ -42,6 +48,29 @@ pub(crate) fn read_optional_regular_bytes(
     {
         let _ = path;
         Err(RegularFileReadError::UnsupportedPlatform)
+    }
+}
+
+/// Read at most `maximum_bytes + 1` from one optional regular no-follow file.
+///
+/// Descriptor metadata rejects an already oversized file before allocating its
+/// contents. The extra byte in the bounded read detects growth after that
+/// metadata observation.
+pub(crate) fn read_optional_regular_bytes_bounded(
+    path: &Path,
+    maximum_bytes: usize,
+) -> Result<Option<Vec<u8>>, BoundedRegularFileReadError> {
+    #[cfg(unix)]
+    {
+        supported::read_optional_regular_bytes_bounded(path, maximum_bytes)
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = (path, maximum_bytes);
+        Err(BoundedRegularFileReadError::Read(
+            RegularFileReadError::UnsupportedPlatform,
+        ))
     }
 }
 
@@ -145,7 +174,7 @@ fn commit_bytes(path: &Path, bytes: &[u8], mode: FileCommitMode) -> io::Result<(
 
 #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
 mod supported {
-    use super::{FileCommitMode, RegularFileReadError};
+    use super::{BoundedRegularFileReadError, FileCommitMode, RegularFileReadError};
 
     use std::{
         ffi::{OsStr, OsString},
@@ -166,6 +195,79 @@ mod supported {
     pub(super) fn read_optional_regular_bytes(
         path: &Path,
     ) -> Result<Option<Vec<u8>>, RegularFileReadError> {
+        let Some((mut file, _)) = open_optional_regular_file(path)? else {
+            return Ok(None);
+        };
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)
+            .map_err(RegularFileReadError::Io)?;
+        Ok(Some(bytes))
+    }
+
+    pub(super) fn read_optional_regular_bytes_bounded(
+        path: &Path,
+        maximum_bytes: usize,
+    ) -> Result<Option<Vec<u8>>, BoundedRegularFileReadError> {
+        read_optional_regular_bytes_bounded_with_hook(path, maximum_bytes, || Ok(()))
+    }
+
+    #[cfg(test)]
+    pub(super) fn read_optional_regular_bytes_bounded_with_hook(
+        path: &Path,
+        maximum_bytes: usize,
+        before_read: impl FnOnce() -> io::Result<()>,
+    ) -> Result<Option<Vec<u8>>, BoundedRegularFileReadError> {
+        read_optional_regular_bytes_bounded_inner(path, maximum_bytes, before_read)
+    }
+
+    #[cfg(not(test))]
+    fn read_optional_regular_bytes_bounded_with_hook(
+        path: &Path,
+        maximum_bytes: usize,
+        before_read: impl FnOnce() -> io::Result<()>,
+    ) -> Result<Option<Vec<u8>>, BoundedRegularFileReadError> {
+        read_optional_regular_bytes_bounded_inner(path, maximum_bytes, before_read)
+    }
+
+    fn read_optional_regular_bytes_bounded_inner(
+        path: &Path,
+        maximum_bytes: usize,
+        before_read: impl FnOnce() -> io::Result<()>,
+    ) -> Result<Option<Vec<u8>>, BoundedRegularFileReadError> {
+        let Some((mut file, observed_size)) =
+            open_optional_regular_file(path).map_err(BoundedRegularFileReadError::Read)?
+        else {
+            return Ok(None);
+        };
+        if observed_size > u64::try_from(maximum_bytes).unwrap_or(u64::MAX) {
+            return Err(BoundedRegularFileReadError::TooLarge);
+        }
+        before_read().map_err(|source| {
+            BoundedRegularFileReadError::Read(RegularFileReadError::Io(source))
+        })?;
+
+        let read_limit = maximum_bytes
+            .checked_add(1)
+            .ok_or(BoundedRegularFileReadError::TooLarge)?;
+        let mut bytes = Vec::with_capacity(
+            usize::try_from(observed_size)
+                .unwrap_or(maximum_bytes)
+                .min(maximum_bytes),
+        );
+        Read::by_ref(&mut file)
+            .take(u64::try_from(read_limit).unwrap_or(u64::MAX))
+            .read_to_end(&mut bytes)
+            .map_err(RegularFileReadError::Io)
+            .map_err(BoundedRegularFileReadError::Read)?;
+        if bytes.len() > maximum_bytes {
+            return Err(BoundedRegularFileReadError::TooLarge);
+        }
+        Ok(Some(bytes))
+    }
+
+    fn open_optional_regular_file(
+        path: &Path,
+    ) -> Result<Option<(fs::File, u64)>, RegularFileReadError> {
         let metadata = match fs::symlink_metadata(path) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -189,11 +291,13 @@ mod supported {
             return Err(RegularFileReadError::NotRegular);
         }
 
-        let mut file = fs::File::from(fd);
-        let mut bytes = Vec::new();
-        file.read_to_end(&mut bytes)
-            .map_err(RegularFileReadError::Io)?;
-        Ok(Some(bytes))
+        let size = u64::try_from(metadata.st_size).map_err(|_| {
+            RegularFileReadError::Io(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "regular file has a negative size",
+            ))
+        })?;
+        Ok(Some((fs::File::from(fd), size)))
     }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]

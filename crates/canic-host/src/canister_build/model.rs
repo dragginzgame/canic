@@ -100,6 +100,7 @@ pub struct ConfiguredCanisterArtifactBuildOutput {
 pub struct ArtifactTransformOutput {
     pub transform: ArtifactTransformKind,
     pub tool_version: Option<String>,
+    pub tool_sha256: Option<String>,
     pub outcome: ArtifactTransformOutcome,
     pub metrics: Option<WasmTransformMetrics>,
 }
@@ -109,6 +110,7 @@ impl ArtifactTransformOutput {
         Self {
             transform,
             tool_version: None,
+            tool_sha256: None,
             outcome: ArtifactTransformOutcome::NotRequested,
             metrics: None,
         }

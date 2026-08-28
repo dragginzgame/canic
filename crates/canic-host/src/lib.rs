@@ -11,6 +11,7 @@ const EXECUTABLE_BUSY_RETRY_ATTEMPTS: usize = 8;
 const EXECUTABLE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
 
 mod artifact_io;
+pub mod binaryen;
 mod bootstrap_candid;
 mod bootstrap_coordinator;
 mod bootstrap_store;

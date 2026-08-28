@@ -20,13 +20,28 @@ Wasm Store publication, and module-hash authority. The optimized bytes are the
 only release artifact; there is no unoptimized fallback or parallel artifact.
 Debug and fast builds record that optimization was not requested.
 
+Install the governed optimizer from any published Canic CLI without a source
+checkout:
+
+```bash
+canic toolchain install
+```
+
+The command verifies both the official archive and the extracted executable,
+installs `wasm-opt` under `~/.local/bin`, and prints its absolute path. A
+release build resolves the first `wasm-opt` on `PATH` and admits it only when
+both its exact Binaryen identity and platform-specific executable SHA-256
+match Canic's pins. Failure names that selected path and the repair command;
+it never searches past a rejected executable or emits unoptimized bytes.
+
 Before replacing the staged input, the release transform derives the required
 Wasm feature flags from the module under Canic's admitted IC feature contract
 and proves exact export-inventory, feature, and embedded public-Candid parity.
-Its provenance records before/after raw, deterministic-gzip, code-section,
-data-section, and defined-function measurements. The separately materialized
-Candid and its protocol-profile digest remain bound before optimization. The
-builder keeps Wasm compilation non-incremental. An explicit
+Its provenance records the exact optimizer version and executable SHA-256 plus
+before/after raw, deterministic-gzip, code-section, data-section, and defined-
+function measurements. The separately materialized Candid and its protocol-
+profile digest remain bound before optimization. The builder keeps Wasm
+compilation non-incremental. An explicit
 `RUSTC_WRAPPER` wins; otherwise an executable `sccache` on `PATH` is used.
 
 ### Standalone-local runtime

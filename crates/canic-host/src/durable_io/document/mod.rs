@@ -4,7 +4,10 @@
 //! Does not own: domain validation, document paths, locks, schemas, transitions or retry policy.
 //! Boundary: callers validate typed state; this module preserves bytes and filesystem outcomes.
 
-use super::{RegularFileReadError, read_optional_regular_bytes, write_bytes};
+use super::{
+    BoundedRegularFileReadError as DurableBoundedRegularFileReadError, RegularFileReadError,
+    read_optional_regular_bytes, read_optional_regular_bytes_bounded, write_bytes,
+};
 use serde::Serialize;
 use std::{io, path::Path};
 
@@ -61,14 +64,12 @@ pub fn read_optional_bounded_regular_bytes(
     path: &Path,
     maximum_bytes: usize,
 ) -> Result<Option<Vec<u8>>, BoundedRegularFileReadError> {
-    let bytes = read_optional_regular_bytes(path).map_err(BoundedRegularFileReadError::Read)?;
-    if bytes
-        .as_ref()
-        .is_some_and(|bytes| bytes.len() > maximum_bytes)
-    {
-        return Err(BoundedRegularFileReadError::TooLarge);
-    }
-    Ok(bytes)
+    read_optional_regular_bytes_bounded(path, maximum_bytes).map_err(|error| match error {
+        DurableBoundedRegularFileReadError::Read(source) => {
+            BoundedRegularFileReadError::Read(source)
+        }
+        DurableBoundedRegularFileReadError::TooLarge => BoundedRegularFileReadError::TooLarge,
+    })
 }
 
 /// Atomically replace one document and reconcile an uncertain result from exact durable bytes.

@@ -65,6 +65,7 @@ fn usage_lists_current_commands_alphabetically() {
             "state",
             "status",
             "token",
+            "toolchain",
         ]
     );
     assert!(plain.contains("Usage: canic [OPTIONS] <COMMAND>"));
@@ -102,6 +103,8 @@ fn current_command_help_and_versions_return_ok() {
         &["state", "--help"],
         &["status", "--help"],
         &["token", "--help"],
+        &["toolchain", "--help"],
+        &["toolchain", "install", "--help"],
     ] {
         assert!(run(args.iter().map(OsString::from)).is_ok(), "{args:?}");
     }

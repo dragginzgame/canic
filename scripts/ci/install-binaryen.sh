@@ -14,14 +14,17 @@ resolve_platform() {
     Darwin:arm64 | Darwin:aarch64)
         archive_platform="arm64-macos"
         checksum="$CANIC_BINARYEN_SHA256_DARWIN_ARM64"
+        executable_checksum="$CANIC_BINARYEN_WASM_OPT_SHA256_DARWIN_ARM64"
         ;;
     Darwin:x86_64 | Darwin:amd64)
         archive_platform="x86_64-macos"
         checksum="$CANIC_BINARYEN_SHA256_DARWIN_X64"
+        executable_checksum="$CANIC_BINARYEN_WASM_OPT_SHA256_DARWIN_X64"
         ;;
     Linux:x86_64 | Linux:amd64)
         archive_platform="x86_64-linux"
         checksum="$CANIC_BINARYEN_SHA256_LINUX_X64"
+        executable_checksum="$CANIC_BINARYEN_WASM_OPT_SHA256_LINUX_X64"
         ;;
     *)
         echo "unsupported Binaryen platform: $(uname -s) $(uname -m)" >&2
@@ -48,6 +51,7 @@ main() {
 
     candidate="$TMP_DIR/$package/bin/wasm-opt"
     chmod +x "$candidate"
+    bash "$SCRIPT_DIR/verify-file-checksum.sh" sha256 "$executable_checksum" "$candidate"
     version_output="$("$candidate" --version 2>&1)"
     if [ "$version_output" != "wasm-opt version $CANIC_BINARYEN_VERSION (version_$CANIC_BINARYEN_VERSION)" ]; then
         echo "installed Binaryen does not report the pinned version" >&2

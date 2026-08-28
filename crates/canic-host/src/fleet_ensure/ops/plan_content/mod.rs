@@ -4,10 +4,14 @@
 //! Does not own: Store policy, action ordering, or remote publication.
 //! Boundary: durable plan JSON retains chunk hashes, never inline chunk bytes.
 
+#[cfg(test)]
+mod tests;
+
 use super::{EnsurePaths, EnsureStateError};
 use crate::{
     durable_io::{
-        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
+        BoundedRegularFileReadError, RegularFileReadError, create_new_bytes_with_parents,
+        read_optional_regular_bytes_bounded,
     },
     fleet_ensure::model::{CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan},
 };
@@ -41,7 +45,7 @@ pub(super) fn retain(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), 
 
 pub(super) fn remove_inline_bytes(projection: &mut Value) -> Result<(), EnsureStateError> {
     for action in protocol_actions_mut(projection)? {
-        if action_kind(action)? != "publish_store_chunk" {
+        if fleet_protocol_action_kind(action)? != Some("publish_store_chunk") {
             continue;
         }
         let request = request_mut(action)?;
@@ -63,7 +67,7 @@ pub(super) fn remove_inline_bytes(projection: &mut Value) -> Result<(), EnsureSt
 pub(super) fn hydrate(paths: &EnsurePaths, projection: &mut Value) -> Result<(), EnsureStateError> {
     let authorities = projected_chunk_authorities(projection)?;
     for action in protocol_actions_mut(projection)? {
-        if action_kind(action)? != "publish_store_chunk" {
+        if fleet_protocol_action_kind(action)? != Some("publish_store_chunk") {
             continue;
         }
         let request = request_mut(action)?;
@@ -129,7 +133,7 @@ fn projected_chunk_authorities(
 ) -> Result<BTreeMap<ChunkSetKey, Vec<Vec<u8>>>, EnsureStateError> {
     let mut authorities = BTreeMap::new();
     for action in protocol_actions(projection)? {
-        if action_kind(action)? != "prepare_store_chunk_set" {
+        if fleet_protocol_action_kind(action)? != Some("prepare_store_chunk_set") {
             continue;
         }
         let request = request(action)?;
@@ -224,16 +228,26 @@ fn read_object(
     expected_size: u64,
 ) -> Result<Vec<u8>, EnsureStateError> {
     let path = object_path(paths, expected);
-    let bytes = match read_optional_regular_bytes(&path) {
+    if expected_size == 0
+        || expected_size > u64::try_from(canic_core::CANIC_WASM_CHUNK_BYTES).unwrap_or(u64::MAX)
+    {
+        return Err(EnsureStateError::StoreChunkMismatch { path });
+    }
+    let maximum_bytes = usize::try_from(expected_size)
+        .map_err(|_| EnsureStateError::StoreChunkMismatch { path: path.clone() })?;
+    let bytes = match read_optional_regular_bytes_bounded(&path, maximum_bytes) {
         Ok(Some(bytes)) => bytes,
-        Ok(None) | Err(RegularFileReadError::NotRegular) => {
+        Ok(None) | Err(BoundedRegularFileReadError::Read(RegularFileReadError::NotRegular)) => {
             return Err(EnsureStateError::StoreChunkUnavailable { path });
         }
-        Err(RegularFileReadError::Io(source)) => {
+        Err(BoundedRegularFileReadError::TooLarge) => {
+            return Err(EnsureStateError::StoreChunkMismatch { path });
+        }
+        Err(BoundedRegularFileReadError::Read(RegularFileReadError::Io(source))) => {
             return Err(EnsureStateError::Io { path, source });
         }
         #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
+        Err(BoundedRegularFileReadError::Read(RegularFileReadError::UnsupportedPlatform)) => {
             return Err(EnsureStateError::StoreChunkUnavailable { path });
         }
     };
@@ -275,11 +289,19 @@ fn protocol_actions_mut(value: &mut Value) -> Result<&mut Vec<Value>, EnsureStat
         .ok_or_else(|| authority("plan protocol actions are not an array"))
 }
 
-fn action_kind(action: &Value) -> Result<&str, EnsureStateError> {
+fn fleet_protocol_action_kind(action: &Value) -> Result<Option<&str>, EnsureStateError> {
+    let outer_kind = action
+        .get("kind")
+        .and_then(Value::as_str)
+        .ok_or_else(|| authority("protocol action has no exact kind"))?;
+    if outer_kind != "fleet_protocol" {
+        return Ok(None);
+    }
     action
         .get("action")
         .and_then(|value| value.get("kind"))
         .and_then(Value::as_str)
+        .map(Some)
         .ok_or_else(|| authority("Fleet protocol action has no exact kind"))
 }
 

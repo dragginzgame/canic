@@ -103,7 +103,13 @@ New plan documents retain only the Store chunk hash, bounded size, template,
 version and index. Exact bytes live under
 `.canic/fleet-ensure/objects/sha256/`; write verifies any retained prepared
 authority before retention, and read rejects missing, unsafe, oversized or
-hash-mismatched objects before an action can be observed or issued.
+hash-mismatched objects before an action can be observed or issued. Both
+projection directions discriminate the outer Fleet-protocol action before
+reading Store-specific fields; generic protocol steps remain byte-for-byte
+outside the content-addressing owner. Object hydration now rejects an invalid
+declared bound before access, preflights the no-follow descriptor size before
+allocation and reads no more than the expected size plus one byte. Concurrent
+growth, truncation, links and same-length hash drift all fail closed.
 
 ## Current Completion State
 
@@ -275,9 +281,13 @@ applies `-Oz`, and rejects export, embedded public-Candid or feature drift
 before replacing the staged input. Gzip, artifact hashes, release sets, Store
 publication and module-hash authority consume only those optimized bytes; fast
 and debug builds do not request the transform, and release has no unoptimized
-fallback. Provenance records before/after raw, gzip, code-section, data-section
-and defined-function values. The recurring footprint method covers all nine
-Canic-owned roles and requires exact identity across two clean release builds.
+fallback. Admission verifies the platform-specific executable SHA-256 before
+running the selected path, and `canic toolchain install` provides the published
+checkout-independent repair path. Provenance records that executable digest
+alongside the exact version and before/after raw, gzip, code-section, data-
+section and defined-function values. The recurring footprint method covers all
+nine Canic-owned roles and requires exact identity across two clean release
+builds.
 
 The focused real App build reduced section 10 from 2,997,977 to 2,827,666
 bytes through Binaryen. Named post-optimization Twiggy evidence then identified
@@ -289,6 +299,16 @@ Fourteen topology, sixteen Component-deployment and twenty-two chain-key batch
 tests pass, alongside the focused host artifact/provenance suites and
 warning-denied host and core Clippy. IcyDB's retained-kernel scan residual is
 recorded as upstream feedback only; no IcyDB repository was changed.
+
+The CANIC-079/080 follow-up has targeted authority and I/O evidence passing:
+seven Binaryen-filtered tests, all fifteen artifact finalizer tests, nine build-
+provenance tests, fifteen durable-I/O tests, three direct Store-object tests,
+two CLI toolchain tests, top-level ordering and the recursive CLI help check.
+The selected executable is rejected on digest mismatch before execution and
+the diagnostic names its path and public repair command. Warning-denied all-
+target Clippy for `canic-host` and `canic-cli`, the release-integrity contract,
+the Binaryen installer ShellCheck and changelog governance also pass. No
+complete workspace or broad PocketIC gate was run during this coding slice.
 
 Read-only Toko Miner inspection confirms the managed and standalone-local
 PocketIC journeys cover install, Canic/IcyDB readiness, admission, operations,

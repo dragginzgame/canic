@@ -158,6 +158,7 @@ pub struct ArtifactTransformProvenanceV1 {
     pub transform: ArtifactTransformKindV1,
     pub tool: String,
     pub tool_version: Option<String>,
+    pub tool_sha256: Option<String>,
     pub outcome: ArtifactTransformOutcomeV1,
     pub metrics: Option<WasmTransformMetricsV1>,
 }

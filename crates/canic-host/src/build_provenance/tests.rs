@@ -97,9 +97,14 @@ fn release_optimization_provenance_records_binaryen_metrics() {
     let root = temp_dir("canic-build-provenance-optimization");
     write_sample_workspace(&root, "demo", "app");
     let mut output = write_sample_artifacts(&root, "app");
+    let expected_tool_sha256 = crate::binaryen::current_binaryen_authority()
+        .expect("supported test platform")
+        .executable_sha256()
+        .to_string();
     output.transforms[2] = ArtifactTransformOutput {
         transform: ArtifactTransformKind::Optimize,
         tool_version: Some("wasm-opt version 108 (version_108)".to_string()),
+        tool_sha256: Some(expected_tool_sha256.clone()),
         outcome: ArtifactTransformOutcome::Applied,
         metrics: Some(WasmTransformMetrics {
             before: WasmArtifactMetrics {
@@ -124,6 +129,10 @@ fn release_optimization_provenance_records_binaryen_metrics() {
 
     fs::remove_dir_all(&root).expect("remove root");
     assert_eq!(transforms[2].tool, "wasm-opt");
+    assert_eq!(
+        transforms[2].tool_sha256.as_deref(),
+        Some(expected_tool_sha256.as_str())
+    );
     let metrics = transforms[2].metrics.as_ref().expect("optimizer metrics");
     assert_eq!(metrics.before.code_section_bytes, 70);
     assert_eq!(metrics.after.code_section_bytes, 60);
@@ -216,6 +225,46 @@ fn build_provenance_rejects_transform_outcome_without_matching_tool_version() {
         .expect_err("applied transform without tool version must reject");
 
     fs::remove_dir_all(&root).expect("remove root");
+}
+
+#[test]
+fn build_provenance_rejects_release_optimizer_without_exact_digest() {
+    let root = temp_dir("canic-build-provenance-transform-digest");
+    write_sample_workspace(&root, "demo", "app");
+    for tool_sha256 in [
+        None,
+        Some("not-a-sha256".to_string()),
+        Some("ab".repeat(32)),
+    ] {
+        let mut output = write_sample_artifacts(&root, "app");
+        output.transforms[2] = ArtifactTransformOutput {
+            transform: ArtifactTransformKind::Optimize,
+            tool_version: Some("wasm-opt version 108 (version_108)".to_string()),
+            tool_sha256,
+            outcome: ArtifactTransformOutcome::Applied,
+            metrics: Some(WasmTransformMetrics {
+                before: WasmArtifactMetrics {
+                    raw_bytes: 10,
+                    gzip_bytes: 9,
+                    code_section_bytes: 8,
+                    data_section_bytes: 1,
+                    defined_functions: 1,
+                },
+                after: WasmArtifactMetrics {
+                    raw_bytes: 9,
+                    gzip_bytes: 8,
+                    code_section_bytes: 7,
+                    data_section_bytes: 1,
+                    defined_functions: 1,
+                },
+            }),
+        };
+
+        artifact_transform_provenance(&sample_request(&root, output))
+            .expect_err("non-authoritative optimizer digest must reject");
+    }
+
+    fs::remove_dir_all(root).expect("remove root");
 }
 
 #[test]
@@ -338,6 +387,7 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
             ArtifactTransformOutput {
                 transform: ArtifactTransformKind::Shrink,
                 tool_version: Some("ic-wasm 0.test".to_string()),
+                tool_sha256: None,
                 outcome: ArtifactTransformOutcome::Applied,
                 metrics: None,
             },
