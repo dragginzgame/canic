@@ -215,7 +215,7 @@ ownership guards and changelog governance. The combined IcyDB fixture was not
 rerun or awaited; its maintained one-package guard remains fail-closed until
 the matching timer-aligned IcyDB release is selected.
 
-<!-- canic-release-state: source-development -->
+<!-- canic-release-validation: version=0.109.16 source=d7b6a4055f5ec3df10f4baec204d6148452dc11c date=2026-08-28 gate=complete -->
 Published `0.109.15` added a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while
