@@ -62,7 +62,7 @@ help:
 	@echo ""
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
-	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Canic toolchain"
+	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Binaryen/Canic toolchain"
 	@echo "  install-hooks    Configure the repository formatting-only pre-commit hook"
 	@echo "  update-dev       Pin the latest stable ICP CLI and synchronize development tools"
 	@echo ""
@@ -124,7 +124,7 @@ help:
 install:
 	cargo install --locked --path crates/canic-cli
 
-# Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Canic toolchain.
+# Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Binaryen/Canic toolchain.
 install-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" GITLEAKS_INSTALL_DIR="$(GITLEAKS_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
@@ -155,6 +155,7 @@ update-dev:
 	"$(CARGO_INSTALL_BIN_DIR)/sccache" --version
 	icp --version
 	ic-wasm --version
+	wasm-opt --version
 	"$(GITLEAKS_INSTALL_DIR)/gitleaks" version
 	bash scripts/ci/check-dependency-risk-inventory.sh
 

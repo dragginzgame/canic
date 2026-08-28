@@ -59,11 +59,23 @@ use selection::{
 pub(in crate::ops::auth) use signing::{
     sign_chain_key_root_delegation_batch, sign_next_chain_key_root_delegation_batch,
 };
+use std::cmp::Ordering;
 
 const CHAIN_KEY_BATCH_SCHEMA_VERSION_V1: u16 = 1;
 const MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS: usize = 64;
 const MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES: usize = 128;
 const CHAIN_KEY_SIGNING_RETRY_BACKOFF_NS: u64 = 60_000_000_000;
+
+fn oldest_chain_key_batch_order(
+    left: &ChainKeyRootDelegationBatch,
+    right: &ChainKeyRootDelegationBatch,
+) -> Ordering {
+    // Batch IDs are the unique storage keys, so this is a total order for the
+    // retained inventory and stable tie preservation has no observable owner.
+    left.prepared_at_ns
+        .cmp(&right.prepared_at_ns)
+        .then_with(|| left.batch_id.cmp(&right.batch_id))
+}
 
 ///
 /// PrepareDueChainKeyRootDelegationBatchInput
@@ -306,11 +318,7 @@ fn reusable_in_flight_chain_key_batch(
             )
         })
         .collect::<Vec<_>>();
-    batches.sort_by(|left, right| {
-        left.prepared_at_ns
-            .cmp(&right.prepared_at_ns)
-            .then_with(|| left.batch_id.cmp(&right.batch_id))
-    });
+    batches.sort_unstable_by(oldest_chain_key_batch_order);
     batches.into_iter().next()
 }
 

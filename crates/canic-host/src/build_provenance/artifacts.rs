@@ -1,12 +1,16 @@
 use std::path::Path;
 
-use crate::{artifact_io::IC_WASM_TOOL, evidence_envelope::file_input_fingerprint};
+use crate::{
+    artifact_io::{IC_WASM_TOOL, WASM_OPT_TOOL},
+    evidence_envelope::file_input_fingerprint,
+};
 
 use crate::canister_build::{ArtifactTransformKind, ArtifactTransformOutcome};
 
 use super::model::{
     ArtifactProvenanceKindV1, ArtifactProvenanceV1, ArtifactTransformKindV1,
     ArtifactTransformOutcomeV1, ArtifactTransformProvenanceV1, BuildProvenanceRequest,
+    WasmArtifactMetricsV1, WasmTransformMetricsV1,
 };
 
 pub(super) fn artifact_provenance(
@@ -61,6 +65,21 @@ pub(super) fn artifact_transform_provenance(
                 }
                 _ => {}
             }
+            match (transform.transform, transform.outcome, &transform.metrics) {
+                (ArtifactTransformKind::Optimize, ArtifactTransformOutcome::Applied, None) => {
+                    return Err(
+                        "applied release Wasm optimization must record before/after metrics".into(),
+                    );
+                }
+                (ArtifactTransformKind::Optimize, ArtifactTransformOutcome::Applied, Some(_))
+                | (_, _, None) => {}
+                _ => {
+                    return Err(
+                        "only an applied release Wasm optimization may record transform metrics"
+                            .into(),
+                    );
+                }
+            }
             Ok(ArtifactTransformProvenanceV1 {
                 role: request.role.clone(),
                 transform: match transform.transform {
@@ -68,8 +87,15 @@ pub(super) fn artifact_transform_provenance(
                     ArtifactTransformKind::CandidMetadata => {
                         ArtifactTransformKindV1::CandidMetadata
                     }
+                    ArtifactTransformKind::Optimize => ArtifactTransformKindV1::Optimize,
                 },
-                tool: IC_WASM_TOOL.to_string(),
+                tool: match transform.transform {
+                    ArtifactTransformKind::Shrink | ArtifactTransformKind::CandidMetadata => {
+                        IC_WASM_TOOL
+                    }
+                    ArtifactTransformKind::Optimize => WASM_OPT_TOOL,
+                }
+                .to_string(),
                 tool_version: transform.tool_version.clone(),
                 outcome: match transform.outcome {
                     ArtifactTransformOutcome::Applied => ArtifactTransformOutcomeV1::Applied,
@@ -80,6 +106,25 @@ pub(super) fn artifact_transform_provenance(
                         ArtifactTransformOutcomeV1::NotRequested
                     }
                 },
+                metrics: transform
+                    .metrics
+                    .as_ref()
+                    .map(|metrics| WasmTransformMetricsV1 {
+                        before: WasmArtifactMetricsV1 {
+                            raw_bytes: metrics.before.raw_bytes,
+                            gzip_bytes: metrics.before.gzip_bytes,
+                            code_section_bytes: metrics.before.code_section_bytes,
+                            data_section_bytes: metrics.before.data_section_bytes,
+                            defined_functions: metrics.before.defined_functions,
+                        },
+                        after: WasmArtifactMetricsV1 {
+                            raw_bytes: metrics.after.raw_bytes,
+                            gzip_bytes: metrics.after.gzip_bytes,
+                            code_section_bytes: metrics.after.code_section_bytes,
+                            data_section_bytes: metrics.after.data_section_bytes,
+                            defined_functions: metrics.after.defined_functions,
+                        },
+                    }),
             })
         })
         .collect()

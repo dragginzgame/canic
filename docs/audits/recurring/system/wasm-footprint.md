@@ -3,15 +3,15 @@
 ## Method Contract
 
 - Audit ID: `CANIC-WASM-001`
-- Method version: `3`
+- Method version: `4`
 - Disposition: `revise`
 - Owner: canonical Canic-produced Wasm size and retained-size attribution
 - Kind/profile: `measured` and `trend`
 - Trace mode: `execution_trace` in an isolated local build environment
 - Cost/runtime: high; normally 60-180 minutes
 - Prerequisites: a clean disposable product worktree, Rust/Cargo with the Wasm
-  target, pinned ICP CLI helpers, `ic-wasm`, `twiggy`, isolated `.icp` state,
-  and an isolated `CARGO_TARGET_DIR`
+  target, pinned ICP CLI helpers, `ic-wasm`, Binaryen 108 `wasm-opt`, `twiggy`,
+  isolated `.icp` state, and isolated clean Cargo targets
 - False-positive boundary: method, roster, toolchain, profile, or execution-path
   drift makes results non-comparable; size pressure is not a correctness defect
   until attributed to an owned invariant
@@ -19,9 +19,10 @@
 
 ## Purpose
 
-Measure the Wasm artifacts Canic actually produces for installation, compare
-the release and debug profiles, and attribute retained-size pressure without
-creating a competing build path.
+Measure the Wasm artifacts Canic actually produces for installation, qualify
+the governed release optimizer across every role, prove two-clean-build output
+determinism, compare release and debug, and attribute retained-size pressure
+without creating a competing build path.
 
 This audit does not prove runtime correctness, authorize feature removal, or
 replace `CANIC-BUILD-INTEGRITY-001` reproducibility evidence.
@@ -30,23 +31,29 @@ replace `CANIC-BUILD-INTEGRITY-001` reproducibility evidence.
 
 The host `build_artifact` example is the single executable authority used by
 this audit. It enters `build_workspace_canister_artifact`, applies Canic's
-profile, shrink, metadata, Candid, provenance, and gzip rules, and copies the
-result to the ICP-visible artifact path.
+profile, shrink, metadata, Candid, required release optimization, provenance,
+code-limit, and gzip rules, and copies the result to the ICP-visible artifact
+path. Optimization is complete before any canonical gzip or artifact identity
+is derived.
 
-V3 retains v2's removal of v1's direct Cargo Wasm build and inferred
-"pre-shrink" artifact. The supported builder does not expose that intermediate
-as a public audit artifact. The runner must not recreate it with direct
+V4 retains v3's removal of the direct Cargo Wasm build and inferred
+"pre-shrink" artifact. It consumes the release transform's governed
+before/after metrics without retaining the pre-optimization module as a second
+artifact. The runner must not recreate it with direct
 `cargo build --target wasm32-unknown-unknown`, copy a target-directory Wasm,
 or bypass the build guard.
 
 The authoritative measured classes are therefore:
 
-- canonical release `.wasm` and builder-produced `.wasm.gz`;
+- two independently built canonical release `.wasm`, `.wasm.gz`, and `.did`
+  sets whose bytes must match exactly;
+- governed pre/post optimization measurements for raw, deterministic gzip,
+  code-section, data-section, and defined-function size/count;
 - canonical debug `.wasm` and builder-produced `.wasm.gz`; and
 - `ic-wasm`/`twiggy` analysis of the canonical release `.wasm`.
 
 No alias, fallback, reconstructed pre-transform path, or duplicate gzip path is
-part of v3.
+part of v4.
 
 ## Fixed Scope
 
@@ -79,12 +86,16 @@ and Wasm Store infrastructure. Every other role is an application Component.
 There is no dedicated minimal role in this roster. Repeated retained hotspots
 across at least three Components are the shared fan-in signal.
 
-V3 corrects v2's stale six-role roster and its omission of the separately built
-Coordinator and Store. V2 results are non-comparable and cannot baseline v3.
+V4 retains v3's corrected nine-role roster and separately built Coordinator
+and Store. V3 results lack optimizer and clean-build evidence, so they are
+non-comparable and cannot baseline v4.
 
-V3 always captures both profiles:
+V4 always captures three isolated build runs:
 
-- `release`, the shipping/install authority; and
+- two `release` runs, each using a fresh Cargo target and generated artifact
+  tree, whose canonical Wasm, gzip, Candid, and optimization metrics must match;
+- `release`, the shipping/install authority represented by the first matching
+  run; and
 - `debug`, a diagnostic comparison built through the same authority.
 
 Fast or role-scoped investigations are development measurements, not a run of
@@ -107,7 +118,7 @@ Optional control:
 
 - `WASM_AUDIT_DATE=YYYY-MM-DD` pins the UTC report date.
 
-There is no skip-build or cache-reuse mode. Every retained v3 run builds fresh
+There is no skip-build or cache-reuse mode. Every retained v4 run builds fresh
 artifacts through the canonical builder with network access disabled. Build
 output may create `.icp/` in the disposable product worktree and an external
 temporary Cargo target. Any tracked product mutation or unexpected untracked
@@ -122,7 +133,7 @@ authoritative operation.
 Each run records the immutable fields required by `AUDIT-HOWTO.md`, plus:
 
 - ordered roster key;
-- release/debug profile key;
+- two-clean-release/debug profile key;
 - product execution-path key;
 - exact external-tool key; and
 - root-independent executable composite.
@@ -138,8 +149,8 @@ A predecessor is compatible only when all of these match exactly:
 - execution-path key; and
 - external-tool key.
 
-The first valid v3 run records `N/A` deltas. Later runs compare causally to the
-immediate compatible predecessor and retain the original v3 baseline identity
+The first valid v4 run records `N/A` deltas. Later runs compare causally to the
+immediate compatible predecessor and retain the original v4 baseline identity
 for cumulative release-line comparison. A missing or zero denominator is
 `N/A`, never an invented percentage.
 
@@ -153,6 +164,11 @@ would be misleading.
 For every role record:
 
 - release Wasm and gzip bytes;
+- exact before/after optimizer raw, gzip, code-section, data-section, and
+  defined-function measurements;
+- exact Wasm, gzip, and Candid identity across two isolated clean release builds;
+- release-transform proof that the export inventory, derived IC Wasm features,
+  and embedded public Candid metadata are unchanged;
 - debug Wasm and gzip bytes;
 - debug-minus-release byte and percentage delta;
 - compatible-predecessor release byte and percentage delta, when available;
@@ -161,8 +177,9 @@ For every role record:
 - bounded `twiggy dominators` evidence; and
 - bounded `twiggy monos` evidence.
 
-Retain one canonical TSV, one aggregate summary, one detail file per role, one
-method identity JSON file, and one evidence manifest. Raw Wasm, Cargo output,
+Retain one canonical size TSV, one optimizer TSV, one determinism TSV, one
+aggregate summary, one detail file per role, one method identity JSON file,
+and one evidence manifest. Raw Wasm, Cargo output,
 and complete tool dumps are transient and must not enter the report archive.
 All retained snippets redact repository, home, cache, credential, principal,
 token, and private-material paths or values.
@@ -170,15 +187,16 @@ token, and private-material paths or values.
 ## Exact Result And Risk Rules
 
 Required tools, builds, artifacts, and analyses are fail-closed. A missing
-role, failed canonical build, missing release/debug artifact, failed
-`ic-wasm`/`twiggy` command, source mutation, or unverifiable evidence hash makes
+role, failed canonical build, missing release/debug artifact, missing or wrong
+Binaryen, changed export/Candid/feature contract, nondeterministic clean build,
+failed `ic-wasm`/`twiggy` command, source mutation, or unverifiable evidence hash makes
 the run `blocked`; such a run cannot support a baseline.
 
 For a complete run, add these disjoint inputs and cap at 10:
 
 | Input | Score |
 | --- | ---: |
-| no compatible v3 predecessor | 2 |
+| no compatible v4 predecessor | 2 |
 | largest/smallest Component release ratio is 1.10-1.2499 | 1 |
 | largest/smallest Component release ratio is at least 1.25 | 2 |
 | root/max-Component release ratio is 2.0-2.9999 | 1 |
@@ -209,13 +227,14 @@ Every report contains:
 1. verdict, validity, comparability, and exact score;
 2. scope, immutable product/method/tool identity, timestamps, and safety state;
 3. canonical artifact size matrix and compatible deltas;
-4. release/debug comparison;
-5. `ic-wasm` structure evidence;
-6. `twiggy` shallow, retained, dominator, and monomorphization evidence;
-7. Component spread, repeated fan-in signals, and separate infrastructure interpretation;
-8. findings or an explicit no-new-finding statement;
-9. checklist and command verification; and
-10. retained artifact links and hashed evidence manifest.
+4. governed optimizer before/after measurements and two-clean-build determinism;
+5. release/debug comparison;
+6. `ic-wasm` structure evidence;
+7. `twiggy` shallow, retained, dominator, and monomorphization evidence;
+8. Component spread, repeated fan-in signals, and separate infrastructure interpretation;
+9. findings or an explicit no-new-finding statement;
+10. checklist and command verification; and
+11. retained artifact links and hashed evidence manifest.
 
 Exact diagnostic text is asserted only where it is a documented
 operator-facing contract. Internal failure evidence preserves the typed tool or
@@ -223,8 +242,8 @@ build cause instead of treating display strings as the authority.
 
 ## Method-Change Rule
 
-V1 is preserved as invalid history and v2 as valid superseded history. If v3's
-artifact authority, fixed roster, profile pair, metric derivation, comparison
-key or score changes, increment
+V1 is preserved as invalid history and v2/v3 as valid superseded history. If
+v4's artifact authority, fixed roster, build-run set, metric derivation,
+comparison key or score changes, increment
 the method version and apply the post-freeze method-defect protocol. Compare
 only results produced by the corrected method.

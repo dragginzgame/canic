@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.18` makes every current Fleet Ensure protocol action round-trip through
+  schema-1 JSON with exact decimal cycle values, preserved plan/effect
+  identities and replay-safe issued-journal recovery, hard-cuts inline Wasm
+  bytes in favor of verified content-addressed chunks, and aligns the composed
+  IcyDB fixture on the single maintained timer provider. Release Wasm now has
+  one fail-closed, checksum-bound Binaryen 108 optimization path before gzip,
+  artifact identity, release-set and Wasm Store authority, followed by a
+  measured cleanup of redundant topology and delegated-auth sort
+  instantiations. A supported feature-selected standalone-local build keeps
+  Candid in a sidecar instead of the deployed runtime.
 - `0.109.17` makes every version lane fail closed before mutation when complete
   validation, fast eligibility, clean-tree or immutable-source proof fails,
   corrects the warning-denied governed timing output, and reports the isolated

@@ -4,7 +4,10 @@
 //! Does not own: batch construction, issuer install planning, or timer orchestration.
 //! Boundary: private helper for one persisted batch's management-canister signing step.
 
-use super::{CHAIN_KEY_SIGNING_RETRY_BACKOFF_NS, SignNextChainKeyRootDelegationBatchResult};
+use super::{
+    CHAIN_KEY_SIGNING_RETRY_BACKOFF_NS, SignNextChainKeyRootDelegationBatchResult,
+    oldest_chain_key_batch_order,
+};
 use crate::{
     InternalError,
     ops::{
@@ -186,11 +189,7 @@ fn next_chain_key_batch_for_signing(now_ns: u64) -> Option<ChainKeyRootDelegatio
             ChainKeyRootDelegationBatchStatus::Installed => false,
         })
         .collect::<Vec<_>>();
-    batches.sort_by(|left, right| {
-        left.prepared_at_ns
-            .cmp(&right.prepared_at_ns)
-            .then_with(|| left.batch_id.cmp(&right.batch_id))
-    });
+    batches.sort_unstable_by(oldest_chain_key_batch_order);
     batches.into_iter().next()
 }
 

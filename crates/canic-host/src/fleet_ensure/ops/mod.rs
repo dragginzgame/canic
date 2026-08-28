@@ -7,6 +7,7 @@
 mod canic_init;
 mod current_inventory;
 pub(super) mod current_protocol;
+mod plan_content;
 mod platform;
 mod protocol;
 
@@ -154,6 +155,7 @@ pub trait EnsurePlatform {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnsurePaths {
+    pub content: PathBuf,
     pub journal: PathBuf,
     pub lock: PathBuf,
     pub plan: PathBuf,
@@ -169,6 +171,11 @@ impl EnsurePaths {
             .join(environment)
             .join(fleet);
         Self {
+            content: root
+                .join(".canic")
+                .join("fleet-ensure")
+                .join("objects")
+                .join("sha256"),
             journal: directory.join("journal.json"),
             lock: directory.join("operation.lock"),
             plan: directory.join("plan.json"),
@@ -211,6 +218,15 @@ pub enum EnsureStateError {
         source: io::Error,
     },
 
+    #[error("Fleet ensure Store chunk authority is invalid: {reason}")]
+    StoreChunkAuthority { reason: String },
+
+    #[error("Fleet ensure Store chunk content is unavailable at {}", path.display())]
+    StoreChunkUnavailable { path: PathBuf },
+
+    #[error("Fleet ensure Store chunk content differs from its retained hash at {}", path.display())]
+    StoreChunkMismatch { path: PathBuf },
+
     #[error("failed to lock Fleet ensure state {}", path.display())]
     Lock { path: PathBuf },
 
@@ -246,8 +262,21 @@ pub fn read_journal(
 }
 
 pub fn read_plan(paths: &EnsurePaths) -> Result<Option<FleetEnsurePlan>, EnsureStateError> {
-    let value: Option<FleetEnsurePlan> = read_current(&paths.plan)?;
-    validate_schema(value, &paths.plan, |record| record.schema_version)
+    let Some(bytes) = read_document_bytes(&paths.plan)? else {
+        return Ok(None);
+    };
+    let mut projection: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|source| EnsureStateError::Decode {
+            path: paths.plan.clone(),
+            source,
+        })?;
+    plan_content::hydrate(paths, &mut projection)?;
+    let value: FleetEnsurePlan =
+        serde_json::from_value(projection).map_err(|source| EnsureStateError::Decode {
+            path: paths.plan.clone(),
+            source,
+        })?;
+    validate_schema(Some(value), &paths.plan, |record| record.schema_version)
 }
 
 pub fn read_state(
@@ -344,7 +373,22 @@ pub fn write_journal(
 }
 
 pub fn write_plan(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), EnsureStateError> {
-    write_current(&paths.plan, plan)
+    plan_content::retain(paths, plan)?;
+    let mut projection =
+        super::json::to_value(plan).map_err(|source| EnsureStateError::Decode {
+            path: paths.plan.clone(),
+            source,
+        })?;
+    plan_content::remove_inline_bytes(&mut projection)?;
+    let bytes =
+        serde_json::to_vec_pretty(&projection).map_err(|source| EnsureStateError::Decode {
+            path: paths.plan.clone(),
+            source,
+        })?;
+    write_bytes(&paths.plan, &bytes).map_err(|source| EnsureStateError::Io {
+        path: paths.plan.clone(),
+        source,
+    })
 }
 
 pub fn write_state(
@@ -361,33 +405,15 @@ pub fn write_state(
 ///
 /// Panics only if the maintained action enum stops being JSON serializable.
 pub fn action_sha256(action: &EnsureAction) -> String {
-    sha256_hex(&serde_json::to_vec(action).expect("ensure action is JSON serializable"))
+    sha256_hex(&super::json::to_vec(action).expect("ensure action is JSON serializable"))
 }
 
 fn read_current<T>(path: &Path) -> Result<Option<T>, EnsureStateError>
 where
     T: DeserializeOwned,
 {
-    let bytes = match read_optional_regular_bytes(path) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) => return Ok(None),
-        Err(RegularFileReadError::NotRegular) => {
-            return Err(EnsureStateError::Unsafe {
-                path: path.to_path_buf(),
-            });
-        }
-        Err(RegularFileReadError::Io(source)) => {
-            return Err(EnsureStateError::Io {
-                path: path.to_path_buf(),
-                source,
-            });
-        }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(EnsureStateError::Unsafe {
-                path: path.to_path_buf(),
-            });
-        }
+    let Some(bytes) = read_document_bytes(path)? else {
+        return Ok(None);
     };
     serde_json::from_slice(&bytes)
         .map(Some)
@@ -395,6 +421,23 @@ where
             path: path.to_path_buf(),
             source,
         })
+}
+
+fn read_document_bytes(path: &Path) -> Result<Option<Vec<u8>>, EnsureStateError> {
+    match read_optional_regular_bytes(path) {
+        Ok(bytes) => Ok(bytes),
+        Err(RegularFileReadError::NotRegular) => Err(EnsureStateError::Unsafe {
+            path: path.to_path_buf(),
+        }),
+        Err(RegularFileReadError::Io(source)) => Err(EnsureStateError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+        #[cfg(not(unix))]
+        Err(RegularFileReadError::UnsupportedPlatform) => Err(EnsureStateError::Unsafe {
+            path: path.to_path_buf(),
+        }),
+    }
 }
 
 fn write_current(path: &Path, value: &impl Serialize) -> Result<(), EnsureStateError> {

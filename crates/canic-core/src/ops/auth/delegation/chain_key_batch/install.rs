@@ -5,7 +5,7 @@
 //! Boundary: deterministic install planning and result recording for auth workflows.
 
 use super::super::root_issuer_renewal::renewal_template_fingerprint;
-use super::ChainKeyRootDelegationBatchInstallPlan;
+use super::{ChainKeyRootDelegationBatchInstallPlan, oldest_chain_key_batch_order};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -248,11 +248,7 @@ fn next_chain_key_batch_for_install(now_ns: u64) -> Option<ChainKeyRootDelegatio
                 .is_none_or(|retry_after_ns| now_ns >= retry_after_ns)
         })
         .collect::<Vec<_>>();
-    batches.sort_by(|left, right| {
-        left.prepared_at_ns
-            .cmp(&right.prepared_at_ns)
-            .then_with(|| left.batch_id.cmp(&right.batch_id))
-    });
+    batches.sort_unstable_by(oldest_chain_key_batch_order);
     batches.into_iter().next()
 }
 

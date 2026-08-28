@@ -199,6 +199,7 @@ fn sample_build_provenance_payload() -> BuildProvenanceV1 {
             tool: "ic-wasm".to_string(),
             tool_version: Some("ic-wasm 0.test".to_string()),
             outcome: ArtifactTransformOutcomeV1::Applied,
+            metrics: None,
         }],
         warnings: Vec::new(),
     }

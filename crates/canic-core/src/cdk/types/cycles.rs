@@ -8,7 +8,10 @@ use crate::cdk::{
     candid::{CandidType, Nat},
     structures::{Storable, storable::Bound},
 };
-use serde::{Deserialize, Serialize, de::Deserializer};
+use serde::{
+    Deserialize, Serialize,
+    de::{Deserializer, Visitor},
+};
 use std::{
     borrow::Cow,
     fmt::{self, Display},
@@ -35,10 +38,59 @@ pub const QC: u128 = 1_000_000_000_000_000;
 /// helpers for cycle balances.
 ///
 
-#[derive(
-    CandidType, Clone, Default, Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize,
-)]
+#[derive(CandidType, Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Cycles(u128);
+
+impl<'de> Deserialize<'de> for Cycles {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_any(HumanReadableCyclesVisitor)
+        } else {
+            u128::deserialize(deserializer).map(Self::new)
+        }
+    }
+}
+
+struct HumanReadableCyclesVisitor;
+
+impl Visitor<'_> for HumanReadableCyclesVisitor {
+    type Value = Cycles;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a cycle amount encoded as bounded decimal text")
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        u128::try_from(value).map(Cycles::new).map_err(E::custom)
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        value.parse::<u128>().map(Cycles::new).map_err(E::custom)
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Cycles::new(u128::from(value)))
+    }
+
+    fn visit_u128<E>(self, value: u128) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Cycles::new(value))
+    }
+}
 
 impl Cycles {
     #[must_use]
@@ -261,6 +313,16 @@ impl Storable for Cycles {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn candid_cycle_amount_remains_an_exact_u128() {
+        let expected = Cycles::new(u128::MAX);
+        let encoded = crate::cdk::candid::encode_one(&expected).expect("encode Candid Cycles");
+        let decoded =
+            crate::cdk::candid::decode_one::<Cycles>(&encoded).expect("decode exact Candid Cycles");
+
+        assert_eq!(decoded, expected);
+    }
 
     #[test]
     fn parses_exact_cycle_shorthand_without_floating_point() {

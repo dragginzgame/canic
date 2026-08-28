@@ -9,8 +9,8 @@ use crate::cli::clap::render_usage;
 use crate::{
     cli::{
         clap::{
-            parse_matches, required_string, required_typed, string_option, string_option_or_else,
-            value_arg,
+            flag_arg, parse_matches, required_string, required_typed, string_option,
+            string_option_or_else, value_arg,
         },
         defaults::local_environment,
         globals::internal_environment_arg,
@@ -21,8 +21,9 @@ use crate::{
 use canic_core::ids::{BuildNetwork, CanisterRole, ReleaseBuildId};
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
 use canic_host::canister_build::{
-    CanisterBuildProfile, ConfiguredCanisterArtifactBuildOutput, WorkspaceBuildContext,
-    build_workspace_canister_artifact, build_workspace_configured_canister_artifacts,
+    CanisterArtifactBuildOptions, CanisterBuildProfile, ConfiguredCanisterArtifactBuildOutput,
+    WorkspaceBuildContext, build_workspace_canister_artifact,
+    build_workspace_canister_artifact_with_options, build_workspace_configured_canister_artifacts,
     copy_icp_wasm_output, print_workspace_build_context_once,
 };
 use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
@@ -45,8 +46,9 @@ use canic_host::{
     table::{ColumnAlign, render_bordered_table},
     terminal::{TerminalActivity, TerminalStyle},
 };
-use clap::Command as ClapCommand;
+use clap::{ArgAction, Command as ClapCommand};
 use std::{
+    collections::BTreeSet,
     env,
     ffi::OsString,
     path::{Path, PathBuf},
@@ -57,7 +59,7 @@ use thiserror::Error as ThisError;
 const BUILD_HELP_AFTER: &str = "\
 Examples:
   canic build demo
-  canic build demo app --profile release --provenance artifacts/app-provenance.json
+  canic build demo app --standalone-local --features standalone-local
 
 Builds the configured Fleet Subnet Root, every attached Component role, and
 Canic's built-in Coordinator and Wasm Store by default. Pass a role for one
@@ -139,7 +141,10 @@ struct BuildOptions {
     workspace: Option<String>,
     icp_root: Option<String>,
     config: Option<String>,
+    features: BTreeSet<String>,
+    no_default_features: bool,
     provenance: Option<PathBuf>,
+    standalone_local: bool,
 }
 
 impl BuildOptions {
@@ -157,8 +162,24 @@ impl BuildOptions {
             workspace: string_option(&matches, "workspace"),
             icp_root: string_option(&matches, "icp-root"),
             config: string_option(&matches, "config"),
+            features: matches
+                .get_many::<String>("features")
+                .into_iter()
+                .flatten()
+                .cloned()
+                .collect(),
+            no_default_features: matches.get_flag("no-default-features"),
             provenance: string_option(&matches, "provenance").map(PathBuf::from),
+            standalone_local: matches.get_flag("standalone-local"),
         })
+    }
+
+    fn artifact_build_options(&self) -> CanisterArtifactBuildOptions {
+        CanisterArtifactBuildOptions {
+            cargo_features: self.features.clone(),
+            default_features: !self.no_default_features,
+            sidecar_only_candid: self.standalone_local,
+        }
     }
 }
 
@@ -182,8 +203,21 @@ where
     let mut context = resolve_build_context(&options, config_path, &roles[0])?;
 
     if let Some(role) = &options.role {
+        if options.standalone_local && context.build_network != BuildNetwork::Local {
+            return Err(BuildCommandError::Usage(
+                "--standalone-local requires a local ICP environment".to_string(),
+            ));
+        }
+        if options.standalone_local && role == CanisterRole::ROOT.as_str() {
+            return Err(BuildCommandError::Usage(
+                "--standalone-local requires a non-Root application role".to_string(),
+            ));
+        }
         print_workspace_build_context_once(&context)?;
-        let output = build_workspace_canister_artifact(&context)?;
+        let output = build_workspace_canister_artifact_with_options(
+            &context,
+            &options.artifact_build_options(),
+        )?;
         copy_icp_wasm_output(role, &output)?;
         write_build_provenance_if_requested(&options, &context, output.clone())?;
         TerminalStyle::detected().print_section(
@@ -240,6 +274,22 @@ fn build_command() -> ClapCommand {
                 .help("Canic config path; inferred from the workspace when omitted"),
         )
         .arg(
+            value_arg("features")
+                .long("features")
+                .value_name("feature,...")
+                .num_args(1)
+                .action(ArgAction::Append)
+                .value_delimiter(',')
+                .requires("role")
+                .help("Cargo features used identically for declaration and runtime builds"),
+        )
+        .arg(
+            flag_arg("no-default-features")
+                .long("no-default-features")
+                .requires("role")
+                .help("Disable Cargo default features for both build passes"),
+        )
+        .arg(
             value_arg("profile")
                 .long("profile")
                 .value_name("debug|fast|release")
@@ -255,6 +305,12 @@ fn build_command() -> ClapCommand {
                 .num_args(1)
                 .requires("role")
                 .help("Write an EvidenceEnvelopeV1 build provenance artifact to this file"),
+        )
+        .arg(
+            flag_arg("standalone-local")
+                .long("standalone-local")
+                .requires("role")
+                .help("Emit a local runtime with Candid retained only in the adjacent .did"),
         )
         .arg(internal_environment_arg())
         .after_help(BUILD_HELP_AFTER)
@@ -743,9 +799,26 @@ fn build_command_provenance(options: &BuildOptions, workspace_root: &Path) -> Co
         argv_normalized.push("--environment".to_string());
         argv_normalized.push(options.environment.clone());
     }
+    if !options.features.is_empty() {
+        argv_normalized.push("--features".to_string());
+        argv_normalized.push(
+            options
+                .features
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+    }
+    if options.no_default_features {
+        argv_normalized.push("--no-default-features".to_string());
+    }
     if let Some(provenance) = &options.provenance {
         argv_normalized.push("--provenance".to_string());
         argv_normalized.push(command_path_for_root(provenance, workspace_root));
+    }
+    if options.standalone_local {
+        argv_normalized.push("--standalone-local".to_string());
     }
 
     CommandProvenanceV1 {
@@ -860,7 +933,41 @@ mod tests {
         assert_eq!(options.workspace, None);
         assert_eq!(options.icp_root, None);
         assert_eq!(options.config, None);
+        assert!(options.features.is_empty());
+        assert!(!options.no_default_features);
         assert_eq!(options.provenance, None);
+        assert!(!options.standalone_local);
+    }
+
+    #[test]
+    fn build_accepts_feature_selected_sidecar_only_runtime() {
+        let options = BuildOptions::parse([
+            OsString::from("demo"),
+            OsString::from("app"),
+            OsString::from("--standalone-local"),
+            OsString::from("--features"),
+            OsString::from("standalone-local,qualification"),
+            OsString::from("--no-default-features"),
+        ])
+        .expect("parse standalone-local build options");
+
+        assert_eq!(
+            options.features,
+            ["qualification", "standalone-local"]
+                .map(str::to_string)
+                .into_iter()
+                .collect()
+        );
+        assert!(options.no_default_features);
+        assert!(options.standalone_local);
+        assert_eq!(
+            options.artifact_build_options(),
+            CanisterArtifactBuildOptions {
+                cargo_features: options.features,
+                default_features: false,
+                sidecar_only_candid: true,
+            }
+        );
     }
 
     #[test]
@@ -992,6 +1099,20 @@ mod tests {
     }
 
     #[test]
+    fn whole_app_build_rejects_focused_feature_flags() {
+        for flag_args in [
+            vec!["--features", "standalone-local"],
+            vec!["--no-default-features"],
+            vec!["--standalone-local"],
+        ] {
+            let args = std::iter::once(OsString::from("demo"))
+                .chain(flag_args.into_iter().map(OsString::from))
+                .collect::<Vec<_>>();
+            std::assert_matches!(BuildOptions::parse(args), Err(BuildCommandError::Clap(_)));
+        }
+    }
+
+    #[test]
     fn build_rejects_invalid_profile() {
         let error = BuildOptions::parse([
             OsString::from("--profile"),
@@ -1032,9 +1153,12 @@ mod tests {
 
         assert!(text.contains("Usage: canic build [OPTIONS] <app> [role]"));
         assert!(text.contains("canic build demo"));
-        assert!(text.contains("canic build demo app --profile release"));
+        assert!(text.contains("canic build demo app --standalone-local"));
         assert!(text.contains("[default: fast]"));
+        assert!(text.contains("--features <feature,...>"));
+        assert!(text.contains("--no-default-features"));
         assert!(text.contains("--provenance <file>"));
+        assert!(text.contains("--standalone-local"));
         assert!(text.contains("Builds the configured Fleet Subnet Root"));
         assert!(text.contains("every attached Component role"));
         assert_eq!(text.matches("  canic build ").count(), 2);
@@ -1183,6 +1307,12 @@ mod tests {
         fs::create_dir_all(&outside).expect("create outside");
         let mut options = build_options(&root, "demo", "app");
         options.provenance = Some(outside.join("build-provenance.json"));
+        options.features = ["qualification", "standalone-local"]
+            .map(str::to_string)
+            .into_iter()
+            .collect();
+        options.no_default_features = true;
+        options.standalone_local = true;
 
         let provenance = build_command_provenance(&options, &root);
 
@@ -1198,6 +1328,19 @@ mod tests {
                 .argv_normalized
                 .windows(2)
                 .any(|args| args[0] == "--profile" && args[1] == "fast")
+        );
+        assert!(provenance.argv_normalized.windows(2).any(|args| {
+            args[0] == "--features" && args[1] == "qualification,standalone-local"
+        }));
+        assert!(
+            provenance
+                .argv_normalized
+                .contains(&"--no-default-features".to_string())
+        );
+        assert!(
+            provenance
+                .argv_normalized
+                .contains(&"--standalone-local".to_string())
         );
     }
 
@@ -1274,7 +1417,10 @@ mod tests {
             workspace: Some(root.display().to_string()),
             icp_root: None,
             config: None,
+            features: BTreeSet::new(),
+            no_default_features: false,
             provenance: None,
+            standalone_local: false,
         }
     }
 

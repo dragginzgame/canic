@@ -25,7 +25,7 @@ case "$MODE" in
     fast | full | ordinary | pocketic) ;;
     targeted-pocketic)
         if [[ -z "$TARGETED_POCKETIC_TEST" ]]; then
-            echo "targeted-pocketic requires one exact governed lib test" >&2
+            echo "targeted-pocketic requires one exact governed test" >&2
             exit 2
         fi
         ;;
@@ -568,7 +568,24 @@ require_ordinary_success_before_pocketic
 start_owned_pocketic_server
 
 if [[ "$MODE" == "targeted-pocketic" ]]; then
-    if [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_serial_pocketic_suite" ]]; then
+    targeted_integration_count=0
+    while IFS=$'\t' read -r row_package row_target _ row_execution _; do
+        if [[ "$row_package" == "canic-tests" &&
+            "$row_target" == "$TARGETED_POCKETIC_TEST" &&
+            "$row_execution" == "pocketic-serial" ]]; then
+            targeted_integration_count=$((targeted_integration_count + 1))
+        fi
+    done < <(tail -n +2 "$INVENTORY")
+
+    if [[ "$targeted_integration_count" -gt 1 ]]; then
+        echo "targeted PocketIC integration target is classified more than once: $TARGETED_POCKETIC_TEST" >&2
+        exit 2
+    elif [[ "$targeted_integration_count" -eq 1 ]]; then
+        run_serial_pocketic_test \
+            "targeted canic-tests PocketIC integration proof" \
+            -p canic-tests \
+            --test "$TARGETED_POCKETIC_TEST"
+    elif [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_serial_pocketic_suite" ]]; then
         run_serial_pocketic_test \
             "targeted governed canic-testing-internal PocketIC suite" \
             -p canic-testing-internal \
@@ -577,7 +594,7 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
             -- \
             --exact \
             --ignored
-    else
+    elif [[ "$TARGETED_POCKETIC_TEST" == *::* ]]; then
         run_serial_pocketic_test \
             "targeted canic-testing-internal PocketIC proof" \
             -p canic-testing-internal \
@@ -585,6 +602,9 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
             "$TARGETED_POCKETIC_TEST" \
             -- \
             --exact
+    else
+        echo "targeted PocketIC test is not a classified integration target or exact lib test: $TARGETED_POCKETIC_TEST" >&2
+        exit 2
     fi
     finish_test_run
     exit 0

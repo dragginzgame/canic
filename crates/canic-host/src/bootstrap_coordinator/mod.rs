@@ -8,10 +8,7 @@
 mod tests;
 
 use crate::{
-    artifact_io::{
-        embed_candid_metadata, enforce_wasm_code_section_limit, maybe_shrink_wasm_artifact,
-        write_gzip_artifact, write_wasm_artifact,
-    },
+    artifact_io::{finalize_wasm_artifact, write_wasm_artifact},
     bootstrap_candid::materialize_infrastructure_candid,
     bootstrap_store::{
         append_profile_config_args, generated_wasm_store_wrapper_patch_table,
@@ -19,8 +16,7 @@ use crate::{
         resolved_canic_package, resolved_wrapper_dependencies,
     },
     canister_build::{
-        ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
-        CanisterBuildProfile, WorkspaceBuildContext,
+        CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext,
         cache::{canister_build_target_root, configure_canister_cargo_command},
         extract_candid_bytes,
     },
@@ -105,7 +101,6 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     let did_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.did"));
 
     write_wasm_artifact(&built_wasm_path, &wasm_path)?;
-    let mut transforms = vec![maybe_shrink_wasm_artifact(&wasm_path)?];
     if should_embed_candid_metadata(context.build_network) {
         ensure_fleet_coordinator_did(context, &source, &did_path)?;
     } else {
@@ -116,15 +111,13 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
             "Fleet Coordinator materialized Candid differs from its compiled profile".into(),
         );
     }
-    if should_embed_candid_metadata(context.build_network) {
-        transforms.push(embed_candid_metadata(&wasm_path, &did_path)?);
-    } else {
-        transforms.push(ArtifactTransformOutput::not_requested(
-            ArtifactTransformKind::CandidMetadata,
-        ));
-    }
-    enforce_wasm_code_section_limit(&wasm_path)?;
-    write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
+    let transforms = finalize_wasm_artifact(
+        context.profile,
+        should_embed_candid_metadata(context.build_network),
+        &wasm_path,
+        &did_path,
+        &wasm_gz_path,
+    )?;
 
     Ok(CanisterArtifactBuildOutput {
         package_name: source.package_name,

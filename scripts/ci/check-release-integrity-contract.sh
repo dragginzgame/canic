@@ -50,6 +50,7 @@ installers=(
     "$ROOT/scripts/ci/install-pocketic.sh"
     "$ROOT/scripts/ci/install-icp-cli.sh"
     "$ROOT/scripts/ci/install-ic-wasm.sh"
+    "$ROOT/scripts/ci/install-binaryen.sh"
 )
 
 fail() {
@@ -116,10 +117,13 @@ if rg '^[[:space:]]+runs-on:' "$CI" | rg -v '^[[:space:]]+runs-on: ubuntu-24\.04
 fi
 rg -F 'bash scripts/ci/install-ic-wasm.sh' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound ic-wasm installer"
+rg -F 'bash scripts/ci/install-binaryen.sh' "$CI" >/dev/null ||
+    fail "CI does not use the checksum-bound Binaryen installer"
 for single_use_tool in \
     'cargo install candid-extractor' \
     'bash scripts/ci/install-icp-cli.sh' \
     'bash scripts/ci/install-ic-wasm.sh' \
+    'bash scripts/ci/install-binaryen.sh' \
     'rustup target add'; do
     [ "$(rg -c -F "$single_use_tool" "$CI")" -eq 1 ] ||
         fail "CI must install $single_use_tool exactly once in its owning lane"
@@ -690,8 +694,12 @@ mapfile -t version_vars < <(
 declare -A validated_version_vars=()
 for variable in "${version_vars[@]}"; do
     value="${!variable:-}"
-    [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] ||
-        fail "$variable is not an exact semantic version"
+    if [ "$variable" = "CANIC_BINARYEN_VERSION" ]; then
+        [[ "$value" =~ ^[1-9][0-9]*$ ]] || fail "$variable is not an exact Binaryen release"
+    else
+        [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] ||
+            fail "$variable is not an exact semantic version"
+    fi
     validated_version_vars["$variable"]=1
 done
 

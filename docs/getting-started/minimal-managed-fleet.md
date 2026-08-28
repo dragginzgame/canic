@@ -284,5 +284,9 @@ from Canic-owned methods.
 
 Canic uses a dedicated declaration build to extract each `.did`, then omits the
 debug-only `get_candid_pointer` export from the final artifact. Local final
-artifacts embed public `candid:service` metadata for introspection; production
-`ICP_ENVIRONMENT=ic` artifacts skip that metadata as well.
+managed artifacts embed public `candid:service` metadata for introspection;
+production `ICP_ENVIRONMENT=ic` artifacts skip that metadata. A focused
+`canic build <app> <role> --standalone-local --features <features>` build keeps
+Candid only in the adjacent `.did`, proves the runtime method exports match it,
+and omits both the pointer export and embedded metadata from the deployable
+Wasm.

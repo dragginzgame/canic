@@ -11,7 +11,8 @@ CI should validate:
 - package metadata App/role equality with the envelope target;
 - Rust/Cargo toolchain and build profile;
 - raw Wasm and deterministic gzip SHA-256 plus sizes;
-- optional transform tool/version/outcome consistency;
+- transform tool/version/outcome consistency, including required Binaryen 108
+  optimization and its before/after structural metrics for release profiles;
 - stable envelope and payload schema identities;
 - a successful exit class without conflicting evidence.
 

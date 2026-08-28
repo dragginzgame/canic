@@ -8,7 +8,8 @@ use std::{
 use crate::{
     canister_build::{
         ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
-        CanisterArtifactBuildOutput, CanisterBuildProfile,
+        CanisterArtifactBuildOutput, CanisterBuildProfile, WasmArtifactMetrics,
+        WasmTransformMetrics,
     },
     evidence_envelope::{CommandProvenanceV1, EvidenceTargetKindV1, PayloadSchemaRefV1},
     test_support::temp_dir,
@@ -92,6 +93,43 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
 }
 
 #[test]
+fn release_optimization_provenance_records_binaryen_metrics() {
+    let root = temp_dir("canic-build-provenance-optimization");
+    write_sample_workspace(&root, "demo", "app");
+    let mut output = write_sample_artifacts(&root, "app");
+    output.transforms[2] = ArtifactTransformOutput {
+        transform: ArtifactTransformKind::Optimize,
+        tool_version: Some("wasm-opt version 108 (version_108)".to_string()),
+        outcome: ArtifactTransformOutcome::Applied,
+        metrics: Some(WasmTransformMetrics {
+            before: WasmArtifactMetrics {
+                raw_bytes: 100,
+                gzip_bytes: 80,
+                code_section_bytes: 70,
+                data_section_bytes: 20,
+                defined_functions: 10,
+            },
+            after: WasmArtifactMetrics {
+                raw_bytes: 90,
+                gzip_bytes: 75,
+                code_section_bytes: 60,
+                data_section_bytes: 20,
+                defined_functions: 9,
+            },
+        }),
+    };
+
+    let transforms = artifact_transform_provenance(&sample_request(&root, output))
+        .expect("transform provenance");
+
+    fs::remove_dir_all(&root).expect("remove root");
+    assert_eq!(transforms[2].tool, "wasm-opt");
+    let metrics = transforms[2].metrics.as_ref().expect("optimizer metrics");
+    assert_eq!(metrics.before.code_section_bytes, 70);
+    assert_eq!(metrics.after.code_section_bytes, 60);
+}
+
+#[test]
 fn build_provenance_envelope_wraps_stable_payload() {
     let root = temp_dir("canic-build-provenance-envelope");
     write_sample_workspace(&root, "demo", "app");
@@ -133,13 +171,10 @@ fn build_provenance_envelope_wraps_stable_payload() {
         "04".repeat(32)
     );
     assert_eq!(payload.artifacts.len(), 2);
-    assert_eq!(payload.transforms.len(), 2);
-    assert!(
-        payload
-            .transforms
-            .iter()
-            .all(|transform| transform.tool == "ic-wasm")
-    );
+    assert_eq!(payload.transforms.len(), 3);
+    assert_eq!(payload.transforms[0].tool, "ic-wasm");
+    assert_eq!(payload.transforms[1].tool, "ic-wasm");
+    assert_eq!(payload.transforms[2].tool, "wasm-opt");
     assert_eq!(payload.transforms[0].role, "app");
     assert_eq!(
         payload.transforms[0].transform,
@@ -158,6 +193,15 @@ fn build_provenance_envelope_wraps_stable_payload() {
         ArtifactTransformOutcomeV1::NotRequested
     );
     assert_eq!(payload.transforms[1].tool_version, None);
+    assert_eq!(
+        payload.transforms[2].transform,
+        ArtifactTransformKindV1::Optimize
+    );
+    assert_eq!(
+        payload.transforms[2].outcome,
+        ArtifactTransformOutcomeV1::NotRequested
+    );
+    assert_eq!(payload.transforms[2].tool_version, None);
 }
 
 #[test]
@@ -295,8 +339,10 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
                 transform: ArtifactTransformKind::Shrink,
                 tool_version: Some("ic-wasm 0.test".to_string()),
                 outcome: ArtifactTransformOutcome::Applied,
+                metrics: None,
             },
             ArtifactTransformOutput::not_requested(ArtifactTransformKind::CandidMetadata),
+            ArtifactTransformOutput::not_requested(ArtifactTransformKind::Optimize),
         ],
     }
 }

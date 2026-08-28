@@ -11,6 +11,7 @@ ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
 SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
 GITLEAKS_INSTALL_DIR="${GITLEAKS_INSTALL_DIR:-$HOME/.local/bin}"
 IC_WASM_INSTALL_DIR="${IC_WASM_INSTALL_DIR:-$HOME/.local/bin}"
+BINARYEN_INSTALL_DIR="${BINARYEN_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_DEV_TOOLS=(
     "cargo-watch@$CANIC_CARGO_WATCH_VERSION"
     "cargo-edit@$CANIC_CARGO_EDIT_VERSION"
@@ -216,6 +217,32 @@ install_or_update_ic_wasm() {
     fi
 }
 
+install_or_update_binaryen() {
+    local bin
+    local path_had_install_dir=0
+
+    if [[ ":$PATH:" == *":$BINARYEN_INSTALL_DIR:"* ]]; then
+        path_had_install_dir=1
+    fi
+
+    yellow "Binaryen:"
+    require_command curl
+    require_command tar
+    mkdir -p "$BINARYEN_INSTALL_DIR"
+    PATH="$(resolved_cargo_bin_dir):$BINARYEN_INSTALL_DIR:$PATH"
+    export PATH
+    hash -r 2>/dev/null || true
+    cyan_command "BINARYEN_INSTALL_DIR=$BINARYEN_INSTALL_DIR bash scripts/ci/install-binaryen.sh"
+    bin="$(
+        BINARYEN_INSTALL_DIR="$BINARYEN_INSTALL_DIR" \
+            bash "$ROOT_DIR/scripts/ci/install-binaryen.sh"
+    )"
+    green "Binaryen ready: $("$bin" --version 2>&1)"
+    if [ "$path_had_install_dir" -eq 0 ]; then
+        yellow "wasm-opt installed under $BINARYEN_INSTALL_DIR; add it to PATH to run it directly."
+    fi
+}
+
 require_python() {
     yellow "Python 3:"
     require_command python3
@@ -244,14 +271,15 @@ main() {
     fi
 
     if [ "${1:-}" = "--update-prereqs" ]; then
-        blue "Checking Python, shell lint, workflow lint, secret scan, and ICP CLI prerequisites"
+        blue "Checking Python, shell lint, workflow lint, secret scan, ICP CLI, and Wasm prerequisites"
         require_python
         install_or_update_shellcheck
         install_or_update_actionlint
         install_or_update_gitleaks
         install_or_update_icp_cli
         install_or_update_ic_wasm
-        green "Python, shell lint, workflow lint, secret scan, and ICP CLI prerequisites ready."
+        install_or_update_binaryen
+        green "Python, shell lint, workflow lint, secret scan, ICP CLI, and Wasm prerequisites ready."
         return 0
     fi
 
@@ -285,6 +313,7 @@ main() {
     install_or_update_gitleaks
     install_or_update_icp_cli
     install_or_update_ic_wasm
+    install_or_update_binaryen
 
     yellow "Canic CLI:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --quiet --locked canic-cli --version $CANIC_CLI_VERSION"

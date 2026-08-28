@@ -7,6 +7,7 @@
 pub mod dto;
 mod generate;
 mod inventory;
+mod json;
 pub mod model;
 pub mod ops;
 pub mod policy;
