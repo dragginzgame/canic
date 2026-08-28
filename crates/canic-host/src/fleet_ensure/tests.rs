@@ -1,10 +1,11 @@
 use crate::{
     fleet_ensure::{
         model::{
-            CanisterRuntimeStatus, CurrentFleetProtocolAction, DesiredCanister,
+            CanisterRuntimeStatus, CurrentFleetProtocolAction, CycleConservation, DesiredCanister,
             DesiredCanisterInit, DesiredCanisterKind, DesiredFleet, DesiredFleetProtocol,
             DesiredPresence, DesiredProtocolStep, DrainAuthority, EffectRecord, EnsureAction,
-            FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureStateRecord, FleetObservation, LiveCanister,
+            FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlan, FleetEnsureStateRecord, FleetObservation,
+            LiveCanister,
         },
         ops::{EffectObservation, EffectOutcome, EnsurePlatform, TerminalFleetInventory},
         workflow,
@@ -13,23 +14,34 @@ use crate::{
     test_support::temp_dir,
 };
 use candid::Principal;
+use canic_control_plane::{
+    dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput},
+    ids::{TemplateId, TemplateVersion},
+};
 use canic_core::{
-    cdk::utils::hash::sha256_hex,
+    cdk::{types::Cycles, utils::hash::sha256_hex},
     dto::{
         component_provisioning::{
             FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
             FleetComponentProvisioningPrepareRequest,
         },
-        fleet_registry::{FleetRegistry, FleetRegistryVersion},
+        fleet_registry::{
+            FleetRegistry, FleetRegistryActivationRequest, FleetRegistryVersion,
+            FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootStatus,
+        },
+        fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
     },
     ids::{
-        AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest, FleetAdmissionPolicy,
-        FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
+        AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest, ComponentTopologyDigest,
+        CyclesFundingBudget, FleetAdmissionPolicy, FleetBinding, FleetCoordinatorBinding, FleetId,
+        FleetKey, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits,
+        FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority, ReleaseBuildId,
+        ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -1471,6 +1483,436 @@ fn typed_fleet_protocol_is_issued_once_and_requires_terminal_status() {
     .expect("terminal typed status resumes without a second command");
     assert!(terminal.terminal);
     assert_eq!(platform.mutations.get(&action_hash), Some(&1));
+
+    let mutation_count = platform.mutations.values().sum::<u32>();
+    let successor = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut platform,
+    )
+    .expect("plan immediate terminal replay");
+    let replay = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        &successor.plan.plan_sha256,
+        &mut platform,
+    )
+    .expect("apply immediate terminal replay");
+    assert!(replay.terminal);
+    assert_eq!(platform.mutations.get(&action_hash), Some(&1));
+    assert_eq!(platform.mutations.values().sum::<u32>(), mutation_count);
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one focused regression keeps the exact Registry cycle projection and identity proof together"
+)]
+fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
+    let root = temp_dir("canic-fleet-ensure-json-round-trip");
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&root, "staging", "json-round-trip");
+    let base_registry = empty_active_registry();
+    let base_version = FleetRegistryVersion {
+        authority: base_registry.authority.clone(),
+        revision: base_registry.revision,
+        content_hash: [12; 32],
+    };
+    let root_entry = FleetSubnetRootEntry {
+        placement_subnet: SubnetId::from_principal(
+            SUBNET.parse().expect("fixture Subnet Principal"),
+        ),
+        fleet_subnet_root: OLD_APP.parse().expect("fixture Root Principal"),
+        component_admissions: Vec::new(),
+        component_topology_digest: ComponentTopologyDigest::from_bytes([13; 32]),
+        active_release_set: FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [14; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([15; 32]),
+        },
+        limits: FleetSubnetRootLimits {
+            maximum_component_instances: 1,
+            maximum_registry_bytes: 16_777_216,
+            maximum_wasm_store_bytes: 40_000_000,
+            canister_pool: FleetSubnetCanisterPoolConfig {
+                minimum_size: 1,
+                maximum_size: 2,
+                canister_cycles: Cycles::new(u128::MAX),
+            },
+            cycles_funding: CyclesFundingBudget {
+                window_secs: 3_600,
+                maximum_cycles: Cycles::new(u128::MAX),
+            },
+            maximum_group_placements: 1,
+        },
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
+        status: FleetSubnetRootStatus::Joining,
+    };
+    let mut joined_registry = base_registry;
+    joined_registry.revision = 2;
+    joined_registry.fleet_subnet_roots.push(root_entry.clone());
+    let joined_version = FleetRegistryVersion {
+        authority: joined_registry.authority.clone(),
+        revision: joined_registry.revision,
+        content_hash: [16; 32],
+    };
+    let actions = vec![
+        fleet_protocol_action(
+            "registry-join",
+            CurrentFleetProtocolAction::JoinRoot {
+                expected_registry: joined_registry.clone(),
+                expected_version: joined_version.clone(),
+                request: FleetSubnetRootJoinRequest {
+                    expected_registry: base_version,
+                    entry: root_entry,
+                },
+            },
+        ),
+        fleet_protocol_action(
+            "registry-activate",
+            CurrentFleetProtocolAction::ActivateRegistry {
+                expected_registry: joined_registry,
+                expected_version: joined_version.clone(),
+                request: FleetRegistryActivationRequest {
+                    expected_registry: joined_version,
+                },
+            },
+        ),
+    ];
+    let action_hashes = actions
+        .iter()
+        .map(crate::fleet_ensure::ops::action_sha256)
+        .collect::<Vec<_>>();
+    let mut plan = FleetEnsurePlan {
+        canisters: Vec::new(),
+        conservation: CycleConservation {
+            expected_post_operation_cycles: 0,
+            maximum_execution_burn_cycles: 0,
+            maximum_new_funding_cycles: 0,
+            maximum_operator_debit_cycles: 0,
+            maximum_unavoidable_fee_cycles: 0,
+            observed_controlled_cycles: 0,
+            retained_in_reused_canisters_cycles: 0,
+            scheduled_transfer_cycles: 0,
+        },
+        desired_sha256: "17".repeat(32),
+        environment: "staging".to_string(),
+        fleet: "json-round-trip".to_string(),
+        operation_id: "18".repeat(32),
+        plan_sha256: String::new(),
+        planned_at_time: 1,
+        protocol_actions: actions,
+        schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+    };
+    plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
+
+    crate::fleet_ensure::ops::write_plan(&paths, &plan).expect("write current plan");
+    let encoded = fs::read_to_string(&paths.plan).expect("read current plan JSON");
+    assert!(encoded.contains(&format!("\"canister_cycles\": \"{}\"", u128::MAX)));
+    let reopened = crate::fleet_ensure::ops::read_plan(&paths)
+        .expect("read current plan")
+        .expect("retained current plan");
+
+    assert_eq!(reopened, plan);
+    assert_eq!(
+        crate::fleet_ensure::policy::expected_plan_sha256(&reopened),
+        plan.plan_sha256
+    );
+    assert_eq!(
+        reopened
+            .protocol_actions
+            .iter()
+            .map(crate::fleet_ensure::ops::action_sha256)
+            .collect::<Vec<_>>(),
+        action_hashes
+    );
+
+    fs::remove_dir_all(root).expect("remove Fleet ensure JSON fixture");
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one focused proof keeps hash retention, partial progress, and content drift together"
+)]
+fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
+    let root = temp_dir("canic-fleet-ensure-content-addressed-plan");
+    let paths =
+        crate::fleet_ensure::ops::EnsurePaths::under(&root, "staging", "content-addressed-plan");
+    let template_id = TemplateId::owned("component:app".to_string());
+    let version = TemplateVersion::owned("22".repeat(32));
+    let bytes = vec![0, 1, 2, 3, 127, 128, 254, 255];
+    let chunk_hash = canic_core::cdk::utils::hash::wasm_hash(&bytes);
+    let actions = vec![
+        fleet_protocol_action(
+            "prepare-store-chunks",
+            CurrentFleetProtocolAction::PrepareStoreChunkSet {
+                request: TemplateChunkSetPrepareInput {
+                    template_id: template_id.clone(),
+                    version: version.clone(),
+                    payload_hash: chunk_hash.clone(),
+                    payload_size_bytes: bytes.len() as u64,
+                    chunk_hashes: vec![chunk_hash.clone()],
+                },
+            },
+        ),
+        fleet_protocol_action(
+            "publish-store-chunk",
+            CurrentFleetProtocolAction::PublishStoreChunk {
+                request: TemplateChunkInput {
+                    template_id,
+                    version,
+                    chunk_index: 0,
+                    bytes: bytes.clone(),
+                },
+            },
+        ),
+    ];
+    let mut plan = FleetEnsurePlan {
+        canisters: Vec::new(),
+        conservation: CycleConservation {
+            expected_post_operation_cycles: 0,
+            maximum_execution_burn_cycles: 0,
+            maximum_new_funding_cycles: 0,
+            maximum_operator_debit_cycles: 0,
+            maximum_unavoidable_fee_cycles: 0,
+            observed_controlled_cycles: 0,
+            retained_in_reused_canisters_cycles: 0,
+            scheduled_transfer_cycles: 0,
+        },
+        desired_sha256: "23".repeat(32),
+        environment: "staging".to_string(),
+        fleet: "content-addressed-plan".to_string(),
+        operation_id: "24".repeat(32),
+        plan_sha256: String::new(),
+        planned_at_time: 1,
+        protocol_actions: actions,
+        schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+    };
+    plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
+
+    crate::fleet_ensure::ops::write_plan(&paths, &plan).expect("write hash-only current plan");
+    let encoded = fs::read_to_string(&paths.plan).expect("read hash-only current plan");
+    assert!(!encoded.contains("\"bytes\""));
+    assert!(encoded.contains("\"bytes_sha256\""));
+    assert!(encoded.contains("\"chunk_hashes\""));
+    let object = paths
+        .content
+        .join(canic_core::cdk::utils::hash::hex_bytes(&chunk_hash));
+    assert_eq!(
+        fs::read(&object).expect("read retained chunk object"),
+        bytes
+    );
+
+    let reopened = crate::fleet_ensure::ops::read_plan(&paths)
+        .expect("read hash-only current plan")
+        .expect("retained hash-only current plan");
+    assert_eq!(reopened, plan);
+    assert_eq!(
+        crate::fleet_ensure::policy::expected_plan_sha256(&reopened),
+        plan.plan_sha256
+    );
+
+    let partial_paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &root,
+        "staging",
+        "content-addressed-partial-plan",
+    );
+    let mut partial = plan;
+    partial.fleet = "content-addressed-partial-plan".to_string();
+    partial.protocol_actions.remove(0);
+    partial.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&partial);
+    crate::fleet_ensure::ops::write_plan(&partial_paths, &partial)
+        .expect("write publish-only partial-progress plan");
+    assert_eq!(
+        crate::fleet_ensure::ops::read_plan(&partial_paths)
+            .expect("read publish-only partial-progress plan")
+            .expect("retained publish-only partial-progress plan"),
+        partial
+    );
+
+    fs::remove_file(&object).expect("remove isolated chunk object");
+    assert!(matches!(
+        crate::fleet_ensure::ops::read_plan(&paths),
+        Err(crate::fleet_ensure::ops::EnsureStateError::StoreChunkUnavailable { path })
+            if path == object
+    ));
+    fs::write(&object, [9]).expect("tamper isolated chunk object");
+    assert!(matches!(
+        crate::fleet_ensure::ops::read_plan(&paths),
+        Err(crate::fleet_ensure::ops::EnsureStateError::StoreChunkMismatch { path })
+            if path == object
+    ));
+    fs::remove_dir_all(root).expect("remove content-addressed plan fixture");
+}
+
+#[test]
+#[ignore = "requires an explicit read-only current Fleet Ensure evidence directory"]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one evidence regression keeps isolation, all action variants, and immutable identity checks together"
+)]
+fn retained_current_plan_and_issued_journal_round_trip_from_an_isolated_copy() {
+    let source = PathBuf::from(
+        env::var_os("CANIC_CURRENT_FLEET_ENSURE_EVIDENCE")
+            .expect("set CANIC_CURRENT_FLEET_ENSURE_EVIDENCE"),
+    );
+    let source_plan = source.join("plan.json");
+    let source_journal = source.join("journal.json");
+    let original_plan = fs::read(&source_plan).expect("read retained plan evidence");
+    let original_journal = fs::read(&source_journal).expect("read retained journal evidence");
+    let scratch = temp_dir("canic-retained-fleet-ensure-json");
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&scratch, "evidence", "retained");
+    fs::create_dir_all(
+        paths
+            .plan
+            .parent()
+            .expect("Fleet Ensure evidence directory"),
+    )
+    .expect("create isolated evidence directory");
+    fs::write(&paths.plan, &original_plan).expect("copy retained plan evidence");
+    fs::write(&paths.journal, &original_journal).expect("copy retained journal evidence");
+
+    let mut plan = crate::fleet_ensure::ops::read_plan(&paths)
+        .expect("decode retained current plan")
+        .expect("retained current plan");
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("decode retained current journal")
+        .expect("retained current journal");
+    assert_eq!(
+        crate::fleet_ensure::policy::expected_plan_sha256(&plan),
+        plan.plan_sha256
+    );
+    assert_eq!(journal.plan_sha256, plan.plan_sha256);
+    assert_eq!(journal.operation_id, plan.operation_id);
+    assert!(matches!(
+        journal.effects.last().map(|effect| &effect.state),
+        Some(crate::fleet_ensure::model::EffectState::Issued)
+    ));
+    let retained_action_hashes = crate::fleet_ensure::workflow::ordered_actions(&plan)
+        .into_iter()
+        .take(journal.effects.len())
+        .map(crate::fleet_ensure::ops::action_sha256)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        retained_action_hashes,
+        journal
+            .effects
+            .iter()
+            .map(|effect| effect.action_sha256.clone())
+            .collect::<Vec<_>>()
+    );
+
+    let (registry_authority, root_entry) = plan
+        .protocol_actions
+        .iter()
+        .find_map(|action| match action {
+            EnsureAction::FleetProtocol { action, .. } => match action.as_ref() {
+                CurrentFleetProtocolAction::JoinRoot {
+                    expected_registry,
+                    request,
+                    ..
+                } => Some((expected_registry.authority.clone(), request.entry.clone())),
+                _ => None,
+            },
+            _ => None,
+        })
+        .expect("retained current plan Registry join");
+    let store = plan
+        .protocol_actions
+        .iter()
+        .find_map(|action| match action {
+            EnsureAction::FleetProtocol { action, .. } => match action.as_ref() {
+                CurrentFleetProtocolAction::BootstrapStore { expected, .. } => {
+                    Some(expected.clone())
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .expect("retained current plan Store bootstrap");
+    plan.protocol_actions.push(fleet_protocol_action(
+        "retained-evidence-adopt-store",
+        CurrentFleetProtocolAction::AdoptStore {
+            request: FleetSubnetWasmStoreAdoptionRequest {
+                operation_id: [20; 32],
+                authority: FleetSubnetWasmStoreAuthority {
+                    authority: registry_authority,
+                    placement_subnet: root_entry.placement_subnet,
+                    fleet_subnet_root: root_entry.fleet_subnet_root,
+                    wasm_store: store.wasm_store,
+                    installation_controller: Principal::anonymous(),
+                    release_build_id: store.release_set.release_build_id,
+                    wasm_module_hash: [21; 32],
+                },
+            },
+        },
+    ));
+    plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
+    let action_hashes = crate::fleet_ensure::workflow::ordered_actions(&plan)
+        .into_iter()
+        .map(crate::fleet_ensure::ops::action_sha256)
+        .collect::<Vec<_>>();
+    let expected_variants = BTreeSet::from([
+        "activate_registry",
+        "activate_registry_mirror",
+        "adopt_store",
+        "bootstrap_store",
+        "join_root",
+        "prepare_component_registry",
+        "prepare_store_chunk_set",
+        "provision_components",
+        "publish_store_chunk",
+        "stage_store_manifest",
+        "synchronize_registry",
+    ]);
+    assert_eq!(current_protocol_variants(&plan), expected_variants);
+
+    crate::fleet_ensure::ops::write_plan(&paths, &plan).expect("write isolated current plan");
+    let reopened = crate::fleet_ensure::ops::read_plan(&paths)
+        .expect("reopen isolated current plan")
+        .expect("isolated current plan");
+    assert_eq!(reopened, plan);
+    assert_eq!(
+        crate::fleet_ensure::policy::expected_plan_sha256(&reopened),
+        plan.plan_sha256
+    );
+    assert_eq!(
+        crate::fleet_ensure::workflow::ordered_actions(&reopened)
+            .into_iter()
+            .map(crate::fleet_ensure::ops::action_sha256)
+            .collect::<Vec<_>>(),
+        action_hashes
+    );
+    let canonical = fs::read(&paths.plan).expect("read canonical current plan");
+    assert!(canonical.len() < original_plan.len() / 10);
+    assert!(
+        !canonical
+            .windows(b"\"bytes\"".len())
+            .any(|window| window == b"\"bytes\"")
+    );
+    let second = crate::fleet_ensure::ops::EnsurePaths::under(&scratch, "evidence", "second");
+    crate::fleet_ensure::ops::write_plan(&second, &reopened)
+        .expect("write second canonical current plan");
+    assert_eq!(
+        fs::read(&second.plan).expect("read second canonical current plan"),
+        canonical
+    );
+
+    assert_eq!(
+        fs::read(source_plan).expect("reread source plan"),
+        original_plan
+    );
+    assert_eq!(
+        fs::read(source_journal).expect("reread source journal"),
+        original_journal
+    );
+    fs::remove_dir_all(scratch).expect("remove isolated retained evidence");
 }
 
 #[test]
@@ -2166,6 +2608,45 @@ fn drain(candid: &Path) -> DrainAuthority {
 
 fn protocol_step(root: &Path) -> DesiredProtocolStep {
     protocol_step_for(root, "fleet-catalog-terminal", "app")
+}
+
+fn fleet_protocol_action(name: &str, action: CurrentFleetProtocolAction) -> EnsureAction {
+    EnsureAction::FleetProtocol {
+        action: Box::new(action),
+        candid: "coordinator.did".to_string(),
+        candid_sha256: "19".repeat(32),
+        maximum_execution_burn_cycles: 1,
+        name: name.to_string(),
+        principal: TREASURY.to_string(),
+    }
+}
+
+fn current_protocol_variants(plan: &FleetEnsurePlan) -> BTreeSet<&'static str> {
+    plan.protocol_actions
+        .iter()
+        .filter_map(|action| match action {
+            EnsureAction::FleetProtocol { action, .. } => Some(match action.as_ref() {
+                CurrentFleetProtocolAction::ActivateRegistry { .. } => "activate_registry",
+                CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => {
+                    "activate_registry_mirror"
+                }
+                CurrentFleetProtocolAction::AdoptStore { .. } => "adopt_store",
+                CurrentFleetProtocolAction::BootstrapStore { .. } => "bootstrap_store",
+                CurrentFleetProtocolAction::JoinRoot { .. } => "join_root",
+                CurrentFleetProtocolAction::PrepareStoreChunkSet { .. } => {
+                    "prepare_store_chunk_set"
+                }
+                CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => {
+                    "prepare_component_registry"
+                }
+                CurrentFleetProtocolAction::ProvisionComponents { .. } => "provision_components",
+                CurrentFleetProtocolAction::PublishStoreChunk { .. } => "publish_store_chunk",
+                CurrentFleetProtocolAction::StageStoreManifest { .. } => "stage_store_manifest",
+                CurrentFleetProtocolAction::SynchronizeRegistry { .. } => "synchronize_registry",
+            }),
+            _ => None,
+        })
+        .collect()
 }
 
 fn typed_protocol_action(operation_id: &str) -> EnsureAction {

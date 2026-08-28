@@ -13,11 +13,11 @@ pub use model::{
     ArtifactTransformOutcomeV1, ArtifactTransformProvenanceV1, BUILD_PROVENANCE_SCHEMA_ID,
     BuildProvenanceRequest, BuildProvenanceStatusV1, BuildProvenanceV1, BuildScriptInputStateV1,
     CargoProvenanceV1, ProtocolProfileProvenanceV1, SourceDirtyPolicyV1, SourceProvenanceV1,
-    SourceVcsV1,
+    SourceVcsV1, WasmArtifactMetricsV1, WasmTransformMetricsV1,
 };
 
 #[cfg(test)]
-use artifacts::artifact_provenance;
+use artifacts::{artifact_provenance, artifact_transform_provenance};
 #[cfg(test)]
 use source::source_provenance;
 

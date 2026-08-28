@@ -3,11 +3,11 @@
 set -euo pipefail
 
 METHOD_ID="CANIC-WASM-001"
-METHOD_VERSION="3"
+METHOD_VERSION="4"
 METHOD_TAG="$METHOD_ID/v$METHOD_VERSION"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
-AUDIT_STEM="wasm-footprint-v3"
-PROFILE_KEY="release+debug"
+AUDIT_STEM="wasm-footprint-v4"
+PROFILE_KEY="release-clean-a+release-clean-b+debug"
 EXPECTED_ROSTER_KEY="app,test,user_hub,scale_hub,user_shard,scale_replica,root,fleet_coordinator,wasm_store"
 
 METHOD_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -175,28 +175,57 @@ capture_twiggy_metrics() {
         "$monos_txt" | head -n 16 >"$analysis_dir/$canister.monos-excerpt.txt"
 }
 
+capture_optimizer_metrics() {
+    local canister="$1"
+    local run_label="$2"
+    local log_path="$3"
+    local line
+    local metric_pattern
+
+    line="$(
+        rg "release Wasm optimization for .*/$canister/$canister\\.wasm:" "$log_path" |
+            tail -n 1
+    )"
+    metric_pattern='raw ([0-9]+) -> ([0-9]+), gzip ([0-9]+) -> ([0-9]+), code section ([0-9]+) -> ([0-9]+), data section ([0-9]+) -> ([0-9]+), functions ([0-9]+) -> ([0-9]+)$'
+    if [[ ! "$line" =~ $metric_pattern ]]; then
+        echo "unable to parse governed release optimization metrics for $canister" >&2
+        exit 1
+    fi
+    {
+        printf '%s\t%s' "$canister" "$run_label"
+        printf '\t%s' "${BASH_REMATCH[@]:1}"
+        printf '\n'
+    } >>"$OPTIMIZER_RUN_METRICS"
+}
+
 build_profile() {
     local profile="$1"
-    local output_dir="$RUN_TMP/artifacts/$profile"
+    local run_label="$2"
+    local target_dir="$3"
+    local output_dir="$RUN_TMP/artifacts/$run_label"
+    local build_log="$RUN_TMP/build-$run_label.log"
     local canister
     local artifact_root
+    rm -rf "$PRODUCT_ROOT/.icp"
+    rm -rf "$target_dir"
     mkdir -p "$output_dir"
 
     for canister in "${CANISTERS[@]}"; do
-        printf 'building %s profile for %s through Canic host authority\n' "$profile" "$canister"
+        printf 'building %s profile (%s) for %s through Canic host authority\n' \
+            "$profile" "$run_label" "$canister"
         if ! (
             cd "$PRODUCT_ROOT"
             ICP_ENVIRONMENT=local \
                 CARGO_NET_OFFLINE=true \
                 CARGO_INCREMENTAL=0 \
-                CARGO_TARGET_DIR="$CARGO_TARGET_DIR" \
+                CARGO_TARGET_DIR="$target_dir" \
                 cargo run --offline --locked -q --profile fast \
                     -p canic-host --example build_artifact -- \
                     "$canister" "$profile" "$PRODUCT_ROOT" "$PRODUCT_ROOT" \
                     "$PRODUCT_CONFIG"
-        ) >>"$RUN_TMP/build-$profile.log" 2>&1; then
-            echo "canonical $profile build failed for $canister" >&2
-            tail -n 80 "$RUN_TMP/build-$profile.log" >&2
+        ) >>"$build_log" 2>&1; then
+            echo "canonical $profile build ($run_label) failed for $canister" >&2
+            tail -n 80 "$build_log" >&2
             exit 1
         fi
 
@@ -216,16 +245,22 @@ build_profile() {
         fi
         cp "$artifact_root/$canister.wasm" "$output_dir/$canister.wasm"
         cp "$artifact_root/$canister.wasm.gz" "$output_dir/$canister.wasm.gz"
+        cp "$artifact_root/$canister.did" "$output_dir/$canister.did"
+        if [[ "$profile" == "release" ]]; then
+            capture_optimizer_metrics "$canister" "$run_label" "$build_log"
+        fi
     done
 }
 
 require_command cargo
+require_command cmp
 require_command rustc
 require_command git
 require_command gzip
 require_command sha256sum
 require_command ic-wasm
 require_command twiggy
+require_command wasm-opt
 require_icp_tools
 
 if [[ "${ICP_ENVIRONMENT:-local}" == "ic" ]]; then
@@ -258,8 +293,9 @@ cleanup() {
     rm -rf "$RUN_TMP"
 }
 trap cleanup EXIT
-export CARGO_TARGET_DIR="${CANIC_AUDIT_CARGO_TARGET_DIR:-$RUN_TMP/target}"
 export CARGO_NET_OFFLINE="true"
+OPTIMIZER_RUN_METRICS="$RUN_TMP/optimizer-run-metrics.tsv"
+printf 'canister\trun\tbefore_raw_bytes\tafter_raw_bytes\tbefore_gzip_bytes\tafter_gzip_bytes\tbefore_code_bytes\tafter_code_bytes\tbefore_data_section_bytes\tafter_data_section_bytes\tbefore_functions\tafter_functions\n' >"$OPTIMIZER_RUN_METRICS"
 
 PRODUCT_CONFIG="$PRODUCT_ROOT/apps/test/canic.toml"
 mapfile -t CANISTERS < <(
@@ -287,10 +323,11 @@ CARGO_VERSION="$(tool_version cargo)"
 ICP_VERSION="$(tool_version icp)"
 IC_WASM_VERSION="$(tool_version ic-wasm)"
 TWIGGY_VERSION="$(tool_version twiggy)"
+WASM_OPT_VERSION="$(tool_version wasm-opt)"
 TOOL_KEY="$(
-    printf 'rustc=%s\ncargo=%s\nicp=%s\nic-wasm=%s\ntwiggy=%s\n' \
+    printf 'rustc=%s\ncargo=%s\nicp=%s\nic-wasm=%s\ntwiggy=%s\nwasm-opt=%s\n' \
         "$RUSTC_VERSION" "$CARGO_VERSION" "$ICP_VERSION" \
-        "$IC_WASM_VERSION" "$TWIGGY_VERSION" | sha256sum | awk '{print $1}'
+        "$IC_WASM_VERSION" "$TWIGGY_VERSION" "$WASM_OPT_VERSION" | sha256sum | awk '{print $1}'
 )"
 
 RUN_DATE="${WASM_AUDIT_DATE:-$(date -u +%F)}"
@@ -340,11 +377,38 @@ while IFS= read -r candidate_method_path; do
     fi
 done < <(
     find "$METHOD_ROOT/docs/audits/reports" -type f \
-        -path '*/artifacts/wasm-footprint-v3*/method.json' -print 2>/dev/null | sort -r
+        -path '*/artifacts/wasm-footprint-v4*/method.json' -print 2>/dev/null | sort -r
 )
 
-build_profile release
-build_profile debug
+build_profile release release-clean-a "$RUN_TMP/target-release"
+build_profile release release-clean-b "$RUN_TMP/target-release"
+
+DETERMINISM_METRICS="$RUN_TMP/determinism.tsv"
+printf 'canister\twasm_sha256\tgzip_sha256\tcandid_sha256\tresult\n' >"$DETERMINISM_METRICS"
+for canister in "${CANISTERS[@]}"; do
+    for extension in wasm wasm.gz did; do
+        if ! cmp -s \
+            "$RUN_TMP/artifacts/release-clean-a/$canister.$extension" \
+            "$RUN_TMP/artifacts/release-clean-b/$canister.$extension"; then
+            echo "clean release builds are not deterministic for $canister.$extension" >&2
+            exit 1
+        fi
+    done
+    first_metrics="$(awk -F'\t' -v role="$canister" '$1 == role && $2 == "release-clean-a" { for (i=3; i<=12; i++) printf "%s%s", $i, (i == 12 ? ORS : OFS) }' OFS='\t' "$OPTIMIZER_RUN_METRICS")"
+    second_metrics="$(awk -F'\t' -v role="$canister" '$1 == role && $2 == "release-clean-b" { for (i=3; i<=12; i++) printf "%s%s", $i, (i == 12 ? ORS : OFS) }' OFS='\t' "$OPTIMIZER_RUN_METRICS")"
+    if [[ -z "$first_metrics" || "$first_metrics" != "$second_metrics" ]]; then
+        echo "clean release optimization metrics are not deterministic for $canister" >&2
+        exit 1
+    fi
+    printf '%s\t%s\t%s\t%s\tPASS\n' \
+        "$canister" \
+        "$(file_hash "$RUN_TMP/artifacts/release-clean-a/$canister.wasm")" \
+        "$(file_hash "$RUN_TMP/artifacts/release-clean-a/$canister.wasm.gz")" \
+        "$(file_hash "$RUN_TMP/artifacts/release-clean-a/$canister.did")" \
+        >>"$DETERMINISM_METRICS"
+done
+
+build_profile debug debug "$RUN_TMP/target-debug"
 
 TRACKED_STATUS_AFTER="$(git -C "$PRODUCT_ROOT" status --porcelain=v1 --untracked-files=no)"
 if [[ -n "$TRACKED_STATUS_AFTER" ]]; then
@@ -365,6 +429,12 @@ fi
 mkdir -p "$ARTIFACTS_DIR"
 ANALYSIS_DIR="$RUN_TMP/analysis"
 mkdir -p "$ANALYSIS_DIR"
+OPTIMIZATION_METRICS="$ARTIFACTS_DIR/optimization-metrics.tsv"
+DETERMINISM_EVIDENCE="$ARTIFACTS_DIR/determinism.tsv"
+printf 'canister\tbefore_raw_bytes\tafter_raw_bytes\tbefore_gzip_bytes\tafter_gzip_bytes\tbefore_code_bytes\tafter_code_bytes\tbefore_data_section_bytes\tafter_data_section_bytes\tbefore_functions\tafter_functions\n' >"$OPTIMIZATION_METRICS"
+awk -F'\t' 'BEGIN { OFS="\t" } NR > 1 && $2 == "release-clean-a" { print $1,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12 }' \
+    "$OPTIMIZER_RUN_METRICS" >>"$OPTIMIZATION_METRICS"
+cp "$DETERMINISM_METRICS" "$DETERMINISM_EVIDENCE"
 
 declare -A KIND=()
 declare -A RELEASE_BYTES=()
@@ -383,6 +453,16 @@ declare -A TOP_NAME=()
 declare -A TOP_BYTES=()
 declare -A RETAINED_NAME=()
 declare -A RETAINED_BYTES=()
+declare -A OPT_BEFORE_RAW=()
+declare -A OPT_AFTER_RAW=()
+declare -A OPT_BEFORE_GZIP=()
+declare -A OPT_AFTER_GZIP=()
+declare -A OPT_BEFORE_CODE=()
+declare -A OPT_AFTER_CODE=()
+declare -A OPT_BEFORE_DATA=()
+declare -A OPT_AFTER_DATA=()
+declare -A OPT_BEFORE_FUNCTIONS=()
+declare -A OPT_AFTER_FUNCTIONS=()
 
 BASELINE_TSV="N/A"
 if [[ "$BASELINE_METHOD_JSON" != "N/A" ]]; then
@@ -393,8 +473,8 @@ SIZE_METRICS="$ARTIFACTS_DIR/size-metrics.tsv"
 printf 'canister\tkind\trelease_wasm_bytes\trelease_gzip_bytes\tdebug_wasm_bytes\tdebug_gzip_bytes\tdebug_delta_bytes\tdebug_delta_percent\tbaseline_delta_bytes\tbaseline_delta_percent\tfunctions\tdata_sections\tdata_bytes\texports\ttop_name\ttop_bytes\tretained_name\tretained_bytes\n' >"$SIZE_METRICS"
 
 for canister in "${CANISTERS[@]}"; do
-    release_wasm="$RUN_TMP/artifacts/release/$canister.wasm"
-    release_gzip="$RUN_TMP/artifacts/release/$canister.wasm.gz"
+    release_wasm="$RUN_TMP/artifacts/release-clean-a/$canister.wasm"
+    release_gzip="$RUN_TMP/artifacts/release-clean-a/$canister.wasm.gz"
     debug_wasm="$RUN_TMP/artifacts/debug/$canister.wasm"
     debug_gzip="$RUN_TMP/artifacts/debug/$canister.wasm.gz"
     case "$canister" in
@@ -412,6 +492,29 @@ for canister in "${CANISTERS[@]}"; do
     DEBUG_DELTA_PERCENT["$canister"]="$(percent_delta "${RELEASE_BYTES[$canister]}" "${DEBUG_BYTES[$canister]}")"
     BASELINE_DELTA_BYTES["$canister"]="N/A"
     BASELINE_DELTA_PERCENT["$canister"]="N/A"
+    optimization_row="$(awk -F'\t' -v role="$canister" '$1 == role { print; exit }' "$OPTIMIZATION_METRICS")"
+    if [[ -z "$optimization_row" ]]; then
+        echo "missing optimization metrics for $canister" >&2
+        exit 1
+    fi
+    IFS=$'\t' read -r _ before_raw after_raw before_gzip after_gzip \
+        before_code after_code before_data after_data before_functions after_functions \
+        <<<"$optimization_row"
+    OPT_BEFORE_RAW["$canister"]="$before_raw"
+    OPT_AFTER_RAW["$canister"]="$after_raw"
+    OPT_BEFORE_GZIP["$canister"]="$before_gzip"
+    OPT_AFTER_GZIP["$canister"]="$after_gzip"
+    OPT_BEFORE_CODE["$canister"]="$before_code"
+    OPT_AFTER_CODE["$canister"]="$after_code"
+    OPT_BEFORE_DATA["$canister"]="$before_data"
+    OPT_AFTER_DATA["$canister"]="$after_data"
+    OPT_BEFORE_FUNCTIONS["$canister"]="$before_functions"
+    OPT_AFTER_FUNCTIONS["$canister"]="$after_functions"
+    if [[ "${OPT_AFTER_RAW[$canister]}" != "${RELEASE_BYTES[$canister]}" ||
+        "${OPT_AFTER_GZIP[$canister]}" != "${RELEASE_GZIP_BYTES[$canister]}" ]]; then
+        echo "canonical release bytes do not match governed optimization metrics for $canister" >&2
+        exit 1
+    fi
 
     ic_wasm_info="$ANALYSIS_DIR/$canister.ic-wasm-info.txt"
     ic-wasm "$release_wasm" info >"$ic_wasm_info"
@@ -473,7 +576,7 @@ RISK_SCORE=0
 declare -a RISK_DRIVERS=()
 if [[ "$BASELINE_REPORT" == "N/A" ]]; then
     RISK_SCORE=$((RISK_SCORE + 2))
-    RISK_DRIVERS+=("no compatible v3 predecessor: +2")
+    RISK_DRIVERS+=("no compatible v4 predecessor: +2")
 fi
 if awk -v value="$component_spread_ratio" 'BEGIN { exit !(value >= 1.25) }'; then
     RISK_SCORE=$((RISK_SCORE + 2))
@@ -512,7 +615,7 @@ else
     RUN_RESULT="pass"
 fi
 if [[ "$BASELINE_REPORT" == "N/A" ]]; then
-    COMPARABILITY="first-v3-baseline"
+    COMPARABILITY="first-v4-baseline"
     ORIGINAL_BASELINE_REPORT="$REPORT_RELATIVE"
 else
     COMPARABILITY="comparable to immediate compatible predecessor"
@@ -535,6 +638,24 @@ for canister in "${CANISTERS[@]}"; do
         >>"$SUMMARY_PATH"
 done
 
+cat >>"$SUMMARY_PATH" <<EOF
+
+## Governed Release Optimization
+
+| Canister | Raw before → after | Gzip before → after | Code before → after | Data section before → after | Functions before → after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+EOF
+for canister in "${CANISTERS[@]}"; do
+    printf '| `%s` | %s → %s | %s → %s | %s → %s | %s → %s | %s → %s |\n' \
+        "$canister" \
+        "${OPT_BEFORE_RAW[$canister]}" "${OPT_AFTER_RAW[$canister]}" \
+        "${OPT_BEFORE_GZIP[$canister]}" "${OPT_AFTER_GZIP[$canister]}" \
+        "${OPT_BEFORE_CODE[$canister]}" "${OPT_AFTER_CODE[$canister]}" \
+        "${OPT_BEFORE_DATA[$canister]}" "${OPT_AFTER_DATA[$canister]}" \
+        "${OPT_BEFORE_FUNCTIONS[$canister]}" "${OPT_AFTER_FUNCTIONS[$canister]}" \
+        >>"$SUMMARY_PATH"
+done
+
 for canister in "${CANISTERS[@]}"; do
     detail_path="$ARTIFACTS_DIR/$canister.md"
     dominators_excerpt="$(cat "$ANALYSIS_DIR/$canister.dominators-excerpt.txt")"
@@ -551,6 +672,11 @@ for canister in "${CANISTERS[@]}"; do
 | Debug gzip bytes | ${DEBUG_GZIP_BYTES[$canister]} |
 | Debug delta | ${DEBUG_DELTA_BYTES[$canister]} (${DEBUG_DELTA_PERCENT[$canister]}%) |
 | Compatible predecessor delta | ${BASELINE_DELTA_BYTES[$canister]} (${BASELINE_DELTA_PERCENT[$canister]}) |
+| Optimizer raw bytes | ${OPT_BEFORE_RAW[$canister]} → ${OPT_AFTER_RAW[$canister]} |
+| Optimizer gzip bytes | ${OPT_BEFORE_GZIP[$canister]} → ${OPT_AFTER_GZIP[$canister]} |
+| Optimizer code-section bytes | ${OPT_BEFORE_CODE[$canister]} → ${OPT_AFTER_CODE[$canister]} |
+| Optimizer data-section bytes | ${OPT_BEFORE_DATA[$canister]} → ${OPT_AFTER_DATA[$canister]} |
+| Optimizer defined functions | ${OPT_BEFORE_FUNCTIONS[$canister]} → ${OPT_AFTER_FUNCTIONS[$canister]} |
 | Functions | ${FUNCTIONS[$canister]} |
 | Data sections / bytes | ${DATA_SECTIONS[$canister]} / ${DATA_BYTES[$canister]} |
 | Exported methods | ${EXPORTS[$canister]} |
@@ -594,7 +720,7 @@ EOF
 COMPLETED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 mkdir -p "$DAY_DIR"
 cat >"$REPORT_PATH" <<EOF
-# Wasm Footprint Audit v3 - $RUN_DATE
+# Wasm Footprint Audit v4 - $RUN_DATE
 
 ## Verdict
 
@@ -603,19 +729,19 @@ cat >"$REPORT_PATH" <<EOF
 - Comparability: \`$COMPARABILITY\`.
 - Authoritative risk score: \`$RISK_SCORE/10\`.
 
-V3 completed fresh release and debug builds for every frozen configured role
+V4 completed two isolated clean release builds and one debug build for every frozen configured role
 plus Fleet Coordinator and Wasm Store through Canic's authoritative host
 artifact builder. It did not invoke direct Cargo
-Wasm compilation, infer a target-directory artifact, or recreate a pre-shrink
-metric. It admits the current roster and separate infrastructure coverage after
-v2's frozen scope correctly detected product drift. Historical v2 evidence
-remains valid but is not comparable with v3.
+Wasm compilation, infer a target-directory artifact, or retain a competing
+pre-optimization Wasm. The governed release transform supplies its own exact
+before/after measurements. Historical v3 evidence remains valid but is not
+comparable with v4.
 
 ## Scope And Identity
 
 - Definition: \`$DEFINITION_PATH\`.
 - Compared predecessor: \`$BASELINE_REPORT\`.
-- Original v3 baseline: \`$ORIGINAL_BASELINE_REPORT\`.
+- Original v4 baseline: \`$ORIGINAL_BASELINE_REPORT\`.
 - Release anchor: \`$RELEASE_ANCHOR\`.
 - Source commit: \`$PRODUCT_COMMIT\`.
 - Source tree: \`$SOURCE_TREE_HASH\`.
@@ -647,7 +773,7 @@ audit_method_id: $METHOD_ID
 audit_method_version: $METHOD_VERSION
 audit_method_fingerprint: $METHOD_FINGERPRINT
 audit_script_hashes: definition=$DEFINITION_FINGERPRINT; executable-composite=$METHOD_FINGERPRINT
-external_tool_versions: $ICP_VERSION; $IC_WASM_VERSION; $TWIGGY_VERSION
+external_tool_versions: $ICP_VERSION; $IC_WASM_VERSION; $TWIGGY_VERSION; $WASM_OPT_VERSION
 fixture_or_seed: apps/test/canic.toml@$PRODUCT_COMMIT; roster=$ROSTER_KEY
 environment_class: isolated local linked-worktree execution_trace
 execution_path_key: $EXECUTION_PATH_KEY
@@ -671,6 +797,24 @@ for canister in "${CANISTERS[@]}"; do
         "${DEBUG_BYTES[$canister]}" "${DEBUG_GZIP_BYTES[$canister]}" \
         "${DEBUG_DELTA_BYTES[$canister]}" "${DEBUG_DELTA_PERCENT[$canister]}" \
         "${BASELINE_DELTA_BYTES[$canister]}" "${BASELINE_DELTA_PERCENT[$canister]}" \
+        >>"$REPORT_PATH"
+done
+
+cat >>"$REPORT_PATH" <<EOF
+
+## Governed Release Optimization
+
+| Canister | Raw before → after | Gzip before → after | Code before → after | Data section before → after | Functions before → after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+EOF
+for canister in "${CANISTERS[@]}"; do
+    printf '| `%s` | %s → %s | %s → %s | %s → %s | %s → %s | %s → %s |\n' \
+        "$canister" \
+        "${OPT_BEFORE_RAW[$canister]}" "${OPT_AFTER_RAW[$canister]}" \
+        "${OPT_BEFORE_GZIP[$canister]}" "${OPT_AFTER_GZIP[$canister]}" \
+        "${OPT_BEFORE_CODE[$canister]}" "${OPT_AFTER_CODE[$canister]}" \
+        "${OPT_BEFORE_DATA[$canister]}" "${OPT_AFTER_DATA[$canister]}" \
+        "${OPT_BEFORE_FUNCTIONS[$canister]}" "${OPT_AFTER_FUNCTIONS[$canister]}" \
         >>"$REPORT_PATH"
 done
 
@@ -733,9 +877,9 @@ nor duplicated here.
 
 ## Findings
 
-- Method revision: v3 admits the current configured roster and separate
-  Coordinator/Store infrastructure; valid v2 history cannot baseline v3.
-- New product findings: none. The first v3 measurement is a baseline, and no
+- Method revision: v4 qualifies the canonical Binaryen transform and two-clean-build
+  determinism across the full roster; valid v3 history cannot baseline v4.
+- New product findings: none. The first v4 measurement is a baseline, and no
   comparable regression exists to attribute.
 
 ## Required Checklist
@@ -744,7 +888,10 @@ nor duplicated here.
 | --- | --- | --- |
 | clean isolated product snapshot | PASS | linked worktree clean before; tracked-clean after |
 | canonical release artifacts | PASS | complete nine-role roster built through host \`build_artifact\` |
+| deterministic clean release builds | PASS | exact Wasm, gzip, Candid, and transform metrics match across isolated targets |
 | canonical debug artifacts | PASS | same nine roles and authority |
+| governed Binaryen optimization | PASS | pinned tool plus before/after raw, gzip, code, data, and function metrics for every role |
+| Candid/export/feature parity | PASS | release transform rejects before replacing an artifact if any governed invariant changes |
 | builder gzip integrity | PASS | every gzip decodes to its paired canonical Wasm |
 | machine-readable sizes | PASS | \`size-metrics.tsv\` |
 | \`ic-wasm info\` | PASS | nine release artifacts parsed |
@@ -752,16 +899,17 @@ nor duplicated here.
 | \`twiggy dominators\` | PASS | bounded role excerpts retained |
 | \`twiggy monos\` | PASS | bounded role excerpts retained |
 | compatible predecessor selection | PASS | exact method/roster/profile/path/tool keys; \`$BASELINE_REPORT\` |
-| direct Cargo/pre-shrink fallback absent | PASS | v3 invokes only the host artifact authority |
+| direct Cargo/pre-optimization fallback absent | PASS | v4 invokes only the host artifact authority |
 | source mutation | PASS | no tracked mutation or unexpected untracked path |
 
 ## Verification Readout
 
 | Command/check | Result | Notes |
 | --- | --- | --- |
-| \`cargo run --offline --locked -p canic-host --example build_artifact -- <role> release ...\` | PASS | nine ordered roles |
+| \`cargo run --offline --locked -p canic-host --example build_artifact -- <role> release ...\` | PASS | nine ordered roles, repeated from isolated clean targets |
 | same authoritative command with \`debug\` | PASS | nine ordered roles |
 | \`gzip -t\` plus decoded SHA-256 equality | PASS | release and debug artifacts |
+| \`cmp\` plus SHA-256 identity | PASS | two clean canonical release builds, all roles |
 | \`ic-wasm <release.wasm> info\` | PASS | all roles |
 | \`twiggy top\|dominators\|monos <release.wasm>\` | PASS | all roles |
 | method composite | PASS | root-independent \`$METHOD_FINGERPRINT\` |
@@ -772,6 +920,8 @@ nor duplicated here.
 
 - [size summary](artifacts/$SCOPE_STEM/size-summary.md)
 - [machine-readable metrics](artifacts/$SCOPE_STEM/size-metrics.tsv)
+- [optimizer before/after metrics](artifacts/$SCOPE_STEM/optimization-metrics.tsv)
+- [clean-build determinism](artifacts/$SCOPE_STEM/determinism.tsv)
 - [method identity](artifacts/$SCOPE_STEM/method.json)
 - [evidence manifest](artifacts/$SCOPE_STEM/evidence-manifest.yml)
 EOF
@@ -784,6 +934,8 @@ declare -a RETAINED_FILES=(
     "$REPORT_PATH"
     "$SUMMARY_PATH"
     "$SIZE_METRICS"
+    "$OPTIMIZATION_METRICS"
+    "$DETERMINISM_EVIDENCE"
     "$METHOD_JSON"
 )
 for canister in "${CANISTERS[@]}"; do
@@ -806,6 +958,7 @@ done
     printf '  icp: "%s"\n' "$ICP_VERSION"
     printf '  ic-wasm: "%s"\n' "$IC_WASM_VERSION"
     printf '  twiggy: "%s"\n' "$TWIGGY_VERSION"
+    printf '  wasm-opt: "%s"\n' "$WASM_OPT_VERSION"
     printf 'timestamps:\n'
     printf '  started_at: "%s"\n' "$STARTED_AT"
     printf '  completed_at: "%s"\n' "$COMPLETED_AT"

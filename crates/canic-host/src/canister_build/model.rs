@@ -9,6 +9,27 @@ pub(super) const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 pub(super) const WASM_STORE_ROLE: &str = "wasm_store";
 pub(super) const WASM_TARGET: &str = "wasm32-unknown-unknown";
 
+/// Caller-selected Cargo and Candid policy for one focused canister build.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CanisterArtifactBuildOptions {
+    /// Cargo features applied identically to the declaration and runtime passes.
+    pub cargo_features: BTreeSet<String>,
+    /// Whether Cargo's package default features remain enabled.
+    pub default_features: bool,
+    /// Whether the final runtime must retain Candid only as an adjacent sidecar.
+    pub sidecar_only_candid: bool,
+}
+
+impl Default for CanisterArtifactBuildOptions {
+    fn default() -> Self {
+        Self {
+            cargo_features: BTreeSet::new(),
+            default_features: true,
+            sidecar_only_candid: false,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum CanisterArtifactSource {
     DeclaredRole,
@@ -80,6 +101,7 @@ pub struct ArtifactTransformOutput {
     pub transform: ArtifactTransformKind,
     pub tool_version: Option<String>,
     pub outcome: ArtifactTransformOutcome,
+    pub metrics: Option<WasmTransformMetrics>,
 }
 
 impl ArtifactTransformOutput {
@@ -88,15 +110,17 @@ impl ArtifactTransformOutput {
             transform,
             tool_version: None,
             outcome: ArtifactTransformOutcome::NotRequested,
+            metrics: None,
         }
     }
 }
 
-/// Optional `ic-wasm` operation that can change one emitted Wasm artifact.
+/// Tool-owned operation that can change one emitted Wasm artifact.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ArtifactTransformKind {
     Shrink,
     CandidMetadata,
+    Optimize,
 }
 
 /// Result of one optional artifact transform decision.
@@ -105,4 +129,21 @@ pub enum ArtifactTransformOutcome {
     Applied,
     ToolUnavailable,
     NotRequested,
+}
+
+/// Exact structural sizes around one Wasm transform.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WasmTransformMetrics {
+    pub before: WasmArtifactMetrics,
+    pub after: WasmArtifactMetrics,
+}
+
+/// Install-relevant and transport sizes for one Wasm module.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WasmArtifactMetrics {
+    pub raw_bytes: u64,
+    pub gzip_bytes: u64,
+    pub code_section_bytes: u64,
+    pub data_section_bytes: u64,
+    pub defined_functions: u32,
 }

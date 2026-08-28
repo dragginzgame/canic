@@ -9,8 +9,7 @@ use std::{
 
 use crate::{
     artifact_io::{
-        embed_candid_metadata, enforce_wasm_code_section_limit, maybe_shrink_wasm_artifact,
-        write_gzip_artifact, write_wasm_artifact,
+        finalize_wasm_artifact, validate_sidecar_only_candid_artifact, write_wasm_artifact,
     },
     bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
     bootstrap_store::build_bootstrap_wasm_store_artifact,
@@ -32,21 +31,34 @@ use super::{
     },
     candid::{extract_candid_bytes, remove_stale_icp_candid_sidecars},
     model::{
-        ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
-        CanisterArtifactBuildSpec, CanisterArtifactSource, ConfiguredCanisterArtifactBuildOutput,
-        WASM_TARGET,
+        CanisterArtifactBuildOptions, CanisterArtifactBuildOutput, CanisterArtifactBuildSpec,
+        CanisterArtifactSource, ConfiguredCanisterArtifactBuildOutput, FLEET_COORDINATOR_ROLE,
+        WASM_STORE_ROLE, WASM_TARGET,
     },
 };
 
 pub fn build_workspace_canister_artifact(
     context: &WorkspaceBuildContext,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
+    build_workspace_canister_artifact_with_options(
+        context,
+        &CanisterArtifactBuildOptions::default(),
+    )
+}
+
+/// Build one configured role with caller-selected Cargo features and Candid retention.
+pub fn build_workspace_canister_artifact_with_options(
+    context: &WorkspaceBuildContext,
+    options: &CanisterArtifactBuildOptions,
+) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
     match CanisterArtifactSource::for_role(&context.role) {
         CanisterArtifactSource::FleetCoordinator => {
+            require_default_build_options(options, FLEET_COORDINATOR_ROLE)?;
             return build_bootstrap_fleet_coordinator_artifact(context);
         }
         CanisterArtifactSource::WasmStore => {
+            require_default_build_options(options, WASM_STORE_ROLE)?;
             return build_bootstrap_wasm_store_artifact(context);
         }
         CanisterArtifactSource::DeclaredRole => {}
@@ -54,7 +66,20 @@ pub fn build_workspace_canister_artifact(
 
     let config = AppConfigSnapshot::load(&context.config_path)?;
     let spec = resolve_canister_artifact_build_spec(context, config.model())?;
-    build_workspace_canister_artifact_from_spec(context, &spec)
+    build_workspace_canister_artifact_from_spec(context, &spec, options)
+}
+
+fn require_default_build_options(
+    options: &CanisterArtifactBuildOptions,
+    role: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if options == &CanisterArtifactBuildOptions::default() {
+        return Ok(());
+    }
+    Err(format!(
+        "caller-selected Cargo features and sidecar-only Candid are unsupported for built-in role {role}"
+    )
+    .into())
 }
 
 /// Build the requested configured roles in one Cargo invocation per workspace and profile.
@@ -106,6 +131,7 @@ pub fn copy_icp_wasm_output(
 fn build_workspace_canister_artifact_from_spec(
     context: &WorkspaceBuildContext,
     spec: &CanisterArtifactBuildSpec,
+    options: &CanisterArtifactBuildOptions,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     if context.role != spec.role {
         return Err(format!(
@@ -121,6 +147,7 @@ fn build_workspace_canister_artifact_from_spec(
         context,
         &spec.package_manifest_path,
         &spec.package_name,
+        options,
     )?;
     let candid = extract_candid_bytes(&release_wasm_path)?;
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
@@ -134,8 +161,16 @@ fn build_workspace_canister_artifact_from_spec(
         &spec.package_manifest_path,
         &spec.package_name,
         Some(profile.protocol_profile_digest),
+        options,
     )?;
-    finish_canister_artifact_output(context, spec, &release_wasm_path, &candid, profile)
+    finish_canister_artifact_output(
+        context,
+        spec,
+        &release_wasm_path,
+        &candid,
+        profile,
+        options.sidecar_only_candid,
+    )
 }
 
 /// Build all admitted configured roles in one Cargo invocation per workspace and profile.
@@ -164,6 +199,7 @@ pub fn build_workspace_canister_artifacts_from_specs(
                 context,
                 &spec.package_manifest_path,
                 &spec.package_name,
+                &CanisterArtifactBuildOptions::default(),
             )?;
         }
     }
@@ -183,6 +219,7 @@ pub fn build_workspace_canister_artifacts_from_specs(
             &spec.package_manifest_path,
             &spec.package_name,
             Some(profile.protocol_profile_digest),
+            &CanisterArtifactBuildOptions::default(),
         )?;
         profiles.push((candid, profile));
     }
@@ -192,8 +229,15 @@ pub fn build_workspace_canister_artifacts_from_specs(
             handles.push(scope.spawn(move || {
                 let release_wasm_path =
                     built_canister_wasm_path(context, context.profile, spec.package_name.as_str());
-                finish_canister_artifact_output(context, spec, &release_wasm_path, &candid, profile)
-                    .map_err(|error| error.to_string())
+                finish_canister_artifact_output(
+                    context,
+                    spec,
+                    &release_wasm_path,
+                    &candid,
+                    profile,
+                    false,
+                )
+                .map_err(|error| error.to_string())
             }));
         }
 
@@ -236,21 +280,20 @@ fn finish_canister_artifact_output(
     release_wasm_path: &Path,
     candid: &[u8],
     profile: canic_core::role_contract::ProtocolProfileHashes,
+    sidecar_only_candid: bool,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    let mut transforms = Vec::new();
     write_wasm_artifact(release_wasm_path, &spec.wasm_path)?;
-    transforms.push(maybe_shrink_wasm_artifact(&spec.wasm_path)?);
     write_bytes(&spec.did_path, candid)?;
-
-    if should_embed_candid_metadata(context.build_network) {
-        transforms.push(embed_candid_metadata(&spec.wasm_path, &spec.did_path)?);
-    } else {
-        transforms.push(ArtifactTransformOutput::not_requested(
-            ArtifactTransformKind::CandidMetadata,
-        ));
+    let transforms = finalize_wasm_artifact(
+        context.profile,
+        !sidecar_only_candid && should_embed_candid_metadata(context.build_network),
+        &spec.wasm_path,
+        &spec.did_path,
+        &spec.wasm_gz_path,
+    )?;
+    if sidecar_only_candid {
+        validate_sidecar_only_candid_artifact(&spec.wasm_path, &spec.did_path)?;
     }
-    enforce_wasm_code_section_limit(&spec.wasm_path)?;
-    write_gzip_artifact(&spec.wasm_path, &spec.wasm_gz_path)?;
 
     Ok(CanisterArtifactBuildOutput {
         package_name: spec.package_name.clone(),
@@ -436,8 +479,9 @@ fn run_canister_build(
     manifest_path: &Path,
     package_name: &str,
     protocol_profile_digest: Option<canic_core::role_contract::ProtocolProfileDigest>,
+    options: &CanisterArtifactBuildOptions,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let mut command = canister_cargo_build_command(context, manifest_path, context.profile);
+    let mut command = canister_runtime_command(context, manifest_path, context.profile, options);
     command.env_remove(canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV);
     if let Some(digest) = protocol_profile_digest {
         command.env(
@@ -467,8 +511,10 @@ fn run_canister_profile_candid_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
     package_name: &str,
+    options: &CanisterArtifactBuildOptions,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let mut command = canister_profile_candid_command(context, manifest_path, context.profile);
+    let mut command =
+        canister_profile_candid_command(context, manifest_path, context.profile, options);
     let output = command.output()?;
     if !output.status.success() {
         return Err(format!(
@@ -489,8 +535,10 @@ fn canister_profile_candid_command(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
     profile: CanisterBuildProfile,
+    options: &CanisterArtifactBuildOptions,
 ) -> Command {
     let mut command = canister_cargo_command(context, manifest_path, profile, "rustc");
+    apply_cargo_feature_selection(&mut command, options);
     command.args([
         "--lib",
         "--",
@@ -499,6 +547,33 @@ fn canister_profile_candid_command(
         "--check-cfg=cfg(canic_export_candid)",
     ]);
     command
+}
+
+fn canister_runtime_command(
+    context: &WorkspaceBuildContext,
+    manifest_path: &Path,
+    profile: CanisterBuildProfile,
+    options: &CanisterArtifactBuildOptions,
+) -> Command {
+    let mut command = canister_cargo_build_command(context, manifest_path, profile);
+    apply_cargo_feature_selection(&mut command, options);
+    command
+}
+
+fn apply_cargo_feature_selection(command: &mut Command, options: &CanisterArtifactBuildOptions) {
+    if !options.default_features {
+        command.arg("--no-default-features");
+    }
+    if !options.cargo_features.is_empty() {
+        command.arg("--features").arg(
+            options
+                .cargo_features
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+    }
 }
 
 fn run_canister_build_batch(
@@ -657,10 +732,12 @@ mod tests {
     #[test]
     fn profile_candid_pass_is_explicit_for_nonlocal_binding_derivation() {
         let context = build_context();
+        let options = CanisterArtifactBuildOptions::default();
         let command = canister_profile_candid_command(
             &context,
             Path::new("/workspace/app/Cargo.toml"),
             CanisterBuildProfile::Fast,
+            &options,
         );
         let args = command
             .get_args()
@@ -673,6 +750,49 @@ mod tests {
                 .any(|args| args == ["--cfg", "canic_export_candid"])
         );
         assert!(args.contains(&"--check-cfg=cfg(canic_export_candid)".to_string()));
+    }
+
+    #[test]
+    fn declaration_and_runtime_passes_share_exact_cargo_features() {
+        let context = build_context();
+        let options = CanisterArtifactBuildOptions {
+            cargo_features: ["qualification", "standalone-local"]
+                .map(str::to_string)
+                .into_iter()
+                .collect(),
+            default_features: false,
+            sidecar_only_candid: true,
+        };
+        let declaration = canister_profile_candid_command(
+            &context,
+            Path::new("/workspace/app/Cargo.toml"),
+            CanisterBuildProfile::Fast,
+            &options,
+        );
+        let runtime = canister_runtime_command(
+            &context,
+            Path::new("/workspace/app/Cargo.toml"),
+            CanisterBuildProfile::Fast,
+            &options,
+        );
+        let declaration_args = declaration
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        let runtime_args = runtime
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        for args in [&declaration_args, &runtime_args] {
+            assert!(args.contains(&"--no-default-features".to_string()));
+            assert!(
+                args.windows(2)
+                    .any(|args| { args == ["--features", "qualification,standalone-local"] })
+            );
+        }
+        assert!(declaration_args.contains(&"canic_export_candid".to_string()));
+        assert!(!runtime_args.contains(&"canic_export_candid".to_string()));
     }
 
     #[test]

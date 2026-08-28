@@ -104,7 +104,6 @@ struct LifecycleCompositionSnapshot {
 }
 
 #[test]
-#[ignore = "published IcyDB still resolves ic-timers 0.6.1; re-enable after its timer-aligned release"]
 fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
     let trap_wasm = icydb_participant_trap_wasm();
     let fixture = install_canic_icydb_lifecycle_fixture();
@@ -152,7 +151,7 @@ fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
         &fixture.pic,
         canister_id,
         "active before upgrade",
-        expected_active_inventory(),
+        expected_active_inventory(IcydbRecoveryExpectation::Scheduled),
     );
 
     fixture
@@ -180,7 +179,7 @@ fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
         &fixture.pic,
         canister_id,
         "active after upgrade",
-        expected_active_inventory(),
+        expected_active_inventory(IcydbRecoveryExpectation::Quiescent),
     );
 }
 
@@ -219,7 +218,7 @@ fn prove_initial_composition(fixture: &CanicIcydbLifecycleFixture) {
         &fixture.pic,
         canister_id,
         "active after install",
-        expected_active_inventory(),
+        expected_active_inventory(IcydbRecoveryExpectation::Scheduled),
     );
 }
 
@@ -510,7 +509,7 @@ fn expected_prepared_inventory(icydb_recovery: IcydbRecoveryExpectation) -> Vec<
     ]
 }
 
-fn expected_active_inventory() -> Vec<LogicalTimerRow> {
+fn expected_active_inventory(icydb_recovery: IcydbRecoveryExpectation) -> Vec<LogicalTimerRow> {
     vec![
         logical_timer_row(
             "canic",
@@ -528,17 +527,19 @@ fn expected_active_inventory() -> Vec<LogicalTimerRow> {
             TimerRegistrationStatus::Unregistered,
             TimerProcessCondition::Idle,
         ),
-        expected_icydb_recovery_row(IcydbRecoveryExpectation::Scheduled),
+        expected_icydb_recovery_row(icydb_recovery),
     ]
 }
 
 fn expected_icydb_recovery_row(expectation: IcydbRecoveryExpectation) -> LogicalTimerRow {
-    let (registration, condition) = match expectation {
+    let (scheduling_mode, registration, condition) = match expectation {
         IcydbRecoveryExpectation::Quiescent => (
+            TimerSchedulingMode::Watchdog,
             TimerRegistrationStatus::Unregistered,
             TimerProcessCondition::Idle,
         ),
         IcydbRecoveryExpectation::Scheduled => (
+            TimerSchedulingMode::Continuation,
             TimerRegistrationStatus::Scheduled,
             TimerProcessCondition::Active,
         ),
@@ -547,7 +548,7 @@ fn expected_icydb_recovery_row(expectation: IcydbRecoveryExpectation) -> Logical
         "icydb",
         "startup",
         "recovery",
-        TimerSchedulingMode::Watchdog,
+        scheduling_mode,
         registration,
         condition,
     )

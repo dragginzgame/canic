@@ -13,12 +13,15 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.16` at
-`045f131224506bfadabfdb258471cd9b9745d8c8` is immutable but unqualified: its
-complete gate stopped at warning-denied Clippy, while the former release shell
-continued through versioning, tagging, push and package publication. The open
-`0.109.17` correction is the maintained successor; downstream adoption of
-`0.109.16` is blocked.
+Published `v0.109.17` at
+`0f28b200865912d172dc2b09f04949938244b2af` is the immutable maintained
+release. Published `v0.109.16` at
+`045f131224506bfadabfdb258471cd9b9745d8c8` remains immutable but unqualified:
+its complete gate stopped at warning-denied Clippy while the former release
+shell continued through versioning, tagging, push and package publication.
+The open `0.109.18` patch corrects current Fleet Ensure plan JSON round trips
+and carries the timer-aligned IcyDB fixture; downstream adoption of `0.109.16`
+remains blocked.
 
 The interrupted registry publication exposed six immutable `0.109.16`
 packages (`canic-backup`, `canic-core`, `canic-control-plane`, `canic-macros`,
@@ -90,6 +93,18 @@ globally distributed lock across independent operator-state roots is not yet
 provided; do not run concurrent apply commands from different Canic state
 roots.
 
+Fleet Ensure schema `v1` now owns one exact JSON projection for the complete
+current plan. Every nested `u128` cycle amount is bounded decimal text, and the
+matching human-readable `Cycles` decoder accepts that exact form even inside
+Serde's internally tagged current protocol enum. Candid and binary encodings
+remain exact `u128`; plan and action hashing retain the same decimal authority,
+so reopening a retained plan does not change its digest or replay identity.
+New plan documents retain only the Store chunk hash, bounded size, template,
+version and index. Exact bytes live under
+`.canic/fleet-ensure/objects/sha256/`; write verifies any retained prepared
+authority before retention, and read rejects missing, unsafe, oversized or
+hash-mismatched objects before an action can be observed or issued.
+
 ## Current Completion State
 
 The current candidate converges canister existence, code, controllers, running
@@ -151,10 +166,10 @@ is closed without restoring a deleted install or recovery owner.
 The direct Canic runtime exact-pins `ic-timers 0.7.0` and uses its
 policy-specific watchdog reconciliation state without changing Canic's
 cadence-backed recovery contract. The composed-framework lifecycle fixture
-still resolves the exact published IcyDB 0.245.1 runtime and model family until
-its timer-aligned release is selected. Dependency edges into that family are
-confined to the two unpublished fixture packages, while published Canic package
-graphs remain IcyDB-free. The host-only published
+resolves the exact published IcyDB 0.246.0 runtime and model family. Both now
+share the one locked `ic-timers 0.7.0` provider. Dependency edges into that
+family are confined to the two unpublished fixture packages, while published
+Canic package graphs remain IcyDB-free. The host-only published
 `canic::testing` feature now owns the generic managed-App test boundary: exact
 grouped init and Directory authority, initial fencing/activation, protected
 status, successor fencing, same-release upgrade and standalone-local install.
@@ -220,23 +235,70 @@ PocketIC gate was run during coding, as required by repository policy.
 The Canic-side `ic-timers 0.7.0` slice passes locked all-target checks and
 warning-denied all-target Clippy for `canic-core` and `canic-control-plane`,
 five core timer-custody tests, five Root canister-pool tests, the focused native
-ownership guards and changelog governance. The combined IcyDB fixture was not
-rerun or awaited; its maintained one-package guard remains fail-closed until
-the matching timer-aligned IcyDB release is selected.
+ownership guards and changelog governance. Published IcyDB 0.246.0 now resolves
+the same timer provider, so the combined lifecycle fixture is active again. Its
+targeted governed PocketIC journey passes in 11 seconds with one shared timer
+inventory across install, prepared, active and upgrade boundaries.
 
-The `0.109.17` release correction centralizes complete and fast versioning in
+Published `0.109.17` centralizes complete and fast versioning in
 one `set -euo pipefail` owner. Validation failure, fast-eligibility failure,
 dirty state or source drift now exits before the version bumper receives its
 validated-source environment. Its executable fixture proves each negative path
 and the exact successful authority handoff. The two timing-report format calls
-that stopped `0.109.16` Clippy use the maintained inline argument form. The
-known unpublished composed-IcyDB dependency on `ic-timers 0.6.1` is reported as
-a warning rather than a release blocker while Canic remains exact-pinned to
-`0.7.0`; an unknown timer-provider version still fails the inventory. The
-composed-IcyDB PocketIC custody journey is explicitly ignored, with its strict
-assertions retained, until the timer-aligned IcyDB release is available.
+that stopped `0.109.16` Clippy use the maintained inline argument form.
 
-The same open `0.109.17` batch now reduces endpoint-heavy Canic Wasm without
+The open `0.109.18` patch aligns IcyDB `0.246.0` on the single
+`ic-timers 0.7.0` provider and repairs the current Fleet Ensure JSON boundary.
+Focused production-writer coverage passes for Registry join and activation
+with `u128::MAX` cycle values. An isolated copy of the exact downstream
+37,131,114-byte plan and 8,448-byte issued journal decodes and re-encodes
+without changing the source files, embedded plan digest, operation ID,
+conservation totals or ordered action hashes. Its isolated canonical rewrite
+removes every inline Store payload and is less than one tenth of the retained
+file size. The evidence covers all eleven current protocol variants. The issued
+action is observed terminal without a second command, and its immediate
+successor ensure performs zero mutations. A focused object-store regression
+also proves fail-closed rejection after content tampering.
+
+The same patch exposes one supported feature-selected standalone-local build.
+Its declaration pass produces the exact adjacent `.did`; its deployable runtime
+uses the same Cargo feature set without the declaration cfg, pointer export or
+embedded public Candid. Finalization compares the runtime query/update export
+inventory to the parsed sidecar and fails before `ICP_WASM_OUTPUT_PATH` copying
+on any mismatch. Normal managed builds retain their existing local metadata
+policy, while IC builds remain metadata-free.
+
+Release-profile artifacts now have one canonical finalizer for configured
+Components, Fleet Coordinator and Wasm Store. It requires the checksum-bound
+official Binaryen 108 identity, derives the input's admitted IC feature flags,
+applies `-Oz`, and rejects export, embedded public-Candid or feature drift
+before replacing the staged input. Gzip, artifact hashes, release sets, Store
+publication and module-hash authority consume only those optimized bytes; fast
+and debug builds do not request the transform, and release has no unoptimized
+fallback. Provenance records before/after raw, gzip, code-section, data-section
+and defined-function values. The recurring footprint method covers all nine
+Canic-owned roles and requires exact identity across two clean release builds.
+
+The focused real App build reduced section 10 from 2,997,977 to 2,827,666
+bytes through Binaryen. Named post-optimization Twiggy evidence then identified
+only stable sorting as a material Canic-owned residual. Removing hidden
+`BTreeMap::collect` sorts in Component topology and sharing the unique-ID total
+order used by three chain-key batch selectors reduced the final measured code
+section again to 2,800,001 bytes and defined functions from 5,009 to 4,963.
+Fourteen topology, sixteen Component-deployment and twenty-two chain-key batch
+tests pass, alongside the focused host artifact/provenance suites and
+warning-denied host and core Clippy. IcyDB's retained-kernel scan residual is
+recorded as upstream feedback only; no IcyDB repository was changed.
+
+Read-only Toko Miner inspection confirms the managed and standalone-local
+PocketIC journeys cover install, Canic/IcyDB readiness, admission, operations,
+state and timer restoration, same-Wasm upgrade and fencing. Its current dirty
+qualification script remains pinned to Canic `0.109.17` and builds the fast
+profile, so the supplied optimized managed journey is useful evidence but not
+the final frozen-candidate release-pipeline gate. Toko must bind that gate to
+the candidate's canonical release artifact; Canic did not mutate Toko.
+
+Published `0.109.17` also reduces endpoint-heavy Canic Wasm without
 removing managed behavior. Macro-generated handlers share non-generic
 instrumentation, standard update payload limits use the runtime fallback, and
 default Fleet guards skip unused caller/context construction. Final artifacts
@@ -418,14 +480,13 @@ performed.
 
 ## Next Action
 
-The open `0.109.16` batch corrects the current Fleet Ensure ordering,
-same-module reinstall proof, conflicted Root observation, pending-reset balance
-truth, retry progress identity, target-local funding margin, operation-bound
-Store adoption and pre-effect Component/pool capacity validation. Targeted host
-and CLI compilation plus focused behavior tests are the coding-time boundary;
-the maintainer-owned release workflow chooses the broad validation gate.
+Finish the narrow `0.109.18` candidate with targeted warning-denied host/core
+Clippy, changelog/status integrity and diff hygiene. Once the combined dirty
+candidate is frozen, the maintainer-owned release workflow must run the normal
+complete Canic gate, the two-clean-build nine-role Wasm audit and Toko Miner's
+managed plus standalone-local built-release-Wasm gate before version or
+publication authority. After immutable publication, downstream may reopen its
+existing schema-1 plan and issued journal; it must not delete or rewrite that evidence.
 The distinct pooled-canister Ledger-account recovery operation and finalized
-artifact build-network binding remain later accepted work; this batch neither
-counts accidentally credited Ledger balances as native cycles nor deploys a
-network-mismatched artifact implicitly.
+artifact build-network binding remain later accepted work.
 Do not begin 0.110. Do not begin 0.111 from this batch.

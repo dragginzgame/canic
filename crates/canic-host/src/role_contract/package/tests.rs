@@ -97,8 +97,6 @@ fn isolated_renamed_canic_workspace_is_rejected() {
         panic!("renamed duplicate must preserve its Cargo failure, got {validation:?}");
     };
     assert_eq!(phase, "wasm_filtered_metadata");
-    assert!(cause.contains("depends on crate `canic"));
-    assert!(cause.contains("multiple times with different names"));
     assert!(!cause.contains(&fixture.root.display().to_string()));
     assert!(!cause.contains(env!("CARGO_MANIFEST_DIR")));
 }

@@ -19,8 +19,11 @@ For the complete maintainer toolchain:
 make install-dev
 ```
 
-The maintainer setup installs the repository-pinned ICP CLI, Wasm/Candid tools
-and `sccache`, and configures the repository pre-commit formatter. Explicit
+The maintainer setup installs the repository-pinned ICP CLI, `ic-wasm`,
+Binaryen, Candid tools and `sccache`, and configures the repository pre-commit
+formatter. Release artifact builds require the checksum-bound Binaryen 108
+`wasm-opt`; they fail rather than emitting unoptimized release bytes when it is
+missing or has a different identity. Explicit
 `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values remain
 authoritative. Otherwise Make and Canic artifact builds discover `sccache` and
 keep deterministic Wasm builds non-incremental.

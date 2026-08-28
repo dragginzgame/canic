@@ -776,18 +776,12 @@ pub enum ComponentTopologyError {
 fn compile_provisioning_grants(
     config: &ConfigModel,
 ) -> Result<Vec<ComponentProvisioningGrant>, ComponentTopologyError> {
-    let mut outgoing = config
-        .component_specs
-        .keys()
-        .cloned()
-        .map(|component_spec| (component_spec, Vec::new()))
-        .collect::<BTreeMap<ComponentSpecId, Vec<ComponentSpecId>>>();
-    let mut incoming = config
-        .component_specs
-        .keys()
-        .cloned()
-        .map(|component_spec| (component_spec, 0_u32))
-        .collect::<BTreeMap<_, _>>();
+    let mut outgoing = BTreeMap::<ComponentSpecId, Vec<ComponentSpecId>>::new();
+    let mut incoming = BTreeMap::<ComponentSpecId, u32>::new();
+    for component_spec in config.component_specs.keys() {
+        outgoing.insert(component_spec.clone(), Vec::new());
+        incoming.insert(component_spec.clone(), 0);
+    }
     let mut grants = Vec::new();
 
     for (requester_component_spec, source) in &config.component_specs {
@@ -873,16 +867,12 @@ fn compile_provisioning_grants(
 fn validate_projected_grant_cycles(
     topology: &ComponentTopology,
 ) -> Result<(), ComponentTopologyError> {
-    let mut outgoing = topology
-        .component_specs
-        .iter()
-        .map(|spec| (spec.component_spec.clone(), Vec::new()))
-        .collect::<BTreeMap<ComponentSpecId, Vec<ComponentSpecId>>>();
-    let mut incoming = topology
-        .component_specs
-        .iter()
-        .map(|spec| (spec.component_spec.clone(), 0_u32))
-        .collect::<BTreeMap<_, _>>();
+    let mut outgoing = BTreeMap::<ComponentSpecId, Vec<ComponentSpecId>>::new();
+    let mut incoming = BTreeMap::<ComponentSpecId, u32>::new();
+    for spec in &topology.component_specs {
+        outgoing.insert(spec.component_spec.clone(), Vec::new());
+        incoming.insert(spec.component_spec.clone(), 0);
+    }
 
     for grant in &topology.provisioning_grants {
         let Some(requester_outgoing) = outgoing.get_mut(&grant.requester_component_spec) else {

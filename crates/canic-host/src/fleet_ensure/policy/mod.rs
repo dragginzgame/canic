@@ -1581,7 +1581,7 @@ pub(crate) fn operation_id(desired_sha256: &str, environment: &str, fleet: &str)
 pub(crate) fn expected_plan_sha256(plan: &FleetEnsurePlan) -> String {
     let mut canonical = plan.clone();
     canonical.plan_sha256.clear();
-    let bytes = serde_json::to_vec(&canonical).expect("Fleet ensure plan is JSON serializable");
+    let bytes = super::json::to_vec(&canonical).expect("Fleet ensure plan is JSON serializable");
     let mut hasher = Sha256::new();
     hash_field(&mut hasher, b"canic:fleet-ensure:plan:v1");
     hash_field(&mut hasher, &bytes);

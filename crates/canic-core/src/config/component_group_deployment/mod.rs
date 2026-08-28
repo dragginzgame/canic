@@ -452,13 +452,13 @@ struct DeploymentValidationLedger {
 
 impl DeploymentValidationLedger {
     fn new(component_topology: &ComponentTopology) -> Self {
+        let mut spec_demand = BTreeMap::new();
+        for spec in &component_topology.component_specs {
+            spec_demand.insert(spec.component_spec.clone(), 0);
+        }
         Self {
             flattened_member_count: 0,
-            spec_demand: component_topology
-                .component_specs
-                .iter()
-                .map(|spec| (spec.component_spec.clone(), 0_u32))
-                .collect(),
+            spec_demand,
         }
     }
 

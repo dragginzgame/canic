@@ -159,6 +159,7 @@ pub struct ArtifactTransformProvenanceV1 {
     pub tool: String,
     pub tool_version: Option<String>,
     pub outcome: ArtifactTransformOutcomeV1,
+    pub metrics: Option<WasmTransformMetricsV1>,
 }
 
 /// Artifact-changing operation selected by the host builder.
@@ -167,6 +168,7 @@ pub struct ArtifactTransformProvenanceV1 {
 pub enum ArtifactTransformKindV1 {
     Shrink,
     CandidMetadata,
+    Optimize,
 }
 
 /// Recorded outcome of one artifact transform decision.
@@ -176,6 +178,23 @@ pub enum ArtifactTransformOutcomeV1 {
     Applied,
     ToolUnavailable,
     NotRequested,
+}
+
+/// Exact structural sizes before and after release Wasm optimization.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WasmTransformMetricsV1 {
+    pub before: WasmArtifactMetricsV1,
+    pub after: WasmArtifactMetricsV1,
+}
+
+/// Install-relevant and transport sizes for one Wasm module.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WasmArtifactMetricsV1 {
+    pub raw_bytes: u64,
+    pub gzip_bytes: u64,
+    pub code_section_bytes: u64,
+    pub data_section_bytes: u64,
+    pub defined_functions: u32,
 }
 
 ///
