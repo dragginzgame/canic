@@ -2,8 +2,8 @@ use crate::{
     fleet_ensure::{
         model::{
             CanisterRuntimeStatus, CurrentFleetProtocolAction, DesiredCanister,
-            DesiredCanisterKind, DesiredFleet, DesiredFleetProtocol, DesiredPresence,
-            DesiredProtocolStep, DrainAuthority, EffectRecord, EnsureAction,
+            DesiredCanisterInit, DesiredCanisterKind, DesiredFleet, DesiredFleetProtocol,
+            DesiredPresence, DesiredProtocolStep, DrainAuthority, EffectRecord, EnsureAction,
             FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureStateRecord, FleetObservation, LiveCanister,
         },
         ops::{EffectObservation, EffectOutcome, EnsurePlatform, TerminalFleetInventory},
@@ -145,10 +145,12 @@ impl MockPlatform {
                 self.live.insert(
                     principal.clone(),
                     LiveCanister {
+                        canister_version: Some(1),
                         controllers: controllers.clone(),
                         cycles: retained_cycles,
                         module_sha256: None,
                         principal: principal.clone(),
+                        reinstall_required: false,
                         root_owned_lifecycle: None,
                         status: CanisterRuntimeStatus::Running,
                     },
@@ -183,10 +185,18 @@ impl MockPlatform {
                 }
             }
             EnsureAction::Install { wasm_sha256, .. } => {
-                self.live
+                let live = self
+                    .live
                     .get_mut(principal.as_deref().expect("install principal"))
-                    .expect("install target")
-                    .module_sha256 = Some(wasm_sha256.clone());
+                    .expect("install target");
+                live.module_sha256 = Some(wasm_sha256.clone());
+                live.canister_version = Some(
+                    live.canister_version
+                        .unwrap_or_default()
+                        .checked_add(1)
+                        .expect("fixture canister version"),
+                );
+                live.reinstall_required = false;
                 empty_outcome()
             }
             EnsureAction::FleetProtocol { name, .. } | EnsureAction::Protocol { name, .. } => {
@@ -335,12 +345,19 @@ impl EnsurePlatform for MockPlatform {
             EnsureAction::Delete { .. } => {
                 principal.is_none_or(|value| !self.live.contains_key(value))
             }
-            EnsureAction::Install { wasm_sha256, .. } => {
-                principal
-                    .and_then(|value| self.live.get(value))
-                    .and_then(|live| live.module_sha256.as_deref())
-                    == Some(wasm_sha256)
-            }
+            EnsureAction::Install {
+                mode, wasm_sha256, ..
+            } => principal
+                .and_then(|value| self.live.get(value))
+                .is_some_and(|live| {
+                    crate::fleet_ensure::ops::install_effect_applied(
+                        *mode,
+                        wasm_sha256,
+                        live.module_sha256.as_deref(),
+                        record.pre_canister_version,
+                        live.canister_version,
+                    )
+                }),
             EnsureAction::FleetProtocol { name, .. } | EnsureAction::Protocol { name, .. } => {
                 self.protocol_ready.contains(name)
             }
@@ -402,6 +419,16 @@ impl EnsurePlatform for MockPlatform {
             return Ok(None);
         };
         Ok(self.live.get(destination).map(|live| live.cycles))
+    }
+
+    fn action_canister_version(
+        &mut self,
+        action: &EnsureAction,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<u64>, Self::Error> {
+        Ok(Self::principal(state, action)
+            .and_then(|principal| self.live.get(principal))
+            .and_then(|live| live.canister_version))
     }
 
     fn apply(
@@ -550,6 +577,189 @@ fn conservation_equation_accounts_for_funding_fees_and_burn_separately() {
     assert!(proof.scheduled_transfer_cycles > 0);
     assert!(proof.retained_in_reused_canisters_cycles > 0);
     assert!(proof.maximum_new_funding_cycles > 0);
+}
+
+#[test]
+fn infrastructure_install_order_keeps_store_before_root_initialization() {
+    let coordinator = install_action(
+        "coordinator",
+        DesiredCanisterInit::Coordinator,
+        crate::fleet_ensure::model::InstallMode::Reinstall,
+    );
+    let store = install_action(
+        "store",
+        DesiredCanisterInit::Store {
+            root: "root".to_string(),
+        },
+        crate::fleet_ensure::model::InstallMode::Reinstall,
+    );
+    let root = install_action(
+        "root",
+        DesiredCanisterInit::Root {
+            root: "root".to_string(),
+        },
+        crate::fleet_ensure::model::InstallMode::Reinstall,
+    );
+
+    assert!(workflow::action_order(&coordinator) < workflow::action_order(&store));
+    assert!(workflow::action_order(&store) < workflow::action_order(&root));
+}
+
+#[test]
+fn same_module_reinstall_requires_a_newer_canister_version() {
+    use crate::fleet_ensure::{model::InstallMode, ops::install_effect_applied};
+
+    assert!(!install_effect_applied(
+        InstallMode::Reinstall,
+        "same",
+        Some("same"),
+        Some(7),
+        Some(7),
+    ));
+    assert!(install_effect_applied(
+        InstallMode::Reinstall,
+        "same",
+        Some("same"),
+        Some(7),
+        Some(8),
+    ));
+    assert!(!install_effect_applied(
+        InstallMode::Reinstall,
+        "same",
+        Some("different"),
+        Some(7),
+        Some(8),
+    ));
+}
+
+#[test]
+fn ledger_withdraw_receipt_is_not_native_funding_completion() {
+    use crate::fleet_ensure::ops::native_funding_applied;
+
+    assert!(!native_funding_applied(5_000_000_000_000, None));
+    assert!(!native_funding_applied(
+        5_000_000_000_000,
+        Some(4_999_999_999_999),
+    ));
+    assert!(native_funding_applied(
+        5_000_000_000_000,
+        Some(5_000_000_000_000),
+    ));
+}
+
+#[test]
+fn same_module_reinstall_runs_once_and_replay_is_effect_free() {
+    let mut fixture = fixture();
+    fixture.desired.canisters.truncate(1);
+    fixture.platform.desired = fixture.desired.clone();
+    let treasury = fixture
+        .platform
+        .live
+        .get_mut(TREASURY)
+        .expect("live Coordinator");
+    treasury.reinstall_required = true;
+    let before = treasury.canister_version;
+    let desired_sha256 = "7".repeat(64);
+
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan same-module reinstall");
+    assert!(matches!(
+        workflow::ordered_actions(&planned.plan).as_slice(),
+        [EnsureAction::Install {
+            mode: crate::fleet_ensure::model::InstallMode::Reinstall,
+            ..
+        }]
+    ));
+    let applied = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("apply same-module reinstall");
+    assert!(applied.terminal);
+    assert_eq!(applied.effects_applied, 1);
+    assert!(
+        fixture
+            .platform
+            .live
+            .get(TREASURY)
+            .and_then(|live| live.canister_version)
+            > before
+    );
+
+    let replay_plan = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_001,
+        &mut fixture.platform,
+    )
+    .expect("plan terminal replay");
+    assert!(workflow::ordered_actions(&replay_plan.plan).is_empty());
+    let replay = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &replay_plan.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("apply terminal replay");
+    assert!(replay.terminal);
+    assert_eq!(replay.effects_applied, 0);
+}
+
+#[test]
+fn funding_margin_is_bounded_by_the_target_observation_only() {
+    let mut fixture = fixture();
+    fixture.desired.maximum_observation_burn_cycles = "10".to_string();
+    fixture.platform.desired = fixture.desired.clone();
+
+    let report = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"3".repeat(64),
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("compile target-bounded funding plan");
+    let funding = report
+        .plan
+        .canisters
+        .iter()
+        .find(|canister| canister.name == "app")
+        .and_then(|canister| {
+            canister.actions.iter().find_map(|action| match action {
+                EnsureAction::Fund {
+                    amount,
+                    expected_post_cycles,
+                    funding_deficit_cycles,
+                    funding_margin_cycles,
+                    ..
+                } => Some((
+                    *amount,
+                    *expected_post_cycles,
+                    *funding_deficit_cycles,
+                    *funding_margin_cycles,
+                )),
+                _ => None,
+            })
+        })
+        .expect("underfunded App has one funding action");
+
+    assert_eq!(funding, (28, 33, 15, 13));
 }
 
 #[test]
@@ -714,9 +924,11 @@ fn managed_topology_without_typed_protocol_intent_rejects_before_effects() {
 fn terminal_inventory_rejects_missing_and_duplicate_principals() {
     let mut state = FleetEnsureStateRecord {
         active_registry: None,
+        completed_reinstalls: BTreeMap::new(),
         fleet: "inventory-test".to_string(),
         pending_principals: BTreeMap::new(),
         principals: BTreeMap::new(),
+        retained_cycles_by_principal: BTreeMap::new(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         topology: BTreeMap::from([(
             "coordinator".to_string(),
@@ -1321,6 +1533,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
         operator_cycles: u128,
         pic: pocket_ic::PocketIc,
         protocol_ready: BTreeSet<String>,
+        reinstall_required: BTreeSet<String>,
     }
 
     impl PocketPlatform {
@@ -1342,6 +1555,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
                 .canister_status(id, Some(CONTROLLER.parse().expect("controller Principal")))
                 .expect("PocketIC status");
             Some(LiveCanister {
+                canister_version: Some(status.version),
                 controllers: status
                     .settings
                     .controllers
@@ -1353,6 +1567,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
                     .module_hash
                     .map(canic_core::cdk::utils::hash::hex_bytes),
                 principal: principal.to_string(),
+                reinstall_required: self.reinstall_required.contains(principal),
                 root_owned_lifecycle: None,
                 status: match format!("{:?}", status.status).as_str() {
                     "Running" => CanisterRuntimeStatus::Running,
@@ -1436,13 +1651,19 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
                 EnsureAction::Create { .. } | EnsureAction::Fund { .. } => None,
             };
             let applied = match action {
-                EnsureAction::Install { wasm_sha256, .. } => {
-                    principal
-                        .and_then(|value| self.live(value))
-                        .and_then(|live| live.module_sha256)
-                        .as_deref()
-                        == Some(wasm_sha256)
-                }
+                EnsureAction::Install {
+                    mode, wasm_sha256, ..
+                } => principal
+                    .and_then(|value| self.live(value))
+                    .is_some_and(|live| {
+                        crate::fleet_ensure::ops::install_effect_applied(
+                            *mode,
+                            wasm_sha256,
+                            live.module_sha256.as_deref(),
+                            record.pre_canister_version,
+                            live.canister_version,
+                        )
+                    }),
                 EnsureAction::Start { .. } => principal
                     .and_then(|value| self.live(value))
                     .is_some_and(|live| live.status == CanisterRuntimeStatus::Running),
@@ -1494,6 +1715,20 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
             _state: &FleetEnsureStateRecord,
         ) -> Result<Option<u128>, Self::Error> {
             Ok(None)
+        }
+
+        fn action_canister_version(
+            &mut self,
+            action: &EnsureAction,
+            state: &FleetEnsureStateRecord,
+        ) -> Result<Option<u64>, Self::Error> {
+            let principal = match action {
+                EnsureAction::Install { principal, .. } => Self::principal(state, principal),
+                _ => None,
+            };
+            Ok(principal
+                .and_then(|value| self.live(value))
+                .and_then(|live| live.canister_version))
         }
 
         fn apply(
@@ -1578,6 +1813,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
                                     Some(CONTROLLER.parse().expect("controller Principal")),
                                 )
                                 .expect("reinstall PocketIC canister");
+                            self.reinstall_required.remove(&id.to_string());
                         }
                     }
                     Ok(empty_outcome())
@@ -1640,7 +1876,6 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
     fs::create_dir_all(&root).expect("create PocketIC fixture root");
     let wasm = root.join("current.wasm");
     fs::write(&wasm, b"\0asm\x01\0\0\0").expect("write minimal Wasm");
-    let old_wasm = b"\0asm\x01\0\0\0\0\x01\0".to_vec();
     let pic = PocketIcBuilder::new().with_application_subnet().build();
     let treasury = pic
         .create_canister_with_params(
@@ -1670,7 +1905,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
         .expect("create partial Root");
     pic.install_canister(
         root_canister,
-        old_wasm,
+        fs::read(&wasm).expect("read current Root Wasm"),
         Vec::new(),
         Some(CONTROLLER.parse().expect("controller Principal")),
     );
@@ -1701,10 +1936,10 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
     let mut root_desired =
         desired_canister("root", Some(&root_canister.to_string()), false, &wasm, None);
     // This fixture exercises the generic effect/conservation engine with
-    // minimal Wasm, not the typed Canic control plane. The production typed
-    // journey owns Coordinator/Root/Store initialization separately.
-    root_desired.kind = DesiredCanisterKind::Auxiliary;
-    root_desired.parent = None;
+    // minimal Wasm while retaining the exact Coordinator -> Root topology
+    // required for a governed same-module Root reset.
+    root_desired.kind = DesiredCanisterKind::Root;
+    root_desired.parent = Some("coordinator".to_string());
     root_desired.initial_cycles = "1000000000000".to_string();
     root_desired.minimum_cycles = "1000000000000".to_string();
     canisters.push(root_desired);
@@ -1767,6 +2002,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
         operator_cycles: 10_000_000_000_000,
         pic,
         protocol_ready: BTreeSet::new(),
+        reinstall_required: BTreeSet::from([root_canister.to_string()]),
     };
     let source = "d".repeat(64);
     let planned = workflow::plan(
@@ -2051,6 +2287,7 @@ fn live(
     controllers: &[&str],
 ) -> LiveCanister {
     LiveCanister {
+        canister_version: Some(1),
         controllers: controllers
             .iter()
             .map(|value| (*value).to_string())
@@ -2058,12 +2295,32 @@ fn live(
         cycles,
         module_sha256: module_sha256.map(str::to_string),
         principal: principal.to_string(),
+        reinstall_required: false,
         root_owned_lifecycle: None,
         status: if running {
             CanisterRuntimeStatus::Running
         } else {
             CanisterRuntimeStatus::Stopped
         },
+    }
+}
+
+fn install_action(
+    name: &str,
+    canic_init: DesiredCanisterInit,
+    mode: crate::fleet_ensure::model::InstallMode,
+) -> EnsureAction {
+    EnsureAction::Install {
+        canic_init: Some(canic_init),
+        init_arg: None,
+        init_arg_sha256: None,
+        init_candid: None,
+        init_candid_sha256: None,
+        mode,
+        name: name.to_string(),
+        principal: Principal::from_slice(&[99; 29]).to_text(),
+        wasm: "artifact.wasm".to_string(),
+        wasm_sha256: "ab".repeat(32),
     }
 }
 

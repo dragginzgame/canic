@@ -40,7 +40,8 @@ use canic_core::{
 use ic_timers::{
     AfterCompletionRegistration, TimerCadence, TimerCompletion, TimerCompletionOutcome,
     TimerDirective, TimerIdentity, TimerReconcileState, TimerRunResult, WatchdogDecision,
-    WatchdogRegistration, WatchdogRunResult, reconcile_after_completion, reconcile_watchdog,
+    WatchdogReconcileState, WatchdogRegistration, WatchdogRunResult, reconcile_after_completion,
+    reconcile_watchdog,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -59,7 +60,11 @@ thread_local! {
 
 /// Reserve inactive maintenance in the shared inventory before application hooks run.
 pub fn declare() {
-    reconcile_native_timers(TimerReconcileState::Inactive).unwrap_or_else(|error| {
+    reconcile_native_timers(
+        TimerReconcileState::Inactive,
+        WatchdogReconcileState::Inactive,
+    )
+    .unwrap_or_else(|error| {
         ic_cdk::trap(format!(
             "canister-pool maintenance declaration rejected: {error}"
         ))
@@ -70,8 +75,11 @@ pub fn declare() {
 /// Start one non-overlapping root-owned maintenance loop.
 pub fn start() -> Result<(), InternalError> {
     TimerApi::require_active().map_err(|_error| InternalError::invariant())?;
-    reconcile_native_timers(TimerReconcileState::Scheduled)
-        .map_err(|_error| InternalError::invariant())?;
+    reconcile_native_timers(
+        TimerReconcileState::Scheduled,
+        WatchdogReconcileState::Scheduled,
+    )
+    .map_err(|_error| InternalError::invariant())?;
     MAINTENANCE_ENABLED.set(true);
     TimerApi::defer_lifecycle_result_required(
         Duration::ZERO,
@@ -87,7 +95,10 @@ pub fn resume_after_authority_snapshot() -> Result<(), AuthorityTimerError> {
         return Ok(());
     }
     TimerApi::require_active()?;
-    reconcile_native_timers(TimerReconcileState::Scheduled)
+    reconcile_native_timers(
+        TimerReconcileState::Scheduled,
+        WatchdogReconcileState::Scheduled,
+    )
 }
 
 /// Cancel Root-owned claims before core authority owners are suspended.
@@ -282,9 +293,12 @@ fn run_recovery_watchdog() -> WatchdogRunResult {
     WatchdogRunResult::new(completion, WatchdogDecision::Continue)
 }
 
-fn reconcile_native_timers(desired: TimerReconcileState) -> Result<(), AuthorityTimerError> {
-    reconcile_maintenance_timer(desired)?;
-    if let Err(primary) = reconcile_recovery_watchdog(desired) {
+fn reconcile_native_timers(
+    maintenance_desired: TimerReconcileState,
+    watchdog_desired: WatchdogReconcileState,
+) -> Result<(), AuthorityTimerError> {
+    reconcile_maintenance_timer(maintenance_desired)?;
+    if let Err(primary) = reconcile_recovery_watchdog(watchdog_desired) {
         return match cancel_maintenance_timer() {
             Ok(()) => Err(primary),
             Err(cleanup) => Err(AuthorityTimerError::RegistrationRollback {
@@ -319,7 +333,7 @@ fn reconcile_maintenance_timer(desired: TimerReconcileState) -> Result<(), Autho
         .map_err(|_| AuthorityTimerError::CustodyBusy)?
 }
 
-fn reconcile_recovery_watchdog(desired: TimerReconcileState) -> Result<(), AuthorityTimerError> {
+fn reconcile_recovery_watchdog(desired: WatchdogReconcileState) -> Result<(), AuthorityTimerError> {
     let identity = TimerApi::recovery_watchdog_identity()?;
     let cadence = TimerCadence::new(MAINTENANCE_INTERVAL)?;
     RECOVERY_WATCHDOG

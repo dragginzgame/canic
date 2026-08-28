@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
 
 ## Purpose
 
@@ -13,10 +13,9 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.14` at
-`412ca5dbb373d907448210e5854d6acdacab1bcf` is the immutable predecessor of
-the open `0.109.15` release-efficiency and compatible dependency-lock
-correction.
+Published `v0.109.15` at
+`f402cf3dc75dd33c942c9c8a08a770f7f654b492` is the immutable predecessor of
+the open `0.109.16` current-estate convergence correction.
 
 Release versioning no longer treats that descriptive lineage prose as a
 machine authority. Uniform package versions, the immutable tag and the exact
@@ -140,10 +139,13 @@ retained Component operation receipt and proves an immediate second run has no
 nonterminal action or update effect. The control-plane convergence evidence gap
 is closed without restoring a deleted install or recovery owner.
 
-The composed-framework lifecycle fixture resolves the exact published IcyDB
-0.245.1 runtime and model family without a compatibility path. Dependency edges
-into that family are confined to the two unpublished fixture packages, while
-published Canic package graphs remain IcyDB-free. The host-only published
+The direct Canic runtime exact-pins `ic-timers 0.7.0` and uses its
+policy-specific watchdog reconciliation state without changing Canic's
+cadence-backed recovery contract. The composed-framework lifecycle fixture
+still resolves the exact published IcyDB 0.245.1 runtime and model family until
+its timer-aligned release is selected. Dependency edges into that family are
+confined to the two unpublished fixture packages, while published Canic package
+graphs remain IcyDB-free. The host-only published
 `canic::testing` feature now owns the generic managed-App test boundary: exact
 grouped init and Directory authority, initial fencing/activation, protected
 status, successor fencing, same-release upgrade and standalone-local install.
@@ -179,8 +181,31 @@ not active contracts.
 
 ## Validation State
 
+Open `0.109.16` coding-time evidence passes at the published `0.109.15`
+predecessor worktree: locked `canic-host`/`canic-cli` all-target compilation,
+warning-denied all-target Clippy for both changed packages, changelog
+governance, and focused tests for the process-backed retained-estate planner,
+same-module reinstall plus effect-free replay, Store-before-Root ordering,
+target-local funding diagnostics, stable Component-failure progress identity
+and ICP status canister-version decoding. Focused generation and current-plan
+tests reject a 4.8T pool target for a 5T admitted Component before effects, and
+the Store-adoption predicate rejects immutable authority without the exact
+operation receipt. Native funding also remains issued until a fresh canister
+observation reaches the reviewed post-balance; a Ledger receipt alone is not
+completion. The exact Toko-shaped Fleet Ensure PocketIC test also passes
+with a same-module Root reset proved by a strictly newer management canister
+version and an effect-free successor apply. No broad workspace or broad
+PocketIC gate was run during coding, as required by repository policy.
+
+The Canic-side `ic-timers 0.7.0` slice passes locked all-target checks and
+warning-denied all-target Clippy for `canic-core` and `canic-control-plane`,
+five core timer-custody tests, five Root canister-pool tests, the focused native
+ownership guards and changelog governance. The combined IcyDB fixture was not
+rerun or awaited; its maintained one-package guard remains fail-closed until
+the matching timer-aligned IcyDB release is selected.
+
 <!-- canic-release-validation: version=0.109.15 source=9b490f2ac2d8e029d56390d23ade8b04077d2c59 date=2026-08-27 gate=complete -->
-The open `0.109.15` patch adds a governed fast release lane for exact
+Published `0.109.15` added a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while
 skipping the workspace/PocketIC matrix. Its release receipt records
@@ -343,7 +368,14 @@ performed.
 
 ## Next Action
 
-The open `0.109.15` source batch is ready for its source commit. Once committed,
-`make release-patch-fast` may seal and publish it when the maintainer explicitly
-requests that action.
+The open `0.109.16` batch corrects the current Fleet Ensure ordering,
+same-module reinstall proof, conflicted Root observation, pending-reset balance
+truth, retry progress identity, target-local funding margin, operation-bound
+Store adoption and pre-effect Component/pool capacity validation. Targeted host
+and CLI compilation plus focused behavior tests are the coding-time boundary;
+the maintainer-owned release workflow chooses the broad validation gate.
+The distinct pooled-canister Ledger-account recovery operation and finalized
+artifact build-network binding remain later accepted work; this batch neither
+counts accidentally credited Ledger balances as native cycles nor deploys a
+network-mismatched artifact implicitly.
 Do not begin 0.110. Do not begin 0.111 from this batch.

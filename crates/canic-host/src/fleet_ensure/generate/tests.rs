@@ -5,7 +5,10 @@ use crate::{
             CanisterRuntimeStatus, CurrentFleetProtocolAction, EffectRecord, EnsureAction,
             FleetEnsureStateRecord, FleetObservation, LiveCanister, RootOwnedCanisterLifecycle,
         },
-        ops::{EffectObservation, EffectOutcome, EnsurePlatform},
+        ops::{
+            EffectObservation, EffectOutcome, EnsurePaths, EnsurePlatform, IcpEnsurePlatform,
+            IcpEnsurePlatformError, write_state,
+        },
         workflow,
     },
     network::{NetworkEnrollmentOptions, enroll_network},
@@ -32,7 +35,7 @@ use canic_core::{
     },
     ids::{
         CanisterRole, ComponentDeploymentConfigurationDigest, FleetCoordinatorBinding, FleetKey,
-        FleetRegistryAuthority, FleetSubnetRootReleaseSet, ReleaseSetDigest,
+        FleetRegistryAuthority, FleetSubnetRootReleaseSet, ReleaseBuildNonce, ReleaseSetDigest,
     },
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
 };
@@ -341,6 +344,66 @@ pool_imports = []
 }
 
 #[test]
+fn generation_rejects_component_demand_above_pool_target_before_observation() {
+    let root = temp_dir("fleet-generate-pool-capacity");
+    let app_config = root.join("apps/demo/canic.toml");
+    let source_path = root.join("deployments/staging.toml");
+    let seed_path = root.join("deployments/staging.estate.toml");
+    fs::create_dir_all(app_config.parent().expect("App config parent"))
+        .expect("create App config parent");
+    fs::create_dir_all(source_path.parent().expect("source parent")).expect("create source parent");
+    fs::write(&app_config, multi_component_config()).expect("write App config");
+    let operator = principal_text(20);
+    let coordinator = principal_text(21);
+    let fleet_root = principal_text(22);
+    let store = principal_text(23);
+    let pool_one = principal_text(24);
+    let pool_two = principal_text(25);
+    let placement = principal_text(26);
+    let coordinator_subnet = principal_text(27);
+    let source = multi_component_source_toml(&operator, &coordinator_subnet, &placement).replacen(
+        "canister_cycles = \"5T\"",
+        "canister_cycles = \"4800000000000\"",
+        1,
+    );
+    fs::write(&source_path, source).expect("write insufficient pool source");
+    fs::write(
+        &seed_path,
+        retained_estate_seed_toml(
+            "a8".repeat(32).parse().expect("Fleet ID"),
+            &coordinator,
+            &placement,
+            &fleet_root,
+            &store,
+            [&pool_one, &pool_two],
+        ),
+    )
+    .expect("write estate seed");
+    let request = FleetGenerateRequest {
+        app_config: &app_config,
+        environment: "local",
+        fleet: "staging",
+        icp_executable: "must-not-run",
+        release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([9; 32])),
+        root: &root,
+        seed: &seed_path,
+        source: &source_path,
+    };
+
+    assert!(matches!(
+        generate_desired_fleet(&request),
+        Err(FleetGenerateError::ComponentPoolCapacity(
+            RootPoolCapacityError::Insufficient {
+                component_spec,
+                pool_target_cycles: 4_800_000_000_000,
+                required_cycles: 5_000_000_000_000,
+                root,
+            }
+        )) if component_spec.as_str() == "app" && root == fleet_root
+    ));
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one retained-estate journey keeps generation, convergence, conservation, and replay together"
@@ -443,11 +506,17 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     );
     let icp = write_fake_icp(
         &root,
-        &operator,
-        &coordinator,
-        &fleet_root,
-        &retained_authority,
-        &retained_pool,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: &"83".repeat(32),
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &retained_pool,
+            public_cycle_balance: None,
+            root_module_hash: &"84".repeat(32),
+            root_status_error: None,
+        },
     );
     let request = FleetGenerateRequest {
         app_config: &app_config,
@@ -536,6 +605,249 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(
         no_apply_platform.mutations, 0,
         "public generation and planning remain effect-free"
+    );
+
+    let mut recovery_desired = desired.clone();
+    recovery_desired.fleet = "retained-multi-component-recovery".to_string();
+    let artifacts = crate::fleet_ensure::ops::resolve_desired_artifacts(&root, &recovery_desired)
+        .expect("resolve current infrastructure artifacts");
+    let mut recovery_platform =
+        RetainedEnsurePlatform::new(&recovery_desired, &observed, &pool_one);
+    for configured in &recovery_desired.canisters {
+        let live = recovery_platform
+            .live
+            .get_mut(configured.principal.as_deref().expect("retained Principal"))
+            .expect("retained live canister");
+        if matches!(
+            configured.kind,
+            DesiredCanisterKind::Coordinator
+                | DesiredCanisterKind::Root
+                | DesiredCanisterKind::Store
+        ) {
+            live.module_sha256 = artifacts
+                .wasm_sha256_by_canister
+                .get(&configured.name)
+                .cloned();
+            live.reinstall_required = true;
+        } else if configured.kind == DesiredCanisterKind::Pool {
+            live.root_owned_lifecycle = Some(RootOwnedCanisterLifecycle::Retained);
+        }
+    }
+    let recovery = workflow::plan(
+        &root,
+        &recovery_desired,
+        &source_digest,
+        &recovery_desired.fleet,
+        1_800_000_000_000_000_050,
+        &mut recovery_platform,
+    )
+    .expect("plan exact same-module infrastructure recovery");
+    let ordered = workflow::ordered_actions(&recovery.plan);
+    let store_index = ordered
+        .iter()
+        .position(|action| action.name() == "store-0")
+        .expect("Store reinstall");
+    let root_index = ordered
+        .iter()
+        .position(|action| action.name() == "root-0")
+        .expect("Root reinstall");
+    assert!(store_index < root_index);
+    assert_eq!(ordered.len(), 3);
+    assert!(ordered.iter().all(|action| matches!(
+        action,
+        EnsureAction::Install {
+            mode: crate::fleet_ensure::model::InstallMode::Reinstall,
+            ..
+        }
+    )));
+    assert_eq!(recovery.plan.conservation.maximum_new_funding_cycles, 0);
+    assert_eq!(recovery.plan.conservation.maximum_operator_debit_cycles, 0);
+
+    let mut production_recovery_desired = recovery_desired.clone();
+    production_recovery_desired.fleet = "retained-multi-component-live-recovery".to_string();
+    let coordinator_hash = artifacts
+        .wasm_sha256_by_canister
+        .get("coordinator")
+        .expect("Coordinator artifact");
+    let root_hash = artifacts
+        .wasm_sha256_by_canister
+        .get("root-0")
+        .expect("Root artifact");
+    write_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: coordinator_hash,
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &retained_pool,
+            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            root_module_hash: root_hash,
+            root_status_error: Some(canic_core::diagnostics::codes::STATE_CONFLICT),
+        },
+    );
+    let state = retained_ensure_state(&production_recovery_desired, &observed, &artifacts);
+    write_state(
+        &EnsurePaths::under(
+            &root,
+            &production_recovery_desired.environment,
+            &production_recovery_desired.fleet,
+        ),
+        &state,
+    )
+    .expect("retain exact current Fleet evidence");
+    let mut production_platform = IcpEnsurePlatform::new(
+        production_recovery_desired.clone(),
+        icp.to_str().expect("fake ICP path"),
+        &root,
+    );
+    let production_recovery = workflow::plan(
+        &root,
+        &production_recovery_desired,
+        &source_digest,
+        &production_recovery_desired.fleet,
+        1_800_000_000_000_000_100,
+        &mut production_platform,
+    )
+    .expect("plan conflicted Root recovery from retained exact balances");
+    let production_actions = workflow::ordered_actions(&production_recovery.plan);
+    assert_eq!(
+        production_actions
+            .iter()
+            .filter(|action| matches!(
+                action,
+                EnsureAction::Install {
+                    mode: crate::fleet_ensure::model::InstallMode::Reinstall,
+                    ..
+                }
+            ))
+            .count(),
+        3,
+    );
+    assert!(matches!(
+        production_actions.get(1),
+        Some(EnsureAction::FleetProtocol { action, .. })
+            if matches!(action.as_ref(), CurrentFleetProtocolAction::AdoptStore { .. })
+    ));
+    assert_eq!(
+        production_recovery
+            .plan
+            .conservation
+            .maximum_new_funding_cycles,
+        0
+    );
+    assert_eq!(
+        production_recovery
+            .plan
+            .conservation
+            .maximum_operator_debit_cycles,
+        0
+    );
+    let pool_names = production_recovery_desired
+        .canisters
+        .iter()
+        .filter(|canister| canister.kind == DesiredCanisterKind::Pool)
+        .map(|canister| canister.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let retained_assets = production_recovery
+        .plan
+        .canisters
+        .iter()
+        .filter(|canister| pool_names.contains(canister.name.as_str()))
+        .map(|canister| canister.observed_cycles)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        retained_assets,
+        BTreeSet::from([4_800_000_000_000, 5_000_000_000_000])
+    );
+
+    let mut pending_pool = retained_pool;
+    let pending = pending_pool
+        .entries
+        .iter_mut()
+        .find(|asset| asset.canister_id.to_text() == pool_two)
+        .expect("idle retained pool asset");
+    pending.status = CanisterPoolAssetStatus::PendingReset;
+    pending.cycles = Cycles::new(0);
+    let mut pending_desired = recovery_desired.clone();
+    pending_desired.fleet = "retained-multi-component-pending-reset".to_string();
+    write_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: coordinator_hash,
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &pending_pool,
+            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            root_module_hash: root_hash,
+            root_status_error: None,
+        },
+    );
+    write_state(
+        &EnsurePaths::under(&root, &pending_desired.environment, &pending_desired.fleet),
+        &retained_ensure_state(&pending_desired, &observed, &artifacts),
+    )
+    .expect("retain exact pre-reset pool balances");
+    let mut pending_platform = IcpEnsurePlatform::new(
+        pending_desired.clone(),
+        icp.to_str().expect("fake ICP path"),
+        &root,
+    );
+    let pending_plan = workflow::plan(
+        &root,
+        &pending_desired,
+        &source_digest,
+        &pending_desired.fleet,
+        1_800_000_000_000_000_200,
+        &mut pending_platform,
+    )
+    .expect("plan pending-reset pool from retained exact balance");
+    let retained_pending = pending_plan
+        .plan
+        .canisters
+        .iter()
+        .find(|canister| canister.principal.as_deref() == Some(pool_two.as_str()))
+        .expect("pending retained asset plan");
+    assert_eq!(retained_pending.observed_cycles, 5_000_000_000_000);
+    assert!(retained_pending.actions.is_empty());
+    assert_eq!(pending_plan.plan.conservation.maximum_new_funding_cycles, 0);
+
+    let mut drifted_desired = pending_desired.clone();
+    drifted_desired.fleet = "retained-controller-drift".to_string();
+    drifted_desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Root)
+        .expect("desired Root")
+        .controllers = vec![principal_text(99)];
+    write_state(
+        &EnsurePaths::under(&root, &drifted_desired.environment, &drifted_desired.fleet),
+        &retained_ensure_state(&drifted_desired, &observed, &artifacts),
+    )
+    .expect("retain drift-negative evidence");
+    let mut drifted_platform = IcpEnsurePlatform::new(
+        drifted_desired.clone(),
+        icp.to_str().expect("fake ICP path"),
+        &root,
+    );
+    let error = workflow::plan(
+        &root,
+        &drifted_desired,
+        &source_digest,
+        &drifted_desired.fleet,
+        1_800_000_000_000_000_300,
+        &mut drifted_platform,
+    )
+    .expect_err("Root controller drift must reject retained balance evidence");
+    assert!(
+        matches!(
+            &error,
+            workflow::EnsureWorkflowError::Platform(IcpEnsurePlatformError::CurrentProtocol(_))
+        ),
+        "unexpected controller-drift error: {error:?}"
     );
 
     let mut platform = RetainedEnsurePlatform::new(&desired, &observed, &pool_one);
@@ -657,10 +969,12 @@ impl RetainedEnsurePlatform {
                 (
                     principal.clone(),
                     LiveCanister {
+                        canister_version: Some(1),
                         controllers: canister.controllers.clone(),
                         cycles: observed.cycles,
                         module_sha256: canister.wasm.as_ref().map(|_| "00".repeat(32)),
                         principal,
+                        reinstall_required: false,
                         root_owned_lifecycle,
                         status,
                     },
@@ -937,6 +1251,56 @@ fn terminal_observation_protocol_actions(
             principal: coordinator,
         },
     ]
+}
+
+fn retained_ensure_state(
+    desired: &DesiredFleet,
+    observed: &BTreeMap<String, ObservedCanister>,
+    artifacts: &crate::fleet_ensure::model::DesiredFleetArtifacts,
+) -> FleetEnsureStateRecord {
+    FleetEnsureStateRecord {
+        active_registry: None,
+        completed_reinstalls: BTreeMap::new(),
+        fleet: desired.fleet.clone(),
+        pending_principals: BTreeMap::new(),
+        principals: desired
+            .canisters
+            .iter()
+            .filter_map(|canister| {
+                canister
+                    .principal
+                    .clone()
+                    .map(|principal| (canister.name.clone(), principal))
+            })
+            .collect(),
+        retained_cycles_by_principal: observed
+            .iter()
+            .map(|(principal, canister)| (principal.clone(), canister.cycles))
+            .collect(),
+        schema_version: crate::fleet_ensure::model::FLEET_ENSURE_SCHEMA_VERSION,
+        topology: desired
+            .canisters
+            .iter()
+            .map(|canister| {
+                (
+                    canister.name.clone(),
+                    crate::fleet_ensure::model::FleetEnsureTopologyRecord {
+                        kind: canister.kind,
+                        module_hash: artifacts
+                            .wasm_sha256_by_canister
+                            .get(&canister.name)
+                            .cloned(),
+                        parent: canister.parent.clone(),
+                        protocol_binding: canister.protocol_binding.clone(),
+                        role: canister
+                            .protocol_binding
+                            .as_ref()
+                            .map(|binding| binding.role.to_string()),
+                    },
+                )
+            })
+            .collect(),
+    }
 }
 
 fn multi_component_config() -> &'static str {
@@ -1371,28 +1735,79 @@ fn retained_pool_response(
     }
 }
 
+struct FakeIcpFixture<'a> {
+    authority: &'a FleetSubnetRootAuthority,
+    coordinator: &'a str,
+    coordinator_module_hash: &'a str,
+    fleet_root: &'a str,
+    operator: &'a str,
+    pool: &'a CanisterPoolResponse,
+    public_cycle_balance: Option<(&'a str, u128)>,
+    root_module_hash: &'a str,
+    root_status_error: Option<canic_core::diagnostics::RegisteredDiagnosticCode>,
+}
+
 #[cfg(unix)]
-fn write_fake_icp(
-    root: &Path,
-    operator: &str,
-    coordinator: &str,
-    fleet_root: &str,
-    authority: &FleetSubnetRootAuthority,
-    pool: &CanisterPoolResponse,
-) -> PathBuf {
+#[expect(
+    clippy::too_many_lines,
+    reason = "one process-backed fixture keeps every accepted fake ICP command visible"
+)]
+fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
+    let FakeIcpFixture {
+        authority,
+        coordinator,
+        coordinator_module_hash,
+        fleet_root,
+        operator,
+        pool,
+        public_cycle_balance,
+        root_module_hash,
+        root_status_error,
+    } = fixture;
     let executable = root.join("fake-icp");
     let counter = root.join("root-status-count");
-    let coordinator_status =
-        canister_status_json(coordinator, operator, "83".repeat(32), 270_000_000_000_000);
-    let root_status =
-        canister_status_json(fleet_root, operator, "84".repeat(32), 30_000_000_000_000);
+    let coordinator_status = canister_status_json(
+        coordinator,
+        operator,
+        coordinator_module_hash.to_string(),
+        270_000_000_000_000,
+    );
+    let root_status = canister_status_json(
+        fleet_root,
+        operator,
+        root_module_hash.to_string(),
+        30_000_000_000_000,
+    );
     let authority_response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
         RootEstateStatusResponse::FleetAuthority(Box::new(authority.clone())),
     ));
-    let pool_response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
-        RootEstateStatusResponse::Pool(Box::new(pool.clone())),
-    ));
+    let pool_response = root_status_error.map_or_else(
+        || {
+            candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
+                RootEstateStatusResponse::Pool(Box::new(pool.clone())),
+            ))
+        },
+        |code| {
+            candid_response_json(&Err::<RootEstateStatusResponse, _>(
+                canic_core::dto::error::Error::from_registered(code),
+            ))
+        },
+    );
     let ledger_response = candid_response_json(&Nat::from(100_000_000_u64));
+    let public_cycle_case = public_cycle_balance.map_or_else(String::new, |(canister, cycles)| {
+        let response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
+            FixtureManagedStatusResponse::CycleBalance(
+                canic_core::dto::role::CycleBalanceStatusResponse { cycles },
+            ),
+        ));
+        format!(
+            r#"if [ "$1" = "canister" ] && [ "$2" = "call" ] && [ "$3" = "{canister}" ] && [ "$4" = "canic_status" ]; then
+  printf '%s\n' '{response}'
+  exit 0
+fi
+"#
+        )
+    });
     let script = format!(
         r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
@@ -1406,6 +1821,10 @@ if [ "$1" = "identity" ] && [ "$2" = "principal" ]; then
   printf '%s\n' '{operator}'
   exit 0
 fi
+if [ "$1" = "cycles" ] && [ "$2" = "balance" ]; then
+  printf '%s\n' '{{"balance":"500000000000000 cycles"}}'
+  exit 0
+fi
 if [ "$1" = "canister" ] && [ "$2" = "status" ]; then
   if [ "$3" = "{coordinator}" ]; then
     printf '%s\n' '{coordinator_status}'
@@ -1417,6 +1836,7 @@ if [ "$1" = "canister" ] && [ "$2" = "status" ]; then
   fi
 fi
 if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
+  {public_cycle_case}
   if [ "$4" = "icrc1_fee" ]; then
     printf '%s\n' '{ledger_response}'
     exit 0
@@ -1446,15 +1866,13 @@ exit 42
     executable
 }
 
+#[derive(candid::CandidType)]
+enum FixtureManagedStatusResponse {
+    CycleBalance(canic_core::dto::role::CycleBalanceStatusResponse),
+}
+
 #[cfg(not(unix))]
-fn write_fake_icp(
-    _root: &Path,
-    _operator: &str,
-    _coordinator: &str,
-    _fleet_root: &str,
-    _authority: &FleetSubnetRootAuthority,
-    _pool: &CanisterPoolResponse,
-) -> PathBuf {
+fn write_fake_icp(_root: &Path, _fixture: FakeIcpFixture<'_>) -> PathBuf {
     panic!("public generator fixture requires a Unix fake ICP executable")
 }
 
@@ -1469,6 +1887,7 @@ fn canister_status_json(
         "name": null,
         "status": "running",
         "settings": { "controllers": [controller] },
+        "version": 1,
         "module_hash": module_hash,
         "memory_size": null,
         "cycles": cycles.to_string(),

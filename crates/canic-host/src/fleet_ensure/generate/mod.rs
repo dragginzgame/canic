@@ -11,7 +11,8 @@ use crate::{
     canister_protocol::query_with_candid,
     component_topology::{
         PlannedFleetSubnetRootTopology, PlannedFleetSubnetRootTopologyInput,
-        RootComponentAdmissionInput, plan_initial_fleet_topology,
+        RootComponentAdmissionInput, RootPoolCapacityError, RootPoolCapacityInput,
+        plan_initial_fleet_topology, validate_root_pool_capacity,
     },
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_ensure::model::{
@@ -145,6 +146,9 @@ pub enum FleetGenerateError {
 
     #[error("artifact Candid sidecar is missing or changed: {0}")]
     Candid(String),
+
+    #[error(transparent)]
+    ComponentPoolCapacity(#[from] RootPoolCapacityError),
 
     #[error("system clock is before the Unix epoch")]
     Clock,
@@ -454,6 +458,24 @@ pub fn generate_desired_fleet(
         .collect::<Result<Vec<_>, FleetGenerateError>>()?;
     let topology = plan_initial_fleet_topology(config.model(), root_inputs)
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let capacity_roots = bind_root_generation_inputs(
+        &source.fleet_subnet_roots,
+        &seed.roots,
+        &topology.fleet_subnet_roots,
+    )?
+    .into_iter()
+    .map(|binding| RootPoolCapacityInput {
+        component_admissions: binding.planned.component_admissions.clone(),
+        pool_target_cycles: binding
+            .planned
+            .limits
+            .canister_pool
+            .canister_cycles
+            .to_u128(),
+        root: binding.seed.root.clone(),
+    })
+    .collect::<Vec<_>>();
+    validate_root_pool_capacity(config.model(), &capacity_roots)?;
     let (infrastructure, complete) = release_authority(request, config.component_topology())?;
     if complete.manifest.infrastructure_artifact_manifest_sha256 != infrastructure.digest {
         return Err(FleetGenerateError::Release(

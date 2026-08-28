@@ -167,6 +167,13 @@ exact local Component Registry preparation before Component provisioning in
 that order. Every configured initial placement must appear once and every
 selected Root must be a declared Root role.
 
+Every admitted Component Spec's release-bound `initial_cycles` must be less
+than or equal to the owning Root's exact pool `canister_cycles` target. Canic
+checks this while generating desired state and again while planning from a
+current desired document. A stale or edited 4.8T pool target therefore cannot
+reach live provisioning for a 5T Component: the no-effect diagnostic names the
+Root, Component Spec, exact target and required cycles.
+
 All cycle quantities are exact decimal strings. Unknown fields and unknown
 schema generations reject. Wasm, binary init-argument, and drain-Candid files
 are hashed into the reviewed plan and rechecked immediately before their
@@ -211,6 +218,31 @@ An interrupted invocation retains one intent per action under
 `.canic/fleet-ensure/<environment>/<fleet>/` and resumes that action before
 opening another. The stall budget counts only consecutive non-progress.
 
+When a partial current-control-plane reset makes a Root's protected pool status
+return `STATE_CONFLICT` or `STATE_UNAVAILABLE`, planning does not invent an
+empty pool or configured-capacity balance. For an exact desired Store or pool
+identity under an exact live Root/controller binding, it first attempts the
+public Canic cycle-balance query and otherwise uses the last exact balance
+retained by the current Fleet Ensure state. A zero-valued `PendingReset` row is
+treated the same way. Missing exact evidence is a blocker. This narrow
+observation cannot create, fund, replace, transfer, drain or delete anything.
+
+The resulting corrective graph reinstalls the Coordinator, replays the exact
+Root-owned Store-controller adoption, reinstalls the Store, and only then
+reinstalls the Root. All later protocol work stays fenced until ordinary
+protected observation resumes. Reinstall intent records the management
+canister version before the effect; terminal observation requires the requested
+module at a strictly newer version. A same-module predecessor therefore cannot
+be mistaken for an applied reinstall, including after process restart or a
+lost response.
+
+The Store authority retained by a Root describes the only Store that may be
+adopted; it is not proof that adoption occurred. Store bootstrap remains
+blocked until the exact derived operation ID returns the durable adoption
+receipt with the matching authority and final Root-plus-operator controller
+set. Missing or conflicting receipts keep the one idempotent adoption action
+open.
+
 ## Cycle Conservation
 
 The reviewed maximum equation is:
@@ -245,6 +277,16 @@ observation burn, and retirement transfers are separate report fields. Apply
 cannot issue actions whose planned debit exceeds the reviewed operator bound;
 terminal success additionally requires measured burn to remain within its
 reviewed ceiling.
+Each existing-canister funding action also reports the exact observed deficit,
+target-local uncertainty margin and expected post-funding native balance. The
+margin covers only that target's planned update actions plus one observation;
+it is never multiplied by the Fleet-wide observation ceiling.
+This action is a Cycles Ledger `withdraw` to the target canister—a native
+canister top-up—not a transfer to the Principal's Ledger account. Its Ledger
+block/duplicate receipt proves issuance only. Completion requires a fresh
+Root-owned or management observation at or above `expected_native_post`.
+Canic exposes no Fleet Ensure action that substitutes a plain Ledger-account
+transfer for native funding.
 
 ## Retirement Boundary
 

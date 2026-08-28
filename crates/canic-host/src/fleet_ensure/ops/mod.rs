@@ -33,6 +33,8 @@ use std::{
 use thiserror::Error as ThisError;
 
 pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
+#[cfg(test)]
+pub(crate) use platform::{install_effect_applied, native_funding_applied};
 
 pub(crate) const fn root_owned_lifecycle(
     kind: DesiredCanisterKind,
@@ -128,6 +130,16 @@ pub trait EnsurePlatform {
         action: &EnsureAction,
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error>;
+
+    /// Return the exact management canister version before an install effect.
+    /// Other effect classes have no version boundary.
+    fn action_canister_version(
+        &mut self,
+        _action: &EnsureAction,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Option<u64>, Self::Error> {
+        Ok(None)
+    }
 
     fn apply(
         &mut self,
@@ -255,9 +267,11 @@ pub fn read_state(
     }
     Ok(value.unwrap_or_else(|| FleetEnsureStateRecord {
         active_registry: None,
+        completed_reinstalls: BTreeMap::default(),
         fleet: fleet.to_string(),
         pending_principals: BTreeMap::default(),
         principals: BTreeMap::default(),
+        retained_cycles_by_principal: BTreeMap::default(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         topology: BTreeMap::default(),
     }))

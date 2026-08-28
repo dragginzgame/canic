@@ -15,11 +15,13 @@ pub const MAX_FLEET_ENSURE_PROTOCOL_STEPS: usize = 4_096;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LiveCanister {
+    pub canister_version: Option<u64>,
     pub controllers: Vec<String>,
     #[serde(with = "u128_text")]
     pub cycles: u128,
     pub module_sha256: Option<String>,
     pub principal: String,
+    pub reinstall_required: bool,
     pub root_owned_lifecycle: Option<RootOwnedCanisterLifecycle>,
     pub status: CanisterRuntimeStatus,
 }
@@ -31,6 +33,8 @@ pub struct LiveCanister {
 pub enum RootOwnedCanisterLifecycle {
     Claimed,
     Idle,
+    /// Last exact current-generation balance retained while Root status is fenced.
+    Retained,
     Store,
     Workload,
 }
@@ -279,6 +283,12 @@ pub enum EnsureAction {
         #[serde(with = "u128_text")]
         amount: u128,
         created_at_time: u64,
+        #[serde(default, with = "u128_text", skip_serializing_if = "is_zero_u128")]
+        expected_post_cycles: u128,
+        #[serde(default, with = "u128_text", skip_serializing_if = "is_zero_u128")]
+        funding_deficit_cycles: u128,
+        #[serde(default, with = "u128_text", skip_serializing_if = "is_zero_u128")]
+        funding_margin_cycles: u128,
         ledger: String,
         name: String,
         principal: String,
@@ -576,6 +586,8 @@ pub struct EffectRecord {
     pub post_cycles: Option<u128>,
     #[serde(with = "option_u128_text")]
     pub pre_cycles: Option<u128>,
+    #[serde(default)]
+    pub pre_canister_version: Option<u64>,
     pub progress_identity: Option<String>,
     pub receipt: Option<String>,
     pub state: EffectState,
@@ -654,9 +666,13 @@ pub fn reconcile_retirement_transfer(
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetEnsureStateRecord {
     pub active_registry: Option<canic_core::dto::fleet_registry::FleetRegistry>,
+    #[serde(default)]
+    pub completed_reinstalls: BTreeMap<String, u64>,
     pub fleet: String,
     pub pending_principals: BTreeMap<String, String>,
     pub principals: BTreeMap<String, String>,
+    #[serde(default)]
+    pub retained_cycles_by_principal: BTreeMap<String, u128>,
     pub schema_version: u16,
     pub topology: BTreeMap<String, FleetEnsureTopologyRecord>,
 }
@@ -696,6 +712,10 @@ pub struct FleetEnsureReport {
     pub effects_applied: u32,
     pub plan: FleetEnsurePlan,
     pub terminal: bool,
+}
+
+const fn is_zero_u128(value: &u128) -> bool {
+    *value == 0
 }
 
 mod u128_text {

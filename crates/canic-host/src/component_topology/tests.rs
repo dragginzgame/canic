@@ -165,6 +165,46 @@ fn pre_creation_planner_derives_complete_topology_without_canister_principals() 
 }
 
 #[test]
+fn admitted_component_demand_cannot_exceed_root_pool_target() {
+    let config = config();
+    let plan = plan_initial_fleet_topology(
+        &config,
+        vec![planned_root(
+            5,
+            vec![admission("database", 1), admission("users", 1)],
+        )],
+    )
+    .expect("valid planned Root");
+    let admitted = plan.fleet_subnet_roots[0].component_admissions.clone();
+    let root = Principal::from_slice(&[4; 29]).to_text();
+
+    let insufficient = RootPoolCapacityInput {
+        component_admissions: admitted.clone(),
+        pool_target_cycles: 4_999_999_999_999,
+        root: root.clone(),
+    };
+    assert_eq!(
+        validate_root_pool_capacity(&config, &[insufficient]),
+        Err(RootPoolCapacityError::Insufficient {
+            component_spec: "database".parse().expect("Component Spec"),
+            pool_target_cycles: 4_999_999_999_999,
+            required_cycles: 5_000_000_000_000,
+            root: root.clone(),
+        })
+    );
+
+    validate_root_pool_capacity(
+        &config,
+        &[RootPoolCapacityInput {
+            component_admissions: admitted,
+            pool_target_cycles: 5_000_000_000_000,
+            root,
+        }],
+    )
+    .expect("equal pool target admits the Component");
+}
+
+#[test]
 fn empty_application_topology_reports_the_current_projection_blocker() {
     let config = parse_config_model(EMPTY_APPLICATION_CONFIG).expect("valid empty application");
 

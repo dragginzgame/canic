@@ -279,6 +279,7 @@ fn parses_canister_status_report_json() {
     let report = serde_json::from_str::<IcpCanisterStatusReport>(
         r#"{
   "id": "t63gs-up777-77776-aaaba-cai",
+  "version": 42,
   "name": "motoko-ex",
   "status": "Running",
   "settings": {
@@ -292,6 +293,7 @@ fn parses_canister_status_report_json() {
     .expect("parse status report");
 
     assert_eq!(report.status, "Running");
+    assert_eq!(report.canister_version, Some(42));
     assert_eq!(
         report.settings.expect("settings").controllers.as_slice(),
         &["zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae"]

@@ -592,12 +592,12 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
     let root = workspace_root();
     let lock = read_source(&root, "Cargo.lock");
 
-    assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.6.1"]);
+    assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.7.0"]);
     assert_eq!(locked_package_versions(&lock, "ic-cdk-timers"), ["1.0.0"]);
     assert_eq!(locked_package_versions(&lock, "icydb"), ["0.245.1"]);
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
-    assert!(workspace_manifest.contains("ic-timers = \"=0.6.1\""));
+    assert!(workspace_manifest.contains("ic-timers = \"=0.7.0\""));
     assert!(workspace_manifest.contains("icydb = { version = \"0.245\""));
     assert!(workspace_manifest.contains("icydb-model = \"0.245\""));
     assert!(!workspace_manifest.contains("ic-cdk-timers ="));
