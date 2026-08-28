@@ -73,22 +73,7 @@ DETAILED_CHANGELOG="docs/changelog/$PLANNED_MINOR_LINE.md"
 STATUS_DOCUMENT="docs/status/current.md"
 SOURCE_STATUS_MARKER="<!-- canic-release-state: source-development -->"
 
-[[ -f "$DETAILED_CHANGELOG" ]] || {
-  echo "❌ Missing detailed changelog for planned release $PLANNED: $DETAILED_CHANGELOG" >&2
-  exit 1
-}
-[[ -f "$STATUS_DOCUMENT" ]] || {
-  echo "❌ Missing current status document: $STATUS_DOCUMENT" >&2
-  exit 1
-}
-[[ "$(rg -c -F "## $PLANNED - Unreleased" "$DETAILED_CHANGELOG")" -eq 1 ]] || {
-  echo "❌ $DETAILED_CHANGELOG must contain exactly one open $PLANNED draft." >&2
-  exit 1
-}
-[[ "$(rg -c -F "$SOURCE_STATUS_MARKER" "$STATUS_DOCUMENT")" -eq 1 ]] || {
-  echo "❌ Current status does not declare the governed source-development state." >&2
-  exit 1
-}
+bash scripts/ci/check-release-draft-ready.sh "$BUMP_TYPE"
 
 # Refresh remote state after validation and immediately before any version file
 # changes. A stale source branch or occupied tag must not leave a local release

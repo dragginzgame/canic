@@ -32,15 +32,22 @@ printf '%s\n' \
     >"$FIXTURE/scripts/ci/check-fast-patch-eligibility.sh"
 printf '%s\n' \
     '#!/usr/bin/env bash' \
+    'printf "draft-preflight\n" >>"$FIXTURE_EVENTS"' \
+    'exit "${FAKE_DRAFT_STATUS:-0}"' \
+    >"$FIXTURE/scripts/ci/check-release-draft-ready.sh"
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
     'printf "bump=%s validated=%s head=%s kind=%s\n" "$1" "${CANIC_RELEASE_VALIDATED:-}" "${CANIC_RELEASE_VALIDATED_HEAD:-}" "${CANIC_RELEASE_VALIDATION_KIND:-}" >>"$FIXTURE_EVENTS"' \
     >"$FIXTURE/scripts/ci/bump-version.sh"
 chmod +x "$FIXTURE/bin/make" "$FIXTURE/bin/git" \
     "$FIXTURE/scripts/ci/check-fast-patch-eligibility.sh" \
+    "$FIXTURE/scripts/ci/check-release-draft-ready.sh" \
     "$FIXTURE/scripts/ci/bump-version.sh" \
     "$FIXTURE/scripts/ci/run-release-validation-lane.sh"
 
 export FIXTURE_EVENTS="$FIXTURE/events"
 export FAKE_GIT_COUNT="$FIXTURE/git-count"
+export CANIC_RELEASE_RECEIPT_DIR="$FIXTURE/receipts"
 PATH="$FIXTURE/bin:$PATH"
 export PATH
 
@@ -54,6 +61,24 @@ assert_no_bump() {
         exit 1
     fi
 }
+
+assert_no_validation() {
+    if [[ -f "$FIXTURE_EVENTS" ]] && rg -F 'make --no-print-directory validate' "$FIXTURE_EVENTS" >/dev/null; then
+        echo "release validation lane test failed: validation followed a failed draft preflight" >&2
+        exit 1
+    fi
+}
+
+reset_fixture
+status=0
+FAKE_DRAFT_STATUS=31 \
+    bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete patch || status=$?
+[[ "$status" -eq 31 ]] || {
+    echo "release validation lane test failed: draft preflight failure status was $status" >&2
+    exit 1
+}
+assert_no_validation
+assert_no_bump
 
 reset_fixture
 status=0
@@ -89,6 +114,14 @@ reset_fixture
 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major
 rg -F 'bump=major validated=1 head=validated-head kind=complete' "$FIXTURE_EVENTS" >/dev/null || {
     echo "release validation lane test failed: successful complete gate did not bind its source" >&2
+    exit 1
+}
+
+reset_fixture
+bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major
+assert_no_validation
+rg -F 'bump=major validated=1 head=validated-head kind=complete' "$FIXTURE_EVENTS" >/dev/null || {
+    echo "release validation lane test failed: retained receipt did not resume version mutation" >&2
     exit 1
 }
 

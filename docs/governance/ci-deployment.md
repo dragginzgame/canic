@@ -244,9 +244,17 @@ and proves that `HEAD` is unchanged before granting version-mutation authority.
 The complete lane runs the same explicit `make validate` workflow. It does not
 mutate source formatting; the pre-commit hook handles routine formatting, while
 validation's `make fmt-check` catches bypassed hooks. Any failed target leaves
-the version unchanged. An executable release-integrity regression proves that a
-failed gate cannot invoke the bump script. The underlying bump script rejects
-direct invocation without the private validation marker supplied by the owner.
+the version unchanged. After a complete gate succeeds and the clean immutable
+source revision is rechecked, the lane atomically retains a local exact-HEAD
+success receipt under `target/release-validation/`. If versioning, remote
+readiness or another later release-only step fails, rerunning the same complete
+release command rechecks the cheap preflight and reuses that receipt instead of
+rerunning compilation or PocketIC. A source commit change or missing receipt
+requires validation again. An executable release-integrity regression proves
+that a failed gate cannot invoke the bump script and that an exact successful
+receipt resumes version mutation without a second validation. The underlying
+bump script rejects direct invocation without the private validation marker
+supplied by the owner.
 The root `Cargo.toml` is the sole live workspace package-version authority;
 ordinary status and planning prose must not act as a parallel package-version
 source. Current and committed version queries must use the shared pinned

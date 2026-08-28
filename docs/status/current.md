@@ -185,6 +185,11 @@ removes the need for downstream test adapters to pin private `canic-core` or
 
 The validation runner retains the August shared PocketIC server, one-process
 governed suite, persistent artifact cache and ordinary-before-PocketIC barrier.
+The release lane now rejects malformed draft/status metadata before entering
+that runner and retains an exact-HEAD local success receipt after the clean
+complete gate. A later release-only failure can resume the same immutable
+candidate without repeating the complete suite; any source commit change
+invalidates the receipt.
 The enlarged 0.109 graph had nevertheless regressed ordinary validation to six
 sequential Cargo invocations and expanded the internal governed inventory from
 22 to 32 cases. The current runner batches the four package-owned integration
@@ -336,7 +341,7 @@ packages. The controlled release-Wasm comparison used identical source,
 toolchain, profile, shrink and metadata paths. No broad workspace or PocketIC
 gate was run during this coding slice.
 
-<!-- canic-release-validation: version=0.109.17 source=62460639651acb8ac0bed9856b8974117348b9cf date=2026-08-28 gate=complete -->
+<!-- canic-release-state: source-development -->
 Published `0.109.15` added a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while
