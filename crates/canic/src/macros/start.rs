@@ -540,8 +540,8 @@ macro_rules! __canic_require_finish {
 /// Place this macro at the end of the canister's crate root after
 /// `start!`, `start_local!`, `start_wasm_store!`, or
 /// `start_fleet_coordinator!` and after any extra endpoint definitions. In
-/// local-network builds it exports Candid from the exact selected Wasm; IC
-/// builds only satisfy the required Canic finish marker.
+/// Canic's dedicated declaration pass it exports Candid from the exact selected
+/// Wasm; final artifacts only satisfy the required Canic finish marker.
 #[macro_export]
 macro_rules! finish {
     () => {

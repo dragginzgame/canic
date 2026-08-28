@@ -89,6 +89,7 @@ impl WorkspaceBuildContext {
     /// Apply the exact Canic build authority to one child command.
     pub fn apply_to_command(&self, command: &mut Command) {
         command
+            .env_remove(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
             .env_remove(RELEASE_BUILD_ID_ENV)
             .env("ICP_ENVIRONMENT", self.build_network.as_str())
             .env(

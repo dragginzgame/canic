@@ -58,7 +58,6 @@ macro_rules! __canic_build_internal {
             }
         });
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
-        println!("cargo:rerun-if-env-changed=ICP_ENVIRONMENT");
         println!("cargo:rerun-if-env-changed={__canic_config_path_env}");
         let __canic_release_build_id_env =
             $crate::__internal::core::ids::RELEASE_BUILD_ID_ENV;
@@ -119,7 +118,10 @@ macro_rules! __canic_build_internal {
         for custom_cfg in $crate::__build::CANIC_CUSTOM_CFG_NAMES {
             println!("cargo:rustc-check-cfg=cfg({custom_cfg})");
         }
-        if std::env::var("ICP_ENVIRONMENT").as_deref().unwrap_or("local") == "local" {
+        let __canic_candid_build_env =
+            $crate::__internal::core::role_contract::CANONICAL_CANDID_BUILD_ENV;
+        println!("cargo:rerun-if-env-changed={__canic_candid_build_env}");
+        if std::env::var(__canic_candid_build_env).as_deref() == Ok("1") {
             println!("cargo:rustc-cfg=canic_export_candid");
         }
         let role_name = __canic_role_name.as_str();

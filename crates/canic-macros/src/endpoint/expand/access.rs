@@ -62,14 +62,9 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
         AccessPlan::DefaultFleet(guard) => {
             let guard_expr = guard_tokens(*guard);
             quote! {
-                let #caller = ::canic::__internal::cdk::api::msg_caller();
-                let #ctx = ::canic::__internal::core::access::expr::AccessContext {
-                    caller: #caller,
-                    call: #call,
-                };
                 if let Err(err) = ::canic::__internal::core::access::expr::eval_default_fleet_guard(
                     #guard_expr,
-                    &#ctx,
+                    #call,
                 ) {
                     #deny
                 }

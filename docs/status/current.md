@@ -232,7 +232,27 @@ and the exact successful authority handoff. The two timing-report format calls
 that stopped `0.109.16` Clippy use the maintained inline argument form. The
 known unpublished composed-IcyDB dependency on `ic-timers 0.6.1` is reported as
 a warning rather than a release blocker while Canic remains exact-pinned to
-`0.7.0`; an unknown timer-provider version still fails the inventory.
+`0.7.0`; an unknown timer-provider version still fails the inventory. The
+composed-IcyDB PocketIC custody journey is explicitly ignored, with its strict
+assertions retained, until the timer-aligned IcyDB release is available.
+
+The same open `0.109.17` batch now reduces endpoint-heavy Canic Wasm without
+removing managed behavior. Macro-generated handlers share non-generic
+instrumentation, standard update payload limits use the runtime fallback, and
+default Fleet guards skip unused caller/context construction. Final artifacts
+also omit the declaration-pass-only `get_candid_pointer` export while retaining
+their extracted `.did` and local Candid metadata. On the controlled 256-endpoint
+release fixture these changes reduce section 10 from 3,360,770 to 3,257,052
+bytes and defined functions from 6,458 to 6,260. Canonical finalization now
+warns at 9.25 MiB and rejects section 10 above the IC's exact 10 MiB limit for
+configured roles and both built-in infrastructure canisters.
+
+Focused evidence passes: 12 endpoint-expansion tests, five access-policy tests,
+six artifact-build authority/command tests, six Wasm section/limit tests,
+locked compilation and warning-denied all-target Clippy for the four changed
+packages. The controlled release-Wasm comparison used identical source,
+toolchain, profile, shrink and metadata paths. No broad workspace or PocketIC
+gate was run during this coding slice.
 
 <!-- canic-release-state: source-development -->
 Published `0.109.15` added a governed fast release lane for exact

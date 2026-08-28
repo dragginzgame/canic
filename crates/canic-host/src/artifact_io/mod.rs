@@ -1,3 +1,5 @@
+mod wasm;
+
 use crate::{
     canister_build::{ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput},
     durable_io::write_bytes,
@@ -11,6 +13,8 @@ use std::{
 };
 
 use flate2::{Compression, GzBuilder};
+
+pub use wasm::enforce_wasm_code_section_limit;
 
 pub const IC_WASM_TOOL: &str = "ic-wasm";
 

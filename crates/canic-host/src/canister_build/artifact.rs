@@ -9,7 +9,8 @@ use std::{
 
 use crate::{
     artifact_io::{
-        embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact, write_wasm_artifact,
+        embed_candid_metadata, enforce_wasm_code_section_limit, maybe_shrink_wasm_artifact,
+        write_gzip_artifact, write_wasm_artifact,
     },
     bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
     bootstrap_store::build_bootstrap_wasm_store_artifact,
@@ -134,9 +135,6 @@ fn build_workspace_canister_artifact_from_spec(
         &spec.package_name,
         Some(profile.protocol_profile_digest),
     )?;
-    if should_embed_candid_metadata(context.build_network) {
-        require_unchanged_profile_candid(&spec.role, &candid, &release_wasm_path)?;
-    }
     finish_canister_artifact_output(context, spec, &release_wasm_path, &candid, profile)
 }
 
@@ -180,15 +178,12 @@ pub fn build_workspace_canister_artifacts_from_specs(
             &spec.capabilities,
             &candid,
         );
-        let final_wasm_path = run_canister_build(
+        run_canister_build(
             context,
             &spec.package_manifest_path,
             &spec.package_name,
             Some(profile.protocol_profile_digest),
         )?;
-        if embed_candid {
-            require_unchanged_profile_candid(&spec.role, &candid, &final_wasm_path)?;
-        }
         profiles.push((candid, profile));
     }
     std::thread::scope(|scope| {
@@ -254,6 +249,7 @@ fn finish_canister_artifact_output(
             ArtifactTransformKind::CandidMetadata,
         ));
     }
+    enforce_wasm_code_section_limit(&spec.wasm_path)?;
     write_gzip_artifact(&spec.wasm_path, &spec.wasm_gz_path)?;
 
     Ok(CanisterArtifactBuildOutput {
@@ -505,21 +501,6 @@ fn canister_profile_candid_command(
     command
 }
 
-fn require_unchanged_profile_candid(
-    role: &str,
-    expected: &[u8],
-    final_wasm_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let actual = extract_candid_bytes(final_wasm_path)?;
-    if actual != expected {
-        return Err(format!(
-            "generated Candid changed after binding protocol-profile digest for role {role}"
-        )
-        .into());
-    }
-    Ok(())
-}
-
 fn run_canister_build_batch(
     context: &WorkspaceBuildContext,
     cargo_workspace_root: &Path,
@@ -552,6 +533,7 @@ fn canister_cargo_batch_command(
 ) -> Command {
     let manifest_path = cargo_workspace_root.join("Cargo.toml");
     let mut command = canister_cargo_build_command(context, &manifest_path, profile);
+    command.env(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1");
     for spec in specs {
         command.arg("--package").arg(&spec.package_name);
     }
@@ -646,6 +628,7 @@ mod tests {
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>();
+        let environment = command.get_envs().collect::<BTreeMap<_, _>>();
 
         assert_eq!(
             args,
@@ -662,6 +645,12 @@ mod tests {
                 "--package",
                 "canister-hub",
             ]
+        );
+        assert_eq!(
+            environment.get(std::ffi::OsStr::new(
+                canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV
+            )),
+            Some(&Some(std::ffi::OsStr::new("1")))
         );
     }
 

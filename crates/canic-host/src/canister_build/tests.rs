@@ -145,6 +145,15 @@ fn build_context_applies_exact_child_build_network() {
 
     context.apply_to_command(&mut command);
 
+    assert_eq!(
+        command.get_envs().find(|(key, _)| {
+            *key == std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
+        }),
+        Some((
+            std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV),
+            None,
+        ))
+    );
     let environment = command
         .get_envs()
         .filter_map(|(key, value)| value.map(|value| (key, value)))

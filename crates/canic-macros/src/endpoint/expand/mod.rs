@@ -59,7 +59,6 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
         quote!(#[::candid::candid_method(update, rename = #method_name)])
     });
     let payload_registration = payload_registration(kind, &args, &orig_name);
-    let dispatch_fn = dispatch(kind, wrapper_async);
 
     let wrapper_sig = syn::Signature {
         ident: orig_name.clone(),
@@ -88,7 +87,6 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
     let dispatch_call = dispatch_call(
         wrapper_async,
         impl_async,
-        dispatch_fn,
         &call_ident,
         impl_name,
         &call_args,
@@ -148,29 +146,12 @@ fn preflight(name: &syn::Ident) -> TokenStream2 {
     }
 }
 
-fn dispatch(kind: EndpointKind, asyncness: bool) -> TokenStream2 {
-    match (kind, asyncness) {
-        (EndpointKind::Query, false) => {
-            quote!(::canic::__internal::core::dispatch::dispatch_query)
-        }
-        (EndpointKind::Query, true) => {
-            quote!(::canic::__internal::core::dispatch::dispatch_query_async)
-        }
-        (EndpointKind::Update, false) => {
-            quote!(::canic::__internal::core::dispatch::dispatch_update)
-        }
-        (EndpointKind::Update, true) => {
-            quote!(::canic::__internal::core::dispatch::dispatch_update_async)
-        }
-    }
-}
-
 fn payload_registration(
     kind: EndpointKind,
     args: &ValidatedArgs,
     name: &syn::Ident,
 ) -> TokenStream2 {
-    if !matches!(kind, EndpointKind::Update) {
+    if !matches!(kind, EndpointKind::Update) || args.payload_max_bytes.is_none() {
         return quote!();
     }
 
@@ -181,9 +162,10 @@ fn payload_registration(
     } else {
         quote!(stringify!(#name))
     };
-    let max_bytes = args.payload_max_bytes.clone().unwrap_or_else(|| {
-        quote!(::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES)
-    });
+    let max_bytes = args
+        .payload_max_bytes
+        .as_ref()
+        .expect("explicit payload registration requires an explicit limit");
 
     quote! {
         const _: () = {
@@ -260,31 +242,21 @@ fn first_typed_arg_ident(sig: &Signature) -> Option<syn::Ident> {
 fn dispatch_call(
     wrapper_async: bool,
     impl_async: bool,
-    dispatch: TokenStream2,
     call: &syn::Ident,
     impl_name: syn::Ident,
     args: &[TokenStream2],
 ) -> TokenStream2 {
-    if wrapper_async {
-        if impl_async {
-            quote! {
-                #dispatch(#call, || async move {
-                    #impl_name(#(#args),*).await
-                }).await
-            }
-        } else {
-            quote! {
-                #dispatch(#call, || async move {
-                    #impl_name(#(#args),*)
-                }).await
-            }
-        }
+    let implementation = if wrapper_async && impl_async {
+        quote!(#impl_name(#(#args),*).await)
     } else {
-        quote! {
-            #dispatch(#call, || {
-                #impl_name(#(#args),*)
-            })
-        }
+        quote!(#impl_name(#(#args),*))
+    };
+
+    quote! {
+        ::canic::__internal::core::dispatch::enter_endpoint();
+        let __canic_result = #implementation;
+        ::canic::__internal::core::dispatch::exit_endpoint(#call);
+        __canic_result
     }
 }
 

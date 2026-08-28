@@ -104,6 +104,7 @@ struct LifecycleCompositionSnapshot {
 }
 
 #[test]
+#[ignore = "published IcyDB still resolves ic-timers 0.6.1; re-enable after its timer-aligned release"]
 fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
     let trap_wasm = icydb_participant_trap_wasm();
     let fixture = install_canic_icydb_lifecycle_fixture();
