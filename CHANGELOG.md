@@ -16,7 +16,11 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   validation, fast eligibility, clean-tree or immutable-source proof fails,
   corrects the warning-denied governed timing output, and reports the isolated
   IcyDB timer-version lag as a warning while retaining the maintained timer
-  ownership guards. It supersedes the unqualified `0.109.16` publication.
+  ownership guards. The composed custody journey remains explicitly ignored
+  until the aligned IcyDB release. It also removes redundant per-endpoint Wasm
+  code and the final debug-only Candid export, and rejects final artifacts above
+  the IC's exact 10 MiB code-section limit. It supersedes the unqualified
+  `0.109.16` publication.
 - `0.109.16` makes partial current-estate convergence cycle-truthful and
   replay-safe by ordering Store repair before Root initialization, requiring a
   newer canister version for same-module reinstalls, retaining exact

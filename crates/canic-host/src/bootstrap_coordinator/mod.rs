@@ -9,7 +9,8 @@ mod tests;
 
 use crate::{
     artifact_io::{
-        embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact, write_wasm_artifact,
+        embed_candid_metadata, enforce_wasm_code_section_limit, maybe_shrink_wasm_artifact,
+        write_gzip_artifact, write_wasm_artifact,
     },
     bootstrap_candid::materialize_infrastructure_candid,
     bootstrap_store::{
@@ -95,14 +96,8 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
         context,
         &source.manifest_path,
         Some(profile.protocol_profile_digest),
-        should_embed_candid_metadata(context.build_network),
+        false,
     )?;
-    if should_embed_candid_metadata(context.build_network) {
-        let final_candid = extract_candid_bytes(&built_wasm_path)?;
-        if final_candid != candid {
-            return Err("Fleet Coordinator Candid changed after protocol-profile binding".into());
-        }
-    }
     let artifact_root = context.artifact_root().join(FLEET_COORDINATOR_ROLE);
     fs::create_dir_all(&artifact_root)?;
     let wasm_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.wasm"));
@@ -128,6 +123,7 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
             ArtifactTransformKind::CandidMetadata,
         ));
     }
+    enforce_wasm_code_section_limit(&wasm_path)?;
     write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
 
     Ok(CanisterArtifactBuildOutput {

@@ -34,6 +34,21 @@ fn update_expansion_registers_payload_limit_for_exported_name() {
 }
 
 #[test]
+fn default_update_expansion_uses_runtime_fallback_without_registration() {
+    let args = make_args(Vec::new());
+    let func: ItemFn = syn::parse_quote!(
+        fn ping() -> Result<(), ::canic::Error> {
+            Ok(())
+        }
+    );
+
+    let expanded = expand(EndpointKind::Update, args, func).to_string();
+
+    assert!(!expanded.contains("register_update_limit"));
+    assert!(!expanded.contains("__canic_ctor_payload_limit_ping"));
+}
+
+#[test]
 fn explicit_update_payload_limit_uses_raw_predecode_adapter() {
     let mut args = make_args(Vec::new());
     args.payload_max_bytes = Some(quote!(16 * 1024));
@@ -144,7 +159,7 @@ fn access_stage_expr_builds_context_from_the_exact_transport_caller() {
 }
 
 #[test]
-fn access_stage_default_guard_uses_the_exact_transport_caller() {
+fn access_stage_default_guard_skips_the_unused_transport_caller() {
     let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
     let args = make_args(Vec::new());
     let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
@@ -152,8 +167,9 @@ fn access_stage_default_guard_uses_the_exact_transport_caller() {
     let stage = access_stage(&plan, &call).to_string();
     let compact = stage.split_whitespace().collect::<String>();
 
-    assert!(compact.contains("caller:__canic_caller"));
-    assert!(!compact.contains("authenticated_caller"));
+    assert!(compact.contains("eval_default_fleet_guard"));
+    assert!(compact.contains("__canic_call"));
+    assert!(!compact.contains("msg_caller"));
 }
 
 #[test]
@@ -178,16 +194,20 @@ fn authenticated_endpoint_expansion_fences_before_access_and_dispatch() {
     let access = expanded
         .find("eval_access")
         .expect("expanded endpoint must evaluate access");
-    let dispatch = expanded
-        .find("dispatch_update_async")
-        .expect("expanded endpoint must dispatch update after access");
+    let enter = expanded
+        .find("enter_endpoint")
+        .expect("expanded endpoint must enter instrumentation after access");
     let impl_call = expanded
         .find("__canic_impl_write")
         .expect("expanded endpoint must call implementation");
+    let exit = expanded
+        .find("exit_endpoint")
+        .expect("expanded endpoint must exit instrumentation after implementation");
 
     assert!(fence < access);
-    assert!(access < dispatch);
-    assert!(dispatch < impl_call);
+    assert!(access < enter);
+    assert!(enter < impl_call);
+    assert!(impl_call < exit);
     assert!(compact.contains("::canic::application_scope!(\"write\").as_str()"));
     assert!(!compact.contains("authenticated_with_scope(\"write\")"));
 }

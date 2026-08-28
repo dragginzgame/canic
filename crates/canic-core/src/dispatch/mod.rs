@@ -6,7 +6,7 @@
 //! Responsibilities:
 //! - Ensure runtime memory bootstrap readiness at endpoint boundary
 //! - Enter and exit endpoint performance tracking
-//! - Invoke the supplied handler closure
+//! - Bracket the macro-generated handler invocation
 //! - Enforce the protected Fleet-activation phase before application dispatch
 //! - Preserve synchronous vs asynchronous execution semantics
 //!
@@ -28,7 +28,6 @@
 pub mod icrc21;
 
 use crate::{ids::EndpointCall, perf};
-use std::future::Future;
 
 #[cfg_attr(not(target_arch = "wasm32"), expect(clippy::missing_const_for_fn))]
 fn ensure_memory_bootstrap() {
@@ -40,9 +39,15 @@ fn ensure_memory_bootstrap() {
     }
 }
 
-fn enter_endpoint() {
+/// Enter shared endpoint instrumentation before invoking the generated handler.
+pub fn enter_endpoint() {
     ensure_memory_bootstrap();
     perf::enter_endpoint();
+}
+
+/// Exit shared endpoint instrumentation after the generated handler returns.
+pub fn exit_endpoint(call: EndpointCall) {
+    perf::exit_endpoint(call);
 }
 
 /// Enforce cross-cutting endpoint prerequisites before access evaluation.
@@ -112,46 +117,4 @@ fn enforce_fleet_activation_fence(call: EndpointCall) {
         let _ = call;
         let _ = crate::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_endpoint_allowed;
     }
-}
-
-/// Dispatch a synchronous query endpoint.
-pub fn dispatch_query<R>(call: EndpointCall, f: impl FnOnce() -> R) -> R {
-    enter_endpoint();
-    let res = f();
-    perf::exit_endpoint(call);
-
-    res
-}
-
-/// Dispatch an asynchronous query endpoint.
-pub async fn dispatch_query_async<R, F>(call: EndpointCall, f: impl FnOnce() -> F) -> R
-where
-    F: Future<Output = R>,
-{
-    enter_endpoint();
-    let res = f().await;
-    perf::exit_endpoint(call);
-
-    res
-}
-
-/// Dispatch a synchronous update endpoint.
-pub fn dispatch_update<R>(call: EndpointCall, f: impl FnOnce() -> R) -> R {
-    enter_endpoint();
-    let res = f();
-    perf::exit_endpoint(call);
-
-    res
-}
-
-/// Dispatch an asynchronous update endpoint.
-pub async fn dispatch_update_async<R, F>(call: EndpointCall, f: impl FnOnce() -> F) -> R
-where
-    F: Future<Output = R>,
-{
-    enter_endpoint();
-    let res = f().await;
-    perf::exit_endpoint(call);
-
-    res
 }

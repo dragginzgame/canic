@@ -316,7 +316,7 @@ pub mod deployment {
 pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), AccessError> {
     match eval_access_inner(expr, ctx).await {
         Ok(()) => Ok(()),
-        Err(failure) => Err(record_access_failure(ctx, failure)),
+        Err(failure) => Err(record_access_failure(ctx.call, failure)),
     }
 }
 
@@ -327,7 +327,7 @@ type AccessEvalFuture<'a> = Pin<Box<dyn Future<Output = Result<(), AccessFailure
 /// Evaluate an implicit Fleet guard and record a normalized denial on failure.
 pub fn eval_default_fleet_guard(
     guard: DefaultFleetGuard,
-    ctx: &AccessContext,
+    call: EndpointCall,
 ) -> Result<(), AccessError> {
     let result = match guard {
         DefaultFleetGuard::AllowsUpdates => access::fleet::guard_fleet_update(),
@@ -346,7 +346,7 @@ pub fn eval_default_fleet_guard(
                 }
             };
             Err(record_access_failure(
-                ctx,
+                call,
                 AccessFailure::from_builtin(&predicate, err),
             ))
         }
@@ -456,8 +456,8 @@ impl AccessFailure {
     }
 }
 
-fn record_access_failure(ctx: &AccessContext, failure: AccessFailure) -> AccessError {
-    AccessMetrics::increment(ctx.call, failure.metric_kind, failure.predicate);
+fn record_access_failure(call: EndpointCall, failure: AccessFailure) -> AccessError {
+    AccessMetrics::increment(call, failure.metric_kind, failure.predicate);
     if let Some(codes) = failure.error.diagnostic_codes() {
         log!(
             Topic::Auth,

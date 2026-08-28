@@ -282,6 +282,7 @@ metadata, readiness, and management methods. When comparing an old non-Canic
 canister to a Canic-managed rewrite, compare the application surface separately
 from Canic-owned methods.
 
-Local builds extract `.did` files from debug Wasm artifacts. Production
-`ICP_ENVIRONMENT=ic` builds intentionally skip Candid extraction and embedded
-`candid:service` metadata so deployed Wasm artifacts stay smaller.
+Canic uses a dedicated declaration build to extract each `.did`, then omits the
+debug-only `get_candid_pointer` export from the final artifact. Local final
+artifacts embed public `candid:service` metadata for introspection; production
+`ICP_ENVIRONMENT=ic` artifacts skip that metadata as well.

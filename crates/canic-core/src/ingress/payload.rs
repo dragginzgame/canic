@@ -1,6 +1,6 @@
 //! Module: ingress::payload
 //!
-//! Responsibility: update ingress payload limits registered by endpoint macros.
+//! Responsibility: explicit update limits registered by endpoint macros and default fallback.
 //! Does not own: endpoint dispatch, authorization, or payload decoding.
 //! Boundary: stores method limit metadata consumed during ingress inspection.
 
