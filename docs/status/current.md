@@ -139,13 +139,12 @@ retained Component operation receipt and proves an immediate second run has no
 nonterminal action or update effect. The control-plane convergence evidence gap
 is closed without restoring a deleted install or recovery owner.
 
-The direct Canic runtime exact-pins `ic-timers 0.7.0` and uses its
-policy-specific watchdog reconciliation state without changing Canic's
-cadence-backed recovery contract. The composed-framework lifecycle fixture
-still resolves the exact published IcyDB 0.245.1 runtime and model family until
-its timer-aligned release is selected. Dependency edges into that family are
-confined to the two unpublished fixture packages, while published Canic package
-graphs remain IcyDB-free. The host-only published
+The direct Canic runtime and composed-framework lifecycle fixture exact-pin one
+`ic-timers 0.6.1` provider inventory. The fixture resolves the exact published
+IcyDB 0.245.1 runtime and model family without introducing a second set of
+canister-local timer statics. Dependency edges into that family remain confined
+to the two unpublished fixture packages, while published Canic package graphs
+remain IcyDB-free. The host-only published
 `canic::testing` feature now owns the generic managed-App test boundary: exact
 grouped init and Directory authority, initial fencing/activation, protected
 status, successor fencing, same-release upgrade and standalone-local install.
@@ -197,12 +196,12 @@ with a same-module Root reset proved by a strictly newer management canister
 version and an effect-free successor apply. No broad workspace or broad
 PocketIC gate was run during coding, as required by repository policy.
 
-The Canic-side `ic-timers 0.7.0` slice passes locked all-target checks and
-warning-denied all-target Clippy for `canic-core` and `canic-control-plane`,
-five core timer-custody tests, five Root canister-pool tests, the focused native
-ownership guards and changelog governance. The combined IcyDB fixture was not
-rerun or awaited; its maintained one-package guard remains fail-closed until
-the matching timer-aligned IcyDB release is selected.
+The first complete-gate attempt after the timer change stopped at the ordinary
+test barrier because the published IcyDB fixture still resolved `ic-timers
+0.6.1` beside Canic's attempted `0.7.0`. PocketIC did not start. The incomplete
+upgrade has been removed: the exact provider graph and its ownership guard now
+resolve one `ic-timers 0.6.1`, including the published IcyDB fixture. The
+maintainer-owned complete gate remains the final validation boundary.
 
 <!-- canic-release-validation: version=0.109.15 source=9b490f2ac2d8e029d56390d23ade8b04077d2c59 date=2026-08-27 gate=complete -->
 Published `0.109.15` added a governed fast release lane for exact
