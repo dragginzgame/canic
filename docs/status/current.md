@@ -229,7 +229,10 @@ one `set -euo pipefail` owner. Validation failure, fast-eligibility failure,
 dirty state or source drift now exits before the version bumper receives its
 validated-source environment. Its executable fixture proves each negative path
 and the exact successful authority handoff. The two timing-report format calls
-that stopped `0.109.16` Clippy use the maintained inline argument form.
+that stopped `0.109.16` Clippy use the maintained inline argument form. The
+known unpublished composed-IcyDB dependency on `ic-timers 0.6.1` is reported as
+a warning rather than a release blocker while Canic remains exact-pinned to
+`0.7.0`; an unknown timer-provider version still fails the inventory.
 
 <!-- canic-release-state: source-development -->
 Published `0.109.15` added a governed fast release lane for exact

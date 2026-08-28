@@ -14,8 +14,9 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
 - `0.109.17` makes every version lane fail closed before mutation when complete
   validation, fast eligibility, clean-tree or immutable-source proof fails,
-  and corrects the warning-denied governed timing output. It supersedes the
-  unqualified `0.109.16` publication.
+  corrects the warning-denied governed timing output, and reports the isolated
+  IcyDB timer-version lag as a warning while retaining the maintained timer
+  ownership guards. It supersedes the unqualified `0.109.16` publication.
 - `0.109.16` makes partial current-estate convergence cycle-truthful and
   replay-safe by ordering Store repair before Root initialization, requiring a
   newer canister version for same-module reinstalls, retaining exact
