@@ -29,7 +29,7 @@ FAILURE_RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 RUNNER_DEPTH="${CANIC_VALIDATION_RUNNER_DEPTH:-0}"
 export CANIC_VALIDATION_RUNNER_DEPTH="$((RUNNER_DEPTH + 1))"
 MAX_FAILURE_DETAIL_LINES=160
-FAILURE_PATTERN='---- .* stdout ----|panicked at|failures:|test result: FAILED|error(\[[A-Z0-9]+\])?:|target failed|make(\[[0-9]+\])?: \*\*\*'
+FAILURE_PATTERN='---- .* stdout ----|^test .* \.\.\. FAILED$|failures:|test result: FAILED|error(\[[A-Z0-9]+\])?:|target failed|make(\[[0-9]+\])?: \*\*\*'
 
 failed_targets=()
 targets=()
@@ -65,7 +65,7 @@ is_live_failure_line() {
 
     case "$line" in
         *"error:"* | *"error["* | *"rustc-LLVM ERROR"* | \
-            *"test result: FAILED"* | *"panicked at"* | *"fatal:"* | \
+            *"test result: FAILED"* | test\ *" ... FAILED" | *"fatal:"* | \
             *"FAILED:"* | *"Target failed:"* | *"No such file or directory"* | \
             *"❌"* | *"🚨"* | \
             *make:*"***"* | *make\[*"***"*) return 0 ;;

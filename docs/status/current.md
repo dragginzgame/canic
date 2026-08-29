@@ -37,8 +37,10 @@ Component roles keep Root activation and observation but omit that responder's
 command, response, workflow and Candid graph. The generated pool-ledger helper
 also retains the exact release-build ID supplied by the complete artifact
 build, closing the release-set admission failure exposed by the focused
-all-role build. The workspace remains version `0.109.21`; no version, tag,
-package, push or deployment action has occurred for this draft.
+all-role build. Validation output now distinguishes a caught PocketIC trap from
+a real libtest or target failure instead of marking every Rust panic-hook line
+as an error. The workspace version surfaces are synchronized to `0.109.22`;
+no tag, package, push or deployment action has occurred for this draft.
 
 Published `v0.109.20` at
 `a90b1ae74439c335ced10d20728e45c0607a01a7` is the immutable predecessor.
@@ -333,8 +335,15 @@ by the production finalizer, and the repository/platform authority test passes.
 Canonical Coordinator and Store Candid include the new capability identity.
 The focused generated-helper journey now uses a nonzero release-build ID and
 proves those exact bytes survive finalization before exercising its existing
-at-most-once withdrawal and cycle-conservation path. No broad workspace or
-PocketIC gate was run during coding, as required by repository policy.
+at-most-once withdrawal and cycle-conservation path. The validation-runner
+regression passes with a caught panic retained as ordinary raw evidence and a
+separate real failed test highlighted in both live and retained diagnostics.
+Targeted syntax, governed ShellCheck and the release-integrity contract guard
+pass. The previously started broad test invocation reached the lifecycle
+boundary suite and passed all five tests, including the caught init trap, then
+was interrupted later during `native_agent_delegation`; it is not complete-gate
+evidence. This coding slice did not start another broad workspace or PocketIC
+gate, as required by repository policy.
 
 Published `0.109.21` coding-time evidence passed targeted locked checks, as
 required during implementation: the changed four-package graph compiles;
@@ -704,9 +713,11 @@ sibling-repository mutation was performed by this documentation reconciliation.
 The open `0.109.22` batch corrects the packaged Binaryen 132 authority exposed
 by downstream staging, makes all runtime platform projections accountable to
 the repository pins and hard-cuts the incorrectly universal non-Root
-capability responder into exact role-contract ownership. The next maintainer
-action is to review this diff and choose the release validation, version and
-publication boundary; coding-time agents must not pre-run the broad gate.
+capability responder into exact role-contract ownership. It also prevents an
+expected caught PocketIC trap from appearing as a validation error. The next
+maintainer action is to review this diff and choose the release validation,
+version and publication boundary; coding-time agents must not pre-run the broad
+gate.
 
 The separately reported release-build LTO duplication remains a non-blocking,
 measurement-led throughput slice. It is not part of the staging correctness
