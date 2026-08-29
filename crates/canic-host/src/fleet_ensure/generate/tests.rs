@@ -635,17 +635,18 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let stopped_message = stopped.to_string();
     assert!(matches!(
         stopped,
-        FleetGenerateError::StoppedRootStartRequired {
+        FleetGenerateError::StoppedRootStartRequired(details)
+        if matches!(details.as_ref(), StoppedRootStartPrerequisite {
             controller,
             fleet,
             module_sha256,
             root: stopped_root,
             subnet,
-        } if controller == operator
+        } if controller == &operator
             && fleet == "retained-multi-component"
-            && module_sha256 == root_module_hash
-            && stopped_root == fleet_root
-            && subnet == placement
+            && module_sha256 == &root_module_hash
+            && stopped_root == &fleet_root
+            && subnet == &placement)
     ));
     let Err(repeated) = generate_desired_fleet(&request) else {
         panic!("the same stopped Root prerequisite must remain deterministic");
