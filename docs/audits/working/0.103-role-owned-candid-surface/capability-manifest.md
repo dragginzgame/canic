@@ -136,7 +136,8 @@ variant merely to prove that it exists.
 
 | Capability | Exact 0.103 protocol effect |
 | --- | --- |
-| `Runtime` | Adds `Overview`, `CycleBalance`, `CycleHistory`, `Health`, `Logs`, `Metrics`, `Readiness` and `Runtime` to the configured role's status type, plus `Binding` for managed roles, exact `Authority` for Store and `RespondCapability` to a role that owns that RPC response. `CycleHistory` is local balance observation, not funding history. |
+| `Runtime` | Adds `Overview`, `CycleBalance`, `CycleHistory`, `Health`, `Logs`, `Metrics`, `Readiness` and `Runtime` to the configured role's status type, plus `Binding` for managed roles and exact `Authority` for Store. `CycleHistory` is local balance observation, not funding history. |
+| `ChildProvisioning` | Adds `RespondCapability` only to an exact non-Root role with at least one nonempty `spawn_grants.<parent-role>` entry. The built-in Store retains the same response through its distinct Store command surface. Leaf and ordinary top-level Component roles compile no non-Root capability responder or its request/response codec graph. |
 | `AutomaticTopup` | Adds `CanisterStatusRequest::CycleTopups` only to a configured managed role with an explicit `topup` policy, together with its referenced DTO and public handler reachability. Root, Coordinator and the implicit Store cannot acquire it. The same frozen decision is 0.104's private timer/workflow pruning input. |
 | `Root` + `RootControlPlane` | These always coexist and jointly add every Root target in `method-register.tsv` except the signer-gated role-attestation pair and the already listed `Runtime` targets. They are not independently pruned protocol layers. |
 | `FleetCoordinator` | Adds `CoordinatorStatusRequest::Overview` plus every Coordinator target in the register. The current Coordinator has no old overview method, so profile verification is the one target not represented by an old row. |

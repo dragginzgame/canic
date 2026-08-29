@@ -173,6 +173,9 @@ macro_rules! __canic_build_internal {
                 $crate::__internal::core::role_contract::RoleCapabilityKey::AutomaticTopup => {
                     println!("cargo:rustc-cfg=canic_capability_automatic_topup");
                 }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::ChildProvisioning => {
+                    println!("cargo:rustc-cfg=canic_capability_child_provisioning");
+                }
                 $crate::__internal::core::role_contract::RoleCapabilityKey::DelegatedTokenIssuer => {
                     println!("cargo:rustc-cfg=canic_capability_delegated_token_issuer");
                 }

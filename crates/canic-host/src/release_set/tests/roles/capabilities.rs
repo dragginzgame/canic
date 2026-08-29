@@ -7,6 +7,7 @@ fn configured_role_capabilities_lists_enabled_role_features() {
 
     let capabilities = BTreeSet::from([
         RoleCapabilityKey::AutomaticTopup,
+        RoleCapabilityKey::ChildProvisioning,
         RoleCapabilityKey::DelegatedTokenIssuer,
         RoleCapabilityKey::Index,
         RoleCapabilityKey::Root,

@@ -244,10 +244,10 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                     .map(StoreStatusResponse::Operation)
                 }
                 StoreStatusRequest::Overview => {
-                    let capabilities = ::std::collections::BTreeSet::from([
-                        $crate::__internal::core::role_contract::RoleCapabilityKey::Runtime,
-                        $crate::__internal::core::role_contract::RoleCapabilityKey::WasmStore,
-                    ]);
+                    let capabilities =
+                        $crate::__internal::core::role_contract::built_in_role_capabilities(
+                            $crate::__internal::core::role_contract::BuiltInRoleKind::WasmStore,
+                        );
                     Ok(StoreStatusResponse::Overview(
                         $crate::__internal::core::api::role::RoleOverviewApi::overview(
                             $crate::__internal::core::ids::CanisterRole::from("wasm_store"),

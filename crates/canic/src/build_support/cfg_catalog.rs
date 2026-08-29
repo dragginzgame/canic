@@ -4,6 +4,7 @@
 /// register this exact catalog with rustc.
 pub const CANIC_CUSTOM_CFG_NAMES: &[&str] = &[
     "canic_capability_automatic_topup",
+    "canic_capability_child_provisioning",
     "canic_capability_delegated_token_issuer",
     "canic_capability_delegated_token_verifier",
     "canic_capability_fleet_admission_projection",

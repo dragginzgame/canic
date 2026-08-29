@@ -21,6 +21,7 @@ use crate::{
 #[remain::sorted]
 pub enum RoleCapability {
     AutomaticTopup,
+    ChildProvisioning,
     DelegatedTokenIssuer,
     DelegatedTokenVerifier,
     FleetAdmissionProjection,

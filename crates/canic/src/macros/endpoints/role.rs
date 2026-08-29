@@ -18,6 +18,10 @@ macro_rules! __canic_compiled_role_capabilities {
         #[cfg(canic_capability_automatic_topup)]
         capabilities
             .insert($crate::__internal::core::role_contract::RoleCapabilityKey::AutomaticTopup);
+        #[cfg(canic_capability_child_provisioning)]
+        capabilities.insert(
+            $crate::__internal::core::role_contract::RoleCapabilityKey::ChildProvisioning,
+        );
         #[cfg(canic_capability_delegated_token_issuer)]
         capabilities.insert(
             $crate::__internal::core::role_contract::RoleCapabilityKey::DelegatedTokenIssuer,
@@ -455,6 +459,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             PrepareFleetAdmission(
                 ::canic::dto::fleet_admission::FleetAdmissionPrepareTargetRequest,
             ),
+            #[cfg(canic_capability_child_provisioning)]
             RespondCapability(::canic::dto::capability::NonrootCyclesCapabilityEnvelopeV1),
         }
 
@@ -485,6 +490,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             PrepareFleetAdmission(
                 ::canic::dto::fleet_admission::FleetAdmissionTargetReceipt,
             ),
+            #[cfg(canic_capability_child_provisioning)]
             RespondCapability(::canic::dto::capability::NonrootCyclesCapabilityResponseV1),
         }
 
@@ -595,6 +601,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
                     $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::prepare(request)
                         .map(CanisterCommandResponse::PrepareFleetAdmission)
                 }
+                #[cfg(canic_capability_child_provisioning)]
                 CanisterCommand::RespondCapability(envelope) => {
                     $crate::__internal::core::api::rpc::RpcApi::response_capability_v1_nonroot(
                         envelope,

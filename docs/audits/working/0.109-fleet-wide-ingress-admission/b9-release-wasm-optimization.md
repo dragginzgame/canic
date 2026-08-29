@@ -126,6 +126,33 @@ interchangeable ties. None of this feedback authorizes Canic to mutate IcyDB or
 to weaken query, persistence, authentication, lifecycle or deterministic
 canonicalization semantics.
 
+## Role-specific managed runtime surface
+
+The 0.109.22 follow-up removes one incorrectly universal endpoint graph rather
+than deleting the managed runtime bundle. `ChildProvisioning` is derived from
+an exact nonempty `spawn_grants.<parent-role>` set. Only that role compiles the
+non-Root `RespondCapability` request, response and workflow dispatch; a leaf or
+ordinary Component has no such Candid variant. The built-in Store keeps its
+separate responder. `ConfigureRuntime`, binding and operation observation stay
+on every managed Component because the Root uses them for activation and
+reconciliation.
+
+A canonical release build of the managed leaf audit role produced 2,546,839
+raw bytes, a 2,316,160-byte code section and 4,183 defined functions after the
+required Binaryen 132 transform. Its generated Candid contains
+`ConfigureRuntime` and no `RespondCapability`. The existing descendant-parent
+audit role retains both variants. Those artifacts prove exact surface pruning;
+their sizes are not a controlled before/after comparison because the two roles
+have different configured capabilities and application code.
+
+The larger compact-runtime-configuration opportunity remains separate. The
+current full configuration is also the protected source for Component topology
+hashes, descendant funding limits and application-wide auth policy. Replacing
+it safely requires a named precompiled runtime authority that preserves those
+bindings; trimming the model ad hoc would weaken activation or funding checks.
+This endpoint slice therefore does not claim the downstream artificial
+whole-bundle ceiling as an achieved saving.
+
 A temporary symbol-preserving IcyDB `0.246.0` ten-typed-entity, SQL-off fixture
 was also passed through the same `-Oz` transform with names retained. Twiggy
 reported 240,125 residual bloat bytes: Rust sorting remained dominant, while

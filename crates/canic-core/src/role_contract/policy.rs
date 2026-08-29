@@ -105,6 +105,7 @@ pub fn built_in_role_capabilities(kind: BuiltInRoleKind) -> BTreeSet<RoleCapabil
             capabilities.insert(RoleCapabilityKey::FleetCoordinator);
         }
         BuiltInRoleKind::WasmStore => {
+            capabilities.insert(RoleCapabilityKey::ChildProvisioning);
             capabilities.insert(RoleCapabilityKey::Runtime);
             capabilities.insert(RoleCapabilityKey::WasmStore);
         }
@@ -129,6 +130,14 @@ pub fn derive_role_capabilities(
     }
 
     for component_spec in config.component_specs.values() {
+        if component_spec
+            .spawn_grants
+            .get(role)
+            .is_some_and(|grants| !grants.is_empty())
+        {
+            capabilities.insert(RoleCapabilityKey::ChildProvisioning);
+        }
+
         let Some(canister) = component_spec.get_canister(role) else {
             continue;
         };

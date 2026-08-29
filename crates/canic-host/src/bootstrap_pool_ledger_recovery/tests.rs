@@ -2,7 +2,7 @@ use super::*;
 use crate::canister_build::cache::{canister_build_target_root, configure_canister_cargo_command};
 use crate::test_support::temp_dir;
 use candid::{CandidType, Deserialize, Nat, Principal, decode_one, encode_one};
-use canic_core::ids::BuildNetwork;
+use canic_core::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
 use pocket_ic::PocketIcBuilder;
 use std::path::Path;
 
@@ -50,6 +50,8 @@ struct HelperReceipt {
 fn generated_pool_ledger_recovery_helper_converts_one_account_exactly_once() {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let icp_root = temp_dir("canic-pool-ledger-recovery-build");
+    let release_build_id =
+        ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([39; 32]));
     let context = WorkspaceBuildContext {
         role: POOL_LEDGER_RECOVERY_ROLE.to_string(),
         profile: CanisterBuildProfile::Fast,
@@ -60,7 +62,7 @@ fn generated_pool_ledger_recovery_helper_converts_one_account_exactly_once() {
         config_path: workspace_root.join("canic.toml"),
         local_replica: None,
         refresh_canonical_infrastructure_did: false,
-        release_build_id: None,
+        release_build_id: Some(release_build_id),
     };
 
     let output = build_pool_ledger_recovery_artifact(&context)
@@ -75,6 +77,7 @@ fn generated_pool_ledger_recovery_helper_converts_one_account_exactly_once() {
 
     let ledger_wasm = build_cycles_ledger_stub(&workspace_root);
     let helper_wasm = fs::read(&output.wasm_path).expect("read generated recovery helper");
+    assert_release_build_identity(&helper_wasm, release_build_id);
     let pic = PocketIcBuilder::new().with_application_subnet().build();
     let subnet = *pic
         .topology()
@@ -149,6 +152,14 @@ fn generated_pool_ledger_recovery_helper_converts_one_account_exactly_once() {
     assert!(pic.cycle_balance(pool) >= before + withdrawal - 200_000_000_000);
 
     fs::remove_dir_all(icp_root).expect("clean generated helper test root");
+}
+
+fn assert_release_build_identity(wasm: &[u8], release_build_id: ReleaseBuildId) {
+    let identity = release_build_id.to_string();
+    assert!(
+        wasm.windows(identity.len())
+            .any(|window| window == identity.as_bytes())
+    );
 }
 
 fn build_cycles_ledger_stub(workspace_root: &Path) -> Vec<u8> {

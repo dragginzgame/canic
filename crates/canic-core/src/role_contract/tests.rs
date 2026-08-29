@@ -277,6 +277,22 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
 }
 
 #[test]
+fn child_provisioning_is_derived_only_for_roles_with_spawn_grants() {
+    let config = ConfigTestBuilder::new()
+        .with_default_canister_kind("project_instance", CanisterKind::Service)
+        .with_default_canister_kind("project_machine", CanisterKind::Instance)
+        .build();
+
+    let parent = derive_role_capabilities(&config, &CanisterRole::new("project_instance"))
+        .expect("parent role should resolve");
+    let child = derive_role_capabilities(&config, &CanisterRole::new("project_machine"))
+        .expect("child role should resolve");
+
+    assert!(parent.contains(&RoleCapabilityKey::ChildProvisioning));
+    assert!(!child.contains(&RoleCapabilityKey::ChildProvisioning));
+}
+
+#[test]
 fn local_application_authorization_capability_is_exactly_role_pruned() {
     let mut enabled = ConfigTestBuilder::canister_config(CanisterKind::Service);
     enabled.auth.delegated_token_verifier = true;
@@ -411,7 +427,11 @@ fn automatic_topup_is_derived_only_from_the_exact_configured_role() {
     assert!(!plain.contains(&RoleCapabilityKey::AutomaticTopup));
     assert_eq!(
         built_in_role_capabilities(BuiltInRoleKind::WasmStore),
-        BTreeSet::from([RoleCapabilityKey::Runtime, RoleCapabilityKey::WasmStore])
+        BTreeSet::from([
+            RoleCapabilityKey::ChildProvisioning,
+            RoleCapabilityKey::Runtime,
+            RoleCapabilityKey::WasmStore,
+        ])
     );
 }
 

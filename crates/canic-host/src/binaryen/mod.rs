@@ -79,6 +79,43 @@ impl BinaryenAuthority {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct BinaryenPlatformAuthority {
+    os: &'static str,
+    arch: &'static str,
+    authority: BinaryenAuthority,
+}
+
+const SUPPORTED_BINARYEN_AUTHORITIES: [BinaryenPlatformAuthority; 3] = [
+    BinaryenPlatformAuthority {
+        os: "macos",
+        arch: "aarch64",
+        authority: BinaryenAuthority {
+            archive_platform: "arm64-macos",
+            archive_sha256: "98aad827847af7ef990ed7098d885725c8e5b5aae75073403635617ae4e259aa",
+            executable_sha256: "a9c8d09d84186e4c8efe937f3de19b887404d24a96e2638f3bd3b476e17b7218",
+        },
+    },
+    BinaryenPlatformAuthority {
+        os: "macos",
+        arch: "x86_64",
+        authority: BinaryenAuthority {
+            archive_platform: "x86_64-macos",
+            archive_sha256: "40c3de90bb3766bd0282a895e139a6f50253dba49b4f5bb89e66faca162d832e",
+            executable_sha256: "c3cbd288eef3402119d8183df1739887ff0e6430caba2e1c801406df725a2bd3",
+        },
+    },
+    BinaryenPlatformAuthority {
+        os: "linux",
+        arch: "x86_64",
+        authority: BinaryenAuthority {
+            archive_platform: "x86_64-linux",
+            archive_sha256: "195ddc94f9bc89f45abdabb0b9eea86023d727ba90eac8b35b80f2544fc30572",
+            executable_sha256: "1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725",
+        },
+    },
+];
+
 ///
 /// BinaryenExecutable
 ///
@@ -186,24 +223,18 @@ pub enum BinaryenToolError {
 
 /// Return the checksum authority for the current supported host platform.
 pub fn current_binaryen_authority() -> Result<BinaryenAuthority, BinaryenToolError> {
-    match (env::consts::OS, env::consts::ARCH) {
-        ("macos", "aarch64") => Ok(BinaryenAuthority {
-            archive_platform: "arm64-macos",
-            archive_sha256: "375c3df6d2722ae8e56d577c4c27eacab43c75ceaaefec0861a5ac4b81612010",
-            executable_sha256: "d1fb2d189fa4305889a99136aaf0ff21fe9551a764b665c7f34dfa3834a4717a",
-        }),
-        ("macos", "x86_64") => Ok(BinaryenAuthority {
-            archive_platform: "x86_64-macos",
-            archive_sha256: "d7091c41473cc431f8ed47ed3b8396e1443e662c88ef1d49c5a737d6b9cddcd7",
-            executable_sha256: "e233a27614ac30ae192c1102ea8f1d0b072e06215ec3818d8d8dd79c0ef7b39e",
-        }),
-        ("linux", "x86_64") => Ok(BinaryenAuthority {
-            archive_platform: "x86_64-linux",
-            archive_sha256: "7bb8a2d97214f40bf34abc31d49b34aa5deab10b25d6d13c5f72cb395cf142fb",
-            executable_sha256: "36f78112c8d629e27f8c68be89bee47c245cbde8794e1ff56c03212c02dc8484",
-        }),
-        (os, arch) => Err(BinaryenToolError::UnsupportedPlatform { os, arch }),
-    }
+    binaryen_authority_for(env::consts::OS, env::consts::ARCH)
+}
+
+fn binaryen_authority_for(
+    os: &'static str,
+    arch: &'static str,
+) -> Result<BinaryenAuthority, BinaryenToolError> {
+    SUPPORTED_BINARYEN_AUTHORITIES
+        .iter()
+        .find(|projection| (projection.os, projection.arch) == (os, arch))
+        .map(|projection| projection.authority)
+        .ok_or(BinaryenToolError::UnsupportedPlatform { os, arch })
 }
 
 /// Resolve and admit the exact optimizer selected by the caller's current PATH.
