@@ -299,6 +299,12 @@ pub struct IcpEnsurePlatform {
     root: PathBuf,
 }
 
+#[derive(Clone, Copy)]
+enum RetainedRootOwnedObservationMode {
+    DeferredUntilRootStart,
+    ReinstallRecovery,
+}
+
 impl IcpEnsurePlatform {
     #[must_use]
     pub fn new(desired: DesiredFleet, icp_executable: &str, root: &Path) -> Self {
@@ -534,11 +540,7 @@ impl IcpEnsurePlatform {
         principal: &str,
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
-        let protocol_intent = self.desired.protocol.as_ref().ok_or_else(|| {
-            current_protocol::CurrentProtocolError::Configuration(
-                "Root-owned observation requires typed Fleet protocol".to_string(),
-            )
-        })?;
+        let candid = self.root_protocol_candid()?;
         let parent = configured.parent.as_deref().ok_or_else(|| {
             current_protocol::CurrentProtocolError::Configuration(format!(
                 "Root-owned canister {} has no Root parent",
@@ -551,7 +553,12 @@ impl IcpEnsurePlatform {
                 configured.name
             ))
         })?;
-        let candid = resolve_path(&self.root, &protocol_intent.root_candid);
+        let retained_observation = |mode| {
+            self.retained_root_owned_observation(configured, principal, parent, root, state, mode)
+        };
+        if self.required_root_status(&configured.name, root)? == CanisterRuntimeStatus::Stopped {
+            return retained_observation(RetainedRootOwnedObservationMode::DeferredUntilRootStart);
+        }
         let target = parse_principal("Root-owned canister", principal)?;
         let mut start_after = None;
         loop {
@@ -568,8 +575,8 @@ impl IcpEnsurePlatform {
             let response = match response {
                 Ok(response) => response,
                 Err(error) if recoverable_root_status_error(&error) => {
-                    return self.retained_root_owned_observation(
-                        configured, principal, parent, root, state,
+                    return retained_observation(
+                        RetainedRootOwnedObservationMode::ReinstallRecovery,
                     );
                 }
                 Err(error) => {
@@ -587,8 +594,8 @@ impl IcpEnsurePlatform {
                     canic_core::dto::pool::CanisterPoolAssetStatus::PendingReset
                 ) && asset.cycles.to_u128() == 0
                 {
-                    return self.retained_root_owned_observation(
-                        configured, principal, parent, root, state,
+                    return retained_observation(
+                        RetainedRootOwnedObservationMode::ReinstallRecovery,
                     );
                 }
                 let Some(root_owned_lifecycle) =
@@ -633,6 +640,30 @@ impl IcpEnsurePlatform {
         }
     }
 
+    fn root_protocol_candid(&self) -> Result<PathBuf, IcpEnsurePlatformError> {
+        let protocol = self.desired.protocol.as_ref().ok_or_else(|| {
+            current_protocol::CurrentProtocolError::Configuration(
+                "Root-owned observation requires typed Fleet protocol".to_string(),
+            )
+        })?;
+        Ok(resolve_path(&self.root, &protocol.root_candid))
+    }
+
+    fn required_root_status(
+        &self,
+        configured_name: &str,
+        root: &str,
+    ) -> Result<CanisterRuntimeStatus, IcpEnsurePlatformError> {
+        self.status_optional(root)?
+            .map(|live| live.status)
+            .ok_or_else(|| {
+                current_protocol::CurrentProtocolError::Configuration(format!(
+                    "Root-owned canister {configured_name} has no live Root"
+                ))
+                .into()
+            })
+    }
+
     fn retained_root_owned_observation(
         &self,
         configured: &crate::fleet_ensure::model::DesiredCanister,
@@ -640,7 +671,24 @@ impl IcpEnsurePlatform {
         parent: &str,
         root: &str,
         state: &FleetEnsureStateRecord,
+        mode: RetainedRootOwnedObservationMode,
     ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        let Some(retained_topology) = exact_retained_root_owned_topology(
+            state,
+            &configured.name,
+            configured.kind,
+            parent,
+            principal,
+            root,
+        ) else {
+            return Err(
+                current_protocol::CurrentProtocolError::Configuration(format!(
+                    "Root-owned canister {} has no exact retained topology authority",
+                    configured.name
+                ))
+                .into(),
+            );
+        };
         let cycles = self
             .public_cycle_balance(principal)
             .or_else(|| state.retained_cycles_by_principal.get(principal).copied())
@@ -695,15 +743,14 @@ impl IcpEnsurePlatform {
                 .into(),
             );
         }
-        self.record_recovery_reinstalls(parent);
+        if matches!(mode, RetainedRootOwnedObservationMode::ReinstallRecovery) {
+            self.record_recovery_reinstalls(parent);
+        }
         Ok(Some(LiveCanister {
             canister_version: None,
             controllers: vec![root.to_string()],
             cycles,
-            module_sha256: state
-                .topology
-                .get(&configured.name)
-                .and_then(|topology| topology.module_hash.clone()),
+            module_sha256: retained_topology.module_hash.clone(),
             principal: principal.to_string(),
             reinstall_required: false,
             root_owned_lifecycle: Some(RootOwnedCanisterLifecycle::Retained),
@@ -1617,6 +1664,31 @@ impl EnsurePlatform for IcpEnsurePlatform {
     }
 }
 
+fn exact_retained_root_owned_topology<'a>(
+    state: &'a FleetEnsureStateRecord,
+    name: &str,
+    kind: DesiredCanisterKind,
+    parent: &str,
+    principal: &str,
+    root: &str,
+) -> Option<&'a crate::fleet_ensure::model::FleetEnsureTopologyRecord> {
+    let child_identity_matches = state
+        .principals
+        .get(name)
+        .is_some_and(|retained| retained == principal);
+    let root_identity_matches = state
+        .principals
+        .get(parent)
+        .is_some_and(|retained| retained == root);
+    let topology = state
+        .topology
+        .get(name)
+        .filter(|topology| topology.kind == kind && topology.parent.as_deref() == Some(parent));
+    (child_identity_matches && root_identity_matches)
+        .then_some(topology)
+        .flatten()
+}
+
 fn recoverable_root_status_error(error: &CanisterProtocolError) -> bool {
     error.is_rejected_with(canic_core::diagnostics::codes::STATE_CONFLICT)
         || error.is_rejected_with(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
@@ -1854,6 +1926,71 @@ mod tests {
                 &CanisterPoolAssetStatus::PendingReset
             ),
             None
+        );
+    }
+
+    #[test]
+    fn retained_root_owned_topology_requires_exact_child_root_and_parent_binding() {
+        let mut state = FleetEnsureStateRecord {
+            active_registry: None,
+            completed_reinstalls: BTreeMap::new(),
+            fleet: "fleet".to_string(),
+            pending_principals: BTreeMap::new(),
+            principals: BTreeMap::from([
+                ("root".to_string(), "root-principal".to_string()),
+                ("store".to_string(), "store-principal".to_string()),
+            ]),
+            retained_cycles_by_principal: BTreeMap::new(),
+            schema_version: crate::fleet_ensure::model::FLEET_ENSURE_SCHEMA_VERSION,
+            topology: BTreeMap::from([(
+                "store".to_string(),
+                crate::fleet_ensure::model::FleetEnsureTopologyRecord {
+                    kind: DesiredCanisterKind::Store,
+                    module_hash: Some("11".repeat(32)),
+                    parent: Some("root".to_string()),
+                    protocol_binding: None,
+                    role: None,
+                },
+            )]),
+        };
+
+        assert!(
+            exact_retained_root_owned_topology(
+                &state,
+                "store",
+                DesiredCanisterKind::Store,
+                "root",
+                "store-principal",
+                "root-principal",
+            )
+            .is_some()
+        );
+        assert!(
+            exact_retained_root_owned_topology(
+                &state,
+                "store",
+                DesiredCanisterKind::Store,
+                "root",
+                "foreign-store",
+                "root-principal",
+            )
+            .is_none()
+        );
+        state
+            .topology
+            .get_mut("store")
+            .expect("Store topology")
+            .parent = Some("foreign-root".to_string());
+        assert!(
+            exact_retained_root_owned_topology(
+                &state,
+                "store",
+                DesiredCanisterKind::Store,
+                "root",
+                "store-principal",
+                "root-principal",
+            )
+            .is_none()
         );
     }
 }

@@ -132,8 +132,7 @@ impl GenerateOptions {
         let management_creation_fee_cycles =
             string_option(generate, "management-creation-fee-cycles")
                 .map(|value| {
-                    value
-                        .parse::<Cycles>()
+                    Cycles::from_human_config_str(&value)
                         .map(|cycles| cycles.to_u128())
                         .map_err(|_| {
                             FleetCommandError::Usage(

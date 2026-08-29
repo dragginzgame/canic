@@ -65,7 +65,7 @@ use thiserror::Error as ThisError;
 const MAX_GENERATOR_INPUT_BYTES: usize = 1024 * 1024;
 const MAINNET_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 const GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD: u128 = 1_000_000;
-const GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES: u128 = 10_000_000;
+const GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES: u128 = 1_000_000_000_000;
 const GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES: u128 = 100_000_000_000;
 
 /// Exact local and live inputs for one no-effect desired-state generation.
@@ -211,20 +211,20 @@ struct ExplicitSubnetSource {
 #[serde(deny_unknown_fields)]
 struct CyclesCreationSource {
     kind: String,
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     cycles: Cycles,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CoordinatorFundingSource {
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     minimum_reserve_cycles: Cycles,
     window_secs: u64,
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     maximum_cycles: Cycles,
     maximum_automatic_grants: u32,
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     maximum_automatic_cycles: Cycles,
 }
 
@@ -249,7 +249,7 @@ struct RootSource {
 struct PoolSource {
     minimum_size: u32,
     maximum_size: u32,
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     canister_cycles: Cycles,
     #[serde(default)]
     imports: Vec<String>,
@@ -258,16 +258,16 @@ struct PoolSource {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RootFundingSource {
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     request_threshold: Cycles,
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     target_balance: Cycles,
     cooldown_secs: u64,
     window_secs: u64,
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     maximum_cycles: Cycles,
     maximum_automatic_grants: u32,
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     maximum_automatic_cycles: Cycles,
 }
 
@@ -285,7 +285,7 @@ struct LimitsSource {
 #[serde(deny_unknown_fields)]
 struct CyclesFundingSource {
     window_secs: u64,
-    #[serde(deserialize_with = "Cycles::from_config")]
+    #[serde(deserialize_with = "Cycles::from_human_config")]
     maximum_cycles: Cycles,
 }
 
@@ -1020,11 +1020,11 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             controller_canisters: Vec::new(),
             controllers: vec![input.source.operator.clone()],
             drain: None,
-            initial_cycles: "0".to_string(),
+            initial_cycles: config_cycles(0),
             init_arg: None,
             init_candid: None,
             kind: DesiredCanisterKind::Auxiliary,
-            minimum_cycles: "0".to_string(),
+            minimum_cycles: config_cycles(0),
             name: "treasury".to_string(),
             parent: None,
             presence: DesiredPresence::Present,
@@ -1068,7 +1068,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             .seed
             .management_creation_fee_cycles
             .clone()
-            .unwrap_or_else(|| "0".to_string()),
+            .unwrap_or_else(|| config_cycles(0)),
         material_cycle_threshold: config_cycles(GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD),
         maximum_observation_burn_cycles: config_cycles(
             GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES,
@@ -1555,14 +1555,15 @@ fn validate_identity_seed(
                 FleetGenerateError::FreshSeedConflict(
                     "fresh estate seed is missing its exact management creation fee".to_string(),
                 )
-            })?
-            .parse::<Cycles>()
-            .map(|cycles| cycles.to_u128())
+            })?;
+        let fee = Cycles::from_human_config_str(fee)
             .map_err(|_| {
                 FleetGenerateError::FreshSeedConflict(
-                    "fresh estate seed has an invalid management creation fee".to_string(),
+                    "fresh estate seed management creation fee must use B, T, or Q units"
+                        .to_string(),
                 )
-            })?;
+            })?
+            .to_u128();
         let expected = fresh_seed(source, seed.fleet_id, &seed.cycles_ledger, fee)?;
         if seed == &expected {
             return Ok(());

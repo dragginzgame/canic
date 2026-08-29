@@ -89,7 +89,7 @@ pub struct ComponentSpecConfig {
 
     #[serde(
         default = "defaults::initial_cycles",
-        deserialize_with = "Cycles::from_config"
+        deserialize_with = "Cycles::from_human_config"
     )]
     pub initial_cycles: Cycles,
 
@@ -234,7 +234,7 @@ pub struct CyclesFundingBudgetConfig {
 
     #[serde(
         default = "defaults::component_cycles_funding_maximum_cycles",
-        deserialize_with = "Cycles::from_config"
+        deserialize_with = "Cycles::from_human_config"
     )]
     pub maximum_cycles: Cycles,
 }
@@ -261,7 +261,7 @@ pub struct ComponentChildConfig {
 
     #[serde(
         default = "defaults::initial_cycles",
-        deserialize_with = "Cycles::from_config"
+        deserialize_with = "Cycles::from_human_config"
     )]
     pub initial_cycles: Cycles,
 
@@ -516,7 +516,7 @@ pub struct CanisterConfig {
 
     #[serde(
         default = "defaults::initial_cycles",
-        deserialize_with = "Cycles::from_config"
+        deserialize_with = "Cycles::from_human_config"
     )]
     pub initial_cycles: Cycles,
 
@@ -584,13 +584,13 @@ impl CanisterConfig {
 pub struct CyclesFundingPolicyConfig {
     #[serde(
         default = "defaults::cycles_funding_max_per_request",
-        deserialize_with = "Cycles::from_config"
+        deserialize_with = "Cycles::from_human_config"
     )]
     pub max_per_request: Cycles,
 
     #[serde(
         default = "defaults::cycles_funding_max_per_child",
-        deserialize_with = "Cycles::from_config"
+        deserialize_with = "Cycles::from_human_config"
     )]
     pub max_per_child: Cycles,
 
@@ -685,13 +685,13 @@ impl fmt::Display for CanisterKind {
 pub struct TopupPolicy {
     #[serde(
         default = "defaults::topup_threshold",
-        deserialize_with = "Cycles::from_config"
+        deserialize_with = "Cycles::from_human_config"
     )]
     pub threshold: Cycles,
 
     #[serde(
         default = "defaults::topup_amount",
-        deserialize_with = "Cycles::from_config"
+        deserialize_with = "Cycles::from_human_config"
     )]
     pub amount: Cycles,
 }

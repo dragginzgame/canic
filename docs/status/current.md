@@ -29,9 +29,13 @@ build network, proves fresh pool funding is part of Fleet Ensure's direct
 reviewed creation graph, and adds one Root-owned same-Principal recovery for
 cycles accidentally credited to an empty pool canister's default Cycles Ledger
 account. Human Fleet cycle configuration now accepts and generates compact
-exact `B`, `T`, and `Q` values through one parser without changing durable plan
-integer authority. Its validation-runner self-test is also isolated from outer
-runner state. Release optimization advances to checksum-bound Binaryen 132,
+exact `B`, `T`, and `Q` values through one strict human-input parser without
+changing durable plan integer authority. A stopped exact retained Root now
+produces its same-Principal Start before protected child observation, and a
+reviewed apply accepts bounded balance movement in either direction while
+retaining the exact action and debit authority. Its validation-runner self-test
+is also isolated from outer runner state. Release optimization advances to
+checksum-bound Binaryen 132,
 while `make update-dev` reports later official stable releases without changing
 the pin. The workspace remains version `0.109.20`; no version, tag, package,
 push or deployment action has occurred for this draft.
@@ -344,6 +348,15 @@ the release-integrity contract pass. A real Canic Wasm Store role optimizes
 under 132 with identical exports and required features before and after. The
 maintainer-owned complete gate and a live production Cycles Ledger recovery
 effect were not run during coding; no remote state or cycles were touched.
+
+The latest staging-regression slice additionally passes eight focused cycle
+value tests, all 131 core configuration tests, three reviewed-plan integrity
+and bidirectional-balance tests, the exact retained Root topology test, the
+public retained multi-Component generator journey with stopped-Root planning,
+the CLI fresh-fee boundary, and warning-denied all-target Clippy for the three
+changed packages. The stopped-Root plan contains one Start, no protected Root
+query and zero funding or operator debit. No broad gate or live operation was
+run for this coding slice.
 
 Open `0.109.16` coding-time evidence passes at the published `0.109.15`
 predecessor worktree: locked `canic-host`/`canic-cli` all-target compilation,
@@ -669,12 +682,16 @@ sibling-repository mutation was performed by this documentation reconciliation.
 
 ## Next Action
 
-The open `0.109.21` batch now implements the three accepted bounded follow-ups:
-network-bound finalized artifacts, direct reviewed fresh-pool creation funding,
-and same-Principal recovery of an empty pool asset's default Cycles Ledger
-balance. The next maintainer action is to review this diff and choose the
-release validation/version/publication boundary; coding-time agents must not
-pre-run the broad gate.
+The open `0.109.21` batch now also closes the two downstream staging blockers:
+stopped-Root observation ordering and bounded bidirectional apply-time balance
+reconciliation. Its human-authored cycle boundary is a strict compact-unit
+contract rather than presentation alone. The next maintainer action is to
+review this diff and choose the release validation/version/publication boundary;
+coding-time agents must not pre-run the broad gate.
+
+The separately reported release-build LTO duplication remains a non-blocking,
+measurement-led throughput slice. It is not part of the staging correctness
+boundary and should not delay publication of these Fleet Ensure corrections.
 
 After immutable publication, downstream adopters should pin the tag, rebuild
 and qualify their artifacts, then exercise the ordinary Fleet Ensure

@@ -373,6 +373,29 @@ pool_imports = []
 }
 
 #[test]
+fn protected_policy_rejects_unsuffixed_cycle_amounts_before_generation() {
+    let principal = Principal::from_slice(&[8]).to_text();
+    let source = multi_component_source_toml(&principal, &principal, &principal);
+    for invalid in [
+        source.replacen(
+            "canister_cycles = \"5T\"",
+            "canister_cycles = \"5000000000000\"",
+            1,
+        ),
+        source.replacen(
+            "canister_cycles = \"5T\"",
+            "canister_cycles = 5000000000000",
+            1,
+        ),
+    ] {
+        assert!(
+            toml::from_str::<FleetSource>(&invalid).is_err(),
+            "accepted unsuffixed human cycle authority"
+        );
+    }
+}
+
+#[test]
 fn generation_rejects_component_demand_above_pool_target_before_observation() {
     let root = temp_dir("fleet-generate-pool-capacity");
     let app_config = root.join("apps/demo/canic.toml");
@@ -392,7 +415,7 @@ fn generation_rejects_component_demand_above_pool_target_before_observation() {
     let coordinator_subnet = principal_text(27);
     let source = multi_component_source_toml(&operator, &coordinator_subnet, &placement).replacen(
         "canister_cycles = \"5T\"",
-        "canister_cycles = \"4800000000000\"",
+        "canister_cycles = \"4.8T\"",
         1,
     );
     fs::write(&source_path, source).expect("write insufficient pool source");
@@ -546,8 +569,10 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             pool: &retained_pool,
             public_cycle_balance: None,
             root_module_hash: &"84".repeat(32),
+            root_runtime_status: "running",
             root_status_error: None,
             store: &store,
+            store_has_root_controller: false,
             store_module_hash: &"85".repeat(32),
         },
     );
@@ -594,8 +619,26 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         2,
         "both paid pool assets remain explicitly retained"
     );
-    assert_eq!(desired.ledger_fee_cycles, "100000000");
-    assert_eq!(desired.management_creation_fee_cycles, "0");
+    assert_eq!(desired.ledger_fee_cycles, "0.1B");
+    assert_eq!(desired.management_creation_fee_cycles, "0B");
+    assert_eq!(desired.material_cycle_threshold, "0.001B");
+    assert_eq!(desired.maximum_observation_burn_cycles, "1T");
+    for value in [
+        &desired.ledger_fee_cycles,
+        &desired.management_creation_fee_cycles,
+        &desired.material_cycle_threshold,
+        &desired.maximum_observation_burn_cycles,
+        &desired.maximum_update_burn_cycles,
+    ]
+    .into_iter()
+    .chain(
+        desired
+            .canisters
+            .iter()
+            .flat_map(|canister| [&canister.initial_cycles, &canister.minimum_cycles]),
+    ) {
+        Cycles::from_human_config_str(value).expect("generated cycle value uses compact units");
+    }
 
     let fresh_seed_path = root.join("deployments/fresh-multi-component.estate.toml");
     let fresh_id = initialize_fresh_estate_seed(&FreshEstateSeedRequest {
@@ -630,6 +673,28 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(fresh.desired.management_creation_fee_cycles, "500B");
     let fresh_seed = fs::read_to_string(&fresh_seed_path).expect("read fresh estate seed");
     assert!(fresh_seed.contains("management_creation_fee_cycles = \"500B\""));
+    let invalid_fresh_seed_path = root.join("deployments/fresh-invalid-units.estate.toml");
+    fs::write(
+        &invalid_fresh_seed_path,
+        fresh_seed.replace(
+            "management_creation_fee_cycles = \"500B\"",
+            "management_creation_fee_cycles = \"500000000000\"",
+        ),
+    )
+    .expect("write invalid fresh estate seed fixture");
+    assert!(matches!(
+        generate_desired_fleet(&FleetGenerateRequest {
+            app_config: &app_config,
+            environment: "local",
+            fleet: "fresh-invalid-units",
+            icp_executable: icp.to_str().expect("fake ICP path"),
+            release_build_id,
+            root: &root,
+            seed: &invalid_fresh_seed_path,
+            source: &source_path,
+        }),
+        Err(FleetGenerateError::FreshSeedConflict(_))
+    ));
     assert!(
         fresh
             .desired
@@ -887,8 +952,10 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             pool: &retained_pool,
             public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: root_hash,
+            root_runtime_status: "running",
             root_status_error: Some(canic_core::diagnostics::codes::STATE_CONFLICT),
             store: &store,
+            store_has_root_controller: false,
             store_module_hash: store_hash,
         },
     );
@@ -967,6 +1034,66 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         BTreeSet::from([4_800_000_000_000, 5_000_000_000_000])
     );
 
+    let mut stopped_desired = recovery_desired.clone();
+    stopped_desired.fleet = "retained-stopped-root".to_string();
+    write_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: coordinator_hash,
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &retained_pool,
+            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            root_module_hash: root_hash,
+            root_runtime_status: "stopped",
+            root_status_error: None,
+            store: &store,
+            store_has_root_controller: true,
+            store_module_hash: store_hash,
+        },
+    );
+    let root_status_counter = root.join("root-status-count");
+    if root_status_counter.exists() {
+        fs::remove_file(&root_status_counter).expect("reset Root query counter");
+    }
+    write_state(
+        &EnsurePaths::under(&root, &stopped_desired.environment, &stopped_desired.fleet),
+        &retained_ensure_state(&stopped_desired, &observed, &artifacts),
+    )
+    .expect("retain exact stopped-Root evidence");
+    let mut stopped_platform = IcpEnsurePlatform::new(
+        stopped_desired.clone(),
+        icp.to_str().expect("fake ICP path"),
+        &root,
+    );
+    let stopped_plan = workflow::plan(
+        &root,
+        &stopped_desired,
+        &source_digest,
+        &stopped_desired.fleet,
+        1_800_000_000_000_000_150,
+        &mut stopped_platform,
+    )
+    .expect("plan exact stopped Root before protected role observation");
+    let stopped_actions = workflow::ordered_actions(&stopped_plan.plan);
+    assert!(matches!(
+        stopped_actions.as_slice(),
+        [EnsureAction::Start { name, principal }]
+            if name == "root-0" && principal == &fleet_root
+    ));
+    assert!(
+        !root_status_counter.exists(),
+        "planning must not query a stopped Root role endpoint"
+    );
+    assert_eq!(stopped_plan.plan.conservation.maximum_new_funding_cycles, 0);
+    assert_eq!(
+        stopped_plan.plan.conservation.maximum_operator_debit_cycles,
+        0
+    );
+    fs::write(&root_status_counter, b"1\n").expect("prime later pool-only fake query");
+
     let mut pending_pool = retained_pool;
     let pending = pending_pool
         .entries
@@ -988,8 +1115,10 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             pool: &pending_pool,
             public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: root_hash,
+            root_runtime_status: "running",
             root_status_error: None,
             store: &store,
+            store_has_root_controller: false,
             store_module_hash: store_hash,
         },
     );
@@ -1963,8 +2092,10 @@ struct FakeIcpFixture<'a> {
     pool: &'a CanisterPoolResponse,
     public_cycle_balance: Option<(&'a str, u128)>,
     root_module_hash: &'a str,
+    root_runtime_status: &'a str,
     root_status_error: Option<canic_core::diagnostics::RegisteredDiagnosticCode>,
     store: &'a str,
+    store_has_root_controller: bool,
     store_module_hash: &'a str,
 }
 
@@ -1983,8 +2114,10 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
         pool,
         public_cycle_balance,
         root_module_hash,
+        root_runtime_status,
         root_status_error,
         store,
+        store_has_root_controller,
         store_module_hash,
     } = fixture;
     let executable = root.join("fake-icp");
@@ -1994,18 +2127,24 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
         operator,
         coordinator_module_hash.to_string(),
         270_000_000_000_000,
+        "running",
+        None,
     );
     let root_status = canister_status_json(
         fleet_root,
         operator,
         root_module_hash.to_string(),
         30_000_000_000_000,
+        root_runtime_status,
+        None,
     );
     let store_status = canister_status_json(
         store,
         operator,
         store_module_hash.to_string(),
         10_000_000_000_000,
+        "running",
+        store_has_root_controller.then_some(fleet_root),
     );
     let authority_response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
         RootEstateStatusResponse::FleetAuthority(Box::new(authority.clone())),
@@ -2074,7 +2213,7 @@ if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
     printf '%s\n' '{ledger_response}'
     exit 0
   fi
-  if [ "$4" = "canic_status" ]; then
+  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_status" ]; then
     count=0
     if [ -f "{counter}" ]; then
       count=$(sed -n '1p' "{counter}")
@@ -2114,12 +2253,16 @@ fn canister_status_json(
     controller: &str,
     module_hash: String,
     cycles: u128,
+    status: &str,
+    second_controller: Option<&str>,
 ) -> String {
+    let mut controllers = vec![controller];
+    controllers.extend(second_controller);
     serde_json::json!({
         "id": canister,
         "name": null,
-        "status": "running",
-        "settings": { "controllers": [controller] },
+        "status": status,
+        "settings": { "controllers": controllers },
         "version": 1,
         "module_hash": module_hash,
         "memory_size": null,

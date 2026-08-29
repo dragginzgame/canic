@@ -110,10 +110,8 @@ impl Cycles {
             (QC, "Q", 15)
         } else if self.0 >= TC {
             (TC, "T", 12)
-        } else if self.0 >= BC {
-            (BC, "B", 9)
         } else {
-            return self.0.to_string();
+            (BC, "B", 9)
         };
         let whole = self.0 / unit;
         let remainder = self.0 % unit;
@@ -125,22 +123,66 @@ impl Cycles {
         format!("{whole}.{fraction}{suffix}")
     }
 
-    /// Deserialize cycle config from either shorthand text such as `10T` or a number.
-    pub fn from_config<'de, D>(deserializer: D) -> Result<Self, D::Error>
+    /// Parse one exact human-authored cycle amount with a mandatory `B`, `T`, or `Q` unit.
+    pub fn from_human_config_str(value: &str) -> Result<Self, CyclesParseError> {
+        if !matches!(value.as_bytes().last(), Some(b'B' | b'T' | b'Q')) {
+            return Err(CyclesParseError::HumanUnitRequired {
+                value: value.to_string(),
+            });
+        }
+        value.parse()
+    }
+
+    /// Deserialize one human-authored cycle amount from quoted compact text.
+    pub fn from_human_config<'de, D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Helper {
-            Str(String),
-            Num(u128),
-        }
+        deserializer.deserialize_any(HumanConfigCyclesVisitor)
+    }
+}
 
-        match Helper::deserialize(deserializer)? {
-            Helper::Str(s) => s.parse::<Self>().map_err(serde::de::Error::custom),
-            Helper::Num(n) => Ok(Self::new(n)),
-        }
+struct HumanConfigCyclesVisitor;
+
+impl Visitor<'_> for HumanConfigCyclesVisitor {
+    type Value = Cycles;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a quoted exact cycle amount with an uppercase B, T, or Q suffix")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Cycles::from_human_config_str(value).map_err(E::custom)
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Err(E::custom(CyclesParseError::HumanUnitRequired {
+            value: value.to_string(),
+        }))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Err(E::custom(CyclesParseError::HumanUnitRequired {
+            value: value.to_string(),
+        }))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Err(E::custom(CyclesParseError::HumanUnitRequired {
+            value: value.to_string(),
+        }))
     }
 }
 
@@ -201,6 +243,11 @@ pub enum CyclesParseError {
 
     #[error("cycle amount number is invalid: {value}")]
     InvalidNumber { value: String },
+
+    #[error(
+        "human-authored cycle amount must be quoted text with an uppercase B, T, or Q suffix: {value}"
+    )]
+    HumanUnitRequired { value: String },
 
     #[error("cycle amount suffix is invalid: {suffix}")]
     InvalidSuffix { suffix: String },
@@ -366,8 +413,9 @@ mod tests {
     #[test]
     fn renders_exact_compact_config_values_without_floating_point() {
         let cases = [
-            (0, "0"),
-            (999_999_999, "999999999"),
+            (0, "0B"),
+            (1, "0.000000001B"),
+            (999_999_999, "0.999999999B"),
             (1_000_000_000, "1B"),
             (1_500_000_000, "1.5B"),
             (999_999_999_999, "999.999999999B"),
@@ -382,7 +430,47 @@ mod tests {
         }
 
         let maximum = Cycles::new(u128::MAX);
-        assert_eq!(maximum.to_config_string().parse::<Cycles>(), Ok(maximum),);
+        assert_eq!(
+            maximum.to_config_string().parse::<Cycles>(),
+            Ok(maximum.clone()),
+        );
+        assert_eq!(
+            Cycles::from_human_config_str(&maximum.to_config_string()),
+            Ok(maximum),
+        );
+    }
+
+    #[test]
+    fn human_config_requires_quoted_uppercase_billion_or_larger_units() {
+        #[derive(Deserialize)]
+        struct Config {
+            #[serde(deserialize_with = "Cycles::from_human_config")]
+            cycles: Cycles,
+        }
+
+        for (source, expected) in [
+            (r#"cycles = "5T""#, 5 * TC),
+            (r#"cycles = "5.1T""#, 5_100_000_000_000),
+            (r#"cycles = "0.1B""#, 100_000_000),
+            (r#"cycles = "1Q""#, QC),
+        ] {
+            let parsed = toml::from_str::<Config>(source).expect("parse strict human cycles");
+            assert_eq!(parsed.cycles, Cycles::new(expected));
+        }
+
+        for source in [
+            "cycles = 5000000000000",
+            r#"cycles = "5000000000000""#,
+            r#"cycles = "5t""#,
+            r#"cycles = "5 T""#,
+            r#"cycles = "5e3B""#,
+            r#"cycles = "0.0000000001B""#,
+        ] {
+            assert!(
+                toml::from_str::<Config>(source).is_err(),
+                "accepted {source}"
+            );
+        }
     }
 
     #[test]

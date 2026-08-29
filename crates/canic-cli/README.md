@@ -128,9 +128,10 @@ dependent controllers and treasury authority from the retained creation
 results. Use `--cycles-ledger <principal>` only for a network whose Cycles
 Ledger differs from the maintained default.
 
-Human cycle inputs accept exact case-sensitive `B`, `T`, and `Q` suffixes,
-including exact decimals such as `1.5T`. Durable plans retain exact integer
-cycle authority.
+Human cycle inputs require quoted TOML text or CLI values with exact
+case-sensitive `B`, `T`, or `Q` suffixes, including decimals such as `1.5T`
+and `0.1B`. Bare or unsuffixed quantities reject. Generated TOML always uses
+at least `B`; durable plans retain exact integer cycle authority.
 
 Because fresh Principals are outputs of the first reviewed plan, their typed
 control-plane work may require a successor plan. If apply asks for a new plan
