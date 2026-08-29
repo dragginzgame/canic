@@ -16,7 +16,8 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   descendant-provisioning parents retain the non-Root capability responder,
   and corrects the packaged Binaryen 132 authority on every supported host
   platform against the repository tool pins. Generated release helpers now
-  carry their exact release-build identity into the complete artifact set.
+  carry their exact release-build identity into the complete artifact set,
+  and validation diagnostics no longer report caught test panics as failures.
 - `0.109.21` makes finalized release artifacts network-bound, proves fresh pool
   canisters are funded directly by the reviewed Fleet Ensure creation graph,
   and adds an exact same-Principal recovery for cycles accidentally credited to
