@@ -2,15 +2,12 @@
 
 use super::*;
 use crate::{
-    config::{
-        Config,
-        schema::{CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig},
-    },
+    config::schema::{CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig},
     domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
     ids::ComponentSpecId,
     ops::auth::delegated::chain_key::ChainKeySignatureVerificationInput,
     storage::stable::env::{Env, EnvData, EnvRecord},
-    test::config::ConfigTestBuilder,
+    test::config::{ConfigTestBuilder, install_model_for_role},
 };
 use k256::ecdsa::{
     Signature as K256TestSignature, SigningKey as K256SigningKey, signature::hazmat::PrehashSigner,
@@ -437,8 +434,7 @@ fn install_verifier_test_config(
         .delegated_tokens
         .chain_key_root_proof
         .max_revocation_latency_ns = Some(600);
-    Config::reset_for_tests();
-    Config::init_from_model_for_tests(cfg).expect("test config should install");
+    let _config = install_model_for_role(cfg, "project_instance");
 
     Env::import(EnvData {
         record: EnvRecord {

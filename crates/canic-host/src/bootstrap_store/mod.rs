@@ -1,6 +1,6 @@
 use crate::{
-    artifact_io::finalize_wasm_artifact,
-    bootstrap_candid::materialize_infrastructure_candid,
+    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
+    bootstrap_candid::resolve_infrastructure_candid,
     canister_build::{
         CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext,
         cache::{canister_build_target_root, configure_canister_cargo_command},
@@ -100,23 +100,27 @@ pub fn build_bootstrap_wasm_store_artifact(
     let wasm_gz_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm.gz"));
     let did_path = artifact_root.join(format!("{WASM_STORE_ROLE}.did"));
     let profile_path = artifact_root.join(".build-profile");
-    fs::copy(&built_wasm_path, &wasm_path)?;
-    fs::write(profile_path, context.profile.target_dir_name())?;
-    if should_embed_candid_metadata(context.build_network) {
-        ensure_wasm_store_did(context, &source, &did_path)?;
+    let embed_candid = should_embed_candid_metadata(context.build_network);
+    let artifact_candid = if embed_candid {
+        resolve_wasm_store_candid(context, &source)?
     } else {
-        write_bytes(&did_path, &candid)?;
-    }
-    if fs::read(&did_path)? != candid {
+        candid.clone()
+    };
+    if artifact_candid != candid {
         return Err("Wasm Store materialized Candid differs from its compiled profile".into());
     }
-    let transforms = finalize_wasm_artifact(
-        context.profile,
-        should_embed_candid_metadata(context.build_network),
-        &wasm_path,
-        &did_path,
-        &wasm_gz_path,
-    )?;
+    let transforms = finalize_wasm_artifact(&WasmArtifactFinalization {
+        profile: context.profile,
+        build_network: context.build_network,
+        embed_candid,
+        validate_sidecar_only: false,
+        source_wasm_path: &built_wasm_path,
+        candid: &artifact_candid,
+        wasm_path: &wasm_path,
+        did_path: &did_path,
+        wasm_gz_path: &wasm_gz_path,
+    })?;
+    write_bytes(&profile_path, context.profile.target_dir_name().as_bytes())?;
 
     Ok(CanisterArtifactBuildOutput {
         package_name: source.package_name,
@@ -587,21 +591,19 @@ pub fn append_profile_config_args(command: &mut Command, profile: &str, settings
 }
 
 // Copy or regenerate the `.did` file that matches the built bootstrap artifact.
-fn ensure_wasm_store_did(
+fn resolve_wasm_store_candid(
     context: &WorkspaceBuildContext,
     source: &BootstrapWasmStoreSource,
-    artifact_did_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let target_root = canister_build_target_root(&context.workspace_root);
     let selected_wasm_path = target_root
         .join("wasm32-unknown-unknown")
         .join(context.profile.target_dir_name())
         .join(format!("{CANONICAL_WASM_STORE_CRATE_NAME}.wasm"));
 
-    materialize_infrastructure_candid(
+    resolve_infrastructure_candid(
         WASM_STORE_ROLE,
         source.canonical_did_path.as_deref(),
-        artifact_did_path,
         context.refresh_canonical_infrastructure_did,
         &selected_wasm_path,
         || Ok(()),

@@ -12,7 +12,7 @@ use crate::{
         ComponentProvisioningGrant, ComponentSpawnGrant, ComponentSpec, ComponentTopology,
         FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose, RoleRuntimeAuthority,
         RuntimeApplicationAuthorization, RuntimeCanisterAuthority, RuntimeCanisterConfig,
-        RuntimeDeploymentMemberAuthority,
+        RuntimeChildCanisterAuthority, RuntimeDeploymentMemberAuthority,
         schema::{
             AppConfig, AuthConfig, CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig,
             ComponentChildConfig, ComponentChildKind, ComponentDeploymentMemberLimitConfig,
@@ -66,6 +66,10 @@ fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStrea
         authority.canisters.iter(),
         render_runtime_canister_authority,
     );
+    let children = render_vec(
+        authority.children.iter(),
+        render_runtime_child_canister_authority,
+    );
     let configuration_digest = render_byte_array(authority.configuration_digest.as_bytes());
     let deployment_members = render_vec(
         authority.deployment_members.iter(),
@@ -85,10 +89,28 @@ fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStrea
             global_icrc21: #global_icrc21,
             component_topology: #component_topology,
             canisters: #canisters,
+            children: #children,
             configuration_digest:
                 ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentConfigurationDigest::from_bytes(#configuration_digest),
             deployment_members: #deployment_members,
             application_authorizations: #application_authorizations,
+        }
+    }
+}
+
+fn render_runtime_child_canister_authority(
+    authority: &RuntimeChildCanisterAuthority,
+) -> TokenStream {
+    let component_spec = render_component_spec_id(&authority.component_spec);
+    let role = render_canister_role(&authority.role);
+    let kind = render_canister_kind(authority.kind);
+    let cycles_funding = render_cycles_funding_policy(&authority.cycles_funding);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::RuntimeChildCanisterAuthority {
+            component_spec: #component_spec,
+            role: #role,
+            kind: #kind,
+            cycles_funding: #cycles_funding,
         }
     }
 }

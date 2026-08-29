@@ -8,7 +8,7 @@ use crate::{
         CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, MetricsCanisterConfig,
         RoleDeclaration, RoleDeclarationKind, StandardsCanisterConfig,
     },
-    config::{Config, ConfigModel},
+    config::{Config, ConfigModel, RoleRuntimeAuthority, RoleRuntimeConfig},
     ids::{CanisterRole, ComponentSpecId},
 };
 use std::{collections::BTreeMap, sync::Arc};
@@ -174,8 +174,24 @@ impl ConfigTestBuilder {
     /// initialization.
     #[must_use]
     pub fn install(self) -> Arc<ConfigModel> {
-        Config::reset_for_tests();
-        Config::init_from_model_for_tests(self.model).expect("init test config")
+        let role = self
+            .model
+            .component_specs
+            .get("default")
+            .expect("test builder retains the default Component Spec")
+            .component_role
+            .clone();
+        install_model_for_role(self.model, role)
+    }
+
+    /// Install this builder's model and exact runtime projection for `role`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the model or requested role cannot compile as current authority.
+    #[must_use]
+    pub fn install_for_role(self, role: impl Into<CanisterRole>) -> Arc<ConfigModel> {
+        install_model_for_role(self.model, role)
     }
 
     #[must_use]
@@ -215,4 +231,23 @@ impl ConfigTestBuilder {
             spawn_grants: BTreeMap::default(),
         }
     }
+}
+
+/// Install one test model through the same explicit configuration authorities as lifecycle.
+///
+/// # Panics
+///
+/// Panics if the model or requested role cannot compile as current authority.
+#[must_use]
+pub fn install_model_for_role(
+    model: ConfigModel,
+    role: impl Into<CanisterRole>,
+) -> Arc<ConfigModel> {
+    let role = role.into();
+    let authority =
+        RoleRuntimeAuthority::compile(&model, &role).expect("compile exact test runtime authority");
+    Config::reset_for_tests();
+    let config = Config::init_from_model_for_tests(model).expect("init test config");
+    RoleRuntimeConfig::init(authority).expect("init exact test runtime authority");
+    config
 }

@@ -208,10 +208,9 @@ const fn require_proof_field_bound(
 mod tests {
     use super::*;
     use crate::{
-        config::Config,
         dto::auth::{IcCanisterSignatureProofV1, RoleAttestationRootProof},
         ids::BuildNetwork,
-        test::config::ConfigTestBuilder,
+        test::config::{ConfigTestBuilder, install_model_for_role},
     };
 
     fn p(byte: u8) -> Principal {
@@ -224,8 +223,7 @@ mod tests {
         cfg.auth.delegated_tokens.build_network = BuildNetwork::Ic;
         cfg.auth.delegated_tokens.root_canister_id = Some(p(1).to_string());
         cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = None;
-        Config::reset_for_tests();
-        Config::init_from_model_for_tests(cfg).expect("test config should install");
+        let _config = install_model_for_role(cfg, "app");
 
         let attestation = SignedRoleAttestation {
             payload: RoleAttestation {
@@ -255,8 +253,7 @@ mod tests {
         cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
         cfg.auth.delegated_tokens.root_canister_id = Some(p(1).to_string());
         cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = None;
-        Config::reset_for_tests();
-        Config::init_from_model_for_tests(cfg).expect("test config should install");
+        let _config = install_model_for_role(cfg, "app");
 
         let attestation = SignedRoleAttestation {
             payload: RoleAttestation {

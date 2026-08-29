@@ -15,26 +15,69 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.22` at
-`674f1098fffb3cb51b59b3213b175b4e1ee769fb` is the immutable maintained
-release. It binds the exact `ChildProvisioning` capability to roles with
-configured descendants, omits that command graph from leaf roles, corrects the
-packaged Binaryen 132 authority and prevents caught test panics from being
-misreported as validation failures.
+Published `v0.109.23` at
+`7be26a5125156b7df3cdf5f774b47a7c7d266a3d` is the immutable maintained
+release. Ordinary managed roles, standalone-local roles and the built-in Wasm
+Store embed one exact build-compiled runtime authority instead of the complete
+source configuration and TOML. Root remains the sole runtime owner of the full
+application/control-plane model and also receives its exact runtime projection
+for shared runtime services.
 
-`0.109.23` is the single open patch draft. Ordinary managed roles,
-standalone-local roles and the built-in Wasm Store now embed one exact
-build-compiled runtime authority instead of the complete source configuration
-and TOML. Each projection keeps the role's runtime policy, admitted descendant
-settings, relevant grouped deployment and application-authorization authority,
-plus the protected topology required to validate complete Root admission.
-Sibling `RuntimeCanisterConfig` records and source-only configuration are
-absent. Root remains the sole runtime owner of the full
-application/control-plane model and also receives its separate exact runtime
-projection for shared runtime services.
-The workspace version remains `0.109.22` until the maintainer selects a release
-boundary; no version, package, tag, push or deployment action has occurred for
-this draft.
+`0.109.24` is the single open patch draft. Build output ownership now matches
+that runtime boundary: every role renders its exact runtime authority, but only
+Root renders and writes the complete `ConfigModel`, compact TOML and their
+compiler environment paths. Ordinary roles and Store no longer create unused
+full-configuration outputs. Root's shared runtime authority no longer duplicates
+Store or Component records already owned by its full control-plane model, while
+ordinary parents retain only exact child identity, kind and cycles-funding
+authority beside their own complete runtime record. Runtime tests now install
+that projection explicitly, the redundant delegated-token issuance cfg is
+removed, and implicit standalone configuration is validated without
+materializing a disposable TOML file. Retained Fleet generation now verifies a
+stopped Root's exact management Principal, Subnet, controller and module hash,
+then returns one deterministic reviewed same-ID Start prerequisite before any
+protected Root query or output replacement. Once running, that Root must pass
+the complete protected Fleet-authority and pool-inventory verification. The
+artifact finalizer now qualifies the complete Wasm/Candid/gzip candidate in a
+private sibling staging directory before replacing any published member, so a
+failed transform or size check preserves the preceding set. The current 10 MiB
+code-section threshold applies only to IC-mainnet builds; local builds continue
+after reporting their measured size. A focused machine-readable diagnostic
+report now separates named Canic auth/admission, metrics, child-provisioning and
+remaining runtime bytes from application/upstream, stripped-unattributed and
+Wasm structural bytes without guessing ownership. The workspace version
+remains `0.109.23`
+until the maintainer selects a release boundary; no version, package, tag, push
+or deployment action has occurred for this draft.
+
+Open `0.109.24` CANIC-090 coding-time evidence passes the public retained-estate generator
+journey from stopped management observation through a running Root's complete
+protected authority/pool verification, the focused management-state and
+module-hash rejection test, the CLI guarded-output replacement test, formatting,
+diff hygiene and warning-denied `canic-host` Clippy. The stopped pass makes no
+protected Root call and preserves existing output bytes. No broad workspace or
+PocketIC gate was run during coding.
+
+The artifact-publication slice passes all 23 focused artifact-I/O tests and the
+two infrastructure-Candid resolver tests. Exact regressions prove an IC-bound
+candidate one byte over the current limit leaves the prior `.wasm`, `.did` and
+`.wasm.gz` byte-identical, while the same candidate publishes for `local`.
+The capability-size classifier fixture, Bash syntax, targeted ShellCheck and an
+end-to-end stripped-Wasm reconciliation smoke test pass. Warning-denied
+`canic-host` library Clippy plus the current-document, audit-method catalog and
+release-validation matrix guards pass. No broad workspace or PocketIC gate was
+run for this slice.
+
+Read-only Toko Miner inspection confirms its 273-export `project_instance`
+remains 238,244 code-section bytes over the current IC-mainnet limit after
+Binaryen 132, while a second converging `-Oz` pass saves only about 5 KiB.
+Export address spans account for only about 104 KiB, so export trampolines
+alone cannot provide the requested regression headroom. Its role-selected
+Core/Runtime/Security metrics implementations are compiled once for the role,
+not once as three endpoint-specific providers; the higher-confidence remaining
+pressure is the endpoint/request-wrapper graph and its shared generic
+dependencies. The downstream checkout and its generated artifacts remain
+read-only from Canic.
 
 Published `v0.109.20` at
 `a90b1ae74439c335ced10d20728e45c0607a01a7` is the immutable predecessor.
@@ -318,7 +361,7 @@ not active contracts.
 
 ## Validation State
 
-Open `0.109.23` coding-time evidence passes the exact role-authority source and
+Published `0.109.23` coding-time evidence passes the exact role-authority source and
 installation test, including fail-closed role substitution, and the focused
 multi-Spec grouped-deployment projection test, including changed digest,
 purpose, limits and member rejection. Locked ordinary, Root and Store lifecycle
@@ -715,10 +758,12 @@ sibling-repository mutation was performed by this documentation reconciliation.
 
 ## Next Action
 
-The open `0.109.23` batch removes the complete source configuration owner from
-ordinary managed, standalone-local and Store artifacts. The remaining work is
-the maintainer-owned review and chosen release validation, version and
-publication boundary. Coding-time agents must not pre-run the broad gate.
+The open `0.109.24` batch combines the already implemented configuration-owner
+contraction and stopped-Root correction with qualification-first artifact-set
+publication, IC-only enforcement of the current mainnet code limit and focused
+machine-readable size attribution. The remaining work is maintainer review and
+the chosen release validation, version and publication boundary. Coding-time
+agents must not pre-run the broad gate.
 
 The separately reported release-build LTO duplication remains a non-blocking,
 measurement-led throughput slice. It is not part of the staging correctness

@@ -2,7 +2,9 @@
 
 use super::*;
 use crate::{
-    config::{ComponentDeploymentPurpose, Config, ConfigError, RoleRuntimeAuthority},
+    config::{
+        ComponentDeploymentPurpose, Config, ConfigError, RoleRuntimeAuthority, schema::CanisterKind,
+    },
     dto::component_deployment::ProtectedComponentDeployment,
     ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentGroupDeploymentId,
@@ -415,7 +417,10 @@ fn assert_compiled_role_runtime_projection(
     }
     assert!(
         runtime
-            .canister_by_role(&CanisterRole::from("database"))
+            .canister(
+                Some(&binding.component_spec),
+                &CanisterRole::from("database")
+            )
             .is_some()
     );
     assert!(
@@ -423,14 +428,17 @@ fn assert_compiled_role_runtime_projection(
             .canister(None, &CanisterRole::from("database"))
             .is_none()
     );
-    assert!(
-        runtime
-            .canister_by_role(&CanisterRole::from("child"))
-            .is_some()
+    let child = runtime
+        .child(&binding.component_spec, &CanisterRole::from("child"))
+        .expect("admitted child authority");
+    assert_eq!(child.kind, CanisterKind::Instance);
+    assert_eq!(
+        child.cycles_funding.max_per_request.to_u128(),
+        5_000_000_000_000
     );
     assert!(
         runtime
-            .canister_by_role(&CanisterRole::from("api"))
+            .canister(Some(&binding.component_spec), &CanisterRole::from("api"))
             .is_none()
     );
     assert!(
@@ -447,11 +455,12 @@ fn assert_compiled_role_runtime_projection(
         .component_topology
         .canonical_bytes()
         .expect("empty Root runtime topology remains canonical");
-    for role in [CanisterRole::ROOT, CanisterRole::WASM_STORE]
-        .into_iter()
+    assert!(root_runtime.canister(None, &CanisterRole::ROOT).is_some());
+    assert!(root_runtime.children.is_empty());
+    for role in std::iter::once(CanisterRole::WASM_STORE)
         .chain(["database", "api", "child"].map(CanisterRole::from))
     {
-        assert!(root_runtime.canister_by_role(&role).is_some());
+        assert!(root_runtime.canister(None, &role).is_none());
     }
 
     runtime

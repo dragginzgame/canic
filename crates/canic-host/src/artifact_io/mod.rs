@@ -10,12 +10,14 @@ use crate::{
     durable_io::write_bytes,
     output_with_executable_busy_retry,
 };
+use canic_core::ids::BuildNetwork;
 use std::{
     collections::BTreeSet,
     fs,
     io::{Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::Command,
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use flate2::{Compression, GzBuilder};
@@ -23,6 +25,8 @@ use flate2::{Compression, GzBuilder};
 pub use wasm::enforce_wasm_code_section_limit;
 
 pub const IC_WASM_TOOL: &str = "ic-wasm";
+const ARTIFACT_STAGE_ATTEMPTS: usize = 64;
+static ARTIFACT_STAGE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 const IC_WASM_FEATURE_FLAGS: &[&str] = &[
     "--enable-bulk-memory",
     "--enable-sign-ext",
@@ -44,30 +48,116 @@ const CANISTER_METHOD_EXPORT_PREFIXES: [&str; 3] = [
     "canister_update ",
 ];
 
-/// Apply the one canonical transform/compression pipeline to an emitted Wasm.
+/// Inputs and final paths for one qualification-before-publication Wasm artifact set.
+pub struct WasmArtifactFinalization<'a> {
+    pub profile: CanisterBuildProfile,
+    pub build_network: BuildNetwork,
+    pub embed_candid: bool,
+    pub validate_sidecar_only: bool,
+    pub source_wasm_path: &'a Path,
+    pub candid: &'a [u8],
+    pub wasm_path: &'a Path,
+    pub did_path: &'a Path,
+    pub wasm_gz_path: &'a Path,
+}
+
+/// Apply the canonical transform/compression pipeline before publishing any final artifact.
 pub fn finalize_wasm_artifact(
-    profile: CanisterBuildProfile,
-    embed_candid: bool,
-    wasm_path: &Path,
-    did_path: &Path,
-    wasm_gz_path: &Path,
+    finalization: &WasmArtifactFinalization<'_>,
 ) -> Result<Vec<ArtifactTransformOutput>, Box<dyn std::error::Error>> {
-    let mut transforms = vec![maybe_shrink_wasm_artifact(wasm_path)?];
-    if embed_candid {
-        let metadata = embed_candid_metadata(wasm_path, did_path)?;
-        if metadata.outcome == ArtifactTransformOutcome::Applied {
-            validate_embedded_public_candid(wasm_path, did_path)?;
+    stage_and_publish_artifact_set(finalization, |staged| {
+        let mut transforms = vec![maybe_shrink_wasm_artifact(&staged.wasm_path)?];
+        if finalization.embed_candid {
+            let metadata = embed_candid_metadata(&staged.wasm_path, &staged.did_path)?;
+            if metadata.outcome == ArtifactTransformOutcome::Applied {
+                validate_embedded_public_candid(&staged.wasm_path, &staged.did_path)?;
+            }
+            transforms.push(metadata);
+        } else {
+            transforms.push(ArtifactTransformOutput::not_requested(
+                ArtifactTransformKind::CandidMetadata,
+            ));
         }
-        transforms.push(metadata);
-    } else {
-        transforms.push(ArtifactTransformOutput::not_requested(
-            ArtifactTransformKind::CandidMetadata,
-        ));
+        transforms.push(optimize_release_wasm_artifact(
+            finalization.profile,
+            &staged.wasm_path,
+        )?);
+        enforce_wasm_code_section_limit(finalization.build_network, &staged.wasm_path)?;
+        write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)?;
+        if finalization.validate_sidecar_only {
+            validate_sidecar_only_candid_artifact(&staged.wasm_path, &staged.did_path)?;
+        }
+        Ok(transforms)
+    })
+}
+
+fn stage_and_publish_artifact_set<T>(
+    finalization: &WasmArtifactFinalization<'_>,
+    qualify: impl FnOnce(&StagedArtifactSet) -> Result<T, Box<dyn std::error::Error>>,
+) -> Result<T, Box<dyn std::error::Error>> {
+    let staged = StagedArtifactSet::create(finalization.wasm_path)?;
+    write_wasm_artifact(finalization.source_wasm_path, &staged.wasm_path)?;
+    write_bytes(&staged.did_path, finalization.candid)?;
+
+    let result = qualify(&staged)?;
+    let wasm = fs::read(&staged.wasm_path)?;
+    let candid = fs::read(&staged.did_path)?;
+    let wasm_gz = fs::read(&staged.wasm_gz_path)?;
+
+    // The build lock keeps consumers behind this function's success boundary. Each complete
+    // file is durably replaced only after the complete candidate set has qualified.
+    write_bytes(finalization.wasm_gz_path, &wasm_gz)?;
+    write_bytes(finalization.did_path, &candid)?;
+    write_bytes(finalization.wasm_path, &wasm)?;
+    Ok(result)
+}
+
+struct StagedArtifactSet {
+    root: PathBuf,
+    wasm_path: PathBuf,
+    did_path: PathBuf,
+    wasm_gz_path: PathBuf,
+}
+
+impl StagedArtifactSet {
+    fn create(final_wasm_path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let parent = final_wasm_path.parent().ok_or_else(|| {
+            format!(
+                "final Wasm artifact has no parent directory: {}",
+                final_wasm_path.display()
+            )
+        })?;
+        for _ in 0..ARTIFACT_STAGE_ATTEMPTS {
+            let sequence = ARTIFACT_STAGE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+            let root = parent.join(format!(
+                ".canic-artifact-stage-{}-{sequence}",
+                std::process::id()
+            ));
+            match fs::create_dir(&root) {
+                Ok(()) => {
+                    return Ok(Self {
+                        wasm_path: root.join("candidate.wasm"),
+                        did_path: root.join("candidate.did"),
+                        wasm_gz_path: root.join("candidate.wasm.gz"),
+                        root,
+                    });
+                }
+                Err(source) if source.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(source) => return Err(source.into()),
+            }
+        }
+        Err(format!(
+            "failed to allocate an artifact staging directory beneath {}",
+            parent.display()
+        )
+        .into())
     }
-    transforms.push(optimize_release_wasm_artifact(profile, wasm_path)?);
-    enforce_wasm_code_section_limit(wasm_path)?;
-    write_gzip_artifact(wasm_path, wasm_gz_path)?;
-    Ok(transforms)
+}
+
+impl Drop for StagedArtifactSet {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
 }
 
 /// Prove that a final runtime matches its sidecar method inventory without carrying Candid.

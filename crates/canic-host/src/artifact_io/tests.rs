@@ -1,8 +1,102 @@
 use super::*;
+use canic_core::ids::BuildNetwork;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+
+#[test]
+fn ic_code_limit_failure_preserves_the_published_artifact_set() {
+    let root = unique_temp_dir("canic-artifact-set-ic-limit");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let source_wasm_path = root.join("source.wasm");
+    let wasm_path = root.join("app.wasm");
+    let did_path = root.join("app.did");
+    let wasm_gz_path = root.join("app.wasm.gz");
+    let oversized =
+        wasm_with_code_section_size(super::wasm::CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES + 1);
+    fs::write(&source_wasm_path, oversized).expect("write oversized source Wasm");
+    fs::write(&wasm_path, b"previous wasm").expect("write previous Wasm");
+    fs::write(&did_path, b"previous candid").expect("write previous Candid");
+    fs::write(&wasm_gz_path, b"previous gzip").expect("write previous gzip");
+
+    let finalization = WasmArtifactFinalization {
+        profile: CanisterBuildProfile::Fast,
+        build_network: BuildNetwork::Ic,
+        embed_candid: false,
+        validate_sidecar_only: false,
+        source_wasm_path: &source_wasm_path,
+        candid: b"service : {}",
+        wasm_path: &wasm_path,
+        did_path: &did_path,
+        wasm_gz_path: &wasm_gz_path,
+    };
+    let error = stage_and_publish_artifact_set(&finalization, |staged| {
+        enforce_wasm_code_section_limit(BuildNetwork::Ic, &staged.wasm_path)?;
+        write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)?;
+        Ok(())
+    })
+    .expect_err("IC-bound oversized Wasm must reject");
+
+    assert!(error.to_string().contains("IC mainnet Wasm artifact"));
+    assert_eq!(
+        fs::read(&wasm_path).expect("read previous Wasm"),
+        b"previous wasm"
+    );
+    assert_eq!(
+        fs::read(&did_path).expect("read previous Candid"),
+        b"previous candid"
+    );
+    assert_eq!(
+        fs::read(&wasm_gz_path).expect("read previous gzip"),
+        b"previous gzip"
+    );
+    assert_no_artifact_stage(&root);
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn local_build_publishes_wasm_above_the_current_ic_mainnet_limit() {
+    let root = unique_temp_dir("canic-artifact-set-local-limit");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let source_wasm_path = root.join("source.wasm");
+    let wasm_path = root.join("app.wasm");
+    let did_path = root.join("app.did");
+    let wasm_gz_path = root.join("app.wasm.gz");
+    let oversized =
+        wasm_with_code_section_size(super::wasm::CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES + 1);
+    fs::write(&source_wasm_path, &oversized).expect("write oversized source Wasm");
+
+    let finalization = WasmArtifactFinalization {
+        profile: CanisterBuildProfile::Fast,
+        build_network: BuildNetwork::Local,
+        embed_candid: false,
+        validate_sidecar_only: false,
+        source_wasm_path: &source_wasm_path,
+        candid: b"service : {}",
+        wasm_path: &wasm_path,
+        did_path: &did_path,
+        wasm_gz_path: &wasm_gz_path,
+    };
+    stage_and_publish_artifact_set(&finalization, |staged| {
+        enforce_wasm_code_section_limit(BuildNetwork::Local, &staged.wasm_path)?;
+        write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)?;
+        Ok(())
+    })
+    .expect("local oversized Wasm must publish");
+
+    assert_eq!(
+        fs::read(&wasm_path).expect("read published Wasm"),
+        oversized
+    );
+    assert_eq!(
+        fs::read(&did_path).expect("read published Candid"),
+        b"service : {}"
+    );
+    assert!(fs::metadata(&wasm_gz_path).expect("gzip metadata").len() > 0);
+    assert_no_artifact_stage(&root);
+    fs::remove_dir_all(root).expect("remove temp root");
+}
 
 // Keep the shrink pass optional when the executable is absent.
 #[test]
@@ -451,6 +545,44 @@ fn push_section(wasm: &mut Vec<u8>, id: u8, payload: &[u8]) {
     wasm.push(id);
     wasm.push(u8::try_from(payload.len()).expect("short test section"));
     wasm.extend_from_slice(payload);
+}
+
+fn wasm_with_code_section_size(size: usize) -> Vec<u8> {
+    let mut wasm = b"\0asm\x01\0\0\0".to_vec();
+    wasm.push(10);
+    push_u32_leb128(
+        &mut wasm,
+        u32::try_from(size).expect("test section size fits u32"),
+    );
+    wasm.resize(wasm.len() + size, 0);
+    wasm
+}
+
+fn push_u32_leb128(bytes: &mut Vec<u8>, mut value: u32) {
+    loop {
+        let mut byte = u8::try_from(value & 0x7f).expect("LEB128 byte fits u8");
+        value >>= 7;
+        if value != 0 {
+            byte |= 0x80;
+        }
+        bytes.push(byte);
+        if value == 0 {
+            return;
+        }
+    }
+}
+
+fn assert_no_artifact_stage(root: &Path) {
+    let staged = fs::read_dir(root)
+        .expect("read artifact root")
+        .filter_map(Result::ok)
+        .any(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".canic-artifact-stage-")
+        });
+    assert!(!staged, "artifact staging directory must be removed");
 }
 
 fn unique_temp_dir(label: &str) -> std::path::PathBuf {

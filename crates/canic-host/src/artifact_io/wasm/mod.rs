@@ -6,9 +6,11 @@
 
 use std::{collections::BTreeMap, fmt, fs, path::Path};
 
+use canic_core::ids::BuildNetwork;
+
 use crate::canister_build::WasmArtifactMetrics;
 
-const IC_WASM_CODE_SECTION_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+pub(super) const CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 const IC_WASM_CODE_SECTION_WARNING_BYTES: usize = 9 * 1024 * 1024 + 256 * 1024;
 const WASM_HEADER: &[u8; 8] = b"\0asm\x01\0\0\0";
 const WASM_CUSTOM_SECTION_ID: u8 = 0;
@@ -115,8 +117,9 @@ impl fmt::Display for WasmCodeSectionError {
 
 impl std::error::Error for WasmCodeSectionError {}
 
-/// Reject a final artifact whose code section cannot pass IC module validation.
+/// Enforce the current IC mainnet code limit only for an IC-bound artifact.
 pub fn enforce_wasm_code_section_limit(
+    build_network: BuildNetwork,
     wasm_path: &Path,
 ) -> Result<usize, Box<dyn std::error::Error>> {
     let wasm = fs::read(wasm_path)?;
@@ -126,30 +129,48 @@ pub fn enforce_wasm_code_section_limit(
             wasm_path.display()
         )
     })?;
-    validate_wasm_code_section_size(code_section_bytes).map_err(|source| {
-        format!(
-            "Wasm artifact {} cannot be installed: {source}",
-            wasm_path.display()
-        )
-    })?;
-
-    if code_section_bytes >= IC_WASM_CODE_SECTION_WARNING_BYTES {
-        eprintln!(
-            "warning: Wasm code section for {} is {} bytes; {} bytes remain before the IC limit",
-            wasm_path.display(),
-            code_section_bytes,
-            IC_WASM_CODE_SECTION_LIMIT_BYTES - code_section_bytes
-        );
-    } else {
-        eprintln!(
-            "Wasm code section for {}: {} bytes; {} bytes remain before the IC limit",
-            wasm_path.display(),
-            code_section_bytes,
-            IC_WASM_CODE_SECTION_LIMIT_BYTES - code_section_bytes
-        );
+    match build_network {
+        BuildNetwork::Ic => {
+            validate_wasm_code_section_size(code_section_bytes).map_err(|source| {
+                format!(
+                    "IC mainnet Wasm artifact {} cannot be installed: {source}",
+                    wasm_path.display()
+                )
+            })?;
+            report_current_ic_mainnet_limit_distance(wasm_path, code_section_bytes);
+        }
+        BuildNetwork::Local if code_section_bytes > CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES => {
+            eprintln!(
+                "Wasm code section for {}: {} bytes; local builds do not enforce the current IC mainnet limit of {} bytes",
+                wasm_path.display(),
+                code_section_bytes,
+                CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES,
+            );
+        }
+        BuildNetwork::Local => {
+            report_current_ic_mainnet_limit_distance(wasm_path, code_section_bytes);
+        }
     }
 
     Ok(code_section_bytes)
+}
+
+fn report_current_ic_mainnet_limit_distance(wasm_path: &Path, code_section_bytes: usize) {
+    if code_section_bytes >= IC_WASM_CODE_SECTION_WARNING_BYTES {
+        eprintln!(
+            "warning: Wasm code section for {} is {} bytes; {} bytes remain before the current IC mainnet limit",
+            wasm_path.display(),
+            code_section_bytes,
+            CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES - code_section_bytes
+        );
+    } else {
+        eprintln!(
+            "Wasm code section for {}: {} bytes; {} bytes remain before the current IC mainnet limit",
+            wasm_path.display(),
+            code_section_bytes,
+            CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES - code_section_bytes
+        );
+    }
 }
 
 pub(super) fn wasm_artifact_metrics(
@@ -380,10 +401,10 @@ fn read_u32(bytes: &[u8], cursor: &mut usize) -> Option<u32> {
 }
 
 const fn validate_wasm_code_section_size(size: usize) -> Result<(), WasmCodeSectionError> {
-    if size > IC_WASM_CODE_SECTION_LIMIT_BYTES {
+    if size > CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES {
         return Err(WasmCodeSectionError::LimitExceeded {
             actual: size,
-            limit: IC_WASM_CODE_SECTION_LIMIT_BYTES,
+            limit: CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES,
         });
     }
     Ok(())
@@ -437,7 +458,7 @@ mod tests {
     #[test]
     fn accepts_the_exact_ic_code_section_limit() {
         assert_eq!(
-            validate_wasm_code_section_size(IC_WASM_CODE_SECTION_LIMIT_BYTES),
+            validate_wasm_code_section_size(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES),
             Ok(())
         );
     }
@@ -445,10 +466,10 @@ mod tests {
     #[test]
     fn rejects_one_byte_over_the_ic_code_section_limit() {
         assert_eq!(
-            validate_wasm_code_section_size(IC_WASM_CODE_SECTION_LIMIT_BYTES + 1),
+            validate_wasm_code_section_size(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES + 1),
             Err(WasmCodeSectionError::LimitExceeded {
-                actual: IC_WASM_CODE_SECTION_LIMIT_BYTES + 1,
-                limit: IC_WASM_CODE_SECTION_LIMIT_BYTES,
+                actual: CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES + 1,
+                limit: CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES,
             })
         );
     }

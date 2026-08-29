@@ -8,11 +8,12 @@ use crate::{
     InternalError,
     config::{
         ComponentTopology, Config, ConfigError, ConfigModel, RoleRuntimeConfig,
-        RuntimeCanisterConfig,
+        RuntimeCanisterConfig, RuntimeChildCanisterAuthority,
         schema::{
-            CanisterConfig, ComponentSpecConfig, DelegatedTokenConfig, FleetInitMode, IndexConfig,
-            LocalApplicationAuthorizationConfig, LogConfig, RoleAttestationConfig, ScalingConfig,
-            implicit_root_canister_config, implicit_wasm_store_canister_config,
+            CanisterConfig, ComponentSpecConfig, CyclesFundingPolicyConfig, DelegatedTokenConfig,
+            FleetInitMode, IndexConfig, LocalApplicationAuthorizationConfig, LogConfig,
+            RoleAttestationConfig, ScalingConfig, implicit_root_canister_config,
+            implicit_wasm_store_canister_config,
         },
     },
     dto::component_deployment::ProtectedComponentDeployment,
@@ -205,35 +206,15 @@ pub struct ConfigOps;
 
 impl ConfigOps {
     fn authority() -> Result<Arc<crate::config::RoleRuntimeAuthority>, InternalError> {
-        if let Some(authority) = RoleRuntimeConfig::try_get() {
-            return Ok(authority);
-        }
-
-        #[cfg(test)]
-        {
-            let config = Config::get()?;
-            let role = EnvOps::canister_role().unwrap_or(CanisterRole::ROOT);
-            let authority = if role.is_wasm_store() {
-                crate::config::RoleRuntimeAuthority::compile_wasm_store(&config)
-            } else {
-                crate::config::RoleRuntimeAuthority::compile(&config, &role)
-            }
-            .map_err(|_error| InternalError::invariant())?;
-            Ok(Arc::new(authority))
-        }
-
-        #[cfg(not(test))]
-        {
-            Err(InternalError::invariant())
-        }
+        RoleRuntimeConfig::try_get().ok_or_else(InternalError::invariant)
     }
 
-    fn try_get_canister(
+    fn try_get_child(
         component_spec: &ComponentSpecId,
         canister_role: &CanisterRole,
-    ) -> Result<RuntimeCanisterConfig, InternalError> {
+    ) -> Result<RuntimeChildCanisterAuthority, InternalError> {
         Self::authority()?
-            .canister(Some(component_spec), canister_role)
+            .child(component_spec, canister_role)
             .ok_or_else(|| {
                 ConfigOpsError::CanisterNotFound(
                     canister_role.to_string(),
@@ -265,14 +246,6 @@ impl ConfigOps {
                 )
                 .into()
             })
-    }
-
-    pub fn try_get_canister_by_role(
-        canister_role: &CanisterRole,
-    ) -> Result<RuntimeCanisterConfig, InternalError> {
-        Self::authority()?
-            .canister_by_role(canister_role)
-            .ok_or_else(|| ConfigOpsError::CanisterRoleAmbiguous(canister_role.to_string()).into())
     }
 
     pub(crate) fn log_config() -> Result<LogConfig, InternalError> {
@@ -331,11 +304,11 @@ impl ConfigOps {
         Ok(Self::current_canister()?.index)
     }
 
-    pub(crate) fn current_component_canister(
+    pub(crate) fn current_component_child(
         canister_role: &CanisterRole,
-    ) -> Result<RuntimeCanisterConfig, InternalError> {
+    ) -> Result<RuntimeChildCanisterAuthority, InternalError> {
         let component_spec = EnvOps::component_spec()?;
-        Self::try_get_canister(&component_spec, canister_role)
+        Self::try_get_child(&component_spec, canister_role)
     }
 
     pub(crate) fn current_icrc21_enabled() -> bool {
@@ -348,23 +321,23 @@ impl ConfigOps {
     pub(crate) fn cycles_funding_limits_for_root_child_role(
         child_role: &CanisterRole,
     ) -> Result<FundingLimits, InternalError> {
-        Ok(funding_limits(&Self::try_get_canister_by_role(child_role)?))
+        let child = RootConfigOps::try_get_canister_by_role(child_role)?;
+        Ok(funding_limits(&child.cycles_funding))
     }
 
     pub(crate) fn cycles_funding_limits_for_component_child_role(
         child_role: &CanisterRole,
     ) -> Result<FundingLimits, InternalError> {
-        Ok(funding_limits(&Self::current_component_canister(
-            child_role,
-        )?))
+        let child = Self::current_component_child(child_role)?;
+        Ok(funding_limits(&child.cycles_funding))
     }
 }
 
-const fn funding_limits(cfg: &RuntimeCanisterConfig) -> FundingLimits {
+const fn funding_limits(policy: &CyclesFundingPolicyConfig) -> FundingLimits {
     FundingLimits {
-        max_per_request: cfg.cycles_funding.max_per_request.to_u128(),
-        max_per_child: cfg.cycles_funding.max_per_child.to_u128(),
-        cooldown_secs: cfg.cycles_funding.cooldown_secs,
+        max_per_request: policy.max_per_request.to_u128(),
+        max_per_child: policy.max_per_child.to_u128(),
+        cooldown_secs: policy.cooldown_secs,
     }
 }
 
@@ -372,8 +345,10 @@ const fn funding_limits(cfg: &RuntimeCanisterConfig) -> FundingLimits {
 mod tests {
     use super::*;
     use crate::{
-        config::schema::CanisterKind,
+        cdk::types::Cycles,
+        config::schema::{CanisterKind, CyclesFundingPolicyConfig},
         storage::stable::env::{Env, EnvData, EnvRecord},
+        test::config::ConfigTestBuilder,
     };
 
     #[test]
@@ -389,12 +364,17 @@ mod tests {
 
     #[test]
     fn ordinary_runtime_lookup_requires_its_exact_component_spec() {
-        Config::reset_for_tests();
-        let config = ConfigModel::test_default();
         let role = CanisterRole::from("app");
-        let authority = crate::config::RoleRuntimeAuthority::compile(&config, &role)
-            .expect("compile ordinary runtime authority");
-        RoleRuntimeConfig::init(authority).expect("install ordinary runtime authority");
+        let child_role = CanisterRole::from("child");
+        let mut child = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+        child.cycles_funding = CyclesFundingPolicyConfig {
+            max_per_request: Cycles::new(10),
+            max_per_child: Cycles::new(30),
+            cooldown_secs: 60,
+        };
+        let _config = ConfigTestBuilder::new()
+            .with_default_canister(child_role.clone(), child)
+            .install();
 
         let original_env = Env::export();
         let component_spec =
@@ -407,6 +387,17 @@ mod tests {
             },
         });
         ConfigOps::current_canister().expect("exact ordinary runtime config");
+        let child = ConfigOps::current_component_child(&child_role)
+            .expect("exact compact child runtime authority");
+        assert_eq!(child.kind, CanisterKind::Singleton);
+        assert_eq!(child.cycles_funding.max_per_request.to_u128(), 10);
+        assert_eq!(child.cycles_funding.max_per_child.to_u128(), 30);
+        assert_eq!(child.cycles_funding.cooldown_secs, 60);
+        let limits = ConfigOps::cycles_funding_limits_for_component_child_role(&child_role)
+            .expect("compact child funding limits");
+        assert_eq!(limits.max_per_request, 10);
+        assert_eq!(limits.max_per_child, 30);
+        assert_eq!(limits.cooldown_secs, 60);
 
         let mut missing_component_spec = Env::export();
         missing_component_spec.record.component_spec = None;

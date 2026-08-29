@@ -8,8 +8,8 @@
 mod tests;
 
 use crate::{
-    artifact_io::{finalize_wasm_artifact, write_wasm_artifact},
-    bootstrap_candid::materialize_infrastructure_candid,
+    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
+    bootstrap_candid::resolve_infrastructure_candid,
     bootstrap_store::{
         append_profile_config_args, generated_wasm_store_wrapper_patch_table,
         registry_package_version_suffix, render_profile, require_package_manifest_identity,
@@ -22,7 +22,6 @@ use crate::{
     },
     cargo_command,
     cargo_metadata::{CargoMetadata, CargoMetadataPackage, cargo_metadata},
-    durable_io::write_bytes,
     role_contract::{
         PackageValidationMode, RolePackageValidation, finding_detail,
         resolve_built_in_fleet_coordinator_contract, validate_built_in_fleet_coordinator_package,
@@ -100,24 +99,28 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     let wasm_gz_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.wasm.gz"));
     let did_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.did"));
 
-    write_wasm_artifact(&built_wasm_path, &wasm_path)?;
-    if should_embed_candid_metadata(context.build_network) {
-        ensure_fleet_coordinator_did(context, &source, &did_path)?;
+    let embed_candid = should_embed_candid_metadata(context.build_network);
+    let artifact_candid = if embed_candid {
+        resolve_fleet_coordinator_candid(context, &source)?
     } else {
-        write_bytes(&did_path, &candid)?;
-    }
-    if fs::read(&did_path)? != candid {
+        candid.clone()
+    };
+    if artifact_candid != candid {
         return Err(
             "Fleet Coordinator materialized Candid differs from its compiled profile".into(),
         );
     }
-    let transforms = finalize_wasm_artifact(
-        context.profile,
-        should_embed_candid_metadata(context.build_network),
-        &wasm_path,
-        &did_path,
-        &wasm_gz_path,
-    )?;
+    let transforms = finalize_wasm_artifact(&WasmArtifactFinalization {
+        profile: context.profile,
+        build_network: context.build_network,
+        embed_candid,
+        validate_sidecar_only: false,
+        source_wasm_path: &built_wasm_path,
+        candid: &artifact_candid,
+        wasm_path: &wasm_path,
+        did_path: &did_path,
+        wasm_gz_path: &wasm_gz_path,
+    })?;
 
     Ok(CanisterArtifactBuildOutput {
         package_name: source.package_name,
@@ -374,20 +377,18 @@ fn append_coordinator_profile_config_args(command: &mut Command, profile: Canist
     }
 }
 
-fn ensure_fleet_coordinator_did(
+fn resolve_fleet_coordinator_candid(
     context: &WorkspaceBuildContext,
     source: &BootstrapFleetCoordinatorSource,
-    artifact_did_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let selected_wasm_path = canister_build_target_root(&context.workspace_root)
         .join("wasm32-unknown-unknown")
         .join(context.profile.target_dir_name())
         .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
 
-    materialize_infrastructure_candid(
+    resolve_infrastructure_candid(
         FLEET_COORDINATOR_ROLE,
         source.canonical_did_path.as_deref(),
-        artifact_did_path,
         context.refresh_canonical_infrastructure_did,
         &selected_wasm_path,
         || Ok(()),

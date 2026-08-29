@@ -18,9 +18,10 @@ use crate::{
         RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
     },
     fleet_ensure::model::{
-        DesiredCanister, DesiredCanisterInit, DesiredCanisterKind, DesiredComponentGroupPlacement,
-        DesiredFleet, DesiredFleetBootstrap, DesiredFleetBootstrapRoot, DesiredFleetProtocol,
-        DesiredPresence, FLEET_ENSURE_SCHEMA_VERSION, MAX_FLEET_ENSURE_CANISTERS,
+        CanisterRuntimeStatus, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
+        DesiredComponentGroupPlacement, DesiredFleet, DesiredFleetBootstrap,
+        DesiredFleetBootstrapRoot, DesiredFleetProtocol, DesiredPresence,
+        FLEET_ENSURE_SCHEMA_VERSION, MAX_FLEET_ENSURE_CANISTERS,
     },
     fleet_ensure::ops::root_owned_lifecycle,
     icp::IcpCli,
@@ -144,6 +145,21 @@ pub enum FleetGenerateError {
 
     #[error("retained canister {canister} is unavailable: {reason}")]
     CanisterUnavailable { canister: String, reason: String },
+
+    #[error(
+        "retained Root {root} is stopped after exact management verification \
+         (Subnet {subnet}, controller {controller}, module SHA-256 {module_sha256}); \
+         no protected Root query or output mutation was attempted. Review and apply only the \
+         same-ID Start through the current retained `canic fleet ensure {fleet}` authority, \
+         then rerun `canic fleet generate`"
+    )]
+    StoppedRootStartRequired {
+        controller: String,
+        fleet: String,
+        module_sha256: String,
+        root: String,
+        subnet: String,
+    },
 
     #[error(
         "retained canister {canister} controller set differs: actual {actual:?}, expected {expected:?}"
@@ -1207,6 +1223,12 @@ fn observe_estate(
         )?;
     }
     let mut observed = BTreeMap::new();
+    let root_principals = seed
+        .roots
+        .iter()
+        .map(|root| root.root.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut root_statuses = BTreeMap::new();
     for (canister, (expected_subnet, required_controllers)) in expected {
         parse_principal("retained canister", &canister)?;
         let status = icp.canister_status_report(&canister).map_err(|error| {
@@ -1215,6 +1237,12 @@ fn observe_estate(
                 reason: error.to_string(),
             }
         })?;
+        if status.id != canister {
+            return Err(FleetGenerateError::SeedTopology(format!(
+                "retained canister query for {canister} returned identity {}",
+                status.id
+            )));
+        }
         let controllers = status
             .settings
             .map(|settings| settings.controllers)
@@ -1244,14 +1272,27 @@ fn observe_estate(
             .replace('_', "")
             .parse::<u128>()
             .map_err(|_| FleetGenerateError::Authority("invalid live cycle balance".to_string()))?;
+        let module_sha256 = status
+            .module_hash
+            .as_deref()
+            .map(|hash| normalize_observed_module_sha256(&canister, hash))
+            .transpose()?;
+        if root_principals.contains(canister.as_str()) {
+            let runtime_status = parse_observed_runtime_status(&canister, &status.status)?;
+            if module_sha256.is_none() {
+                return Err(FleetGenerateError::CanisterUnavailable {
+                    canister,
+                    reason: "retained Root has no installed module SHA-256".to_string(),
+                });
+            }
+            root_statuses.insert(status.id.clone(), runtime_status);
+        }
         if observed
             .insert(
                 status.id.clone(),
                 ObservedCanister {
                     cycles,
-                    module_sha256: status
-                        .module_hash
-                        .map(|hash| hash.trim_start_matches("0x").to_ascii_lowercase()),
+                    module_sha256,
                     subnet,
                 },
             )
@@ -1261,6 +1302,45 @@ fn observe_estate(
                 "retained identity {} is assigned to more than one role",
                 status.id
             )));
+        }
+    }
+    for root in &seed.roots {
+        match root_statuses.get(&root.root) {
+            Some(CanisterRuntimeStatus::Running) => {}
+            Some(CanisterRuntimeStatus::Stopped) => {
+                let observation = observed.get(&root.root).ok_or_else(|| {
+                    FleetGenerateError::SeedTopology(format!(
+                        "retained Root {} has no exact management observation",
+                        root.root
+                    ))
+                })?;
+                let module_sha256 = observation.module_sha256.clone().ok_or_else(|| {
+                    FleetGenerateError::CanisterUnavailable {
+                        canister: root.root.clone(),
+                        reason: "retained Root has no installed module SHA-256".to_string(),
+                    }
+                })?;
+                return Err(FleetGenerateError::StoppedRootStartRequired {
+                    controller: operator.to_text(),
+                    fleet: request.fleet.to_string(),
+                    module_sha256,
+                    root: root.root.clone(),
+                    subnet: observation.subnet.clone(),
+                });
+            }
+            Some(CanisterRuntimeStatus::Stopping) => {
+                return Err(FleetGenerateError::CanisterUnavailable {
+                    canister: root.root.clone(),
+                    reason: "retained Root is stopping; wait for terminal Stopped state and rerun generation"
+                        .to_string(),
+                });
+            }
+            None => {
+                return Err(FleetGenerateError::SeedTopology(format!(
+                    "retained Root {} has no runtime-status observation",
+                    root.root
+                )));
+            }
         }
     }
     observe_root_owned_pool_assets(
@@ -1277,6 +1357,35 @@ fn observe_estate(
         &mut observed,
     )?;
     Ok(observed)
+}
+
+fn parse_observed_runtime_status(
+    canister: &str,
+    value: &str,
+) -> Result<CanisterRuntimeStatus, FleetGenerateError> {
+    match value.to_ascii_lowercase().as_str() {
+        "running" => Ok(CanisterRuntimeStatus::Running),
+        "stopped" => Ok(CanisterRuntimeStatus::Stopped),
+        "stopping" => Ok(CanisterRuntimeStatus::Stopping),
+        _ => Err(FleetGenerateError::CanisterUnavailable {
+            canister: canister.to_string(),
+            reason: format!("unknown management runtime status {value:?}"),
+        }),
+    }
+}
+
+fn normalize_observed_module_sha256(
+    canister: &str,
+    value: &str,
+) -> Result<String, FleetGenerateError> {
+    let normalized = value.trim_start_matches("0x").to_ascii_lowercase();
+    if normalized.len() != 64 || !normalized.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(FleetGenerateError::CanisterUnavailable {
+            canister: canister.to_string(),
+            reason: format!("invalid installed module SHA-256 {value:?}"),
+        });
+    }
+    Ok(normalized)
 }
 
 fn require_root_estate_authority(
