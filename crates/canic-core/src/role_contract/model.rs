@@ -53,6 +53,7 @@ pub enum CanicFeatureEffect {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum RoleCapabilityKey {
     AutomaticTopup,
+    ChildProvisioning,
     DelegatedTokenIssuer,
     DelegatedTokenVerifier,
     FleetAdmissionProjection,
@@ -76,6 +77,7 @@ impl RoleCapabilityKey {
     pub const fn manifest_name(self) -> &'static str {
         match self {
             Self::AutomaticTopup => "AutomaticTopup",
+            Self::ChildProvisioning => "ChildProvisioning",
             Self::DelegatedTokenIssuer => "DelegatedTokenIssuer",
             Self::DelegatedTokenVerifier => "DelegatedTokenVerifier",
             Self::FleetAdmissionProjection => "FleetAdmissionProjection",

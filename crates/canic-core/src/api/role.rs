@@ -48,6 +48,7 @@ impl RoleOverviewApi {
 const fn capability_view(capability: RoleCapabilityKey) -> Option<RoleCapability> {
     Some(match capability {
         RoleCapabilityKey::AutomaticTopup => RoleCapability::AutomaticTopup,
+        RoleCapabilityKey::ChildProvisioning => RoleCapability::ChildProvisioning,
         RoleCapabilityKey::DelegatedTokenIssuer => RoleCapability::DelegatedTokenIssuer,
         RoleCapabilityKey::DelegatedTokenVerifier => RoleCapability::DelegatedTokenVerifier,
         RoleCapabilityKey::FleetAdmissionProjection => RoleCapability::FleetAdmissionProjection,
@@ -74,6 +75,7 @@ mod tests {
     fn overview_projects_public_capabilities_in_lexical_order() {
         let capabilities = BTreeSet::from([
             RoleCapabilityKey::AutomaticTopup,
+            RoleCapabilityKey::ChildProvisioning,
             RoleCapabilityKey::DelegatedTokenIssuer,
             RoleCapabilityKey::DelegatedTokenVerifier,
             RoleCapabilityKey::FleetAdmissionProjection,
@@ -112,6 +114,7 @@ mod tests {
             overview.capabilities,
             vec![
                 RoleCapability::AutomaticTopup,
+                RoleCapability::ChildProvisioning,
                 RoleCapability::DelegatedTokenIssuer,
                 RoleCapability::DelegatedTokenVerifier,
                 RoleCapability::FleetAdmissionProjection,

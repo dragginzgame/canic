@@ -343,6 +343,7 @@ pub(in crate::release_set) fn project_role_capabilities(
             }
             RoleCapabilityKey::FleetCoordinator
             | RoleCapabilityKey::FleetAdmissionProjection
+            | RoleCapabilityKey::ChildProvisioning
             | RoleCapabilityKey::Root
             | RoleCapabilityKey::RootControlPlane
             | RoleCapabilityKey::Runtime

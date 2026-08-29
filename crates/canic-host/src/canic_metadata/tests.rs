@@ -7,11 +7,13 @@ use candid::{CandidType, Encode};
 use canic_core::{
     cdk::utils::hash::hex_bytes,
     dto::{
-        error::Error, metadata::CanicMetadataResponse, role::RoleOverviewResponse,
+        error::Error,
+        metadata::CanicMetadataResponse,
+        role::{RoleCapability, RoleOverviewResponse},
         state::BootstrapStatusResponse,
     },
     ids::CanisterRole,
-    role_contract::ProtocolProfileDigest,
+    role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
 };
 use std::{collections::BTreeSet, path::PathBuf};
 
@@ -48,7 +50,7 @@ fn overview_only_verifies_an_already_selected_binding() {
     let output = response_json(&Ok::<_, Error>(RoleStatusResponse::Overview(
         RoleOverviewResponse {
             role: CanisterRole::from("app"),
-            capabilities: Vec::new(),
+            capabilities: vec![RoleCapability::ChildProvisioning],
             protocol_profile_digest: [1; 32],
             metadata: CanicMetadataResponse {
                 package_name: "example".to_string(),
@@ -69,7 +71,7 @@ fn overview_only_verifies_an_already_selected_binding() {
         binding: RegistryProtocolBinding {
             release_identity: "0.93.4".to_string(),
             role: CanisterRole::from("app"),
-            capabilities: BTreeSet::new(),
+            capabilities: BTreeSet::from([RoleCapabilityKey::ChildProvisioning]),
             candid_sha256: [2; 32],
             protocol_profile_digest: ProtocolProfileDigest::from_bytes([1; 32]),
         },

@@ -8,17 +8,50 @@ fn repository_binaryen_authority_matches_every_supported_projection() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../tool-versions.env"
     ));
-    for expected in [
-        format!("export CANIC_BINARYEN_VERSION={BINARYEN_VERSION}"),
-        "export CANIC_BINARYEN_SHA256_DARWIN_ARM64=98aad827847af7ef990ed7098d885725c8e5b5aae75073403635617ae4e259aa".to_string(),
-        "export CANIC_BINARYEN_SHA256_DARWIN_X64=40c3de90bb3766bd0282a895e139a6f50253dba49b4f5bb89e66faca162d832e".to_string(),
-        "export CANIC_BINARYEN_SHA256_LINUX_X64=195ddc94f9bc89f45abdabb0b9eea86023d727ba90eac8b35b80f2544fc30572".to_string(),
-        "export CANIC_BINARYEN_WASM_OPT_SHA256_DARWIN_ARM64=a9c8d09d84186e4c8efe937f3de19b887404d24a96e2638f3bd3b476e17b7218".to_string(),
-        "export CANIC_BINARYEN_WASM_OPT_SHA256_DARWIN_X64=c3cbd288eef3402119d8183df1739887ff0e6430caba2e1c801406df725a2bd3".to_string(),
-        "export CANIC_BINARYEN_WASM_OPT_SHA256_LINUX_X64=1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725".to_string(),
-    ] {
-        assert!(pins.lines().any(|line| line == expected));
+    assert_eq!(
+        BINARYEN_VERSION,
+        repository_pin(pins, "CANIC_BINARYEN_VERSION")
+    );
+
+    let expected_projections = [
+        ("macos", "aarch64", "arm64-macos", "DARWIN_ARM64"),
+        ("macos", "x86_64", "x86_64-macos", "DARWIN_X64"),
+        ("linux", "x86_64", "x86_64-linux", "LINUX_X64"),
+    ];
+
+    assert_eq!(
+        SUPPORTED_BINARYEN_AUTHORITIES.len(),
+        expected_projections.len()
+    );
+
+    for (os, arch, archive_platform, pin_suffix) in expected_projections {
+        let authority = binaryen_authority_for(os, arch).expect("supported Binaryen platform");
+
+        assert_eq!(authority.archive_platform(), archive_platform);
+        assert_eq!(
+            authority.archive_sha256(),
+            repository_pin(pins, &format!("CANIC_BINARYEN_SHA256_{pin_suffix}"))
+        );
+        assert_eq!(
+            authority.executable_sha256(),
+            repository_pin(
+                pins,
+                &format!("CANIC_BINARYEN_WASM_OPT_SHA256_{pin_suffix}")
+            )
+        );
     }
+}
+
+fn repository_pin<'a>(pins: &'a str, variable: &str) -> &'a str {
+    let prefix = format!("export {variable}=");
+    let mut values = pins.lines().filter_map(|line| line.strip_prefix(&prefix));
+    let value = values.next().expect("repository Binaryen pin");
+
+    assert!(
+        values.next().is_none(),
+        "duplicate repository pin {variable}"
+    );
+    value
 }
 
 #[cfg(unix)]

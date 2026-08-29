@@ -588,6 +588,16 @@ fn role_capability_surfaces_are_pruned_at_the_destination_macro() {
         "the managed children status variant must compile only for Sharding profiles"
     );
 
+    assert!(
+        role_surface
+            .matches("#[cfg(canic_capability_child_provisioning)]")
+            .count()
+            == 4
+            && role_surface.contains("RoleCapabilityKey::ChildProvisioning")
+            && role_surface.contains("CanisterCommand::RespondCapability")
+            && role_surface.contains("CanisterCommandResponse::RespondCapability"),
+        "the child-provisioning command graph must compile only for roles with spawn grants"
+    );
     assert_eq!(
         role_surface
             .matches("#[cfg(canic_capability_local_application_authorization)]")

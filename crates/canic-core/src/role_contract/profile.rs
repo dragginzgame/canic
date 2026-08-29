@@ -192,6 +192,7 @@ mod tests {
     fn capability_manifest_names_are_lexicographically_ordered() {
         let names = [
             RoleCapabilityKey::AutomaticTopup,
+            RoleCapabilityKey::ChildProvisioning,
             RoleCapabilityKey::DelegatedTokenIssuer,
             RoleCapabilityKey::DelegatedTokenVerifier,
             RoleCapabilityKey::FleetAdmissionProjection,

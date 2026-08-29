@@ -1225,6 +1225,7 @@ type RoleCapability = variant {
   FleetCoordinator;
   Index;
   Icrc21;
+  ChildProvisioning;
   DelegatedTokenIssuer;
   FleetAdmissionProjection;
   RoleAttestationSigner;

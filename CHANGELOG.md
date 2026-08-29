@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.22` makes managed command surfaces role-specific so only exact
+  descendant-provisioning parents retain the non-Root capability responder,
+  and corrects the packaged Binaryen 132 authority on every supported host
+  platform against the repository tool pins. Generated release helpers now
+  carry their exact release-build identity into the complete artifact set.
 - `0.109.21` makes finalized release artifacts network-bound, proves fresh pool
   canisters are funded directly by the reviewed Fleet Ensure creation graph,
   and adds an exact same-Principal recovery for cycles accidentally credited to

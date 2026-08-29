@@ -2,6 +2,8 @@
 
 Last updated: 2026-08-29
 
+<!-- canic-release-state: source-development -->
+
 ## Purpose
 
 This is the compact handoff for new agent sessions. Read it first, then inspect
@@ -13,35 +15,33 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.20` at
-`a90b1ae74439c335ced10d20728e45c0607a01a7` is the immutable maintained
+Published `v0.109.21` at
+`467bf195f91123886753dba6f48ffd4397ae1fa7` is the immutable maintained
 release. Its annotated tag object is
-`5fb5d80c850124347f79d98b5e3508b8fc66258c`, and its validated source is
-`ba023237850b4b00171b6041d3c8421d56a60f45`. It restores retained-estate
-convergence with distinct Root and Store installation identities, exact
-stopped-role startup, and typed retry of an issued Component command under its
-original idempotency authority. It also publishes the no-effect fresh-Fleet
-seed and hardens compiler-cache and long-run validation diagnostics.
+`81ac37ef81a7f96b65504fce061e3fe090859083`, and its validated source is
+`e1e8882115c80ada672febc6237b91c48f43655b`. It binds finalized artifacts to
+their exact build network, funds fresh pool assets through the direct reviewed
+creation graph, recovers accidental pool-ledger credits on the same Principal,
+requires compact human cycle units, starts a stopped retained Root before child
+observation, and accepts bounded bidirectional balance movement without
+changing effect or debit authority.
 
-`0.109.21` is the single open patch draft. Its current candidate binds every
-finalized release build and complete release set to the exact `local` or `ic`
-build network, proves fresh pool funding is part of Fleet Ensure's direct
-reviewed creation graph, and adds one Root-owned same-Principal recovery for
-cycles accidentally credited to an empty pool canister's default Cycles Ledger
-account. Human Fleet cycle configuration now accepts and generates compact
-exact `B`, `T`, and `Q` values through one strict human-input parser without
-changing durable plan integer authority. A stopped exact retained Root now
-produces its same-Principal Start before protected child observation, and a
-reviewed apply accepts bounded balance movement in either direction while
-retaining the exact action and debit authority. Its validation-runner self-test
-is also isolated from outer runner state. Release optimization advances to
-checksum-bound Binaryen 132,
-while `make update-dev` reports later official stable releases without changing
-the pin. The workspace remains version `0.109.20`; no version, tag, package,
-push or deployment action has occurred for this draft.
+`0.109.22` is the single open patch draft. It corrects all six packaged
+Binaryen archive and executable digests to the official version 132 authority
+already retained in `tool-versions.env`. The runtime platform table is now
+directly testable, and every supported projection is compared field-for-field
+with those repository pins. It also derives one exact `ChildProvisioning`
+capability from configured spawn grants and compiles the managed non-Root
+capability responder only for roles that own descendants. Leaf and ordinary
+Component roles keep Root activation and observation but omit that responder's
+command, response, workflow and Candid graph. The generated pool-ledger helper
+also retains the exact release-build ID supplied by the complete artifact
+build, closing the release-set admission failure exposed by the focused
+all-role build. The workspace remains version `0.109.21`; no version, tag,
+package, push or deployment action has occurred for this draft.
 
-Published `v0.109.19` at
-`8be7c210e6ef7a2b707139c34a47989ac4fd810b` is the immutable predecessor.
+Published `v0.109.20` at
+`a90b1ae74439c335ced10d20728e45c0607a01a7` is the immutable predecessor.
 Published `v0.109.16` at
 `045f131224506bfadabfdb258471cd9b9745d8c8` remains immutable but unqualified:
 its complete gate stopped at warning-denied Clippy while the former release
@@ -195,7 +195,7 @@ non-empty inventory with conserved cycles and identities, then converges again
 without effects. Further fresh-estate expansion remains paused behind this
 retained-estate correction.
 
-The open `0.109.21` draft makes release-build network part of immutable artifact
+Published `0.109.21` makes release-build network part of immutable artifact
 authority. The selected named environment determines `BuildNetwork`, and
 generation rejects a finalized local build for an IC environment (or the
 inverse) before writing a desired Fleet document. Fresh generation continues
@@ -322,7 +322,21 @@ not active contracts.
 
 ## Validation State
 
-Open `0.109.21` coding-time evidence passes targeted locked checks only, as
+Open `0.109.22` coding-time evidence passes the focused role-capability
+derivation, build-cfg catalog, destination protocol-surface and release-set
+projection tests. A canonical release build of the managed leaf audit role
+produced a 2,546,839-byte Wasm with a 2,316,160-byte code section and 4,183
+defined functions; its generated command union contains `ConfigureRuntime` and
+omits `RespondCapability`. The configured descendant-parent audit role retains
+both command variants. The corrected Linux Binaryen 132 executable is admitted
+by the production finalizer, and the repository/platform authority test passes.
+Canonical Coordinator and Store Candid include the new capability identity.
+The focused generated-helper journey now uses a nonzero release-build ID and
+proves those exact bytes survive finalization before exercising its existing
+at-most-once withdrawal and cycle-conservation path. No broad workspace or
+PocketIC gate was run during coding, as required by repository policy.
+
+Published `0.109.21` coding-time evidence passed targeted locked checks, as
 required during implementation: the changed four-package graph compiles;
 23 canister-pool tests, eight current-protocol tests, 41 public protocol-surface
 tests, 26 CLI build tests, nine release-build tests, 12 release-set tests,
@@ -681,26 +695,27 @@ review a new current plan that reuses the controlled Principals and balances
 while reinstalling the corrected infrastructure artifacts. No compatibility
 bridge, journal edit or live repair path was added.
 
-The maintainer versioned, committed, tagged and pushed immutable `v0.109.20`.
+The maintainer versioned, committed, tagged and pushed immutable `v0.109.21`.
 No deployment, identity switch, Ledger call, live canister call, or
 sibling-repository mutation was performed by this documentation reconciliation.
 
 ## Next Action
 
-The open `0.109.21` batch now also closes the two downstream staging blockers:
-stopped-Root observation ordering and bounded bidirectional apply-time balance
-reconciliation. Its human-authored cycle boundary is a strict compact-unit
-contract rather than presentation alone. The next maintainer action is to
-review this diff and choose the release validation/version/publication boundary;
-coding-time agents must not pre-run the broad gate.
+The open `0.109.22` batch corrects the packaged Binaryen 132 authority exposed
+by downstream staging, makes all runtime platform projections accountable to
+the repository pins and hard-cuts the incorrectly universal non-Root
+capability responder into exact role-contract ownership. The next maintainer
+action is to review this diff and choose the release validation, version and
+publication boundary; coding-time agents must not pre-run the broad gate.
 
 The separately reported release-build LTO duplication remains a non-blocking,
 measurement-led throughput slice. It is not part of the staging correctness
 boundary and should not delay publication of these Fleet Ensure corrections.
 
-After immutable publication, downstream adopters should pin the tag, rebuild
-and qualify their artifacts, then exercise the ordinary Fleet Ensure
-generate/plan/apply sequence and prove terminal convergence plus an immediate
-effect-free replay. If that evidence identifies no further defect, the next
-human-owned step is a fresh 0.109 closeout audit. Do not begin 0.110 or 0.111
-from this batch.
+After immutable publication, downstream adopters should pin the tag, rerun
+complete CI and release preparation, then review a fresh zero-debit Fleet
+Ensure plan before separately authorizing its exact apply digest. Terminal
+convergence and an immediate effect-free replay remain the live completion
+boundary. If that evidence identifies no further defect, the next human-owned
+step is a fresh 0.109 closeout audit. Do not begin 0.110 or 0.111 from this
+batch.
