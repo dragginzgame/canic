@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-29
 
-<!-- canic-release-state: source-development -->
+<!-- canic-release-validation: version=0.109.23 source=3778df1f2dffbc9b223fdc3a5d5439dfe11be91d date=2026-08-29 gate=complete -->
 
 ## Purpose
 
