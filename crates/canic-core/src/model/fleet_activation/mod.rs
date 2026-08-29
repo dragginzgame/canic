@@ -8,10 +8,9 @@ pub mod endpoint_mode;
 
 use crate::{
     config::ComponentTopology,
-    dto::fleet_subnet_root::FleetSubnetWasmStoreActivationAuthority,
     ids::{
         AppId, CanonicalNetworkId, FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
-        FleetSubnetWasmStoreAuthority, ReleaseBuildId,
+        FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, ReleaseBuildId,
     },
     model::fleet_funding_policy::{
         FleetFundingPolicyValidationError, validate_fleet_subnet_root_funding_authority,

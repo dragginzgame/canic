@@ -7,8 +7,8 @@
 use crate::{
     dto::fleet_registry::{FleetRegistryVersion, FleetSubnetRootStatus},
     ids::{
-        ComponentTopologyDigest, FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
-        FleetSubnetWasmStoreAuthority, ReleaseBuildId, ReleaseSetDigest, SubnetId,
+        ComponentTopologyDigest, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+        FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, SubnetId,
     },
 };
 use candid::{CandidType, Principal};
@@ -44,24 +44,6 @@ pub struct FleetSubnetRootAuthority {
 pub struct FleetSubnetWasmStoreInitArgs {
     pub authority: FleetSubnetWasmStoreAuthority,
     pub install_id: [u8; 32],
-}
-
-///
-/// FleetSubnetWasmStoreActivationAuthority
-///
-/// Exact child identity Root must use while activating its independently installed Store.
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct FleetSubnetWasmStoreActivationAuthority {
-    pub fleet: FleetBinding,
-    pub operation_id: [u8; 32],
-    pub fleet_subnet_root: Principal,
-    pub wasm_store: Principal,
-    pub release_build_id: ReleaseBuildId,
-    pub component_topology_digest: ComponentTopologyDigest,
-    pub controllers: Vec<Principal>,
-    pub manifest_digest: ReleaseSetDigest,
 }
 
 /// Request the one planned sibling Store controller handoff during root preparation.

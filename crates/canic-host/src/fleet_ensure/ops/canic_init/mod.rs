@@ -28,12 +28,12 @@ use candid::{Principal, encode_one};
 use canic_control_plane::dto::fleet_coordinator::FleetCoordinatorInitArgs;
 use canic_core::{
     dto::fleet_subnet_root::{
-        FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreActivationAuthority,
-        FleetSubnetWasmStoreInitArgs,
+        FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
     },
     ids::{
         FleetBinding, FleetCoordinatorBinding, FleetKey, FleetRegistryAuthority,
-        FleetSubnetRootBinding, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority,
+        FleetSubnetRootBinding, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreActivationAuthority,
+        FleetSubnetWasmStoreAuthority,
     },
     shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
 };
