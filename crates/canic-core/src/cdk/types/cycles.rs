@@ -103,6 +103,28 @@ impl Cycles {
         self.0
     }
 
+    /// Render an exact compact value for human-authored configuration.
+    #[must_use]
+    pub fn to_config_string(&self) -> String {
+        let (unit, suffix, decimal_places) = if self.0 >= QC {
+            (QC, "Q", 15)
+        } else if self.0 >= TC {
+            (TC, "T", 12)
+        } else if self.0 >= BC {
+            (BC, "B", 9)
+        } else {
+            return self.0.to_string();
+        };
+        let whole = self.0 / unit;
+        let remainder = self.0 % unit;
+        if remainder == 0 {
+            return format!("{whole}{suffix}");
+        }
+        let fraction = format!("{remainder:0decimal_places$}");
+        let fraction = fraction.trim_end_matches('0');
+        format!("{whole}.{fraction}{suffix}")
+    }
+
     /// Deserialize cycle config from either shorthand text such as `10T` or a number.
     pub fn from_config<'de, D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -327,13 +349,40 @@ mod tests {
     #[test]
     fn parses_exact_cycle_shorthand_without_floating_point() {
         assert_eq!("10K".parse::<Cycles>(), Ok(Cycles::new(10_000)));
+        assert_eq!("2B".parse::<Cycles>(), Ok(Cycles::new(2_000_000_000)));
         assert_eq!("1.5T".parse::<Cycles>(), Ok(Cycles::new(1_500_000_000_000)));
+        assert_eq!(
+            "4Q".parse::<Cycles>(),
+            Ok(Cycles::new(4_000_000_000_000_000))
+        );
         assert_eq!(".25M".parse::<Cycles>(), Ok(Cycles::new(250_000)));
         assert_eq!("1.0000T".parse::<Cycles>(), Ok(Cycles::new(TC)));
         assert_eq!(
             u128::MAX.to_string().parse::<Cycles>(),
             Ok(Cycles::new(u128::MAX))
         );
+    }
+
+    #[test]
+    fn renders_exact_compact_config_values_without_floating_point() {
+        let cases = [
+            (0, "0"),
+            (999_999_999, "999999999"),
+            (1_000_000_000, "1B"),
+            (1_500_000_000, "1.5B"),
+            (999_999_999_999, "999.999999999B"),
+            (1_000_000_000_000, "1T"),
+            (1_500_000_000_000, "1.5T"),
+            (1_000_000_000_000_000, "1Q"),
+        ];
+        for (cycles, expected) in cases {
+            let rendered = Cycles::new(cycles).to_config_string();
+            assert_eq!(rendered, expected);
+            assert_eq!(rendered.parse::<Cycles>(), Ok(Cycles::new(cycles)));
+        }
+
+        let maximum = Cycles::new(u128::MAX);
+        assert_eq!(maximum.to_config_string().parse::<Cycles>(), Ok(maximum),);
     }
 
     #[test]

@@ -26,8 +26,8 @@ use thiserror::Error as ThisError;
 use std::os::unix::fs::PermissionsExt;
 
 pub const BINARYEN_REPAIR_COMMAND: &str = "canic toolchain install";
-pub const BINARYEN_VERSION: &str = "108";
-pub const BINARYEN_VERSION_IDENTITY: &str = "wasm-opt version 108 (version_108)";
+pub const BINARYEN_VERSION: &str = "132";
+pub const BINARYEN_VERSION_IDENTITY: &str = "wasm-opt version 132 (version_132)";
 pub const WASM_OPT_TOOL: &str = "wasm-opt";
 
 const DOWNLOAD_TOOL: &str = "curl";

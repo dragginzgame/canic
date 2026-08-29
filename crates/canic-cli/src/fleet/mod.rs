@@ -19,8 +19,10 @@ use crate::{
     },
     output, version_text,
 };
-use canic_core::cdk::utils::hash::sha256_hex;
-use canic_core::ids::ReleaseBuildId;
+use canic_core::{
+    cdk::{types::Cycles, utils::hash::sha256_hex},
+    ids::ReleaseBuildId,
+};
 use canic_host::{
     fleet_ensure::{
         DesiredFleetLoadError, EnsureWorkflowError, FleetEnsureReport, FleetGenerateError,
@@ -130,12 +132,15 @@ impl GenerateOptions {
         let management_creation_fee_cycles =
             string_option(generate, "management-creation-fee-cycles")
                 .map(|value| {
-                    value.parse::<u128>().map_err(|_| {
-                        FleetCommandError::Usage(
-                            "management creation fee must be an exact unsigned decimal cycle amount"
+                    value
+                        .parse::<Cycles>()
+                        .map(|cycles| cycles.to_u128())
+                        .map_err(|_| {
+                            FleetCommandError::Usage(
+                            "management creation fee must be an exact cycle amount such as 500B"
                                 .to_string(),
                         )
-                    })
+                        })
                 })
                 .transpose()?;
         let cycles_ledger = string_option(generate, "cycles-ledger");
@@ -268,7 +273,7 @@ fn generate_command() -> Command {
             value_arg("management-creation-fee-cycles")
                 .long("management-creation-fee-cycles")
                 .value_name("CYCLES")
-                .help("Exact per-canister management creation fee required with --fresh"),
+                .help("Exact per-canister management creation fee such as 500B; required with --fresh"),
         )
         .arg(
             value_arg("output")

@@ -127,7 +127,7 @@ canic fleet generate staging \
   --app-config apps/demo/canic.toml \
   --release-build <release-build-id> \
   --fresh \
-  --management-creation-fee-cycles <exact-fee>
+  --management-creation-fee-cycles 500B
 ```
 
 `--fresh` durably creates `deployments/<fleet>.estate.toml` before generating
@@ -179,11 +179,11 @@ environment = "local"
 treasury = "treasury" # logical name of one controlled canister below
 operator = "<operator-principal>"
 cycles_ledger = "<cycles-ledger-principal>"
-ledger_fee_cycles = "100000000" # example; generated from the live Ledger
+ledger_fee_cycles = "100000000" # below 1B; generated from the live Ledger
 management_creation_fee_cycles = "0" # retained; fresh uses its seeded exact fee
 material_cycle_threshold = "1000000"
 maximum_observation_burn_cycles = "10000000"
-maximum_update_burn_cycles = "100000000000"
+maximum_update_burn_cycles = "100B"
 maximum_stalled_observations = 8
 
 [protocol]
@@ -214,10 +214,16 @@ presence = "present"
 replace = false
 subnet = "<subnet-principal>"
 controllers = ["<operator-principal>"]
-initial_cycles = "5000000000000"
-minimum_cycles = "1000000000000"
+initial_cycles = "5T"
+minimum_cycles = "1T"
 wasm = "artifacts/fleet_coordinator.wasm"
 ```
+
+Human TOML cycle values accept exact case-sensitive `B`, `T`, and `Q`
+suffixes and exact decimals such as `1.5T`. Generated TOML uses the largest
+whole-unit magnitude at or above one billion cycles; smaller values remain
+exact decimal integers. Durable plan JSON continues to encode cycle authority
+as bounded decimal text.
 
 Generated fresh Store and pool entries additionally use
 `controller_canisters = ["root-0"]`. These are logical dependencies, not

@@ -54,7 +54,7 @@ fn fresh_generation_requires_and_retains_exact_creation_fee_authority() {
     ));
     let options = GenerateOptions::parse(args.into_iter().chain([
         OsString::from("--management-creation-fee-cycles"),
-        OsString::from("500000000000"),
+        OsString::from("500B"),
     ]))
     .expect("parse fresh generation");
     assert!(options.fresh);

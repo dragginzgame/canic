@@ -28,7 +28,12 @@ finalized release build and complete release set to the exact `local` or `ic`
 build network, proves fresh pool funding is part of Fleet Ensure's direct
 reviewed creation graph, and adds one Root-owned same-Principal recovery for
 cycles accidentally credited to an empty pool canister's default Cycles Ledger
-account. The workspace remains version `0.109.20`; no version, tag, package,
+account. Human Fleet cycle configuration now accepts and generates compact
+exact `B`, `T`, and `Q` values through one parser without changing durable plan
+integer authority. Its validation-runner self-test is also isolated from outer
+runner state. Release optimization advances to checksum-bound Binaryen 132,
+while `make update-dev` reports later official stable releases without changing
+the pin. The workspace remains version `0.109.20`; no version, tag, package,
 push or deployment action has occurred for this draft.
 
 Published `v0.109.19` at
@@ -320,16 +325,25 @@ tests, 26 CLI build tests, nine release-build tests, 12 release-set tests,
 12 Fleet-generation tests and 28 replay-policy tests pass. The standalone
 temporary helper builds as real Wasm from an independently resolved lock whose
 complete package identities must already exist in the workspace lock. Focused
-conservation coverage binds the full Ledger balance, withdrawal, exact fee,
+cycle-value coverage proves exact `B`, `T`, and `Q` parsing, compact rendering,
+generated TOML reopening and the CLI fresh-fee boundary without floating point.
+Focused conservation coverage binds the full Ledger balance, withdrawal, exact fee,
 update burn and expected native remainder. A focused 4.45-second PocketIC
 journey installs the generated helper on the same pool Principal, converts the
 exact default Ledger balance to native cycles once, accepts replay without a
 second withdrawal and uninstalls without losing the balance or identity. The
 IcyDB `0.247.0` runtime/model fixture passes locked all-target compilation, the
 exact single-provider guard, and its governed composed-Wasm PocketIC lifecycle
-journey. The maintainer-owned complete gate and a live production Cycles Ledger
-recovery effect were not run during coding; no remote state or cycles were
-touched.
+journey. The exact nested validation-runner gate and targeted ShellCheck pass
+after binding the self-test to its fixture-owned root, snapshot and depth.
+Binaryen 132's three official archives and extracted executables match the six
+governed hashes; the isolated Linux installer, live latest-release check,
+five-path update-check fixture, eight Binaryen-filtered host tests, all 15
+artifact finalizer tests, nine provenance tests, warning-denied host Clippy and
+the release-integrity contract pass. A real Canic Wasm Store role optimizes
+under 132 with identical exports and required features before and after. The
+maintainer-owned complete gate and a live production Cycles Ledger recovery
+effect were not run during coding; no remote state or cycles were touched.
 
 Open `0.109.16` coding-time evidence passes at the published `0.109.15`
 predecessor worktree: locked `canic-host`/`canic-cli` all-target compilation,
@@ -385,7 +399,7 @@ policy, while IC builds remain metadata-free.
 
 Release-profile artifacts now have one canonical finalizer for configured
 Components, Fleet Coordinator and Wasm Store. It requires the checksum-bound
-official Binaryen 108 identity, derives the input's admitted IC feature flags,
+official Binaryen 132 identity, derives the input's admitted IC feature flags,
 applies `-Oz`, and rejects export, embedded public-Candid or feature drift
 before replacing the staged input. Gzip, artifact hashes, release sets, Store
 publication and module-hash authority consume only those optimized bytes; fast

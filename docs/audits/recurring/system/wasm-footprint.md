@@ -10,7 +10,7 @@
 - Trace mode: `execution_trace` in an isolated local build environment
 - Cost/runtime: high; normally 60-180 minutes
 - Prerequisites: a clean disposable product worktree, Rust/Cargo with the Wasm
-  target, pinned ICP CLI helpers, `ic-wasm`, Binaryen 108 `wasm-opt`, `twiggy`,
+  target, pinned ICP CLI helpers, `ic-wasm`, Binaryen 132 `wasm-opt`, `twiggy`,
   isolated `.icp` state, and isolated clean Cargo targets
 - False-positive boundary: method, roster, toolchain, profile, or execution-path
   drift makes results non-comparable; size pressure is not a correctness defect

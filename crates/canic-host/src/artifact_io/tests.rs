@@ -270,7 +270,7 @@ fn release_wasm_fails_closed_when_binaryen_is_missing() {
     )
     .expect_err("release build must reject without Binaryen");
 
-    assert!(error.to_string().contains("requires Binaryen 108"));
+    assert!(error.to_string().contains("requires Binaryen 132"));
     assert_eq!(fs::read(&wasm_path).expect("read Wasm fixture"), original);
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -313,7 +313,7 @@ fn release_wasm_optimization_records_metrics_and_preserves_contract() {
     fs::write(&wasm_path, &original).expect("write Wasm fixture");
     write_executable(
         &command_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'wasm-opt version 108 (version_108)\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int; exit 0;; esac\n[ \"$2\" = \"-o\" ] || exit 91\n[ \"$4\" = \"-Oz\" ] || exit 92\ncp \"$1\" \"$3\"\n",
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'wasm-opt version 132 (version_132)\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) printf '%s\\n' --enable-mutable-globals --enable-nontrapping-float-to-int --enable-bulk-memory --enable-sign-ext --enable-bulk-memory-opt; exit 0;; esac\n[ \"$2\" = \"-o\" ] || exit 91\n[ \"$4\" = \"-Oz\" ] || exit 92\ncase \" $* \" in *\" --enable-mutable-globals \"*) ;; *) exit 93;; esac\ncase \" $* \" in *\" --enable-bulk-memory-opt \"*) ;; *) exit 94;; esac\ncp \"$1\" \"$3\"\n",
     );
 
     let transform = optimize_release_wasm_artifact_with_command(
@@ -328,7 +328,7 @@ fn release_wasm_optimization_records_metrics_and_preserves_contract() {
     assert_eq!(transform.outcome, ArtifactTransformOutcome::Applied);
     assert_eq!(
         transform.tool_version.as_deref(),
-        Some("wasm-opt version 108 (version_108)")
+        Some("wasm-opt version 132 (version_132)")
     );
     assert!(
         transform
@@ -371,7 +371,7 @@ fn release_wasm_optimization_rejects_export_or_candid_drift() {
         write_executable(
             &command_path,
             &format!(
-                "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'wasm-opt version 108 (version_108)\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int; exit 0;; esac\ncp '{}' \"$3\"\n",
+                "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'wasm-opt version 132 (version_132)\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int; exit 0;; esac\ncp '{}' \"$3\"\n",
                 replacement_path.display()
             ),
         );
@@ -401,7 +401,7 @@ fn release_wasm_optimization_rejects_required_feature_drift() {
     fs::write(&wasm_path, &original).expect("write Wasm fixture");
     write_executable(
         &command_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'wasm-opt version 108 (version_108)\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) case \"$1\" in *.optimized) printf '%s\\n' --enable-bulk-memory;; *) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int;; esac; exit 0;; esac\ncp \"$1\" \"$3\"\n",
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'wasm-opt version 132 (version_132)\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) case \"$1\" in *.optimized) printf '%s\\n' --enable-bulk-memory;; *) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int;; esac; exit 0;; esac\ncp \"$1\" \"$3\"\n",
     );
 
     let error = optimize_release_wasm_artifact_with_command(

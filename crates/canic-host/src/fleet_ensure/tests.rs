@@ -86,7 +86,8 @@ impl MockPlatform {
     fn new(desired: DesiredFleet, live: impl IntoIterator<Item = LiveCanister>) -> Self {
         let ledger_fee_cycles = desired
             .ledger_fee_cycles
-            .parse()
+            .parse::<Cycles>()
+            .map(|cycles| cycles.to_u128())
             .expect("fixture ledger fee");
         Self {
             completed: BTreeMap::new(),
@@ -184,12 +185,14 @@ impl MockPlatform {
                 let creation_fee = self
                     .desired
                     .management_creation_fee_cycles
-                    .parse::<u128>()
+                    .parse::<Cycles>()
+                    .map(|cycles| cycles.to_u128())
                     .expect("creation fee");
                 let ledger_fee = self
                     .desired
                     .ledger_fee_cycles
-                    .parse::<u128>()
+                    .parse::<Cycles>()
+                    .map(|cycles| cycles.to_u128())
                     .expect("ledger fee");
                 self.operator_cycles -= requested_initial_cycles + creation_fee + ledger_fee;
                 let principal = format!("created-{name}");
@@ -224,7 +227,8 @@ impl MockPlatform {
                 let ledger_fee = self
                     .desired
                     .ledger_fee_cycles
-                    .parse::<u128>()
+                    .parse::<Cycles>()
+                    .map(|cycles| cycles.to_u128())
                     .expect("ledger fee");
                 self.operator_cycles -= amount + ledger_fee;
                 let live = self
@@ -2779,7 +2783,8 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
                 ledger_fee_cycles: self
                     .desired
                     .ledger_fee_cycles
-                    .parse()
+                    .parse::<Cycles>()
+                    .map(|cycles| cycles.to_u128())
                     .expect("PocketIC fixture ledger fee"),
                 operator_cycles: self.operator_cycles,
                 protocol_ready: self
@@ -3246,7 +3251,14 @@ fn fresh_logical_controller_and_treasury_roles_create_and_replay_without_effect(
     child.controller_canisters = vec!["treasury".to_string()];
     fixture.desired.canisters = vec![coordinator, child];
     fixture.desired.treasury = "treasury".to_string();
+    fixture.desired.ledger_fee_cycles = "10B".to_string();
+    fixture.desired.management_creation_fee_cycles = "50B".to_string();
+    for canister in &mut fixture.desired.canisters {
+        canister.initial_cycles = "20B".to_string();
+        canister.minimum_cycles = "20B".to_string();
+    }
     fixture.platform = MockPlatform::new(fixture.desired.clone(), Vec::new());
+    fixture.platform.operator_cycles = 1_000_000_000_000_000;
 
     let desired_sha256 = "73".repeat(32);
     let planned = workflow::plan(
