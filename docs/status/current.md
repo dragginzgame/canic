@@ -2,7 +2,6 @@
 
 Last updated: 2026-08-29
 
-<!-- canic-release-validation: version=0.109.23 source=3778df1f2dffbc9b223fdc3a5d5439dfe11be91d date=2026-08-29 gate=complete -->
 
 ## Purpose
 
@@ -579,7 +578,6 @@ slice.
 The adjacent version-rollback regression also passes using exact restored file
 bytes and clean repository state rather than brittle console prose.
 
-<!-- canic-release-validation: version=0.109.21 source=e1e8882115c80ada672febc6237b91c48f43655b date=2026-08-29 gate=complete -->
 Published `0.109.15` added a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while
@@ -788,3 +786,5 @@ convergence and an immediate effect-free replay remain the live completion
 boundary. If that evidence identifies no further defect, the next human-owned
 step is a fresh 0.109 closeout audit. Do not begin 0.110 or 0.111 from this
 batch.
+
+<!-- canic-release-validation: version=0.109.24 source=8aaeef70b91d289628d11c641858344928e69efe date=2026-08-29 gate=complete -->
