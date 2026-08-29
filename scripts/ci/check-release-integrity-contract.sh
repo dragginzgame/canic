@@ -15,6 +15,8 @@ DEV_INSTALL="$ROOT/scripts/dev/install_dev.sh"
 GIT_HOOK_INSTALLER="$ROOT/scripts/dev/install-git-hooks.sh"
 PRE_COMMIT_HOOK="$ROOT/.githooks/pre-commit"
 ICP_UPDATE="$ROOT/scripts/dev/update-icp-cli-pin.sh"
+BINARYEN_UPDATE_CHECK="$ROOT/scripts/dev/check-binaryen-update.sh"
+BINARYEN_UPDATE_CHECK_TEST="$ROOT/scripts/ci/test-binaryen-update-check.sh"
 INSTALLING="$ROOT/INSTALLING.md"
 SECRET_SCAN="$ROOT/scripts/ci/run-secret-scan.sh"
 GITLEAKS_IGNORE="$ROOT/.gitleaksignore"
@@ -59,7 +61,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$RELEASE_VALIDATION_LANE" "$RELEASE_VALIDATION_LANE_TEST" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$BINARYEN_UPDATE_CHECK" "$BINARYEN_UPDATE_CHECK_TEST" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$RELEASE_VALIDATION_LANE" "$RELEASE_VALIDATION_LANE_TEST" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -697,6 +699,8 @@ rg -F 'bash scripts/dev/update-icp-cli-pin.sh' "$MAKEFILE" >/dev/null ||
     fail "make update-dev does not refresh the ICP CLI pin"
 
 update_dev_recipe="$(sed -n '/^update-dev:/,/^$/p' "$MAKEFILE")"
+rg -F 'bash scripts/dev/check-binaryen-update.sh' <<<"$update_dev_recipe" >/dev/null ||
+    fail "make update-dev does not report Binaryen release drift"
 rg -F 'bash scripts/dev/install_dev.sh --ensure-ripgrep' <<<"$update_dev_recipe" >/dev/null ||
     fail "make update-dev does not install the feature-qualified ripgrep tool"
 rg -F '"$(CARGO_INSTALL_BIN_DIR)/rg" --pcre2-version' <<<"$update_dev_recipe" >/dev/null ||
@@ -706,6 +710,7 @@ rg -F 'bash scripts/ci/check-dependency-risk-inventory.sh' <<<"$update_dev_recip
 if rg -F 'cargo audit' <<<"$update_dev_recipe" >/dev/null; then
     fail "make update-dev must not use cargo-audit's mutable shared database"
 fi
+bash "$BINARYEN_UPDATE_CHECK_TEST"
 rg -F 'cargo_toolchain install --quiet --locked --force --features pcre2' "$DEV_INSTALL" >/dev/null ||
     fail "developer ripgrep installation does not enable required PCRE2 support"
 

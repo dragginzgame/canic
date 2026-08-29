@@ -24,7 +24,10 @@ use canic_control_plane::{
     ids::{TemplateId, TemplateVersion},
 };
 use canic_core::{
-    cdk::utils::hash::{hex_bytes, sha256_hex},
+    cdk::{
+        types::Cycles,
+        utils::hash::{hex_bytes, sha256_hex},
+    },
     dto::pool::{CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus},
     dto::{
         component_provisioning::{
@@ -624,7 +627,9 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(fresh.observed_canisters, 0);
     assert_eq!(fresh.observed_controlled_cycles, 0);
     assert_eq!(fresh.desired.treasury, "coordinator");
-    assert_eq!(fresh.desired.management_creation_fee_cycles, "500000000000");
+    assert_eq!(fresh.desired.management_creation_fee_cycles, "500B");
+    let fresh_seed = fs::read_to_string(&fresh_seed_path).expect("read fresh estate seed");
+    assert!(fresh_seed.contains("management_creation_fee_cycles = \"500B\""));
     assert!(
         fresh
             .desired
@@ -714,7 +719,13 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             .iter()
             .find(|(_, name, _)| name.as_str() == pool.name.as_str())
             .expect("fresh pool creation is reviewed directly");
-        assert_eq!(funded.to_string(), pool.initial_cycles);
+        assert_eq!(pool.initial_cycles, "5T");
+        assert_eq!(
+            pool.initial_cycles
+                .parse::<Cycles>()
+                .map(|cycles| cycles.to_u128()),
+            Ok(*funded),
+        );
     }
     let requested = created
         .iter()
@@ -1179,7 +1190,11 @@ impl RetainedEnsurePlatform {
             .collect();
         Self {
             desired: desired.clone(),
-            ledger_fee_cycles: desired.ledger_fee_cycles.parse().expect("ledger fee"),
+            ledger_fee_cycles: desired
+                .ledger_fee_cycles
+                .parse::<Cycles>()
+                .map(|cycles| cycles.to_u128())
+                .expect("ledger fee"),
             live,
             mutations: 0,
             terminal_observation_protocol: false,

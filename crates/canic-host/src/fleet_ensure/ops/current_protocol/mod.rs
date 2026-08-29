@@ -245,6 +245,15 @@ pub enum CurrentProtocolError {
     Transport(#[from] CanisterProtocolError),
 }
 
+fn desired_cycles(field: &str, value: &str) -> Result<u128, CurrentProtocolError> {
+    value
+        .parse::<Cycles>()
+        .map(|cycles| cycles.to_u128())
+        .map_err(|_| {
+            CurrentProtocolError::Configuration(format!("{field} is not an exact cycle amount"))
+        })
+}
+
 /// Validate current desired Root pool targets against release-bound App demand.
 pub(super) fn validate_component_pool_capacity(
     root: &Path,
@@ -340,11 +349,10 @@ pub(super) fn compile_store_control_actions_unobserved(
                 CurrentFleetProtocolAction::AdoptStore { request },
                 target,
                 format!("root-store-control:{root_name}"),
-                desired.maximum_update_burn_cycles.parse().map_err(|_| {
-                    CurrentProtocolError::Configuration(
-                        "maximum_update_burn_cycles is not an exact integer".to_string(),
-                    )
-                })?,
+                desired_cycles(
+                    "maximum_update_burn_cycles",
+                    &desired.maximum_update_burn_cycles,
+                )?,
             )
         })
         .collect()
@@ -432,11 +440,10 @@ pub(super) fn compile(
         operation_id,
     )?);
     compiled.sort_by_key(|step| current_protocol_stage(&step.action));
-    let per_action_burn_cycles = desired.maximum_update_burn_cycles.parse().map_err(|_| {
-        CurrentProtocolError::Configuration(
-            "maximum_update_burn_cycles is not an exact integer".to_string(),
-        )
-    })?;
+    let per_action_burn_cycles = desired_cycles(
+        "maximum_update_burn_cycles",
+        &desired.maximum_update_burn_cycles,
+    )?;
     bind_unapplied_actions(
         icp,
         root,
@@ -498,14 +505,10 @@ fn compile_pool_ledger_recovery_steps(
     operation_id: [u8; 32],
 ) -> Result<Vec<CompiledCurrentProtocolStep>, CurrentProtocolError> {
     let fee = query_cycles_ledger_amount(icp, &desired.cycles_ledger, "icrc1_fee", &())?;
-    let maximum_execution_burn_cycles = desired
-        .maximum_update_burn_cycles
-        .parse::<u128>()
-        .map_err(|_| {
-            CurrentProtocolError::Configuration(
-                "maximum_update_burn_cycles is not an exact integer".to_string(),
-            )
-        })?;
+    let maximum_execution_burn_cycles = desired_cycles(
+        "maximum_update_burn_cycles",
+        &desired.maximum_update_burn_cycles,
+    )?;
     let mut steps = Vec::new();
     for authority in authorities {
         let root = authority.binding.fleet_subnet_root;

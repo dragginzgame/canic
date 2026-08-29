@@ -12,7 +12,7 @@ use crate::fleet_ensure::model::{
     MAX_FLEET_ENSURE_PROTOCOL_STEPS, RootOwnedCanisterLifecycle,
 };
 use candid::Principal;
-use canic_core::ids::FleetName;
+use canic_core::{cdk::types::Cycles, ids::FleetName};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
@@ -1598,7 +1598,8 @@ fn canister_cycle_policy(
 
 fn parse_fleet_cycles(field: &'static str, value: &str) -> Result<u128, EnsurePolicyError> {
     value
-        .parse()
+        .parse::<Cycles>()
+        .map(|cycles| cycles.to_u128())
         .map_err(|_| EnsurePolicyError::InvalidFleetCycles {
             field,
             value: value.to_string(),
@@ -1611,7 +1612,8 @@ fn parse_canister_cycles(
     value: &str,
 ) -> Result<u128, EnsurePolicyError> {
     value
-        .parse()
+        .parse::<Cycles>()
+        .map(|cycles| cycles.to_u128())
         .map_err(|_| EnsurePolicyError::InvalidCanisterCycles {
             field,
             name: name.to_string(),

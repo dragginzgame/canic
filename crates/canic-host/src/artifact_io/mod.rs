@@ -28,6 +28,13 @@ const IC_WASM_FEATURE_FLAGS: &[&str] = &[
     "--enable-sign-ext",
     "--enable-nontrapping-float-to-int",
 ];
+const BINARYEN_REPORTED_IC_WASM_FEATURE_FLAGS: &[&str] = &[
+    "--enable-bulk-memory",
+    "--enable-bulk-memory-opt",
+    "--enable-mutable-globals",
+    "--enable-nontrapping-float-to-int",
+    "--enable-sign-ext",
+];
 
 const CANDID_POINTER_EXPORT: &str = "get_candid_pointer";
 const IC_CDK_INTERNAL_METHOD_PREFIX: &str = "<ic-cdk internal> ";
@@ -517,7 +524,7 @@ fn derive_wasm_features(
         .map(str::trim)
         .filter(|line| !line.is_empty())
     {
-        if !IC_WASM_FEATURE_FLAGS.contains(&line) {
+        if !BINARYEN_REPORTED_IC_WASM_FEATURE_FLAGS.contains(&line) {
             return Err(format!(
                 "Wasm artifact {} requires feature `{line}` outside Canic's IC feature contract",
                 wasm_path.display()

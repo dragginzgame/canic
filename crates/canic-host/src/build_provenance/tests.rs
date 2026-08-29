@@ -103,7 +103,7 @@ fn release_optimization_provenance_records_binaryen_metrics() {
         .to_string();
     output.transforms[2] = ArtifactTransformOutput {
         transform: ArtifactTransformKind::Optimize,
-        tool_version: Some("wasm-opt version 108 (version_108)".to_string()),
+        tool_version: Some("wasm-opt version 132 (version_132)".to_string()),
         tool_sha256: Some(expected_tool_sha256.clone()),
         outcome: ArtifactTransformOutcome::Applied,
         metrics: Some(WasmTransformMetrics {
@@ -239,7 +239,7 @@ fn build_provenance_rejects_release_optimizer_without_exact_digest() {
         let mut output = write_sample_artifacts(&root, "app");
         output.transforms[2] = ArtifactTransformOutput {
             transform: ArtifactTransformKind::Optimize,
-            tool_version: Some("wasm-opt version 108 (version_108)".to_string()),
+            tool_version: Some("wasm-opt version 132 (version_132)".to_string()),
             tool_sha256,
             outcome: ArtifactTransformOutcome::Applied,
             metrics: Some(WasmTransformMetrics {

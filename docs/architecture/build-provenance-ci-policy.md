@@ -12,7 +12,7 @@ CI should validate:
 - Rust/Cargo toolchain and build profile;
 - raw Wasm and deterministic gzip SHA-256 plus sizes;
 - transform tool/version/executable-SHA/outcome consistency, including
-  required Binaryen 108 optimization and its before/after structural metrics
+  required Binaryen 132 optimization and its before/after structural metrics
   for release profiles;
 - stable envelope and payload schema identities;
 - a successful exit class without conflicting evidence.

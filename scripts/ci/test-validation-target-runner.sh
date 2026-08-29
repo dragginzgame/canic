@@ -25,6 +25,9 @@ printf '%s\n' \
 
 status=0
 CANIC_VALIDATION_FAILURE_LOG_DIR="$FIXTURE/failure-logs" \
+    CANIC_VALIDATION_ROOT="$FIXTURE" \
+    CANIC_VALIDATION_RUNNER_DEPTH=0 \
+    CANIC_VALIDATION_RUNNER_SNAPSHOT_PATH='' \
     bash "$FIXTURE/scripts/ci/run-validation-targets.sh" \
     pass mutate-runner fail-one fail-two >"$FIXTURE/output.log" 2>&1 || status=$?
 

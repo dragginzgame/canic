@@ -21,7 +21,7 @@ make install-dev
 
 The maintainer setup installs the repository-pinned ICP CLI, `ic-wasm`,
 Binaryen, Candid tools and `sccache`, and configures the repository pre-commit
-formatter. Release artifact builds require the checksum-bound Binaryen 108
+formatter. Release artifact builds require the checksum-bound Binaryen 132
 `wasm-opt`; they fail rather than emitting unoptimized release bytes when it is
 missing or has a different identity or executable SHA-256. Published CLI users
 can install the governed optimizer without a Canic checkout:

@@ -466,7 +466,7 @@ fn fresh_seed(
         coordinator: "coordinator".to_string(),
         treasury: None,
         cycles_ledger: cycles_ledger.to_string(),
-        management_creation_fee_cycles: Some(management_creation_fee_cycles.to_string()),
+        management_creation_fee_cycles: Some(config_cycles(management_creation_fee_cycles)),
         roots,
     })
 }
@@ -967,11 +967,11 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
                     vec![seed.root.clone()]
                 },
                 drain: None,
-                initial_cycles: source.canister_pool.canister_cycles.to_u128().to_string(),
+                initial_cycles: source.canister_pool.canister_cycles.to_config_string(),
                 init_arg: None,
                 init_candid: None,
                 kind: DesiredCanisterKind::Pool,
-                minimum_cycles: source.canister_pool.canister_cycles.to_u128().to_string(),
+                minimum_cycles: source.canister_pool.canister_cycles.to_config_string(),
                 name,
                 parent: Some(root_name.clone()),
                 presence: DesiredPresence::Present,
@@ -1061,7 +1061,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         cycles_ledger: input.seed.cycles_ledger.clone(),
         environment: input.request.environment.to_string(),
         fleet: input.request.fleet.to_string(),
-        ledger_fee_cycles: input.ledger_fee_cycles.to_string(),
+        ledger_fee_cycles: config_cycles(input.ledger_fee_cycles),
         // Retained seeds bind paid canisters to observed Principals and carry no creation fee.
         // Fresh seeds retain their explicit fee before any generated Principal exists.
         management_creation_fee_cycles: input
@@ -1069,11 +1069,12 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             .management_creation_fee_cycles
             .clone()
             .unwrap_or_else(|| "0".to_string()),
-        material_cycle_threshold: GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD.to_string(),
-        maximum_observation_burn_cycles: GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES
-            .to_string(),
+        material_cycle_threshold: config_cycles(GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD),
+        maximum_observation_burn_cycles: config_cycles(
+            GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES,
+        ),
         maximum_stalled_observations: 8,
-        maximum_update_burn_cycles: GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES.to_string(),
+        maximum_update_burn_cycles: config_cycles(GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES),
         operator: input.source.operator.clone(),
         protocol: Some(DesiredFleetProtocol {
             app_config,
@@ -1555,7 +1556,8 @@ fn validate_identity_seed(
                     "fresh estate seed is missing its exact management creation fee".to_string(),
                 )
             })?
-            .parse::<u128>()
+            .parse::<Cycles>()
+            .map(|cycles| cycles.to_u128())
             .map_err(|_| {
                 FleetGenerateError::FreshSeedConflict(
                     "fresh estate seed has an invalid management creation fee".to_string(),
@@ -1753,11 +1755,11 @@ fn infrastructure_canister(
         controller_canisters: Vec::new(),
         controllers: vec![operator.to_string()],
         drain: None,
-        initial_cycles: initial_cycles.to_string(),
+        initial_cycles: config_cycles(initial_cycles),
         init_arg: None,
         init_candid: None,
         kind,
-        minimum_cycles: minimum_cycles.to_string(),
+        minimum_cycles: config_cycles(minimum_cycles),
         name: name.to_string(),
         parent: parent.map(str::to_string),
         presence: DesiredPresence::Present,
@@ -1767,6 +1769,10 @@ fn infrastructure_canister(
         subnet: subnet.to_string(),
         wasm: Some(artifact.wasm_relative_path.clone()),
     }
+}
+
+fn config_cycles(cycles: u128) -> String {
+    Cycles::new(cycles).to_config_string()
 }
 
 fn coordinator_funding(

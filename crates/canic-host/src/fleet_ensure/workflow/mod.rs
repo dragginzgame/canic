@@ -21,6 +21,7 @@ use crate::fleet_ensure::{
         validate_path_identity, validate_path_labels,
     },
 };
+use canic_core::cdk::types::Cycles;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -586,7 +587,10 @@ fn compatible_after_bounded_observation(
     desired: &crate::fleet_ensure::model::DesiredFleet,
     observation: &FleetObservation,
 ) -> bool {
-    let Ok(maximum_observation_burn) = desired.maximum_observation_burn_cycles.parse::<u128>()
+    let Ok(maximum_observation_burn) = desired
+        .maximum_observation_burn_cycles
+        .parse::<Cycles>()
+        .map(|cycles| cycles.to_u128())
     else {
         return false;
     };
@@ -634,7 +638,11 @@ fn retained_funding_remains_sufficient(
             else {
                 return false;
             };
-            let Ok(minimum) = configured.minimum_cycles.parse::<u128>() else {
+            let Ok(minimum) = configured
+                .minimum_cycles
+                .parse::<Cycles>()
+                .map(|cycles| cycles.to_u128())
+            else {
                 return false;
             };
             live.cycles

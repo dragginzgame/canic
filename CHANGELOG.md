@@ -15,8 +15,11 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 - `0.109.21` makes finalized release artifacts network-bound, proves fresh pool
   canisters are funded directly by the reviewed Fleet Ensure creation graph,
   and adds an exact same-Principal recovery for cycles accidentally credited to
-  an empty Root-owned pool canister's Cycles Ledger account. The composed
-  lifecycle fixture advances to IcyDB `0.247.0`.
+  an empty Root-owned pool canister's Cycles Ledger account. Human Fleet cycle
+  configuration now round-trips compact exact `B`, `T`, and `Q` values. The
+  composed lifecycle fixture advances to IcyDB `0.247.0`, release optimization
+  advances to Binaryen 132 with update discovery, and nested validation-runner
+  tests now remain bound to their isolated fixture root.
 - `0.109.20` restores retained-estate convergence with distinct Root and Store
   installation identities, exact stopped-role startup, and typed retry of an
   issued Component command under its original idempotency authority. It adds

@@ -10,12 +10,12 @@ fn repository_binaryen_authority_matches_every_supported_projection() {
     ));
     for expected in [
         format!("export CANIC_BINARYEN_VERSION={BINARYEN_VERSION}"),
-        "export CANIC_BINARYEN_SHA256_DARWIN_ARM64=375c3df6d2722ae8e56d577c4c27eacab43c75ceaaefec0861a5ac4b81612010".to_string(),
-        "export CANIC_BINARYEN_SHA256_DARWIN_X64=d7091c41473cc431f8ed47ed3b8396e1443e662c88ef1d49c5a737d6b9cddcd7".to_string(),
-        "export CANIC_BINARYEN_SHA256_LINUX_X64=7bb8a2d97214f40bf34abc31d49b34aa5deab10b25d6d13c5f72cb395cf142fb".to_string(),
-        "export CANIC_BINARYEN_WASM_OPT_SHA256_DARWIN_ARM64=d1fb2d189fa4305889a99136aaf0ff21fe9551a764b665c7f34dfa3834a4717a".to_string(),
-        "export CANIC_BINARYEN_WASM_OPT_SHA256_DARWIN_X64=e233a27614ac30ae192c1102ea8f1d0b072e06215ec3818d8d8dd79c0ef7b39e".to_string(),
-        "export CANIC_BINARYEN_WASM_OPT_SHA256_LINUX_X64=36f78112c8d629e27f8c68be89bee47c245cbde8794e1ff56c03212c02dc8484".to_string(),
+        "export CANIC_BINARYEN_SHA256_DARWIN_ARM64=98aad827847af7ef990ed7098d885725c8e5b5aae75073403635617ae4e259aa".to_string(),
+        "export CANIC_BINARYEN_SHA256_DARWIN_X64=40c3de90bb3766bd0282a895e139a6f50253dba49b4f5bb89e66faca162d832e".to_string(),
+        "export CANIC_BINARYEN_SHA256_LINUX_X64=195ddc94f9bc89f45abdabb0b9eea86023d727ba90eac8b35b80f2544fc30572".to_string(),
+        "export CANIC_BINARYEN_WASM_OPT_SHA256_DARWIN_ARM64=a9c8d09d84186e4c8efe937f3de19b887404d24a96e2638f3bd3b476e17b7218".to_string(),
+        "export CANIC_BINARYEN_WASM_OPT_SHA256_DARWIN_X64=c3cbd288eef3402119d8183df1739887ff0e6430caba2e1c801406df725a2bd3".to_string(),
+        "export CANIC_BINARYEN_WASM_OPT_SHA256_LINUX_X64=1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725".to_string(),
     ] {
         assert!(pins.lines().any(|line| line == expected));
     }
@@ -29,7 +29,7 @@ fn same_version_executable_with_wrong_digest_is_rejected_before_execution() {
     let executable = root.join("wasm-opt");
     fs::write(
         &executable,
-        "#!/bin/sh\nprintf 'this must not execute' > execution-marker\nprintf 'wasm-opt version 108 (version_108)\\n'\n",
+        "#!/bin/sh\nprintf 'this must not execute' > execution-marker\nprintf 'wasm-opt version 132 (version_132)\\n'\n",
     )
     .expect("write fake executable");
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
@@ -57,7 +57,7 @@ fn admitted_executable_records_exact_path_version_and_digest() {
     let executable = root.join("wasm-opt");
     fs::write(
         &executable,
-        "#!/bin/sh\nprintf 'wasm-opt version 108 (version_108)\\n'\n",
+        "#!/bin/sh\nprintf 'wasm-opt version 132 (version_132)\\n'\n",
     )
     .expect("write fake executable");
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
@@ -80,7 +80,7 @@ fn staged_installer_closes_its_writer_before_executable_admission() {
     let candidate = root.join("candidate-wasm-opt");
     fs::write(
         &candidate,
-        "#!/bin/sh\nprintf 'wasm-opt version 108 (version_108)\\n'\n",
+        "#!/bin/sh\nprintf 'wasm-opt version 132 (version_132)\\n'\n",
     )
     .expect("write fake optimizer candidate");
     fs::set_permissions(&candidate, fs::Permissions::from_mode(0o755))

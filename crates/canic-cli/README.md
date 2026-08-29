@@ -116,7 +116,7 @@ canic fleet generate staging \
   --app-config apps/demo/canic.toml \
   --release-build <release-build-id> \
   --fresh \
-  --management-creation-fee-cycles <exact-fee>
+  --management-creation-fee-cycles 500B
 ```
 
 The fresh seed contains a random Fleet ID, exact Cycles Ledger and management
@@ -127,6 +127,10 @@ ensure` plan/apply path creates each role with durable intent and resolves
 dependent controllers and treasury authority from the retained creation
 results. Use `--cycles-ledger <principal>` only for a network whose Cycles
 Ledger differs from the maintained default.
+
+Human cycle inputs accept exact case-sensitive `B`, `T`, and `Q` suffixes,
+including exact decimals such as `1.5T`. Durable plans retain exact integer
+cycle authority.
 
 Because fresh Principals are outputs of the first reviewed plan, their typed
 control-plane work may require a successor plan. If apply asks for a new plan

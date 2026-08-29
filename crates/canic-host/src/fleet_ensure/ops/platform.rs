@@ -23,6 +23,7 @@ use crate::{
 };
 use candid::{CandidType, Nat, Principal};
 use canic_core::{
+    cdk::types::Cycles,
     dto::pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
     protocol as canic_protocol,
 };
@@ -752,7 +753,8 @@ impl IcpEnsurePlatform {
         let creation_fee = self
             .desired
             .management_creation_fee_cycles
-            .parse::<u128>()
+            .parse::<Cycles>()
+            .map(|cycles| cycles.to_u128())
             .map_err(|_| IcpEnsurePlatformError::Arithmetic("management creation fee"))?;
         let amount = authority
             .requested_initial_cycles

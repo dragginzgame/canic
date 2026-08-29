@@ -13,7 +13,7 @@ canic build <app> <role> --profile release \
 
 The role must belong to the selected App configuration. The builder records
 the exact package, profile, input fingerprint, canonical Wasm digest and
-deterministic gzip digest. Release builds run the checksum-bound Binaryen 108
+deterministic gzip digest. Release builds run the checksum-bound Binaryen 132
 `wasm-opt -Oz` transform after shrink and optional public-Candid embedding but
 before the code-limit check, gzip, artifact hashes, release-set manifests,
 Wasm Store publication, and module-hash authority. The optimized bytes are the
