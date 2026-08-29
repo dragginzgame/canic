@@ -273,8 +273,10 @@ source. Current and committed version queries must use the shared pinned
 parsers. The governed bump is the one exception: after validating one exact
 clean source commit, it seals the matching detailed changelog draft with the
 release date and writes that source commit into one machine-checked
-current-status release marker. Lineage prose is descriptive and is not a
-versioning or publication authority. Immediately before changing version
+current-status release marker. Source development and draft preflight require
+no manually maintained status marker; the bump removes stale marker lines and
+writes the sole candidate marker itself. Lineage prose is descriptive and is
+not a versioning or publication authority. Immediately before changing version
 files, the bump transaction fetches the current `origin` branch, requires it
 to remain an ancestor of the validated local source, and requires the exact
 planned release tag to be absent remotely. The release commit may then

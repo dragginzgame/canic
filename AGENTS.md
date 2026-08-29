@@ -33,6 +33,11 @@ with this file, the code is wrong.
   wording, line wrapping, illustrative values, heading inventories, or the
   absence of ordinary narrative. When a fact needs machine enforcement, give
   it a machine-readable field instead of parsing prose.
+- Development and release preflight must not require contributors to add,
+  remove or rotate status markers by hand. The governed version-bump transaction
+  owns the exact validated-release marker after validation succeeds; a missing,
+  stale or repeated development marker must not block or invalidate an
+  otherwise valid source candidate.
 
 ## Delivery Cadence
 - Follow `docs/governance/delivery-cadence.md`; it is the authoritative policy

@@ -45,7 +45,10 @@ code-section threshold applies only to IC-mainnet builds; local builds continue
 after reporting their measured size. A focused machine-readable diagnostic
 report now separates named Canic auth/admission, metrics, child-provisioning and
 remaining runtime bytes from application/upstream, stripped-unattributed and
-Wasm structural bytes without guessing ownership. The workspace version
+Wasm structural bytes without guessing ownership. Release draft preflight no
+longer requires a contributor-maintained development-state marker; the governed
+bump removes stale marker lines and writes the exact validated-source marker
+after validation. The workspace version
 remains `0.109.23`
 until the maintainer selects a release boundary; no version, package, tag, push
 or deployment action has occurred for this draft.
@@ -57,6 +60,12 @@ module-hash rejection test, the CLI guarded-output replacement test, formatting,
 diff hygiene and warning-denied `canic-host` Clippy. The stopped pass makes no
 protected Root call and preserves existing output bytes. No broad workspace or
 PocketIC gate was run during coding.
+
+The release-preflight simplification passes the actual `0.109.24` draft check,
+targeted Bash syntax and ShellCheck, current-document semantics, the release
+validation-lane and integrity-contract fixtures, and all 15 release-flow
+regressions. Those regressions cover marker-free draft preflight and atomic
+replacement of repeated stale markers by one exact validated-source marker.
 
 The artifact-publication slice passes all 23 focused artifact-I/O tests and the
 two infrastructure-Candid resolver tests. Exact regressions prove an IC-bound

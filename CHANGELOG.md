@@ -18,7 +18,9 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   complete configuration model and compact TOML used by its control plane. A
   stopped retained Root now yields a deterministic management-bound same-ID
   Start prerequisite before protected observation or generated-output mutation;
-  full Root and pool verification resumes only after it is running.
+  full Root and pool verification resumes only after it is running. Release
+  preflight also leaves status-marker creation to the governed bump instead of
+  requiring manual development-state turnover.
 - `0.109.23` replaces the full source configuration embedded in ordinary
   managed and Store Wasms with one build-compiled role runtime authority.
   Root remains the sole full control-plane configuration owner, while each
