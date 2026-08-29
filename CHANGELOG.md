@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   plan/apply owner retains all paid effects, interruption recovery and
   effect-free replay. Retained-estate generation remains live-verified and
   fail-closed.
+- Keeps the persistent Make-selected `sccache` server outside disposable test
+  scratch, preventing later Cargo gates from inheriting a deleted temporary
+  directory after test cleanup.
 
 ## [0.109.x] - Fleet-Wide Ingress Admission
 

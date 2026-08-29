@@ -32,12 +32,14 @@ CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target
 CARGO_TARGET_DIR ?= $(CANIC_CARGO_TARGET_DIR)
 export CARGO_TARGET_DIR
 SCCACHE_BIN ?= $(shell command -v sccache 2>/dev/null)
+CANIC_SCCACHE_WRAPPER := $(CURDIR)/scripts/ci/run-sccache.sh
 ifeq ($(origin RUSTC_WRAPPER), undefined)
 ifneq ($(strip $(SCCACHE_BIN)),)
-RUSTC_WRAPPER ?= $(SCCACHE_BIN)
+CANIC_SCCACHE_BIN ?= $(SCCACHE_BIN)
+RUSTC_WRAPPER ?= $(CANIC_SCCACHE_WRAPPER)
 endif
 endif
-ifneq ($(filter sccache,$(notdir $(RUSTC_WRAPPER))),)
+ifneq ($(filter sccache run-sccache.sh,$(notdir $(RUSTC_WRAPPER))),)
 CARGO_INCREMENTAL ?= 0
 SCCACHE_CACHE_SIZE ?= 40G
 SCCACHE_IDLE_TIMEOUT ?= 7200
@@ -45,6 +47,7 @@ export CARGO_INCREMENTAL
 export SCCACHE_CACHE_SIZE
 export SCCACHE_IDLE_TIMEOUT
 endif
+export CANIC_SCCACHE_BIN
 export RUSTC_WRAPPER
 VALIDATION_RUNNER := bash scripts/ci/run-validation-targets.sh
 RELEASE_VALIDATION_LANE := bash scripts/ci/run-release-validation-lane.sh
