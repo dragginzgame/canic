@@ -17,7 +17,8 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   and adds an exact same-Principal recovery for cycles accidentally credited to
   an empty Root-owned pool canister's Cycles Ledger account. A stopped retained
   Root is now started before protected child observation, and reviewed apply
-  accepts bounded balance burn or refunds without changing effect authority.
+  accepts bounded balance burn or refunds without changing effect authority or
+  omitting already-controlled terminal Component cycles.
   Human Fleet cycle input now requires compact exact `B`, `T`, or `Q` values. The
   composed lifecycle fixture advances to IcyDB `0.247.0`, release optimization
   advances to Binaryen 132 with update discovery, and nested validation-runner
