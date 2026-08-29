@@ -5,9 +5,10 @@
 /// Embed the shared Canic configuration into a canister crate's build script.
 ///
 /// Reads the provided TOML file (relative to the crate manifest dir), validates it
-/// using the shared config schema, and emits both a compact source copy and a
-/// generated Rust config model for runtime bootstrap. Canister crates typically
-/// invoke this from `build.rs`.
+/// using the shared config schema, and emits the exact role runtime authority.
+/// Root additionally receives the compact source and complete generated model it
+/// owns for control-plane bootstrap. Canister crates typically invoke this from
+/// `build.rs`.
 #[macro_export]
 macro_rules! build {
     ($file:expr) => {{
@@ -49,7 +50,7 @@ macro_rules! __canic_build_internal {
         let __canic_config_path_env =
             $crate::__internal::core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV;
         let env_cfg = std::env::var(__canic_config_path_env).ok();
-        let mut $cfg_path = env_cfg.as_ref().map_or(default_cfg_path, |value| {
+        let $cfg_path = env_cfg.as_ref().map_or(default_cfg_path, |value| {
             let path = std::path::PathBuf::from(value);
             if path.is_relative() {
                 std::path::PathBuf::from(&manifest_dir).join(path)
@@ -91,14 +92,7 @@ macro_rules! __canic_build_internal {
                 __canic_default_role.as_deref(),
             );
 
-        if generated_default_config {
-            let out_dir =
-                std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
-            let generated_cfg_path = out_dir.join("canic.default.toml");
-            std::fs::write(&generated_cfg_path, &$cfg_str).expect("write default canic config");
-            $cfg_path = generated_cfg_path;
-            println!("cargo:rerun-if-changed={}", $cfg_path.display());
-        } else if let Some(parent) = $cfg_path.parent() {
+        if !generated_default_config && let Some(parent) = $cfg_path.parent() {
             println!("cargo:rerun-if-changed={}", parent.display());
         }
 
@@ -107,8 +101,6 @@ macro_rules! __canic_build_internal {
             $crate::__internal::core::bootstrap::parse_config_model(&$cfg_str)
                 .expect("invalid canic config")
         );
-        let compact_cfg = $crate::__internal::core::bootstrap::compact_config_source(&$cfg_str);
-
         // Run the extra body (per-canister or nothing)
         $body
 
@@ -141,15 +133,13 @@ macro_rules! __canic_build_internal {
                 $cfg_path.display()
             );
         }
-        let compiled_cfg =
-            $crate::__internal::core::bootstrap::emit_config_model_source($cfg.as_ref());
-        let role_runtime_authority =
-            $crate::__internal::core::bootstrap::emit_role_runtime_authority_source(
-                $cfg.as_ref(),
-                &role_id,
-                __canic_wasm_store_special,
-            )
-            .expect("compile role runtime authority");
+        let __canic_build_sources = $crate::__build::compile_role_build_sources(
+            $cfg.as_ref(),
+            &$cfg_str,
+            &role_id,
+            __canic_wasm_store_special,
+        )
+            .expect("compile exact role build sources");
         let metrics_tier_mask =
             $crate::__build::configured_role_metrics_tier_mask($cfg.as_ref(), &role_id);
         let metrics_core = metrics_tier_mask & $crate::__build::METRICS_TIER_CORE != 0;
@@ -170,9 +160,6 @@ macro_rules! __canic_build_internal {
             .unwrap_or_else(|finding| panic!("role contract rejected: {finding:?}"))
         };
 
-        let delegated_token_issuer = __canic_capabilities.contains(
-            &$crate::__internal::core::role_contract::RoleCapabilityKey::DelegatedTokenIssuer,
-        );
         let has_icrc21 = __canic_capabilities
             .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21);
         for capability in &__canic_capabilities {
@@ -241,10 +228,6 @@ macro_rules! __canic_build_internal {
             println!("cargo:rustc-cfg=canic_icrc21_enabled");
         }
 
-        if delegated_token_issuer {
-            println!("cargo:rustc-cfg=canic_delegated_token_issuer");
-        }
-
         if metrics_core {
             println!("cargo:rustc-cfg=canic_metrics_core");
         }
@@ -271,40 +254,18 @@ macro_rules! __canic_build_internal {
 
         let out_dir =
             std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
-        let compact_cfg_path = out_dir.join("canic.compact.toml");
-        let compiled_cfg_path = out_dir.join("canic.compiled.rs");
         let role_runtime_authority_path = out_dir.join("canic.role-runtime-authority.rs");
-        std::fs::write(&compact_cfg_path, compact_cfg).expect("write compact canic config");
-        std::fs::write(&compiled_cfg_path, compiled_cfg).expect("write compiled canic config");
-        std::fs::write(&role_runtime_authority_path, role_runtime_authority)
-            .expect("write compiled role runtime authority");
+        std::fs::write(
+            &role_runtime_authority_path,
+            __canic_build_sources.role_runtime_authority,
+        )
+        .expect("write compiled role runtime authority");
 
-        let compact_abs = compact_cfg_path
-            .canonicalize()
-            .expect("canonicalize compact canic config path");
-        let compiled_abs = compiled_cfg_path
-            .canonicalize()
-            .expect("canonicalize compiled canic config path");
         let role_runtime_authority_abs = role_runtime_authority_path
             .canonicalize()
             .expect("canonicalize compiled role runtime authority path");
-        let source_abs = $cfg_path
-            .canonicalize()
-            .expect("canonicalize source canic config path");
 
         println!("cargo:rustc-env=CANIC_CANISTER_ROLE={role_name}");
-        println!(
-            "cargo:rustc-env=CANIC_CONFIG_ORIGIN_PATH={}",
-            source_abs.display()
-        );
-        println!(
-            "cargo:rustc-env=CANIC_CONFIG_SOURCE_PATH={}",
-            compact_abs.display()
-        );
-        println!(
-            "cargo:rustc-env=CANIC_CONFIG_MODEL_PATH={}",
-            compiled_abs.display()
-        );
         println!(
             "cargo:rustc-env=CANIC_ROLE_RUNTIME_AUTHORITY_PATH={}",
             role_runtime_authority_abs.display()
@@ -313,7 +274,39 @@ macro_rules! __canic_build_internal {
             "cargo:rerun-if-changed={}",
             role_runtime_authority_abs.display()
         );
-        println!("cargo:rerun-if-changed={}", compact_abs.display());
-        println!("cargo:rerun-if-changed={}", compiled_abs.display());
+
+        if let Some(root_sources) = __canic_build_sources.root {
+            let compact_cfg_path = out_dir.join("canic.compact.toml");
+            let compiled_cfg_path = out_dir.join("canic.compiled.rs");
+            std::fs::write(&compact_cfg_path, root_sources.compact_config)
+                .expect("write compact Root config");
+            std::fs::write(&compiled_cfg_path, root_sources.config_model)
+                .expect("write compiled Root config");
+
+            let compact_abs = compact_cfg_path
+                .canonicalize()
+                .expect("canonicalize compact Root config path");
+            let compiled_abs = compiled_cfg_path
+                .canonicalize()
+                .expect("canonicalize compiled Root config path");
+            let source_abs = $cfg_path
+                .canonicalize()
+                .expect("canonicalize source Root config path");
+
+            println!(
+                "cargo:rustc-env=CANIC_CONFIG_ORIGIN_PATH={}",
+                source_abs.display()
+            );
+            println!(
+                "cargo:rustc-env=CANIC_CONFIG_SOURCE_PATH={}",
+                compact_abs.display()
+            );
+            println!(
+                "cargo:rustc-env=CANIC_CONFIG_MODEL_PATH={}",
+                compiled_abs.display()
+            );
+            println!("cargo:rerun-if-changed={}", compact_abs.display());
+            println!("cargo:rerun-if-changed={}", compiled_abs.display());
+        }
     }};
 }

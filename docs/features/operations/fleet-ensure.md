@@ -73,6 +73,17 @@ pool identity remains in the conservation set as it moves from idle bootstrap
 capacity through claimed state to a Component workload, without receiving pool
 minimum top-ups or being counted twice.
 
+A stopped retained Root is a separately reviewed prerequisite, not generator
+authority. Generation first verifies the exact management-observed Principal,
+Subnet, controller set and installed module hash, then returns a deterministic
+same-ID Start diagnostic before calling any protected Root endpoint or changing
+`fleets/<fleet>.toml`. Use the already-reviewed current Fleet Ensure authority
+to plan and apply only that exact Root Start, then rerun generation. A stopping
+Root, missing module, changed identity, foreign controller, wrong Subnet or
+malformed management observation fails closed. Once the exact Root is running,
+generation performs the complete protected Fleet-authority and pool-inventory
+verification; management evidence never substitutes for those proofs.
+
 Retained-estate treasury policy is explicit adoption, not discovery: it must
 name an already-present, non-replaceable controlled canister. Omitting
 `treasury` selects the exact seeded Coordinator. Canic does not silently invent

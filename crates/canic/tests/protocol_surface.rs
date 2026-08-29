@@ -1659,7 +1659,7 @@ fn active_delegation_proof_installer_surface_is_issuer_gated() {
     let endpoint_path = workspace_root().join("crates/canic/src/macros/endpoints/role.rs");
     let endpoint_source = read_text(&endpoint_path);
     assert!(
-        endpoint_source.contains("#[cfg(canic_delegated_token_issuer)]")
+        endpoint_source.contains("#[cfg(canic_capability_delegated_token_issuer)]")
             && endpoint_source.contains("InstallDelegationProof(")
             && endpoint_source.contains("PrepareDelegatedToken(")
             && endpoint_source.contains("ActiveDelegationProof")

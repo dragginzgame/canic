@@ -52,7 +52,8 @@ pub use fleet_service::{
 pub use runtime::RoleRuntimeAuthorityError;
 pub use runtime::{
     RoleRuntimeAuthority, RoleRuntimeConfig, RuntimeApplicationAuthorization,
-    RuntimeCanisterAuthority, RuntimeCanisterConfig, RuntimeDeploymentMemberAuthority,
+    RuntimeCanisterAuthority, RuntimeCanisterConfig, RuntimeChildCanisterAuthority,
+    RuntimeDeploymentMemberAuthority,
 };
 pub use schema::ConfigModel;
 #[cfg(any(not(target_arch = "wasm32"), test))]

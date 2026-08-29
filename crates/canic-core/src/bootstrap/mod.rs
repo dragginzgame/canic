@@ -48,7 +48,7 @@ pub mod compiled {
         MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES, MAX_FLEET_SERVICE_TARGETS,
         MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES, RoleRuntimeAuthority,
         RuntimeApplicationAuthorization, RuntimeCanisterAuthority, RuntimeCanisterConfig,
-        RuntimeDeploymentMemberAuthority,
+        RuntimeChildCanisterAuthority, RuntimeDeploymentMemberAuthority,
     };
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},

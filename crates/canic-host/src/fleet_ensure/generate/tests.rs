@@ -135,6 +135,38 @@ fn retained_identities_and_controller_sets_are_exact() {
 }
 
 #[test]
+fn management_runtime_and_module_observations_fail_closed() {
+    assert!(matches!(
+        parse_observed_runtime_status("root", "running"),
+        Ok(CanisterRuntimeStatus::Running)
+    ));
+    assert!(matches!(
+        parse_observed_runtime_status("root", "STOPPED"),
+        Ok(CanisterRuntimeStatus::Stopped)
+    ));
+    assert!(matches!(
+        parse_observed_runtime_status("root", "stopping"),
+        Ok(CanisterRuntimeStatus::Stopping)
+    ));
+    assert!(matches!(
+        parse_observed_runtime_status("root", "starting"),
+        Err(FleetGenerateError::CanisterUnavailable { .. })
+    ));
+
+    let uppercase = "AB".repeat(32);
+    let normalized = normalize_observed_module_sha256("root", &format!("0x{uppercase}"))
+        .expect("valid observed module hash");
+    assert_eq!(normalized, uppercase.to_ascii_lowercase());
+    let non_hex = "gg".repeat(32);
+    for invalid in ["ab", non_hex.as_str()] {
+        assert!(matches!(
+            normalize_observed_module_sha256("root", invalid),
+            Err(FleetGenerateError::CanisterUnavailable { .. })
+        ));
+    }
+}
+
+#[test]
 fn root_policy_drift_requires_the_reviewed_reinstall() {
     let operator = Principal::from_slice(&[11]);
     let source = multi_component_source(
@@ -558,24 +590,30 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &pool_one,
         &pool_two,
     );
-    let icp = write_fake_icp(
-        &root,
-        FakeIcpFixture {
-            authority: &retained_authority,
-            coordinator: &coordinator,
-            coordinator_module_hash: &"83".repeat(32),
-            fleet_root: &fleet_root,
-            operator: &operator,
-            pool: &retained_pool,
-            public_cycle_balance: None,
-            root_module_hash: &"84".repeat(32),
-            root_runtime_status: "running",
-            root_status_error: None,
-            store: &store,
-            store_has_root_controller: false,
-            store_module_hash: &"85".repeat(32),
-        },
-    );
+    let coordinator_module_hash = "83".repeat(32);
+    let root_module_hash = "84".repeat(32);
+    let store_module_hash = "85".repeat(32);
+    let write_icp = |root_runtime_status| {
+        write_fake_icp(
+            &root,
+            FakeIcpFixture {
+                authority: &retained_authority,
+                coordinator: &coordinator,
+                coordinator_module_hash: &coordinator_module_hash,
+                fleet_root: &fleet_root,
+                operator: &operator,
+                pool: &retained_pool,
+                public_cycle_balance: None,
+                root_module_hash: &root_module_hash,
+                root_runtime_status,
+                root_status_error: None,
+                store: &store,
+                store_has_root_controller: false,
+                store_module_hash: &store_module_hash,
+            },
+        )
+    };
+    let icp = write_icp("stopped");
     let request = FleetGenerateRequest {
         app_config: &app_config,
         environment: "local",
@@ -586,6 +624,43 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         seed: &seed_path,
         source: &source_path,
     };
+    let preserved_output = root.join("fleets/retained-multi-component.toml");
+    fs::create_dir_all(preserved_output.parent().expect("desired output parent"))
+        .expect("create desired output parent");
+    fs::write(&preserved_output, b"retained desired authority\n")
+        .expect("write retained desired authority");
+    let Err(stopped) = generate_desired_fleet(&request) else {
+        panic!("a stopped retained Root requires a separately reviewed same-ID Start");
+    };
+    let stopped_message = stopped.to_string();
+    assert!(matches!(
+        stopped,
+        FleetGenerateError::StoppedRootStartRequired {
+            controller,
+            fleet,
+            module_sha256,
+            root: stopped_root,
+            subnet,
+        } if controller == operator
+            && fleet == "retained-multi-component"
+            && module_sha256 == root_module_hash
+            && stopped_root == fleet_root
+            && subnet == placement
+    ));
+    let Err(repeated) = generate_desired_fleet(&request) else {
+        panic!("the same stopped Root prerequisite must remain deterministic");
+    };
+    assert_eq!(repeated.to_string(), stopped_message);
+    assert!(
+        !root.join("root-status-count").exists(),
+        "the no-effect generator must not query a stopped Root"
+    );
+    assert_eq!(
+        fs::read(&preserved_output).expect("read preserved desired authority"),
+        b"retained desired authority\n"
+    );
+
+    write_icp("running");
     let generated = generate_desired_fleet(&request).expect("generate from live retained estate");
     assert_eq!(generated.observed_canisters, 5);
     assert_eq!(generated.observed_controlled_cycles, 319_900_000_000_000);

@@ -74,10 +74,10 @@ pub mod __build {
     pub use crate::build_support::{
         CANIC_CUSTOM_CFG_NAMES, METRICS_TIER_CORE, METRICS_TIER_PLACEMENT, METRICS_TIER_PLATFORM,
         METRICS_TIER_RUNTIME, METRICS_TIER_SECURITY, METRICS_TIER_STORAGE,
-        assert_canonical_role_contract_build, config_app_id, config_contains_role,
-        config_declares_role, configured_role_metrics_tier_mask, declared_package_metadata,
-        declared_package_role, metrics_profile_tier_mask, read_config_source_or_default,
-        required_package_metadata, required_package_role,
+        assert_canonical_role_contract_build, compile_role_build_sources, config_app_id,
+        config_contains_role, config_declares_role, configured_role_metrics_tier_mask,
+        declared_package_metadata, declared_package_role, metrics_profile_tier_mask,
+        read_config_source_or_default, required_package_metadata, required_package_role,
     };
 }
 

@@ -1,10 +1,42 @@
-use std::{fs, path::Path};
+use std::{error::Error, fmt, fs, path::Path};
 
 use canic_core::{
-    bootstrap::compiled::{ConfigModel, validate_canister_role_name},
+    bootstrap::{
+        compact_config_source,
+        compiled::{ConfigModel, validate_canister_role_name},
+        emit_config_model_source, emit_role_runtime_authority_source,
+    },
     ids::CanisterRole,
 };
 use toml::Value as TomlValue;
+
+/// Root-only build outputs retained by the full control-plane configuration owner.
+#[derive(Clone, Debug)]
+pub struct RootBuildSources {
+    pub compact_config: String,
+    pub config_model: String,
+}
+
+/// Exact generated source set for one canister role.
+#[derive(Clone, Debug)]
+pub struct RoleBuildSources {
+    pub role_runtime_authority: String,
+    pub root: Option<RootBuildSources>,
+}
+
+/// Failure while compiling the exact generated source set for one role.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoleBuildSourcesError {
+    detail: String,
+}
+
+impl fmt::Display for RoleBuildSourcesError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.detail)
+    }
+}
+
+impl Error for RoleBuildSourcesError {}
 
 ///
 /// PackageCanicMetadata
@@ -13,6 +45,28 @@ use toml::Value as TomlValue;
 pub struct PackageCanicMetadata {
     pub app: String,
     pub role: String,
+}
+
+/// Compile only the generated sources owned by one exact role artifact.
+pub fn compile_role_build_sources(
+    config: &ConfigModel,
+    config_source: &str,
+    role: &CanisterRole,
+    wasm_store: bool,
+) -> Result<RoleBuildSources, RoleBuildSourcesError> {
+    let role_runtime_authority = emit_role_runtime_authority_source(config, role, wasm_store)
+        .map_err(|error| RoleBuildSourcesError {
+            detail: error.to_string(),
+        })?;
+    let root = role.is_root().then(|| RootBuildSources {
+        compact_config: compact_config_source(config_source),
+        config_model: emit_config_model_source(config),
+    });
+
+    Ok(RoleBuildSources {
+        role_runtime_authority,
+        root,
+    })
 }
 
 /// Reject authoritative wasm builds that bypass host role-contract validation.
@@ -159,6 +213,26 @@ mod tests {
     use super::*;
     use canic_core::bootstrap::parse_config_model;
 
+    const ROLE_BUILD_CONFIG: &str = r#"
+[app]
+name = "test"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[auth.delegated_tokens]
+enabled = false
+
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
+"#;
+
     #[test]
     fn canonical_role_contract_marker_is_required_only_for_wasm_builds() {
         assert_canonical_role_contract_build("x86_64-unknown-linux-gnu", None);
@@ -173,6 +247,42 @@ mod tests {
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn role_build_sources_retain_full_configuration_only_for_root() {
+        let config = parse_config_model(ROLE_BUILD_CONFIG).expect("build config parses");
+
+        let ordinary = compile_role_build_sources(
+            &config,
+            ROLE_BUILD_CONFIG,
+            &CanisterRole::from("app"),
+            false,
+        )
+        .expect("ordinary build sources compile");
+        assert!(ordinary.root.is_none());
+        assert!(
+            ordinary
+                .role_runtime_authority
+                .contains("RoleRuntimeAuthority")
+        );
+
+        let wasm_store =
+            compile_role_build_sources(&config, ROLE_BUILD_CONFIG, &CanisterRole::WASM_STORE, true)
+                .expect("Store build sources compile");
+        assert!(wasm_store.root.is_none());
+        assert!(
+            wasm_store
+                .role_runtime_authority
+                .contains("RuntimeCanisterConfig")
+        );
+
+        let root =
+            compile_role_build_sources(&config, ROLE_BUILD_CONFIG, &CanisterRole::ROOT, false)
+                .expect("Root build sources compile");
+        let root_sources = root.root.expect("Root owns full configuration outputs");
+        assert!(root_sources.config_model.contains("ConfigModel"));
+        assert!(root_sources.compact_config.contains("[roles.root]"));
     }
 
     #[test]

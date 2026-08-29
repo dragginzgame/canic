@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.24` makes generated build ownership match runtime ownership: Root no
+  longer duplicates Component records in its runtime projection, ordinary
+  parents retain compact child kind/funding authority, and Root alone emits the
+  complete configuration model and compact TOML used by its control plane. A
+  stopped retained Root now yields a deterministic management-bound same-ID
+  Start prerequisite before protected observation or generated-output mutation;
+  full Root and pool verification resumes only after it is running.
 - `0.109.23` replaces the full source configuration embedded in ordinary
   managed and Store Wasms with one build-compiled role runtime authority.
   Root remains the sole full control-plane configuration owner, while each

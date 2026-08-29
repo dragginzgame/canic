@@ -53,6 +53,15 @@ pub struct RuntimeCanisterConfig {
     pub standards: StandardsCanisterConfig,
 }
 
+/// Minimal authority retained by a Component for one admitted direct-child role.
+#[derive(Clone, Debug)]
+pub struct RuntimeChildCanisterAuthority {
+    pub component_spec: ComponentSpecId,
+    pub role: CanisterRole,
+    pub kind: CanisterKind,
+    pub cycles_funding: CyclesFundingPolicyConfig,
+}
+
 #[cfg(any(not(target_arch = "wasm32"), test))]
 impl From<CanisterConfig> for RuntimeCanisterConfig {
     fn from(config: CanisterConfig) -> Self {
@@ -95,6 +104,7 @@ pub struct RoleRuntimeAuthority {
     pub global_icrc21: bool,
     pub component_topology: ComponentTopology,
     pub canisters: Vec<RuntimeCanisterAuthority>,
+    pub children: Vec<RuntimeChildCanisterAuthority>,
     pub configuration_digest: ComponentDeploymentConfigurationDigest,
     pub deployment_members: Vec<RuntimeDeploymentMemberAuthority>,
     pub application_authorizations: Vec<RuntimeApplicationAuthorization>,
@@ -136,13 +146,21 @@ impl RoleRuntimeAuthority {
             .map(|(component_spec, _config)| component_spec.clone())
             .collect::<BTreeSet<_>>();
         let canisters = if role.is_root() {
-            root_runtime_canister_authorities(config)
+            vec![RuntimeCanisterAuthority {
+                component_spec: None,
+                role: CanisterRole::ROOT,
+                config: super::schema::implicit_root_canister_config().into(),
+            }]
         } else {
             runtime_canister_authorities(config, role, &relevant_component_specs)
         };
+        let children = if role.is_root() {
+            Vec::new()
+        } else {
+            runtime_child_canister_authorities(config, role, &relevant_component_specs)
+        };
         let supports_delegated_token_issuance = canisters
             .iter()
-            .filter(|authority| &authority.role == role)
             .any(|authority| authority.config.auth.delegated_token_issuer);
         let application_authorizations = if supports_delegated_token_issuance {
             runtime_application_authorizations(config)
@@ -190,6 +208,7 @@ impl RoleRuntimeAuthority {
                 .is_some_and(|standards| standards.icrc21),
             component_topology,
             canisters,
+            children,
             configuration_digest,
             deployment_members,
             application_authorizations,
@@ -220,6 +239,7 @@ impl RoleRuntimeAuthority {
                 role: CanisterRole::WASM_STORE,
                 config: super::schema::implicit_wasm_store_canister_config().into(),
             }],
+            children: Vec::new(),
             configuration_digest,
             deployment_members: Vec::new(),
             application_authorizations: Vec::new(),
@@ -241,13 +261,17 @@ impl RoleRuntimeAuthority {
     }
 
     #[must_use]
-    pub fn canister_by_role(&self, role: &CanisterRole) -> Option<RuntimeCanisterConfig> {
-        let mut matches = self
-            .canisters
+    pub fn child(
+        &self,
+        component_spec: &ComponentSpecId,
+        role: &CanisterRole,
+    ) -> Option<RuntimeChildCanisterAuthority> {
+        self.children
             .iter()
-            .filter(|authority| &authority.role == role);
-        let authority = matches.next()?;
-        matches.next().is_none().then(|| authority.config.clone())
+            .find(|authority| {
+                &authority.component_spec == component_spec && &authority.role == role
+            })
+            .cloned()
     }
 
     #[must_use]
@@ -327,18 +351,10 @@ fn runtime_canister_authorities(
         .component_specs
         .iter()
         .filter(|(component_spec, _config)| relevant_component_specs.contains(*component_spec))
-        .flat_map(|(component_spec, config)| {
-            let admitted_roles = config
-                .spawn_grants
-                .get(role)
-                .map(|grants| grants.keys().cloned().collect::<BTreeSet<_>>())
-                .unwrap_or_default();
+        .filter_map(|(component_spec, config)| {
             config
-                .canister_configs()
-                .filter(move |(candidate, _config)| {
-                    candidate == &role || admitted_roles.contains(*candidate)
-                })
-                .map(|(role, config)| RuntimeCanisterAuthority {
+                .get_canister(role)
+                .map(|config| RuntimeCanisterAuthority {
                     component_spec: Some(component_spec.clone()),
                     role: role.clone(),
                     config: config.into(),
@@ -348,31 +364,32 @@ fn runtime_canister_authorities(
 }
 
 #[cfg(any(not(target_arch = "wasm32"), test))]
-fn root_runtime_canister_authorities(config: &ConfigModel) -> Vec<RuntimeCanisterAuthority> {
-    std::iter::once(RuntimeCanisterAuthority {
-        component_spec: None,
-        role: CanisterRole::ROOT,
-        config: super::schema::implicit_root_canister_config().into(),
-    })
-    .chain(std::iter::once(RuntimeCanisterAuthority {
-        component_spec: None,
-        role: CanisterRole::WASM_STORE,
-        config: super::schema::implicit_wasm_store_canister_config().into(),
-    }))
-    .chain(
-        config
-            .component_specs
-            .iter()
-            .flat_map(|(component_spec, spec)| {
-                spec.canister_configs()
-                    .map(|(role, canister)| RuntimeCanisterAuthority {
-                        component_spec: Some(component_spec.clone()),
-                        role: role.clone(),
-                        config: canister.into(),
+fn runtime_child_canister_authorities(
+    config: &ConfigModel,
+    role: &CanisterRole,
+    relevant_component_specs: &BTreeSet<ComponentSpecId>,
+) -> Vec<RuntimeChildCanisterAuthority> {
+    config
+        .component_specs
+        .iter()
+        .filter(|(component_spec, _config)| relevant_component_specs.contains(*component_spec))
+        .flat_map(|(component_spec, config)| {
+            config
+                .spawn_grants
+                .get(role)
+                .into_iter()
+                .flat_map(|grants| grants.keys())
+                .filter_map(|child_role| {
+                    let child = config.get_canister(child_role)?;
+                    Some(RuntimeChildCanisterAuthority {
+                        component_spec: component_spec.clone(),
+                        role: child_role.clone(),
+                        kind: child.kind,
+                        cycles_funding: child.cycles_funding,
                     })
-            }),
-    )
-    .collect()
+                })
+        })
+        .collect()
 }
 
 #[cfg(any(not(target_arch = "wasm32"), test))]

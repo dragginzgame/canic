@@ -10,6 +10,7 @@
         current-document-semantics-gate dependency-risk-inventory-test layering-gate \
         lint-workflows recovery-runbooks-gate release-integrity-contract-gate \
         release-validation-matrix-gate validation-runner-gate \
+        wasm-capability-size-report-gate \
         dependency-risk-gate gitleaks-scan shellcheck \
         install install-dev install-hooks update-dev \
         ensure-clean test-unit test-unit-fast test-ordinary test-pocketic workspace-test-inventory-gate \
@@ -296,7 +297,8 @@ check-invariants:
 		release-integrity-contract-gate \
 		audit-method-catalog-gate \
 		recovery-runbooks-gate \
-		validation-runner-gate
+		validation-runner-gate \
+		wasm-capability-size-report-gate
 
 # CI keeps tool installation as an immediate prerequisite, then collects every
 # independent preflight or security failure before gating expensive jobs.
@@ -312,7 +314,8 @@ ci-preflight:
 		release-integrity-contract-gate \
 		audit-method-catalog-gate \
 		recovery-runbooks-gate \
-		workspace-test-inventory-gate
+		workspace-test-inventory-gate \
+		wasm-capability-size-report-gate
 
 ci-checks:
 	+@$(VALIDATION_RUNNER) \
@@ -352,6 +355,9 @@ release-validation-matrix-gate:
 
 validation-runner-gate:
 	bash scripts/ci/test-validation-target-runner.sh
+
+wasm-capability-size-report-gate:
+	bash scripts/ci/test-wasm-capability-size-report.sh
 
 dependency-risk-gate:
 	bash scripts/ci/check-dependency-risk-inventory.sh

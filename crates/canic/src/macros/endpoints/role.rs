@@ -82,7 +82,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
         pub enum CanisterStatusRequest {
             #[cfg(canic_capability_fleet_admission_projection)]
             Admission(::canic::dto::page::PageRequest),
-            #[cfg(canic_delegated_token_issuer)]
+            #[cfg(canic_capability_delegated_token_issuer)]
             ActiveDelegationProof,
             #[cfg(canic_capability_local_application_authorization)]
             ApplicationSession,
@@ -95,7 +95,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
             CycleHistory(::canic::dto::page::PageRequest),
             #[cfg(canic_capability_automatic_topup)]
             CycleTopups(::canic::dto::page::PageRequest),
-            #[cfg(canic_delegated_token_issuer)]
+            #[cfg(canic_capability_delegated_token_issuer)]
             DelegatedToken(::canic::dto::auth::DelegatedTokenGetRequest),
             Health,
             Logs(::canic::dto::role::LogStatusRequest),
@@ -123,7 +123,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
         pub enum CanisterStatusResponse {
             #[cfg(canic_capability_fleet_admission_projection)]
             Admission(::canic::dto::fleet_admission::FleetAdmissionProjectionStatusResponse),
-            #[cfg(canic_delegated_token_issuer)]
+            #[cfg(canic_capability_delegated_token_issuer)]
             ActiveDelegationProof(::canic::dto::auth::ActiveDelegationProofStatusResponse),
             #[cfg(canic_capability_local_application_authorization)]
             ApplicationSession(::canic::dto::auth::ApplicationSessionStatus),
@@ -142,7 +142,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
             CycleTopups(
                 ::canic::dto::page::Page<::canic::dto::cycles::CycleTopupEvent>,
             ),
-            #[cfg(canic_delegated_token_issuer)]
+            #[cfg(canic_capability_delegated_token_issuer)]
             DelegatedToken(::canic::dto::auth::DelegatedToken),
             Health(::canic::dto::runtime::CanicHealthStatus),
             Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
@@ -179,7 +179,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
                         .await
                         .map_err(::canic::Error::from)?;
                 }
-                #[cfg(canic_delegated_token_issuer)]
+                #[cfg(canic_capability_delegated_token_issuer)]
                 CanisterStatusRequest::ActiveDelegationProof
                 | CanisterStatusRequest::DelegatedToken(_) => {}
                 #[cfg(canic_capability_local_application_authorization)]
@@ -206,7 +206,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
                     $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::status(page)
                         .map(CanisterStatusResponse::Admission)
                 }
-                #[cfg(canic_delegated_token_issuer)]
+                #[cfg(canic_capability_delegated_token_issuer)]
                 CanisterStatusRequest::ActiveDelegationProof => {
                     $crate::__internal::core::api::auth::AuthApi::active_delegation_proof_status()
                         .map(CanisterStatusResponse::ActiveDelegationProof)
@@ -249,7 +249,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
                         $crate::__internal::core::api::cycles::CycleTrackerQuery::topups(page),
                     ))
                 }
-                #[cfg(canic_delegated_token_issuer)]
+                #[cfg(canic_capability_delegated_token_issuer)]
                 CanisterStatusRequest::DelegatedToken(request) => {
                     $crate::__internal::core::api::auth::AuthApi::get_delegated_token(request)
                         .map(CanisterStatusResponse::DelegatedToken)
@@ -445,7 +445,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             ConfigureRuntime(
                 ::canic::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest,
             ),
-            #[cfg(canic_delegated_token_issuer)]
+            #[cfg(canic_capability_delegated_token_issuer)]
             InstallDelegationProof(
                 ::canic::dto::auth::InstallActiveDelegationProofRequest,
             ),
@@ -453,7 +453,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             OpenFleetAdmission(
                 ::canic::dto::fleet_admission::FleetAdmissionOpenTargetRequest,
             ),
-            #[cfg(canic_delegated_token_issuer)]
+            #[cfg(canic_capability_delegated_token_issuer)]
             PrepareDelegatedToken(::canic::dto::auth::DelegatedTokenPrepareRequest),
             #[cfg(canic_capability_fleet_admission_projection)]
             PrepareFleetAdmission(
@@ -475,7 +475,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             ),
             #[cfg(canic_capability_local_application_authorization)]
             ApplicationSession(::canic::dto::auth::ApplicationSessionCommandResponse),
-            #[cfg(canic_delegated_token_issuer)]
+            #[cfg(canic_capability_delegated_token_issuer)]
             InstallDelegationProof(
                 ::canic::dto::auth::InstallActiveDelegationProofResponse,
             ),
@@ -484,7 +484,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
                 ::canic::dto::fleet_admission::FleetAdmissionTargetReceipt,
             ),
             OperationAccepted(::canic::dto::role::OperationReceipt),
-            #[cfg(canic_delegated_token_issuer)]
+            #[cfg(canic_capability_delegated_token_issuer)]
             PrepareDelegatedToken(::canic::dto::auth::DelegatedTokenPrepareResponse),
             #[cfg(canic_capability_fleet_admission_projection)]
             PrepareFleetAdmission(
@@ -566,7 +566,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
                         ::canic::dto::role::OperationReceipt { operation_id },
                     ))
                 }
-                #[cfg(canic_delegated_token_issuer)]
+                #[cfg(canic_capability_delegated_token_issuer)]
                 CanisterCommand::InstallDelegationProof(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_controller(caller)
@@ -586,7 +586,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
                     $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open(request)
                         .map(CanisterCommandResponse::OpenFleetAdmission)
                 }
-                #[cfg(canic_delegated_token_issuer)]
+                #[cfg(canic_capability_delegated_token_issuer)]
                 CanisterCommand::PrepareDelegatedToken(request) => {
                     $crate::__internal::core::api::auth::AuthApi::prepare_delegated_token(request)
                         .await

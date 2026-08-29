@@ -5,7 +5,7 @@
 //! Boundary: emits one release-bound support artifact from a generated minimal canister source.
 
 use crate::{
-    artifact_io::finalize_wasm_artifact,
+    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_store::{
         append_profile_config_args, render_profile, resolved_canic_package,
         resolved_wrapper_dependencies,
@@ -17,7 +17,6 @@ use crate::{
     },
     cargo_command,
     cargo_metadata::cargo_metadata,
-    durable_io::write_bytes,
     should_embed_candid_metadata,
 };
 use std::fs;
@@ -112,33 +111,49 @@ serde = {{ version = \"={}\", default-features = false, features = [\"derive\"] 
         .join(context.profile.target_dir_name())
         .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
     let candid = extract_candid_bytes(&built_wasm_path)?;
+    finalize_pool_ledger_recovery_artifact(
+        context,
+        &canic_package.version,
+        &built_wasm_path,
+        &candid,
+    )
+}
+
+fn finalize_pool_ledger_recovery_artifact(
+    context: &WorkspaceBuildContext,
+    package_version: &str,
+    built_wasm_path: &std::path::Path,
+    candid: &[u8],
+) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let protocol_role = canic_core::ids::CanisterRole::new(POOL_LEDGER_RECOVERY_ROLE);
     let protocol_capabilities = std::collections::BTreeSet::new();
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
-        &canic_package.version,
+        package_version,
         &protocol_role,
         &protocol_capabilities,
-        &candid,
+        candid,
     );
     let artifact_root = context.artifact_root().join(POOL_LEDGER_RECOVERY_ROLE);
     fs::create_dir_all(&artifact_root)?;
     let wasm_path = artifact_root.join(format!("{POOL_LEDGER_RECOVERY_ROLE}.wasm"));
     let wasm_gz_path = artifact_root.join(format!("{POOL_LEDGER_RECOVERY_ROLE}.wasm.gz"));
     let did_path = artifact_root.join(format!("{POOL_LEDGER_RECOVERY_ROLE}.did"));
-    fs::copy(&built_wasm_path, &wasm_path)?;
-    write_bytes(&did_path, &candid)?;
-    let transforms = finalize_wasm_artifact(
-        context.profile,
-        should_embed_candid_metadata(context.build_network),
-        &wasm_path,
-        &did_path,
-        &wasm_gz_path,
-    )?;
+    let transforms = finalize_wasm_artifact(&WasmArtifactFinalization {
+        profile: context.profile,
+        build_network: context.build_network,
+        embed_candid: should_embed_candid_metadata(context.build_network),
+        validate_sidecar_only: false,
+        source_wasm_path: built_wasm_path,
+        candid,
+        wasm_path: &wasm_path,
+        did_path: &did_path,
+        wasm_gz_path: &wasm_gz_path,
+    })?;
 
     Ok(CanisterArtifactBuildOutput {
         package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
-        package_version: canic_package.version.clone(),
-        protocol_release_identity: canic_package.version.clone(),
+        package_version: package_version.to_string(),
+        protocol_release_identity: package_version.to_string(),
         protocol_role,
         protocol_capabilities,
         artifact_root,

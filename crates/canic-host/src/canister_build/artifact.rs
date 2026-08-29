@@ -8,14 +8,11 @@ use std::{
 };
 
 use crate::{
-    artifact_io::{
-        finalize_wasm_artifact, validate_sidecar_only_candid_artifact, write_wasm_artifact,
-    },
+    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
     bootstrap_pool_ledger_recovery::build_pool_ledger_recovery_artifact,
     bootstrap_store::build_bootstrap_wasm_store_artifact,
     cargo_command,
-    durable_io::write_bytes,
     release_set::AppConfigSnapshot,
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
@@ -287,18 +284,17 @@ fn finish_canister_artifact_output(
     profile: canic_core::role_contract::ProtocolProfileHashes,
     sidecar_only_candid: bool,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    write_wasm_artifact(release_wasm_path, &spec.wasm_path)?;
-    write_bytes(&spec.did_path, candid)?;
-    let transforms = finalize_wasm_artifact(
-        context.profile,
-        !sidecar_only_candid && should_embed_candid_metadata(context.build_network),
-        &spec.wasm_path,
-        &spec.did_path,
-        &spec.wasm_gz_path,
-    )?;
-    if sidecar_only_candid {
-        validate_sidecar_only_candid_artifact(&spec.wasm_path, &spec.did_path)?;
-    }
+    let transforms = finalize_wasm_artifact(&WasmArtifactFinalization {
+        profile: context.profile,
+        build_network: context.build_network,
+        embed_candid: !sidecar_only_candid && should_embed_candid_metadata(context.build_network),
+        validate_sidecar_only: sidecar_only_candid,
+        source_wasm_path: release_wasm_path,
+        candid,
+        wasm_path: &spec.wasm_path,
+        did_path: &spec.did_path,
+        wasm_gz_path: &spec.wasm_gz_path,
+    })?;
 
     Ok(CanisterArtifactBuildOutput {
         package_name: spec.package_name.clone(),

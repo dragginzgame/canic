@@ -24,6 +24,12 @@ hard-cut during 0.92. Current evidence belongs to dated audit reports and the
 active release-line closeout; this directory retains operator contracts and
 validation procedures only.
 
+## Wasm Diagnostics
+
+- [Wasm capability size report](wasm-capability-size-report.md) documents the
+  focused machine-readable symbol-attribution helper. It is supporting
+  diagnostic evidence, not a deployment gate or replacement audit method.
+
 ## Blob Storage Operations
 
 - [Blob storage integration](blob-storage-integration.md) documents the 0.69

@@ -20,7 +20,6 @@ pub const CANIC_CUSTOM_CFG_NAMES: &[&str] = &[
     "canic_capability_scaling",
     "canic_capability_sharding",
     "canic_capability_wasm_store",
-    "canic_delegated_token_issuer",
     "canic_export_candid",
     "canic_icrc21_enabled",
     "canic_is_root",
