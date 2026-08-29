@@ -71,7 +71,7 @@ esac
 PLANNED_MINOR_LINE="${PLANNED%.*}"
 DETAILED_CHANGELOG="docs/changelog/$PLANNED_MINOR_LINE.md"
 STATUS_DOCUMENT="docs/status/current.md"
-SOURCE_STATUS_MARKER="<!-- canic-release-state: source-development -->"
+STATUS_MARKER_PATTERN='^<!-- canic-release-(state|validation):.*-->$'
 
 bash scripts/ci/check-release-draft-ready.sh "$BUMP_TYPE"
 
@@ -140,9 +140,12 @@ sed -i \
   "s/^## $NEW - Unreleased$/## $NEW - $RELEASE_DATE/" \
   "$DETAILED_CHANGELOG"
 VALIDATION_STATUS_MARKER="<!-- canic-release-validation: version=$NEW source=$CURRENT_HEAD date=$RELEASE_DATE gate=$VALIDATION_KIND -->"
-sed -i \
-  "s#^$SOURCE_STATUS_MARKER\$#$VALIDATION_STATUS_MARKER#" \
-  "$STATUS_DOCUMENT"
+sed -i -E "/$STATUS_MARKER_PATTERN/d" "$STATUS_DOCUMENT"
+printf '\n%s\n' "$VALIDATION_STATUS_MARKER" >>"$STATUS_DOCUMENT"
+[[ "$(rg -c -F "$VALIDATION_STATUS_MARKER" "$STATUS_DOCUMENT" || true)" -eq 1 ]] || {
+  echo "❌ Failed to bind current status to the validated release candidate." >&2
+  rollback_release_surfaces 1
+}
 
 [[ "$(rg -c -F "## $NEW - $RELEASE_DATE" "$DETAILED_CHANGELOG")" -eq 1 ]] || {
   echo "❌ Failed to seal $DETAILED_CHANGELOG for $NEW." >&2

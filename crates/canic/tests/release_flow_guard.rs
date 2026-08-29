@@ -186,6 +186,151 @@ fn output_text(output: &Output) -> String {
     )
 }
 
+#[test]
+fn release_draft_preflight_does_not_require_a_manual_status_marker() {
+    let root = unique_temp_repo("draft-without-status-marker");
+    fs::create_dir_all(&root).expect("temp repo should be created");
+    write_executable(
+        &root,
+        "scripts/ci/check-release-draft-ready.sh",
+        &fs::read_to_string(workspace_root().join("scripts/ci/check-release-draft-ready.sh"))
+            .expect("release draft guard should be readable"),
+    );
+    write_executable(
+        &root,
+        "scripts/ci/read-workspace-version.sh",
+        "#!/usr/bin/env bash\nprintf '%s\\n' '0.92.7'\n",
+    );
+    write_file(
+        &root,
+        "docs/changelog/0.92.md",
+        "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
+    );
+    write_file(
+        &root,
+        "docs/status/current.md",
+        "Current source development remains descriptive.\n",
+    );
+
+    let output = Command::new("bash")
+        .arg("scripts/ci/check-release-draft-ready.sh")
+        .arg("patch")
+        .current_dir(&root)
+        .output()
+        .expect("release draft guard should run");
+
+    assert!(
+        output.status.success(),
+        "manual status-marker absence must not block a valid draft\n{}",
+        output_text(&output)
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn governed_bump_replaces_stale_status_markers_it_owns() {
+    let root = unique_temp_repo("bump-owns-status-marker");
+    fs::create_dir_all(&root).expect("temp repo should be created");
+    run_git(&root, &["init"]);
+    write_file(
+        &root,
+        "Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.92.7\"\n",
+    );
+    write_file(&root, "Cargo.lock", "# original lock\n");
+    write_file(
+        &root,
+        "docs/changelog/0.92.md",
+        "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
+    );
+    write_file(
+        &root,
+        "docs/status/current.md",
+        "Current source remains descriptive.\n\n<!-- canic-release-state: source-development -->\n<!-- canic-release-validation: version=0.92.7 source=1111111111111111111111111111111111111111 date=2026-08-28 gate=complete -->\n",
+    );
+    write_file(
+        &root,
+        "scripts/dev/install_dev.sh",
+        "CANIC_CLI_VERSION=\"${CANIC_CLI_VERSION:-0.92.7}\"\n",
+    );
+    install_version_reader(&root);
+    write_executable(
+        &root,
+        "scripts/ci/check-release-draft-ready.sh",
+        &fs::read_to_string(workspace_root().join("scripts/ci/check-release-draft-ready.sh"))
+            .expect("release draft guard should be readable"),
+    );
+    write_executable(
+        &root,
+        "scripts/ci/check-release-remote-state.sh",
+        "#!/usr/bin/env bash\nexit 0\n",
+    );
+    write_executable(
+        &root,
+        "scripts/ci/sync-release-surface-version.sh",
+        "#!/usr/bin/env bash\nsed -i 's/0.92.7/0.92.8/' scripts/dev/install_dev.sh\n",
+    );
+    write_executable(
+        &root,
+        "fake-bin/cargo",
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+    "set-version --help" | "get --version")
+        exit 0
+        ;;
+    get\ --entry\ *\ workspace.package.version)
+        awk '/^version = / { gsub(/"/, "", $3); print $3; exit }' "$3/Cargo.toml"
+        ;;
+    "set-version --workspace --bump patch")
+        sed -i 's/0.92.7/0.92.8/' Cargo.toml
+        ;;
+    "update --workspace --offline")
+        printf '# regenerated lock\n' >Cargo.lock
+        ;;
+    *)
+        echo "unexpected cargo arguments: $*" >&2
+        exit 2
+        ;;
+esac
+"#,
+    );
+    commit_all(&root, "validated source");
+    let validated_head = git_output(&root, &["rev-parse", "HEAD"]);
+    let path = format!(
+        "{}:{}",
+        root.join("fake-bin").display(),
+        env::var("PATH").unwrap_or_default()
+    );
+
+    let output = Command::new("bash")
+        .arg(workspace_root().join("scripts/ci/bump-version.sh"))
+        .arg("patch")
+        .current_dir(&root)
+        .env("CANIC_RELEASE_DATE", "2026-08-29")
+        .env("CANIC_RELEASE_VALIDATED", "1")
+        .env("CANIC_RELEASE_VALIDATED_HEAD", &validated_head)
+        .env("CANIC_RELEASE_VALIDATION_KIND", "complete")
+        .env("PATH", path)
+        .output()
+        .expect("bump script should run");
+
+    assert!(
+        output.status.success(),
+        "governed bump should own status-marker replacement\n{}",
+        output_text(&output)
+    );
+    let status = fs::read_to_string(root.join("docs/status/current.md"))
+        .expect("sealed current status should be readable");
+    let expected = format!(
+        "<!-- canic-release-validation: version=0.92.8 source={validated_head} date=2026-08-29 gate=complete -->"
+    );
+    assert_eq!(status.matches(&expected).count(), 1);
+    assert_eq!(status.matches("<!-- canic-release-").count(), 1);
+    assert!(status.contains("Current source remains descriptive."));
+    let _ = fs::remove_dir_all(root);
+}
+
 fn create_candidate_repo(name: &str) -> (PathBuf, String) {
     let root = unique_temp_repo(name);
     fs::create_dir_all(&root).expect("temp repo should be created");
