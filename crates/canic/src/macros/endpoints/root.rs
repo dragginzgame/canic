@@ -52,6 +52,7 @@ macro_rules! canic_emit_root_command_endpoint {
             ),
             ProvisionPeer(::canic::dto::component_registry::RootPeerComponentAllocationRequest),
             PublishReleaseSet(::canic::dto::template::WasmStoreAdminCommand),
+            RecoverPoolLedger(::canic::dto::pool::PoolLedgerRecoveryRequest),
             RefillCycles(::canic::dto::icp_refill::CycleRefillInput),
             RemoveComponent(::canic::dto::component_registry::RootComponentDrainingRequest),
             RemoveRoot(::canic::dto::role::RootRemovalRequest),
@@ -107,6 +108,7 @@ macro_rules! canic_emit_root_command_endpoint {
             PrepareRoleAttestation(::canic::dto::auth::RoleAttestationPrepareResponse),
             PreviewCycleRefill(::canic::dto::icp_refill::IcpRefillDryRun),
             PublishReleaseSet(::canic::dto::template::WasmStoreAdminResponse),
+            RecoverPoolLedger(::canic::dto::pool::PoolLedgerRecoveryReceipt),
             RespondCapability(::canic::dto::capability::RootCapabilityResponseV1),
             ResumeAuthoritySnapshot(
                 ::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
@@ -200,6 +202,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::PreviewCycleRefill(_)
                     | RootCommand::ProvisionComponent(_)
                     | RootCommand::PublishReleaseSet(_)
+                    | RootCommand::RecoverPoolLedger(_)
                     | RootCommand::RefillCycles(_)
                     | RootCommand::RemoveComponent(_)
                     | RootCommand::RemoveSubtree(_)
@@ -327,6 +330,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::ProvisionComponent(_)
                     | RootCommand::ProvisionComponents(_)
                     | RootCommand::PublishReleaseSet(_)
+                    | RootCommand::RecoverPoolLedger(_)
                     | RootCommand::ResumeFleetActivation(_)
                     | RootCommand::RetryPoolRefill
                     | RootCommand::RetryPoolReset(_)
@@ -556,6 +560,18 @@ macro_rules! canic_emit_root_command_endpoint {
                     ::canic::api::canister::template::WasmStorePublicationApi::admin(command)
                         .await
                         .map(RootCommandResponse::PublishReleaseSet)
+                }
+                RootCommand::RecoverPoolLedger(request) => {
+                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+                        ::canic::dto::pool::PoolAdminCommand::RecoverLedger(Box::new(request)),
+                    )
+                    .await?;
+                    match response {
+                        ::canic::dto::pool::PoolAdminResponse::LedgerRecovered(receipt) => {
+                            Ok(RootCommandResponse::RecoverPoolLedger(*receipt))
+                        }
+                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+                    }
                 }
                 RootCommand::RefillCycles(request) => {
                     let operation_id = request.operation_id;

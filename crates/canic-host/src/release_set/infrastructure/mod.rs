@@ -31,9 +31,10 @@ pub use persistence::{
 
 const SHA_256_HEX_BYTES: usize = 64;
 const MAX_ARTIFACT_PATH_BYTES: usize = 4_096;
-const REQUIRED_INFRASTRUCTURE_ROLES: [CanicInfrastructureRole; 3] = [
+const REQUIRED_INFRASTRUCTURE_ROLES: [CanicInfrastructureRole; 4] = [
     CanicInfrastructureRole::FleetCoordinator,
     CanicInfrastructureRole::FleetSubnetRoot,
+    CanicInfrastructureRole::PoolLedgerRecovery,
     CanicInfrastructureRole::WasmStore,
 ];
 
@@ -48,6 +49,7 @@ const REQUIRED_INFRASTRUCTURE_ROLES: [CanicInfrastructureRole; 3] = [
 pub enum CanicInfrastructureRole {
     FleetCoordinator,
     FleetSubnetRoot,
+    PoolLedgerRecovery,
     WasmStore,
 }
 
@@ -58,6 +60,7 @@ impl CanicInfrastructureRole {
         match self {
             Self::FleetCoordinator => "fleet_coordinator",
             Self::FleetSubnetRoot => "fleet_subnet_root",
+            Self::PoolLedgerRecovery => "pool_ledger_recovery",
             Self::WasmStore => "wasm_store",
         }
     }
@@ -68,6 +71,7 @@ impl CanicInfrastructureRole {
         match self {
             Self::FleetCoordinator => "fleet_coordinator",
             Self::FleetSubnetRoot => "root",
+            Self::PoolLedgerRecovery => "pool_ledger_recovery",
             Self::WasmStore => "wasm_store",
         }
     }
@@ -98,7 +102,7 @@ pub struct CanicInfrastructureArtifactInput<'a> {
 ///
 /// CanicInfrastructureArtifactManifest
 ///
-/// Canonical three-entry artifact authority for one Canic release build.
+/// Canonical infrastructure and temporary-support artifact authority for one release build.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

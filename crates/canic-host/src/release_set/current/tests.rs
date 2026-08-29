@@ -7,6 +7,7 @@ fn current_manifest_canonical_shape_binds_both_child_digests() {
     );
     let manifest = CurrentReleaseSetManifest {
         application_artifact_union_sha256: [8; 32],
+        build_network: canic_core::ids::BuildNetwork::Local,
         infrastructure_artifact_manifest_sha256: [9; 32],
         release_build_id: id,
         schema_version: CurrentReleaseSetManifest::SCHEMA_VERSION,
@@ -16,4 +17,5 @@ fn current_manifest_canonical_shape_binds_both_child_digests() {
     let decoded: CurrentReleaseSetManifest = serde_json::from_slice(&bytes).expect("decode");
 
     assert_eq!(decoded, manifest);
+    assert_eq!(decoded.build_network, canic_core::ids::BuildNetwork::Local);
 }

@@ -10,7 +10,7 @@ use canic_core::{
     },
     control_plane_support::model::replay::ReplayCostGuardSettlement,
     eager_static,
-    ids::ComponentInstanceId,
+    ids::{ComponentInstanceId, ReleaseBuildId},
     impl_storable_bounded, impl_storable_unbounded,
     role_contract::allocation::memory::control_plane::{
         ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
@@ -100,13 +100,69 @@ pub struct CanisterPoolStateRecord {
     pub last_creation_timestamp_ns: u64,
     pub creation: Option<CanisterPoolCreationRecord>,
     pub handoff: Option<CanisterPoolHandoffRecord>,
+    pub ledger_recovery: Option<CanisterPoolLedgerRecoveryRecord>,
+    pub last_ledger_recovery: Option<CanisterPoolLedgerRecoveryReceiptRecord>,
 }
 
 impl CanisterPoolStateRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "CanisterPoolStateRecord";
 }
 
-impl_storable_bounded!(CanisterPoolStateRecord, 1_024, false);
+impl_storable_bounded!(CanisterPoolStateRecord, 4_096, false);
+
+/// Release-bound helper evidence retained by one pool Ledger recovery.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterPoolLedgerRecoveryArtifactRecord {
+    pub candid_sha256: [u8; 32],
+    pub payload_hash: [u8; 32],
+    pub payload_size_bytes: u64,
+    pub raw_module_hash: [u8; 32],
+    pub release_build_id: ReleaseBuildId,
+}
+
+/// Complete immutable authority of one pool Ledger recovery.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterPoolLedgerRecoveryAuthorityRecord {
+    pub artifact: CanisterPoolLedgerRecoveryArtifactRecord,
+    pub canister_id: Principal,
+    pub created_at_time_ns: u64,
+    pub cycles_ledger: Principal,
+    pub ledger_balance: Cycles,
+    pub ledger_fee: Cycles,
+    pub maximum_execution_burn_cycles: Cycles,
+    pub operation_id: [u8; 32],
+    pub withdrawal_amount: Cycles,
+}
+
+/// Durable progress of a Root-owned empty-pool Ledger recovery.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CanisterPoolLedgerRecoveryPhaseRecord {
+    Prepared,
+    HelperInstallIssued,
+    HelperInstalled,
+    WithdrawalIssued,
+    WithdrawalVerified { block_index: u64 },
+    HelperUninstallIssued { block_index: u64 },
+}
+
+/// Nonterminal current pool Ledger recovery.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterPoolLedgerRecoveryRecord {
+    pub authority: CanisterPoolLedgerRecoveryAuthorityRecord,
+    pub initial_native_cycles: Cycles,
+    pub phase: CanisterPoolLedgerRecoveryPhaseRecord,
+    pub prepared_at_ns: u64,
+}
+
+/// Terminal receipt retained for exact at-most-once replay.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterPoolLedgerRecoveryReceiptRecord {
+    pub authority: CanisterPoolLedgerRecoveryAuthorityRecord,
+    pub block_index: u64,
+    pub completed_at_ns: u64,
+    pub final_native_cycles: Cycles,
+    pub initial_native_cycles: Cycles,
+}
 
 /// Exact retry authority for one draining-root asset handoff.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -174,6 +230,9 @@ pub enum CanisterPoolAssetStatusRecord {
     Recycling {
         claim: CanisterPoolClaimRecord,
         reset: CanisterPoolRecycleResetRecord,
+    },
+    RecoveringLedger {
+        operation_id: [u8; 32],
     },
     HandingOff {
         recipient: Principal,
@@ -316,6 +375,7 @@ mod tests {
                 ("recycling_ready", 448),
                 ("recycling_failed_empty", 451),
                 ("handing_off", 316),
+                ("recovering_ledger", 360),
                 ("failed_empty", 271),
             ]
         );
@@ -357,13 +417,13 @@ mod tests {
         assert_eq!(
             state_measurements,
             [
-                ("default", 73),
-                ("intent", 604),
-                ("created", 651),
-                ("blocked", 624),
+                ("default", 112),
+                ("intent", 2_312),
+                ("created", 2_359),
+                ("blocked", 2_332),
             ]
         );
-        assert!(state_measurements.iter().all(|(_, bytes)| *bytes <= 1_024));
+        assert!(state_measurements.iter().all(|(_, bytes)| *bytes <= 4_096));
 
         let handoff_receipt = CanisterPoolHandoffReceiptRecord {
             recipient: canister_principal(),
@@ -427,7 +487,7 @@ mod tests {
         Principal::from_slice(&[u8::MAX; 10])
     }
 
-    fn finite_asset_statuses() -> [(&'static str, CanisterPoolAssetStatusRecord); 11] {
+    fn finite_asset_statuses() -> [(&'static str, CanisterPoolAssetStatusRecord); 12] {
         let claim = maximum_claim();
         [
             ("store", CanisterPoolAssetStatusRecord::Store),
@@ -472,6 +532,12 @@ mod tests {
                 "handing_off",
                 CanisterPoolAssetStatusRecord::HandingOff {
                     recipient: maximum_principal(),
+                },
+            ),
+            (
+                "recovering_ledger",
+                CanisterPoolAssetStatusRecord::RecoveringLedger {
+                    operation_id: [u8::MAX; 32],
                 },
             ),
             (
@@ -522,6 +588,41 @@ mod tests {
                 recipient: maximum_principal(),
                 prepared_at_ns: u64::MAX,
             }),
+            ledger_recovery: Some(CanisterPoolLedgerRecoveryRecord {
+                authority: maximum_ledger_recovery_authority(),
+                initial_native_cycles: Cycles::new(u128::MAX),
+                phase: CanisterPoolLedgerRecoveryPhaseRecord::HelperUninstallIssued {
+                    block_index: u64::MAX,
+                },
+                prepared_at_ns: u64::MAX,
+            }),
+            last_ledger_recovery: Some(CanisterPoolLedgerRecoveryReceiptRecord {
+                authority: maximum_ledger_recovery_authority(),
+                block_index: u64::MAX,
+                completed_at_ns: u64::MAX,
+                final_native_cycles: Cycles::new(u128::MAX),
+                initial_native_cycles: Cycles::new(u128::MAX),
+            }),
+        }
+    }
+
+    fn maximum_ledger_recovery_authority() -> CanisterPoolLedgerRecoveryAuthorityRecord {
+        CanisterPoolLedgerRecoveryAuthorityRecord {
+            artifact: CanisterPoolLedgerRecoveryArtifactRecord {
+                candid_sha256: [u8::MAX; 32],
+                payload_hash: [u8::MAX; 32],
+                payload_size_bytes: u64::MAX,
+                raw_module_hash: [u8::MAX; 32],
+                release_build_id: "ff".repeat(32).parse().expect("maximum release build ID"),
+            },
+            canister_id: maximum_principal(),
+            created_at_time_ns: u64::MAX,
+            cycles_ledger: maximum_principal(),
+            ledger_balance: Cycles::new(u128::MAX),
+            ledger_fee: Cycles::new(u128::MAX),
+            maximum_execution_burn_cycles: Cycles::new(u128::MAX),
+            operation_id: [u8::MAX; 32],
+            withdrawal_amount: Cycles::new(u128::MAX),
         }
     }
 }

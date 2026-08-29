@@ -13,9 +13,27 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
+Published `v0.109.20` at
+`a90b1ae74439c335ced10d20728e45c0607a01a7` is the immutable maintained
+release. Its annotated tag object is
+`5fb5d80c850124347f79d98b5e3508b8fc66258c`, and its validated source is
+`ba023237850b4b00171b6041d3c8421d56a60f45`. It restores retained-estate
+convergence with distinct Root and Store installation identities, exact
+stopped-role startup, and typed retry of an issued Component command under its
+original idempotency authority. It also publishes the no-effect fresh-Fleet
+seed and hardens compiler-cache and long-run validation diagnostics.
+
+`0.109.21` is the single open patch draft. Its current candidate binds every
+finalized release build and complete release set to the exact `local` or `ic`
+build network, proves fresh pool funding is part of Fleet Ensure's direct
+reviewed creation graph, and adds one Root-owned same-Principal recovery for
+cycles accidentally credited to an empty pool canister's default Cycles Ledger
+account. The workspace remains version `0.109.20`; no version, tag, package,
+push or deployment action has occurred for this draft.
+
 Published `v0.109.19` at
-`8be7c210e6ef7a2b707139c34a47989ac4fd810b` is the immutable maintained
-release. Published `v0.109.16` at
+`8be7c210e6ef7a2b707139c34a47989ac4fd810b` is the immutable predecessor.
+Published `v0.109.16` at
 `045f131224506bfadabfdb258471cd9b9745d8c8` remains immutable but unqualified:
 its complete gate stopped at warning-denied Clippy while the former release
 shell continued through versioning, tagging, push and package publication.
@@ -168,6 +186,26 @@ non-empty inventory with conserved cycles and identities, then converges again
 without effects. Further fresh-estate expansion remains paused behind this
 retained-estate correction.
 
+The open `0.109.21` draft makes release-build network part of immutable artifact
+authority. The selected named environment determines `BuildNetwork`, and
+generation rejects a finalized local build for an IC environment (or the
+inverse) before writing a desired Fleet document. Fresh generation continues
+to fund each initial pool asset directly through the existing reviewed
+creation owner: the plan contains the exact pool principal allocation amount,
+Ledger fee, management creation fee and maximum operator debit, with no Root
+Ledger bootstrap or parallel funding authority.
+
+An empty Root-owned pool asset may now recover cycles that were mistakenly sent
+to its default Cycles Ledger account. Fleet Ensure observes the exact Ledger
+balance and fee, counts those cycles inside the starting controlled estate,
+and compiles at most one recovery per Root into the reviewed protocol graph.
+Root fences the asset, retains current-plus-last exact authority, installs the
+release-bound temporary helper on the same Principal, accepts only the exact
+idempotent withdrawal, proves the Ledger debit and bounded native credit,
+retains uninstall intent, removes the helper and returns the asset to ready
+inventory. Workloads, claims, Store assets, draining Roots, foreign
+controllers, unexpected modules and incomplete arithmetic remain ineligible.
+
 The high-level `canic fleet generate <fleet>` owner now compiles the low-level
 desired document from protected Fleet policy and an exact finalized complete
 release set. Retained generation accepts one explicit live estate seed and
@@ -203,7 +241,7 @@ is closed without restoring a deleted install or recovery owner.
 The direct Canic runtime exact-pins `ic-timers 0.7.0` and uses its
 policy-specific watchdog reconciliation state without changing Canic's
 cadence-backed recovery contract. The composed-framework lifecycle fixture
-resolves the exact published IcyDB 0.246.0 runtime and model family. Both now
+resolves the exact published IcyDB 0.247.0 runtime and model family. Both now
 share the one locked `ic-timers 0.7.0` provider. Dependency edges into that
 family are confined to the two unpublished fixture packages, while published
 Canic package graphs remain IcyDB-free. The host-only published
@@ -275,6 +313,24 @@ not active contracts.
 
 ## Validation State
 
+Open `0.109.21` coding-time evidence passes targeted locked checks only, as
+required during implementation: the changed four-package graph compiles;
+23 canister-pool tests, eight current-protocol tests, 41 public protocol-surface
+tests, 26 CLI build tests, nine release-build tests, 12 release-set tests,
+12 Fleet-generation tests and 28 replay-policy tests pass. The standalone
+temporary helper builds as real Wasm from an independently resolved lock whose
+complete package identities must already exist in the workspace lock. Focused
+conservation coverage binds the full Ledger balance, withdrawal, exact fee,
+update burn and expected native remainder. A focused 4.45-second PocketIC
+journey installs the generated helper on the same pool Principal, converts the
+exact default Ledger balance to native cycles once, accepts replay without a
+second withdrawal and uninstalls without losing the balance or identity. The
+IcyDB `0.247.0` runtime/model fixture passes locked all-target compilation, the
+exact single-provider guard, and its governed composed-Wasm PocketIC lifecycle
+journey. The maintainer-owned complete gate and a live production Cycles Ledger
+recovery effect were not run during coding; no remote state or cycles were
+touched.
+
 Open `0.109.16` coding-time evidence passes at the published `0.109.15`
 predecessor worktree: locked `canic-host`/`canic-cli` all-target compilation,
 warning-denied all-target Clippy for both changed packages, changelog
@@ -294,10 +350,10 @@ PocketIC gate was run during coding, as required by repository policy.
 The Canic-side `ic-timers 0.7.0` slice passes locked all-target checks and
 warning-denied all-target Clippy for `canic-core` and `canic-control-plane`,
 five core timer-custody tests, five Root canister-pool tests, the focused native
-ownership guards and changelog governance. Published IcyDB 0.246.0 now resolves
+ownership guards and changelog governance. Published IcyDB 0.247.0 now resolves
 the same timer provider, so the combined lifecycle fixture is active again. Its
-targeted governed PocketIC journey passes in 11 seconds with one shared timer
-inventory across install, prepared, active and upgrade boundaries.
+targeted governed PocketIC journey passes with one shared timer inventory across
+install, prepared, active and upgrade boundaries.
 
 Published `0.109.17` centralizes complete and fast versioning in
 one `set -euo pipefail` owner. Validation failure, fast-eligibility failure,
@@ -593,18 +649,22 @@ review a new current plan that reuses the controlled Principals and balances
 while reinstalling the corrected infrastructure artifacts. No compatibility
 bridge, journal edit or live repair path was added.
 
-No version, commit, tag, package publication, push, deployment, identity
-switch, Ledger call, live canister call, or sibling-repository mutation was
-performed.
+The maintainer versioned, committed, tagged and pushed immutable `v0.109.20`.
+No deployment, identity switch, Ledger call, live canister call, or
+sibling-repository mutation was performed by this documentation reconciliation.
 
 ## Next Action
 
-Finish the combined open `0.109.20` candidate with targeted host/CLI hygiene,
-then let the maintainer-selected release flow choose its validation boundary.
-After immutable publication, affected retained estates must generate and review
-a current reinstall plan rather than reopen a predecessor issued operation.
-Downstream launchers must use the ordinary Fleet Ensure generate/plan/apply
-sequence and qualify it in their own repository. The distinct pooled-canister
-Ledger-account recovery operation and finalized artifact build-network binding
-remain later accepted work. Do not begin 0.110. Do not begin 0.111 from this
-batch.
+The open `0.109.21` batch now implements the three accepted bounded follow-ups:
+network-bound finalized artifacts, direct reviewed fresh-pool creation funding,
+and same-Principal recovery of an empty pool asset's default Cycles Ledger
+balance. The next maintainer action is to review this diff and choose the
+release validation/version/publication boundary; coding-time agents must not
+pre-run the broad gate.
+
+After immutable publication, downstream adopters should pin the tag, rebuild
+and qualify their artifacts, then exercise the ordinary Fleet Ensure
+generate/plan/apply sequence and prove terminal convergence plus an immediate
+effect-free replay. If that evidence identifies no further defect, the next
+human-owned step is a fresh 0.109 closeout audit. Do not begin 0.110 or 0.111
+from this batch.

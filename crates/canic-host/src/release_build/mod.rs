@@ -12,7 +12,7 @@ use crate::durable_io::{
     RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes, write_bytes,
 };
 use crate::entropy::{EntropyError, random_bytes_32};
-use canic_core::ids::{ReleaseBuildId, ReleaseBuildNonce};
+use canic_core::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
 use ciborium::Value;
 use sha2::{Digest, Sha256};
 use std::{
@@ -50,6 +50,7 @@ pub struct ReleaseBuildPlanRecord {
     pub release_build_id: ReleaseBuildId,
     pub builder_version: String,
     pub build_profile: CanisterBuildProfile,
+    pub build_network: BuildNetwork,
     pub state: ReleaseBuildPlanState,
 }
 
@@ -148,9 +149,18 @@ pub fn plan_release_build_for_profile(
     root: &Path,
     build_profile: CanisterBuildProfile,
 ) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
+    plan_release_build_for_profile_and_network(root, build_profile, BuildNetwork::Local)
+}
+
+/// Create one durable release-build authority for an exact profile and runtime network.
+pub fn plan_release_build_for_profile_and_network(
+    root: &Path,
+    build_profile: CanisterBuildProfile,
+    build_network: BuildNetwork,
+) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
     for _ in 0..RANDOM_ATTEMPTS {
         let nonce = random_nonce()?;
-        match plan_release_build_with_nonce(root, nonce, build_profile) {
+        match plan_release_build_with_nonce_and_network(root, nonce, build_profile, build_network) {
             Ok(plan) => return Ok(plan),
             Err(ReleaseBuildPlanError::Io { source, .. })
                 if source.kind() == io::ErrorKind::AlreadyExists => {}
@@ -224,18 +234,35 @@ pub fn release_build_plan_path(root: &Path, release_build_id: ReleaseBuildId) ->
         .join("plan.cbor")
 }
 
+#[cfg(test)]
 fn plan_release_build_with_nonce(
     root: &Path,
     nonce: ReleaseBuildNonce,
     build_profile: CanisterBuildProfile,
 ) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
-    plan_release_build_with_nonce_and_builder(root, nonce, build_profile, env!("CARGO_PKG_VERSION"))
+    plan_release_build_with_nonce_and_network(root, nonce, build_profile, BuildNetwork::Local)
+}
+
+fn plan_release_build_with_nonce_and_network(
+    root: &Path,
+    nonce: ReleaseBuildNonce,
+    build_profile: CanisterBuildProfile,
+    build_network: BuildNetwork,
+) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
+    plan_release_build_with_nonce_and_builder(
+        root,
+        nonce,
+        build_profile,
+        build_network,
+        env!("CARGO_PKG_VERSION"),
+    )
 }
 
 fn plan_release_build_with_nonce_and_builder(
     root: &Path,
     nonce: ReleaseBuildNonce,
     build_profile: CanisterBuildProfile,
+    build_network: BuildNetwork,
     builder_version: &str,
 ) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
     let release_build_id = ReleaseBuildId::from_nonce(nonce);
@@ -244,6 +271,7 @@ fn plan_release_build_with_nonce_and_builder(
         release_build_id,
         builder_version: builder_version.to_string(),
         build_profile,
+        build_network,
         state: ReleaseBuildPlanState::Planned,
     };
     let path = release_build_plan_path(root, release_build_id);
@@ -353,6 +381,7 @@ fn encode_record(record: &ReleaseBuildPlanRecord) -> Vec<u8> {
         Value::Bytes(record.release_build_id.as_bytes().to_vec()),
         Value::Text(record.builder_version.clone()),
         Value::Text(record.build_profile.target_dir_name().to_string()),
+        Value::Text(record.build_network.as_str().to_string()),
         state,
     ]);
     let mut bytes = Vec::new();
@@ -367,7 +396,7 @@ fn decode_record(
 ) -> Result<ReleaseBuildPlanRecord, ReleaseBuildPlanError> {
     let value: Value =
         ciborium::de::from_reader(bytes).map_err(|error| invalid(path, error.to_string()))?;
-    let fields = exact_array(path, value, 5, "record")?;
+    let fields = exact_array(path, value, 6, "record")?;
     let nonce = ReleaseBuildNonce::from_random_bytes(exact_digest(path, &fields[0], "nonce")?);
     let release_build_id = exact_digest(path, &fields[1], "release_build_id")?
         .iter()
@@ -388,7 +417,20 @@ fn decode_record(
         .ok_or_else(|| invalid(path, "build_profile must be text"))?
         .parse()
         .map_err(|error| invalid(path, error))?;
-    let state_fields = exact_array_ref(path, &fields[4], "state")?;
+    let build_network = match fields[4]
+        .as_text()
+        .ok_or_else(|| invalid(path, "build_network must be text"))?
+    {
+        "ic" => BuildNetwork::Ic,
+        "local" => BuildNetwork::Local,
+        value => {
+            return Err(invalid(
+                path,
+                format!("build_network must be `ic` or `local`, found {value}"),
+            ));
+        }
+    };
+    let state_fields = exact_array_ref(path, &fields[5], "state")?;
     let discriminant = state_fields
         .first()
         .and_then(Value::as_integer)
@@ -406,6 +448,7 @@ fn decode_record(
         release_build_id,
         builder_version,
         build_profile,
+        build_network,
         state,
     };
     if encode_record(&record) != bytes {

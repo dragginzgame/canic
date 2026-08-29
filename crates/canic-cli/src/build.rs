@@ -34,7 +34,9 @@ use canic_host::{
     },
     format::wasm_size_label,
     icp_config::{resolve_current_canic_icp_root, resolve_icp_build_network_from_root},
-    release_build::{finalize_release_build_from_manifest, plan_release_build_for_profile},
+    release_build::{
+        finalize_release_build_from_manifest, plan_release_build_for_profile_and_network,
+    },
     release_set::{
         AppConfigError, AppConfigSnapshot, ApplicationArtifactBuildTarget,
         ApplicationArtifactFileBuildOutput, CanicInfrastructureArtifactBuildOutput,
@@ -226,8 +228,12 @@ where
         );
         println!("{}", output.wasm_gz_path.display());
     } else {
-        let release = plan_release_build_for_profile(&context.icp_root, context.profile)
-            .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+        let release = plan_release_build_for_profile_and_network(
+            &context.icp_root,
+            context.profile,
+            context.build_network,
+        )
+        .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
         context = context.with_release_build_id(release.record.release_build_id);
         build_app(&options, &context, &roles, started_at)?;
     }
@@ -522,6 +528,7 @@ fn infrastructure_output(
 ) -> Result<CanicInfrastructureArtifactBuildOutput, BuildCommandError> {
     let role = match built.role.as_str() {
         "fleet_coordinator" => CanicInfrastructureRole::FleetCoordinator,
+        "pool_ledger_recovery" => CanicInfrastructureRole::PoolLedgerRecovery,
         "root" => CanicInfrastructureRole::FleetSubnetRoot,
         "wasm_store" => CanicInfrastructureRole::WasmStore,
         role => {
@@ -563,8 +570,12 @@ fn artifact_relative_path(icp_root: &Path, path: &Path) -> Result<String, BuildC
 fn build_builtin_infrastructure(
     context: &WorkspaceBuildContext,
 ) -> Result<Vec<InfrastructureCanisterArtifactBuildOutput>, BuildCommandError> {
-    const BUILT_INS: [(&str, InfrastructureDeploymentScope); 2] = [
+    const BUILT_INS: [(&str, InfrastructureDeploymentScope); 3] = [
         ("fleet_coordinator", InfrastructureDeploymentScope::Fleet),
+        (
+            "pool_ledger_recovery",
+            InfrastructureDeploymentScope::Support,
+        ),
         ("wasm_store", InfrastructureDeploymentScope::FleetSubnet),
     ];
 
@@ -649,6 +660,7 @@ impl InfrastructureArtifactTiming {
 enum InfrastructureDeploymentScope {
     Fleet,
     FleetSubnet,
+    Support,
 }
 
 impl InfrastructureDeploymentScope {
@@ -656,6 +668,7 @@ impl InfrastructureDeploymentScope {
         match self {
             Self::Fleet => "1 / Fleet",
             Self::FleetSubnet => "1 / Fleet Subnet",
+            Self::Support => "temporary support",
         }
     }
 }

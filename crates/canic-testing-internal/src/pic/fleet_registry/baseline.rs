@@ -38,6 +38,7 @@ mod tests {
     #[cfg(test)]
     use canic::dto::pool::{
         CanisterPoolAssetOrigin, CanisterPoolAssetStatus, PoolCanisterRequest, PoolImportResponse,
+        PoolLedgerRecoveryPhase, PoolLedgerRecoveryReceipt, PoolLedgerRecoveryRequest,
     };
     use canic::dto::pool::{
         CanisterPoolResponse, CanisterPoolStatusRequest, PoolMaintenanceResponse,
@@ -241,6 +242,8 @@ mod tests {
         PrepareFleetActivation,
         ProvisionComponent(RootComponentAllocationRequest),
         #[cfg(test)]
+        RecoverPoolLedger(PoolLedgerRecoveryRequest),
+        #[cfg(test)]
         RespondCapability(canic::dto::capability::RootCapabilityEnvelopeV1),
         #[cfg(test)]
         ResumeAuthoritySnapshot(AuthoritySnapshotRequest),
@@ -249,9 +252,12 @@ mod tests {
     }
 
     #[derive(CandidType, Debug, Deserialize)]
-    #[expect(
-        clippy::large_enum_variant,
-        reason = "the PocketIC decoder mirrors the direct Root command wire"
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::large_enum_variant,
+            reason = "the non-test decoder mirrors the direct Root command wire"
+        )
     )]
     enum RootCommandResponseFragment {
         #[cfg(test)]
@@ -261,6 +267,8 @@ mod tests {
         #[cfg(test)]
         PrepareAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
         PrepareComponentRegistry(RootComponentRegistryStatusResponse),
+        #[cfg(test)]
+        RecoverPoolLedger(PoolLedgerRecoveryReceipt),
         #[cfg(test)]
         ResumeAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
         #[cfg(test)]
@@ -2060,12 +2068,13 @@ mod tests {
             | CurrentFleetProtocolAction::StageStoreManifest { .. }
             | CurrentFleetProtocolAction::AdoptStore { .. }
             | CurrentFleetProtocolAction::BootstrapStore { .. } => 0,
-            CurrentFleetProtocolAction::JoinRoot { .. } => 1,
-            CurrentFleetProtocolAction::SynchronizeRegistry { .. } => 2,
-            CurrentFleetProtocolAction::ActivateRegistry { .. } => 3,
-            CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => 4,
-            CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => 5,
-            CurrentFleetProtocolAction::ProvisionComponents { .. } => 6,
+            CurrentFleetProtocolAction::RecoverPoolLedger { .. } => 1,
+            CurrentFleetProtocolAction::JoinRoot { .. } => 2,
+            CurrentFleetProtocolAction::SynchronizeRegistry { .. } => 3,
+            CurrentFleetProtocolAction::ActivateRegistry { .. } => 4,
+            CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => 5,
+            CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => 6,
+            CurrentFleetProtocolAction::ProvisionComponents { .. } => 7,
         }
     }
 
@@ -2165,6 +2174,18 @@ mod tests {
                 assert!(matches!(
                     response,
                     CoordinatorCommandResponse::OperationAccepted(_)
+                ));
+            }
+            CurrentFleetProtocolAction::RecoverPoolLedger { request } => {
+                let response = root_command(
+                    pic,
+                    step.target,
+                    RootCommandFragment::RecoverPoolLedger(request.clone()),
+                )
+                .expect("recover current pool Ledger balance");
+                assert!(matches!(
+                    response,
+                    RootCommandResponseFragment::RecoverPoolLedger(_)
                 ));
             }
             CurrentFleetProtocolAction::PublishStoreChunk { request } => {
@@ -2320,6 +2341,20 @@ mod tests {
                     && observed.phase == FleetComponentProvisioningPhase::RuntimesActivated
                     && observed.published_fleet_registry.is_some()
                     && observed.pending_root_failure.is_none()
+            ),
+            CurrentFleetProtocolAction::RecoverPoolLedger { request } => matches!(
+                root_status(
+                    pic,
+                    step.target,
+                    RootStatusRequestFragment::Operation(OperationStatusRequest {
+                        operation_id: request.operation_id,
+                    }),
+                ),
+                Ok(RootStatusResponseFragment::Operation(
+                    RootOperationStatusResponse::RecoverPoolLedger(observed)
+                )) if observed.request == *request
+                    && observed.phase == PoolLedgerRecoveryPhase::Complete
+                    && observed.receipt.is_some()
             ),
             CurrentFleetProtocolAction::PublishStoreChunk { request } => {
                 let status = current_store_staging_status(
