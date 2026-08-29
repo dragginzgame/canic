@@ -12,8 +12,7 @@ use canic::{
             FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
         },
         fleet_subnet_root::{
-            FleetSubnetRootAuthority, FleetSubnetRootInitArgs,
-            FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAdoptionRequest,
+            FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreAdoptionRequest,
             FleetSubnetWasmStoreInitArgs,
         },
         role::{OperationReceipt, OperationStatusRequest},
@@ -22,8 +21,8 @@ use canic::{
     ids::{
         CanisterRole, ComponentSpecAdmission, CyclesFundingBudget, FleetCoordinatorBinding,
         FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
-        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority,
-        ReleaseSetDigest, SubnetId,
+        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreActivationAuthority,
+        FleetSubnetWasmStoreAuthority, ReleaseSetDigest, SubnetId,
     },
     protocol,
 };

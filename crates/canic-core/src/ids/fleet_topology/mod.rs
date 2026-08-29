@@ -7,7 +7,8 @@
 use crate::{
     cdk::types::Cycles,
     ids::{
-        CanisterRole, ComponentInstanceId, ComponentSpecId, FleetBinding, ReleaseBuildId, SubnetId,
+        CanisterRole, ComponentInstanceId, ComponentSpecId, FleetBinding, ReleaseBuildId,
+        ReleaseSetDigest, SubnetId,
     },
 };
 use candid::{CandidType, Principal};
@@ -285,6 +286,19 @@ pub struct FleetSubnetWasmStoreAuthority {
     pub installation_controller: Principal,
     pub release_build_id: ReleaseBuildId,
     pub wasm_module_hash: [u8; 32],
+}
+
+/// Exact child identity Root must use while activating its independently installed Store.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetWasmStoreActivationAuthority {
+    pub fleet: FleetBinding,
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+    pub wasm_store: Principal,
+    pub release_build_id: ReleaseBuildId,
+    pub component_topology_digest: ComponentTopologyDigest,
+    pub controllers: Vec<Principal>,
+    pub manifest_digest: ReleaseSetDigest,
 }
 
 ///

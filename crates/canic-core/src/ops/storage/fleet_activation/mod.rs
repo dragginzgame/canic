@@ -1484,15 +1484,15 @@ mod tests {
                 FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
             },
             fleet_subnet_root::{
-                FleetSubnetRootAuthority, FleetSubnetRootInitArgs,
-                FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreInitArgs,
+                FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
             },
         },
         ids::{
             AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId,
             ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
             FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding,
-            FleetSubnetRootLimits, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority,
+            FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
+            FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority,
             ManagedCanisterBinding, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
         storage::stable::fleet_activation::{

@@ -53,8 +53,8 @@ pub use fleet_topology::{
     FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetRegistryAuthority,
     FleetSubnetCanisterPoolConfig, FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootBinding,
     FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
-    FleetSubnetRootLimits, FleetSubnetWasmStoreAuthority, MAX_FLEET_ROOT_FUNDING_SLOTS,
-    ManagedCanisterBinding,
+    FleetSubnetRootLimits, FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority,
+    MAX_FLEET_ROOT_FUNDING_SLOTS, ManagedCanisterBinding,
 };
 pub use intent::{IntentId, IntentResourceKey};
 pub use metrics::{AccessMetricKind, SystemMetricKind};

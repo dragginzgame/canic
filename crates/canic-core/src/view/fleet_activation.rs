@@ -5,10 +5,12 @@
 //! Boundary: storage ops report whether one exact transition committed; workflows consume it once.
 
 use crate::cdk::types::Principal;
-use crate::dto::{
-    component_registry::ComponentRuntimeStatusResponse,
-    fleet_activation::FleetActivationStatusResponse,
-    fleet_subnet_root::FleetSubnetWasmStoreActivationAuthority,
+use crate::{
+    dto::{
+        component_registry::ComponentRuntimeStatusResponse,
+        fleet_activation::FleetActivationStatusResponse,
+    },
+    ids::FleetSubnetWasmStoreActivationAuthority,
 };
 
 /// The exact root-owned Wasm Store included in fresh Fleet activation.

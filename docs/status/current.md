@@ -561,7 +561,9 @@ workspace or broad PocketIC gate was run during this coding slice.
 The distinct Root/Store correction passes focused exact-authority model and
 stable-state tests, Root/Store init decoding, issued-command retry, stopped
 same-Principal startup, formatting and warning-denied all-target Clippy for the
-three changed packages. Its governed five-Component PocketIC journey rebuilt
+four changed packages. The layering guard also passes with the Store child
+authority owned by the layer-neutral identity model rather than a transport
+DTO. Its governed five-Component PocketIC journey rebuilt
 the changed Root, Coordinator and Store Wasms and passed in 364 seconds. It
 retained one issued operation through a typed Root-acceptance failure, restarted
 the same Store, replayed the exact command, activated all five Components,
