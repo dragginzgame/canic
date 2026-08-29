@@ -179,10 +179,10 @@ environment = "local"
 treasury = "treasury" # logical name of one controlled canister below
 operator = "<operator-principal>"
 cycles_ledger = "<cycles-ledger-principal>"
-ledger_fee_cycles = "100000000" # below 1B; generated from the live Ledger
-management_creation_fee_cycles = "0" # retained; fresh uses its seeded exact fee
-material_cycle_threshold = "1000000"
-maximum_observation_burn_cycles = "10000000"
+ledger_fee_cycles = "0.1B" # generated from the live Ledger
+management_creation_fee_cycles = "0B" # retained; fresh uses its seeded exact fee
+material_cycle_threshold = "0.001B"
+maximum_observation_burn_cycles = "1T"
 maximum_update_burn_cycles = "100B"
 maximum_stalled_observations = 8
 
@@ -204,8 +204,8 @@ principal = "<controlled-treasury-principal>"
 replace = false
 subnet = "<subnet-principal>"
 controllers = ["<operator-principal>"]
-initial_cycles = "0"
-minimum_cycles = "0"
+initial_cycles = "0B"
+minimum_cycles = "0B"
 
 [[canisters]]
 name = "coordinator"
@@ -219,11 +219,14 @@ minimum_cycles = "1T"
 wasm = "artifacts/fleet_coordinator.wasm"
 ```
 
-Human TOML cycle values accept exact case-sensitive `B`, `T`, and `Q`
-suffixes and exact decimals such as `1.5T`. Generated TOML uses the largest
-whole-unit magnitude at or above one billion cycles; smaller values remain
-exact decimal integers. Durable plan JSON continues to encode cycle authority
-as bounded decimal text.
+Human-authored `canic.toml`, Fleet policy and cycle-valued CLI options require
+quoted exact values with a case-sensitive `B`, `T`, or `Q` suffix. Exact
+decimals such as `1.5T` and `0.1B` are accepted; bare integers, unsuffixed
+strings, lowercase units, exponent notation and sub-cycle precision reject.
+Generated operator-reviewable TOML uses the largest exact unit with `B` as its
+minimum, including `0B` and fractional billions. Durable plan JSON, Candid,
+stable state, hashes and receipts continue to use their exact machine-owned
+integer or bounded-decimal representations and must not be hand-edited.
 
 Generated fresh Store and pool entries additionally use
 `controller_canisters = ["root-0"]`. These are logical dependencies, not
@@ -283,8 +286,13 @@ canic fleet ensure staging \
 ```
 
 Before the first effect, changed desired bytes, artifacts, authority-bearing
-live state, funding sufficiency, the live Cycles Ledger fee, or bounded cycle
-observations stop apply and require a new plan. Once the journal is in progress,
+live state, funding sufficiency or the live Cycles Ledger fee stop apply and
+require a new plan. Live controlled balances may move up through refunds or
+down through execution burn only within the reviewed per-canister observation
+bound and only while the normalized action graph and funding authority remain
+identical. The accepted apply-time balances become the journal's truthful
+initial conservation evidence; movement outside the bound rejects before any
+effect. Once the journal is in progress,
 the plan's digest-bound reviewed desired input is authoritative: newer working
 bytes cannot alter or supersede it, and an explicit environment lets the CLI
 resume even if the working TOML is missing. After terminal closure, rerun the
@@ -320,6 +328,13 @@ public Canic cycle-balance query and otherwise uses the last exact balance
 retained by the current Fleet Ensure state. A zero-valued `PendingReset` row is
 treated the same way. Missing exact evidence is a blocker. This narrow
 observation cannot create, fund, replace, transfer, drain or delete anything.
+
+If an exact retained Root is stopped, planning uses management status before
+calling its protected role endpoint. Exact current state may defer observation
+of that Root's already-bound Store and pool children only long enough to review
+one same-Principal `Start` action. Child, Root, parent, topology and controller
+bindings must all match, and no other mutation is admitted from deferred
+evidence. After the Root starts, ordinary protected observation resumes.
 
 The resulting corrective graph reinstalls the Coordinator, replays the exact
 Root-owned Store-controller adoption, reinstalls the Store, and only then
@@ -413,7 +428,7 @@ endpoint before replacement or deletion:
 candid = "interfaces/cycle-drain.did"
 method = "canic_cycle_drain"
 destination = "treasury" # exact logical name from the desired document
-maximum_execution_burn_cycles = "100000000"
+maximum_execution_burn_cycles = "0.1B"
 ```
 
 Fleet Ensure resolves that logical name through its durable current state. The

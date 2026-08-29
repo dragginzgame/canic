@@ -414,9 +414,8 @@ pub fn compile_plan(
             maximum: MAX_FLEET_ENSURE_PROTOCOL_STEPS,
         });
     }
-    if recovery_reinstalls.is_empty()
-        && protocol_actions.is_empty()
-        && let Some(name) = desired.canisters.iter().find_map(|configured| {
+    if recovery_reinstalls.is_empty() && protocol_actions.is_empty() {
+        let pending = desired.canisters.iter().find_map(|configured| {
             observation
                 .canisters
                 .get(&configured.name)
@@ -425,9 +424,16 @@ pub fn compile_plan(
                     live.root_owned_lifecycle == Some(RootOwnedCanisterLifecycle::Retained)
                 })
                 .then(|| configured.name.clone())
-        })
-    {
-        return Err(EnsurePolicyError::PendingRootOwnedBalance { name });
+        });
+        if let Some(name) = pending
+            && !retained_root_observation_is_start_only(
+                desired,
+                &accumulator.canisters,
+                observation,
+            )
+        {
+            return Err(EnsurePolicyError::PendingRootOwnedBalance { name });
+        }
     }
 
     let observation_count = maximum_observation_count(
@@ -506,6 +512,40 @@ pub fn compile_plan(
     };
     plan.plan_sha256 = expected_plan_sha256(&plan);
     Ok(plan)
+}
+
+fn retained_root_observation_is_start_only(
+    desired: &DesiredFleet,
+    plans: &[CanisterPlan],
+    observation: &FleetObservation,
+) -> bool {
+    let only_start_effects = plans
+        .iter()
+        .flat_map(|plan| &plan.actions)
+        .all(|action| matches!(action, EnsureAction::Start { .. }));
+    only_start_effects
+        && desired
+            .canisters
+            .iter()
+            .filter(|configured| {
+                observation
+                    .canisters
+                    .get(&configured.name)
+                    .and_then(Option::as_ref)
+                    .is_some_and(|live| {
+                        live.root_owned_lifecycle == Some(RootOwnedCanisterLifecycle::Retained)
+                    })
+            })
+            .all(|configured| {
+                configured.parent.as_ref().is_some_and(|parent| {
+                    plans.iter().any(|plan| {
+                        plan.name == *parent
+                            && plan.actions.iter().any(|action| {
+                                matches!(action, EnsureAction::Start { name, .. } if name == parent)
+                            })
+                    })
+                })
+            })
 }
 
 /// Validate identity labels before they are used to construct operator-state paths.

@@ -309,7 +309,7 @@ where
             journal
         }
         _ => {
-            let observation = verify_fresh_plan(
+            let (observation, initial_controlled_cycles) = verify_fresh_plan(
                 root,
                 operation_desired,
                 operation_desired_sha256,
@@ -322,7 +322,7 @@ where
                 completion: FleetEnsureCompletion::InProgress,
                 effects: Vec::new(),
                 fleet: requested_fleet.to_string(),
-                initial_controlled_cycles: retained_plan.conservation.observed_controlled_cycles,
+                initial_controlled_cycles,
                 initial_operator_cycles: observation.operator_cycles,
                 operation_id: retained_plan.operation_id.clone(),
                 plan_sha256: retained_plan.plan_sha256.clone(),
@@ -547,7 +547,7 @@ fn verify_fresh_plan<P>(
     retained_plan: &FleetEnsurePlan,
     platform: &mut P,
     state: &FleetEnsureStateRecord,
-) -> Result<FleetObservation, EnsureWorkflowError<P::Error>>
+) -> Result<(FleetObservation, u128), EnsureWorkflowError<P::Error>>
 where
     P: EnsurePlatform,
 {
@@ -578,7 +578,7 @@ where
     {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
-    Ok(observation)
+    Ok((observation, current.conservation.observed_controlled_cycles))
 }
 
 fn compatible_after_bounded_observation(
@@ -587,7 +587,7 @@ fn compatible_after_bounded_observation(
     desired: &crate::fleet_ensure::model::DesiredFleet,
     observation: &FleetObservation,
 ) -> bool {
-    let Ok(maximum_observation_burn) = desired
+    let Ok(maximum_observation_movement) = desired
         .maximum_observation_burn_cycles
         .parse::<Cycles>()
         .map(|cycles| cycles.to_u128())
@@ -598,13 +598,10 @@ fn compatible_after_bounded_observation(
         return false;
     }
     for (retained_canister, current_canister) in retained.canisters.iter().zip(&current.canisters) {
-        let Some(decrease) = retained_canister
+        let movement = retained_canister
             .observed_cycles
-            .checked_sub(current_canister.observed_cycles)
-        else {
-            return false;
-        };
-        if decrease > maximum_observation_burn {
+            .abs_diff(current_canister.observed_cycles);
+        if movement > maximum_observation_movement {
             return false;
         }
     }

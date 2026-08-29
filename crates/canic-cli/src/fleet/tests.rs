@@ -52,7 +52,7 @@ fn fresh_generation_requires_and_retains_exact_creation_fee_authority() {
         GenerateOptions::parse(args.clone()),
         Err(FleetCommandError::Usage(_))
     ));
-    let options = GenerateOptions::parse(args.into_iter().chain([
+    let options = GenerateOptions::parse(args.clone().into_iter().chain([
         OsString::from("--management-creation-fee-cycles"),
         OsString::from("500B"),
     ]))
@@ -63,6 +63,15 @@ fn fresh_generation_requires_and_retains_exact_creation_fee_authority() {
         Some(500_000_000_000)
     );
     assert_eq!(options.cycles_ledger, DEFAULT_CYCLES_LEDGER);
+
+    for invalid in ["500000000000", "500b", "0.5e3B"] {
+        let error = GenerateOptions::parse(args.clone().into_iter().chain([
+            OsString::from("--management-creation-fee-cycles"),
+            OsString::from(invalid),
+        ]))
+        .expect_err("reject non-canonical human cycle input");
+        assert!(matches!(error, FleetCommandError::Usage(_)));
+    }
 }
 
 #[test]

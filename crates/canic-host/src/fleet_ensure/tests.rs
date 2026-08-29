@@ -1191,6 +1191,145 @@ fn same_module_reinstall_runs_once_and_replay_is_effect_free() {
 }
 
 #[test]
+fn reviewed_plan_accepts_bounded_bidirectional_balance_movement_with_truthful_start() {
+    let mut fixture = fixture();
+    let desired_sha256 = "76".repeat(32);
+    let initial = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan initial convergence");
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &initial.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("apply initial convergence");
+
+    fixture.desired.maximum_observation_burn_cycles = "10".to_string();
+    fixture.platform.desired = fixture.desired.clone();
+    fixture.platform.mutations.clear();
+    let reviewed = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut fixture.platform,
+    )
+    .expect("plan effect-free replay");
+    assert!(workflow::ordered_actions(&reviewed.plan).is_empty());
+    let reviewed_cycles = reviewed.plan.conservation.observed_controlled_cycles;
+    fixture
+        .platform
+        .live
+        .get_mut(TREASURY)
+        .expect("retained Coordinator")
+        .cycles -= 4;
+    fixture
+        .platform
+        .live
+        .get_mut(OLD_APP)
+        .expect("retained App")
+        .cycles += 3;
+
+    let applied = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &reviewed.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("accept bounded decrease and refund");
+    assert!(applied.terminal);
+    assert_eq!(applied.effects_applied, 0);
+    assert_eq!(fixture.platform.mutations.values().sum::<u32>(), 0);
+    assert_eq!(
+        applied
+            .actual_conservation
+            .expect("terminal conservation")
+            .observed_starting_cycles,
+        reviewed_cycles - 1
+    );
+
+    let replay = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_200,
+        &mut fixture.platform,
+    )
+    .expect("replan terminal state");
+    assert!(workflow::ordered_actions(&replay.plan).is_empty());
+}
+
+#[test]
+fn reviewed_plan_rejects_balance_movement_beyond_its_bound_before_effects() {
+    let mut fixture = fixture();
+    let desired_sha256 = "77".repeat(32);
+    let initial = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan initial convergence");
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &initial.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("apply initial convergence");
+    fixture.desired.maximum_observation_burn_cycles = "10".to_string();
+    fixture.platform.desired = fixture.desired.clone();
+    fixture.platform.mutations.clear();
+    let reviewed = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut fixture.platform,
+    )
+    .expect("plan bounded estate");
+    fixture
+        .platform
+        .live
+        .get_mut(TREASURY)
+        .expect("retained Coordinator")
+        .cycles += 11;
+
+    let error = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &reviewed.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect_err("reject movement beyond reviewed bound");
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::DriftedBeforeApply
+    ));
+    assert_eq!(fixture.platform.mutations.values().sum::<u32>(), 0);
+}
+
+#[test]
 fn funding_margin_is_bounded_by_the_target_observation_only() {
     let mut fixture = fixture();
     fixture.desired.maximum_observation_burn_cycles = "10".to_string();
