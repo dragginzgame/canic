@@ -81,8 +81,16 @@ inspection remains safe while the owned validation finishes.
 CI uses the same runner for its preflight, security and Rust-check jobs. Tool
 installation and version verification remain immediate prerequisites, after
 which each job reports every independent policy, security or compile-check
-failure in one run. Every expensive compile and test job still requires both
-cheap gate jobs to pass.
+failure in one run. Every repeated failure-detail line carries its exact
+`[ERR:<target>]` owner and is rendered red on an interactive terminal.
+High-confidence compiler, panic, test and Make failure lines receive that same
+decoration as they stream; decoration never changes the target result. The raw
+command output remains in `latest.log`; the directly promptable, aggregated
+failure excerpt is retained separately as `latest-errors.log`. Every expensive
+compile and test job still requires both cheap gate jobs to pass. Each runner
+invocation first syntax-checks and executes a private immutable copy of itself;
+an unrelated edit to the workspace script during a long test cannot splice new
+shell text into the process after the tests have completed.
 
 The repository owns one `pre-commit` hook, configured by `make install-dev` or
 `make install-hooks`. It runs only `make fmt`; it does not run tests, Clippy,

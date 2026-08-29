@@ -6,7 +6,21 @@ if [[ $# -eq 0 ]]; then
     exit 2
 fi
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RUNNER_SOURCE="${BASH_SOURCE[0]}"
+ROOT="${CANIC_VALIDATION_ROOT:-$(cd "$(dirname "$RUNNER_SOURCE")/../.." && pwd)}"
+if [[ "${CANIC_VALIDATION_RUNNER_SNAPSHOT_PATH:-}" != "$RUNNER_SOURCE" ]]; then
+    RUNNER_SNAPSHOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-validation-runner.XXXXXX")"
+    RUNNER_SNAPSHOT="$RUNNER_SNAPSHOT_DIR/run-validation-targets.sh"
+    trap 'rm -rf "$RUNNER_SNAPSHOT_DIR"' EXIT
+    cp "$RUNNER_SOURCE" "$RUNNER_SNAPSHOT"
+    bash -n "$RUNNER_SNAPSHOT"
+    snapshot_status=0
+    CANIC_VALIDATION_ROOT="$ROOT" \
+        CANIC_VALIDATION_RUNNER_SNAPSHOT_PATH="$RUNNER_SNAPSHOT" \
+        bash "$RUNNER_SNAPSHOT" "$@" || snapshot_status=$?
+    exit "$snapshot_status"
+fi
+
 LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-validation.XXXXXX")"
 trap 'rm -rf "$LOG_DIR"' EXIT
 FAILURE_LOG_ROOT="${CANIC_VALIDATION_FAILURE_LOG_DIR:-$ROOT/target/validation-failures}"
@@ -23,6 +37,54 @@ results=()
 elapsed_seconds=()
 logs=()
 retained_logs=()
+highlighted_failure_log=""
+
+print_error_line() {
+    local target="$1"
+    local line="$2"
+
+    if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]]; then
+        printf '\033[1;31m[ERR:%s] %s\033[0m\n' "$target" "$line"
+    else
+        printf '[ERR:%s] %s\n' "$target" "$line"
+    fi
+}
+
+print_retained_error_line() {
+    local line="$1"
+
+    if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]]; then
+        printf '\033[1;31m%s\033[0m\n' "$line"
+    else
+        printf '%s\n' "$line"
+    fi
+}
+
+is_live_failure_line() {
+    local line="$1"
+
+    case "$line" in
+        *"error:"* | *"error["* | *"rustc-LLVM ERROR"* | \
+            *"test result: FAILED"* | *"panicked at"* | *"fatal:"* | \
+            *"FAILED:"* | *"Target failed:"* | *"No such file or directory"* | \
+            *"❌"* | *"🚨"* | \
+            *make:*"***"* | *make\[*"***"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+annotate_live_output() {
+    local target="$1"
+    local line
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if is_live_failure_line "$line"; then
+            print_error_line "$target" "$line"
+        else
+            printf '%s\n' "$line"
+        fi
+    done
+}
 
 persist_failure_log() {
     local log="$1"
@@ -49,23 +111,41 @@ print_failure_detail() {
     # matching remains deterministic while the live output stays colored.
     LC_ALL=C sed $'s/\033\[[0-9;]*[[:alpha:]]//g' "$log" >"$clean_log"
 
-    inherited="$(rg '^\[validation-detail\]' "$clean_log" || true)"
+    inherited="$(rg '^\[ERR:[^]]+\]' "$clean_log" || true)"
     if [[ -n "$inherited" ]]; then
-        printf '%s\n' "$inherited" |
-            awk '!seen[$0]++' |
-            tail -n "$MAX_FAILURE_DETAIL_LINES"
+        while IFS= read -r line; do
+            print_retained_error_line "$line"
+        done < <(
+            printf '%s\n' "$inherited" |
+                awk '!seen[$0]++' |
+                tail -n "$MAX_FAILURE_DETAIL_LINES"
+        )
         return
     fi
 
-    printf '[validation-detail] Target: %s\n' "$target"
+    print_error_line "$target" "Target failed"
     details="$(rg --color never --no-heading -C 4 -- "$FAILURE_PATTERN" "$clean_log" || true)"
     if [[ -z "$details" ]]; then
         details="$(tail -n 80 "$clean_log")"
     fi
 
     while IFS= read -r line; do
-        printf '[validation-detail] %s\n' "$line"
+        print_error_line "$target" "$line"
     done < <(printf '%s\n' "$details" | tail -n "$((MAX_FAILURE_DETAIL_LINES - 1))")
+}
+
+persist_highlighted_failure_log() {
+    local highlighted_log="$FAILURE_LOG_ROOT/$FAILURE_RUN_ID-errors.log"
+
+    mkdir -p "$FAILURE_LOG_ROOT" || return 0
+    : >"$highlighted_log" || return 0
+    for index in "${!targets[@]}"; do
+        if [[ "${results[$index]}" == "FAIL" ]]; then
+            print_failure_detail "${logs[$index]}" "${targets[$index]}" >>"$highlighted_log"
+        fi
+    done
+    cp "$highlighted_log" "$FAILURE_LOG_ROOT/latest-errors.log" || true
+    printf '%s\n' "$highlighted_log"
 }
 
 write_github_summary() {
@@ -110,18 +190,22 @@ for target in "$@"; do
         printf '\n==> %s\n' "$target"
     fi
 
-    if make --no-print-directory -C "$ROOT" "$target" 2>&1 | tee "$log"; then
+    if make --no-print-directory -C "$ROOT" "$target" 2>&1 |
+        tee "$log" |
+        annotate_live_output "$target"; then
         result="PASS"
         retained_log=""
     else
         failed_targets+=("$target")
         result="FAIL"
         retained_log="$(persist_failure_log "$log" "$target" "${#targets[@]}")"
-        printf '\nTarget failed: %s\n' "$target"
+        echo
+        print_error_line "$target" "Target failed"
         if [[ -n "$retained_log" ]]; then
-            printf 'Full failure log retained at: %s\n' "$retained_log"
+            print_error_line "$target" "Full failure log retained at: $retained_log"
         else
-            printf 'Unable to retain the complete failure log under: %s\n' "$FAILURE_LOG_ROOT"
+            print_error_line "$target" \
+                "Unable to retain the complete failure log under: $FAILURE_LOG_ROOT"
         fi
         print_failure_detail "$log" "$target"
     fi
@@ -139,34 +223,48 @@ done
 
 printf '\nValidation summary:\n'
 for index in "${!targets[@]}"; do
-    printf '  %-4s %5ss  %s\n' \
-        "${results[$index]}" \
-        "${elapsed_seconds[$index]}" \
-        "${targets[$index]}"
+    if [[ "${results[$index]}" == "FAIL" ]]; then
+        print_error_line "${targets[$index]}" \
+            "FAIL ${elapsed_seconds[$index]}s"
+    else
+        printf '  %-4s %5ss  %s\n' \
+            "${results[$index]}" \
+            "${elapsed_seconds[$index]}" \
+            "${targets[$index]}"
+    fi
 done
 
 write_github_summary
 
 if [[ ${#failed_targets[@]} -ne 0 ]]; then
+    highlighted_failure_log="$(persist_highlighted_failure_log)"
     printf '\nFailure details (repeated from the full logs):\n'
     for index in "${!targets[@]}"; do
         if [[ "${results[$index]}" == "FAIL" ]]; then
             echo
             if [[ -n "${retained_logs[$index]}" ]]; then
-                printf 'Full failure log retained at: %s\n' "${retained_logs[$index]}"
+                print_error_line "${targets[$index]}" \
+                    "Full failure log retained at: ${retained_logs[$index]}"
             fi
             print_failure_detail "${logs[$index]}" "${targets[$index]}"
         fi
     done
 
     if [[ -f "$FAILURE_LOG_ROOT/latest.log" ]]; then
-        printf '\nLatest complete failure log: %s\n' "$FAILURE_LOG_ROOT/latest.log"
+        echo
+        print_error_line summary \
+            "Latest complete failure log: $FAILURE_LOG_ROOT/latest.log"
+    fi
+    if [[ -n "$highlighted_failure_log" ]]; then
+        print_error_line summary \
+            "Latest highlighted errors: $FAILURE_LOG_ROOT/latest-errors.log"
     fi
 
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
         printf '::error title=Validation targets failed::%s\n' "${failed_targets[*]}"
     fi
-    printf '\nVALIDATION FAILED: %s\n' "${failed_targets[*]}" >&2
+    echo >&2
+    print_error_line summary "VALIDATION FAILED: ${failed_targets[*]}" >&2
     exit 1
 fi
 

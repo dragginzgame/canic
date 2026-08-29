@@ -221,6 +221,16 @@ temporary directory outside invocation-owned test scratch, so scratch cleanup
 cannot invalidate a cache daemon that later compile gates reuse. The
 release-integrity fixture, targeted ShellCheck and complete control-plane
 feature matrix pass on the corrected runner; no broad test suite was rerun.
+High-confidence compiler, panic, test and Make failure lines now receive a red
+interactive `[ERR:<target>]` prefix as they stream. Failed targets repeat every
+retained diagnostic line with the same owner and write the plain-text aggregate
+to `target/validation-failures/latest-errors.log`; `latest.log` remains the
+exact raw command output, and decoration never determines success or failure.
+The validation driver syntax-checks and executes one private immutable snapshot
+per invocation. The 1,718-second complete test graph passed before a concurrent
+workspace edit caused the former live-read driver to fail at its final shell
+parse boundary; the snapshot runner removes that failure mode without rerunning
+PocketIC during development.
 The release lane now rejects malformed draft/status metadata before entering
 that runner and retains an exact-HEAD local success receipt after the clean
 complete gate. A later release-only failure can resume the same immutable

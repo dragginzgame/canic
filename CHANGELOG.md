@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Keeps the persistent Make-selected `sccache` server outside disposable test
   scratch, preventing later Cargo gates from inheriting a deleted temporary
   directory after test cleanup.
+- Makes validation failures conspicuous during and at the end of long runs
+  with red, target-owned error prefixes and a retained `latest-errors.log`
+  excerpt while preserving the complete raw failure log.
+- Runs each long validation invocation from a syntax-checked immutable copy of
+  its shell driver, preventing concurrent runner edits from causing a late
+  parser failure after successful tests.
 
 ## [0.109.x] - Fleet-Wide Ingress Admission
 
