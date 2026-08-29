@@ -71,7 +71,7 @@ start_compiler_cache_observation() {
         return
     fi
     local wrapper="$RUSTC_WRAPPER"
-    if [[ "$(basename "$wrapper")" != "sccache" ]]; then
+    if [[ ! "$(basename "$wrapper")" =~ ^(run-sccache\.sh|sccache)$ ]]; then
         echo "==> compiler cache observation: disabled (RUSTC_WRAPPER is not sccache)"
         return
     fi

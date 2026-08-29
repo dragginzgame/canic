@@ -31,6 +31,7 @@ RELEASE_VALIDATION_LANE_TEST="$ROOT/scripts/ci/test-release-validation-lane.sh"
 PUBLISH_WORKSPACE="$ROOT/scripts/ci/publish-workspace.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
+SCCACHE_WRAPPER="$ROOT/scripts/ci/run-sccache.sh"
 POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 RELEASE_PUSH_READY="$ROOT/scripts/ci/check-release-push-ready.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
@@ -58,7 +59,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$RELEASE_VALIDATION_LANE" "$RELEASE_VALIDATION_LANE_TEST" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$RELEASE_VALIDATION_LANE" "$RELEASE_VALIDATION_LANE_TEST" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -277,6 +278,16 @@ fi
 
 rg -F 'SCCACHE_BIN ?= $(shell command -v sccache 2>/dev/null)' "$MAKEFILE" >/dev/null ||
     fail "Make does not discover the pinned local sccache"
+rg -F 'RUSTC_WRAPPER ?= $(CANIC_SCCACHE_WRAPPER)' "$MAKEFILE" >/dev/null ||
+    fail "Make does not select the stable-runtime sccache wrapper"
+rg -F 'SCCACHE_RUNTIME_TMPDIR="$SCCACHE_RUNTIME_ROOT/tmp"' "$SCCACHE_WRAPPER" >/dev/null ||
+    fail "sccache wrapper does not own a stable runtime temporary directory"
+rg -F 'SCCACHE_SERVER_UDS="$SCCACHE_RUNTIME_ROOT/server.sock"' "$SCCACHE_WRAPPER" >/dev/null ||
+    fail "sccache wrapper does not isolate its persistent repository server"
+rg -F 'export TMPDIR="$SCCACHE_RUNTIME_TMPDIR"' "$SCCACHE_WRAPPER" >/dev/null ||
+    fail "sccache wrapper can inherit disposable test scratch"
+rg -F '^(run-sccache\.sh|sccache)$' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "workspace tests do not recognize the maintained sccache wrapper"
 rg -F 'CARGO_INCREMENTAL ?= 0' "$MAKEFILE" >/dev/null ||
     fail "Make does not disable incremental compilation with sccache"
 test_recipe="$(sed -n '/^test-unit:/,/^test-auth:/p' "$MAKEFILE")"
@@ -798,7 +809,7 @@ mkdir -p \
     "$release_cleanup_fixture/target" \
     "$release_cleanup_bin"
 touch "$foreign_test_scratch/live-owner"
-cp "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" \
+cp "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" \
     "$release_cleanup_fixture/scripts/ci/"
 # shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
 printf '%s\n' \
@@ -831,6 +842,28 @@ PATH="$release_cleanup_bin:$PATH" \
     bash "$release_cleanup_fixture/scripts/ci/run-with-test-scratch.sh" \
     bash -c 'printf "%s\n" "$TMPDIR" >"$1"' _ "$release_cleanup_fixture/test-tmpdir"
 assert_owned_test_scratch_cleaned
+
+# shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf "%s\n" "$TMPDIR" >"$FAKE_SCCACHE_RECORD.tmpdir"' \
+    'printf "%s\n" "$SCCACHE_SERVER_UDS" >"$FAKE_SCCACHE_RECORD.socket"' \
+    'printf "%s\n" "$*" >"$FAKE_SCCACHE_RECORD.args"' \
+    'touch "$TMPDIR/server-owned-temp"' >"$release_cleanup_bin/sccache"
+chmod +x "$release_cleanup_bin/sccache"
+FAKE_SCCACHE_RECORD="$release_cleanup_fixture/sccache-record" \
+    CANIC_SCCACHE_BIN="$release_cleanup_bin/sccache" \
+    RUSTC_WRAPPER="$release_cleanup_fixture/scripts/ci/run-sccache.sh" \
+    bash "$release_cleanup_fixture/scripts/ci/run-with-test-scratch.sh" \
+    "$release_cleanup_fixture/scripts/ci/run-sccache.sh" --show-stats
+[ "$(cat "$release_cleanup_fixture/sccache-record.tmpdir")" = \
+    "$release_cleanup_fixture/.tmp/sccache-runtime/tmp" ] ||
+    fail "sccache inherited invocation-owned test scratch"
+[ "$(cat "$release_cleanup_fixture/sccache-record.socket")" = \
+    "$release_cleanup_fixture/.tmp/sccache-runtime/server.sock" ] ||
+    fail "sccache did not use its repository-owned server socket"
+[ -f "$release_cleanup_fixture/.tmp/sccache-runtime/tmp/server-owned-temp" ] ||
+    fail "test cleanup deleted the persistent sccache runtime"
 
 rm -f "$release_cleanup_fixture/cargo-clean-attempts"
 mkdir -p "$release_cleanup_fixture/target"

@@ -216,6 +216,11 @@ removes the need for downstream test adapters to pin private `canic-core` or
 
 The validation runner retains the August shared PocketIC server, one-process
 governed suite, persistent artifact cache and ordinary-before-PocketIC barrier.
+Make-selected `sccache` now uses a stable repository-owned server socket and
+temporary directory outside invocation-owned test scratch, so scratch cleanup
+cannot invalidate a cache daemon that later compile gates reuse. The
+release-integrity fixture, targeted ShellCheck and complete control-plane
+feature matrix pass on the corrected runner; no broad test suite was rerun.
 The release lane now rejects malformed draft/status metadata before entering
 that runner and retains an exact-HEAD local success receipt after the clean
 complete gate. A later release-only failure can resume the same immutable
