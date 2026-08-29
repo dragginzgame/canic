@@ -2704,9 +2704,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.246.0"
+version = "0.247.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3442bf1012a9a903c926d7e9d48239223f80976c13210903f5843e0a2fa6513"
+checksum = "15fade61ed884900cbae7ddfb47ba84d2f0e997554ce49e1f02a76af976179c6"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2722,9 +2722,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.246.0"
+version = "0.247.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3fb7ad0b2a7cada3411d4e2f57fbef24986fa13746350016d2526cf886344d4"
+checksum = "859ae1d6c76cc7732fe2963476de2502a82aab6049bd9535c63b946d37d8f7a7"
 dependencies = [
  "candid",
  "getrandom 0.4.3",
@@ -2747,18 +2747,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.246.0"
+version = "0.247.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cd430b0e016806bbb66bb31b6da697a0575d215b7149f4ad7b8bc459babe9fa"
+checksum = "6040f2e2ee06f659872bece3601fc98f0105bace441d7b6e330a6fb0389049b3"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.246.0"
+version = "0.247.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81e81972c629feb801ab6c7f9c6ecbfaa22594f9722c4e4476328237df821c4a"
+checksum = "b026feff3f90d5303bc7ec2c088dd8080a8c4eb18d48f26fadb287acd1660bc6"
 dependencies = [
  "candid",
  "convert_case 0.11.0",
@@ -2778,9 +2778,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.246.0"
+version = "0.247.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e44b731ef5242c80ede6e1d764c735bd1af23bb11b794964320023d87bf0c76d"
+checksum = "d5a630493c1ba101db38b9f7c611874c81c139703c669d832d0820bd092a30fa"
 dependencies = [
  "convert_case 0.11.0",
  "darling 0.24.1",
@@ -2795,9 +2795,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.246.0"
+version = "0.247.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ad3a2b73a4907da6fd85b2d849abc26fed5a93c34373f99b53f071299d26857"
+checksum = "530db3e29583c3b9a9eefb1ddeecde14bee2a97ed0ba4a9b6faca3fa819e98e3"
 dependencies = [
  "candid",
  "derive_more",

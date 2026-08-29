@@ -1,14 +1,57 @@
 //! Exact Cycles Ledger boundary stub for root pool-refill PocketIC tests.
 
 use candid::{CandidType, Deserialize, Nat, Principal};
-use std::cell::RefCell;
+use ic_cdk::call::Call;
+use std::{cell::RefCell, collections::BTreeMap};
 
 #[derive(CandidType, Deserialize)]
 struct InitArgs {
     canister_ids: Vec<Principal>,
     expected_root: Principal,
     expected_subnet: Principal,
+    initial_balances: Option<Vec<AccountBalance>>,
     pending_first_index: Option<u64>,
+    withdrawal_fee: Option<Nat>,
+}
+
+#[derive(CandidType, Deserialize)]
+struct AccountBalance {
+    balance: Nat,
+    owner: Principal,
+}
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct Account {
+    owner: Principal,
+    subaccount: Option<[u8; 32]>,
+}
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct WithdrawArgs {
+    amount: Nat,
+    created_at_time: Option<u64>,
+    from_subaccount: Option<[u8; 32]>,
+    to: Principal,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct WithdrawalRecord {
+    args: WithdrawArgs,
+    block_index: u64,
+    caller: Principal,
+}
+
+#[derive(CandidType)]
+enum WithdrawError {
+    Duplicate { duplicate_of: Nat },
+    GenericError { error_code: Nat, message: String },
+    InsufficientFunds { balance: Nat },
+    InvalidReceiver { receiver: Principal },
+}
+
+#[derive(CandidType)]
+struct CanisterIdRecord {
+    canister_id: Principal,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -58,12 +101,15 @@ enum CreateCanisterError {
 }
 
 struct State {
+    balances: BTreeMap<Principal, u128>,
     canister_ids: Vec<Principal>,
     expected_root: Principal,
     expected_subnet: Principal,
     pending_first_index: Option<usize>,
     requests: Vec<CreateCanisterArgs>,
     request_count: u64,
+    withdrawal_fee: u128,
+    withdrawals: Vec<WithdrawalRecord>,
 }
 
 const MAX_LANES: usize = 32;
@@ -91,16 +137,137 @@ fn init(args: InitArgs) {
         pending_first_index.is_none_or(|index| index < args.canister_ids.len()),
         "pending lane index must name one configured lane"
     );
+    let balances = args
+        .initial_balances
+        .unwrap_or_default()
+        .into_iter()
+        .map(|entry| {
+            let balance = u128::try_from(entry.balance.0)
+                .expect("initial Cycles Ledger balance must fit u128");
+            (entry.owner, balance)
+        })
+        .collect();
+    let withdrawal_fee = args.withdrawal_fee.map_or(100_000_000, |fee| {
+        u128::try_from(fee.0).expect("withdrawal fee must fit u128")
+    });
     STATE.with_borrow_mut(|state| {
         *state = Some(State {
+            balances,
             canister_ids: args.canister_ids,
             expected_root: args.expected_root,
             expected_subnet: args.expected_subnet,
             pending_first_index,
             requests: Vec::new(),
             request_count: 0,
+            withdrawal_fee,
+            withdrawals: Vec::new(),
         });
     });
+}
+
+#[ic_cdk::query]
+fn icrc1_balance_of(account: Account) -> Nat {
+    if account.subaccount.is_some() {
+        return Nat::from(0_u8);
+    }
+    STATE.with_borrow(|state| {
+        Nat::from(
+            state
+                .as_ref()
+                .expect("Cycles Ledger stub is initialized")
+                .balances
+                .get(&account.owner)
+                .copied()
+                .unwrap_or_default(),
+        )
+    })
+}
+
+#[ic_cdk::query]
+fn icrc1_fee() -> Nat {
+    STATE.with_borrow(|state| {
+        Nat::from(
+            state
+                .as_ref()
+                .expect("Cycles Ledger stub is initialized")
+                .withdrawal_fee,
+        )
+    })
+}
+
+#[ic_cdk::update]
+async fn withdraw(args: WithdrawArgs) -> Result<Nat, WithdrawError> {
+    let caller = ic_cdk::api::msg_caller();
+    if args.from_subaccount.is_some() || args.to != caller {
+        return Err(WithdrawError::InvalidReceiver { receiver: args.to });
+    }
+    let (amount, block_index) = STATE.with_borrow_mut(|state| {
+        let state = state.as_mut().expect("Cycles Ledger stub is initialized");
+        if let Some(existing) = state
+            .withdrawals
+            .iter()
+            .find(|existing| existing.caller == caller && existing.args == args)
+        {
+            return Err(WithdrawError::Duplicate {
+                duplicate_of: Nat::from(existing.block_index),
+            });
+        }
+        let amount =
+            u128::try_from(args.amount.0.clone()).map_err(|_| WithdrawError::GenericError {
+                error_code: Nat::from(1_u8),
+                message: "withdrawal amount exceeds u128".to_string(),
+            })?;
+        let available = state.balances.get(&caller).copied().unwrap_or_default();
+        let debit = amount.checked_add(state.withdrawal_fee).ok_or_else(|| {
+            WithdrawError::GenericError {
+                error_code: Nat::from(2_u8),
+                message: "withdrawal debit overflow".to_string(),
+            }
+        })?;
+        if available < debit {
+            return Err(WithdrawError::InsufficientFunds {
+                balance: Nat::from(available),
+            });
+        }
+        let block_index = u64::try_from(state.withdrawals.len() + 1).map_err(|_| {
+            WithdrawError::GenericError {
+                error_code: Nat::from(3_u8),
+                message: "withdrawal history exhausted".to_string(),
+            }
+        })?;
+        state.balances.insert(caller, available - debit);
+        state.withdrawals.push(WithdrawalRecord {
+            args,
+            block_index,
+            caller,
+        });
+        Ok((amount, block_index))
+    })?;
+    Call::bounded_wait(Principal::management_canister(), "deposit_cycles")
+        .with_cycles(amount)
+        .with_arg(CanisterIdRecord {
+            canister_id: caller,
+        })
+        .await
+        .map_err(|error| WithdrawError::GenericError {
+            error_code: Nat::from(4_u8),
+            message: format!("deposit_cycles failed: {error}"),
+        })?;
+    Ok(Nat::from(block_index))
+}
+
+#[ic_cdk::query]
+fn withdrawal_count() -> u64 {
+    STATE.with_borrow(|state| {
+        u64::try_from(
+            state
+                .as_ref()
+                .expect("Cycles Ledger stub is initialized")
+                .withdrawals
+                .len(),
+        )
+        .expect("withdrawal count fits u64")
+    })
 }
 
 #[ic_cdk::update]
@@ -185,6 +352,28 @@ fn generic_error(message: &str) -> CreateCanisterError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(CandidType)]
+    struct CreateOnlyInitArgs {
+        canister_ids: Vec<Principal>,
+        expected_root: Principal,
+        expected_subnet: Principal,
+        pending_first_index: Option<u64>,
+    }
+
+    #[test]
+    fn create_only_fixture_init_decodes_with_absent_withdrawal_fields() {
+        let bytes = candid::encode_one(CreateOnlyInitArgs {
+            canister_ids: vec![Principal::from_slice(&[1; 29])],
+            expected_root: Principal::from_slice(&[2; 29]),
+            expected_subnet: Principal::from_slice(&[3; 29]),
+            pending_first_index: None,
+        })
+        .expect("encode create-only fixture init");
+        let decoded: InitArgs = candid::decode_one(&bytes).expect("decode extended fixture init");
+        assert!(decoded.initial_balances.is_none());
+        assert!(decoded.withdrawal_fee.is_none());
+    }
 
     #[test]
     fn exact_controller_and_subnet_are_required_independently() {

@@ -14,6 +14,7 @@ mod artifact_io;
 pub mod binaryen;
 mod bootstrap_candid;
 mod bootstrap_coordinator;
+mod bootstrap_pool_ledger_recovery;
 mod bootstrap_store;
 mod build_profile;
 pub mod build_provenance;

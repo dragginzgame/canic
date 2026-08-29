@@ -173,7 +173,9 @@ fn test_wrapper_dependencies() -> GeneratedWrapperDependencies {
     GeneratedWrapperDependencies {
         canic_version: "0.35.5".to_string(),
         candid_version: "0.10.32".to_string(),
+        crypto_common_version: "0.1.6".to_string(),
         ic_cdk_version: "0.20.2".to_string(),
+        serde_version: "1.0.229".to_string(),
     }
 }
 

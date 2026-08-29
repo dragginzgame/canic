@@ -8,34 +8,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Fixes retained Fleet convergence with distinct Root and Store installation
-  identities. Root now retains and validates the exact Store child authority
-  and uses that child identity for Store activation calls. Fleet Ensure starts
-  stopped retained role canisters by Principal before role queries and replays
-  an issued Component-provisioning command only from typed retryable-pending
-  evidence, preserving its reviewed action and idempotency authority.
-- Adds a supported empty-estate entry to the current Fleet Ensure workflow:
-  `canic fleet generate --fresh` durably creates or exactly replays a no-effect
-  seed with a random Fleet ID and explicit Cycles Ledger/creation-fee
-  authority. Generated logical controller and treasury dependencies are
-  resolved only from journaled creation results, while the existing reviewed
-  plan/apply owner retains all paid effects, interruption recovery and
-  effect-free replay. Retained-estate generation remains live-verified and
-  fail-closed.
-- Keeps the persistent Make-selected `sccache` server outside disposable test
-  scratch, preventing later Cargo gates from inheriting a deleted temporary
-  directory after test cleanup.
-- Makes validation failures conspicuous during and at the end of long runs
-  with red, target-owned error prefixes and a retained `latest-errors.log`
-  excerpt while preserving the complete raw failure log.
-- Runs each long validation invocation from a syntax-checked immutable copy of
-  its shell driver, preventing concurrent runner edits from causing a late
-  parser failure after successful tests.
-
 ## [0.109.x] - Fleet-Wide Ingress Admission
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.21` makes finalized release artifacts network-bound, proves fresh pool
+  canisters are funded directly by the reviewed Fleet Ensure creation graph,
+  and adds an exact same-Principal recovery for cycles accidentally credited to
+  an empty Root-owned pool canister's Cycles Ledger account. The composed
+  lifecycle fixture advances to IcyDB `0.247.0`.
+- `0.109.20` restores retained-estate convergence with distinct Root and Store
+  installation identities, exact stopped-role startup, and typed retry of an
+  issued Component command under its original idempotency authority. It adds
+  no-effect fresh-Fleet seeding with journaled logical identity resolution,
+  keeps persistent `sccache` state outside disposable test scratch, highlights
+  retained validation failures, and runs long validation invocations from a
+  syntax-checked immutable driver snapshot.
 - `0.109.19` closes the staged Binaryen writer before the public toolchain
   installer executes and admits the optimizer, and makes in-progress Fleet
   operations retain and resume their exact reviewed desired authority before

@@ -16,7 +16,7 @@ use crate::{
         PersistedApplicationArtifactUnion, PersistedCanicInfrastructureArtifactManifest,
     },
 };
-use canic_core::ids::ReleaseBuildId;
+use canic_core::ids::{BuildNetwork, ReleaseBuildId};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -32,6 +32,7 @@ pub const CURRENT_RELEASE_SET_MANIFEST_FILE: &str = "current-release-set-manifes
 #[serde(deny_unknown_fields)]
 pub struct CurrentReleaseSetManifest {
     pub application_artifact_union_sha256: [u8; 32],
+    pub build_network: BuildNetwork,
     pub infrastructure_artifact_manifest_sha256: [u8; 32],
     pub release_build_id: ReleaseBuildId,
     pub schema_version: u16,
@@ -118,6 +119,7 @@ pub fn compile_and_persist_current_release_set_manifest(
     }
     let expected = CurrentReleaseSetManifest {
         application_artifact_union_sha256: application.digest,
+        build_network: release_build.build_network,
         infrastructure_artifact_manifest_sha256: infrastructure.digest,
         release_build_id,
         schema_version: CurrentReleaseSetManifest::SCHEMA_VERSION,

@@ -57,7 +57,9 @@ struct BootstrapWasmStoreSource {
 pub struct GeneratedWrapperDependencies {
     pub(crate) canic_version: String,
     pub(crate) candid_version: String,
+    pub(crate) crypto_common_version: String,
     pub(crate) ic_cdk_version: String,
+    pub(crate) serde_version: String,
 }
 
 // Build the implicit bootstrap `wasm_store` artifact and populate the canonical
@@ -274,10 +276,17 @@ pub fn resolved_wrapper_dependencies(
     let canic_core = resolved_normal_dependency(metadata, canic_package, "canic-core")?;
     let candid = resolved_normal_dependency(metadata, canic_core, "candid")?;
     let ic_cdk = resolved_normal_dependency(metadata, canic_core, "ic-cdk")?;
+    let serde = resolved_normal_dependency(metadata, canic_core, "serde")?;
+    let ic_principal = resolved_normal_dependency(metadata, candid, "ic_principal")?;
+    let sha2 = resolved_normal_dependency(metadata, ic_principal, "sha2")?;
+    let digest = resolved_normal_dependency(metadata, sha2, "digest")?;
+    let crypto_common = resolved_normal_dependency(metadata, digest, "crypto-common")?;
     Ok(GeneratedWrapperDependencies {
         canic_version: canic_package.version.clone(),
         candid_version: candid.version.clone(),
+        crypto_common_version: crypto_common.version.clone(),
         ic_cdk_version: ic_cdk.version.clone(),
+        serde_version: serde.version.clone(),
     })
 }
 

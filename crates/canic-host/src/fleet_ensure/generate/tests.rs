@@ -85,6 +85,30 @@ fn treasury_adoption_requires_one_observed_seeded_identity() {
 }
 
 #[test]
+fn release_build_network_must_match_the_selected_environment() {
+    let release_build_id =
+        ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([7; 32]));
+
+    require_release_build_network(
+        release_build_id,
+        BuildNetwork::Ic,
+        "staging",
+        BuildNetwork::Ic,
+    )
+    .expect("IC artifact is admitted for an IC environment");
+    assert!(matches!(
+        require_release_build_network(
+            release_build_id,
+            BuildNetwork::Local,
+            "staging",
+            BuildNetwork::Ic,
+        ),
+        Err(FleetGenerateError::Release(reason))
+            if reason.contains("targets local") && reason.contains("requires ic")
+    ));
+}
+
+#[test]
 fn retained_identities_and_controller_sets_are_exact() {
     let principal = Principal::from_slice(&[5]).to_text();
     let foreign = Principal::from_slice(&[6]).to_text();
@@ -665,6 +689,59 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             .all(|canister| canister.disposition
                 == crate::fleet_ensure::model::CanisterDisposition::Create)
     );
+    let created = fresh_plan
+        .canisters
+        .iter()
+        .flat_map(|canister| &canister.actions)
+        .filter_map(|action| match action {
+            EnsureAction::Create {
+                ledger,
+                name,
+                requested_initial_cycles,
+                ..
+            } => Some((ledger, name, *requested_initial_cycles)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(created.len(), fresh.desired.canisters.len());
+    assert!(
+        created
+            .iter()
+            .all(|(ledger, _, _)| { *ledger == &fresh.desired.cycles_ledger })
+    );
+    for pool in &fresh_pools {
+        let (_, _, funded) = created
+            .iter()
+            .find(|(_, name, _)| name.as_str() == pool.name.as_str())
+            .expect("fresh pool creation is reviewed directly");
+        assert_eq!(funded.to_string(), pool.initial_cycles);
+    }
+    let requested = created
+        .iter()
+        .try_fold(0_u128, |total, (_, _, amount)| total.checked_add(*amount))
+        .expect("fresh funding sum");
+    let expected_fees = u128::try_from(created.len())
+        .expect("bounded canister count")
+        .checked_mul(500_100_000_000)
+        .expect("fresh fee sum");
+    assert_eq!(
+        fresh_plan.conservation.maximum_new_funding_cycles,
+        requested
+    );
+    assert_eq!(
+        fresh_plan.conservation.maximum_unavoidable_fee_cycles,
+        expected_fees
+    );
+    assert_eq!(
+        fresh_plan.conservation.maximum_operator_debit_cycles,
+        requested + expected_fees
+    );
+    assert!(fresh_plan.canisters.iter().all(|canister| {
+        canister
+            .actions
+            .iter()
+            .all(|action| !matches!(action, EnsureAction::Fund { .. }))
+    }));
     assert!(matches!(
         initialize_fresh_estate_seed(&FreshEstateSeedRequest {
             cycles_ledger: &mainnet_cycles_ledger(),
@@ -1712,6 +1789,7 @@ fn persist_test_release_authority(
         application_artifact_union_sha256: application
             .digest(config.component_topology())
             .expect("application union digest"),
+        build_network: canic_core::ids::BuildNetwork::Local,
         infrastructure_artifact_manifest_sha256: infrastructure
             .digest()
             .expect("infrastructure manifest digest"),
@@ -1825,6 +1903,7 @@ fn retained_pool_response(
         pending_reset: 0,
         claimed: 0,
         recycling: 0,
+        recovering_ledger: 0,
         handing_off: 0,
         failed: 0,
         completed_handoffs: 0,
@@ -2048,6 +2127,7 @@ fn infrastructure_artifacts(
     [
         CanicInfrastructureRole::FleetCoordinator,
         CanicInfrastructureRole::FleetSubnetRoot,
+        CanicInfrastructureRole::PoolLedgerRecovery,
         CanicInfrastructureRole::WasmStore,
     ]
     .into_iter()

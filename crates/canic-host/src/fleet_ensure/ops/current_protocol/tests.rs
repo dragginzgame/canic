@@ -497,6 +497,7 @@ fn store_sequence_binds_qualified_bytes_and_deterministic_replay_identities() {
         &outputs,
     )
     .expect("persist qualified union");
+    persist_infrastructure_manifest(&root, release_build_id);
     let registry = active_registry(&config);
     let entry = registry
         .fleet_subnet_roots
@@ -550,9 +551,74 @@ fn store_sequence_binds_qualified_bytes_and_deterministic_replay_identities() {
         Some(CurrentFleetProtocolAction::BootstrapStore { .. })
     ));
     assert_eq!(compiled.expected_bootstrap.catalog.len(), 1);
+    assert!(compiled.pool_ledger_recovery_artifact.is_some());
     assert_ne!(compiled.bootstrap_request.operation_id, [0; 32]);
 
     fs::remove_dir_all(root).expect("remove test root");
+}
+
+fn persist_infrastructure_manifest(root: &Path, release_build_id: ReleaseBuildId) {
+    use crate::release_set::{
+        CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
+        CanicInfrastructureRole,
+    };
+
+    let entries = [
+        CanicInfrastructureRole::FleetCoordinator,
+        CanicInfrastructureRole::FleetSubnetRoot,
+        CanicInfrastructureRole::PoolLedgerRecovery,
+        CanicInfrastructureRole::WasmStore,
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, role)| {
+        let index = u8::try_from(index).expect("infrastructure role index fits u8");
+        let raw = [b"\0asm\x01\0\0\0".as_slice(), &[index]].concat();
+        let mut encoder = GzBuilder::new()
+            .mtime(0)
+            .write(Vec::new(), Compression::best());
+        encoder.write_all(&raw).expect("write infrastructure gzip");
+        let gzip = encoder.finish().expect("finish infrastructure gzip");
+        let base = format!(".icp/local/canisters/{0}/{0}", role.as_str());
+        fs::create_dir_all(root.join(&base).parent().expect("artifact parent"))
+            .expect("create artifact parent");
+        fs::write(root.join(format!("{base}.wasm")), &raw).expect("write raw artifact");
+        fs::write(root.join(format!("{base}.wasm.gz")), &gzip).expect("write gzip artifact");
+        CanicInfrastructureArtifactEntry {
+            role,
+            package: role.as_str().to_string(),
+            protocol_release_identity: "current".to_string(),
+            protocol_role: CanisterRole::owned(role.protocol_role_name().to_string()),
+            protocol_capabilities: BTreeSet::new(),
+            release_build_id,
+            wasm_relative_path: format!("{base}.wasm"),
+            wasm_size_bytes: raw.len() as u64,
+            wasm_sha256_hex: canic_core::cdk::utils::hash::sha256_hex(&raw),
+            wasm_gz_relative_path: format!("{base}.wasm.gz"),
+            wasm_gz_size_bytes: gzip.len() as u64,
+            wasm_gz_sha256_hex: canic_core::cdk::utils::hash::sha256_hex(&gzip),
+            candid_sha256: [3; 32],
+            protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+                [4; 32],
+            ),
+        }
+    })
+    .collect();
+    let manifest = CanicInfrastructureArtifactManifest {
+        release_build_id,
+        entries,
+    };
+    manifest.validate().expect("valid infrastructure manifest");
+    let path = root
+        .join(".canic/release-builds")
+        .join(release_build_id.to_string())
+        .join("infrastructure-artifact-manifest.json");
+    fs::create_dir_all(path.parent().expect("manifest parent")).expect("create manifest parent");
+    fs::write(
+        path,
+        manifest.canonical_bytes().expect("canonical manifest"),
+    )
+    .expect("write infrastructure manifest");
 }
 
 fn desired(placements: Vec<DesiredComponentGroupPlacement>) -> DesiredFleet {

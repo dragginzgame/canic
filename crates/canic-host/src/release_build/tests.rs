@@ -24,9 +24,32 @@ fn planned_record_is_durable_canonical_and_bound_to_its_path() {
     let bytes = fs::read(&plan.path).expect("read plan");
     assert_eq!(plan.record.builder_version, env!("CARGO_PKG_VERSION"));
     assert_eq!(plan.record.build_profile, CanisterBuildProfile::Fast);
-    assert_eq!(bytes[0], 0x85);
+    assert_eq!(plan.record.build_network, BuildNetwork::Local);
+    assert_eq!(bytes[0], 0x86);
     assert_eq!(bytes[1..3], [0x58, 0x20]);
     assert!(bytes.ends_with(&[0x81, 0x00]));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn planned_record_binds_the_exact_build_network() {
+    let root = temp_dir("release-build-network");
+    let plan = plan_release_build_with_nonce_and_network(
+        &root,
+        ReleaseBuildNonce::from_random_bytes([8; 32]),
+        CanisterBuildProfile::Release,
+        BuildNetwork::Ic,
+    )
+    .expect("plan IC release build");
+
+    assert_eq!(plan.record.build_network, BuildNetwork::Ic);
+    assert_eq!(
+        load_release_build_plan(&root, plan.record.release_build_id)
+            .expect("load network-bound plan")
+            .build_network,
+        BuildNetwork::Ic
+    );
 
     fs::remove_dir_all(root).expect("remove temp root");
 }

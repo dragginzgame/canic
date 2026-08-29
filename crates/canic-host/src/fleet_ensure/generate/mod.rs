@@ -1685,6 +1685,14 @@ fn release_authority(
     let complete =
         load_persisted_current_release_set_manifest(request.root, request.release_build_id)
             .map_err(|error| FleetGenerateError::Release(error.to_string()))?;
+    let expected_network = resolve_icp_build_network_from_root(request.root, request.environment)
+        .map_err(|error| FleetGenerateError::Release(error.to_string()))?;
+    require_release_build_network(
+        request.release_build_id,
+        complete.manifest.build_network,
+        request.environment,
+        expected_network,
+    )?;
     validate_finalized_release_build_manifest(
         request.root,
         request.release_build_id,
@@ -1708,6 +1716,20 @@ fn release_authority(
         ));
     }
     Ok((infrastructure, complete))
+}
+
+fn require_release_build_network(
+    release_build_id: ReleaseBuildId,
+    actual: BuildNetwork,
+    environment: &str,
+    expected: BuildNetwork,
+) -> Result<(), FleetGenerateError> {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(FleetGenerateError::Release(format!(
+        "release build {release_build_id} targets {actual}, but environment {environment} requires {expected}",
+    )))
 }
 
 #[expect(

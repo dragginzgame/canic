@@ -23,7 +23,9 @@ use crate::{
     icp::IcpCli,
     release_set::{
         AppConfigSnapshot, ApplicationArtifactEntry, ApplicationArtifactUnion,
-        FleetSubnetRootReleaseSetManifest, load_persisted_application_artifact_union,
+        CanicInfrastructureRole, FleetSubnetRootReleaseSetManifest,
+        load_persisted_application_artifact_union,
+        load_persisted_canic_infrastructure_artifact_manifest,
         validate_release_artifact_relative_path,
     },
 };
@@ -44,6 +46,7 @@ use canic_control_plane::ids::{
     TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
 };
 use canic_core::{
+    cdk::types::Cycles,
     control_plane_support::config::{ComponentDeploymentConfiguration, ComponentTopology},
     control_plane_support::ops::{
         component_provisioning_plan::ComponentProvisioningPlanOps, fleet_registry::FleetRegistryOps,
@@ -64,6 +67,10 @@ use canic_core::{
             FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootStatus,
         },
         fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetWasmStoreAdoptionRequest},
+        pool::{
+            CanisterPoolAssetStatus, CanisterPoolStatusRequest, PoolLedgerRecoveryArtifact,
+            PoolLedgerRecoveryRequest,
+        },
         role::{OperationReceipt, OperationStatusRequest},
         root_store::{
             ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
@@ -83,6 +90,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -139,6 +147,7 @@ pub struct CompiledCurrentStoreSequence {
     pub actions: Vec<CurrentFleetProtocolAction>,
     pub bootstrap_request: RootStoreBootstrapRequest,
     pub expected_bootstrap: RootStoreBootstrapResponse,
+    pub pool_ledger_recovery_artifact: Option<PoolLedgerRecoveryArtifact>,
 }
 
 /// One exact role-owned step in the deterministic current Fleet choreography.
@@ -154,17 +163,15 @@ enum RootCommandFragment {
     AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
     BootstrapStore(RootStoreBootstrapRequest),
     PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
+    RecoverPoolLedger(PoolLedgerRecoveryRequest),
     SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
 }
 
 #[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the private decoder mirrors the exact Root command response wire"
-)]
 enum RootCommandResponseFragment {
     OperationAccepted(OperationReceipt),
     PrepareComponentRegistry(RootComponentRegistryStatusResponse),
+    RecoverPoolLedger(canic_core::dto::pool::PoolLedgerRecoveryReceipt),
 }
 
 #[derive(CandidType)]
@@ -176,6 +183,7 @@ enum RootStatusRequestFragment {
     ComponentRegistry(RootComponentRegistryPreparationRequest),
     FleetAuthority,
     Operation(OperationStatusRequest),
+    Pool(CanisterPoolStatusRequest),
 }
 
 #[derive(CandidType, Deserialize)]
@@ -187,6 +195,7 @@ enum RootStatusResponseFragment {
     ComponentRegistry(RootComponentRegistryStatusResponse),
     FleetAuthority(FleetSubnetRootAuthority),
     Operation(RootOperationStatusResponse),
+    Pool(canic_core::dto::pool::CanisterPoolResponse),
 }
 
 /// Typed current-protocol compilation or transport failure.
@@ -405,7 +414,7 @@ pub(super) fn compile(
         )?;
         stores.insert(authority.binding.fleet_subnet_root, sequence);
     }
-    let compiled = compile_current_protocol_sequence(
+    let mut compiled = compile_current_protocol_sequence(
         desired,
         state,
         &configuration,
@@ -414,11 +423,40 @@ pub(super) fn compile(
         &stores,
         operation_id,
     )?;
+    compiled.extend(compile_pool_ledger_recovery_steps(
+        icp,
+        desired,
+        &root_candid_path,
+        &root_authorities,
+        &stores,
+        operation_id,
+    )?);
+    compiled.sort_by_key(|step| current_protocol_stage(&step.action));
     let per_action_burn_cycles = desired.maximum_update_burn_cycles.parse().map_err(|_| {
         CurrentProtocolError::Configuration(
             "maximum_update_burn_cycles is not an exact integer".to_string(),
         )
     })?;
+    bind_unapplied_actions(
+        icp,
+        root,
+        desired,
+        state,
+        protocol_intent,
+        compiled,
+        per_action_burn_cycles,
+    )
+}
+
+fn bind_unapplied_actions(
+    icp: &IcpCli,
+    root: &Path,
+    desired: &DesiredFleet,
+    state: &FleetEnsureStateRecord,
+    protocol_intent: &DesiredFleetProtocol,
+    compiled: Vec<CompiledCurrentProtocolStep>,
+    per_action_burn_cycles: u128,
+) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
     compiled
         .into_iter()
         .map(|step| {
@@ -443,6 +481,178 @@ pub(super) fn compile(
             }
         })
         .collect()
+}
+
+#[derive(CandidType)]
+struct CyclesLedgerAccount {
+    owner: Principal,
+    subaccount: Option<[u8; 32]>,
+}
+
+fn compile_pool_ledger_recovery_steps(
+    icp: &IcpCli,
+    desired: &DesiredFleet,
+    root_candid: &Path,
+    authorities: &[FleetSubnetRootAuthority],
+    stores: &BTreeMap<Principal, CompiledCurrentStoreSequence>,
+    operation_id: [u8; 32],
+) -> Result<Vec<CompiledCurrentProtocolStep>, CurrentProtocolError> {
+    let fee = query_cycles_ledger_amount(icp, &desired.cycles_ledger, "icrc1_fee", &())?;
+    let maximum_execution_burn_cycles = desired
+        .maximum_update_burn_cycles
+        .parse::<u128>()
+        .map_err(|_| {
+            CurrentProtocolError::Configuration(
+                "maximum_update_burn_cycles is not an exact integer".to_string(),
+            )
+        })?;
+    let mut steps = Vec::new();
+    for authority in authorities {
+        let root = authority.binding.fleet_subnet_root;
+        let helper = stores
+            .get(&root)
+            .and_then(|store| store.pool_ledger_recovery_artifact.clone())
+            .ok_or_else(|| {
+                CurrentProtocolError::Configuration(
+                    "production Store sequence omits pool Ledger recovery authority".to_string(),
+                )
+            })?;
+        let mut entries = query_pool_entries(icp, root_candid, root)?;
+        entries.sort_unstable_by_key(|entry| entry.canister_id);
+        for entry in entries {
+            let recovery_operation =
+                derived_operation_id(operation_id, b"pool-ledger-recovery", entry.canister_id);
+            if let Some(RootOperationStatusResponse::RecoverPoolLedger(status)) =
+                query_root_operation(icp, root_candid, root, recovery_operation)?
+            {
+                if status.request.canister_id != entry.canister_id
+                    || status.request.cycles_ledger.to_text() != desired.cycles_ledger
+                    || status.request.artifact != helper
+                {
+                    return Err(CurrentProtocolError::ResponseMismatch);
+                }
+                if status.receipt.is_none() {
+                    steps.push(pool_ledger_recovery_step(root, status.request));
+                    break;
+                }
+                continue;
+            }
+            if !matches!(
+                entry.status,
+                CanisterPoolAssetStatus::PendingReset
+                    | CanisterPoolAssetStatus::Ready
+                    | CanisterPoolAssetStatus::Failed { .. }
+            ) {
+                continue;
+            }
+            let balance = query_cycles_ledger_amount(
+                icp,
+                &desired.cycles_ledger,
+                "icrc1_balance_of",
+                &CyclesLedgerAccount {
+                    owner: entry.canister_id,
+                    subaccount: None,
+                },
+            )?;
+            if balance == 0 {
+                continue;
+            }
+            let withdrawal_amount = balance.checked_sub(fee).filter(|amount| *amount > 0).ok_or_else(
+                || CurrentProtocolError::Configuration(format!(
+                    "pool canister {} has {balance} Ledger cycles, which cannot cover exact fee {fee}",
+                    entry.canister_id,
+                )),
+            )?;
+            let created_at_time_ns = current_time_ns()?;
+            steps.push(pool_ledger_recovery_step(
+                root,
+                PoolLedgerRecoveryRequest {
+                    artifact: helper,
+                    canister_id: entry.canister_id,
+                    created_at_time_ns,
+                    cycles_ledger: Principal::from_text(&desired.cycles_ledger).map_err(|_| {
+                        CurrentProtocolError::Configuration(
+                            "Cycles Ledger Principal is invalid".to_string(),
+                        )
+                    })?,
+                    ledger_balance: Cycles::new(balance),
+                    ledger_fee: Cycles::new(fee),
+                    maximum_execution_burn_cycles: Cycles::new(maximum_execution_burn_cycles),
+                    operation_id: recovery_operation,
+                    withdrawal_amount: Cycles::new(withdrawal_amount),
+                },
+            ));
+            break;
+        }
+    }
+    Ok(steps)
+}
+
+fn current_time_ns() -> Result<u64, CurrentProtocolError> {
+    let duration = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| {
+        CurrentProtocolError::Configuration("system clock is before epoch".to_string())
+    })?;
+    u64::try_from(duration.as_nanos()).map_err(|_| {
+        CurrentProtocolError::Configuration("system clock does not fit u64 nanoseconds".to_string())
+    })
+}
+
+fn pool_ledger_recovery_step(
+    root: Principal,
+    request: PoolLedgerRecoveryRequest,
+) -> CompiledCurrentProtocolStep {
+    CompiledCurrentProtocolStep {
+        name: format!("pool-ledger-recovery:{}", request.canister_id),
+        target: root,
+        action: CurrentFleetProtocolAction::RecoverPoolLedger { request },
+    }
+}
+
+fn query_pool_entries(
+    icp: &IcpCli,
+    root_candid: &Path,
+    root: Principal,
+) -> Result<Vec<canic_core::dto::pool::CanisterPoolAsset>, CurrentProtocolError> {
+    let mut entries = Vec::new();
+    let mut start_after = None;
+    loop {
+        let response: RootStatusResponseFragment = query_with_candid(
+            icp,
+            root_candid,
+            root,
+            protocol::CANIC_STATUS,
+            &RootStatusRequestFragment::Pool(CanisterPoolStatusRequest {
+                start_after,
+                limit: 256,
+            }),
+        )?;
+        let RootStatusResponseFragment::Pool(page) = response else {
+            return Err(CurrentProtocolError::ResponseMismatch);
+        };
+        entries.extend(page.entries);
+        let Some(next) = page.next_start_after else {
+            break;
+        };
+        if start_after.is_some_and(|previous| previous >= next) || entries.len() > 4_096 {
+            return Err(CurrentProtocolError::ResponseMismatch);
+        }
+        start_after = Some(next);
+    }
+    Ok(entries)
+}
+
+fn query_cycles_ledger_amount<I: CandidType>(
+    icp: &IcpCli,
+    ledger: &str,
+    method: &str,
+    input: &I,
+) -> Result<u128, CurrentProtocolError> {
+    let amount: candid::Nat = icp
+        .canister_query_candid(ledger, method, input, None)
+        .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+    Cycles::try_from(amount)
+        .map(|cycles| cycles.to_u128())
+        .map_err(|_| CurrentProtocolError::Configuration(format!("{method} exceeds u128")))
 }
 
 /// Compile the exact current Store, Registry, mirror and Component order without transport.
@@ -684,12 +894,13 @@ const fn current_protocol_stage(action: &CurrentFleetProtocolAction) -> u8 {
         | CurrentFleetProtocolAction::StageStoreManifest { .. }
         | CurrentFleetProtocolAction::AdoptStore { .. }
         | CurrentFleetProtocolAction::BootstrapStore { .. } => 0,
-        CurrentFleetProtocolAction::JoinRoot { .. } => 1,
-        CurrentFleetProtocolAction::SynchronizeRegistry { .. } => 2,
-        CurrentFleetProtocolAction::ActivateRegistry { .. } => 3,
-        CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => 4,
-        CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => 5,
-        CurrentFleetProtocolAction::ProvisionComponents { .. } => 6,
+        CurrentFleetProtocolAction::RecoverPoolLedger { .. } => 1,
+        CurrentFleetProtocolAction::JoinRoot { .. } => 2,
+        CurrentFleetProtocolAction::SynchronizeRegistry { .. } => 3,
+        CurrentFleetProtocolAction::ActivateRegistry { .. } => 4,
+        CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => 5,
+        CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => 6,
+        CurrentFleetProtocolAction::ProvisionComponents { .. } => 7,
     }
 }
 
@@ -884,6 +1095,24 @@ pub(super) fn observe(
             };
             observation(component_registry_progresses(expected, &status), &status)
         }
+        CurrentFleetProtocolAction::RecoverPoolLedger { request } => {
+            let Some(status) = query_root_operation(
+                icp,
+                &resolved.candid_path,
+                resolved.target,
+                request.operation_id,
+            )?
+            else {
+                return Ok(unavailable_observation());
+            };
+            let RootOperationStatusResponse::RecoverPoolLedger(status) = status else {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            };
+            if status.request != *request {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            }
+            observation(status.receipt.is_some(), &status)
+        }
         CurrentFleetProtocolAction::ProvisionComponents { request, plan_hash } => {
             let Some(status) = query_operation(
                 icp,
@@ -1057,6 +1286,23 @@ pub(super) fn apply(
                 return Err(CurrentProtocolError::ResponseMismatch);
             }
             candid::encode_one(response)
+                .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?
+        }
+        CurrentFleetProtocolAction::RecoverPoolLedger { request } => {
+            let response: RootCommandResponseFragment = call_with_candid(
+                icp,
+                &resolved.candid_path,
+                resolved.target,
+                protocol::CANIC_COMMAND,
+                &RootCommandFragment::RecoverPoolLedger(request.clone()),
+            )?;
+            let RootCommandResponseFragment::RecoverPoolLedger(receipt) = response else {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            };
+            if receipt.operation_id != request.operation_id || receipt.request != *request {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            }
+            candid::encode_one(receipt)
                 .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?
         }
         CurrentFleetProtocolAction::SynchronizeRegistry { request, .. }
@@ -1665,13 +1911,65 @@ pub fn compile_current_store_sequence(
         authority.initial_release_set.release_build_id,
     )
     .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
-    compile_current_store_sequence_from_union(
+    let mut sequence = compile_current_store_sequence_from_union(
         root,
         topology,
         authority,
         operation_id,
         &persisted.union,
+    )?;
+    let infrastructure = load_persisted_canic_infrastructure_artifact_manifest(
+        root,
+        authority.initial_release_set.release_build_id,
     )
+    .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+    let helper = infrastructure
+        .manifest
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::PoolLedgerRecovery)
+        .ok_or_else(|| {
+            CurrentProtocolError::Configuration(
+                "current infrastructure manifest omits pool Ledger recovery helper".to_string(),
+            )
+        })?;
+    let bytes = read_infrastructure_artifact(root, helper)?;
+    let template_id = TemplateId::owned("canic:pool-ledger-recovery".to_string());
+    let version =
+        TemplateVersion::owned(authority.initial_release_set.release_build_id.to_string());
+    let mut helper_actions = vec![CurrentFleetProtocolAction::StageStoreManifest {
+        request: TemplateManifestInput {
+            template_id: template_id.clone(),
+            role: CanisterRole::owned("pool_ledger_recovery".to_string()),
+            version: version.clone(),
+            payload_hash: decode_sha256(&helper.wasm_gz_sha256_hex)?.to_vec(),
+            payload_size_bytes: helper.wasm_gz_size_bytes,
+            store_binding: WasmStoreBinding::new("bootstrap"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(0),
+            created_at: 0,
+        },
+    }];
+    append_chunk_actions(&mut helper_actions, template_id, version, &bytes)?;
+    let insertion = sequence
+        .actions
+        .iter()
+        .position(|action| matches!(action, CurrentFleetProtocolAction::AdoptStore { .. }))
+        .ok_or_else(|| {
+            CurrentProtocolError::Configuration("Store sequence omits adoption".to_string())
+        })?;
+    sequence
+        .actions
+        .splice(insertion..insertion, helper_actions);
+    sequence.pool_ledger_recovery_artifact = Some(PoolLedgerRecoveryArtifact {
+        candid_sha256: helper.candid_sha256,
+        payload_hash: decode_sha256(&helper.wasm_gz_sha256_hex)?,
+        payload_size_bytes: helper.wasm_gz_size_bytes,
+        raw_module_hash: decode_sha256(&helper.wasm_sha256_hex)?,
+        release_build_id: authority.initial_release_set.release_build_id,
+    });
+    Ok(sequence)
 }
 
 /// Compile Store actions from one already-qualified current artifact union.
@@ -1797,6 +2095,7 @@ pub fn compile_current_store_sequence_from_union(
         actions,
         bootstrap_request,
         expected_bootstrap,
+        pool_ledger_recovery_artifact: None,
     })
 }
 
@@ -1888,6 +2187,24 @@ fn read_qualified_artifact(
             "Store artifact {} differs from qualified evidence",
             artifact.role
         )));
+    }
+    Ok(bytes)
+}
+
+fn read_infrastructure_artifact(
+    root: &Path,
+    artifact: &crate::release_set::CanicInfrastructureArtifactEntry,
+) -> Result<Vec<u8>, CurrentProtocolError> {
+    validate_release_artifact_relative_path(&artifact.wasm_gz_relative_path)
+        .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+    let bytes = fs::read(root.join(&artifact.wasm_gz_relative_path))
+        .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+    if bytes.len() as u64 != artifact.wasm_gz_size_bytes
+        || canic_core::cdk::utils::hash::sha256_hex(&bytes) != artifact.wasm_gz_sha256_hex
+    {
+        return Err(CurrentProtocolError::Configuration(
+            "pool Ledger recovery helper differs from its infrastructure manifest".to_string(),
+        ));
     }
     Ok(bytes)
 }

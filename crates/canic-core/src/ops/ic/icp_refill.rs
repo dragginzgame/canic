@@ -11,13 +11,15 @@ use crate::{
         IcInfraError,
         icp_refill::{
             IcpRefillCanisterOverrides, IcpRefillCanisters, IcpRefillInfra,
-            IcpXdrConversionRateResponse, Icrc1Account, NotifyTopUpArg, NotifyTopUpError,
-            TransferArg, TransferError,
+            IcpXdrConversionRateResponse, NotifyTopUpArg, NotifyTopUpError, TransferArg,
+            TransferError,
         },
     },
     ops::{OpsError, cost_guard::CostGuardPermit},
 };
 use candid::{Nat, Principal};
+
+pub use crate::infra::ic::icp_refill::Icrc1Account;
 
 ///
 /// IcpRefillOps

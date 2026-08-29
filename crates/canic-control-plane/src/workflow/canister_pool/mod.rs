@@ -2,12 +2,17 @@
 
 mod refill;
 
+use crate::ids::{TemplateId, TemplateVersion};
 use crate::ops::{
-    canister_pool::{CanisterPoolOps, CanisterPoolResetPreparation},
+    canister_pool::{
+        CanisterPoolLedgerRecoveryTransition, CanisterPoolOps, CanisterPoolResetPreparation,
+    },
     component_provisioning::RootComponentProvisioningOps,
     component_registry::ComponentRegistryOps,
     storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
+use crate::workflow::{deployment, runtime::template::exact_store_payload_bytes};
+use candid::{CandidType, Deserialize, Nat};
 use canic_core::{
     api::timer::{TimerApi, TimerError as AuthorityTimerError},
     cdk::types::{Cycles, Principal},
@@ -23,7 +28,9 @@ use canic_core::{
             ic::{
                 IcOps,
                 build_network::BuildNetworkOps,
-                mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
+                call::CallOps,
+                icp_refill::{IcpRefillOps, Icrc1Account},
+                mgmt::{CanisterSettings, CanisterStatusType, MgmtOps, UpdateSettingsArgs},
                 nns::NnsRegistryOps,
             },
         },
@@ -33,6 +40,7 @@ use canic_core::{
         fleet_activation::FleetActivationPhase,
         pool::{
             CanisterPoolResponse, CanisterPoolStatusRequest, PoolAdminCommand, PoolAdminResponse,
+            PoolLedgerRecoveryPhase, PoolLedgerRecoveryReceipt, PoolLedgerRecoveryRequest,
         },
     },
     ids::{BuildNetwork, FleetSubnetCanisterPoolConfig, SubnetId},
@@ -51,6 +59,7 @@ use std::{
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(30);
 const MAINTENANCE_LEASE_NS: u64 = 5 * 60 * 1_000_000_000;
 const MAX_STATUS_PAGE_ENTRIES: u16 = 256;
+const POOL_LEDGER_RECOVERY_TEMPLATE_ID: &str = "canic:pool-ledger-recovery";
 
 thread_local! {
     static MAINTENANCE_TIMER: RefCell<Option<AfterCompletionRegistration>> = const { RefCell::new(None) };
@@ -148,6 +157,10 @@ pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, Inter
             canister_id,
             recipient,
         } => handoff(canister_id, recipient).await,
+        PoolAdminCommand::RecoverLedger(request) => recover_ledger(*request)
+            .await
+            .map(Box::new)
+            .map(PoolAdminResponse::LedgerRecovered),
     }
 }
 
@@ -212,6 +225,12 @@ async fn maintain_once_inner_for_target(
     }
     let config = pool_config()?;
     require_ready_target(&config, ready_target)?;
+
+    if CanisterPoolOps::has_pending_ledger_recovery() {
+        return Ok(PoolAdminResponse::MaintenancePaused {
+            reason: "a pool Ledger recovery is still in flight".to_string(),
+        });
+    }
 
     if CanisterPoolOps::pending_handoff().is_some() {
         return Ok(PoolAdminResponse::MaintenancePaused {
@@ -558,6 +577,264 @@ enum ResetAssetOutcome {
 enum PoolAssetResetIntent {
     ExplicitImport,
     Maintain,
+}
+
+#[derive(CandidType, Clone)]
+struct PoolLedgerRecoveryInit {
+    amount: Nat,
+    canister: Principal,
+    created_at_time_ns: u64,
+    cycles_ledger: Principal,
+    operation_id: [u8; 32],
+    root: Principal,
+}
+
+#[derive(CandidType, Deserialize)]
+struct PoolLedgerRecoveryHelperReceipt {
+    amount: Nat,
+    block_index: Nat,
+    canister: Principal,
+    operation_id: [u8; 32],
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one recovery driver keeps every durable phase and its effect fence together"
+)]
+async fn recover_ledger(
+    request: PoolLedgerRecoveryRequest,
+) -> Result<PoolLedgerRecoveryReceipt, InternalError> {
+    if root_is_draining() {
+        return Err(InternalError::conflict());
+    }
+    let root = IcOps::canister_self();
+    let root_authority = FleetActivationWorkflow::root_authority()?;
+    if request.artifact.release_build_id != root_authority.initial_release_set.release_build_id {
+        return Err(InternalError::conflict());
+    }
+    let status = MgmtOps::canister_status(request.canister_id).await?;
+    require_exact_pool_recovery_controllers(&status.settings.controllers, root)?;
+    if status.status != CanisterStatusType::Running {
+        return Err(InternalError::conflict());
+    }
+    require_pool_recovery_module(status.module_hash.as_deref(), None)?;
+    if CanisterPoolOps::ledger_recovery_status_by_operation(request.operation_id).is_none() {
+        require_exact_ledger_balance(&request, request.ledger_balance.clone()).await?;
+    }
+    let initial_native_cycles =
+        Cycles::try_from(status.cycles.clone()).map_err(|_error| InternalError::invariant())?;
+    let mut progress = CanisterPoolOps::prepare_ledger_recovery(
+        &request,
+        initial_native_cycles,
+        IcOps::now_nanos(),
+    )?;
+    if let Some(receipt) = progress.receipt {
+        return Ok(receipt);
+    }
+    let store = root_authority.wasm_store_authority.wasm_store;
+    let template_id = TemplateId::owned(POOL_LEDGER_RECOVERY_TEMPLATE_ID.to_string());
+    let version = TemplateVersion::owned(request.artifact.release_build_id.to_string());
+
+    for _ in 0..12 {
+        progress = match progress.phase {
+            PoolLedgerRecoveryPhase::Prepared => {
+                require_pool_recovery_module(
+                    status_module(request.canister_id).await?.as_deref(),
+                    None,
+                )?;
+                CanisterPoolOps::advance_ledger_recovery(
+                    &request,
+                    CanisterPoolLedgerRecoveryTransition::HelperInstallIssued,
+                )?
+            }
+            PoolLedgerRecoveryPhase::HelperInstallIssued => {
+                let module = status_module(request.canister_id).await?;
+                if module.as_deref() != Some(request.artifact.raw_module_hash.as_slice()) {
+                    require_pool_recovery_module(module.as_deref(), None)?;
+                    let wasm = exact_store_payload_bytes(
+                        store,
+                        &template_id,
+                        &version,
+                        &request.artifact.payload_hash,
+                        request.artifact.payload_size_bytes,
+                    )
+                    .await?;
+                    let permit =
+                        deployment::reserve_canister_pool_ledger_recovery_install_cost_guard()?;
+                    MgmtOps::install_code_with_permit(
+                        &permit,
+                        request.canister_id,
+                        wasm,
+                        (PoolLedgerRecoveryInit {
+                            amount: Nat::from(request.withdrawal_amount.to_u128()),
+                            canister: request.canister_id,
+                            created_at_time_ns: request.created_at_time_ns,
+                            cycles_ledger: request.cycles_ledger,
+                            operation_id: request.operation_id,
+                            root,
+                        },),
+                    )
+                    .await?;
+                }
+                let installed = status_module(request.canister_id).await?;
+                require_pool_recovery_module(
+                    installed.as_deref(),
+                    Some(request.artifact.raw_module_hash.as_slice()),
+                )?;
+                CanisterPoolOps::advance_ledger_recovery(
+                    &request,
+                    CanisterPoolLedgerRecoveryTransition::HelperInstalled,
+                )?
+            }
+            PoolLedgerRecoveryPhase::HelperInstalled => {
+                require_exact_ledger_balance(&request, request.ledger_balance.clone()).await?;
+                CanisterPoolOps::advance_ledger_recovery(
+                    &request,
+                    CanisterPoolLedgerRecoveryTransition::WithdrawalIssued,
+                )?
+            }
+            PoolLedgerRecoveryPhase::WithdrawalIssued => {
+                let block_index = recover_pool_ledger_once(&request).await?;
+                require_recovery_balance_proof(&request, &progress.initial_native_cycles).await?;
+                CanisterPoolOps::advance_ledger_recovery(
+                    &request,
+                    CanisterPoolLedgerRecoveryTransition::WithdrawalVerified { block_index },
+                )?
+            }
+            PoolLedgerRecoveryPhase::WithdrawalVerified => {
+                let block_index = progress.block_index.ok_or_else(InternalError::invariant)?;
+                require_recovery_balance_proof(&request, &progress.initial_native_cycles).await?;
+                CanisterPoolOps::advance_ledger_recovery(
+                    &request,
+                    CanisterPoolLedgerRecoveryTransition::HelperUninstallIssued { block_index },
+                )?
+            }
+            PoolLedgerRecoveryPhase::HelperUninstallIssued => {
+                let module = status_module(request.canister_id).await?;
+                if module.is_some() {
+                    require_pool_recovery_module(
+                        module.as_deref(),
+                        Some(request.artifact.raw_module_hash.as_slice()),
+                    )?;
+                    MgmtOps::uninstall_code(request.canister_id).await?;
+                }
+                require_pool_recovery_module(
+                    status_module(request.canister_id).await?.as_deref(),
+                    None,
+                )?;
+                let final_native_cycles =
+                    require_recovery_balance_proof(&request, &progress.initial_native_cycles)
+                        .await?;
+                return CanisterPoolOps::complete_ledger_recovery(
+                    &request,
+                    final_native_cycles,
+                    IcOps::now_nanos(),
+                );
+            }
+            PoolLedgerRecoveryPhase::Complete => {
+                return progress.receipt.ok_or_else(InternalError::invariant);
+            }
+        };
+    }
+    Err(InternalError::unavailable())
+}
+
+async fn status_module(canister_id: Principal) -> Result<Option<Vec<u8>>, InternalError> {
+    let root = IcOps::canister_self();
+    let status = MgmtOps::canister_status(canister_id).await?;
+    require_exact_pool_recovery_controllers(&status.settings.controllers, root)?;
+    Ok(status.module_hash)
+}
+
+fn require_exact_pool_recovery_controllers(
+    controllers: &[Principal],
+    root: Principal,
+) -> Result<(), InternalError> {
+    if controllers == [root] {
+        Ok(())
+    } else {
+        Err(InternalError::conflict())
+    }
+}
+
+fn require_pool_recovery_module(
+    actual: Option<&[u8]>,
+    expected: Option<&[u8]>,
+) -> Result<(), InternalError> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(InternalError::conflict())
+    }
+}
+
+async fn exact_ledger_balance(
+    cycles_ledger: Principal,
+    owner: Principal,
+) -> Result<Cycles, InternalError> {
+    let balance = IcpRefillOps::icrc1_balance_of(
+        cycles_ledger,
+        Icrc1Account {
+            owner,
+            subaccount: None,
+        },
+    )
+    .await?;
+    Cycles::try_from(balance).map_err(|_error| InternalError::resource_exhausted())
+}
+
+async fn require_exact_ledger_balance(
+    request: &PoolLedgerRecoveryRequest,
+    expected: Cycles,
+) -> Result<(), InternalError> {
+    if exact_ledger_balance(request.cycles_ledger, request.canister_id).await? == expected {
+        Ok(())
+    } else {
+        Err(InternalError::conflict())
+    }
+}
+
+async fn recover_pool_ledger_once(
+    request: &PoolLedgerRecoveryRequest,
+) -> Result<u64, InternalError> {
+    require_pool_recovery_module(
+        status_module(request.canister_id).await?.as_deref(),
+        Some(request.artifact.raw_module_hash.as_slice()),
+    )?;
+    let response = CallOps::bounded_wait(request.canister_id, "recover")
+        .with_args(())?
+        .execute()
+        .await?;
+    let result: Result<PoolLedgerRecoveryHelperReceipt, String> = response.candid()?;
+    let receipt = result.map_err(|_reason| InternalError::unavailable())?;
+    let exact_operation = receipt.operation_id == request.operation_id;
+    let exact_canister = receipt.canister == request.canister_id;
+    let exact_amount = receipt.amount == request.withdrawal_amount.to_u128();
+    if !(exact_operation && exact_canister && exact_amount) {
+        return Err(InternalError::conflict());
+    }
+    IcpRefillOps::checked_block_index(receipt.block_index)
+}
+
+async fn require_recovery_balance_proof(
+    request: &PoolLedgerRecoveryRequest,
+    initial_native_cycles: &Cycles,
+) -> Result<Cycles, InternalError> {
+    require_exact_ledger_balance(request, Cycles::default()).await?;
+    let final_native_cycles = MgmtOps::get_cycles(request.canister_id).await?;
+    let minimum_credit = request
+        .withdrawal_amount
+        .to_u128()
+        .checked_sub(request.maximum_execution_burn_cycles.to_u128())
+        .ok_or_else(InternalError::invalid_input)?;
+    let minimum_final = initial_native_cycles
+        .to_u128()
+        .checked_add(minimum_credit)
+        .ok_or_else(InternalError::resource_exhausted)?;
+    if final_native_cycles.to_u128() < minimum_final {
+        return Err(InternalError::conflict());
+    }
+    Ok(final_native_cycles)
 }
 
 async fn reset_asset(

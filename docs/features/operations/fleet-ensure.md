@@ -88,6 +88,19 @@ On IC mainnet, every Fiduciary placement must carry an exact
 `acknowledge_fiduciary_cost = true`; non-Fiduciary placements must not claim
 that acknowledgement.
 
+The complete build is network-bound. Select the same named environment that
+the generated Fleet will use:
+
+```bash
+canic build <app> --environment staging --profile release
+```
+
+The finalized release-build and release-set manifests retain `local` or `ic`
+as immutable authority. Generation rejects a local-network infrastructure set
+for an IC environment, and rejects an IC set for a local environment, before
+publishing desired state. Reusing artifact hashes alone cannot bypass that
+network check.
+
 Generated output is content-exact. Repeating generation with the same bytes
 succeeds without rewriting the file. A changed document is never overwritten
 implicitly; replace it only by supplying the SHA-256 of the file already on
@@ -148,6 +161,12 @@ The management creation fee is explicit because it is network/Subnet economic
 authority and cannot be inferred from release metadata. Zero is appropriate
 only where the selected local platform actually charges zero. A wrong value
 cannot silently change the reviewed debit or conservation equation.
+
+Initial pool assets are direct Fleet Ensure creation actions. Their configured
+native funding, one exact Cycles Ledger creation fee and one exact management
+creation fee are included in the reviewed maximum operator debit before any
+effect. Fresh convergence does not fund a Root's default Ledger account and
+does not rely on Root pool maintenance to discover an unreviewed payer.
 
 ## Desired State
 
@@ -356,6 +375,26 @@ block/duplicate receipt proves issuance only. Completion requires a fresh
 Root-owned or management observation at or above `expected_native_post`.
 Canic exposes no Fleet Ensure action that substitutes a plain Ledger-account
 transfer for native funding.
+
+If an earlier operator accidentally transferred cycles to the default Cycles
+Ledger account of an empty Root-owned pool canister, Fleet Ensure can recover
+that balance without replacing the canister. Planning queries the exact account
+balance and Ledger fee, adds the full balance to observed controlled cycles,
+and reports the net withdrawal as a scheduled transfer. Apply asks the owning
+Root to fence that exact pool row before any effect. Root then installs the
+release-bound temporary recovery helper on the same empty canister, withdraws
+the exact balance less the exact fee to that same Principal, proves the Ledger
+account is zero and the native balance received at least the reviewed amount
+less bounded execution burn, journals the uninstall, removes the helper and
+returns the asset to ready inventory.
+
+Recovery never applies to a claimed or workload canister, a Store, a stopped or
+stopping asset, a foreign or multi-controller canister, a draining Root, or a
+canister with unexpected code.
+An account balance that cannot cover the fee is an actionable blocker. One
+asset per Root enters recovery in a reviewed plan; rerunning ensure reviews the
+next eligible balance. Interruption resumes the same Root operation and Ledger
+timestamp, and a completed replay accepts no second withdrawal.
 
 ## Retirement Boundary
 

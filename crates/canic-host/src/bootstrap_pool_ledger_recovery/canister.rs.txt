@@ -1,0 +1,124 @@
+use candid::{CandidType, Deserialize, Nat, Principal};
+use ic_cdk::call::Call;
+use std::cell::RefCell;
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct PoolLedgerRecoveryInit {
+    amount: Nat,
+    canister: Principal,
+    created_at_time_ns: u64,
+    cycles_ledger: Principal,
+    operation_id: [u8; 32],
+    root: Principal,
+}
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct PoolLedgerRecoveryReceipt {
+    amount: Nat,
+    block_index: Nat,
+    canister: Principal,
+    operation_id: [u8; 32],
+}
+
+#[derive(CandidType, Clone)]
+struct WithdrawArgs {
+    amount: Nat,
+    created_at_time: Option<u64>,
+    from_subaccount: Option<[u8; 32]>,
+    to: Principal,
+}
+
+#[derive(CandidType, Debug, Deserialize)]
+enum WithdrawError {
+    BadFee { expected_fee: Nat },
+    CreatedInFuture { ledger_time: u64 },
+    Duplicate { duplicate_of: Nat },
+    FailedToWithdraw {
+        fee_block: Option<Nat>,
+        rejection_code: RejectionCode,
+        rejection_reason: String,
+    },
+    GenericError { error_code: Nat, message: String },
+    InsufficientFunds { balance: Nat },
+    InvalidReceiver { receiver: Principal },
+    TemporarilyUnavailable,
+    TooOld,
+}
+
+#[derive(CandidType, Debug, Deserialize)]
+enum RejectionCode {
+    CanisterError,
+    CanisterReject,
+    DestinationInvalid,
+    NoError,
+    SysFatal,
+    SysTransient,
+    Unknown,
+}
+
+thread_local! {
+    static AUTHORITY: RefCell<Option<PoolLedgerRecoveryInit>> = const { RefCell::new(None) };
+}
+
+#[ic_cdk::init]
+fn init(authority: PoolLedgerRecoveryInit) {
+    assert_eq!(authority.canister, ic_cdk::api::canister_self());
+    assert_ne!(authority.root, Principal::anonymous());
+    assert_ne!(authority.cycles_ledger, Principal::anonymous());
+    assert!(authority.amount > Nat::from(0_u8));
+    AUTHORITY.with_borrow_mut(|slot| *slot = Some(authority));
+}
+
+#[ic_cdk::query]
+fn authority() -> PoolLedgerRecoveryInit {
+    AUTHORITY.with_borrow(|slot| slot.clone().expect("recovery helper is initialized"))
+}
+
+#[ic_cdk::update]
+async fn recover() -> Result<PoolLedgerRecoveryReceipt, String> {
+    let authority = authority();
+    if ic_cdk::api::msg_caller() != authority.root {
+        return Err("only the exact owning Root may recover this pool account".to_string());
+    }
+    let request = WithdrawArgs {
+        amount: authority.amount.clone(),
+        created_at_time: Some(authority.created_at_time_ns),
+        from_subaccount: None,
+        to: authority.canister,
+    };
+    let response = Call::bounded_wait(authority.cycles_ledger, "withdraw")
+        .with_arg(request)
+        .await
+        .map_err(|error| format!("Cycles Ledger withdrawal failed: {error}"))?;
+    let result = response
+        .candid::<Result<Nat, WithdrawError>>()
+        .map_err(|error| format!("Cycles Ledger withdrawal response is invalid: {error}"))?;
+    let block_index = match result {
+        Ok(block_index) | Err(WithdrawError::Duplicate { duplicate_of: block_index }) => block_index,
+        Err(error) => return Err(withdraw_error(error)),
+    };
+    Ok(PoolLedgerRecoveryReceipt {
+        amount: authority.amount,
+        block_index,
+        canister: authority.canister,
+        operation_id: authority.operation_id,
+    })
+}
+
+fn withdraw_error(error: WithdrawError) -> String {
+    match error {
+        WithdrawError::BadFee { expected_fee } => format!("bad fee; expected {expected_fee}"),
+        WithdrawError::CreatedInFuture { ledger_time } => format!("created in future; ledger time {ledger_time}"),
+        WithdrawError::FailedToWithdraw { fee_block, rejection_code, rejection_reason } => {
+            format!("withdrawal failed: {rejection_code:?}; {rejection_reason}; fee block {fee_block:?}")
+        }
+        WithdrawError::GenericError { error_code, message } => format!("Ledger error {error_code}: {message}"),
+        WithdrawError::InsufficientFunds { balance } => format!("insufficient funds; balance {balance}"),
+        WithdrawError::InvalidReceiver { receiver } => format!("invalid receiver {receiver}"),
+        WithdrawError::TemporarilyUnavailable => "Ledger temporarily unavailable".to_string(),
+        WithdrawError::TooOld => "Ledger request is too old".to_string(),
+        WithdrawError::Duplicate { .. } => unreachable!("duplicate is accepted above"),
+    }
+}
+
+ic_cdk::export_candid!();

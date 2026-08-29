@@ -134,6 +134,10 @@ pub mod ops {
             };
         }
 
+        pub mod icp_refill {
+            pub use crate::ops::ic::icp_refill::{IcpRefillOps, Icrc1Account};
+        }
+
         pub mod nns {
             pub use crate::ops::ic::nns::registry::NnsRegistryOps;
         }

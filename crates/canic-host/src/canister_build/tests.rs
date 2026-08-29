@@ -11,6 +11,10 @@ fn infrastructure_roles_use_the_canonical_built_in_artifact_sources() {
         CanisterArtifactSource::FleetCoordinator
     );
     assert_eq!(
+        CanisterArtifactSource::for_role("pool_ledger_recovery"),
+        CanisterArtifactSource::PoolLedgerRecovery
+    );
+    assert_eq!(
         CanisterArtifactSource::for_role("wasm_store"),
         CanisterArtifactSource::WasmStore
     );
