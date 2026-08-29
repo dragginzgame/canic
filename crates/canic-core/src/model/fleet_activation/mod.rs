@@ -8,6 +8,7 @@ pub mod endpoint_mode;
 
 use crate::{
     config::ComponentTopology,
+    dto::fleet_subnet_root::FleetSubnetWasmStoreActivationAuthority,
     ids::{
         AppId, CanonicalNetworkId, FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
         FleetSubnetWasmStoreAuthority, ReleaseBuildId,
@@ -40,6 +41,7 @@ pub struct PreparedFleetSubnetRootAuthority {
     pub binding: FleetSubnetRootBinding,
     pub initial_release_set: FleetSubnetRootReleaseSet,
     pub expected_module_hash: [u8; 32],
+    pub wasm_store_activation: FleetSubnetWasmStoreActivationAuthority,
 }
 
 ///
@@ -64,6 +66,7 @@ pub struct RootInstallIdentity {
     pub install_id: [u8; 32],
     pub expected_module_hash: [u8; 32],
     pub wasm_store_authority: FleetSubnetWasmStoreAuthority,
+    pub wasm_store_activation: FleetSubnetWasmStoreActivationAuthority,
 }
 
 ///
@@ -132,6 +135,9 @@ pub enum PrepareFleetActivationError {
     #[error("sibling Wasm Store authority has a zero module hash")]
     WasmStoreModuleHashZero,
 
+    #[error("sibling Wasm Store installation identity is missing or conflicts with Root")]
+    WasmStoreInstallIdInvalid,
+
     #[error("Fleet Subnet Root funding authority is invalid: {0}")]
     FundingPolicy(#[from] FleetFundingPolicyValidationError),
 
@@ -196,6 +202,7 @@ pub fn prepare_root_install(
     if store_authority != root_authority {
         return Err(PrepareFleetActivationError::WasmStoreAuthorityMismatch);
     }
+    validate_wasm_store_activation_authority(&input)?;
 
     Ok(PreparedFleetActivation {
         identity: FleetActivationIdentity {
@@ -207,6 +214,7 @@ pub fn prepare_root_install(
             binding: input.binding,
             initial_release_set: input.initial_release_set,
             expected_module_hash: input.expected_module_hash,
+            wasm_store_activation: input.wasm_store_activation,
         }),
         wasm_store_authority: Some(input.wasm_store_authority),
     })
@@ -219,6 +227,9 @@ pub fn prepare_wasm_store_install(
     wasm_store_canister: Principal,
 ) -> Result<PreparedFleetActivation, PrepareFleetActivationError> {
     require_release_build_match(input.authority.release_build_id, embedded_release_build_id)?;
+    if input.install_id == [0; 32] {
+        return Err(PrepareFleetActivationError::WasmStoreInstallIdInvalid);
+    }
     validate_wasm_store_authority(&input.authority)?;
     if input.authority.wasm_store != wasm_store_canister {
         return Err(PrepareFleetActivationError::WasmStorePrincipalMismatch {
@@ -288,6 +299,41 @@ fn validate_wasm_store_authority(
         return Err(PrepareFleetActivationError::WasmStoreModuleHashZero);
     }
     Ok(())
+}
+
+fn validate_wasm_store_activation_authority(
+    input: &RootInstallIdentity,
+) -> Result<(), PrepareFleetActivationError> {
+    let child = &input.wasm_store_activation;
+    let expected_controllers = expected_wasm_store_controllers(
+        input.binding.fleet_subnet_root,
+        input.wasm_store_authority.installation_controller,
+    );
+    let exact_binding = child.fleet == input.binding.authority.binding.fleet
+        && child.fleet_subnet_root == input.binding.fleet_subnet_root
+        && child.wasm_store == input.wasm_store_authority.wasm_store
+        && child.release_build_id == input.initial_release_set.release_build_id
+        && child.component_topology_digest == input.binding.component_topology_digest
+        && child.manifest_digest == input.initial_release_set.manifest_digest;
+    let exact_identity = child.operation_id != [0; 32]
+        && child.operation_id != input.install_id
+        && child.wasm_store != Principal::anonymous()
+        && child.fleet_subnet_root != Principal::anonymous();
+    let exact_controllers = child.controllers == expected_controllers;
+    if !exact_binding || !exact_identity || !exact_controllers {
+        return Err(PrepareFleetActivationError::WasmStoreInstallIdInvalid);
+    }
+    Ok(())
+}
+
+pub fn expected_wasm_store_controllers(
+    fleet_subnet_root: Principal,
+    installation_controller: Principal,
+) -> Vec<Principal> {
+    let mut controllers = vec![fleet_subnet_root, installation_controller];
+    controllers.sort();
+    controllers.dedup();
+    controllers
 }
 
 fn require_release_build_match(
@@ -364,6 +410,21 @@ mod tests {
             release_build_id,
             manifest_digest: ReleaseSetDigest::from_bytes([10; 32]),
         };
+        let wasm_store = Principal::from_slice(&[12; 29]);
+        let installation_controller = Principal::from_slice(&[13; 29]);
+        let wasm_store_activation = FleetSubnetWasmStoreActivationAuthority {
+            fleet: binding.authority.binding.fleet.clone(),
+            operation_id: [15; 32],
+            fleet_subnet_root,
+            wasm_store,
+            release_build_id,
+            component_topology_digest: binding.component_topology_digest,
+            controllers: expected_wasm_store_controllers(
+                fleet_subnet_root,
+                installation_controller,
+            ),
+            manifest_digest: initial_release_set.manifest_digest,
+        };
         RootInstallIdentity {
             binding,
             initial_release_set,
@@ -373,11 +434,12 @@ mod tests {
                 authority,
                 placement_subnet,
                 fleet_subnet_root,
-                wasm_store: Principal::from_slice(&[12; 29]),
-                installation_controller: Principal::from_slice(&[13; 29]),
+                wasm_store,
+                installation_controller,
                 release_build_id,
                 wasm_module_hash: [14; 32],
             },
+            wasm_store_activation,
         }
     }
 
@@ -427,6 +489,8 @@ mod tests {
             .expect("projection")
             .digest()
             .expect("digest");
+        input.wasm_store_activation.component_topology_digest =
+            input.binding.component_topology_digest;
         prepare_root_install(
             input,
             embedded,
@@ -446,6 +510,50 @@ mod tests {
         assert_eq!(prepared.identity.operation_id, [3; 32]);
         assert_eq!(prepared.identity.release_build_id, release_build_id);
         assert_eq!(prepared.wasm_store_authority, Some(store_authority));
+        assert_eq!(
+            prepared
+                .root_authority
+                .expect("root authority")
+                .wasm_store_activation
+                .operation_id,
+            [15; 32]
+        );
+    }
+
+    #[test]
+    fn root_install_rejects_missing_foreign_and_conflicting_store_child_authority() {
+        let release_build_id = release_build(16);
+        let mut missing = input(release_build_id);
+        missing.wasm_store_activation.operation_id = [0; 32];
+        assert_eq!(
+            prepare_root(missing, release_build_id),
+            Err(PrepareFleetActivationError::WasmStoreInstallIdInvalid)
+        );
+
+        let mut conflicting = input(release_build_id);
+        conflicting.wasm_store_activation.operation_id = conflicting.install_id;
+        assert_eq!(
+            prepare_root(conflicting, release_build_id),
+            Err(PrepareFleetActivationError::WasmStoreInstallIdInvalid)
+        );
+
+        let mut foreign = input(release_build_id);
+        foreign.wasm_store_activation.wasm_store = Principal::from_slice(&[99; 29]);
+        assert_eq!(
+            prepare_root(foreign, release_build_id),
+            Err(PrepareFleetActivationError::WasmStoreInstallIdInvalid)
+        );
+
+        let mut widened = input(release_build_id);
+        widened
+            .wasm_store_activation
+            .controllers
+            .push(Principal::from_slice(&[98; 29]));
+        widened.wasm_store_activation.controllers.sort();
+        assert_eq!(
+            prepare_root(widened, release_build_id),
+            Err(PrepareFleetActivationError::WasmStoreInstallIdInvalid)
+        );
     }
 
     #[test]

@@ -71,6 +71,14 @@ pub struct EffectOutcome {
 pub struct EffectObservation {
     pub applied: bool,
     pub progress_identity: String,
+    pub retry: EffectRetry,
+}
+
+/// Typed observation-owned authority to replay one exact retained issued command.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EffectRetry {
+    None,
+    ReplayExactIssuedCommand,
 }
 
 /// Complete verified terminal projection published by one current protocol owner.

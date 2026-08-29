@@ -12,7 +12,8 @@ use canic::{
             FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
         },
         fleet_subnet_root::{
-            FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreAdoptionRequest,
+            FleetSubnetRootAuthority, FleetSubnetRootInitArgs,
+            FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAdoptionRequest,
             FleetSubnetWasmStoreInitArgs,
         },
         role::{OperationReceipt, OperationStatusRequest},
@@ -81,6 +82,21 @@ enum RootStatusResponseFragment {
     Readiness(CanicReadinessStatus),
 }
 
+#[derive(CandidType)]
+enum StoreStatusRequestFragment {
+    Operation(OperationStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum StoreStatusResponseFragment {
+    Operation(StoreOperationStatusFragment),
+}
+
+#[derive(CandidType, Deserialize)]
+enum StoreOperationStatusFragment {
+    FleetActivation(FleetActivationStatusResponse),
+}
+
 fn root_command(
     pic: &PocketIc,
     root: Principal,
@@ -146,8 +162,9 @@ pub(super) fn create_and_install_pre_adoption_root(
     })?;
     let store_args = FleetSubnetWasmStoreInitArgs {
         authority: root_args.authority.wasm_store_authority.clone(),
-        install_id: root_args.install_id,
+        install_id: root_args.wasm_store_activation.operation_id,
     };
+    assert_ne!(root_args.install_id, store_args.install_id);
     prepare_sibling_wasm_store_controllers(pic, wasm_store, installation_controller, root_id);
     pic.install_canister(
         wasm_store,
@@ -465,6 +482,36 @@ pub(super) fn activate_managed_fleet(
         panic!("Root returned a differently correlated operation status");
     };
     assert_eq!(activated.phase, FleetActivationPhase::Active);
+    let [store] = prepared
+        .cascade_manifest
+        .as_deref()
+        .expect("prepared root must expose its Store cascade manifest")
+    else {
+        panic!("prepared root must retain exactly one Store child");
+    };
+    let store_response: Result<StoreStatusResponseFragment, Error> = pic
+        .query_candid(
+            store.principal,
+            protocol::CANIC_STATUS,
+            (StoreStatusRequestFragment::Operation(
+                OperationStatusRequest {
+                    operation_id: managed_test_store_install_id(),
+                },
+            ),),
+        )
+        .expect("Store activation status transport");
+    let StoreStatusResponseFragment::Operation(StoreOperationStatusFragment::FleetActivation(
+        store_status,
+    )) = store_response.expect("Store activation status");
+    assert_ne!(
+        store_status.identity.operation_id,
+        activated.identity.operation_id
+    );
+    assert_eq!(
+        store_status.identity.operation_id,
+        managed_test_store_install_id()
+    );
+    assert_eq!(store_status.phase, FleetActivationPhase::Active);
     activated
 }
 
@@ -676,6 +723,10 @@ pub fn managed_test_init_identity() -> ManagedTestIdentity {
     }
 }
 
+const fn managed_test_store_install_id() -> [u8; 32] {
+    [0x47; 32]
+}
+
 fn managed_test_root_init_args(
     input: ManagedRootInstallInput<'_>,
 ) -> Result<FleetSubnetRootInitArgs, Error> {
@@ -721,6 +772,8 @@ fn managed_test_root_init_args(
         },
         epoch: 1,
     };
+    let mut store_controllers = vec![installation_controller, root_id];
+    store_controllers.sort();
 
     Ok(FleetSubnetRootInitArgs {
         authority: FleetSubnetRootAuthority {
@@ -753,7 +806,7 @@ fn managed_test_root_init_args(
             },
             expected_module_hash,
             wasm_store_authority: FleetSubnetWasmStoreAuthority {
-                authority,
+                authority: authority.clone(),
                 placement_subnet: test_subnet(0x45),
                 fleet_subnet_root: root_id,
                 wasm_store,
@@ -763,6 +816,16 @@ fn managed_test_root_init_args(
             },
         },
         install_id: identity.install_id,
+        wasm_store_activation: FleetSubnetWasmStoreActivationAuthority {
+            fleet: authority.binding.fleet,
+            operation_id: managed_test_store_install_id(),
+            fleet_subnet_root: root_id,
+            wasm_store,
+            release_build_id: identity.release_build_id,
+            component_topology_digest,
+            controllers: store_controllers,
+            manifest_digest: release_set_digest,
+        },
         canister_pool_imports: Vec::new(),
     })
 }

@@ -32,6 +32,37 @@ fn generate_defaults_to_policy_seed_and_desired_paths() {
     );
     assert_eq!(options.output, PathBuf::from("fleets/staging.toml"));
     assert_eq!(options.replace, None);
+    assert!(!options.fresh);
+    assert_eq!(options.management_creation_fee_cycles, None);
+}
+
+#[test]
+fn fresh_generation_requires_and_retains_exact_creation_fee_authority() {
+    let release = "01".repeat(32);
+    let args = [
+        OsString::from("generate"),
+        OsString::from("staging"),
+        OsString::from("--app-config"),
+        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--release-build"),
+        OsString::from(&release),
+        OsString::from("--fresh"),
+    ];
+    assert!(matches!(
+        GenerateOptions::parse(args.clone()),
+        Err(FleetCommandError::Usage(_))
+    ));
+    let options = GenerateOptions::parse(args.into_iter().chain([
+        OsString::from("--management-creation-fee-cycles"),
+        OsString::from("500000000000"),
+    ]))
+    .expect("parse fresh generation");
+    assert!(options.fresh);
+    assert_eq!(
+        options.management_creation_fee_cycles,
+        Some(500_000_000_000)
+    );
+    assert_eq!(options.cycles_ledger, DEFAULT_CYCLES_LEDGER);
 }
 
 #[test]
@@ -81,7 +112,7 @@ maximum_stalled_observations = 2
 maximum_update_burn_cycles = "1"
 operator = "rdmx6-jaaaa-aaaaa-aaadq-cai"
 schema_version = 1
-treasury = "rrkah-fqaaa-aaaaa-aaaaq-cai"
+treasury = "coordinator"
 
 [[canisters]]
 controllers = ["rdmx6-jaaaa-aaaaa-aaadq-cai"]

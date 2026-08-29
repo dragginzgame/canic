@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-28
+Last updated: 2026-08-29
 
 ## Purpose
 
@@ -13,13 +13,13 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.18` at
-`9d695598e6b3a959e527d29bed244d7657882b21` is the immutable maintained
+Published `v0.109.19` at
+`8be7c210e6ef7a2b707139c34a47989ac4fd810b` is the immutable maintained
 release. Published `v0.109.16` at
 `045f131224506bfadabfdb258471cd9b9745d8c8` remains immutable but unqualified:
 its complete gate stopped at warning-denied Clippy while the former release
 shell continued through versioning, tagging, push and package publication.
-The open `0.109.19` patch closes the public Binaryen installer's staged writer
+Published `0.109.19` closes the public Binaryen installer's staged writer
 before executing the checksum-admitted candidate, correcting Linux `ETXTBSY`
 without weakening optimizer authority. It also makes an in-progress Fleet
 operation self-sufficient: new plans digest and retain their reviewed desired
@@ -154,18 +154,29 @@ protected operator, and re-observes the final set before the Store install can
 run. Foreign controller sets fail closed, and no temporary/final compatibility
 schema is retained.
 
+Retained convergence now preserves distinct deterministic Root and Store
+installation identities. Root retains a Store child authority bound to the
+exact Fleet, operation, principals, release build, topology, controllers,
+manifest and credential generation; Root-owned state continues to use the Root
+identity while Store prepare, status, resume and activation calls use the Store
+identity. Typed retryable-pending observation may replay the exact retained
+issued Component-provisioning command once without recompiling it. A stopped
+retained Coordinator, Root or Store is started under its existing Principal
+before role queries, without funding, reinstall, replacement or recreation.
+The focused real-Wasm PocketIC journey reaches terminal Root activation and
+non-empty inventory with conserved cycles and identities, then converges again
+without effects. Further fresh-estate expansion remains paused behind this
+retained-estate correction.
+
 The high-level `canic fleet generate <fleet>` owner now compiles the low-level
-desired document from protected Fleet policy, an exact finalized complete
-release set and one explicit live estate seed. Release authority owns Wasm,
-Candid and typed Coordinator/Root/Store init contracts; it cannot invent
-Principals. Seeded Coordinator, Root, Store, pool and treasury identities are
-verified against the active operator, Registry-backed placement, direct
-management evidence and protected Root inventory before create-once output.
-The explicit seed retains the exact live Fleet ID, so changing the workspace
-environment, Fleet label or protected operator cannot silently rename the live
-Fleet. The exact seeded Coordinator is the deterministic default treasury; a
-separate treasury must likewise be explicitly seeded and observed. No project
-mapping, removed plan or historical journal is an identity oracle.
+desired document from protected Fleet policy and an exact finalized complete
+release set. Retained generation accepts one explicit live estate seed and
+verifies its Coordinator, Root, Store, pool and treasury identities against
+the active operator, Registry-backed placement, direct management evidence and
+protected Root inventory. Fresh generation instead creates or exactly replays
+one durable no-effect seed containing a random Fleet ID, exact Cycles Ledger
+and management creation fee, and logical Coordinator, Root, Store and initial
+pool roles. Release metadata invents no Principal in either mode.
 Generation binds both child digests in the finalized complete release set,
 derives each infrastructure Candid sidecar from the manifest-bound Wasm path,
 reads it without following links and verifies the retained digest, rejects
@@ -173,18 +184,14 @@ duplicate retained identities and unexpected co-controllers, and checks the
 complete live Fleet/Coordinator/Root/Store relationship before output. Output
 is create-once by default; a changed generated document requires the exact
 current file SHA-256 through `--replace`, rejects concurrent drift and is
-published atomically. The maintained path deliberately adopts an explicitly seeded
-controlled treasury; it does not claim to bootstrap a literally empty estate.
-Every paid Root-owned asset must be seeded and remain inside the observed
-conservation total through idle, claimed and workload lifecycle states. An
-active Component asset receives no idle-pool minimum top-up and its Root and
-terminal Registry observations are deduplicated conservatively. Missing seeded
-canisters fail closed rather than being recreated. Retained Root identity is
-exact; old init-only policy may differ only when the current artifact reinstall
-will converge it, while drift on an already-current Root fails closed. The
-generated retained contract queries and binds the live Cycles Ledger fee,
-carries zero canister-creation fee authority, and treats its observation/update
-burn values as conservative measured ceilings.
+published atomically. Every paid retained Root-owned asset remains inside the
+observed conservation total through idle, claimed and workload lifecycle
+states; a missing retained identity still fails instead of becoming a
+replacement creation. Fresh generation performs no paid effect. Its ordinary
+Fleet Ensure plan records unallocated roles and the exact maximum debit, and
+apply durably journals each Cycles Ledger creation before resolving dependent
+controller and treasury Principals from retained results. Both modes keep
+observation and update burn as conservative measured ceilings.
 
 The governed production five-Component PocketIC journey now begins from a
 fresh estate and traverses that complete typed graph through terminal catalog
@@ -242,8 +249,10 @@ restored because their mutation authority came from the deleted install plan;
   recovery allowlists.
 - Retained Root repair, provisional successor authority, repair receipts and
   content-addressed recovery-bundle import/verification.
-- Fresh install/deploy/adoption/installed-catalog host owners and their public
-  CLI modes, aliases, diagnostics and compatibility-only tests.
+- Former fresh-install/deploy/adoption/installed-catalog host owners and their
+  public CLI modes, aliases, diagnostics and compatibility-only tests. Fresh
+  estate seeding is a no-effect input to the sole current Fleet Ensure owner,
+  not a restored installer.
 - The dedicated retained-repair fixture and Root-deletion examples.
 
 Historical release notes and archived audits remain truthful history; they are
@@ -282,7 +291,7 @@ validated-source environment. Its executable fixture proves each negative path
 and the exact successful authority handoff. The two timing-report format calls
 that stopped `0.109.16` Clippy use the maintained inline argument form.
 
-The open `0.109.18` patch aligns IcyDB `0.246.0` on the single
+Published `0.109.18` aligns IcyDB `0.246.0` on the single
 `ic-timers 0.7.0` provider and repairs the current Fleet Ensure JSON boundary.
 Focused production-writer coverage passes for Registry join and activation
 with `u128::MAX` cycle values. An isolated copy of the exact downstream
@@ -295,7 +304,7 @@ action is observed terminal without a second command, and its immediate
 successor ensure performs zero mutations. A focused object-store regression
 also proves fail-closed rejection after content tampering.
 
-The same patch exposes one supported feature-selected standalone-local build.
+That release exposes one supported feature-selected standalone-local build.
 Its declaration pass produces the exact adjacent `.did`; its deployable runtime
 uses the same Cargo feature set without the declaration cfg, pointer export or
 embedded public Candid. Finalization compares the runtime query/update export
@@ -365,7 +374,7 @@ packages. The controlled release-Wasm comparison used identical source,
 toolchain, profile, shrink and metadata paths. No broad workspace or PocketIC
 gate was run during this coding slice.
 
-The open `0.109.19` CANIC-081/082 slice has focused evidence passing for the
+Published `0.109.19` CANIC-081/082 has focused evidence passing for the
 real Linux staged-executable publication path, all Binaryen host tests, both
 CLI toolchain tests, retained desired round-trip and changed-input resumption,
 the bounded pre-retention zero-debit final observation, typed protocol replay,
@@ -384,7 +393,7 @@ slice.
 The adjacent version-rollback regression also passes using exact restored file
 bytes and clean repository state rather than brittle console prose.
 
-<!-- canic-release-validation: version=0.109.19 source=cae1e9da047b3121b579c97d324789a82d2e1d06 date=2026-08-28 gate=complete -->
+<!-- canic-release-state: source-development -->
 Published `0.109.15` added a governed fast release lane for exact
 non-runtime changes. It preserves immutable-tag ancestry, targeted release and
 dependency checks, locked compilation, candidate sealing and atomic push while
@@ -542,19 +551,43 @@ Targeted evidence for the published source candidate:
   current-status, release-matrix, release-integrity and local v1 readiness
   checks passed.
 
+The current empty-estate correction has focused evidence passing for durable
+fresh-seed creation and exact replay, changed-fee rejection, no-effect desired
+generation, logical controller and treasury resolution, create convergence and
+an immediate effect-free successor plan. All 55 focused `canic-host` Fleet
+Ensure tests and all eight focused `canic-cli` Fleet tests pass. No broad
+workspace or broad PocketIC gate was run during this coding slice.
+
+The distinct Root/Store correction passes focused exact-authority model and
+stable-state tests, Root/Store init decoding, issued-command retry, stopped
+same-Principal startup, formatting and warning-denied all-target Clippy for the
+three changed packages. Its governed five-Component PocketIC journey rebuilt
+the changed Root, Coordinator and Store Wasms and passed in 364 seconds. It
+retained one issued operation through a typed Root-acceptance failure, restarted
+the same Store, replayed the exact command, activated all five Components,
+published the Fleet catalog and found no nonterminal update on immediate
+replay. Reported shared-server high-water RSS was 423,508 kB with 19 threads.
+
+This correction is a current reinstall-only contract. A successor CLI does not
+inject corrected runtime behavior into an already-installed `0.109.19` Root,
+and the issued predecessor plan is not a cross-patch repair authority. Affected
+operators must discard the predecessor's local in-progress ensure evidence and
+review a new current plan that reuses the controlled Principals and balances
+while reinstalling the corrected infrastructure artifacts. No compatibility
+bridge, journal edit or live repair path was added.
+
 No version, commit, tag, package publication, push, deployment, identity
 switch, Ledger call, live canister call, or sibling-repository mutation was
 performed.
 
 ## Next Action
 
-Finish the narrow `0.109.18` candidate with targeted warning-denied host/core
-Clippy, changelog/status integrity and diff hygiene. Once the combined dirty
-candidate is frozen, the maintainer-owned release workflow must run the normal
-complete Canic gate, the two-clean-build nine-role Wasm audit and Toko Miner's
-managed plus standalone-local built-release-Wasm gate before version or
-publication authority. After immutable publication, downstream may reopen its
-existing schema-1 plan and issued journal; it must not delete or rewrite that evidence.
-The distinct pooled-canister Ledger-account recovery operation and finalized
-artifact build-network binding remain later accepted work.
-Do not begin 0.110. Do not begin 0.111 from this batch.
+Finish the combined open `0.109.20` candidate with targeted host/CLI hygiene,
+then let the maintainer-selected release flow choose its validation boundary.
+After immutable publication, affected retained estates must generate and review
+a current reinstall plan rather than reopen a predecessor issued operation.
+Downstream launchers must use the ordinary Fleet Ensure generate/plan/apply
+sequence and qualify it in their own repository. The distinct pooled-canister
+Ledger-account recovery operation and finalized artifact build-network binding
+remain later accepted work. Do not begin 0.110. Do not begin 0.111 from this
+batch.

@@ -28,8 +28,9 @@ toolchain
 ```
 
 Commands removed by the pre-1.0 hard cut have no aliases or fallback parser.
-In particular, fresh install, deployment-plan, adoption, retained recovery,
-retained Root repair, and recovery-bundle modes are not accepted. Current
+In particular, the former `canic install` fresh-install mode, deployment-plan,
+adoption, retained recovery, retained Root repair, and recovery-bundle modes
+are not accepted. Current
 Authority-bearing Fleet commands read only a terminal `fleet ensure` inventory
 and its exact Registry protocol bindings; they do not consult a former install
 cache. This includes `info subnets`, which requires a complete agreeing live
@@ -82,8 +83,9 @@ on `PATH`.
 ## Fleet Ensure
 
 `canic fleet ensure` is the sole Fleet installation and convergence workflow.
-Generate its low-level desired document from protected Fleet policy, one
-finalized release build, and an explicit live-verified estate seed:
+For a retained estate, generate its low-level desired document from protected
+Fleet policy, one finalized release build, and an explicit live-verified
+estate seed:
 
 ```bash
 canic fleet generate staging \
@@ -105,6 +107,33 @@ without receiving idle-pool funding or being counted again by terminal
 inventory. The generated contract binds the live Cycles Ledger fee and has zero
 creation-fee authority: a missing seeded canister is a blocker, never a request
 to create a replacement.
+
+For a literally empty estate, create or replay a durable no-effect seed before
+generating the same desired-state contract:
+
+```bash
+canic fleet generate staging \
+  --app-config apps/demo/canic.toml \
+  --release-build <release-build-id> \
+  --fresh \
+  --management-creation-fee-cycles <exact-fee>
+```
+
+The fresh seed contains a random Fleet ID, exact Cycles Ledger and management
+creation fee, and logical Coordinator, Root, Store and initial-pool roles. It
+contains no invented Principal. Repetition accepts only the exact same seed
+authority. Generation remains effect-free; the ordinary reviewed `fleet
+ensure` plan/apply path creates each role with durable intent and resolves
+dependent controllers and treasury authority from the retained creation
+results. Use `--cycles-ledger <principal>` only for a network whose Cycles
+Ledger differs from the maintained default.
+
+Because fresh Principals are outputs of the first reviewed plan, their typed
+control-plane work may require a successor plan. If apply asks for a new plan
+and retains the journal as `ReplanRequired`, run plan-only again and apply its
+separately reviewed digest. Continue until the report is terminal; an immediate
+post-terminal plan is effect-free.
+
 The first invocation observes current state and retains a reviewed plan without
 executing Fleet mutations:
 

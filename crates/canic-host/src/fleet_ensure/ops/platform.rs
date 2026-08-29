@@ -15,8 +15,8 @@ use crate::{
             reconcile_retirement_transfer,
         },
         ops::{
-            EffectObservation, EffectOutcome, EnsurePlatform, TerminalFleetInventory, canic_init,
-            current_protocol, protocol, root_owned_lifecycle,
+            EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
+            canic_init, current_protocol, protocol, root_owned_lifecycle,
         },
     },
     icp::{IcpCandidCallError, IcpCli, IcpCommandError, IcpDiagnostic, run_status},
@@ -90,6 +90,15 @@ struct CanisterSettings {
     freezing_threshold: Option<Nat>,
     memory_allocation: Option<Nat>,
     reserved_cycles_limit: Option<Nat>,
+}
+
+struct CreateCanisterAuthority<'a> {
+    controller_canisters: &'a [String],
+    controllers: &'a [String],
+    created_at_time: u64,
+    ledger: &'a str,
+    requested_initial_cycles: u128,
+    subnet: &'a str,
 }
 
 #[derive(CandidType)]
@@ -347,6 +356,25 @@ impl IcpEnsurePlatform {
             .collect()
     }
 
+    fn resolved_controllers(
+        &self,
+        state: &FleetEnsureStateRecord,
+        controllers: &[String],
+        controller_canisters: &[String],
+    ) -> Result<Vec<String>, IcpEnsurePlatformError> {
+        let mut resolved = controllers.to_vec();
+        for name in controller_canisters {
+            resolved.push(
+                self.current_principal(state, name)
+                    .ok_or_else(|| IcpEnsurePlatformError::UnresolvedCreated(name.clone()))?
+                    .to_string(),
+            );
+        }
+        resolved.sort();
+        resolved.dedup();
+        Ok(resolved)
+    }
+
     fn observed_protocol_action(
         &self,
         step: &crate::fleet_ensure::model::DesiredProtocolStep,
@@ -441,6 +469,32 @@ impl IcpEnsurePlatform {
             root_owned_lifecycle: None,
             status,
         }))
+    }
+
+    fn has_stopped_retained_protocol_owner(
+        &self,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<bool, IcpEnsurePlatformError> {
+        for configured in self.desired.canisters.iter().filter(|configured| {
+            configured.presence == crate::fleet_ensure::model::DesiredPresence::Present
+                && matches!(
+                    configured.kind,
+                    DesiredCanisterKind::Coordinator
+                        | DesiredCanisterKind::Root
+                        | DesiredCanisterKind::Store
+                )
+        }) {
+            let Some(principal) = self.current_principal(state, &configured.name) else {
+                continue;
+            };
+            let Some(live) = self.status_optional(principal)? else {
+                continue;
+            };
+            if live.status != CanisterRuntimeStatus::Running {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn observe_configured_canister(
@@ -692,27 +746,26 @@ impl IcpEnsurePlatform {
 
     fn apply_create(
         &self,
-        controllers: &[String],
-        created_at_time: u64,
-        ledger: &str,
-        requested_initial_cycles: u128,
-        subnet: &str,
+        authority: CreateCanisterAuthority<'_>,
+        state: &FleetEnsureStateRecord,
     ) -> Result<EffectOutcome, IcpEnsurePlatformError> {
         let creation_fee = self
             .desired
             .management_creation_fee_cycles
             .parse::<u128>()
             .map_err(|_| IcpEnsurePlatformError::Arithmetic("management creation fee"))?;
-        let amount = requested_initial_cycles
+        let amount = authority
+            .requested_initial_cycles
             .checked_add(creation_fee)
             .ok_or(IcpEnsurePlatformError::Arithmetic("creation amount"))?;
-        let controllers = controllers
+        let controllers = self
+            .resolved_controllers(state, authority.controllers, authority.controller_canisters)?
             .iter()
             .map(|value| parse_principal("controller", value))
             .collect::<Result<Vec<_>, _>>()?;
         let request = CreateCanisterArgs {
             amount: Nat::from(amount),
-            created_at_time: Some(created_at_time),
+            created_at_time: Some(authority.created_at_time),
             creation_args: Some(CmcCreateCanisterArgs {
                 settings: Some(CanisterSettings {
                     compute_allocation: None,
@@ -722,14 +775,14 @@ impl IcpEnsurePlatform {
                     reserved_cycles_limit: None,
                 }),
                 subnet_selection: Some(SubnetSelection::Subnet {
-                    subnet: parse_principal("subnet", subnet)?,
+                    subnet: parse_principal("subnet", authority.subnet)?,
                 }),
             }),
             from_subaccount: None,
         };
         let response: Result<CreateCanisterSuccess, CreateCanisterError> = self
             .icp
-            .canister_call_candid(ledger, "create_canister", &request, None)?;
+            .canister_call_candid(authority.ledger, "create_canister", &request, None)?;
         match response {
             Ok(success) => Ok(EffectOutcome {
                 created_principal: Some(success.canister_id.to_text()),
@@ -1039,6 +1092,9 @@ impl EnsurePlatform for IcpEnsurePlatform {
             return Ok(Vec::new());
         }
         current_protocol::validate_component_pool_capacity(&self.root, &self.desired)?;
+        if self.has_stopped_retained_protocol_owner(state)? {
+            return Ok(Vec::new());
+        }
         if !self.recovery_reinstalls.borrow().is_empty() {
             let recovery = self.recovery_reinstalls.borrow();
             let mut actions = current_protocol::compile_store_control_actions_unobserved(
@@ -1126,6 +1182,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
         record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectObservation, Self::Error> {
+        let mut retry = EffectRetry::None;
         let (applied, progress_identity) = match action {
             EnsureAction::Create { .. } => (
                 record.created_principal.is_some(),
@@ -1191,10 +1248,12 @@ impl EnsurePlatform for IcpEnsurePlatform {
                             applied: false,
                             progress_identity: "store-adoption:protected-status-unavailable"
                                 .to_string(),
+                            retry: EffectRetry::None,
                         }
                     }
                     Err(error) => return Err(error.into()),
                 };
+                retry = observation.retry;
                 (observation.applied, observation.progress_identity)
             }
             EnsureAction::Protocol { .. } => {
@@ -1208,12 +1267,13 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 (observation.applied, observation.progress_identity)
             }
             EnsureAction::SetControllers {
+                controller_canisters,
                 controllers,
                 principal,
                 ..
             } => {
-                let mut expected = controllers.clone();
-                expected.sort();
+                let expected =
+                    self.resolved_controllers(state, controllers, controller_canisters)?;
                 let live = self.status_optional(Self::action_principal(state, principal)?)?;
                 (
                     live.as_ref()
@@ -1253,7 +1313,9 @@ impl EnsurePlatform for IcpEnsurePlatform {
                         side: "live source",
                     })?;
                 let destination = self
-                    .status_optional(destination)?
+                    .status_optional(self.current_principal(state, destination).ok_or_else(
+                        || IcpEnsurePlatformError::UnresolvedCreated(destination.clone()),
+                    )?)?
                     .map(|live| live.cycles)
                     .ok_or_else(|| IcpEnsurePlatformError::MissingTransferBalance {
                         canister: name.clone(),
@@ -1318,6 +1380,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
         Ok(EffectObservation {
             applied,
             progress_identity,
+            retry,
         })
     }
 
@@ -1335,6 +1398,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
         self.require_operator()?;
         match action {
             EnsureAction::Create {
+                controller_canisters,
                 controllers,
                 created_at_time,
                 ledger,
@@ -1342,11 +1406,15 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 subnet,
                 ..
             } => self.apply_create(
-                controllers,
-                *created_at_time,
-                ledger,
-                *requested_initial_cycles,
-                subnet,
+                CreateCanisterAuthority {
+                    controller_canisters,
+                    controllers,
+                    created_at_time: *created_at_time,
+                    ledger,
+                    requested_initial_cycles: *requested_initial_cycles,
+                    subnet,
+                },
+                state,
             ),
             EnsureAction::Delete {
                 maximum_remaining_cycles,
@@ -1426,10 +1494,14 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 })
             }
             EnsureAction::SetControllers {
+                controller_canisters,
                 controllers,
                 principal,
                 ..
-            } => self.apply_controllers(Self::action_principal(state, principal)?, controllers),
+            } => self.apply_controllers(
+                Self::action_principal(state, principal)?,
+                &self.resolved_controllers(state, controllers, controller_canisters)?,
+            ),
             EnsureAction::Start { principal, .. } => {
                 self.icp
                     .start_canister(Self::action_principal(state, principal)?)?;
@@ -1452,7 +1524,9 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 *amount,
                 candid,
                 candid_sha256,
-                destination,
+                self.current_principal(state, destination).ok_or_else(|| {
+                    IcpEnsurePlatformError::UnresolvedCreated(destination.clone())
+                })?,
                 method,
                 operation_id,
                 Self::action_principal(state, principal)?,
@@ -1510,11 +1584,14 @@ impl EnsurePlatform for IcpEnsurePlatform {
     fn action_destination_cycles(
         &mut self,
         action: &EnsureAction,
-        _state: &FleetEnsureStateRecord,
+        state: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error> {
         let EnsureAction::Transfer { destination, .. } = action else {
             return Ok(None);
         };
+        let destination = self
+            .current_principal(state, destination)
+            .ok_or_else(|| IcpEnsurePlatformError::UnresolvedCreated(destination.clone()))?;
         Ok(self.status_optional(destination)?.map(|live| live.cycles))
     }
 

@@ -346,6 +346,12 @@ fn assert_retry_timestamp_is_not_durable_progress(
         .failed_at_ns = 20;
     assert_eq!(
         component_provisioning_observation(false, &first_failure)
+            .expect("first failure observation")
+            .retry,
+        EffectRetry::ReplayExactIssuedCommand
+    );
+    assert_eq!(
+        component_provisioning_observation(false, &first_failure)
             .expect("first failure identity")
             .progress_identity,
         component_provisioning_observation(false, &repeated_failure)
@@ -427,6 +433,7 @@ fn current_desired_state_rejects_component_demand_above_pool_target() {
         coordinator: "coordinator".to_string(),
         coordinator_subnet: registry.authority.binding.coordinator_subnet,
         fleet_id: registry.authority.binding.fleet.fleet.fleet_id,
+        fresh_estate: false,
         release_build_id: authorities[0].initial_release_set.release_build_id,
         root_funding: None,
         roots,
@@ -607,7 +614,7 @@ fn desired(placements: Vec<DesiredComponentGroupPlacement>) -> DesiredFleet {
         }),
         protocol_steps: Vec::new(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
-        treasury: principal(60).to_string(),
+        treasury: "coordinator".to_string(),
     }
 }
 
@@ -629,6 +636,7 @@ fn canister(
     }
     DesiredCanister {
         canic_init: None,
+        controller_canisters: Vec::new(),
         controllers,
         drain: None,
         initial_cycles: "0".to_string(),

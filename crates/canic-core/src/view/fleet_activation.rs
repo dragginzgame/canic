@@ -8,12 +8,19 @@ use crate::cdk::types::Principal;
 use crate::dto::{
     component_registry::ComponentRuntimeStatusResponse,
     fleet_activation::FleetActivationStatusResponse,
+    fleet_subnet_root::FleetSubnetWasmStoreActivationAuthority,
 };
 
 /// The exact root-owned Wasm Store included in fresh Fleet activation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FleetActivationWasmStoreView {
     pub pid: Principal,
+}
+
+/// Exact retained authority Root uses for its independently installed Store child.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetActivationWasmStoreAuthorityView {
+    pub authority: FleetSubnetWasmStoreActivationAuthority,
 }
 
 ///

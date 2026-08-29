@@ -599,6 +599,7 @@ dependencies = [
  "canic-core",
  "ciborium",
  "flate2",
+ "getrandom 0.4.3",
  "ic-query",
  "pocket-ic",
  "rustix",

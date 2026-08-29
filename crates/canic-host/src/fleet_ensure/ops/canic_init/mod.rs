@@ -10,7 +10,8 @@ mod tests;
 use crate::{
     fleet_ensure::{
         model::{
-            DesiredCanisterInit, DesiredFleet, DesiredFleetBootstrap, DesiredFleetBootstrapRoot,
+            DesiredCanisterInit, DesiredCanisterKind, DesiredFleet, DesiredFleetBootstrap,
+            DesiredFleetBootstrapRoot,
         },
         ops::protocol::{self, ProtocolEffectError},
     },
@@ -27,7 +28,8 @@ use candid::{Principal, encode_one};
 use canic_control_plane::dto::fleet_coordinator::FleetCoordinatorInitArgs;
 use canic_core::{
     dto::fleet_subnet_root::{
-        FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
+        FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreActivationAuthority,
+        FleetSubnetWasmStoreInitArgs,
     },
     ids::{
         FleetBinding, FleetCoordinatorBinding, FleetKey, FleetRegistryAuthority,
@@ -238,7 +240,19 @@ fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, CanicIni
                 .iter()
                 .map(|name| resolve_principal(request.principals, "pool import", name))
                 .collect::<Result<Vec<_>, _>>()?;
-            encode_root_arguments(root_authority, request.operation_id, root, imports)
+            let store_controllers = resolved_canister_controllers(
+                request.desired,
+                request.principals,
+                &root_input.store,
+                DesiredCanisterKind::Store,
+            )?;
+            encode_root_arguments(
+                root_authority,
+                request.operation_id,
+                root,
+                store_controllers,
+                imports,
+            )
         }
         DesiredCanisterInit::Store { root } => {
             verify_target_artifact(
@@ -284,11 +298,23 @@ fn encode_root_arguments(
     authority: FleetSubnetRootAuthority,
     operation_id: &str,
     root: &str,
+    wasm_store_controllers: Vec<Principal>,
     canister_pool_imports: Vec<Principal>,
 ) -> Result<Vec<u8>, CanicInitError> {
+    let wasm_store_activation = FleetSubnetWasmStoreActivationAuthority {
+        fleet: authority.binding.authority.binding.fleet.clone(),
+        operation_id: install_id(operation_id, "store", root),
+        fleet_subnet_root: authority.binding.fleet_subnet_root,
+        wasm_store: authority.wasm_store_authority.wasm_store,
+        release_build_id: authority.initial_release_set.release_build_id,
+        component_topology_digest: authority.binding.component_topology_digest,
+        controllers: wasm_store_controllers,
+        manifest_digest: authority.initial_release_set.manifest_digest,
+    };
     encode_one(FleetSubnetRootInitArgs {
         authority,
         install_id: install_id(operation_id, "root", root),
+        wasm_store_activation,
         canister_pool_imports,
     })
     .map_err(Into::into)
@@ -467,6 +493,33 @@ fn resolve_principal(
         .get(name)
         .ok_or_else(|| CanicInitError::UnknownCanister(name.to_string()))?;
     parse_principal(field, value)
+}
+
+fn resolved_canister_controllers(
+    desired: &DesiredFleet,
+    principals: &BTreeMap<String, String>,
+    name: &str,
+    kind: DesiredCanisterKind,
+) -> Result<Vec<Principal>, CanicInitError> {
+    let configured = desired
+        .canisters
+        .iter()
+        .find(|configured| configured.name == name && configured.kind == kind)
+        .ok_or_else(|| CanicInitError::UnknownCanister(name.to_string()))?;
+    let mut controllers = configured
+        .controllers
+        .iter()
+        .map(|controller| parse_principal("Canister controller", controller))
+        .chain(
+            configured
+                .controller_canisters
+                .iter()
+                .map(|controller| resolve_principal(principals, "Canister controller", controller)),
+        )
+        .collect::<Result<Vec<_>, _>>()?;
+    controllers.sort();
+    controllers.dedup();
+    Ok(controllers)
 }
 
 fn parse_principal(field: &'static str, value: &str) -> Result<Principal, CanicInitError> {

@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Fixes retained Fleet convergence with distinct Root and Store installation
+  identities. Root now retains and validates the exact Store child authority
+  and uses that child identity for Store activation calls. Fleet Ensure starts
+  stopped retained role canisters by Principal before role queries and replays
+  an issued Component-provisioning command only from typed retryable-pending
+  evidence, preserving its reviewed action and idempotency authority.
+- Adds a supported empty-estate entry to the current Fleet Ensure workflow:
+  `canic fleet generate --fresh` durably creates or exactly replays a no-effect
+  seed with a random Fleet ID and explicit Cycles Ledger/creation-fee
+  authority. Generated logical controller and treasury dependencies are
+  resolved only from journaled creation results, while the existing reviewed
+  plan/apply owner retains all paid effects, interruption recovery and
+  effect-free replay. Retained-estate generation remains live-verified and
+  fail-closed.
+
 ## [0.109.x] - Fleet-Wide Ingress Admission
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)

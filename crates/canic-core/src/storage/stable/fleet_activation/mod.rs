@@ -155,6 +155,8 @@ pub struct FleetSubnetRootAuthorityRecord {
     pub binding: FleetSubnetRootBinding,
     pub initial_release_set: FleetSubnetRootReleaseSet,
     pub expected_module_hash: [u8; 32],
+    pub wasm_store_activation:
+        crate::dto::fleet_subnet_root::FleetSubnetWasmStoreActivationAuthority,
 }
 
 ///

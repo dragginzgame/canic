@@ -6,8 +6,8 @@ use crate::{
             FleetEnsureStateRecord, FleetObservation, LiveCanister, RootOwnedCanisterLifecycle,
         },
         ops::{
-            EffectObservation, EffectOutcome, EnsurePaths, EnsurePlatform, IcpEnsurePlatform,
-            IcpEnsurePlatformError, write_state,
+            EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
+            IcpEnsurePlatform, IcpEnsurePlatformError, write_state,
         },
         workflow,
     },
@@ -66,9 +66,11 @@ fn treasury_adoption_requires_one_observed_seeded_identity() {
     let seed = EstateSeed {
         schema_version: 1,
         fleet_id: "a6".repeat(32).parse().expect("Fleet ID"),
+        fresh_estate: false,
         coordinator: Principal::from_slice(&[3]).to_text(),
         treasury: None,
         cycles_ledger: mainnet_cycles_ledger(),
+        management_creation_fee_cycles: None,
         roots: Vec::new(),
     };
     let observed = BTreeMap::<String, ObservedCanister>::new();
@@ -428,9 +430,11 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let seed = EstateSeed {
         schema_version: 1,
         fleet_id: "a8".repeat(32).parse().expect("Fleet ID"),
+        fresh_estate: false,
         coordinator: coordinator.clone(),
         treasury: None,
         cycles_ledger: mainnet_cycles_ledger(),
+        management_creation_fee_cycles: None,
         roots: vec![RootSeed {
             placement_subnet: placement.clone(),
             root: fleet_root.clone(),
@@ -516,6 +520,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             public_cycle_balance: None,
             root_module_hash: &"84".repeat(32),
             root_status_error: None,
+            store: &store,
+            store_module_hash: &"85".repeat(32),
         },
     );
     let request = FleetGenerateRequest {
@@ -563,6 +569,111 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     );
     assert_eq!(desired.ledger_fee_cycles, "100000000");
     assert_eq!(desired.management_creation_fee_cycles, "0");
+
+    let fresh_seed_path = root.join("deployments/fresh-multi-component.estate.toml");
+    let fresh_id = initialize_fresh_estate_seed(&FreshEstateSeedRequest {
+        cycles_ledger: &mainnet_cycles_ledger(),
+        management_creation_fee_cycles: 500_000_000_000,
+        seed: &fresh_seed_path,
+        source: &source_path,
+    })
+    .expect("initialize durable fresh estate seed");
+    let repeated_id = initialize_fresh_estate_seed(&FreshEstateSeedRequest {
+        cycles_ledger: &mainnet_cycles_ledger(),
+        management_creation_fee_cycles: 500_000_000_000,
+        seed: &fresh_seed_path,
+        source: &source_path,
+    })
+    .expect("replay durable fresh estate seed");
+    assert_eq!(repeated_id, fresh_id);
+    let fresh = generate_desired_fleet(&FleetGenerateRequest {
+        app_config: &app_config,
+        environment: "local",
+        fleet: "fresh-multi-component",
+        icp_executable: icp.to_str().expect("fake ICP path"),
+        release_build_id,
+        root: &root,
+        seed: &fresh_seed_path,
+        source: &source_path,
+    })
+    .expect("generate literally empty estate");
+    assert_eq!(fresh.observed_canisters, 0);
+    assert_eq!(fresh.observed_controlled_cycles, 0);
+    assert_eq!(fresh.desired.treasury, "coordinator");
+    assert_eq!(fresh.desired.management_creation_fee_cycles, "500000000000");
+    assert!(
+        fresh
+            .desired
+            .bootstrap
+            .as_ref()
+            .is_some_and(|bootstrap| bootstrap.fresh_estate)
+    );
+    assert!(
+        fresh
+            .desired
+            .canisters
+            .iter()
+            .all(|canister| canister.principal.is_none())
+    );
+    let fresh_store = fresh
+        .desired
+        .canisters
+        .iter()
+        .find(|canister| canister.kind == DesiredCanisterKind::Store)
+        .expect("fresh Store");
+    assert_eq!(fresh_store.controller_canisters, ["root-0"]);
+    let fresh_pools = fresh
+        .desired
+        .canisters
+        .iter()
+        .filter(|canister| canister.kind == DesiredCanisterKind::Pool)
+        .collect::<Vec<_>>();
+    assert_eq!(fresh_pools.len(), 2);
+    assert!(
+        fresh_pools
+            .iter()
+            .all(|canister| canister.controller_canisters == ["root-0"])
+    );
+    let fresh_artifacts =
+        crate::fleet_ensure::ops::resolve_desired_artifacts(&root, &fresh.desired)
+            .expect("resolve fresh release artifacts");
+    let fresh_plan = crate::fleet_ensure::policy::compile_plan(
+        &fresh.desired,
+        &fresh_artifacts,
+        &[],
+        &"74".repeat(32),
+        &fresh.desired.fleet,
+        &FleetObservation {
+            additional_controlled_cycles: BTreeMap::new(),
+            canisters: fresh
+                .desired
+                .canisters
+                .iter()
+                .map(|canister| (canister.name.clone(), None))
+                .collect(),
+            ledger_fee_cycles: 100_000_000,
+            operator_cycles: u128::MAX,
+            protocol_ready: BTreeMap::new(),
+        },
+        1_800_000_000_000_000_000,
+    )
+    .expect("compile fresh estate creation plan");
+    assert!(
+        fresh_plan
+            .canisters
+            .iter()
+            .all(|canister| canister.disposition
+                == crate::fleet_ensure::model::CanisterDisposition::Create)
+    );
+    assert!(matches!(
+        initialize_fresh_estate_seed(&FreshEstateSeedRequest {
+            cycles_ledger: &mainnet_cycles_ledger(),
+            management_creation_fee_cycles: 1,
+            seed: &fresh_seed_path,
+            source: &source_path,
+        }),
+        Err(FleetGenerateError::FreshSeedConflict(_))
+    ));
 
     let source_digest = "42".repeat(32);
     let mut no_apply_desired = desired.clone();
@@ -673,6 +784,10 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .wasm_sha256_by_canister
         .get("root-0")
         .expect("Root artifact");
+    let store_hash = artifacts
+        .wasm_sha256_by_canister
+        .get("store-0")
+        .expect("Store artifact");
     write_fake_icp(
         &root,
         FakeIcpFixture {
@@ -685,6 +800,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: root_hash,
             root_status_error: Some(canic_core::diagnostics::codes::STATE_CONFLICT),
+            store: &store,
+            store_module_hash: store_hash,
         },
     );
     let state = retained_ensure_state(&production_recovery_desired, &observed, &artifacts);
@@ -784,6 +901,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: root_hash,
             root_status_error: None,
+            store: &store,
+            store_module_hash: store_hash,
         },
     );
     write_state(
@@ -1072,6 +1191,7 @@ impl EnsurePlatform for RetainedEnsurePlatform {
         Ok(EffectObservation {
             applied,
             progress_identity: format!("install:{principal}:{applied}"),
+            retry: EffectRetry::None,
         })
     }
 
@@ -1750,6 +1870,8 @@ struct FakeIcpFixture<'a> {
     public_cycle_balance: Option<(&'a str, u128)>,
     root_module_hash: &'a str,
     root_status_error: Option<canic_core::diagnostics::RegisteredDiagnosticCode>,
+    store: &'a str,
+    store_module_hash: &'a str,
 }
 
 #[cfg(unix)]
@@ -1768,6 +1890,8 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
         public_cycle_balance,
         root_module_hash,
         root_status_error,
+        store,
+        store_module_hash,
     } = fixture;
     let executable = root.join("fake-icp");
     let counter = root.join("root-status-count");
@@ -1782,6 +1906,12 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
         operator,
         root_module_hash.to_string(),
         30_000_000_000_000,
+    );
+    let store_status = canister_status_json(
+        store,
+        operator,
+        store_module_hash.to_string(),
+        10_000_000_000_000,
     );
     let authority_response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
         RootEstateStatusResponse::FleetAuthority(Box::new(authority.clone())),
@@ -1837,6 +1967,10 @@ if [ "$1" = "canister" ] && [ "$2" = "status" ]; then
   fi
   if [ "$3" = "{fleet_root}" ]; then
     printf '%s\n' '{root_status}'
+    exit 0
+  fi
+  if [ "$3" = "{store}" ]; then
+    printf '%s\n' '{store_status}'
     exit 0
   fi
 fi

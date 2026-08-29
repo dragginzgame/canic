@@ -12,16 +12,19 @@ use crate::fleet_ensure::{
         FleetEnsurePlan, FleetEnsureReport, FleetEnsureStateRecord, FleetObservation,
     },
     ops::{
-        EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256, compact_inline_plan,
-        lock_operation, read_journal, read_plan, read_state, resolve_desired_artifacts,
-        write_journal, write_plan, write_state,
+        EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
+        compact_inline_plan, lock_operation, read_journal, read_plan, read_state,
+        resolve_desired_artifacts, write_journal, write_plan, write_state,
     },
     policy::{
         EnsurePolicyError, compile_plan, expected_plan_sha256, operation_id,
         validate_path_identity, validate_path_labels,
     },
 };
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 use thiserror::Error as ThisError;
 
 /// Fleet ensure planning or convergence failure.
@@ -331,6 +334,7 @@ where
     };
 
     let actions = ordered_actions(&retained_plan);
+    let mut replayed_issued_commands = BTreeSet::new();
     for (index, action) in actions.iter().enumerate() {
         let action_hash = action_sha256(action);
         if journal.effects.len() <= index {
@@ -426,6 +430,40 @@ where
                 record.state = EffectState::Issued;
                 journal.stalled_observations = 0;
                 write_journal(&paths, &journal)?;
+                continue;
+            }
+
+            if observed.retry == EffectRetry::ReplayExactIssuedCommand
+                && !replayed_issued_commands.contains(&index)
+            {
+                if !matches!(
+                    action,
+                    EnsureAction::FleetProtocol { action, .. }
+                        if matches!(
+                            action.as_ref(),
+                            crate::fleet_ensure::model::CurrentFleetProtocolAction::ProvisionComponents { .. }
+                        )
+                ) {
+                    return Err(EnsureWorkflowError::JournalIntegrity);
+                }
+                let retained_receipt = record.receipt.clone();
+                let outcome = platform
+                    .apply(&journal.operation_id, action, record, &state)
+                    .map_err(EnsureWorkflowError::Platform)?;
+                if outcome.created_principal.is_some()
+                    || outcome.receipt != retained_receipt
+                    || outcome.post_cycles.is_some()
+                {
+                    return Err(EnsureWorkflowError::JournalIntegrity);
+                }
+                let record = journal
+                    .effects
+                    .get_mut(index)
+                    .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+                record.progress_identity = Some(observed.progress_identity);
+                journal.stalled_observations = 0;
+                write_journal(&paths, &journal)?;
+                replayed_issued_commands.insert(index);
                 continue;
             }
 
