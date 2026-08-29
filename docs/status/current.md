@@ -58,8 +58,11 @@ journey from stopped management observation through a running Root's complete
 protected authority/pool verification, the focused management-state and
 module-hash rejection test, the CLI guarded-output replacement test, formatting,
 diff hygiene and warning-denied `canic-host` Clippy. The stopped pass makes no
-protected Root call and preserves existing output bytes. No broad workspace or
-PocketIC gate was run during coding.
+protected Root call and preserves existing output bytes. After the complete gate
+reported nine copies of one large-error lint, the five-field prerequisite was
+boxed as one typed payload; warning-denied all-target Clippy now passes for both
+`canic-host` and `canic-cli`. No broad workspace or PocketIC gate was rerun
+during coding.
 
 The release-preflight simplification passes the actual `0.109.24` draft check,
 targeted Bash syntax and ShellCheck, current-document semantics, the release

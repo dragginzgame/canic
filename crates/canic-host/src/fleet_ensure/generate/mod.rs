@@ -146,20 +146,8 @@ pub enum FleetGenerateError {
     #[error("retained canister {canister} is unavailable: {reason}")]
     CanisterUnavailable { canister: String, reason: String },
 
-    #[error(
-        "retained Root {root} is stopped after exact management verification \
-         (Subnet {subnet}, controller {controller}, module SHA-256 {module_sha256}); \
-         no protected Root query or output mutation was attempted. Review and apply only the \
-         same-ID Start through the current retained `canic fleet ensure {fleet}` authority, \
-         then rerun `canic fleet generate`"
-    )]
-    StoppedRootStartRequired {
-        controller: String,
-        fleet: String,
-        module_sha256: String,
-        root: String,
-        subnet: String,
-    },
+    #[error(transparent)]
+    StoppedRootStartRequired(Box<StoppedRootStartPrerequisite>),
 
     #[error(
         "retained canister {canister} controller set differs: actual {actual:?}, expected {expected:?}"
@@ -188,6 +176,23 @@ pub enum FleetGenerateError {
 
     #[error("system clock is before the Unix epoch")]
     Clock,
+}
+
+/// Exact management evidence for the reviewed same-Root Start prerequisite.
+#[derive(Debug, ThisError)]
+#[error(
+    "retained Root {root} is stopped after exact management verification \
+     (Subnet {subnet}, controller {controller}, module SHA-256 {module_sha256}); \
+     no protected Root query or output mutation was attempted. Review and apply only the \
+     same-ID Start through the current retained `canic fleet ensure {fleet}` authority, \
+     then rerun `canic fleet generate`"
+)]
+pub struct StoppedRootStartPrerequisite {
+    pub controller: String,
+    pub fleet: String,
+    pub module_sha256: String,
+    pub root: String,
+    pub subnet: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1320,13 +1325,15 @@ fn observe_estate(
                         reason: "retained Root has no installed module SHA-256".to_string(),
                     }
                 })?;
-                return Err(FleetGenerateError::StoppedRootStartRequired {
-                    controller: operator.to_text(),
-                    fleet: request.fleet.to_string(),
-                    module_sha256,
-                    root: root.root.clone(),
-                    subnet: observation.subnet.clone(),
-                });
+                return Err(FleetGenerateError::StoppedRootStartRequired(Box::new(
+                    StoppedRootStartPrerequisite {
+                        controller: operator.to_text(),
+                        fleet: request.fleet.to_string(),
+                        module_sha256,
+                        root: root.root.clone(),
+                        subnet: observation.subnet.clone(),
+                    },
+                )));
             }
             Some(CanisterRuntimeStatus::Stopping) => {
                 return Err(FleetGenerateError::CanisterUnavailable {
