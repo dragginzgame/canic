@@ -355,8 +355,13 @@ and bidirectional-balance tests, the exact retained Root topology test, the
 public retained multi-Component generator journey with stopped-Root planning,
 the CLI fresh-fee boundary, and warning-denied all-target Clippy for the three
 changed packages. The stopped-Root plan contains one Start, no protected Root
-query and zero funding or operator debit. No broad gate or live operation was
-run for this coding slice.
+query and zero funding or operator debit. A maintainer-run broad test exposed
+one false conservation failure after 423 other `canic-host` tests passed:
+first-apply verification omitted 25 cycles already held in terminal Component
+inventory. The shared plan/apply terminal-cycle projection corrects that defect;
+the exact failed regression, all three reviewed-plan tests and warning-denied
+`canic-host` Clippy pass afterward. The complete broad gate has not passed at
+the corrected source, and no live operation was run for this coding slice.
 
 Open `0.109.16` coding-time evidence passes at the published `0.109.15`
 predecessor worktree: locked `canic-host`/`canic-cli` all-target compilation,

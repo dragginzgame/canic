@@ -162,10 +162,7 @@ where
     write_state(&paths, &state)?;
     if state.active_registry.is_some() {
         let prior = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
-        let inventory = platform
-            .terminal_inventory(&prior.operation_id, &state)
-            .map_err(EnsureWorkflowError::Platform)?;
-        attach_terminal_cycles(&mut observation, inventory.controlled_cycles_by_principal)?;
+        attach_terminal_inventory_cycles(&prior, &state, platform, &mut observation)?;
     }
     let protocol_actions = platform
         .protocol_actions(&operation_id, &state)
@@ -551,9 +548,12 @@ fn verify_fresh_plan<P>(
 where
     P: EnsurePlatform,
 {
-    let observation = platform
+    let mut observation = platform
         .observe(&retained_plan.operation_id, state)
         .map_err(EnsureWorkflowError::Platform)?;
+    if state.active_registry.is_some() {
+        attach_terminal_inventory_cycles(retained_plan, state, platform, &mut observation)?;
+    }
     if observation.operator_cycles < retained_plan.conservation.maximum_operator_debit_cycles {
         return Err(EnsureWorkflowError::InsufficientOperatorCycles {
             actual: observation.operator_cycles,
@@ -579,6 +579,21 @@ where
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     Ok((observation, current.conservation.observed_controlled_cycles))
+}
+
+fn attach_terminal_inventory_cycles<P>(
+    plan: &FleetEnsurePlan,
+    state: &FleetEnsureStateRecord,
+    platform: &mut P,
+    observation: &mut FleetObservation,
+) -> Result<(), EnsureWorkflowError<P::Error>>
+where
+    P: EnsurePlatform,
+{
+    let inventory = platform
+        .terminal_inventory(&plan.operation_id, state)
+        .map_err(EnsureWorkflowError::Platform)?;
+    attach_terminal_cycles(observation, inventory.controlled_cycles_by_principal)
 }
 
 fn compatible_after_bounded_observation(
