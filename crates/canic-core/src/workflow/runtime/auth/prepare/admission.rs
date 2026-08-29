@@ -117,8 +117,7 @@ pub(super) fn validate_token_prepare_public_request(
         .grants
         .iter()
         .filter_map(|grant| {
-            let canister = ConfigOps::try_get_canister_by_role(&grant.target).ok()?;
-            let local = canister.auth.local_application_authorization?;
+            let local = ConfigOps::local_application_authorization_for_role(&grant.target)?;
             Some(DeclaredApplicationRoleScopes {
                 target: grant.target.clone(),
                 scopes: local.allowed_scopes,

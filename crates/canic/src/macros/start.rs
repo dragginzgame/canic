@@ -69,29 +69,22 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         }
 
         #[doc(hidden)]
-        fn __canic_compiled_config() -> (
-            $crate::__internal::core::bootstrap::compiled::ConfigModel,
-            &'static str,
-            &'static str,
-        ) {
-            let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
-            let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
-            let config_path = env!("CANIC_CONFIG_ORIGIN_PATH");
-            (config_model, config_source, config_path)
+        fn __canic_compiled_role_runtime_authority() ->
+            $crate::__internal::core::bootstrap::compiled::RoleRuntimeAuthority
+        {
+            include!(env!("CANIC_ROLE_RUNTIME_AUTHORITY_PATH"))
         }
 
         #[$crate::__internal::cdk::init]
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
-            let (config, config_source, config_path) = __canic_compiled_config();
+            let authority = __canic_compiled_role_runtime_authority();
 
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
                 $canister_role,
                 payload,
                 args,
                 option_env!("CANIC_RELEASE_BUILD_ID"),
-                config,
-                config_source,
-                config_path,
+                authority,
             );
 
             $(($lifecycle_init)();)?
@@ -99,7 +92,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
-            let (config, config_source, config_path) = __canic_compiled_config();
+            let authority = __canic_compiled_role_runtime_authority();
 
             #[cfg(canic_capability_automatic_topup)]
             let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap;
@@ -107,9 +100,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap;
             let active = restore_runtime(
                 $canister_role,
-                config,
-                config_source,
-                config_path,
+                authority,
             );
 
             $(($lifecycle_post_upgrade)();)?
@@ -173,37 +164,28 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
         }
 
         #[doc(hidden)]
-        fn __canic_compiled_config() -> (
-            $crate::__internal::core::bootstrap::compiled::ConfigModel,
-            &'static str,
-            &'static str,
-        ) {
-            let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
-            let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
-            let config_path = env!("CANIC_CONFIG_ORIGIN_PATH");
-            (config_model, config_source, config_path)
+        fn __canic_compiled_role_runtime_authority() ->
+            $crate::__internal::core::bootstrap::compiled::RoleRuntimeAuthority
+        {
+            include!(env!("CANIC_ROLE_RUNTIME_AUTHORITY_PATH"))
         }
 
         #[$crate::__internal::cdk::init]
         fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs) {
-            let (config, config_source, config_path) = __canic_compiled_config();
+            let authority = __canic_compiled_role_runtime_authority();
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_wasm_store_before_bootstrap(
                 args,
                 option_env!("CANIC_RELEASE_BUILD_ID"),
-                config,
-                config_source,
-                config_path,
+                authority,
             );
         }
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
-            let (config, config_source, config_path) = __canic_compiled_config();
+            let authority = __canic_compiled_role_runtime_authority();
             let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
                 $crate::api::canister::CanisterRole::WASM_STORE,
-                config,
-                config_source,
-                config_path,
+                authority,
             );
 
             if active {
@@ -245,15 +227,10 @@ macro_rules! __canic_start_local_lifecycle_core {
         );)?
 
         #[doc(hidden)]
-        fn __canic_compiled_config() -> (
-            $crate::__internal::core::bootstrap::compiled::ConfigModel,
-            &'static str,
-            &'static str,
-        ) {
-            let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
-            let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
-            let config_path = env!("CANIC_CONFIG_ORIGIN_PATH");
-            (config_model, config_source, config_path)
+        fn __canic_compiled_role_runtime_authority() ->
+            $crate::__internal::core::bootstrap::compiled::RoleRuntimeAuthority
+        {
+            include!(env!("CANIC_ROLE_RUNTIME_AUTHORITY_PATH"))
         }
 
         #[doc(hidden)]
@@ -280,11 +257,10 @@ macro_rules! __canic_start_local_lifecycle_core {
 
         #[$crate::__internal::cdk::init]
         fn init(args: Option<Vec<u8>>) {
-            let (config, config_source, config_path) = __canic_compiled_config();
+            let authority = __canic_compiled_role_runtime_authority();
             let role = $canister_role;
-            let component_spec = config
+            let component_spec = authority
                 .component_spec_for_role(&role)
-                .map(|(component_spec, _config)| component_spec.clone())
                 .expect("local bootstrap role must belong to exactly one Component Spec");
             let env = __canic_local_env(role.clone(), component_spec);
 
@@ -295,9 +271,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             initialize_runtime(
                 role,
                 env,
-                config,
-                config_source,
-                config_path,
+                authority,
             );
 
             $(($lifecycle_init)();)?
@@ -321,7 +295,7 @@ macro_rules! __canic_start_local_lifecycle_core {
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
-            let (config, config_source, config_path) = __canic_compiled_config();
+            let authority = __canic_compiled_role_runtime_authority();
 
             #[cfg(canic_capability_automatic_topup)]
             let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap;
@@ -329,9 +303,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_before_bootstrap;
             let _active = restore_runtime(
                 $canister_role,
-                config,
-                config_source,
-                config_path,
+                authority,
             );
 
             $(($lifecycle_post_upgrade)();)?
@@ -410,23 +382,26 @@ macro_rules! __canic_root_lifecycle_core {
 
         #[doc(hidden)]
         fn __canic_compiled_config() -> (
+            $crate::__internal::core::bootstrap::compiled::RoleRuntimeAuthority,
             $crate::__internal::core::bootstrap::compiled::ConfigModel,
             &'static str,
             &'static str,
         ) {
+            let runtime_authority = include!(env!("CANIC_ROLE_RUNTIME_AUTHORITY_PATH"));
             let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
             let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
             let config_path = env!("CANIC_CONFIG_ORIGIN_PATH");
-            (config_model, config_source, config_path)
+            (runtime_authority, config_model, config_source, config_path)
         }
 
         #[$crate::__internal::cdk::init]
         fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs) {
-            let (config, config_source, config_path) = __canic_compiled_config();
+            let (runtime_authority, config, config_source, config_path) = __canic_compiled_config();
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 args,
                 option_env!("CANIC_RELEASE_BUILD_ID"),
+                runtime_authority,
                 config,
                 config_source,
                 config_path,
@@ -437,9 +412,10 @@ macro_rules! __canic_root_lifecycle_core {
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
-            let (config, config_source, config_path) = __canic_compiled_config();
+            let (runtime_authority, config, config_source, config_path) = __canic_compiled_config();
 
             let active = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
+                runtime_authority,
                 config,
                 config_source,
                 config_path,

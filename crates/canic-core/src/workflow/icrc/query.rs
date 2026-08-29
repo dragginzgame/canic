@@ -5,11 +5,10 @@
 //! Boundary: workflow query facade over the standards projection and dispatcher services.
 
 use crate::{
-    config::Config,
     dispatch::icrc21::Icrc21Dispatcher,
     domain::icrc::icrc10::supported_standards,
     dto::icrc21::{ConsentMessageRequest, ConsentMessageResponse},
-    ops::runtime::env::EnvOps,
+    ops::config::ConfigOps,
 };
 
 ///
@@ -21,22 +20,7 @@ pub struct Icrc10Query;
 impl Icrc10Query {
     #[must_use]
     pub fn supported_standards() -> Vec<(String, String)> {
-        let icrc21_enabled = Config::try_get().is_some_and(|cfg| {
-            let global_standards = cfg.standards.as_ref();
-            let canister_standards = EnvOps::component_spec().ok().and_then(|component_spec| {
-                EnvOps::canister_role().ok().and_then(|canister_role| {
-                    cfg.component_specs
-                        .get(&component_spec)?
-                        .get_canister(&canister_role)
-                        .map(|canister_cfg| canister_cfg.standards)
-                })
-            });
-
-            global_standards.is_some_and(|standards| standards.icrc21)
-                && canister_standards.is_some_and(|standards| standards.icrc21)
-        });
-
-        supported_standards(icrc21_enabled)
+        supported_standards(ConfigOps::current_icrc21_enabled())
     }
 }
 

@@ -3,7 +3,7 @@ use crate::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
     },
     bootstrap,
-    config::schema::ConfigModel,
+    config::RoleRuntimeAuthority,
     ids::CanisterRole,
     lifecycle::{LifecyclePhase, lifecycle_trap},
     log,
@@ -18,69 +18,51 @@ use std::time::Duration;
 
 pub fn post_upgrade_nonroot_canister_before_bootstrap(
     role: CanisterRole,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
 ) -> bool {
     post_upgrade_nonroot_before_bootstrap(
         role,
-        config,
-        config_source,
-        config_path,
+        authority,
         workflow::runtime::post_upgrade_nonroot_canister_after_memory_init,
     )
 }
 
 pub fn post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
     role: CanisterRole,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
 ) -> bool {
     post_upgrade_nonroot_before_bootstrap(
         role,
-        config,
-        config_source,
-        config_path,
+        authority,
         workflow::runtime::post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init,
     )
 }
 
 pub fn post_upgrade_local_nonroot_canister_before_bootstrap(
     role: CanisterRole,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
 ) -> bool {
     post_upgrade_nonroot_before_bootstrap(
         role,
-        config,
-        config_source,
-        config_path,
+        authority,
         workflow::runtime::post_upgrade_local_nonroot_canister_after_memory_init,
     )
 }
 
 pub fn post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap(
     role: CanisterRole,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
 ) -> bool {
     post_upgrade_nonroot_before_bootstrap(
         role,
-        config,
-        config_source,
-        config_path,
+        authority,
         workflow::runtime::post_upgrade_local_nonroot_canister_with_automatic_topup_after_memory_init,
     )
 }
 
 fn post_upgrade_nonroot_before_bootstrap(
     role: CanisterRole,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
     restore: fn(CanisterRole) -> Result<bool, crate::InternalError>,
 ) -> bool {
     crate::api::timer::TimerApi::initialize_nonroot_runtime_required();
@@ -90,7 +72,7 @@ fn post_upgrade_nonroot_before_bootstrap(
         LifecycleMetricOutcome::Started,
     );
 
-    if let Err(err) = bootstrap::init_compiled_config(config, config_source) {
+    if let Err(err) = bootstrap::init_role_runtime_authority(&role, authority) {
         LifecycleMetricsApi::record_runtime(
             LifecycleMetricPhase::PostUpgrade,
             LifecycleMetricRole::Nonroot,
@@ -98,7 +80,7 @@ fn post_upgrade_nonroot_before_bootstrap(
         );
         lifecycle_trap(
             LifecyclePhase::PostUpgrade,
-            format!("config init failed (config_path={config_path}): {err}"),
+            format!("runtime authority init failed: {err}"),
         );
     }
 

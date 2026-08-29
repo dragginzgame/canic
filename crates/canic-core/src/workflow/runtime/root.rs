@@ -11,7 +11,7 @@ use crate::{
     ids::CanisterRole,
     log::Topic,
     ops::{
-        config::ConfigOps,
+        config::{ConfigOps, RootConfigOps},
         ic::{IcOps, build_network::BuildNetworkOps, release_build::ReleaseBuildOps},
         runtime::{
             env::EnvOps, fleet_activation::FleetActivationRuntimeOps, memory::MemoryRegistryOps,
@@ -42,8 +42,8 @@ pub fn init_root_canister(
     crate::log::set_ready();
     let embedded_release_build_id =
         ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;
-    let config = ConfigOps::get()?;
-    let component_topology = ConfigOps::component_topology()?;
+    let config = RootConfigOps::get()?;
+    let component_topology = RootConfigOps::component_topology()?;
     let self_pid = IcOps::canister_self();
     FleetActivationOps::initialize_root_prepared(
         args.clone(),

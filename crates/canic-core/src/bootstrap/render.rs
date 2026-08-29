@@ -6,9 +6,15 @@
 
 use crate::{
     config::{
-        ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
+        ComponentChildFundingPolicy, ComponentChildSpec, ComponentDeploymentLabel,
+        ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, ComponentDeploymentLimits,
+        ComponentDeploymentPurpose, ComponentDeploymentSpawnGrantLimit, ComponentLimits,
+        ComponentProvisioningGrant, ComponentSpawnGrant, ComponentSpec, ComponentTopology,
+        FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose, RoleRuntimeAuthority,
+        RuntimeApplicationAuthorization, RuntimeCanisterAuthority, RuntimeCanisterConfig,
+        RuntimeDeploymentMemberAuthority,
         schema::{
-            AppConfig, AuthConfig, CanisterAuthConfig, ChainKeyRootProofConfig,
+            AppConfig, AuthConfig, CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig,
             ComponentChildConfig, ComponentChildKind, ComponentDeploymentMemberLimitConfig,
             ComponentDeploymentSpawnGrantLimitConfig, ComponentGroupComponentConfig,
             ComponentGroupDeploymentConfig, ComponentGroupIncludeConfig,
@@ -29,7 +35,7 @@ use crate::{
         ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
     },
 };
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::quote;
 
 /// config_model
@@ -39,6 +45,323 @@ pub fn config_model(config: &ConfigModel) -> String {
     let mut source = render_config_model(config).to_string();
     source.push('\n');
     source
+}
+
+/// Render one build-compiled role runtime authority into a Rust expression string.
+pub fn role_runtime_authority(authority: &RoleRuntimeAuthority) -> String {
+    let mut source = render_role_runtime_authority(authority).to_string();
+    source.push('\n');
+    source
+}
+
+fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStream {
+    let role = render_canister_role(&authority.role);
+    let app_init_mode = render_fleet_init_mode(authority.app_init_mode);
+    let log = render_log_config(&authority.log);
+    let auth = render_auth_config(&authority.auth);
+    let fleet_admission = authority.fleet_admission;
+    let global_icrc21 = authority.global_icrc21;
+    let component_topology = render_component_topology(&authority.component_topology);
+    let canisters = render_vec(
+        authority.canisters.iter(),
+        render_runtime_canister_authority,
+    );
+    let configuration_digest = render_byte_array(authority.configuration_digest.as_bytes());
+    let deployment_members = render_vec(
+        authority.deployment_members.iter(),
+        render_runtime_deployment_member_authority,
+    );
+    let application_authorizations = render_vec(
+        authority.application_authorizations.iter(),
+        render_runtime_application_authorization,
+    );
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::RoleRuntimeAuthority {
+            role: #role,
+            app_init_mode: #app_init_mode,
+            log: #log,
+            auth: #auth,
+            fleet_admission: #fleet_admission,
+            global_icrc21: #global_icrc21,
+            component_topology: #component_topology,
+            canisters: #canisters,
+            configuration_digest:
+                ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentConfigurationDigest::from_bytes(#configuration_digest),
+            deployment_members: #deployment_members,
+            application_authorizations: #application_authorizations,
+        }
+    }
+}
+
+fn render_runtime_application_authorization(
+    authority: &RuntimeApplicationAuthorization,
+) -> TokenStream {
+    let role = render_canister_role(&authority.role);
+    let config = render_local_application_authorization_config(&authority.config);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::RuntimeApplicationAuthorization {
+            role: #role,
+            config: #config,
+        }
+    }
+}
+
+fn render_runtime_canister_authority(authority: &RuntimeCanisterAuthority) -> TokenStream {
+    let component_spec = render_option(authority.component_spec.as_ref(), render_component_spec_id);
+    let role = render_canister_role(&authority.role);
+    let config = render_runtime_canister_config(&authority.config);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::RuntimeCanisterAuthority {
+            component_spec: #component_spec,
+            role: #role,
+            config: #config,
+        }
+    }
+}
+
+fn render_runtime_deployment_member_authority(
+    authority: &RuntimeDeploymentMemberAuthority,
+) -> TokenStream {
+    let deployment = render_component_group_deployment_id(&authority.deployment);
+    let component_group = render_component_group_spec_id(&authority.component_group);
+    let member = render_flattened_deployment_member(&authority.member);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::RuntimeDeploymentMemberAuthority {
+            deployment: #deployment,
+            component_group: #component_group,
+            member: #member,
+        }
+    }
+}
+
+fn render_component_topology(topology: &ComponentTopology) -> TokenStream {
+    let component_specs = render_vec(topology.component_specs.iter(), render_component_spec);
+    let provisioning_grants = render_vec(
+        topology.provisioning_grants.iter(),
+        render_component_provisioning_grant,
+    );
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentTopology {
+            component_specs: #component_specs,
+            provisioning_grants: #provisioning_grants,
+        }
+    }
+}
+
+fn render_component_spec(spec: &ComponentSpec) -> TokenStream {
+    let component_spec = render_component_spec_id(&spec.component_spec);
+    let spec_hash = render_byte_array(&spec.spec_hash);
+    let component_role = render_canister_role(&spec.component_role);
+    let maximum_fleet_instances = render_u32_literal(spec.maximum_fleet_instances);
+    let limits = render_component_limits(&spec.limits);
+    let children = render_vec(spec.children.iter(), render_component_child_spec);
+    let spawn_grants = render_vec(spec.spawn_grants.iter(), render_component_spawn_grant);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentSpec {
+            component_spec: #component_spec,
+            spec_hash: #spec_hash,
+            component_role: #component_role,
+            maximum_fleet_instances: #maximum_fleet_instances,
+            limits: #limits,
+            children: #children,
+            spawn_grants: #spawn_grants,
+        }
+    }
+}
+
+fn render_component_limits(limits: &ComponentLimits) -> TokenStream {
+    let maximum_descendants = render_u32_literal(limits.maximum_descendants);
+    let maximum_registry_bytes = render_u64_literal(limits.maximum_registry_bytes);
+    let window_secs = render_u64_literal(limits.cycles_funding.window_secs);
+    let maximum_cycles = render_cycles(limits.cycles_funding.maximum_cycles.to_u128());
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentLimits {
+            maximum_descendants: #maximum_descendants,
+            maximum_registry_bytes: #maximum_registry_bytes,
+            cycles_funding: ::canic::__internal::core::bootstrap::compiled::CyclesFundingBudget {
+                window_secs: #window_secs,
+                maximum_cycles: #maximum_cycles,
+            },
+        }
+    }
+}
+
+fn render_runtime_canister_config(config: &RuntimeCanisterConfig) -> TokenStream {
+    let kind = render_canister_kind(config.kind);
+    let topup = render_option(config.topup.as_ref(), render_topup);
+    let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
+    let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
+    let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
+    let index = render_option(config.index.as_ref(), render_index_config);
+    let auth = render_canister_auth_config(&config.auth);
+    let standards = render_standards_canister_config(&config.standards);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::RuntimeCanisterConfig {
+            kind: #kind,
+            topup: #topup,
+            cycles_funding: #cycles_funding,
+            scaling: #scaling,
+            sharding: #sharding,
+            index: #index,
+            auth: #auth,
+            standards: #standards,
+        }
+    }
+}
+
+fn render_canister_kind(kind: CanisterKind) -> TokenStream {
+    let variant = match kind {
+        CanisterKind::Root => quote!(Root),
+        CanisterKind::Service => quote!(Service),
+        CanisterKind::Singleton => quote!(Singleton),
+        CanisterKind::Replica => quote!(Replica),
+        CanisterKind::Shard => quote!(Shard),
+        CanisterKind::Instance => quote!(Instance),
+    };
+    quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::#variant)
+}
+
+fn render_component_child_spec(spec: &ComponentChildSpec) -> TokenStream {
+    let role = render_canister_role(&spec.role);
+    let kind = render_component_child_kind(spec.kind);
+    let cycles_funding = render_component_child_funding_policy(&spec.cycles_funding);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentChildSpec {
+            role: #role,
+            kind: #kind,
+            cycles_funding: #cycles_funding,
+        }
+    }
+}
+
+fn render_component_child_funding_policy(policy: &ComponentChildFundingPolicy) -> TokenStream {
+    let max_per_request = render_cycles(policy.max_per_request.to_u128());
+    let max_per_child = render_cycles(policy.max_per_child.to_u128());
+    let cooldown_secs = render_u64_literal(policy.cooldown_secs);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentChildFundingPolicy {
+            max_per_request: #max_per_request,
+            max_per_child: #max_per_child,
+            cooldown_secs: #cooldown_secs,
+        }
+    }
+}
+
+fn render_component_spawn_grant(grant: &ComponentSpawnGrant) -> TokenStream {
+    let parent_role = render_canister_role(&grant.parent_role);
+    let child_role = render_canister_role(&grant.child_role);
+    let maximum_instances_per_parent = render_u32_literal(grant.maximum_instances_per_parent);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentSpawnGrant {
+            parent_role: #parent_role,
+            child_role: #child_role,
+            maximum_instances_per_parent: #maximum_instances_per_parent,
+        }
+    }
+}
+
+fn render_component_provisioning_grant(grant: &ComponentProvisioningGrant) -> TokenStream {
+    let requester_component_spec = render_component_spec_id(&grant.requester_component_spec);
+    let target_component_spec = render_component_spec_id(&grant.target_component_spec);
+    let maximum_instances_per_requester_per_root =
+        render_u32_literal(grant.maximum_instances_per_requester_per_root);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentProvisioningGrant {
+            requester_component_spec: #requester_component_spec,
+            target_component_spec: #target_component_spec,
+            maximum_instances_per_requester_per_root:
+                #maximum_instances_per_requester_per_root,
+        }
+    }
+}
+
+fn render_flattened_deployment_member(
+    member: &FlattenedComponentGroupDeploymentMember,
+) -> TokenStream {
+    let member_path = render_component_group_member_path(&member.member_path);
+    let component_spec = render_component_spec_id(&member.component_spec);
+    let component_spec_hash = render_byte_array(&member.component_spec_hash);
+    let purpose = render_component_deployment_purpose(&member.purpose);
+    let labels = render_vec(member.labels.iter(), render_component_deployment_label);
+    let limits = render_component_deployment_limits(&member.limits);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::FlattenedComponentGroupDeploymentMember {
+            member_path: #member_path,
+            component_spec: #component_spec,
+            component_spec_hash: #component_spec_hash,
+            purpose: #purpose,
+            labels: #labels,
+            limits: #limits,
+        }
+    }
+}
+
+fn render_component_deployment_purpose(purpose: &ComponentDeploymentPurpose) -> TokenStream {
+    match purpose {
+        ComponentDeploymentPurpose::Ordinary => quote! {
+            ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentPurpose::Ordinary
+        },
+        ComponentDeploymentPurpose::FleetServiceMember {
+            service,
+            member_purpose,
+        } => {
+            let service = render_fleet_service_id(service);
+            let member_purpose = render_fleet_service_member_purpose(*member_purpose);
+            quote! {
+                ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentPurpose::FleetServiceMember {
+                    service: #service,
+                    member_purpose: #member_purpose,
+                }
+            }
+        }
+    }
+}
+
+fn render_component_deployment_label(label: &ComponentDeploymentLabel) -> TokenStream {
+    let key = render_component_deployment_label_key(&label.key);
+    let value = render_component_deployment_label_value(&label.value);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentLabel {
+            key: #key,
+            value: #value,
+        }
+    }
+}
+
+fn render_component_deployment_limits(limits: &ComponentDeploymentLimits) -> TokenStream {
+    let maximum_descendants = render_u32_literal(limits.maximum_descendants);
+    let maximum_registry_bytes = render_u64_literal(limits.maximum_registry_bytes);
+    let spawn_grant_reductions = render_vec(
+        limits.spawn_grant_reductions.iter(),
+        render_component_deployment_spawn_grant_limit,
+    );
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentLimits {
+            maximum_descendants: #maximum_descendants,
+            maximum_registry_bytes: #maximum_registry_bytes,
+            spawn_grant_reductions: #spawn_grant_reductions,
+        }
+    }
+}
+
+fn render_component_deployment_spawn_grant_limit(
+    limit: &ComponentDeploymentSpawnGrantLimit,
+) -> TokenStream {
+    let parent_role = render_canister_role(&limit.parent_role);
+    let child_role = render_canister_role(&limit.child_role);
+    let maximum_instances_per_parent = render_u32_literal(limit.maximum_instances_per_parent);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ComponentDeploymentSpawnGrantLimit {
+            parent_role: #parent_role,
+            child_role: #child_role,
+            maximum_instances_per_parent: #maximum_instances_per_parent,
+        }
+    }
+}
+
+fn render_byte_array<const N: usize>(bytes: &[u8; N]) -> TokenStream {
+    let bytes = bytes.iter().map(|byte| Literal::u8_unsuffixed(*byte));
+    quote!([#(#bytes),*])
 }
 
 // Render the top-level configuration model into a portable Rust expression.
