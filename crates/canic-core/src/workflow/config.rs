@@ -4,7 +4,7 @@
 //! Does not own: configuration storage, timer registration, or endpoint authorization.
 //! Boundary: delegates config serialization to ops.
 
-use crate::{InternalError, ops::config::ConfigOps};
+use crate::{InternalError, ops::config::RootConfigOps};
 
 ///
 /// ConfigWorkflow
@@ -16,6 +16,6 @@ pub struct ConfigWorkflow;
 
 impl ConfigWorkflow {
     pub fn export_toml() -> Result<String, InternalError> {
-        ConfigOps::export_toml()
+        RootConfigOps::export_toml()
     }
 }

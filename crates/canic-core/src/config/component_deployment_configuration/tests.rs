@@ -2,10 +2,10 @@
 
 use super::*;
 use crate::{
-    config::{ComponentDeploymentPurpose, Config, ConfigError},
+    config::{ComponentDeploymentPurpose, Config, ConfigError, RoleRuntimeAuthority},
     dto::component_deployment::ProtectedComponentDeployment,
     ids::{
-        AppId, CanonicalNetworkId, ComponentBinding, ComponentGroupDeploymentId,
+        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentGroupDeploymentId,
         ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupPlacementId,
         ComponentGroupSpecId, ComponentInstanceId, ComponentSpecId, FleetBinding,
         FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
@@ -341,6 +341,8 @@ fn group_member_context_matches_only_the_exact_compiled_projection() {
     config
         .validate_protected_component_deployment(&context, &binding)
         .expect("exact protected context");
+    let runtime = assert_compiled_role_runtime_projection(&config, &binding);
+    assert_runtime_projection_rejects_substitutions(&runtime, &context, &binding);
     let encoded = candid::encode_one(&context).expect("encode protected context");
     let decoded: ProtectedComponentDeployment =
         candid::decode_one(&encoded).expect("decode protected context");
@@ -394,6 +396,116 @@ fn group_member_context_matches_only_the_exact_compiled_projection() {
         config.validate_protected_component_deployment(&wrong_member, &binding),
         Err(ProtectedComponentDeploymentError::UnknownMember { .. })
     ));
+}
+
+fn assert_compiled_role_runtime_projection(
+    config: &ConfigModel,
+    binding: &ComponentBinding,
+) -> RoleRuntimeAuthority {
+    let runtime = RoleRuntimeAuthority::compile(config, &CanisterRole::from("database"))
+        .expect("compiled runtime authority");
+    assert_eq!(runtime.component_topology.component_specs.len(), 2);
+    for component_spec in ["database", "api"] {
+        assert!(
+            runtime
+                .component_topology
+                .get(&component_spec.parse().expect("Component Spec ID"))
+                .is_some()
+        );
+    }
+    assert!(
+        runtime
+            .canister_by_role(&CanisterRole::from("database"))
+            .is_some()
+    );
+    assert!(
+        runtime
+            .canister(None, &CanisterRole::from("database"))
+            .is_none()
+    );
+    assert!(
+        runtime
+            .canister_by_role(&CanisterRole::from("child"))
+            .is_some()
+    );
+    assert!(
+        runtime
+            .canister_by_role(&CanisterRole::from("api"))
+            .is_none()
+    );
+    assert!(
+        runtime
+            .deployment_members
+            .iter()
+            .all(|authority| authority.member.component_spec == binding.component_spec)
+    );
+
+    let root_runtime = RoleRuntimeAuthority::compile(config, &CanisterRole::ROOT)
+        .expect("compiled Root runtime authority");
+    assert!(root_runtime.component_topology.component_specs.is_empty());
+    root_runtime
+        .component_topology
+        .canonical_bytes()
+        .expect("empty Root runtime topology remains canonical");
+    for role in [CanisterRole::ROOT, CanisterRole::WASM_STORE]
+        .into_iter()
+        .chain(["database", "api", "child"].map(CanisterRole::from))
+    {
+        assert!(root_runtime.canister_by_role(&role).is_some());
+    }
+
+    runtime
+}
+
+fn assert_runtime_projection_rejects_substitutions(
+    runtime: &RoleRuntimeAuthority,
+    context: &ProtectedComponentDeployment,
+    binding: &ComponentBinding,
+) {
+    runtime
+        .validate_protected_component_deployment(context, binding)
+        .expect("runtime authority accepts the exact protected context");
+
+    let mut wrong_digest = context.clone();
+    let ProtectedComponentDeployment::GroupMember {
+        configuration_digest,
+        ..
+    } = &mut wrong_digest
+    else {
+        unreachable!()
+    };
+    *configuration_digest = ComponentDeploymentConfigurationDigest::from_bytes([99; 32]);
+
+    let mut wrong_purpose = context.clone();
+    let ProtectedComponentDeployment::GroupMember { purpose, .. } = &mut wrong_purpose else {
+        unreachable!()
+    };
+    *purpose = ComponentDeploymentPurpose::Ordinary;
+
+    let mut wrong_limits = context.clone();
+    let ProtectedComponentDeployment::GroupMember { limits, .. } = &mut wrong_limits else {
+        unreachable!()
+    };
+    limits.maximum_descendants -= 1;
+
+    let mut wrong_member = context.clone();
+    let ProtectedComponentDeployment::GroupMember { member_path, .. } = &mut wrong_member else {
+        unreachable!()
+    };
+    *member_path = ComponentGroupMemberPath::try_from(vec![
+        "missing"
+            .parse::<ComponentGroupMemberId>()
+            .expect("member ID"),
+    ])
+    .expect("member path");
+
+    for changed in [wrong_digest, wrong_purpose, wrong_limits, wrong_member] {
+        assert!(
+            runtime
+                .validate_protected_component_deployment(&changed, binding)
+                .is_err()
+        );
+    }
 }
 
 #[test]

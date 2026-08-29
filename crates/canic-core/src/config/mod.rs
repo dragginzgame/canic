@@ -9,6 +9,7 @@ mod component_deployment_configuration;
 mod component_group;
 mod component_group_deployment;
 mod fleet_service;
+mod runtime;
 pub mod schema;
 mod topology;
 #[cfg(any(not(target_arch = "wasm32"), test))]
@@ -46,6 +47,12 @@ pub use fleet_service::{
     FleetServicePlacementPolicy, FleetServiceTarget, FleetServiceTargetMode, FleetServiceTopology,
     FleetServiceTopologyError, MAX_FLEET_SERVICE_TARGETS,
     MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES,
+};
+#[cfg(any(not(target_arch = "wasm32"), test))]
+pub use runtime::RoleRuntimeAuthorityError;
+pub use runtime::{
+    RoleRuntimeAuthority, RoleRuntimeConfig, RuntimeApplicationAuthorization,
+    RuntimeCanisterAuthority, RuntimeCanisterConfig, RuntimeDeploymentMemberAuthority,
 };
 pub use schema::ConfigModel;
 #[cfg(any(not(target_arch = "wasm32"), test))]
@@ -185,26 +192,6 @@ impl Config {
         })
     }
 
-    /// Return the installed configuration model when available.
-    #[must_use]
-    pub(crate) fn try_get() -> Option<Arc<ConfigModel>> {
-        CONFIG.with(|cfg| {
-            if let Some(config) = cfg.borrow().as_ref() {
-                return Some(config.model.clone());
-            }
-
-            #[cfg(test)]
-            {
-                Some(Self::init_for_tests())
-            }
-
-            #[cfg(not(test))]
-            {
-                None
-            }
-        })
-    }
-
     /// Parse and validate a TOML configuration document on host targets.
     #[cfg(any(not(target_arch = "wasm32"), test))]
     pub fn parse_toml(config_str: &str) -> Result<ConfigModel, ConfigError> {
@@ -277,6 +264,7 @@ impl Config {
     /// Reset the global config so tests can reinitialize with a fresh model.
     #[cfg(test)]
     pub fn reset_for_tests() {
+        RoleRuntimeConfig::reset_for_tests();
         CONFIG.with(|cfg| {
             *cfg.borrow_mut() = None;
         });

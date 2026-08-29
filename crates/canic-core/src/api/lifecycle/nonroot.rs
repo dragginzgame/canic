@@ -1,5 +1,5 @@
 use crate::{
-    config::schema::ConfigModel,
+    config::RoleRuntimeAuthority,
     dto::{
         abi::v1::CanisterInitPayload, env::EnvBootstrapArgs,
         fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
@@ -36,34 +36,26 @@ impl LifecycleApi {
         payload: CanisterInitPayload,
         application_init_args: Option<Vec<u8>>,
         embedded_release_build_id: Option<&str>,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
+        authority: RoleRuntimeAuthority,
     ) {
         lifecycle::init::nonroot::init_nonroot_canister_before_bootstrap(
             role,
             payload,
             application_init_args,
             embedded_release_build_id,
-            config,
-            config_source,
-            config_path,
+            authority,
         );
     }
 
     pub fn init_wasm_store_before_bootstrap(
         input: FleetSubnetWasmStoreInitArgs,
         embedded_release_build_id: Option<&str>,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
+        authority: RoleRuntimeAuthority,
     ) {
         lifecycle::init::nonroot::init_wasm_store_before_bootstrap(
             input,
             embedded_release_build_id,
-            config,
-            config_source,
-            config_path,
+            authority,
         );
     }
 
@@ -74,16 +66,10 @@ impl LifecycleApi {
     pub fn init_local_nonroot_canister_before_bootstrap(
         role: CanisterRole,
         env: EnvBootstrapArgs,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
+        authority: RoleRuntimeAuthority,
     ) {
         lifecycle::init::nonroot::init_local_nonroot_canister_before_bootstrap(
-            role,
-            env,
-            config,
-            config_source,
-            config_path,
+            role, env, authority,
         );
     }
 
@@ -91,47 +77,30 @@ impl LifecycleApi {
     pub fn init_local_nonroot_canister_with_automatic_topup_before_bootstrap(
         role: CanisterRole,
         env: EnvBootstrapArgs,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
+        authority: RoleRuntimeAuthority,
     ) {
         lifecycle::init::nonroot::init_local_nonroot_canister_with_automatic_topup_before_bootstrap(
-            role,
-            env,
-            config,
-            config_source,
-            config_path,
+            role, env, authority,
         );
     }
 
     #[must_use]
     pub fn post_upgrade_nonroot_canister_before_bootstrap(
         role: CanisterRole,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
+        authority: RoleRuntimeAuthority,
     ) -> bool {
-        lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_before_bootstrap(
-            role,
-            config,
-            config_source,
-            config_path,
-        )
+        lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_before_bootstrap(role, authority)
     }
 
     #[doc(hidden)]
     #[must_use]
     pub fn post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
         role: CanisterRole,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
+        authority: RoleRuntimeAuthority,
     ) -> bool {
         lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
             role,
-            config,
-            config_source,
-            config_path,
+            authority,
         )
     }
 
@@ -142,15 +111,10 @@ impl LifecycleApi {
     #[must_use]
     pub fn post_upgrade_local_nonroot_canister_before_bootstrap(
         role: CanisterRole,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
+        authority: RoleRuntimeAuthority,
     ) -> bool {
         lifecycle::upgrade::nonroot::post_upgrade_local_nonroot_canister_before_bootstrap(
-            role,
-            config,
-            config_source,
-            config_path,
+            role, authority,
         )
     }
 
@@ -158,15 +122,11 @@ impl LifecycleApi {
     #[must_use]
     pub fn post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap(
         role: CanisterRole,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
+        authority: RoleRuntimeAuthority,
     ) -> bool {
         lifecycle::upgrade::nonroot::post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap(
             role,
-            config,
-            config_source,
-            config_path,
+            authority,
         )
     }
 }

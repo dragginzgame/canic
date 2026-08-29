@@ -3,13 +3,14 @@ use crate::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
     },
     bootstrap,
-    config::schema::ConfigModel,
+    config::{RoleRuntimeAuthority, schema::ConfigModel},
     lifecycle::{LifecyclePhase, lifecycle_trap},
     ops::runtime::env::EnvOps,
     workflow,
 };
 
 pub fn post_upgrade_root_canister_before_bootstrap(
+    runtime_authority: RoleRuntimeAuthority,
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
@@ -30,6 +31,19 @@ pub fn post_upgrade_root_canister_before_bootstrap(
         lifecycle_trap(
             LifecyclePhase::PostUpgrade,
             format!("config init failed (config_path={config_path}): {err}"),
+        );
+    }
+    if let Err(err) =
+        bootstrap::init_role_runtime_authority(&crate::ids::CanisterRole::ROOT, runtime_authority)
+    {
+        LifecycleMetricsApi::record_runtime(
+            LifecycleMetricPhase::PostUpgrade,
+            LifecycleMetricRole::Root,
+            LifecycleMetricOutcome::Failed,
+        );
+        lifecycle_trap(
+            LifecyclePhase::PostUpgrade,
+            format!("runtime authority init failed: {err}"),
         );
     }
 

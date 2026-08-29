@@ -15,32 +15,26 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 [through 0.101.52 Q4](archive/2026-08-12-precompact.md), and
 [through published 0.109.12](archive/2026-08-26-pre-root-repair-hard-cut.md).
 
-Published `v0.109.21` at
-`467bf195f91123886753dba6f48ffd4397ae1fa7` is the immutable maintained
-release. Its annotated tag object is
-`81ac37ef81a7f96b65504fce061e3fe090859083`, and its validated source is
-`e1e8882115c80ada672febc6237b91c48f43655b`. It binds finalized artifacts to
-their exact build network, funds fresh pool assets through the direct reviewed
-creation graph, recovers accidental pool-ledger credits on the same Principal,
-requires compact human cycle units, starts a stopped retained Root before child
-observation, and accepts bounded bidirectional balance movement without
-changing effect or debit authority.
+Published `v0.109.22` at
+`674f1098fffb3cb51b59b3213b175b4e1ee769fb` is the immutable maintained
+release. It binds the exact `ChildProvisioning` capability to roles with
+configured descendants, omits that command graph from leaf roles, corrects the
+packaged Binaryen 132 authority and prevents caught test panics from being
+misreported as validation failures.
 
-`0.109.22` is the single open patch draft. It corrects all six packaged
-Binaryen archive and executable digests to the official version 132 authority
-already retained in `tool-versions.env`. The runtime platform table is now
-directly testable, and every supported projection is compared field-for-field
-with those repository pins. It also derives one exact `ChildProvisioning`
-capability from configured spawn grants and compiles the managed non-Root
-capability responder only for roles that own descendants. Leaf and ordinary
-Component roles keep Root activation and observation but omit that responder's
-command, response, workflow and Candid graph. The generated pool-ledger helper
-also retains the exact release-build ID supplied by the complete artifact
-build, closing the release-set admission failure exposed by the focused
-all-role build. Validation output now distinguishes a caught PocketIC trap from
-a real libtest or target failure instead of marking every Rust panic-hook line
-as an error. The workspace version surfaces are synchronized to `0.109.22`;
-no tag, package, push or deployment action has occurred for this draft.
+`0.109.23` is the single open patch draft. Ordinary managed roles,
+standalone-local roles and the built-in Wasm Store now embed one exact
+build-compiled runtime authority instead of the complete source configuration
+and TOML. Each projection keeps the role's runtime policy, admitted descendant
+settings, relevant grouped deployment and application-authorization authority,
+plus the protected topology required to validate complete Root admission.
+Sibling `RuntimeCanisterConfig` records and source-only configuration are
+absent. Root remains the sole runtime owner of the full
+application/control-plane model and also receives its separate exact runtime
+projection for shared runtime services.
+The workspace version remains `0.109.22` until the maintainer selects a release
+boundary; no version, package, tag, push or deployment action has occurred for
+this draft.
 
 Published `v0.109.20` at
 `a90b1ae74439c335ced10d20728e45c0607a01a7` is the immutable predecessor.
@@ -324,7 +318,18 @@ not active contracts.
 
 ## Validation State
 
-Open `0.109.22` coding-time evidence passes the focused role-capability
+Open `0.109.23` coding-time evidence passes the exact role-authority source and
+installation test, including fail-closed role substitution, and the focused
+multi-Spec grouped-deployment projection test, including changed digest,
+purpose, limits and member rejection. Locked ordinary, Root and Store lifecycle
+consumers compile. Warning-denied Clippy passes for `canic`, `canic-core` and
+`canic-control-plane`; formatting and diff hygiene pass. The canonical release
+leaf is 2,434,770 optimized bytes with a 2,215,196-byte code section and 3,979
+defined functions, reducing the published `0.109.22` leaf by 112,069 total
+bytes, 100,964 code bytes and 204 functions. No broad workspace or PocketIC
+suite was run during coding.
+
+Published `0.109.22` coding-time evidence passed the focused role-capability
 derivation, build-cfg catalog, destination protocol-surface and release-set
 projection tests. A canonical release build of the managed leaf audit role
 produced a 2,546,839-byte Wasm with a 2,316,160-byte code section and 4,183
@@ -704,20 +709,16 @@ review a new current plan that reuses the controlled Principals and balances
 while reinstalling the corrected infrastructure artifacts. No compatibility
 bridge, journal edit or live repair path was added.
 
-The maintainer versioned, committed, tagged and pushed immutable `v0.109.21`.
+The maintainer versioned, committed, tagged and pushed immutable `v0.109.22`.
 No deployment, identity switch, Ledger call, live canister call, or
 sibling-repository mutation was performed by this documentation reconciliation.
 
 ## Next Action
 
-The open `0.109.22` batch corrects the packaged Binaryen 132 authority exposed
-by downstream staging, makes all runtime platform projections accountable to
-the repository pins and hard-cuts the incorrectly universal non-Root
-capability responder into exact role-contract ownership. It also prevents an
-expected caught PocketIC trap from appearing as a validation error. The next
-maintainer action is to review this diff and choose the release validation,
-version and publication boundary; coding-time agents must not pre-run the broad
-gate.
+The open `0.109.23` batch removes the complete source configuration owner from
+ordinary managed, standalone-local and Store artifacts. The remaining work is
+the maintainer-owned review and chosen release validation, version and
+publication boundary. Coding-time agents must not pre-run the broad gate.
 
 The separately reported release-build LTO duplication remains a non-blocking,
 measurement-led throughput slice. It is not part of the staging correctness

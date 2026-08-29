@@ -3,7 +3,7 @@ use crate::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
     },
     bootstrap,
-    config::schema::ConfigModel,
+    config::RoleRuntimeAuthority,
     dto::{
         abi::v1::CanisterInitPayload, env::EnvBootstrapArgs,
         fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
@@ -22,11 +22,9 @@ pub fn init_nonroot_canister_before_bootstrap(
     payload: CanisterInitPayload,
     application_init_args: Option<Vec<u8>>,
     embedded_release_build_id: Option<&str>,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
 ) {
-    init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
+    init_nonroot_before_bootstrap(role, authority, move |role| {
         workflow::runtime::init_nonroot_canister(
             role,
             payload,
@@ -39,27 +37,19 @@ pub fn init_nonroot_canister_before_bootstrap(
 pub fn init_wasm_store_before_bootstrap(
     input: FleetSubnetWasmStoreInitArgs,
     embedded_release_build_id: Option<&str>,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
 ) {
-    init_nonroot_before_bootstrap(
-        CanisterRole::WASM_STORE,
-        config,
-        config_source,
-        config_path,
-        |_| workflow::runtime::init_wasm_store_canister(input, embedded_release_build_id),
-    );
+    init_nonroot_before_bootstrap(CanisterRole::WASM_STORE, authority, |_| {
+        workflow::runtime::init_wasm_store_canister(input, embedded_release_build_id)
+    });
 }
 
 pub fn init_local_nonroot_canister_before_bootstrap(
     role: CanisterRole,
     env: EnvBootstrapArgs,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
 ) {
-    init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
+    init_nonroot_before_bootstrap(role, authority, move |role| {
         workflow::runtime::init_local_nonroot_canister(role, env)
     });
 }
@@ -67,20 +57,16 @@ pub fn init_local_nonroot_canister_before_bootstrap(
 pub fn init_local_nonroot_canister_with_automatic_topup_before_bootstrap(
     role: CanisterRole,
     env: EnvBootstrapArgs,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
 ) {
-    init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
+    init_nonroot_before_bootstrap(role, authority, move |role| {
         workflow::runtime::init_local_nonroot_canister_with_automatic_topup(role, env)
     });
 }
 
 fn init_nonroot_before_bootstrap(
     role: CanisterRole,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
+    authority: RoleRuntimeAuthority,
     initialize: impl FnOnce(CanisterRole) -> Result<(), crate::InternalError>,
 ) {
     crate::api::timer::TimerApi::initialize_nonroot_runtime_required();
@@ -90,7 +76,7 @@ fn init_nonroot_before_bootstrap(
         LifecycleMetricOutcome::Started,
     );
 
-    if let Err(err) = bootstrap::init_compiled_config(config, config_source) {
+    if let Err(err) = bootstrap::init_role_runtime_authority(&role, authority) {
         LifecycleMetricsApi::record_runtime(
             LifecycleMetricPhase::Init,
             LifecycleMetricRole::Nonroot,
@@ -98,7 +84,7 @@ fn init_nonroot_before_bootstrap(
         );
         lifecycle_trap(
             LifecyclePhase::Init,
-            format!("config init failed (config_path={config_path}): {err}"),
+            format!("runtime authority init failed: {err}"),
         );
     }
 

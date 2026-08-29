@@ -9,7 +9,7 @@ mod render;
 
 #[cfg(any(target_arch = "wasm32", test))]
 use crate::cdk::utils::hash::hex_bytes;
-use crate::config::{Config, schema::ConfigModel};
+use crate::config::{Config, RoleRuntimeAuthority, RoleRuntimeConfig, schema::ConfigModel};
 #[cfg(any(target_arch = "wasm32", test))]
 use crate::domain::auth::{
     ic_root_public_key_raw_from_der_or_raw, is_mainnet_ic_root_public_key_raw,
@@ -46,7 +46,9 @@ pub mod compiled {
         MAX_COMPONENT_GROUP_FLATTENED_MEMBERS, MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES,
         MAX_COMPONENT_GROUP_INCLUSIONS, MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
         MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES, MAX_FLEET_SERVICE_TARGETS,
-        MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES,
+        MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES, RoleRuntimeAuthority,
+        RuntimeApplicationAuthorization, RuntimeCanisterAuthority, RuntimeCanisterConfig,
+        RuntimeDeploymentMemberAuthority,
     };
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},
@@ -73,7 +75,7 @@ pub mod compiled {
         ids::{
             AppId, BuildNetwork, CanisterRole, ComponentDeploymentConfigurationDigest,
             ComponentGroupDeploymentId, ComponentGroupMemberId, ComponentGroupMemberPath,
-            ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
+            ComponentGroupSpecId, ComponentSpecId, CyclesFundingBudget, FleetServiceId,
         },
     };
 }
@@ -92,6 +94,24 @@ pub fn init_compiled_config(
         config
     };
     Config::init_from_model(config, source_toml)
+}
+
+/// Install one build-compiled immutable role runtime authority.
+pub fn init_role_runtime_authority(
+    expected_role: &crate::ids::CanisterRole,
+    authority: RoleRuntimeAuthority,
+) -> Result<Arc<RoleRuntimeAuthority>, crate::InternalError> {
+    if &authority.role != expected_role {
+        return Err(crate::InternalError::invariant());
+    }
+    #[cfg(target_arch = "wasm32")]
+    let authority = {
+        let mut authority = authority;
+        inject_runtime_ic_root_public_key_into_auth(&mut authority.auth)
+            .map_err(crate::InternalError::from)?;
+        authority
+    };
+    RoleRuntimeConfig::init(authority)
 }
 
 /// parse_config_model
@@ -133,25 +153,55 @@ pub fn emit_config_model_source(config: &ConfigModel) -> String {
     render::config_model(config)
 }
 
-#[cfg(target_arch = "wasm32")]
-fn inject_runtime_ic_root_public_key(config: &mut ConfigModel) -> Result<(), ConfigError> {
-    if should_inject_runtime_ic_root_public_key(config) {
-        let root_key = ic_cdk::api::root_key();
-        inject_runtime_ic_root_public_key_from(config, &root_key)?;
-    }
-    Ok(())
+/// Render one validated role runtime authority as Rust source for `include!`.
+#[cfg(any(not(target_arch = "wasm32"), test))]
+pub fn emit_role_runtime_authority_source(
+    config: &ConfigModel,
+    role: &crate::ids::CanisterRole,
+    wasm_store: bool,
+) -> Result<String, crate::config::RoleRuntimeAuthorityError> {
+    let authority = if wasm_store {
+        crate::config::RoleRuntimeAuthority::compile_wasm_store(config)?
+    } else {
+        crate::config::RoleRuntimeAuthority::compile(config, role)?
+    };
+    Ok(render::role_runtime_authority(&authority))
 }
 
-#[cfg(any(target_arch = "wasm32", test))]
+#[cfg(target_arch = "wasm32")]
+fn inject_runtime_ic_root_public_key(config: &mut ConfigModel) -> Result<(), ConfigError> {
+    inject_runtime_ic_root_public_key_into_auth(&mut config.auth)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn inject_runtime_ic_root_public_key_into_auth(
+    auth: &mut crate::config::schema::AuthConfig,
+) -> Result<(), ConfigError> {
+    if !should_inject_runtime_ic_root_public_key_for_auth(auth) {
+        return Ok(());
+    }
+    let root_key = ic_cdk::api::root_key();
+    inject_runtime_ic_root_public_key_into_auth_from(auth, &root_key)
+}
+
+#[cfg(test)]
 fn inject_runtime_ic_root_public_key_from(
     config: &mut ConfigModel,
     root_key: &[u8],
 ) -> Result<(), ConfigError> {
-    if !should_inject_runtime_ic_root_public_key(config) {
+    inject_runtime_ic_root_public_key_into_auth_from(&mut config.auth, root_key)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn inject_runtime_ic_root_public_key_into_auth_from(
+    auth: &mut crate::config::schema::AuthConfig,
+    root_key: &[u8],
+) -> Result<(), ConfigError> {
+    if !should_inject_runtime_ic_root_public_key_for_auth(auth) {
         return Ok(());
     }
 
-    let build_network = config.auth.delegated_tokens.build_network;
+    let build_network = auth.delegated_tokens.build_network;
     let raw_root_key =
         ic_root_public_key_raw_from_der_or_raw(root_key).map_err(ConfigError::RuntimeRootKey)?;
     if is_mainnet_ic_root_public_key_raw(&raw_root_key) {
@@ -160,23 +210,20 @@ fn inject_runtime_ic_root_public_key_from(
         )));
     }
 
-    config.auth.delegated_tokens.ic_root_public_key_raw_hex = Some(hex_bytes(&raw_root_key));
+    auth.delegated_tokens.ic_root_public_key_raw_hex = Some(hex_bytes(&raw_root_key));
     Ok(())
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
-fn should_inject_runtime_ic_root_public_key(config: &ConfigModel) -> bool {
-    if !config.auth.delegated_tokens.enabled
-        || config
-            .auth
-            .delegated_tokens
-            .ic_root_public_key_raw_hex
-            .is_some()
+fn should_inject_runtime_ic_root_public_key_for_auth(
+    auth: &crate::config::schema::AuthConfig,
+) -> bool {
+    if !auth.delegated_tokens.enabled || auth.delegated_tokens.ic_root_public_key_raw_hex.is_some()
     {
         return false;
     }
 
-    config.auth.delegated_tokens.build_network == BuildNetwork::Local
+    auth.delegated_tokens.build_network == BuildNetwork::Local
 }
 
 // -----------------------------------------------------------------------------
@@ -208,6 +255,35 @@ maximum_instances = 1
     #[test]
     fn strict_schema_accepts_current_canister_fields() {
         parse_config_model(MINIMAL_CONFIG).expect("current config should parse");
+    }
+
+    #[test]
+    fn role_runtime_source_contains_only_the_compiled_runtime_authority() {
+        let config = parse_config_model(MINIMAL_CONFIG).expect("current config should parse");
+        let role = crate::ids::CanisterRole::from("app");
+        let source = emit_role_runtime_authority_source(&config, &role, false)
+            .expect("compile role runtime authority");
+
+        assert!(source.contains("RoleRuntimeAuthority"));
+        assert!(source.contains("RuntimeCanisterConfig"));
+        assert!(!source.contains("ConfigModel"));
+        assert!(!source.contains("ComponentSpecConfig"));
+        assert!(!source.contains("initial_cycles"));
+
+        let authority = crate::config::RoleRuntimeAuthority::compile(&config, &role)
+            .expect("compile role runtime authority");
+        assert!(
+            init_role_runtime_authority(
+                &crate::ids::CanisterRole::from("other"),
+                authority.clone()
+            )
+            .is_err()
+        );
+        assert!(crate::config::RoleRuntimeConfig::try_get().is_none());
+        let installed =
+            init_role_runtime_authority(&role, authority).expect("install exact role authority");
+        assert_eq!(installed.role, role);
+        crate::config::Config::reset_for_tests();
     }
 
     #[test]

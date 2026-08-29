@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.23` replaces the full source configuration embedded in ordinary
+  managed and Store Wasms with one build-compiled role runtime authority.
+  Root remains the sole full control-plane configuration owner, while each
+  other artifact retains only its exact runtime settings, admitted descendants
+  and the protected topology needed to validate Root-issued bindings.
 - `0.109.22` makes managed command surfaces role-specific so only exact
   descendant-provisioning parents retain the non-Root capability responder,
   and corrects the packaged Binaryen 132 authority on every supported host

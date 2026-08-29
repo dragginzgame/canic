@@ -108,8 +108,6 @@ macro_rules! __canic_build_internal {
                 .expect("invalid canic config")
         );
         let compact_cfg = $crate::__internal::core::bootstrap::compact_config_source(&$cfg_str);
-        let compiled_cfg =
-            $crate::__internal::core::bootstrap::emit_config_model_source($cfg.as_ref());
 
         // Run the extra body (per-canister or nothing)
         $body
@@ -143,6 +141,15 @@ macro_rules! __canic_build_internal {
                 $cfg_path.display()
             );
         }
+        let compiled_cfg =
+            $crate::__internal::core::bootstrap::emit_config_model_source($cfg.as_ref());
+        let role_runtime_authority =
+            $crate::__internal::core::bootstrap::emit_role_runtime_authority_source(
+                $cfg.as_ref(),
+                &role_id,
+                __canic_wasm_store_special,
+            )
+            .expect("compile role runtime authority");
         let metrics_tier_mask =
             $crate::__build::configured_role_metrics_tier_mask($cfg.as_ref(), &role_id);
         let metrics_core = metrics_tier_mask & $crate::__build::METRICS_TIER_CORE != 0;
@@ -266,8 +273,11 @@ macro_rules! __canic_build_internal {
             std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
         let compact_cfg_path = out_dir.join("canic.compact.toml");
         let compiled_cfg_path = out_dir.join("canic.compiled.rs");
+        let role_runtime_authority_path = out_dir.join("canic.role-runtime-authority.rs");
         std::fs::write(&compact_cfg_path, compact_cfg).expect("write compact canic config");
         std::fs::write(&compiled_cfg_path, compiled_cfg).expect("write compiled canic config");
+        std::fs::write(&role_runtime_authority_path, role_runtime_authority)
+            .expect("write compiled role runtime authority");
 
         let compact_abs = compact_cfg_path
             .canonicalize()
@@ -275,6 +285,9 @@ macro_rules! __canic_build_internal {
         let compiled_abs = compiled_cfg_path
             .canonicalize()
             .expect("canonicalize compiled canic config path");
+        let role_runtime_authority_abs = role_runtime_authority_path
+            .canonicalize()
+            .expect("canonicalize compiled role runtime authority path");
         let source_abs = $cfg_path
             .canonicalize()
             .expect("canonicalize source canic config path");
@@ -291,6 +304,14 @@ macro_rules! __canic_build_internal {
         println!(
             "cargo:rustc-env=CANIC_CONFIG_MODEL_PATH={}",
             compiled_abs.display()
+        );
+        println!(
+            "cargo:rustc-env=CANIC_ROLE_RUNTIME_AUTHORITY_PATH={}",
+            role_runtime_authority_abs.display()
+        );
+        println!(
+            "cargo:rerun-if-changed={}",
+            role_runtime_authority_abs.display()
         );
         println!("cargo:rerun-if-changed={}", compact_abs.display());
         println!("cargo:rerun-if-changed={}", compiled_abs.display());

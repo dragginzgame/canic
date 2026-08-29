@@ -3,7 +3,7 @@ use crate::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
     },
     bootstrap,
-    config::schema::ConfigModel,
+    config::{RoleRuntimeAuthority, schema::ConfigModel},
     dto::fleet_subnet_root::FleetSubnetRootInitArgs,
     lifecycle::{LifecyclePhase, lifecycle_trap},
     workflow,
@@ -12,6 +12,7 @@ use crate::{
 pub fn init_root_canister_before_bootstrap(
     args: FleetSubnetRootInitArgs,
     embedded_release_build_id: Option<&str>,
+    runtime_authority: RoleRuntimeAuthority,
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
@@ -32,6 +33,19 @@ pub fn init_root_canister_before_bootstrap(
         lifecycle_trap(
             LifecyclePhase::Init,
             format!("config init failed (config_path={config_path}): {err}"),
+        );
+    }
+    if let Err(err) =
+        bootstrap::init_role_runtime_authority(&crate::ids::CanisterRole::ROOT, runtime_authority)
+    {
+        LifecycleMetricsApi::record_runtime(
+            LifecycleMetricPhase::Init,
+            LifecycleMetricRole::Root,
+            LifecycleMetricOutcome::Failed,
+        );
+        lifecycle_trap(
+            LifecyclePhase::Init,
+            format!("runtime authority init failed: {err}"),
         );
     }
 

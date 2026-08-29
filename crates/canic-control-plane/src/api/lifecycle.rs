@@ -3,7 +3,7 @@ use canic_core::{
     api::lifecycle::metrics::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
     },
-    bootstrap::compiled::ConfigModel,
+    bootstrap::compiled::{ConfigModel, RoleRuntimeAuthority},
     control_plane_support::view::fleet_activation::FleetActivationTransition,
     dto::fleet_registry::{
         FleetSubnetRootRegistryMirrorActivationRequest,
@@ -194,6 +194,7 @@ impl LifecycleApi {
     pub fn init_root_canister_before_bootstrap(
         args: FleetSubnetRootInitArgs,
         embedded_release_build_id: Option<&str>,
+        runtime_authority: RoleRuntimeAuthority,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
@@ -206,6 +207,7 @@ impl LifecycleApi {
         canic_core::api::lifecycle::root::LifecycleApi::init_root_canister_before_bootstrap(
             args,
             embedded_release_build_id,
+            runtime_authority,
             config,
             config_source,
             config_path,
@@ -892,6 +894,7 @@ impl LifecycleApi {
     /// Delegate root post-upgrade runtime restore to the current core implementation.
     #[must_use]
     pub fn post_upgrade_root_canister_before_bootstrap(
+        runtime_authority: RoleRuntimeAuthority,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
@@ -900,6 +903,7 @@ impl LifecycleApi {
         crate::runtime::root_funding::register();
         let active =
             canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
+                runtime_authority,
                 config,
                 config_source,
                 config_path,

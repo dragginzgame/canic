@@ -60,7 +60,7 @@ pub mod ops {
     }
 
     pub mod config {
-        pub use crate::ops::config::ConfigOps;
+        pub use crate::ops::config::RootConfigOps as ConfigOps;
     }
 
     pub mod component_runtime {
