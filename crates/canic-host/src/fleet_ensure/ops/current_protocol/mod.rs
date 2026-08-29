@@ -8,7 +8,7 @@
 mod tests;
 
 use super::{
-    EffectObservation, EffectOutcome,
+    EffectObservation, EffectOutcome, EffectRetry,
     canic_init::{self, CanicInitError},
 };
 use crate::{
@@ -957,7 +957,11 @@ fn component_provisioning_observation(
     if let Some(failure) = &mut durable_progress.pending_root_failure {
         failure.failed_at_ns = 0;
     }
-    observation(applied, &durable_progress)
+    let mut observation = observation(applied, &durable_progress)?;
+    if !applied && status.pending_root_failure.is_some() {
+        observation.retry = EffectRetry::ReplayExactIssuedCommand;
+    }
+    Ok(observation)
 }
 
 /// Issue one exact typed Coordinator request. Terminal completion remains query-owned.
@@ -1161,6 +1165,7 @@ fn observation<T: CandidType>(
     Ok(EffectObservation {
         applied,
         progress_identity: canic_core::cdk::utils::hash::sha256_hex(&bytes),
+        retry: EffectRetry::None,
     })
 }
 
@@ -1168,6 +1173,7 @@ fn unavailable_observation() -> EffectObservation {
     EffectObservation {
         applied: false,
         progress_identity: "unavailable".to_string(),
+        retry: EffectRetry::None,
     }
 }
 

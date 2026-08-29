@@ -14,11 +14,13 @@ use crate::{
         RootComponentAdmissionInput, RootPoolCapacityError, RootPoolCapacityInput,
         plan_initial_fleet_topology, validate_root_pool_capacity,
     },
-    durable_io::{RegularFileReadError, read_optional_regular_bytes},
+    durable_io::{
+        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
+    },
     fleet_ensure::model::{
         DesiredCanister, DesiredCanisterInit, DesiredCanisterKind, DesiredComponentGroupPlacement,
         DesiredFleet, DesiredFleetBootstrap, DesiredFleetBootstrapRoot, DesiredFleetProtocol,
-        DesiredPresence, FLEET_ENSURE_SCHEMA_VERSION,
+        DesiredPresence, FLEET_ENSURE_SCHEMA_VERSION, MAX_FLEET_ENSURE_CANISTERS,
     },
     fleet_ensure::ops::root_owned_lifecycle,
     icp::IcpCli,
@@ -51,7 +53,7 @@ use canic_core::{
     shared_support::fleet_admission_policy::compile_fleet_admission_policy_template,
 };
 use ic_query::subnet_catalog::SubnetSpecialization;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -78,6 +80,14 @@ pub struct FleetGenerateRequest<'a> {
     pub source: &'a Path,
 }
 
+/// Exact authority used to create one durable empty-estate identity seed.
+pub struct FreshEstateSeedRequest<'a> {
+    pub cycles_ledger: &'a str,
+    pub management_creation_fee_cycles: u128,
+    pub seed: &'a Path,
+    pub source: &'a Path,
+}
+
 /// Generated desired state plus its explicit observation summary.
 pub struct GeneratedDesiredFleet {
     pub desired: DesiredFleet,
@@ -91,6 +101,13 @@ pub struct GeneratedDesiredFleet {
 pub enum FleetGenerateError {
     #[error("failed to read Fleet generator input {path}: {source}")]
     Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("failed to write Fleet generator input {path}: {source}")]
+    Write {
         path: PathBuf,
         #[source]
         source: std::io::Error,
@@ -118,6 +135,9 @@ pub enum FleetGenerateError {
 
     #[error("invalid Fleet generator authority: {0}")]
     Authority(String),
+
+    #[error("existing Fleet identity seed conflicts with requested fresh-estate authority: {0}")]
+    FreshSeedConflict(String),
 
     #[error("Fleet identity seed and policy topology differ: {0}")]
     SeedTopology(String),
@@ -269,27 +289,31 @@ struct CyclesFundingSource {
     maximum_cycles: Cycles,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct EstateSeed {
     schema_version: u32,
     fleet_id: canic_core::ids::FleetId,
+    #[serde(default)]
+    fresh_estate: bool,
     coordinator: String,
     #[serde(default)]
     treasury: Option<TreasurySeed>,
     #[serde(default = "mainnet_cycles_ledger")]
     cycles_ledger: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    management_creation_fee_cycles: Option<String>,
     roots: Vec<RootSeed>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct TreasurySeed {
     principal: String,
     subnet: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct RootSeed {
     placement_subnet: String,
@@ -297,6 +321,175 @@ struct RootSeed {
     store: String,
     #[serde(default)]
     pool_imports: Vec<String>,
+}
+
+/// Create or replay one durable no-effect seed for a literally empty estate.
+pub fn initialize_fresh_estate_seed(
+    request: &FreshEstateSeedRequest<'_>,
+) -> Result<canic_core::ids::FleetId, FleetGenerateError> {
+    let source: FleetSource = load_toml(request.source, "source")?;
+    require_schema(source.schema_version, "source")?;
+    parse_principal("Cycles Ledger", request.cycles_ledger)?;
+    if let Some(existing) = read_seed(request.seed)? {
+        require_fresh_seed_authority(&existing, &source, request)?;
+        return Ok(existing.fleet_id);
+    }
+    let mut bytes = [0_u8; 32];
+    getrandom::fill(&mut bytes).map_err(|error| {
+        FleetGenerateError::Authority(format!("Fleet ID generation failed: {error}"))
+    })?;
+    let seed = fresh_seed(
+        &source,
+        canic_core::ids::FleetId::from_generated_bytes(bytes),
+        request.cycles_ledger,
+        request.management_creation_fee_cycles,
+    )?;
+    let encoded = toml::to_string_pretty(&seed).map_err(|error| {
+        FleetGenerateError::Authority(format!("fresh seed encoding failed: {error}"))
+    })?;
+    match create_new_bytes_with_parents(request.seed, encoded.as_bytes()) {
+        Ok(()) => Ok(seed.fleet_id),
+        Err(io_error) if io_error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let existing = read_seed(request.seed)?.ok_or_else(|| FleetGenerateError::Read {
+                path: request.seed.to_path_buf(),
+                source: std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "concurrent fresh seed publication disappeared",
+                ),
+            })?;
+            require_fresh_seed_authority(&existing, &source, request)?;
+            Ok(existing.fleet_id)
+        }
+        Err(source) => Err(FleetGenerateError::Write {
+            path: request.seed.to_path_buf(),
+            source,
+        }),
+    }
+}
+
+fn read_seed(path: &Path) -> Result<Option<EstateSeed>, FleetGenerateError> {
+    let bytes = match read_optional_regular_bytes(path) {
+        Ok(bytes) => bytes,
+        Err(RegularFileReadError::NotRegular) => {
+            return Err(FleetGenerateError::UnsafeInput {
+                path: path.to_path_buf(),
+                reason: "not a regular no-follow file",
+            });
+        }
+        Err(RegularFileReadError::Io(source)) => {
+            return Err(FleetGenerateError::Read {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+        #[cfg(not(unix))]
+        Err(RegularFileReadError::UnsupportedPlatform) => {
+            return Err(FleetGenerateError::UnsafeInput {
+                path: path.to_path_buf(),
+                reason: "safe no-follow reads are unsupported on this platform",
+            });
+        }
+    };
+    let Some(bytes) = bytes else {
+        return Ok(None);
+    };
+    if bytes.len() > MAX_GENERATOR_INPUT_BYTES {
+        return Err(FleetGenerateError::TooLarge {
+            actual: bytes.len(),
+            maximum: MAX_GENERATOR_INPUT_BYTES,
+            path: path.to_path_buf(),
+        });
+    }
+    toml::from_slice(&bytes)
+        .map(Some)
+        .map_err(|source| FleetGenerateError::Decode {
+            path: path.to_path_buf(),
+            source,
+        })
+}
+
+fn fresh_seed(
+    source: &FleetSource,
+    fleet_id: canic_core::ids::FleetId,
+    cycles_ledger: &str,
+    management_creation_fee_cycles: u128,
+) -> Result<EstateSeed, FleetGenerateError> {
+    if source
+        .fleet_subnet_roots
+        .iter()
+        .any(|root| !root.canister_pool.imports.is_empty())
+    {
+        return Err(FleetGenerateError::FreshSeedConflict(
+            "fresh estate policy must not import retained pool identities".to_string(),
+        ));
+    }
+    let controlled = source
+        .fleet_subnet_roots
+        .iter()
+        .try_fold(1_usize, |total, root| {
+            let pools = usize::try_from(root.canister_pool.minimum_size).map_err(|_| {
+                FleetGenerateError::FreshSeedConflict(
+                    "fresh pool minimum cannot be represented on this host".to_string(),
+                )
+            })?;
+            total
+                .checked_add(2)
+                .and_then(|value| value.checked_add(pools))
+                .ok_or_else(|| {
+                    FleetGenerateError::FreshSeedConflict(
+                        "fresh estate role count overflowed".to_string(),
+                    )
+                })
+        })?;
+    if controlled > MAX_FLEET_ENSURE_CANISTERS {
+        return Err(FleetGenerateError::FreshSeedConflict(format!(
+            "fresh estate declares {controlled} controlled roles, above limit {MAX_FLEET_ENSURE_CANISTERS}"
+        )));
+    }
+    let roots = source
+        .fleet_subnet_roots
+        .iter()
+        .enumerate()
+        .map(|(index, root)| RootSeed {
+            placement_subnet: root.placement_subnet.clone(),
+            root: format!("root-{index}"),
+            store: format!("store-{index}"),
+            pool_imports: (0..root.canister_pool.minimum_size)
+                .map(|pool| format!("root-{index}-pool-{pool}"))
+                .collect(),
+        })
+        .collect();
+    Ok(EstateSeed {
+        schema_version: 1,
+        fleet_id,
+        fresh_estate: true,
+        coordinator: "coordinator".to_string(),
+        treasury: None,
+        cycles_ledger: cycles_ledger.to_string(),
+        management_creation_fee_cycles: Some(management_creation_fee_cycles.to_string()),
+        roots,
+    })
+}
+
+fn require_fresh_seed_authority(
+    actual: &EstateSeed,
+    source: &FleetSource,
+    request: &FreshEstateSeedRequest<'_>,
+) -> Result<(), FleetGenerateError> {
+    let expected = fresh_seed(
+        source,
+        actual.fleet_id,
+        request.cycles_ledger,
+        request.management_creation_fee_cycles,
+    )?;
+    if actual == &expected {
+        Ok(())
+    } else {
+        Err(FleetGenerateError::FreshSeedConflict(
+            "existing seed is retained or differs from the requested ledger, fee, or topology"
+                .to_string(),
+        ))
+    }
 }
 
 #[derive(Clone)]
@@ -498,23 +691,28 @@ pub fn generate_desired_fleet(
     let root_candid = candid_sidecar(request.root, root_artifact)?;
     let store_candid = candid_sidecar(request.root, store_artifact)?;
     let root_candid_path = request.root.join(&root_candid);
-    let observed = observe_estate(&EstateObservationRequest {
-        app: config.model().app_id(),
-        generation: request,
-        operator,
-        root_candid: &root_candid_path,
-        root_wasm_sha256: &root_artifact.wasm_sha256_hex,
-        seed: &seed,
-        source: &source,
-        topology: &topology,
-    })?;
+    let observed = if seed.fresh_estate {
+        validate_fresh_generation_authority(request, &source, operator)?;
+        BTreeMap::new()
+    } else {
+        observe_estate(&EstateObservationRequest {
+            app: config.model().app_id(),
+            generation: request,
+            operator,
+            root_candid: &root_candid_path,
+            root_wasm_sha256: &root_artifact.wasm_sha256_hex,
+            seed: &seed,
+            source: &source,
+            topology: &topology,
+        })?
+    };
     let treasury = seed
         .treasury
         .as_ref()
         .map_or(seed.coordinator.as_str(), |treasury| {
             treasury.principal.as_str()
         });
-    if !observed.contains_key(treasury) {
+    if !seed.fresh_estate && !observed.contains_key(treasury) {
         return Err(FleetGenerateError::Authority(
             "treasury must be the seeded Coordinator or another explicitly seeded controlled canister"
                 .to_string(),
@@ -550,6 +748,52 @@ pub fn generate_desired_fleet(
         observed_controlled_cycles,
         release_build_id: request.release_build_id,
     })
+}
+
+fn validate_fresh_generation_authority(
+    request: &FleetGenerateRequest<'_>,
+    source: &FleetSource,
+    operator: Principal,
+) -> Result<(), FleetGenerateError> {
+    let icp = IcpCli::new(
+        request.icp_executable,
+        Some(request.environment.to_string()),
+    )
+    .with_cwd(request.root.to_path_buf());
+    let active = icp
+        .identity_principal_text()
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    if active != operator.to_text() {
+        return Err(FleetGenerateError::Authority(format!(
+            "active identity {active} differs from protected operator {operator}"
+        )));
+    }
+    let network = resolve_icp_build_network_from_root(request.root, request.environment)
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    if network != BuildNetwork::Ic {
+        return Ok(());
+    }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| FleetGenerateError::Clock)?
+        .as_secs();
+    let catalog = load_mainnet_subnet_catalog(request.root, now)
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    require_fiduciary_acknowledgement(
+        &catalog.catalog,
+        &source.coordinator.subnet.subnet,
+        source.coordinator.subnet.acknowledge_fiduciary_cost,
+        "Coordinator",
+    )?;
+    for root in &source.fleet_subnet_roots {
+        require_fiduciary_acknowledgement(
+            &catalog.catalog,
+            &root.placement_subnet,
+            root.acknowledge_fiduciary_cost,
+            "Fleet Subnet Root",
+        )?;
+    }
+    Ok(())
 }
 
 struct CompileDesiredRequest<'a> {
@@ -641,7 +885,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         "coordinator",
         DesiredCanisterKind::Coordinator,
         Some(DesiredCanisterInit::Coordinator),
-        &input.seed.coordinator,
+        (!input.seed.fresh_estate).then_some(input.seed.coordinator.as_str()),
         None,
         &input.source.operator,
         &input.source.coordinator.subnet.subnet,
@@ -677,7 +921,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             Some(DesiredCanisterInit::Root {
                 root: root_name.clone(),
             }),
-            &seed.root,
+            (!input.seed.fresh_estate).then_some(seed.root.as_str()),
             Some("coordinator"),
             &input.source.operator,
             &source.placement_subnet,
@@ -691,7 +935,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             Some(DesiredCanisterInit::Store {
                 root: root_name.clone(),
             }),
-            &seed.store,
+            (!input.seed.fresh_estate).then_some(seed.store.as_str()),
             Some(&root_name),
             &input.source.operator,
             &source.placement_subnet,
@@ -699,8 +943,12 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             0,
             input.store_artifact,
         );
-        store.controllers.push(seed.root.clone());
-        store.controllers.sort();
+        if input.seed.fresh_estate {
+            store.controller_canisters.push(root_name.clone());
+        } else {
+            store.controllers.push(seed.root.clone());
+            store.controllers.sort();
+        }
         canisters.push(store);
         let mut pool_names = Vec::new();
         for (pool_index, pool) in seed.pool_imports.iter().enumerate() {
@@ -708,7 +956,16 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             pool_names.push(name.clone());
             canisters.push(DesiredCanister {
                 canic_init: None,
-                controllers: vec![seed.root.clone()],
+                controller_canisters: if input.seed.fresh_estate {
+                    vec![root_name.clone()]
+                } else {
+                    Vec::new()
+                },
+                controllers: if input.seed.fresh_estate {
+                    Vec::new()
+                } else {
+                    vec![seed.root.clone()]
+                },
                 drain: None,
                 initial_cycles: source.canister_pool.canister_cycles.to_u128().to_string(),
                 init_arg: None,
@@ -718,7 +975,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
                 name,
                 parent: Some(root_name.clone()),
                 presence: DesiredPresence::Present,
-                principal: Some(pool.clone()),
+                principal: (!input.seed.fresh_estate).then(|| pool.clone()),
                 protocol_binding: None,
                 replace: false,
                 subnet: source.placement_subnet.clone(),
@@ -753,13 +1010,14 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             }
         }
     }
-    if input.treasury != input.seed.coordinator {
+    if !input.seed.fresh_estate && input.treasury != input.seed.coordinator {
         let treasury_observation = input
             .observed
             .get(input.treasury)
             .expect("verified treasury observation");
         canisters.push(DesiredCanister {
             canic_init: None,
+            controller_canisters: Vec::new(),
             controllers: vec![input.source.operator.clone()],
             drain: None,
             initial_cycles: "0".to_string(),
@@ -791,6 +1049,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
                 &input.source.coordinator.subnet.subnet,
             )?,
             fleet_id: input.seed.fleet_id,
+            fresh_estate: input.seed.fresh_estate,
             release_build_id: input.request.release_build_id,
             root_funding: Some(coordinator_funding(
                 input.source.funding_profile,
@@ -803,9 +1062,13 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         environment: input.request.environment.to_string(),
         fleet: input.request.fleet.to_string(),
         ledger_fee_cycles: input.ledger_fee_cycles.to_string(),
-        // Generated retained estates bind every paid canister to an observed Principal.
-        // A missing seeded identity fails closed, so this contract cannot create a canister.
-        management_creation_fee_cycles: "0".to_string(),
+        // Retained seeds bind paid canisters to observed Principals and carry no creation fee.
+        // Fresh seeds retain their explicit fee before any generated Principal exists.
+        management_creation_fee_cycles: input
+            .seed
+            .management_creation_fee_cycles
+            .clone()
+            .unwrap_or_else(|| "0".to_string()),
         material_cycle_threshold: GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD.to_string(),
         maximum_observation_burn_cycles: GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES
             .to_string(),
@@ -821,7 +1084,11 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         }),
         protocol_steps: Vec::new(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
-        treasury: input.treasury.to_string(),
+        treasury: if input.treasury == input.seed.coordinator {
+            "coordinator".to_string()
+        } else {
+            "treasury".to_string()
+        },
     })
 }
 
@@ -1279,6 +1546,34 @@ fn validate_identity_seed(
     source: &FleetSource,
     seed: &EstateSeed,
 ) -> Result<(), FleetGenerateError> {
+    if seed.fresh_estate {
+        let fee = seed
+            .management_creation_fee_cycles
+            .as_deref()
+            .ok_or_else(|| {
+                FleetGenerateError::FreshSeedConflict(
+                    "fresh estate seed is missing its exact management creation fee".to_string(),
+                )
+            })?
+            .parse::<u128>()
+            .map_err(|_| {
+                FleetGenerateError::FreshSeedConflict(
+                    "fresh estate seed has an invalid management creation fee".to_string(),
+                )
+            })?;
+        let expected = fresh_seed(source, seed.fleet_id, &seed.cycles_ledger, fee)?;
+        if seed == &expected {
+            return Ok(());
+        }
+        return Err(FleetGenerateError::FreshSeedConflict(
+            "fresh estate seed differs from current protected topology".to_string(),
+        ));
+    }
+    if seed.management_creation_fee_cycles.is_some() {
+        return Err(FleetGenerateError::SeedTopology(
+            "retained estate seed must not declare fresh creation fee authority".to_string(),
+        ));
+    }
     let mut identities = BTreeSet::new();
     insert_seed_identity(&mut identities, "Coordinator", &seed.coordinator)?;
     if let Some(treasury) = &seed.treasury {
@@ -1423,7 +1718,7 @@ fn infrastructure_canister(
     name: &str,
     kind: DesiredCanisterKind,
     canic_init: Option<DesiredCanisterInit>,
-    principal: &str,
+    principal: Option<&str>,
     parent: Option<&str>,
     operator: &str,
     subnet: &str,
@@ -1433,6 +1728,7 @@ fn infrastructure_canister(
 ) -> DesiredCanister {
     DesiredCanister {
         canic_init,
+        controller_canisters: Vec::new(),
         controllers: vec![operator.to_string()],
         drain: None,
         initial_cycles: initial_cycles.to_string(),
@@ -1443,7 +1739,7 @@ fn infrastructure_canister(
         name: name.to_string(),
         parent: parent.map(str::to_string),
         presence: DesiredPresence::Present,
-        principal: Some(principal.to_string()),
+        principal: principal.map(str::to_string),
         protocol_binding: None,
         replace: false,
         subnet: subnet.to_string(),

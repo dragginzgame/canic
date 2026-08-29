@@ -14,7 +14,8 @@ exact retained plan digest.
 > from terminal protected control-plane evidence, including protocol-created
 > Components, pool assets and bounded descendants. Focused implementation
 > qualification, including retained-estate generation through an effect-free
-> second ensure, is complete; broad validation remains maintainer-owned.
+> second ensure and focused fresh-seed/create replay, is complete; broad
+> validation remains maintainer-owned.
 
 ## Generate Current Desired State
 
@@ -72,18 +73,16 @@ pool identity remains in the conservation set as it moves from idle bootstrap
 capacity through claimed state to a Component workload, without receiving pool
 minimum top-ups or being counted twice.
 
-The treasury policy is explicit adoption, not discovery: it must name an
-already-present, non-replaceable controlled canister. Omitting `treasury`
-selects the exact seeded Coordinator. This generator intentionally rejects a
-literally empty estate; an operator must first provide a separately reviewed
-controlled treasury bootstrap, then seed that observed identity. Canic does
-not silently invent or globally search for one. Missing, foreign, duplicate,
+Retained-estate treasury policy is explicit adoption, not discovery: it must
+name an already-present, non-replaceable controlled canister. Omitting
+`treasury` selects the exact seeded Coordinator. Canic does not silently invent
+or globally search for a retained identity. Missing, foreign, duplicate,
 unseeded or conflicting identities and unexpected co-controllers fail closed.
-If an exact seeded identity is no longer observable, planning rejects instead
+If an exact retained identity is no longer observable, planning rejects instead
 of creating a substitute. The generator queries the configured Cycles Ledger's
-current fee and binds it into the desired document. Because this retained
-contract cannot create a missing seeded canister, its management creation-fee
-authority is zero. Observation and update burn values are distinct conservative
+current fee and binds it into the desired document. Retained generation has
+zero management creation-fee authority; fresh generation uses only its explicit
+seeded fee. Observation and update burn values are distinct conservative
 ceilings checked against measured terminal conservation, not assumed fees.
 On IC mainnet, every Fiduciary placement must carry an exact
 `acknowledge_fiduciary_cost = true`; non-Fiduciary placements must not claim
@@ -105,6 +104,51 @@ The guarded replacement rejects a missing output, a changed current digest, or
 an invalid digest before writing. Publication uses the same atomic durable-file
 boundary as current Fleet operator state.
 
+### Bootstrap A Literally Empty Estate
+
+When no estate seed or live canister exists, explicitly create a fresh seed and
+generate the same current desired-state contract:
+
+```bash
+canic fleet generate staging \
+  --app-config apps/demo/canic.toml \
+  --release-build <release-build-id> \
+  --fresh \
+  --management-creation-fee-cycles <exact-fee>
+```
+
+`--fresh` durably creates `deployments/<fleet>.estate.toml` before generating
+the desired document. The seed contains a cryptographically generated Fleet
+ID, the exact Cycles Ledger, exact management creation fee and logical
+Coordinator/Root/Store/pool roles. Repeating the command reuses those exact
+bytes; a changed fee, Ledger or topology rejects rather than replacing the
+seed. Use `--cycles-ledger <principal>` only when the selected network does not
+use the default Cycles Ledger Principal.
+
+Generation still performs no paid effect. The resulting ordinary `fleet
+ensure` plan shows every new Principal as unallocated and includes the exact
+maximum operator debit, Ledger fees, management creation fees, funding and
+burn. Only `fleet ensure --apply <plan_sha256>` may create canisters. Each
+creation intent is durable before the Cycles Ledger call; a duplicate response
+recovers the same Principal, and later role creation, typed initialization and
+protocol work resolve only those retained identities. The Coordinator is the
+logical treasury for the fresh operation. Each configured Root's
+`canister_pool.minimum_size` becomes its initial set of root-controlled pool
+assets; retained `imports` are forbidden in a fresh seed.
+
+Fresh convergence can cross two reviewed-plan boundaries. The first plan
+allocates and installs roles whose Principals did not exist at generation time.
+When those retained results make the typed control-plane graph compilable, the
+terminal check closes that journal as `ReplanRequired` instead of silently
+adding unreviewed effects. Run plan-only again, review and apply the new digest,
+and continue until the report is terminal. The immediate plan after terminal
+convergence has no mutation action.
+
+The management creation fee is explicit because it is network/Subnet economic
+authority and cannot be inferred from release metadata. Zero is appropriate
+only where the selected local platform actually charges zero. A wrong value
+cannot silently change the reviewed debit or conservation equation.
+
 ## Desired State
 
 The default document is `fleets/<fleet>.toml`:
@@ -113,11 +157,11 @@ The default document is `fleets/<fleet>.toml`:
 schema_version = 1
 fleet = "staging"
 environment = "local"
-treasury = "<controlled-treasury-principal>"
+treasury = "treasury" # logical name of one controlled canister below
 operator = "<operator-principal>"
 cycles_ledger = "<cycles-ledger-principal>"
 ledger_fee_cycles = "100000000" # example; generated from the live Ledger
-management_creation_fee_cycles = "0" # retained generation cannot create
+management_creation_fee_cycles = "0" # retained; fresh uses its seeded exact fee
 material_cycle_threshold = "1000000"
 maximum_observation_burn_cycles = "10000000"
 maximum_update_burn_cycles = "100000000000"
@@ -156,6 +200,12 @@ minimum_cycles = "1000000000000"
 wasm = "artifacts/fleet_coordinator.wasm"
 ```
 
+Generated fresh Store and pool entries additionally use
+`controller_canisters = ["root-0"]`. These are logical dependencies, not
+caller-supplied Principals. Their referenced role must appear earlier in the
+desired document; Fleet Ensure resolves the exact Principal from its durable
+creation state before issuing the dependent effect.
+
 The generated `[bootstrap]` and `[protocol]` blocks enable Canic-owned
 infrastructure initialization and control-plane choreography. They name only the checked-in App configuration, exact
 Coordinator/Root/Store Candid contracts, and typed deployment placements.
@@ -179,9 +229,10 @@ schema generations reject. Wasm, binary init-argument, and drain-Candid files
 are hashed into the reviewed plan and rechecked immediately before their
 effect. Fleet/environment labels are path-safe before Canic accesses operator
 state. Authority Principals must be valid and non-anonymous. The configured
-treasury must already be present and is always reused, never replaced. The
-active ICP identity must equal `operator`, and every host-controlled canister
-retains that Principal as a direct controller so interrupted effects remain
+treasury names one present desired canister and is always reused, never
+replaced. The active ICP identity must equal `operator`, and every
+host-controlled canister retains that Principal as a direct controller so
+interrupted effects remain
 observable and resumable. Root-owned pool assets remain solely under their
 Root and are observed through its protected bounded inventory. A Store retains
 its exact owning Root and protected operator; when a retained Store is still
@@ -316,11 +367,12 @@ endpoint before replacement or deletion:
 [canisters.drain]
 candid = "interfaces/cycle-drain.did"
 method = "canic_cycle_drain"
-destination = "<controlled-treasury-principal>"
+destination = "treasury" # exact logical name from the desired document
 maximum_execution_burn_cycles = "100000000"
 ```
 
-The endpoint receives the Fleet operation ID, exact destination, and exact
+Fleet Ensure resolves that logical name through its durable current state. The
+endpoint receives the Fleet operation ID, exact destination Principal, and exact
 cycle amount and must return either `Accepted` or `Replayed` with that same
 amount. A missing, changed, foreign, or unsafe drain returns a typed blocker.
 The source response is issuance evidence only. Canic retains the exact source
@@ -342,3 +394,11 @@ repair receipts, recovery bundles, installed-Fleet caches, or version-pair
 contracts. Historical release notes remain evidence only. Current desired
 state, current `v1` ensure state, and current live observations are the only
 host authorities.
+
+A successor Canic runtime correction does not upgrade an already-installed
+predecessor Root merely because a newer CLI reopens its issued plan. Under the
+pre-1.0 reinstall-only contract, the operator must discard the predecessor's
+local in-progress ensure evidence and review a new current desired-state plan.
+That plan may reuse the same controlled Principals and cycle balances while
+reinstalling current infrastructure artifacts; it is not a cross-release
+recovery or migration contract.

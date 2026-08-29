@@ -26,6 +26,7 @@ canic-control-plane = { workspace = true, features = [
 canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
 ciborium = { workspace = true }
 flate2 = { workspace = true }
+getrandom = { workspace = true }
 ic-query = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }

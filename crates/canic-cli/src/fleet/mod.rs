@@ -1,6 +1,6 @@
 //! Module: canic_cli::fleet
 //!
-//! Responsibility: parse and render the sole `canic fleet ensure` operator workflow.
+//! Responsibility: parse and render current Fleet generation and convergence workflows.
 //! Does not own: desired-state policy, IC effects, durable intent, or historical compatibility.
 //! Boundary: delegates immediately to the host reconciler after resolving local paths.
 
@@ -24,8 +24,9 @@ use canic_core::ids::ReleaseBuildId;
 use canic_host::{
     fleet_ensure::{
         DesiredFleetLoadError, EnsureWorkflowError, FleetEnsureReport, FleetGenerateError,
-        FleetGenerateRequest, IcpEnsurePlatform, IcpEnsurePlatformError, LoadedDesiredFleet, apply,
-        generate_desired_fleet, load_desired_fleet, plan, retained_in_progress_plan,
+        FleetGenerateRequest, FreshEstateSeedRequest, IcpEnsurePlatform, IcpEnsurePlatformError,
+        LoadedDesiredFleet, apply, generate_desired_fleet, initialize_fresh_estate_seed,
+        load_desired_fleet, plan, retained_in_progress_plan,
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
@@ -45,6 +46,7 @@ Examples:
 
 Planning is read-only. Review `plan_sha256`, then repeat the command with
 `--apply <plan_sha256>`. Historical install and recovery state is not read.";
+const DEFAULT_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 
 /// CLI failure for current Fleet convergence.
 
@@ -100,9 +102,12 @@ pub enum FleetCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct GenerateOptions {
     app_config: PathBuf,
+    cycles_ledger: String,
     environment: Option<String>,
     fleet: String,
+    fresh: bool,
     icp: String,
+    management_creation_fee_cycles: Option<u128>,
     output: PathBuf,
     release_build: ReleaseBuildId,
     replace: Option<String>,
@@ -121,11 +126,37 @@ impl GenerateOptions {
             unreachable!("generate options require the generate subcommand")
         };
         let fleet = required_string(generate, "fleet");
+        let fresh = generate.get_flag("fresh");
+        let management_creation_fee_cycles =
+            string_option(generate, "management-creation-fee-cycles")
+                .map(|value| {
+                    value.parse::<u128>().map_err(|_| {
+                        FleetCommandError::Usage(
+                            "management creation fee must be an exact unsigned decimal cycle amount"
+                                .to_string(),
+                        )
+                    })
+                })
+                .transpose()?;
+        let cycles_ledger = string_option(generate, "cycles-ledger");
+        if fresh && management_creation_fee_cycles.is_none() {
+            return Err(FleetCommandError::Usage(
+                "--fresh requires --management-creation-fee-cycles".to_string(),
+            ));
+        }
+        if !fresh && (management_creation_fee_cycles.is_some() || cycles_ledger.is_some()) {
+            return Err(FleetCommandError::Usage(
+                "--cycles-ledger and --management-creation-fee-cycles require --fresh".to_string(),
+            ));
+        }
         Ok(Self {
             app_config: PathBuf::from(required_string(generate, "app-config")),
+            cycles_ledger: cycles_ledger.unwrap_or_else(|| DEFAULT_CYCLES_LEDGER.to_string()),
             environment: string_option(generate, "environment"),
             fleet: fleet.clone(),
+            fresh,
             icp: string_option_or_else(generate, "icp", default_icp),
+            management_creation_fee_cycles,
             output: string_option(generate, "output").map_or_else(
                 || PathBuf::from("fleets").join(format!("{fleet}.toml")),
                 PathBuf::from,
@@ -197,9 +228,14 @@ fn fleet_command() -> Command {
 fn generate_command() -> Command {
     Command::new("generate")
         .bin_name("canic fleet generate")
-        .about("Generate exact current desired state from policy, release, and live identity authority")
+        .about("Generate exact current desired state from policy, release, and estate authority")
         .disable_help_flag(true)
-        .arg(value_arg("fleet").value_name("fleet").required(true).help("Fleet identity"))
+        .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Fleet identity"),
+        )
         .arg(
             value_arg("app-config")
                 .long("app-config")
@@ -215,10 +251,48 @@ fn generate_command() -> Command {
                 .value_parser(clap::value_parser!(ReleaseBuildId))
                 .help("Finalized current release build emitted by a complete canic build"),
         )
-        .arg(value_arg("output").long("output").value_name("PATH").help("Generated desired TOML; defaults to fleets/<fleet>.toml"))
-        .arg(value_arg("replace").long("replace").value_name("EXPECTED_SHA256").help("Replace existing output only when its exact SHA-256 matches"))
-        .arg(value_arg("seed").long("seed").value_name("PATH").help("Explicit retained identity seed; defaults to deployments/<fleet>.estate.toml"))
-        .arg(value_arg("source").long("source").value_name("PATH").help("Protected Fleet policy input; defaults to deployments/<fleet>.toml"))
+        .arg(
+            value_arg("cycles-ledger")
+                .long("cycles-ledger")
+                .value_name("PRINCIPAL")
+                .help("Exact Cycles Ledger used only when creating a fresh seed"),
+        )
+        .arg(
+            value_arg("fresh")
+                .long("fresh")
+                .action(ArgAction::SetTrue)
+                .num_args(0)
+                .help("Create or replay a durable literally empty-estate seed"),
+        )
+        .arg(
+            value_arg("management-creation-fee-cycles")
+                .long("management-creation-fee-cycles")
+                .value_name("CYCLES")
+                .help("Exact per-canister management creation fee required with --fresh"),
+        )
+        .arg(
+            value_arg("output")
+                .long("output")
+                .value_name("PATH")
+                .help("Generated desired TOML; defaults to fleets/<fleet>.toml"),
+        )
+        .arg(
+            value_arg("replace")
+                .long("replace")
+                .value_name("EXPECTED_SHA256")
+                .help("Replace existing output only when its exact SHA-256 matches"),
+        )
+        .arg(
+            value_arg("seed").long("seed").value_name("PATH").help(
+                "Explicit retained identity seed; defaults to deployments/<fleet>.estate.toml",
+            ),
+        )
+        .arg(
+            value_arg("source")
+                .long("source")
+                .value_name("PATH")
+                .help("Protected Fleet policy input; defaults to deployments/<fleet>.toml"),
+        )
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
@@ -352,6 +426,18 @@ fn load_ensure_authority(
 fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
     let root = resolve_current_canic_icp_root()?;
     let environment = options.environment.as_deref().unwrap_or("local");
+    let seed = resolve_from_root(&root, &options.seed);
+    let source = resolve_from_root(&root, &options.source);
+    if options.fresh {
+        initialize_fresh_estate_seed(&FreshEstateSeedRequest {
+            cycles_ledger: &options.cycles_ledger,
+            management_creation_fee_cycles: options
+                .management_creation_fee_cycles
+                .expect("fresh option validation requires creation fee"),
+            seed: &seed,
+            source: &source,
+        })?;
+    }
     let generated = generate_desired_fleet(&FleetGenerateRequest {
         app_config: &resolve_from_root(&root, &options.app_config),
         environment,
@@ -359,8 +445,8 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
         icp_executable: &options.icp,
         release_build_id: options.release_build,
         root: &root,
-        seed: &resolve_from_root(&root, &options.seed),
-        source: &resolve_from_root(&root, &options.source),
+        seed: &seed,
+        source: &source,
     })?;
     let output = resolve_from_root(&root, &options.output);
     let bytes = toml::to_string_pretty(&generated.desired)?.into_bytes();

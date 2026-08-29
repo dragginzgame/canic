@@ -35,7 +35,10 @@ use crate::{
         storage::{StorageOpsError, auth::AuthStateOps, fleet_activation::FleetActivationOps},
     },
     protocol,
-    view::fleet_activation::{FleetActivationTransition, FleetActivationWasmStoreView},
+    view::fleet_activation::{
+        FleetActivationTransition, FleetActivationWasmStoreAuthorityView,
+        FleetActivationWasmStoreView,
+    },
     workflow::cascade::{
         snapshot::{StateSnapshotBuilder, adapter::StateSnapshotAdapter},
         state::StateCascadeWorkflow,
@@ -127,6 +130,13 @@ impl FleetActivationWorkflow {
 
         let root_pid = IcOps::canister_self();
         require_root_activation_wasm_store(root_pid, wasm_store.pid)?;
+        let child = FleetActivationOps::root_wasm_store_activation_authority()
+            .map_err(StorageOpsError::from)?;
+        validate_root_wasm_store_child_authority(&current, root_pid, wasm_store.pid, &child)?;
+        let observed =
+            query_store_fleet_activation_status(wasm_store.pid, child.authority.operation_id)
+                .await?;
+        validate_nonroot_activation_identity(&current, &observed, child.authority.operation_id)?;
 
         let state_snapshot = StateSnapshotBuilder::new()?.with_fleet_state().build();
         let state_input = StateSnapshotAdapter::to_input(&state_snapshot);
@@ -184,10 +194,18 @@ impl FleetActivationWorkflow {
             .cascade_manifest
             .clone()
             .ok_or_else(InternalError::invariant)?;
-
-        for entry in &manifest {
-            resume_nonroot_activation(entry, &root_status, request).await?;
-        }
+        let child = FleetActivationOps::root_wasm_store_activation_authority()
+            .map_err(StorageOpsError::from)?;
+        let [entry] = manifest.as_slice() else {
+            return Err(InternalError::invariant());
+        };
+        validate_root_wasm_store_child_authority(
+            &root_status,
+            IcOps::canister_self(),
+            entry.principal,
+            &child,
+        )?;
+        resume_nonroot_activation(entry, &root_status, request, &child).await?;
 
         let root_cascade = root_status
             .cascade
@@ -253,6 +271,7 @@ impl FleetActivationWorkflow {
     /// outcomes through the controller status surface.
     pub(crate) async fn complete_provisioned_nonroot_activation(
         pid: crate::cdk::types::Principal,
+        child_operation_id: [u8; 32],
         state: StateSnapshotInput,
         topology: TopologySnapshotInput,
     ) -> Result<(), InternalError> {
@@ -269,14 +288,14 @@ impl FleetActivationWorkflow {
             topology_snapshot_hash: FleetActivationEvidenceOps::topology_snapshot_hash(&topology)?,
         };
         let generation_request = FleetCredentialGenerationRequest {
-            operation_id: root_status.identity.operation_id,
+            operation_id: child_operation_id,
             credential,
         };
 
         let prepared = match submit_store_fleet_command(
             pid,
             StoreCommandFragment::PrepareFleetCredential(generation_request),
-            root_status.identity.operation_id,
+            child_operation_id,
         )
         .await
         {
@@ -285,6 +304,7 @@ impl FleetActivationWorkflow {
                 reconcile_nonroot_activation_status_after_call_error(
                     pid,
                     &root_status,
+                    child_operation_id,
                     &expected_cascade,
                     None,
                     "credential-generation preparation",
@@ -293,7 +313,13 @@ impl FleetActivationWorkflow {
                 .await?
             }
         };
-        validate_nonroot_activation_status(&root_status, &prepared, &expected_cascade, None)?;
+        validate_nonroot_activation_status(
+            &root_status,
+            &prepared,
+            child_operation_id,
+            &expected_cascade,
+            None,
+        )?;
 
         let activation_evidence_hash = FleetActivationEvidenceOps::activation_evidence_hash(
             &prepared.identity,
@@ -301,14 +327,14 @@ impl FleetActivationWorkflow {
             credential,
         )?;
         let request = FleetActivationRequest {
-            operation_id: root_status.identity.operation_id,
+            operation_id: child_operation_id,
             credential,
             activation_evidence_hash,
         };
         let activated = match submit_store_fleet_command(
             pid,
             StoreCommandFragment::ActivateFleet(request),
-            root_status.identity.operation_id,
+            child_operation_id,
         )
         .await
         {
@@ -317,6 +343,7 @@ impl FleetActivationWorkflow {
                 reconcile_nonroot_activation_status_after_call_error(
                     pid,
                     &root_status,
+                    child_operation_id,
                     &expected_cascade,
                     Some(FleetActivationPhase::Active),
                     "activation",
@@ -328,6 +355,7 @@ impl FleetActivationWorkflow {
         validate_nonroot_activation_status(
             &root_status,
             &activated,
+            child_operation_id,
             &expected_cascade,
             Some(FleetActivationPhase::Active),
         )?;
@@ -341,6 +369,8 @@ impl FleetActivationWorkflow {
         EnvOps::require_root()?;
         let root = IcOps::canister_self();
         require_root_activation_wasm_store(root, wasm_store)?;
+        let child = FleetActivationOps::root_wasm_store_activation_authority()
+            .map_err(StorageOpsError::from)?;
 
         let state_snapshot = StateSnapshotBuilder::new()?.with_fleet_state().build();
         let state_input = StateSnapshotAdapter::to_input(&state_snapshot);
@@ -348,7 +378,13 @@ impl FleetActivationWorkflow {
 
         StateCascadeWorkflow::root_cascade_state_to(&state_snapshot, &[wasm_store]).await?;
         CascadeOps::send_topology_snapshot(wasm_store, &topology).await?;
-        Self::complete_provisioned_nonroot_activation(wasm_store, state_input, topology).await
+        Self::complete_provisioned_nonroot_activation(
+            wasm_store,
+            child.authority.operation_id,
+            state_input,
+            topology,
+        )
+        .await
     }
 
     /// Enforce the activation phase before a managed endpoint handler runs.
@@ -433,7 +469,9 @@ async fn resume_nonroot_activation(
     entry: &FleetCascadeManifestEntry,
     root_status: &FleetActivationStatusResponse,
     request: FleetActivationResumeRequest,
+    child: &FleetActivationWasmStoreAuthorityView,
 ) -> Result<(), InternalError> {
+    let child_operation_id = child.authority.operation_id;
     let expected_cascade = FleetCascadeActivationEvidence::Applied {
         state_snapshot_hash: entry.state_snapshot_hash,
         topology_snapshot_hash: entry.topology_snapshot_hash,
@@ -441,10 +479,10 @@ async fn resume_nonroot_activation(
     let prepared: FleetActivationStatusResponse = match submit_store_fleet_command(
         entry.principal,
         StoreCommandFragment::PrepareFleetCredential(FleetCredentialGenerationRequest {
-            operation_id: request.operation_id,
+            operation_id: child_operation_id,
             credential: request.credential,
         }),
-        request.operation_id,
+        child_operation_id,
     )
     .await
     {
@@ -453,6 +491,7 @@ async fn resume_nonroot_activation(
             reconcile_nonroot_activation_status_after_call_error(
                 entry.principal,
                 root_status,
+                child_operation_id,
                 &expected_cascade,
                 None,
                 "credential-generation preparation",
@@ -461,7 +500,13 @@ async fn resume_nonroot_activation(
             .await?
         }
     };
-    validate_nonroot_activation_status(root_status, &prepared, &expected_cascade, None)?;
+    validate_nonroot_activation_status(
+        root_status,
+        &prepared,
+        child_operation_id,
+        &expected_cascade,
+        None,
+    )?;
 
     let activation_evidence_hash = FleetActivationEvidenceOps::activation_evidence_hash(
         &prepared.identity,
@@ -471,11 +516,11 @@ async fn resume_nonroot_activation(
     let activated: FleetActivationStatusResponse = match submit_store_fleet_command(
         entry.principal,
         StoreCommandFragment::ActivateFleet(FleetActivationRequest {
-            operation_id: request.operation_id,
+            operation_id: child_operation_id,
             credential: request.credential,
             activation_evidence_hash,
         }),
-        request.operation_id,
+        child_operation_id,
     )
     .await
     {
@@ -484,6 +529,7 @@ async fn resume_nonroot_activation(
             reconcile_nonroot_activation_status_after_call_error(
                 entry.principal,
                 root_status,
+                child_operation_id,
                 &expected_cascade,
                 Some(FleetActivationPhase::Active),
                 "activation",
@@ -495,6 +541,7 @@ async fn resume_nonroot_activation(
     validate_nonroot_activation_status(
         root_status,
         &activated,
+        child_operation_id,
         &expected_cascade,
         Some(FleetActivationPhase::Active),
     )
@@ -503,21 +550,26 @@ async fn resume_nonroot_activation(
 async fn reconcile_nonroot_activation_status_after_call_error(
     pid: crate::cdk::types::Principal,
     root_status: &FleetActivationStatusResponse,
+    child_operation_id: [u8; 32],
     expected_cascade: &FleetCascadeActivationEvidence,
     required_phase: Option<FleetActivationPhase>,
     _operation: &str,
     call_error: InternalError,
 ) -> Result<FleetActivationStatusResponse, InternalError> {
     let observed: FleetActivationStatusResponse =
-        match query_store_fleet_activation_status(pid, root_status.identity.operation_id).await {
+        match query_store_fleet_activation_status(pid, child_operation_id).await {
             Ok(status) => status,
             Err(_observation_error) => {
                 return Err(call_error);
             }
         };
-    if let Err(_observation_error) =
-        validate_nonroot_activation_status(root_status, &observed, expected_cascade, required_phase)
-    {
+    if let Err(_observation_error) = validate_nonroot_activation_status(
+        root_status,
+        &observed,
+        child_operation_id,
+        expected_cascade,
+        required_phase,
+    ) {
         return Err(call_error);
     }
     Ok(observed)
@@ -559,10 +611,11 @@ async fn query_store_fleet_activation_status(
 fn validate_nonroot_activation_status(
     root_status: &FleetActivationStatusResponse,
     child_status: &FleetActivationStatusResponse,
+    child_operation_id: [u8; 32],
     expected_cascade: &FleetCascadeActivationEvidence,
     required_phase: Option<FleetActivationPhase>,
 ) -> Result<(), InternalError> {
-    if child_status.identity != root_status.identity
+    if validate_nonroot_activation_identity(root_status, child_status, child_operation_id).is_err()
         || child_status.cascade.as_ref() != Some(expected_cascade)
         || child_status.credential != root_status.credential
         || child_status.cascade_manifest.is_some()
@@ -572,6 +625,41 @@ fn validate_nonroot_activation_status(
             FleetActivationPhase::Active => child_status.activated_at_ns.is_none(),
         }
         || required_phase.is_some_and(|phase| child_status.phase != phase)
+    {
+        return Err(InternalError::invariant());
+    }
+    Ok(())
+}
+
+fn validate_nonroot_activation_identity(
+    root_status: &FleetActivationStatusResponse,
+    child_status: &FleetActivationStatusResponse,
+    child_operation_id: [u8; 32],
+) -> Result<(), InternalError> {
+    if child_status.identity.fleet != root_status.identity.fleet
+        || child_status.identity.operation_id != child_operation_id
+        || child_status.identity.release_build_id != root_status.identity.release_build_id
+    {
+        return Err(InternalError::invariant());
+    }
+    Ok(())
+}
+
+fn validate_root_wasm_store_child_authority(
+    root_status: &FleetActivationStatusResponse,
+    root_pid: Principal,
+    wasm_store: Principal,
+    child: &FleetActivationWasmStoreAuthorityView,
+) -> Result<(), InternalError> {
+    let authority = &child.authority;
+    if authority.fleet != root_status.identity.fleet
+        || authority.operation_id == [0; 32]
+        || authority.operation_id == root_status.identity.operation_id
+        || authority.fleet_subnet_root != root_pid
+        || authority.wasm_store != wasm_store
+        || authority.release_build_id != root_status.identity.release_build_id
+        || authority.controllers.is_empty()
+        || !authority.controllers.contains(&root_pid)
     {
         return Err(InternalError::invariant());
     }
@@ -705,12 +793,15 @@ mod tests {
 
     fn child_status(
         root: &FleetActivationStatusResponse,
+        operation_id: [u8; 32],
         phase: FleetActivationPhase,
         cascade: FleetCascadeActivationEvidence,
     ) -> FleetActivationStatusResponse {
+        let mut identity = root.identity.clone();
+        identity.operation_id = operation_id;
         FleetActivationStatusResponse {
             phase,
-            identity: root.identity.clone(),
+            identity,
             cascade: Some(cascade),
             cascade_manifest: None,
             credential: root.credential,
@@ -720,24 +811,33 @@ mod tests {
     }
 
     #[test]
-    fn nonroot_activation_requires_exact_root_identity_cascade_generation_and_phase_evidence() {
+    fn nonroot_activation_requires_exact_child_identity_cascade_generation_and_phase_evidence() {
         let root = root_status();
+        let child_operation_id = [9; 32];
         let expected_cascade = FleetCascadeActivationEvidence::Applied {
             state_snapshot_hash: [10; 32],
             topology_snapshot_hash: [11; 32],
         };
         let prepared = child_status(
             &root,
+            child_operation_id,
             FleetActivationPhase::Prepared,
             expected_cascade.clone(),
         );
 
-        validate_nonroot_activation_status(&root, &prepared, &expected_cascade, None)
-            .expect("exact prepared child");
+        validate_nonroot_activation_status(
+            &root,
+            &prepared,
+            child_operation_id,
+            &expected_cascade,
+            None,
+        )
+        .expect("exact prepared child");
         assert!(
             validate_nonroot_activation_status(
                 &root,
                 &prepared,
+                child_operation_id,
                 &expected_cascade,
                 Some(FleetActivationPhase::Active),
             )
@@ -745,14 +845,21 @@ mod tests {
         );
 
         let mut wrong_identity = prepared;
-        wrong_identity.identity.operation_id = [12; 32];
+        wrong_identity.identity.operation_id = root.identity.operation_id;
         assert!(
-            validate_nonroot_activation_status(&root, &wrong_identity, &expected_cascade, None,)
-                .is_err()
+            validate_nonroot_activation_status(
+                &root,
+                &wrong_identity,
+                child_operation_id,
+                &expected_cascade,
+                None,
+            )
+            .is_err()
         );
 
         let mut active_without_timestamp = child_status(
             &root,
+            child_operation_id,
             FleetActivationPhase::Active,
             expected_cascade.clone(),
         );
@@ -761,6 +868,7 @@ mod tests {
             validate_nonroot_activation_status(
                 &root,
                 &active_without_timestamp,
+                child_operation_id,
                 &expected_cascade,
                 Some(FleetActivationPhase::Active),
             )

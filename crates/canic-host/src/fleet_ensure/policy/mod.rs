@@ -27,6 +27,9 @@ pub enum EnsurePolicyError {
     #[error("controlled canister {name} has duplicate name or principal authority")]
     DuplicateAuthority { name: String },
 
+    #[error("controlled canister {name} references unavailable controller canister {controller}")]
+    ControllerCanisterUnavailable { controller: String, name: String },
+
     #[error("desired Fleet has invalid or anonymous Principal for {field}: {value}")]
     InvalidPrincipal { field: String, value: String },
 
@@ -230,6 +233,7 @@ pub fn compile_plan(
             artifacts,
             configured,
             observed,
+            observation,
             cycle_policy,
             bounds,
             action_time,
@@ -526,6 +530,7 @@ fn compile_canister(
     artifacts: &DesiredFleetArtifacts,
     configured: &crate::fleet_ensure::model::DesiredCanister,
     observed: Option<&LiveCanister>,
+    observation: &FleetObservation,
     cycle_policy: CanisterCyclePolicy,
     bounds: CycleBounds,
     created_at_time: u64,
@@ -550,7 +555,13 @@ fn compile_canister(
             accumulator,
         ),
         (DesiredPresence::Present, None) => {
-            if configured.kind == DesiredCanisterKind::Pool {
+            let fresh_pool = configured.kind == DesiredCanisterKind::Pool
+                && desired
+                    .bootstrap
+                    .as_ref()
+                    .is_some_and(|bootstrap| bootstrap.fresh_estate)
+                && configured.principal.is_none();
+            if configured.kind == DesiredCanisterKind::Pool && !fresh_pool {
                 return Err(EnsurePolicyError::MissingPoolAsset {
                     name: configured.name.clone(),
                 });
@@ -593,6 +604,7 @@ fn compile_canister(
             artifacts,
             configured,
             live,
+            observation,
             cycle_policy,
             bounds,
             created_at_time,
@@ -622,6 +634,7 @@ fn create_plan(
     accumulator.add_fee(bounds.management_creation_fee)?;
     let symbolic = format!("created:{}", configured.name);
     let mut actions = vec![EnsureAction::Create {
+        controller_canisters: configured.controller_canisters.clone(),
         controllers: configured.controllers.clone(),
         created_at_time,
         ledger: desired.cycles_ledger.clone(),
@@ -677,6 +690,7 @@ fn reuse_plan(
     artifacts: &DesiredFleetArtifacts,
     configured: &crate::fleet_ensure::model::DesiredCanister,
     live: &LiveCanister,
+    observation: &FleetObservation,
     cycle_policy: CanisterCyclePolicy,
     bounds: CycleBounds,
     created_at_time: u64,
@@ -732,10 +746,11 @@ fn reuse_plan(
     }
     let mut actual_controllers = live.controllers.clone();
     actual_controllers.sort();
-    let mut desired_controllers = configured.controllers.clone();
+    let mut desired_controllers = resolved_controllers(configured, observation)?;
     desired_controllers.sort();
     if configured.kind != DesiredCanisterKind::Pool && actual_controllers != desired_controllers {
         actions.push(EnsureAction::SetControllers {
+            controller_canisters: configured.controller_canisters.clone(),
             controllers: desired_controllers,
             name: configured.name.clone(),
             principal: live.principal.clone(),
@@ -760,6 +775,28 @@ fn reuse_plan(
         observed_cycles: live.cycles,
         principal: Some(live.principal.clone()),
     })
+}
+
+fn resolved_controllers(
+    configured: &crate::fleet_ensure::model::DesiredCanister,
+    observation: &FleetObservation,
+) -> Result<Vec<String>, EnsurePolicyError> {
+    let mut controllers = configured.controllers.clone();
+    for controller in &configured.controller_canisters {
+        let principal = observation
+            .canisters
+            .get(controller)
+            .and_then(Option::as_ref)
+            .map(|live| live.principal.clone())
+            .ok_or_else(|| EnsurePolicyError::ControllerCanisterUnavailable {
+                controller: controller.clone(),
+                name: configured.name.clone(),
+            })?;
+        controllers.push(principal);
+    }
+    controllers.sort();
+    controllers.dedup();
+    Ok(controllers)
 }
 
 #[expect(
@@ -986,7 +1023,6 @@ fn validate_authority(
         return Err(EnsurePolicyError::InvalidStallBound);
     }
     validate_principal("operator", &desired.operator)?;
-    validate_principal("treasury", &desired.treasury)?;
     validate_principal("cycles_ledger", &desired.cycles_ledger)?;
     let mut names = BTreeSet::new();
     let mut principals = BTreeSet::new();
@@ -1021,16 +1057,18 @@ fn validate_authority(
                 controller,
             )?;
         }
+        for controller in &configured.controller_canisters {
+            if controller.is_empty() {
+                return Err(EnsurePolicyError::InvalidTopology {
+                    name: configured.name.clone(),
+                    reason: "controller canister name must not be empty",
+                });
+            }
+        }
         if let Some(principal) = &configured.principal {
             validate_principal(
                 &format!("canisters.{}.principal", configured.name),
                 principal,
-            )?;
-        }
-        if let Some(drain) = &configured.drain {
-            validate_principal(
-                &format!("canisters.{}.drain.destination", configured.name),
-                &drain.destination,
             )?;
         }
         let unique_name = names.insert(configured.name.as_str());
@@ -1052,9 +1090,15 @@ fn validate_authority(
             });
         }
         validate_canic_initializer(desired, configured)?;
+        let fresh_pool = configured.kind == DesiredCanisterKind::Pool
+            && desired
+                .bootstrap
+                .as_ref()
+                .is_some_and(|bootstrap| bootstrap.fresh_estate)
+            && configured.principal.is_none();
         if configured.kind == DesiredCanisterKind::Pool
             && (configured.presence != DesiredPresence::Present
-                || configured.principal.is_none()
+                || (configured.principal.is_none() && !fresh_pool)
                 || configured.replace
                 || configured.wasm.is_some()
                 || configured.drain.is_some()
@@ -1066,6 +1110,26 @@ fn validate_authority(
                 name: configured.name.clone(),
                 reason: "pool assets must be exact present non-replaceable identities without independent runtime authority",
             });
+        }
+    }
+    for (index, configured) in desired.canisters.iter().enumerate() {
+        for controller in &configured.controller_canisters {
+            let Some(controller_index) = desired
+                .canisters
+                .iter()
+                .position(|candidate| candidate.name == *controller)
+            else {
+                return Err(EnsurePolicyError::ControllerCanisterUnavailable {
+                    controller: controller.clone(),
+                    name: configured.name.clone(),
+                });
+            };
+            if controller_index >= index || controller == &configured.name {
+                return Err(EnsurePolicyError::InvalidTopology {
+                    name: configured.name.clone(),
+                    reason: "controller canister must be a distinct earlier desired role",
+                });
+            }
         }
     }
     validate_typed_topology(desired)?;
@@ -1083,16 +1147,17 @@ fn validate_authority(
         }
     }
     if !desired.canisters.iter().any(|configured| {
-        configured.presence == DesiredPresence::Present
-            && configured.principal.as_deref() == Some(desired.treasury.as_str())
+        configured.presence == DesiredPresence::Present && configured.name == desired.treasury
     }) {
         return Err(EnsurePolicyError::MissingTreasury {
             treasury: desired.treasury.clone(),
         });
     }
-    if desired.canisters.iter().any(|configured| {
-        configured.principal.as_deref() == Some(desired.treasury.as_str()) && configured.replace
-    }) {
+    if desired
+        .canisters
+        .iter()
+        .any(|configured| configured.name == desired.treasury && configured.replace)
+    {
         return Err(EnsurePolicyError::TreasuryReplacement {
             treasury: desired.treasury.clone(),
         });

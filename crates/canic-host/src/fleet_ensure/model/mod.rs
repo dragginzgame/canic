@@ -89,6 +89,8 @@ pub struct DrainAuthority {
 pub struct DesiredCanister {
     #[serde(default)]
     pub canic_init: Option<DesiredCanisterInit>,
+    #[serde(default)]
+    pub controller_canisters: Vec<String>,
     pub controllers: Vec<String>,
     pub drain: Option<DrainAuthority>,
     pub initial_cycles: String,
@@ -171,6 +173,7 @@ pub struct DesiredFleet {
     #[serde(skip)]
     pub(crate) protocol_steps: Vec<DesiredProtocolStep>,
     pub schema_version: u16,
+    /// Logical name of the present controlled canister that owns retirement receipts.
     pub treasury: String,
 }
 
@@ -186,6 +189,7 @@ pub struct DesiredFleetBootstrap {
     pub coordinator: String,
     pub coordinator_subnet: canic_core::ids::SubnetId,
     pub fleet_id: canic_core::ids::FleetId,
+    pub fresh_estate: bool,
     pub release_build_id: canic_core::ids::ReleaseBuildId,
     pub root_funding: Option<canic_core::ids::FleetCoordinatorRootFundingPolicy>,
     pub roots: Vec<DesiredFleetBootstrapRoot>,
@@ -265,6 +269,7 @@ pub struct CanisterCyclePolicy {
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum EnsureAction {
     Create {
+        controller_canisters: Vec<String>,
         controllers: Vec<String>,
         created_at_time: u64,
         ledger: String,
@@ -331,6 +336,7 @@ pub enum EnsureAction {
         status_method: String,
     },
     SetControllers {
+        controller_canisters: Vec<String>,
         controllers: Vec<String>,
         name: String,
         principal: String,

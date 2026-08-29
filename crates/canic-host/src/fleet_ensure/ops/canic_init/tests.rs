@@ -72,6 +72,7 @@ fn generated_coordinator_root_and_store_init_bytes_decode_to_exact_authority() {
         fixture.root_authority.clone(),
         &operation_id,
         "root-0",
+        vec![fixture.root_authority.binding.fleet_subnet_root],
         vec![pool],
     )
     .expect("Root bytes");
@@ -79,6 +80,18 @@ fn generated_coordinator_root_and_store_init_bytes_decode_to_exact_authority() {
     assert_eq!(root.authority, fixture.root_authority);
     assert_eq!(root.canister_pool_imports, vec![pool]);
     assert_eq!(root.install_id, install_id(&operation_id, "root", "root-0"));
+    assert_eq!(
+        root.wasm_store_activation.operation_id,
+        install_id(&operation_id, "store", "root-0")
+    );
+    assert_eq!(
+        root.wasm_store_activation.wasm_store,
+        fixture.root_authority.wasm_store_authority.wasm_store
+    );
+    assert_eq!(
+        root.wasm_store_activation.controllers,
+        vec![fixture.root_authority.binding.fleet_subnet_root]
+    );
 
     let store_authority = root.authority.wasm_store_authority.clone();
     let store_bytes = encode_store_arguments(store_authority.clone(), &operation_id, "root-0")
@@ -91,6 +104,7 @@ fn generated_coordinator_root_and_store_init_bytes_decode_to_exact_authority() {
         install_id(&operation_id, "store", "root-0")
     );
     assert_ne!(root.install_id, store.install_id);
+    assert_eq!(root.wasm_store_activation.operation_id, store.install_id);
 }
 
 struct InitFixture {
@@ -127,6 +141,7 @@ fn fixture() -> InitFixture {
         coordinator: "coordinator".to_string(),
         coordinator_subnet: subnet(1),
         fleet_id: FleetId::from_generated_bytes([5; 32]),
+        fresh_estate: false,
         release_build_id,
         root_funding: None,
         roots: vec![DesiredFleetBootstrapRoot {

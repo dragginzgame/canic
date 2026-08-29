@@ -27,6 +27,12 @@ canic fleet ensure <fleet> --desired <path>
 canic fleet ensure <fleet> --desired <path> --apply <plan_sha256>
 ```
 
+`canic fleet generate --fresh` can first create or replay a durable,
+effect-free logical seed for an empty estate. It does not install anything or
+own a second mutation path. The generated document enters the same reviewed
+plan/apply journal above; create results are retained before dependent
+controller and treasury references are resolved.
+
 The host modules follow the strict boundary:
 
 ```text

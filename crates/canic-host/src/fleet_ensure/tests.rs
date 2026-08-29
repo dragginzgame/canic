@@ -1,13 +1,16 @@
 use crate::{
     fleet_ensure::{
         model::{
-            CanisterRuntimeStatus, CurrentFleetProtocolAction, CycleConservation, DesiredCanister,
-            DesiredCanisterInit, DesiredCanisterKind, DesiredFleet, DesiredFleetProtocol,
-            DesiredPresence, DesiredProtocolStep, DrainAuthority, EffectRecord, EnsureAction,
-            FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlan, FleetEnsureStateRecord, FleetObservation,
-            LiveCanister,
+            CanisterDisposition, CanisterRuntimeStatus, CurrentFleetProtocolAction,
+            CycleConservation, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
+            DesiredFleet, DesiredFleetProtocol, DesiredPresence, DesiredProtocolStep,
+            DrainAuthority, EffectRecord, EffectState, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION,
+            FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
+            FleetEnsureStateRecord, FleetObservation, LiveCanister,
         },
-        ops::{EffectObservation, EffectOutcome, EnsurePlatform, TerminalFleetInventory},
+        ops::{
+            EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
+        },
         workflow,
     },
     registry::RegistryEntry,
@@ -70,6 +73,7 @@ struct MockPlatform {
     operator_cycles: u128,
     protocol_command_only: bool,
     protocol_ready: BTreeSet<String>,
+    protocol_retry: EffectRetry,
     typed_protocol: bool,
     skip_transfer_credit: bool,
     stall_before_mutation: BTreeMap<String, u32>,
@@ -97,6 +101,7 @@ impl MockPlatform {
             operator_cycles: 100_000,
             protocol_command_only: false,
             protocol_ready: BTreeSet::new(),
+            protocol_retry: EffectRetry::None,
             typed_protocol: false,
             skip_transfer_credit: false,
             stall_before_mutation: BTreeMap::new(),
@@ -126,6 +131,39 @@ impl MockPlatform {
         )
     }
 
+    fn canister_principal<'a>(&'a self, state: &'a FleetEnsureStateRecord, name: &str) -> &'a str {
+        state
+            .pending_principals
+            .get(name)
+            .or_else(|| state.principals.get(name))
+            .or_else(|| {
+                self.desired
+                    .canisters
+                    .iter()
+                    .find(|canister| canister.name == name)
+                    .and_then(|canister| canister.principal.as_ref())
+            })
+            .map(String::as_str)
+            .expect("fixture canister Principal")
+    }
+
+    fn controllers(
+        &self,
+        state: &FleetEnsureStateRecord,
+        controllers: &[String],
+        controller_canisters: &[String],
+    ) -> Vec<String> {
+        let mut resolved = controllers.to_vec();
+        resolved.extend(
+            controller_canisters
+                .iter()
+                .map(|name| self.canister_principal(state, name).to_string()),
+        );
+        resolved.sort();
+        resolved.dedup();
+        resolved
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "the deterministic adapter keeps every effect mutation in one exhaustive match"
@@ -134,6 +172,7 @@ impl MockPlatform {
         let principal = Self::principal(state, action).map(str::to_string);
         match action {
             EnsureAction::Create {
+                controller_canisters,
                 controllers,
                 name,
                 requested_initial_cycles,
@@ -158,7 +197,7 @@ impl MockPlatform {
                     principal.clone(),
                     LiveCanister {
                         canister_version: Some(1),
-                        controllers: controllers.clone(),
+                        controllers: self.controllers(state, controllers, controller_canisters),
                         cycles: retained_cycles,
                         module_sha256: None,
                         principal: principal.clone(),
@@ -215,20 +254,23 @@ impl MockPlatform {
                 if !self.protocol_command_only {
                     self.protocol_ready.insert(name.clone());
                 }
+                self.protocol_retry = EffectRetry::None;
                 EffectOutcome {
                     created_principal: None,
-                    post_cycles: principal
-                        .as_deref()
-                        .and_then(|value| self.live.get(value))
-                        .map(|live| live.cycles),
+                    post_cycles: None,
                     receipt: Some("protocol-receipt".to_string()),
                 }
             }
-            EnsureAction::SetControllers { controllers, .. } => {
+            EnsureAction::SetControllers {
+                controller_canisters,
+                controllers,
+                ..
+            } => {
+                let controllers = self.controllers(state, controllers, controller_canisters);
                 self.live
                     .get_mut(principal.as_deref().expect("settings principal"))
                     .expect("settings target")
-                    .controllers = controllers.clone();
+                    .controllers = controllers;
                 empty_outcome()
             }
             EnsureAction::Start { .. } => {
@@ -251,6 +293,7 @@ impl MockPlatform {
                 maximum_execution_burn_cycles,
                 ..
             } => {
+                let destination = self.canister_principal(state, destination).to_string();
                 let post_cycles = {
                     let source = self
                         .live
@@ -261,7 +304,7 @@ impl MockPlatform {
                 };
                 if !self.skip_transfer_credit {
                     self.live
-                        .get_mut(destination)
+                        .get_mut(&destination)
                         .expect("transfer destination")
                         .cycles += amount;
                 }
@@ -349,12 +392,14 @@ impl EnsurePlatform for MockPlatform {
             return Ok(EffectObservation {
                 applied: record.created_principal.is_some(),
                 progress_identity: format!("created:{:?}", record.created_principal),
+                retry: EffectRetry::None,
             });
         }
         if matches!(action, EnsureAction::Fund { .. }) {
             return Ok(EffectObservation {
                 applied: record.receipt.is_some(),
                 progress_identity: format!("fund:{:?}", record.receipt),
+                retry: EffectRetry::None,
             });
         }
         let principal = Self::principal(state, action);
@@ -378,9 +423,16 @@ impl EnsurePlatform for MockPlatform {
             EnsureAction::FleetProtocol { name, .. } | EnsureAction::Protocol { name, .. } => {
                 self.protocol_ready.contains(name)
             }
-            EnsureAction::SetControllers { controllers, .. } => principal
-                .and_then(|value| self.live.get(value))
-                .is_some_and(|live| live.controllers == *controllers),
+            EnsureAction::SetControllers {
+                controller_canisters,
+                controllers,
+                ..
+            } => {
+                let controllers = self.controllers(state, controllers, controller_canisters);
+                principal
+                    .and_then(|value| self.live.get(value))
+                    .is_some_and(|live| live.controllers == controllers)
+            }
             EnsureAction::Start { .. } => principal
                 .and_then(|value| self.live.get(value))
                 .is_some_and(|live| live.status == CanisterRuntimeStatus::Running),
@@ -393,6 +445,7 @@ impl EnsurePlatform for MockPlatform {
                 destination,
                 ..
             } => {
+                let destination = self.canister_principal(state, destination);
                 let source = principal
                     .and_then(|value| self.live.get(value))
                     .map(|live| live.cycles)
@@ -414,6 +467,20 @@ impl EnsurePlatform for MockPlatform {
         Ok(EffectObservation {
             applied,
             progress_identity: format!("mock:{action:?}:{applied}"),
+            retry: if !applied
+                && self.protocol_retry == EffectRetry::ReplayExactIssuedCommand
+                && matches!(
+                    action,
+                    EnsureAction::FleetProtocol { action, .. }
+                        if matches!(
+                            action.as_ref(),
+                            CurrentFleetProtocolAction::ProvisionComponents { .. }
+                        )
+                ) {
+                EffectRetry::ReplayExactIssuedCommand
+            } else {
+                EffectRetry::None
+            },
         })
     }
 
@@ -430,11 +497,12 @@ impl EnsurePlatform for MockPlatform {
     fn action_destination_cycles(
         &mut self,
         action: &EnsureAction,
-        _state: &FleetEnsureStateRecord,
+        state: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error> {
         let EnsureAction::Transfer { destination, .. } = action else {
             return Ok(None);
         };
+        let destination = self.canister_principal(state, destination);
         Ok(self.live.get(destination).map(|live| live.cycles))
     }
 
@@ -569,6 +637,303 @@ fn interruption_at_every_effect_converges_once_and_second_run_has_zero_effects()
     .expect("effect-free terminal replay");
     assert!(terminal.terminal);
     assert_eq!(platform.mutations.values().sum::<u32>(), mutation_count);
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one proof keeps the retained thirteen-applied/one-issued journal and replay assertions visible"
+)]
+fn retryable_provisioning_failure_replays_only_the_exact_retained_issued_command() {
+    let mut fixture = fixture();
+    fixture.desired.protocol = Some(DesiredFleetProtocol {
+        app_config: "canic.toml".to_string(),
+        component_group_placements: Vec::new(),
+        coordinator_candid: "coordinator.did".to_string(),
+        root_candid: "root.did".to_string(),
+        store_candid: "store.did".to_string(),
+    });
+    fixture
+        .desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+        .expect("fixture Coordinator")
+        .wasm = None;
+    fixture.platform.desired = fixture.desired.clone();
+    let desired_sha256 = "45".repeat(32);
+    let initial = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("initial plan");
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &initial.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("initial convergence");
+
+    fixture.platform.completed.clear();
+    fixture.platform.mutations.clear();
+    fixture.platform.typed_protocol = true;
+    let pending = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut fixture.platform,
+    )
+    .expect("typed provisioning plan");
+    assert!(
+        pending
+            .plan
+            .canisters
+            .iter()
+            .all(|canister| canister.actions.is_empty())
+    );
+    let [issued] = pending.plan.protocol_actions.as_slice() else {
+        panic!("expected one typed provisioning action");
+    };
+    let issued = issued.clone();
+    let mut retained = pending.plan;
+    retained.protocol_actions.clear();
+    for index in 0..13 {
+        let mut applied = issued.clone();
+        let EnsureAction::FleetProtocol { name, .. } = &mut applied else {
+            panic!("typed provisioning action");
+        };
+        *name = format!("applied-{index:02}");
+        retained.protocol_actions.push(applied);
+    }
+    retained.protocol_actions.push(issued.clone());
+    retained.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&retained);
+
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    crate::fleet_ensure::ops::write_plan(&paths, &retained).expect("write retained plan");
+    let effects = retained
+        .protocol_actions
+        .iter()
+        .enumerate()
+        .map(|(index, action)| EffectRecord {
+            action_sha256: crate::fleet_ensure::ops::action_sha256(action),
+            created_principal: None,
+            destination_post_cycles: None,
+            destination_pre_cycles: None,
+            post_cycles: None,
+            pre_cycles: None,
+            pre_canister_version: None,
+            progress_identity: Some(format!("retained-{index}")),
+            receipt: Some("protocol-receipt".to_string()),
+            state: if index == 13 {
+                EffectState::Issued
+            } else {
+                EffectState::Applied
+            },
+        })
+        .collect();
+    crate::fleet_ensure::ops::write_journal(
+        &paths,
+        &FleetEnsureJournalRecord {
+            completion: FleetEnsureCompletion::InProgress,
+            effects,
+            fleet: "test-fleet".to_string(),
+            initial_controlled_cycles: retained.conservation.observed_controlled_cycles,
+            initial_operator_cycles: fixture.platform.operator_cycles,
+            operation_id: retained.operation_id.clone(),
+            plan_sha256: retained.plan_sha256.clone(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            stalled_observations: 0,
+        },
+    )
+    .expect("write retained issued journal");
+    fixture.platform.protocol_retry = EffectRetry::ReplayExactIssuedCommand;
+    let identities = fixture
+        .platform
+        .live
+        .keys()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let cycles = fixture
+        .platform
+        .live
+        .iter()
+        .map(|(principal, live)| (principal.clone(), live.cycles))
+        .collect::<BTreeMap<_, _>>();
+    let operator_cycles = fixture.platform.operator_cycles;
+
+    let report = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &retained.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("resume retained issued provisioning");
+
+    assert!(report.terminal);
+    let issued_hash = crate::fleet_ensure::ops::action_sha256(&issued);
+    assert_eq!(fixture.platform.mutations.get(&issued_hash), Some(&1));
+    assert_eq!(fixture.platform.mutations.values().sum::<u32>(), 1);
+    assert_eq!(
+        fixture
+            .platform
+            .live
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<_>>(),
+        identities
+    );
+    assert_eq!(
+        fixture
+            .platform
+            .live
+            .iter()
+            .map(|(principal, live)| (principal.clone(), live.cycles))
+            .collect::<BTreeMap<_, _>>(),
+        cycles
+    );
+    assert_eq!(fixture.platform.operator_cycles, operator_cycles);
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read terminal journal")
+        .expect("terminal journal");
+    assert_eq!(journal.effects.len(), 14);
+    assert!(
+        journal
+            .effects
+            .iter()
+            .all(|effect| effect.state == EffectState::Applied)
+    );
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one proof keeps same-ID Start, cycle conservation, and effect-free replay together"
+)]
+fn stopped_retained_coordinator_starts_same_id_then_replays_without_effect() {
+    let mut fixture = fixture();
+    let desired_sha256 = "46".repeat(32);
+    let initial = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("initial plan");
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &initial.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("initial convergence");
+    fixture.platform.completed.clear();
+    fixture.platform.mutations.clear();
+    fixture
+        .platform
+        .live
+        .get_mut(TREASURY)
+        .expect("retained Coordinator")
+        .status = CanisterRuntimeStatus::Stopped;
+    let identities = fixture
+        .platform
+        .live
+        .keys()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let cycles = fixture
+        .platform
+        .live
+        .iter()
+        .map(|(principal, live)| (principal.clone(), live.cycles))
+        .collect::<BTreeMap<_, _>>();
+
+    let start = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut fixture.platform,
+    )
+    .expect("same-ID Start plan");
+    let actions = workflow::ordered_actions(&start.plan);
+    let [action] = actions.as_slice() else {
+        panic!("expected one same-ID Start action");
+    };
+    assert!(matches!(
+        action,
+        EnsureAction::Start { principal, .. } if principal == TREASURY
+    ));
+    let action_hash = crate::fleet_ensure::ops::action_sha256(action);
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &start.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("same-ID Start convergence");
+    assert_eq!(fixture.platform.mutations.get(&action_hash), Some(&1));
+    assert_eq!(fixture.platform.mutations.values().sum::<u32>(), 1);
+    assert_eq!(
+        fixture
+            .platform
+            .live
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<_>>(),
+        identities
+    );
+    assert_eq!(
+        fixture
+            .platform
+            .live
+            .iter()
+            .map(|(principal, live)| (principal.clone(), live.cycles))
+            .collect::<BTreeMap<_, _>>(),
+        cycles
+    );
+
+    let replay = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_200,
+        &mut fixture.platform,
+    )
+    .expect("effect-free replay plan");
+    assert!(workflow::ordered_actions(&replay.plan).is_empty());
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &replay.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("effect-free replay");
+    assert_eq!(fixture.platform.mutations.values().sum::<u32>(), 1);
 }
 
 #[test]
@@ -2327,12 +2692,14 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
                 return Ok(EffectObservation {
                     applied: record.created_principal.is_some(),
                     progress_identity: format!("created:{:?}", record.created_principal),
+                    retry: EffectRetry::None,
                 });
             }
             if matches!(action, EnsureAction::Fund { .. }) {
                 return Ok(EffectObservation {
                     applied: record.receipt.is_some(),
                     progress_identity: format!("fund:{:?}", record.receipt),
+                    retry: EffectRetry::None,
                 });
             }
             let principal = match action {
@@ -2382,6 +2749,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
             Ok(EffectObservation {
                 applied,
                 progress_identity: format!("pocketic:{action:?}:{applied}"),
+                retry: EffectRetry::None,
             })
         }
 
@@ -2613,6 +2981,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
 
     let mut canisters = vec![DesiredCanister {
         canic_init: None,
+        controller_canisters: Vec::new(),
         controllers: vec![CONTROLLER.to_string()],
         drain: None,
         initial_cycles: "0".to_string(),
@@ -2690,7 +3059,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
         .map(|(name, canister)| protocol_step_for(&root, name, canister))
         .collect(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
-        treasury: treasury.to_string(),
+        treasury: "treasury".to_string(),
     };
     let mut platform = PocketPlatform {
         desired: desired.clone(),
@@ -2757,6 +3126,68 @@ struct Fixture {
     root: PathBuf,
 }
 
+#[test]
+fn fresh_logical_controller_and_treasury_roles_create_and_replay_without_effect() {
+    let mut fixture = fixture();
+    let wasm = fixture.root.join("app.wasm");
+    let mut coordinator = desired_canister("treasury", None, false, &wasm, None);
+    coordinator.kind = DesiredCanisterKind::Coordinator;
+    let mut child = desired_canister("created", None, false, &wasm, None);
+    child.controller_canisters = vec!["treasury".to_string()];
+    fixture.desired.canisters = vec![coordinator, child];
+    fixture.desired.treasury = "treasury".to_string();
+    fixture.platform = MockPlatform::new(fixture.desired.clone(), Vec::new());
+
+    let desired_sha256 = "73".repeat(32);
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        &fixture.desired.fleet,
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan fresh logical authority");
+    assert_eq!(
+        planned
+            .plan
+            .canisters
+            .iter()
+            .filter(|canister| canister.disposition == CanisterDisposition::Create)
+            .count(),
+        2
+    );
+    let applied = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        &fixture.desired.fleet,
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("apply fresh logical authority");
+    assert!(applied.terminal);
+
+    let second = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        &fixture.desired.fleet,
+        1_800_000_000_000_000_100,
+        &mut fixture.platform,
+    )
+    .expect("replan converged logical authority");
+    assert!(
+        second
+            .plan
+            .canisters
+            .iter()
+            .all(|canister| canister.actions.is_empty())
+    );
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
 fn fixture() -> Fixture {
     let root = temp_dir("canic-fleet-ensure");
     fs::create_dir_all(&root).expect("create fixture root");
@@ -2772,6 +3203,7 @@ fn fixture() -> Fixture {
             desired_canister("app", Some(OLD_APP), false, &wasm, None),
             DesiredCanister {
                 canic_init: None,
+                controller_canisters: Vec::new(),
                 controllers: vec![CONTROLLER.to_string()],
                 drain: Some(drain(&candid)),
                 initial_cycles: "0".to_string(),
@@ -2803,7 +3235,7 @@ fn fixture() -> Fixture {
         protocol: None,
         protocol_steps: Vec::new(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
-        treasury: TREASURY.to_string(),
+        treasury: "treasury".to_string(),
     };
     let current_hash = sha256_hex(b"current-wasm");
     let live = vec![
@@ -2829,6 +3261,7 @@ fn desired_canister(
 ) -> DesiredCanister {
     DesiredCanister {
         canic_init: None,
+        controller_canisters: Vec::new(),
         controllers: vec![CONTROLLER.to_string()],
         drain: drain_candid.map(drain),
         initial_cycles: "20".to_string(),
@@ -2854,7 +3287,7 @@ fn desired_canister(
 fn drain(candid: &Path) -> DrainAuthority {
     DrainAuthority {
         candid: candid.display().to_string(),
-        destination: TREASURY.to_string(),
+        destination: "treasury".to_string(),
         maximum_execution_burn_cycles: "2".to_string(),
         method: "canic_cycle_drain".to_string(),
     }

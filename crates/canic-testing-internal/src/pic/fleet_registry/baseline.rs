@@ -1710,6 +1710,53 @@ mod tests {
             &fixture,
             &config_path,
         );
+        assert_ne!(
+            installed.init_args.install_id, installed.init_args.wasm_store_activation.operation_id,
+            "Root and Store must retain distinct installation identities"
+        );
+        assert_eq!(
+            installed.init_args.wasm_store_activation.wasm_store,
+            installed
+                .init_args
+                .authority
+                .wasm_store_authority
+                .wasm_store
+        );
+        let wasm_store = installed
+            .init_args
+            .authority
+            .wasm_store_authority
+            .wasm_store;
+        let installation_controller = installed
+            .init_args
+            .authority
+            .wasm_store_authority
+            .installation_controller;
+        let coordinator_controller = Principal::anonymous();
+        let coordinator_cycles_before_start = pic.cycle_balance(coordinator);
+        pic.stop_canister(coordinator, Some(coordinator_controller))
+            .expect("stop retained Coordinator");
+        assert_eq!(
+            format!(
+                "{:?}",
+                pic.canister_status(coordinator, Some(coordinator_controller))
+                    .expect("stopped retained Coordinator status")
+                    .status
+            ),
+            "Stopped"
+        );
+        pic.start_canister(coordinator, Some(coordinator_controller))
+            .expect("start retained Coordinator with the same identity");
+        assert_eq!(
+            format!(
+                "{:?}",
+                pic.canister_status(coordinator, Some(coordinator_controller))
+                    .expect("running retained Coordinator status")
+                    .status
+            ),
+            "Running"
+        );
+        assert!(pic.cycle_balance(coordinator) <= coordinator_cycles_before_start);
         let CoordinatorStatusResponse::Registry(genesis) =
             coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
                 .expect("query current genesis Registry")
@@ -1755,32 +1802,51 @@ mod tests {
             actions.is_sorted_by_key(|step| current_protocol_test_stage(&step.action)),
             "current protocol actions must preserve Store -> join -> sync -> activate -> mirror -> Component order"
         );
+        let mut replayed_component_command = false;
         for step in &actions {
-            if matches!(
-                step.action,
-                CurrentFleetProtocolAction::ProvisionComponents { .. }
-            ) {
+            if let CurrentFleetProtocolAction::ProvisionComponents { request, .. } = &step.action {
                 reset_prepaid_pool_assets(&pic, fixture.root_id);
+                let store_cycles_before_retry = pic.cycle_balance(wasm_store);
+                pic.stop_canister(wasm_store, Some(installation_controller))
+                    .expect("stop Store before Root activation retry boundary");
+                issue_current_protocol_step(&pic, step, installation_controller);
+                let failure = (0..160)
+                    .find_map(|_| {
+                        let status = coordinator_status(
+                            &pic,
+                            step.target,
+                            CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                                operation_id: request.operation_id,
+                            }),
+                        );
+                        let failure = match status {
+                            Ok(CoordinatorStatusResponse::Operation(
+                                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+                            )) => status.pending_root_failure,
+                            _ => None,
+                        };
+                        if failure.is_none() {
+                            pic.advance_time(Duration::from_secs(1));
+                            pic.tick();
+                        }
+                        failure
+                    })
+                    .expect("typed pending Root retry failure while Store is stopped");
+                assert_eq!(
+                    failure.stage,
+                    canic_core::dto::component_provisioning::FleetComponentProvisioningRetryStage::RootAcceptance
+                );
+                pic.start_canister(wasm_store, Some(installation_controller))
+                    .expect("restart the same retained Store");
+                assert!(pic.cycle_balance(wasm_store) <= store_cycles_before_retry);
+                issue_current_protocol_step(&pic, step, installation_controller);
+                replayed_component_command = true;
+            } else {
+                issue_current_protocol_step(&pic, step, installation_controller);
             }
-            issue_current_protocol_step(
-                &pic,
-                step,
-                installed
-                    .init_args
-                    .authority
-                    .wasm_store_authority
-                    .installation_controller,
-            );
-            await_current_protocol_step(
-                &pic,
-                step,
-                installed
-                    .init_args
-                    .authority
-                    .wasm_store_authority
-                    .installation_controller,
-            );
+            await_current_protocol_step(&pic, step, installation_controller);
         }
+        assert!(replayed_component_command);
 
         let CoordinatorStatusResponse::Registry(terminal_registry) =
             coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
@@ -1813,6 +1879,14 @@ mod tests {
             terminal_sequence.current_stage,
             CurrentRegistryStage::Provisioned
         );
+        assert_eq!(
+            terminal_status.runtime_activated_root_count,
+            terminal_status.root_batch_count
+        );
+        assert!(terminal_status.runtimes_activated_at_ns.is_some());
+        let terminal_pool = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(terminal_pool.workload, 5);
+        assert!(!terminal_pool.entries.is_empty());
         let replay = compile_current_protocol_sequence(
             &desired,
             &state,
@@ -1825,17 +1899,7 @@ mod tests {
         .expect("compile immediate current replay");
         let nonterminal = replay
             .iter()
-            .filter(|step| {
-                !current_protocol_step_is_terminal(
-                    &pic,
-                    step,
-                    installed
-                        .init_args
-                        .authority
-                        .wasm_store_authority
-                        .installation_controller,
-                )
-            })
+            .filter(|step| !current_protocol_step_is_terminal(&pic, step, installation_controller))
             .map(|step| step.name.clone())
             .collect::<Vec<_>>();
         assert!(
@@ -6739,6 +6803,8 @@ mod tests {
                 .project_for_admissions(&init_args.authority.binding.component_admissions)
                 .and_then(|projection| projection.digest())
                 .expect("compile bounded multi-root topology digest");
+            init_args.wasm_store_activation.component_topology_digest =
+                init_args.authority.binding.component_topology_digest;
         }
         bind_init_args_to_pocket_ic_subnet(
             pic,
@@ -6749,7 +6815,7 @@ mod tests {
         init_args.canister_pool_imports = pool_setup(pic, root_id);
         let store_init_args = FleetSubnetWasmStoreInitArgs {
             authority: init_args.authority.wasm_store_authority.clone(),
-            install_id: init_args.install_id,
+            install_id: init_args.wasm_store_activation.operation_id,
         };
         prepare_sibling_wasm_store_controllers(pic, wasm_store, installation_controller, root_id);
         pic.install_canister(
@@ -6788,6 +6854,7 @@ mod tests {
             .fleet
             .fleet
             .fleet_id = fleet_id;
+        init_args.wasm_store_activation.fleet.fleet.fleet_id = fleet_id;
         init_args
             .authority
             .wasm_store_authority
