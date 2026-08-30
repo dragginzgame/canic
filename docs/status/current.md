@@ -324,4 +324,5 @@ simplification and its superseding audit.
 
 
 
-<!-- canic-release-validation: version=0.109.27 source=ef3acc17c865a939d52f3d8376e8725abe598ba6 date=2026-08-30 gate=complete -->
+
+<!-- canic-release-validation: version=0.109.28 source=9d4a6339cfd57c7c468462b031eae70d31992218 date=2026-08-30 gate=complete -->
