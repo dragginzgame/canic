@@ -125,8 +125,10 @@ Terminology:
   slices collected before they enter the current release batch or open patch
   draft.
 - Open patch draft: the newest versioned changelog entry with no matching
-  immutable `v<version>` tag. Compatible work for the complete release batch
-  is added to this entry until the batch is complete and the tag exists.
+  immutable `v<version>` tag. Its heading may say `Unreleased` or already carry
+  an ISO release date; the tag, not heading prose, closes the draft. Compatible
+  work for the complete release batch is added to this entry until the tag
+  exists.
 - Published patch release: a versioned release prepared by the human-owned
   release flow.
 
@@ -216,8 +218,9 @@ During ordinary development:
 3. When a meaningful code or behavior batch is complete, update its changelog
    by default without waiting for a separate maintainer request.
 4. Treat the newest versioned entry without a matching immutable `v<version>`
-   tag as the open patch draft. Update both its single root bullet and detailed
-   section when more compatible work is added.
+   tag as the open patch draft, whether its heading says `Unreleased` or carries
+   an ISO date. Update both its single root bullet and detailed section when
+   more compatible work is added.
 5. If no open draft exists, use the current workspace version when it is not
    tagged; otherwise open the next patch version in the active minor line.
    An explicitly requested minor, major, or exact target takes precedence.

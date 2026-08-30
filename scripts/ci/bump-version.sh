@@ -131,7 +131,13 @@ fi
 
 scripts/ci/sync-release-surface-version.sh "$NEW"
 
-RELEASE_DATE="${CANIC_RELEASE_DATE:-$(date -u +%F)}"
+release_header="$(rg -m1 "^## ${NEW//./\\.} - (Unreleased|[0-9]{4}-[0-9]{2}-[0-9]{2})$" "$DETAILED_CHANGELOG")"
+recorded_release_state="${release_header#"## $NEW - "}"
+if [[ "$recorded_release_state" == "Unreleased" ]]; then
+  RELEASE_DATE="${CANIC_RELEASE_DATE:-$(date -u +%F)}"
+else
+  RELEASE_DATE="$recorded_release_state"
+fi
 [[ "$RELEASE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || {
   echo "❌ Invalid release date: $RELEASE_DATE" >&2
   rollback_release_surfaces 1

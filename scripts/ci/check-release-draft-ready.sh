@@ -35,10 +35,10 @@ status_document="docs/status/current.md"
     exit 1
 }
 
-draft_count="$(rg -c -F "## $planned - Unreleased" "$detailed_changelog" || true)"
-[[ "$draft_count" -eq 1 ]] || {
-    echo "❌ $detailed_changelog must contain exactly one open $planned draft." >&2
+release_entry_count="$(rg -c "^## ${planned//./\\.} - (Unreleased|[0-9]{4}-[0-9]{2}-[0-9]{2})$" "$detailed_changelog" || true)"
+[[ "$release_entry_count" -eq 1 ]] || {
+    echo "❌ $detailed_changelog must contain one $planned release entry (Unreleased or YYYY-MM-DD)." >&2
     exit 1
 }
 
-echo "✅ Release draft preflight passed for $planned"
+echo "✅ Release-notes preflight passed for $planned"
