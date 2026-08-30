@@ -492,13 +492,24 @@ fn apply_dry_run_rejects_symlinked_backup_root() {
 #[cfg(unix)]
 #[test]
 fn apply_dry_run_rejects_special_artifact_files() {
-    use std::os::unix::net::UnixListener;
+    use std::{os::unix::fs::FileTypeExt, process::Command};
 
-    // Keep the fixture path short enough for Unix-domain socket path limits.
-    let root = temp_dir("cba-special");
+    let root = temp_dir("canic-restore-apply-special-artifact");
     fs::create_dir_all(root.join("artifacts")).expect("create artifact root");
-    let socket = root.join("artifacts/root");
-    let listener = UnixListener::bind(&socket).expect("create artifact socket");
+    let fifo = root.join("artifacts/root");
+    let status = Command::new("mkfifo")
+        .args(["-m", "600"])
+        .arg(&fifo)
+        .status()
+        .expect("run mkfifo");
+    assert!(status.success(), "mkfifo failed with {status}");
+    assert!(
+        fs::symlink_metadata(&fifo)
+            .expect("read FIFO metadata")
+            .file_type()
+            .is_fifo(),
+        "special artifact fixture must be a FIFO"
+    );
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
     set_member_artifact(
         &mut manifest,
@@ -520,7 +531,6 @@ fn apply_dry_run_rejects_special_artifact_files() {
         .expect_err("special artifact must reject");
 
     std::assert_matches!(error, RestoreApplyDryRunError::ArtifactUnsafeType { .. });
-    drop(listener);
-    fs::remove_file(socket).expect("remove artifact socket");
+    fs::remove_file(fifo).expect("remove artifact FIFO");
     fs::remove_dir_all(root).expect("remove fixture");
 }

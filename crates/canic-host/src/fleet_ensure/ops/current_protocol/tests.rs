@@ -765,6 +765,8 @@ fn placement(deployment: &str, ordinal: u32, root: &str) -> DesiredComponentGrou
 fn state() -> FleetEnsureStateRecord {
     FleetEnsureStateRecord {
         active_registry: None,
+        completed_reinstall_action_sha256: BTreeMap::new(),
+        completed_reinstall_operation_id: None,
         completed_reinstalls: BTreeMap::new(),
         fleet: "protocol-test".to_string(),
         pending_principals: BTreeMap::new(),

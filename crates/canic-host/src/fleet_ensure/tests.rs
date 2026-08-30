@@ -1569,6 +1569,8 @@ fn managed_topology_without_typed_protocol_intent_rejects_before_effects() {
 fn terminal_inventory_rejects_missing_and_duplicate_principals() {
     let mut state = FleetEnsureStateRecord {
         active_registry: None,
+        completed_reinstall_action_sha256: BTreeMap::new(),
+        completed_reinstall_operation_id: None,
         completed_reinstalls: BTreeMap::new(),
         fleet: "inventory-test".to_string(),
         pending_principals: BTreeMap::new(),
@@ -1773,16 +1775,42 @@ fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
         Err(crate::fleet_ensure::CurrentFleetInventoryError::NotConverged { .. })
     ));
     let state = crate::fleet_ensure::ops::read_state(&paths, "test-fleet").expect("read state");
-    assert!(!state.principals.contains_key("created"));
-    assert!(state.topology.is_empty());
+    assert_eq!(
+        state.principals.get("created").map(String::as_str),
+        Some("created-created")
+    );
+    let retained_topology = state
+        .topology
+        .get("created")
+        .expect("created topology retained before replan");
+    let reviewed_created = fixture
+        .desired
+        .canisters
+        .iter()
+        .find(|canister| canister.name == "created")
+        .expect("reviewed created canister");
+    assert_eq!(retained_topology.kind, reviewed_created.kind);
+    assert_eq!(retained_topology.parent, reviewed_created.parent);
+    assert_eq!(
+        retained_topology.protocol_binding,
+        reviewed_created.protocol_binding
+    );
+    assert_eq!(
+        state.retained_cycles_by_principal.get("created-created"),
+        Some(&19)
+    );
 
+    let mut successor_platform =
+        MockPlatform::new(fixture.desired.clone(), platform.live.values().cloned());
+    successor_platform.operator_cycles = platform.operator_cycles;
+    successor_platform.terminal_inventory = platform.terminal_inventory.clone();
     let successor = workflow::plan(
         &fixture.root,
         &fixture.desired,
         &source,
         "test-fleet",
         1_800_000_000_000_000_100,
-        &mut platform,
+        &mut successor_platform,
     )
     .expect("a closed nonconverged operation permits a freshly reviewed plan");
     assert!(successor.plan.canisters.iter().all(|canister| {
@@ -1805,10 +1833,14 @@ fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
         &source,
         "test-fleet",
         &successor.plan.plan_sha256,
-        &mut platform,
+        &mut successor_platform,
     )
     .expect("successor plan converges the retained created canister");
     assert!(terminal.terminal);
+    assert!(
+        !successor_platform.mutations.contains_key(&creation_hash),
+        "a fresh host process must not repeat the retained creation"
+    );
     let state = crate::fleet_ensure::ops::read_state(&paths, "test-fleet").expect("read state");
     assert!(state.pending_principals.is_empty());
     assert_eq!(

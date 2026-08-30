@@ -956,7 +956,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let artifacts = crate::fleet_ensure::ops::resolve_desired_artifacts(&root, &recovery_desired)
         .expect("resolve current infrastructure artifacts");
     let mut recovery_platform =
-        RetainedEnsurePlatform::new(&recovery_desired, &observed, &pool_one);
+        RetainedEnsurePlatform::new(&recovery_desired, &observed, &pool_one)
+            .with_post_effect_root_owned_protocol();
     for configured in &recovery_desired.canisters {
         let live = recovery_platform
             .live
@@ -973,8 +974,12 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                 .get(&configured.name)
                 .cloned();
             live.reinstall_required = true;
-        } else if configured.kind == DesiredCanisterKind::Pool {
-            live.root_owned_lifecycle = Some(RootOwnedCanisterLifecycle::Retained);
+            if matches!(
+                configured.kind,
+                DesiredCanisterKind::Coordinator | DesiredCanisterKind::Store
+            ) {
+                live.status = CanisterRuntimeStatus::Stopped;
+            }
         }
     }
     let recovery = workflow::plan(
@@ -996,16 +1001,272 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .position(|action| action.name() == "root-0")
         .expect("Root reinstall");
     assert!(store_index < root_index);
-    assert_eq!(ordered.len(), 3);
-    assert!(ordered.iter().all(|action| matches!(
-        action,
-        EnsureAction::Install {
-            mode: crate::fleet_ensure::model::InstallMode::Reinstall,
-            ..
-        }
-    )));
+    assert_eq!(ordered.len(), 5);
+    assert_eq!(
+        ordered
+            .iter()
+            .filter(|action| matches!(
+                action,
+                EnsureAction::Install {
+                    mode: crate::fleet_ensure::model::InstallMode::Reinstall,
+                    ..
+                }
+            ))
+            .count(),
+        3
+    );
+    assert_eq!(
+        ordered
+            .iter()
+            .filter(|action| matches!(action, EnsureAction::Start { .. }))
+            .count(),
+        2
+    );
     assert_eq!(recovery.plan.conservation.maximum_new_funding_cycles, 0);
     assert_eq!(recovery.plan.conservation.maximum_operator_debit_cycles, 0);
+    let recovery_error = workflow::apply(
+        &root,
+        &recovery_desired,
+        &source_digest,
+        &recovery_desired.fleet,
+        &recovery.plan.plan_sha256,
+        &mut recovery_platform,
+    )
+    .expect_err("post-effect protocol work requires a successor review");
+    assert!(matches!(
+        recovery_error,
+        workflow::EnsureWorkflowError::ConvergenceDrift
+    ));
+    assert_eq!(recovery_platform.mutations, 5);
+    let recovery_paths = EnsurePaths::under(
+        &root,
+        &recovery_desired.environment,
+        &recovery_desired.fleet,
+    );
+    let recovery_journal = crate::fleet_ensure::ops::read_journal(&recovery_paths)
+        .expect("read recovery journal")
+        .expect("retained recovery journal");
+    assert_eq!(
+        recovery_journal.completion,
+        crate::fleet_ensure::model::FleetEnsureCompletion::ReplanRequired
+    );
+    let retained_recovery_files = [
+        fs::read(&recovery_paths.state).expect("retain post-effect state bytes"),
+        fs::read(&recovery_paths.plan).expect("retain reviewed plan bytes"),
+        fs::read(&recovery_paths.journal).expect("retain applied journal bytes"),
+    ];
+    assert!(matches!(
+        crate::fleet_ensure::read_current_fleet_inventory(
+            &root,
+            &recovery_desired.environment,
+            &recovery_desired.fleet,
+        ),
+        Err(crate::fleet_ensure::CurrentFleetInventoryError::NotConverged { .. })
+    ));
+    let retained_recovery_state = read_state(&recovery_paths, &recovery_desired.fleet)
+        .expect("read retained post-effect recovery state");
+    for configured in recovery_desired.canisters.iter().filter(|configured| {
+        matches!(
+            configured.kind,
+            DesiredCanisterKind::Root | DesiredCanisterKind::Store | DesiredCanisterKind::Pool
+        )
+    }) {
+        assert_eq!(
+            retained_recovery_state
+                .principals
+                .get(&configured.name)
+                .map(String::as_str),
+            configured.principal.as_deref()
+        );
+        let retained = retained_recovery_state
+            .topology
+            .get(&configured.name)
+            .expect("retained Root-owned topology");
+        assert_eq!(retained.kind, configured.kind);
+        assert_eq!(retained.parent, configured.parent);
+    }
+    let mut resumed_recovery_platform = recovery_platform.fresh_process();
+    let successor_recovery = workflow::plan(
+        &root,
+        &recovery_desired,
+        &source_digest,
+        &recovery_desired.fleet,
+        1_800_000_000_000_000_075,
+        &mut resumed_recovery_platform,
+    )
+    .expect("fresh host process replans from retained exact topology");
+    assert!(
+        successor_recovery
+            .plan
+            .canisters
+            .iter()
+            .all(|canister| canister.actions.is_empty()),
+        "the successor must not repeat reinstall or Start effects"
+    );
+    assert!(matches!(
+        successor_recovery.plan.protocol_actions.as_slice(),
+        [EnsureAction::FleetProtocol { .. }]
+    ));
+    let resumed = workflow::apply(
+        &root,
+        &recovery_desired,
+        &source_digest,
+        &recovery_desired.fleet,
+        &successor_recovery.plan.plan_sha256,
+        &mut resumed_recovery_platform,
+    )
+    .expect("successor recovery converges through the remaining typed action");
+    assert!(resumed.terminal);
+    assert_eq!(resumed_recovery_platform.mutations, 1);
+    let replay_plan = workflow::plan(
+        &root,
+        &recovery_desired,
+        &source_digest,
+        &recovery_desired.fleet,
+        1_800_000_000_000_000_076,
+        &mut resumed_recovery_platform,
+    )
+    .expect("plan terminal recovery replay");
+    assert!(workflow::ordered_actions(&replay_plan.plan).is_empty());
+    let replay = workflow::apply(
+        &root,
+        &recovery_desired,
+        &source_digest,
+        &recovery_desired.fleet,
+        &replay_plan.plan.plan_sha256,
+        &mut resumed_recovery_platform,
+    )
+    .expect("terminal recovery replay is effect-free");
+    assert!(replay.terminal);
+    assert_eq!(replay.effects_applied, 0);
+    assert_eq!(resumed_recovery_platform.mutations, 1);
+
+    fs::write(&recovery_paths.state, &retained_recovery_files[0])
+        .expect("restore untouched post-effect state");
+    fs::write(&recovery_paths.plan, &retained_recovery_files[1])
+        .expect("restore untouched reviewed plan");
+    fs::write(&recovery_paths.journal, &retained_recovery_files[2])
+        .expect("restore untouched applied journal");
+    let mut overwritten_successor = crate::fleet_ensure::ops::read_plan(&recovery_paths)
+        .expect("read retained reviewed plan")
+        .expect("retained reviewed plan");
+    for canister in &mut overwritten_successor.canisters {
+        canister
+            .actions
+            .retain(|action| matches!(action, EnsureAction::Install { .. }));
+    }
+    overwritten_successor.protocol_actions = terminal_observation_protocol_actions(
+        &recovery_desired,
+        &overwritten_successor.operation_id,
+    )
+    .into_iter()
+    .take(1)
+    .collect();
+    overwritten_successor.planned_at_time += 1;
+    overwritten_successor.plan_sha256 =
+        crate::fleet_ensure::policy::expected_plan_sha256(&overwritten_successor);
+    assert_ne!(
+        overwritten_successor.plan_sha256, recovery_journal.plan_sha256,
+        "the rejected successor may already have replaced plan.json"
+    );
+    crate::fleet_ensure::ops::write_plan(&recovery_paths, &overwritten_successor)
+        .expect("retain rejected successor plan without changing the applied journal");
+    let mut pending_reset_pool = retained_pool.clone();
+    for asset in pending_reset_pool
+        .entries
+        .iter_mut()
+        .filter(|asset| asset.origin == CanisterPoolAssetOrigin::Imported)
+    {
+        asset.cycles = Cycles::new(0);
+        asset.status = CanisterPoolAssetStatus::PendingReset;
+    }
+    pending_reset_pool.workload = 0;
+    pending_reset_pool.ready = 0;
+    pending_reset_pool.pending_reset = 2;
+    let versionless_icp = write_versionless_root_owned_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: artifacts
+                .wasm_sha256_by_canister
+                .get("coordinator")
+                .expect("Coordinator artifact"),
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &pending_reset_pool,
+            public_cycle_balance: None,
+            root_module_hash: artifacts
+                .wasm_sha256_by_canister
+                .get("root-0")
+                .expect("Root artifact"),
+            root_runtime_status: "running",
+            root_status_error: None,
+            store: &store,
+            store_has_root_controller: true,
+            store_module_hash: artifacts
+                .wasm_sha256_by_canister
+                .get("store-0")
+                .expect("Store artifact"),
+        },
+    );
+    fs::write(root.join("root-status-count"), b"1\n")
+        .expect("select Root pool status after retained authority");
+    let mut versionless_platform = VersionlessPlanningPlatform::new(
+        IcpEnsurePlatform::new(
+            recovery_desired.clone(),
+            versionless_icp
+                .to_str()
+                .expect("version-less fake ICP path"),
+            &root,
+        ),
+        recovery_desired.clone(),
+    );
+    let versionless_replan = workflow::plan(
+        &root,
+        &recovery_desired,
+        &source_digest,
+        &recovery_desired.fleet,
+        1_800_000_000_000_000_077,
+        &mut versionless_platform,
+    )
+    .expect("version-less fresh process retains journal-proved reinstalls");
+    let repeated_installs = workflow::ordered_actions(&versionless_replan.plan)
+        .into_iter()
+        .filter_map(|action| match action {
+            EnsureAction::Install { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    assert!(
+        repeated_installs.is_disjoint(&BTreeSet::from(["coordinator", "root-0", "store-0"])),
+        "version-less replan repeated proved infrastructure installs: {repeated_installs:?}"
+    );
+    assert_eq!(
+        versionless_replan
+            .plan
+            .conservation
+            .maximum_new_funding_cycles,
+        0
+    );
+    assert_eq!(
+        versionless_replan
+            .plan
+            .conservation
+            .maximum_operator_debit_cycles,
+        0
+    );
+    assert_eq!(
+        crate::fleet_ensure::ops::read_journal(&recovery_paths)
+            .expect("read version-less replan journal")
+            .expect("retained version-less replan journal")
+            .completion,
+        crate::fleet_ensure::model::FleetEnsureCompletion::ReplanRequired
+    );
+    assert!(matches!(
+        versionless_replan.plan.protocol_actions.as_slice(),
+        [EnsureAction::FleetProtocol { .. }]
+    ));
 
     let mut production_recovery_desired = recovery_desired.clone();
     production_recovery_desired.fleet = "retained-multi-component-live-recovery".to_string();
@@ -1516,6 +1777,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &stopped_paths,
         &FleetEnsureStateRecord {
             active_registry: None,
+            completed_reinstall_action_sha256: BTreeMap::new(),
+            completed_reinstall_operation_id: None,
             completed_reinstalls: BTreeMap::new(),
             fleet: stopped_desired.fleet.clone(),
             pending_principals: BTreeMap::new(),
@@ -2025,7 +2288,100 @@ struct RetainedEnsurePlatform {
     ledger_fee_cycles: u128,
     live: BTreeMap<String, LiveCanister>,
     mutations: u32,
+    post_effect_protocol: bool,
+    post_effect_protocol_applied: bool,
     terminal_observation_protocol: bool,
+}
+
+struct VersionlessPlanningPlatform {
+    desired: DesiredFleet,
+    inner: IcpEnsurePlatform,
+}
+
+impl VersionlessPlanningPlatform {
+    fn new(inner: IcpEnsurePlatform, desired: DesiredFleet) -> Self {
+        Self { desired, inner }
+    }
+}
+
+impl EnsurePlatform for VersionlessPlanningPlatform {
+    type Error = io::Error;
+
+    fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
+        self.desired = desired.clone();
+        self.inner
+            .bind_reviewed_desired(desired)
+            .map_err(io::Error::other)
+    }
+
+    fn observe_root_management(
+        &mut self,
+        state: &FleetEnsureStateRecord,
+        reviewed_targets: &BTreeSet<String>,
+    ) -> Result<Option<RootManagementObservation>, Self::Error> {
+        self.inner
+            .observe_root_management(state, reviewed_targets)
+            .map_err(io::Error::other)
+    }
+
+    fn observe(
+        &mut self,
+        operation_id: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<FleetObservation, Self::Error> {
+        self.inner
+            .observe(operation_id, state)
+            .map_err(io::Error::other)
+    }
+
+    fn protocol_actions(
+        &mut self,
+        operation_id: &str,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Vec<EnsureAction>, Self::Error> {
+        Ok(
+            terminal_observation_protocol_actions(&self.desired, operation_id)
+                .into_iter()
+                .take(1)
+                .collect(),
+        )
+    }
+
+    fn observe_effect(
+        &mut self,
+        _operation_id: &str,
+        _action: &EnsureAction,
+        _record: &EffectRecord,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<EffectObservation, Self::Error> {
+        Err(io::Error::other("planning adapter cannot observe effects"))
+    }
+
+    fn action_cycles(
+        &mut self,
+        _action: &EnsureAction,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Option<u128>, Self::Error> {
+        Err(io::Error::other("planning adapter cannot observe effects"))
+    }
+
+    fn action_destination_cycles(
+        &mut self,
+        _action: &EnsureAction,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Option<u128>, Self::Error> {
+        Err(io::Error::other("planning adapter cannot observe effects"))
+    }
+
+    fn apply(
+        &mut self,
+        _operation_id: &str,
+        _action: &EnsureAction,
+        _record: &EffectRecord,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<EffectOutcome, Self::Error> {
+        Err(io::Error::other("planning adapter cannot apply effects"))
+    }
 }
 
 impl RetainedEnsurePlatform {
@@ -2080,8 +2436,27 @@ impl RetainedEnsurePlatform {
                 .expect("ledger fee"),
             live,
             mutations: 0,
+            post_effect_protocol: false,
+            post_effect_protocol_applied: false,
             terminal_observation_protocol: false,
         }
+    }
+
+    fn fresh_process(&self) -> Self {
+        Self {
+            desired: self.desired.clone(),
+            ledger_fee_cycles: self.ledger_fee_cycles,
+            live: self.live.clone(),
+            mutations: 0,
+            post_effect_protocol: self.post_effect_protocol,
+            post_effect_protocol_applied: self.post_effect_protocol_applied,
+            terminal_observation_protocol: self.terminal_observation_protocol,
+        }
+    }
+
+    fn with_post_effect_root_owned_protocol(mut self) -> Self {
+        self.post_effect_protocol = true;
+        self
     }
 
     fn with_terminal_observation_protocol(mut self) -> Self {
@@ -2091,6 +2466,72 @@ impl RetainedEnsurePlatform {
 
     fn total_cycles(&self) -> u128 {
         self.live.values().map(|canister| canister.cycles).sum()
+    }
+
+    fn infrastructure_ready(&self) -> bool {
+        self.desired
+            .canisters
+            .iter()
+            .filter(|configured| {
+                matches!(
+                    configured.kind,
+                    DesiredCanisterKind::Coordinator
+                        | DesiredCanisterKind::Root
+                        | DesiredCanisterKind::Store
+                )
+            })
+            .all(|configured| {
+                configured
+                    .principal
+                    .as_ref()
+                    .and_then(|principal| self.live.get(principal))
+                    .is_some_and(|live| {
+                        !live.reinstall_required && live.status == CanisterRuntimeStatus::Running
+                    })
+            })
+    }
+
+    fn require_exact_root_owned_topology(
+        &self,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<(), io::Error> {
+        for configured in self.desired.canisters.iter().filter(|configured| {
+            matches!(
+                configured.kind,
+                DesiredCanisterKind::Store | DesiredCanisterKind::Pool
+            )
+        }) {
+            let principal = configured
+                .principal
+                .as_ref()
+                .expect("retained Root-owned Principal");
+            let parent = configured
+                .parent
+                .as_ref()
+                .expect("retained Root-owned parent");
+            let parent_principal = self
+                .desired
+                .canisters
+                .iter()
+                .find(|candidate| candidate.name == *parent)
+                .and_then(|candidate| candidate.principal.as_ref())
+                .expect("retained Root Principal");
+            let exact = state.principals.get(&configured.name) == Some(principal)
+                && state.principals.get(parent) == Some(parent_principal)
+                && state
+                    .topology
+                    .get(&configured.name)
+                    .is_some_and(|topology| {
+                        topology.kind == configured.kind && topology.parent.as_ref() == Some(parent)
+                    });
+            if !exact {
+                return Err(io::Error::other(format!(
+                    "{} has no exact retained topology authority",
+                    configured.name
+                )));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -2105,8 +2546,14 @@ impl EnsurePlatform for RetainedEnsurePlatform {
     fn observe(
         &mut self,
         _operation_id: &str,
-        _state: &FleetEnsureStateRecord,
+        state: &FleetEnsureStateRecord,
     ) -> Result<FleetObservation, Self::Error> {
+        if self.post_effect_protocol
+            && !self.post_effect_protocol_applied
+            && self.infrastructure_ready()
+        {
+            self.require_exact_root_owned_topology(state)?;
+        }
         Ok(FleetObservation {
             additional_controlled_cycles: BTreeMap::new(),
             canisters: self
@@ -2134,13 +2581,24 @@ impl EnsurePlatform for RetainedEnsurePlatform {
         operation_id: &str,
         _state: &FleetEnsureStateRecord,
     ) -> Result<Vec<EnsureAction>, Self::Error> {
-        if !self.terminal_observation_protocol {
-            return Ok(Vec::new());
+        if self.terminal_observation_protocol {
+            return Ok(terminal_observation_protocol_actions(
+                &self.desired,
+                operation_id,
+            ));
         }
-        Ok(terminal_observation_protocol_actions(
-            &self.desired,
-            operation_id,
-        ))
+        if self.post_effect_protocol
+            && self.infrastructure_ready()
+            && !self.post_effect_protocol_applied
+        {
+            return Ok(
+                terminal_observation_protocol_actions(&self.desired, operation_id)
+                    .into_iter()
+                    .take(1)
+                    .collect(),
+            );
+        }
+        Ok(Vec::new())
     }
 
     fn observe_effect(
@@ -2150,22 +2608,25 @@ impl EnsurePlatform for RetainedEnsurePlatform {
         _record: &EffectRecord,
         _state: &FleetEnsureStateRecord,
     ) -> Result<EffectObservation, Self::Error> {
-        let EnsureAction::Install {
-            principal,
-            wasm_sha256,
-            ..
-        } = action
-        else {
-            return Err(io::Error::other("retained journey permits only reinstall"));
+        let applied = match action {
+            EnsureAction::Install {
+                principal,
+                wasm_sha256,
+                ..
+            } => self.live.get(principal).is_some_and(|canister| {
+                !canister.reinstall_required
+                    && canister.module_sha256.as_deref() == Some(wasm_sha256)
+            }),
+            EnsureAction::Start { principal, .. } => self
+                .live
+                .get(principal)
+                .is_some_and(|canister| canister.status == CanisterRuntimeStatus::Running),
+            EnsureAction::FleetProtocol { .. } => self.post_effect_protocol_applied,
+            _ => return Err(io::Error::other("unexpected retained journey effect")),
         };
-        let applied = self
-            .live
-            .get(principal)
-            .and_then(|canister| canister.module_sha256.as_deref())
-            == Some(wasm_sha256);
         Ok(EffectObservation {
             applied,
-            progress_identity: format!("install:{principal}:{applied}"),
+            progress_identity: format!("retained:{}:{applied}", action.name()),
             retry: EffectRetry::None,
         })
     }
@@ -2226,10 +2687,26 @@ impl EnsurePlatform for RetainedEnsurePlatform {
         action: &EnsureAction,
         _state: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error> {
-        let EnsureAction::Install { principal, .. } = action else {
+        let (EnsureAction::Install { principal, .. } | EnsureAction::Start { principal, .. }) =
+            action
+        else {
             return Ok(None);
         };
         Ok(self.live.get(principal).map(|canister| canister.cycles))
+    }
+
+    fn action_canister_version(
+        &mut self,
+        action: &EnsureAction,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Option<u64>, Self::Error> {
+        let EnsureAction::Install { principal, .. } = action else {
+            return Ok(None);
+        };
+        Ok(self
+            .live
+            .get(principal)
+            .and_then(|canister| canister.canister_version))
     }
 
     fn action_destination_cycles(
@@ -2247,24 +2724,40 @@ impl EnsurePlatform for RetainedEnsurePlatform {
         _record: &EffectRecord,
         _state: &FleetEnsureStateRecord,
     ) -> Result<EffectOutcome, Self::Error> {
-        let EnsureAction::Install {
-            principal,
-            wasm_sha256,
-            ..
-        } = action
-        else {
-            return Err(io::Error::other("retained journey permits only reinstall"));
+        let (post_cycles, receipt) = match action {
+            EnsureAction::Install {
+                principal,
+                wasm_sha256,
+                ..
+            } => {
+                let canister = self
+                    .live
+                    .get_mut(principal)
+                    .ok_or_else(|| io::Error::other("missing retained canister"))?;
+                canister.module_sha256 = Some(wasm_sha256.clone());
+                canister.reinstall_required = false;
+                canister.canister_version = canister.canister_version.map(|version| version + 1);
+                (Some(canister.cycles), format!("installed:{principal}"))
+            }
+            EnsureAction::Start { principal, .. } => {
+                let canister = self
+                    .live
+                    .get_mut(principal)
+                    .ok_or_else(|| io::Error::other("missing retained canister"))?;
+                canister.status = CanisterRuntimeStatus::Running;
+                (Some(canister.cycles), format!("started:{principal}"))
+            }
+            EnsureAction::FleetProtocol { name, .. } => {
+                self.post_effect_protocol_applied = true;
+                (None, format!("protocol:{name}"))
+            }
+            _ => return Err(io::Error::other("unexpected retained journey effect")),
         };
-        let canister = self
-            .live
-            .get_mut(principal)
-            .ok_or_else(|| io::Error::other("missing retained canister"))?;
-        canister.module_sha256 = Some(wasm_sha256.clone());
         self.mutations += 1;
         Ok(EffectOutcome {
             created_principal: None,
-            post_cycles: Some(canister.cycles),
-            receipt: Some(format!("installed:{principal}")),
+            post_cycles,
+            receipt: Some(receipt),
         })
     }
 }
@@ -2360,6 +2853,8 @@ fn retained_ensure_state(
 ) -> FleetEnsureStateRecord {
     FleetEnsureStateRecord {
         active_registry: None,
+        completed_reinstall_action_sha256: BTreeMap::new(),
+        completed_reinstall_operation_id: None,
         completed_reinstalls: BTreeMap::new(),
         fleet: desired.fleet.clone(),
         pending_principals: BTreeMap::new(),
@@ -2854,11 +3349,26 @@ struct FakeIcpFixture<'a> {
 }
 
 #[cfg(unix)]
+fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
+    write_fake_icp_with_status_projection(root, fixture, Some(1), false)
+}
+
+#[cfg(unix)]
+fn write_versionless_root_owned_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
+    write_fake_icp_with_status_projection(root, fixture, None, true)
+}
+
+#[cfg(unix)]
 #[expect(
     clippy::too_many_lines,
     reason = "one process-backed fixture keeps every accepted fake ICP command visible"
 )]
-fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
+fn write_fake_icp_with_status_projection(
+    root: &Path,
+    fixture: FakeIcpFixture<'_>,
+    status_canister_version: Option<u64>,
+    store_status_unavailable: bool,
+) -> PathBuf {
     let FakeIcpFixture {
         authority,
         coordinator,
@@ -2879,6 +3389,7 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
     let predecessor_pool_status = root.join("predecessor-pool-status");
     let root_started = root.join("root-started");
     let root_start_count = root.join("root-start-count");
+    let store_status_count = root.join("store-status-count");
     if root_started.exists() {
         fs::remove_file(&root_started).expect("reset fake Root runtime state");
     }
@@ -2888,6 +3399,9 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
     if predecessor_pool_status.exists() {
         fs::remove_file(&predecessor_pool_status).expect("reset predecessor pool response");
     }
+    if store_status_count.exists() {
+        fs::remove_file(&store_status_count).expect("reset Store status counter");
+    }
     let coordinator_status = canister_status_json(
         coordinator,
         operator,
@@ -2895,6 +3409,7 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
         270_000_000_000_000,
         "running",
         None,
+        status_canister_version,
     );
     let root_status = canister_status_json(
         fleet_root,
@@ -2903,6 +3418,7 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
         30_000_000_000_000,
         root_runtime_status,
         None,
+        status_canister_version,
     );
     let running_root_status = canister_status_json(
         fleet_root,
@@ -2911,6 +3427,7 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
         29_999_950_000_000,
         "running",
         None,
+        status_canister_version,
     );
     let store_status = canister_status_json(
         store,
@@ -2919,7 +3436,23 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
         10_000_000_000_000,
         "running",
         store_has_root_controller.then_some(fleet_root),
+        status_canister_version,
     );
+    let store_status_command = if store_status_unavailable {
+        format!(
+            r#"if [ ! -f "{}" ]; then
+      printf '%s\n' '1' > "{}"
+      printf '%s\n' 'Store status unavailable' >&2
+      exit 1
+    fi
+    printf '%s\n' '{store_status}'
+    exit 0"#,
+            store_status_count.display(),
+            store_status_count.display(),
+        )
+    } else {
+        format!("printf '%s\\n' '{store_status}'\n    exit 0")
+    };
     let authority_response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
         RootEstateStatusResponse::FleetAuthority(Box::new(authority.clone())),
     ));
@@ -2959,7 +3492,7 @@ fi
     let script = format!(
         r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
-  printf '%s\n' 'icp 1.2.0'
+  printf '%s\n' 'icp 1.3.0'
   exit 0
 fi
 while [ "$1" = "--project-root-override" ] || [ "$1" = "--identity-password-file" ]; do
@@ -2987,8 +3520,7 @@ if [ "$1" = "canister" ] && [ "$2" = "status" ]; then
     exit 0
   fi
   if [ "$3" = "{store}" ]; then
-    printf '%s\n' '{store_status}'
-    exit 0
+    {store_status_command}
   fi
 fi
 if [ "$1" = "canister" ] && [ "$2" = "start" ] && [ "$3" = "{fleet_root}" ]; then
@@ -3047,6 +3579,11 @@ fn write_fake_icp(_root: &Path, _fixture: FakeIcpFixture<'_>) -> PathBuf {
     panic!("public generator fixture requires a Unix fake ICP executable")
 }
 
+#[cfg(not(unix))]
+fn write_versionless_root_owned_fake_icp(_root: &Path, _fixture: FakeIcpFixture<'_>) -> PathBuf {
+    panic!("public generator fixture requires a Unix fake ICP executable")
+}
+
 fn canister_status_json(
     canister: &str,
     controller: &str,
@@ -3054,22 +3591,25 @@ fn canister_status_json(
     cycles: u128,
     status: &str,
     second_controller: Option<&str>,
+    canister_version: Option<u64>,
 ) -> String {
     let mut controllers = vec![controller];
     controllers.extend(second_controller);
-    serde_json::json!({
+    let mut status = serde_json::json!({
         "id": canister,
         "name": null,
         "status": status,
         "settings": { "controllers": controllers },
-        "version": 1,
         "module_hash": module_hash,
         "memory_size": null,
         "cycles": cycles.to_string(),
         "reserved_cycles": null,
         "idle_cycles_burned_per_day": null
-    })
-    .to_string()
+    });
+    if let Some(canister_version) = canister_version {
+        status["version"] = serde_json::json!(canister_version);
+    }
+    status.to_string()
 }
 
 fn candid_response_json<T: candid::CandidType>(value: &T) -> String {

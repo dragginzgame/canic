@@ -838,6 +838,14 @@ pub fn reconcile_retirement_transfer(
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetEnsureStateRecord {
     pub active_registry: Option<canic_core::dto::fleet_registry::FleetRegistry>,
+    /// Exact applied action identities for the adjacent completed reinstalls.
+    #[serde(default)]
+    pub completed_reinstall_action_sha256: BTreeMap<String, String>,
+    /// Exact operation owning the adjacent completed-reinstall thresholds.
+    #[serde(default)]
+    pub completed_reinstall_operation_id: Option<String>,
+    /// Pre-effect version thresholds for exact journal-proved reinstalls in the
+    /// immediately preceding nonterminal operation.
     #[serde(default)]
     pub completed_reinstalls: BTreeMap<String, u64>,
     pub fleet: String,

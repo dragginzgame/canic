@@ -2,7 +2,7 @@
 
 use std::{
     io,
-    process::{Command, Output},
+    process::{Child, Command, Output},
     thread,
     time::Duration,
 };
@@ -66,9 +66,9 @@ pub(crate) fn cargo_command() -> Command {
     command
 }
 
-pub(crate) fn output_with_executable_busy_retry(command: &mut Command) -> io::Result<Output> {
+fn with_executable_busy_retry<T>(mut launch: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     for attempt in 0..EXECUTABLE_BUSY_RETRY_ATTEMPTS {
-        match command.output() {
+        match launch() {
             Err(error)
                 if error.kind() == io::ErrorKind::ExecutableFileBusy
                     && attempt + 1 < EXECUTABLE_BUSY_RETRY_ATTEMPTS =>
@@ -79,6 +79,14 @@ pub(crate) fn output_with_executable_busy_retry(command: &mut Command) -> io::Re
         }
     }
     unreachable!("bounded executable-busy retry always returns on its final attempt")
+}
+
+pub(crate) fn output_with_executable_busy_retry(command: &mut Command) -> io::Result<Output> {
+    with_executable_busy_retry(|| command.output())
+}
+
+pub(crate) fn spawn_with_executable_busy_retry(command: &mut Command) -> io::Result<Child> {
+    with_executable_busy_retry(|| command.spawn())
 }
 
 pub(crate) fn should_embed_candid_metadata(build_network: canic_core::ids::BuildNetwork) -> bool {
