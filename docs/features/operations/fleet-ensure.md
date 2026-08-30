@@ -99,6 +99,19 @@ closed. Once the exact Root is running, generation performs the complete
 protected Fleet-authority and pool-inventory verification; management evidence
 never substitutes for those proofs.
 
+The predecessor seal also fixes the successor order. If live predecessor A is
+sealed to successor C, a later build D cannot retarget that authority while A
+is still live. Generation returns a typed
+`SealedSuccessorConvergenceRequired` diagnostic containing the sealed C and
+requested D release-build IDs and Root artifact hashes. First plan and apply
+the unchanged retained desired C with `canic fleet ensure <fleet>` until its
+terminal re-observation succeeds. Then reuse the finalized D build, rerun
+`canic fleet generate <fleet>` with D's release-build ID, explicitly replace
+the converged C desired document by its reviewed SHA-256, and review a fresh D
+plan. C apply, C terminal proof, D generation and D planning are four distinct
+review boundaries. Neither the diagnostic nor either planning pass changes the
+sealed authority or grants D an effect through C's predecessor bridge.
+
 Retained-estate treasury policy is explicit adoption, not discovery: it must
 name an already-present, non-replaceable controlled canister. Omitting
 `treasury` selects the exact seeded Coordinator. Canic does not silently invent
@@ -377,6 +390,17 @@ canister version before the effect; terminal observation requires the requested
 module at a strictly newer version. A same-module predecessor therefore cannot
 be mistaken for an applied reinstall, including after process restart or a
 lost response.
+
+The normal ICP CLI status projection supplies module, controller, runtime and
+cycle evidence. If that projection omits `canister_version`, Canic obtains the
+exact install-only pre/post version from the typed management-canister
+`canister_status` response for the same Principal and controller identity. The
+fallback takes module hash and version from that one response so terminal proof
+cannot combine different observations. It never defaults or infers the value.
+If both boundaries cannot supply the proof,
+apply stops before install and directs the operator to restore management
+status access and resume the same reviewed plan; an already-retained
+empty-effect journal remains the replay authority.
 
 The Store authority retained by a Root describes the only Store that may be
 adopted; it is not proof that adoption occurred. Store bootstrap remains

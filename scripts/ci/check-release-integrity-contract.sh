@@ -43,6 +43,8 @@ POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
 WORKSPACE_TEST_INVENTORY_GATE="$ROOT/scripts/ci/check-workspace-test-inventory.sh"
 WORKSPACE_TEST_RUNNER="$ROOT/scripts/ci/run-workspace-tests.sh"
+POOL_LEDGER_RECOVERY_TESTS="$ROOT/crates/canic-host/src/bootstrap_pool_ledger_recovery/tests.rs"
+FLEET_ENSURE_TESTS="$ROOT/crates/canic-host/src/fleet_ensure/tests.rs"
 VALIDATION_RUNNER="$ROOT/scripts/ci/run-validation-targets.sh"
 VALIDATION_RUNNER_TEST="$ROOT/scripts/ci/test-validation-target-runner.sh"
 TAG_DELETE_TEST="$ROOT/scripts/ci/test-delete-github-tags-up-to.sh"
@@ -61,7 +63,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$BINARYEN_UPDATE_CHECK" "$BINARYEN_UPDATE_CHECK_TEST" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$RELEASE_VALIDATION_LANE" "$RELEASE_VALIDATION_LANE_TEST" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$BINARYEN_UPDATE_CHECK" "$BINARYEN_UPDATE_CHECK_TEST" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$RELEASE_VALIDATION_LANE" "$RELEASE_VALIDATION_LANE_TEST" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$POOL_LEDGER_RECOVERY_TESTS" "$FLEET_ENSURE_TESTS" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -438,6 +440,53 @@ rg -F 'run: cargo build --release --workspace --locked' "$CI" >/dev/null ||
     fail "CI omits the release-profile workspace build"
 rg -F 'run_serial_pocketic_test' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not isolate serial PocketIC execution"
+test_is_ignored() {
+    local source_file="$1"
+    local function_name="$2"
+    awk -v function_name="$function_name" '
+        /^[[:space:]]*#\[test\]/ {
+            inside_test = 1
+            ignored = 0
+            next
+        }
+        inside_test && /^[[:space:]]*#\[ignore([^]]*)\]/ {
+            ignored = 1
+            next
+        }
+        inside_test && $0 ~ "^[[:space:]]*fn[[:space:]]+" function_name "\\(" {
+            found = 1
+            exit ignored ? 0 : 1
+        }
+        inside_test && /^[[:space:]]*fn[[:space:]]+/ {
+            inside_test = 0
+            ignored = 0
+        }
+        END {
+            if (!found) {
+                exit 1
+            }
+        }
+    ' "$source_file"
+}
+governed_host_pocketic_tests=(
+    'bootstrap_pool_ledger_recovery::tests::governed_pocketic_generated_pool_ledger_recovery_helper_converts_one_account_exactly_once'
+    'fleet_ensure::tests::governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects'
+)
+test_is_ignored \
+    "$POOL_LEDGER_RECOVERY_TESTS" \
+    'governed_pocketic_generated_pool_ledger_recovery_helper_converts_one_account_exactly_once' ||
+    fail "the generated pool Ledger recovery PocketIC proof is not excluded from ordinary tests"
+test_is_ignored \
+    "$FLEET_ENSURE_TESTS" \
+    'governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects' ||
+    fail "the Toko-shaped Fleet Ensure PocketIC proof is not excluded from ordinary tests"
+for governed_test in "${governed_host_pocketic_tests[@]}"; do
+    governed_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" targeted-pocketic "$governed_test")" ||
+        fail "the targeted canic-host PocketIC plan cannot resolve $governed_test"
+    rg -F -- "-p canic-host --lib $governed_test -- --test-threads=1 --nocapture --exact --ignored" \
+        <<<"$governed_test_plan" >/dev/null ||
+        fail "the targeted canic-host PocketIC plan does not govern $governed_test"
+done
 rg -F 'cargo test --locked --no-fail-fast' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not retain failures across Cargo test binaries"
 rg -F 'FAILED_LABELS+=("$label")' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
@@ -479,8 +528,11 @@ rg -F "==> combined inventory: $ordinary_inventory_count targets across $ordinar
     fail "the ordinary integration inventory is not compiled as one multi-package batch"
 rg -F 'libtest-parallel' <<<"$ordinary_test_plan" >/dev/null ||
     fail "ordinary timing output does not distinguish libtest parallelism from suite concurrency"
-CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" pocketic >/dev/null ||
+pocketic_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" pocketic)" ||
     fail "the PocketIC workspace test plan cannot be resolved"
+rg -F -- '-p canic-host --lib governed_pocketic_ -- --test-threads=1 --nocapture --ignored' \
+    <<<"$pocketic_test_plan" >/dev/null ||
+    fail "the PocketIC workspace plan omits the governed canic-host proofs"
 for mode in patch minor major; do
     mode_recipe="$(sed -n "/^$mode:/,/^$/p" "$MAKEFILE")"
     if rg -F '$(MAKE) --no-print-directory fmt' <<<"$mode_recipe" >/dev/null; then

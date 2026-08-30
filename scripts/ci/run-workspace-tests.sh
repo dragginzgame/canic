@@ -362,6 +362,18 @@ run_serial_pocketic_test() {
     run_test pocketic-serial "$label" "$@"
 }
 
+is_governed_canic_host_pocketic_test() {
+    local test_name
+    for test_name in \
+        'bootstrap_pool_ledger_recovery::tests::governed_pocketic_generated_pool_ledger_recovery_helper_converts_one_account_exactly_once' \
+        'fleet_ensure::tests::governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects'; do
+        if [[ "$TARGETED_POCKETIC_TEST" = "$test_name" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 run_inventory_tests() {
     local label="$1"
     local package="$2"
@@ -594,6 +606,15 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
             -- \
             --exact \
             --ignored
+    elif is_governed_canic_host_pocketic_test; then
+        run_serial_pocketic_test \
+            "targeted governed canic-host PocketIC proof" \
+            -p canic-host \
+            --lib \
+            "$TARGETED_POCKETIC_TEST" \
+            -- \
+            --exact \
+            --ignored
     elif [[ "$TARGETED_POCKETIC_TEST" == *::* ]]; then
         run_serial_pocketic_test \
             "targeted canic-testing-internal PocketIC proof" \
@@ -622,6 +643,16 @@ run_serial_pocketic_test \
     pic::governed_suite::governed_serial_pocketic_suite \
     -- \
     --exact \
+    --ignored
+
+# Private host workflows retain their focused unit-test access to internal
+# orchestration while sharing the same bounded server and serial execution.
+run_serial_pocketic_test \
+    "canic-host governed PocketIC proofs" \
+    -p canic-host \
+    --lib \
+    governed_pocketic_ \
+    -- \
     --ignored
 
 # PocketIC-backed integration suites.

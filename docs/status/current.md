@@ -19,21 +19,47 @@ Historical handoffs:
 
 ## Published Release Truth
 
-`v0.109.25` is the immutable maintained release. The annotated tag object
-`3d5b9dde565fae333724ee8cd82f0278b40a57b5` peels to release commit
-`da62ae03f7fb782914936f6124f7aeeeac8b77cc`; workspace packages, `main` and
+`v0.109.26` is the immutable maintained release. The annotated tag object
+`aeeb7b4624aec64a1ad2e4815d78494d643889ed` peels to release commit
+`1f99da17b8627cd482c6d8677f5490d4a3a0964a`; workspace packages, `main` and
 tracked `origin/main` agree. Its complete validation marker binds source
-`90329bde38fbafe72589359f9bdf4d1e43f5cb46`.
+`75b243f429c07b011fa11689947480169866ed00`.
 
 The former handoff incorrectly called 0.109.24 an unversioned draft and 0.109.23
 the maintained release. That recurring release-evidence defect is downstream
 `CANIC-014`. This handoff now treats structured version, tag, package and
 validation records as release authority; narrative is a summary only.
 
-`0.109.26` is an open changelog draft for the current source batch. It is not a
+`0.109.27` is an open changelog draft for the current source batch. It is not a
 versioned workspace, tag, published package or deployment.
 
-## Current 0.109 Correctness Batch
+The current support slice advances the composed lifecycle test fixture to
+published IcyDB `0.249.1`. All six IcyDB packages remain confined to the test
+canister/schema graph, and Canic's published packages remain IcyDB-free.
+It also corrects two `canic-host` PocketIC proofs that had drifted into the
+parallel ordinary lane: generated pool-recovery and Toko-shaped Fleet Ensure
+qualification now use the bounded shared-server serial lane, whose CI job owns
+the required Wasm target.
+
+`CANIC-094` is part of the same open support batch. An exact predecessor A
+sealed to requested successor C still rejects a later successor D; the seal is
+not retargetable. The rejection is now a typed
+`SealedSuccessorConvergenceRequired` result carrying both C and D release-build
+and Root artifact identities. It directs the operator through retained-C plan
+and apply, terminal C proof, D generation and fresh D planning as separate
+review boundaries.
+
+`CANIC-095` then blocked the authorized retained-C apply before its first
+effect because ICP CLI 1.3.0 omits `canister_version` from status JSON. The open
+batch preserves the pre/post reinstall-version invariant and obtains the exact
+missing value from the typed management-canister `canister_status` response.
+The fallback binds module and version from one response rather than joining two
+snapshots. It neither defaults nor infers a version. If both observation
+boundaries fail, the typed diagnostic confirms no install ran and directs
+resume of the same reviewed plan after controller/management access is
+restored.
+
+## Published 0.109.26 Correctness Batch
 
 Published 0.109.25 closes `CANIC-091`: a retained schema-1 state with cycle
 evidence but no Principal/topology maps can review and apply one exact
@@ -51,7 +77,7 @@ post-Start generation and ordinary successor planning still decoded that exact
 predecessor response as current release C and therefore stopped before any
 further effect.
 
-The current `canic-host` batch establishes this corrected invariant:
+The published `canic-host` batch established this corrected invariant:
 
 1. management-observe A with exact Root Principal, Subnet, controllers and
    stopped state;
@@ -119,7 +145,7 @@ still has `closeout_verdict: fail` and no accepted immutable superseding pass.
 
 Required order:
 
-1. finish and publish the current Canic-owned correctness batch through the
+1. finish and publish the current IcyDB test-support slice through the
    maintainer-selected release flow;
 2. adopt that exact release downstream and complete CI, release preparation,
    reviewed no-effect planning and terminal/effect-free replay evidence;
@@ -185,6 +211,32 @@ hygiene, layering, changelog governance, release-draft preflight and the
 current-document semantics guard pass. The evidence intentionally excludes a
 broad workspace or PocketIC gate during coding.
 
+For the open 0.109.27 support slice, locked all-target compilation and
+warning-denied Clippy pass for the composed IcyDB fixture and schema. The exact
+timer/dependency graph guard resolves all six IcyDB packages at `0.249.1`, one
+`ic-timers 0.7.0` provider and no production Canic consumer. The governed
+targeted PocketIC lifecycle journey passes install, startup recovery, upgrade,
+retained state and timer-custody restoration in 134 seconds with a 404,468 kB
+server high-water mark. No broad workspace suite was run.
+
+The focused retained-estate generator regression extends its distinct live A,
+retained B and sealed C identities with later release D. It proves that D fails
+before a protected predecessor query, receives exact typed C/D diagnostic
+fields and cannot change the retained A-to-C authority. The exact regression
+passes in 0.60 seconds after a 26.38-second incremental compile, and
+warning-denied `canic-host` library/test Clippy passes in 9.82 seconds. No broad
+gate was run.
+
+The exact ICP CLI 1.3.0-shaped versionless-status regression passes in 0.02
+seconds after a 34.52-second incremental compile. It decodes version 42 and the
+same-response module hash from typed management status, and rejects when both
+sources are unavailable.
+The reinstall replay regression passes in 0.09 seconds: its first version
+observation failure leaves the exact journal `in_progress` with zero effects,
+then the same digest records the pre-version, installs once, proves a newer
+terminal version and produces an effect-free terminal replay. No broad gate
+was run.
+
 `CANIC-034` is already closed by the maintained fresh-estate creation graph:
 each Root pool asset is funded directly by its reviewed Cycles Ledger creation
 action with exact creation and Ledger fees, so no Root-ledger bootstrap or
@@ -193,12 +245,14 @@ B2 and is not pulled across the human closeout gate.
 
 ## Next Authorized Action
 
-Finish targeted review of the combined `CANIC-092`/`CANIC-093` batch without
-modifying Toko Miner. When the maintainer selects a release flow, publish and
-adopt the exact successor, then repeat downstream post-Start generation,
-review the ordinary successor plan, apply only its exact digest and prove
-terminal replay effect-free. Only then begin 0.109 B9 simplification and its
-superseding audit.
+Finish targeted review of the open 0.109.27 support batch, including the
+CANIC-094 successor-order diagnostic and CANIC-095 typed install-version
+fallback. Do not modify Toko Miner from this repository. After a maintained
+successor is adopted downstream, resume only the unchanged authorized C plan
+if its retained digest still verifies, reach terminal convergence, reuse the
+finalized D build, generate and review a fresh D plan, then prove immediate
+replay effect-free. Only then begin 0.109 B9 simplification and its superseding
+audit.
 
 
 

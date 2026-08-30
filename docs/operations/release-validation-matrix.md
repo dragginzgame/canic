@@ -158,9 +158,9 @@ reason, and target environment.
 ## Fleet Ensure Qualification
 
 ```text
-cargo test --locked -p canic-host --lib \
-  fleet_ensure::tests::governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects \
-  -- --exact --nocapture
+bash scripts/ci/run-with-test-scratch.sh \
+  bash scripts/ci/run-workspace-tests.sh targeted-pocketic \
+  fleet_ensure::tests::governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects
 ```
 
 This governed PocketIC journey is current desired-state qualification evidence.

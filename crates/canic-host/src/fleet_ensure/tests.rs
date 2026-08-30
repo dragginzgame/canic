@@ -14,7 +14,7 @@ use crate::{
         workflow,
     },
     registry::RegistryEntry,
-    test_support::temp_dir,
+    test_support::{start_pocket_ic, temp_dir},
 };
 use candid::Principal;
 use canic_control_plane::{
@@ -80,6 +80,7 @@ struct MockPlatform {
     skip_transfer_credit: bool,
     stall_before_mutation: BTreeMap<String, u32>,
     terminal_inventory: TerminalFleetInventory,
+    version_observation_failures: u8,
 }
 
 impl MockPlatform {
@@ -110,6 +111,7 @@ impl MockPlatform {
             skip_transfer_credit: false,
             stall_before_mutation: BTreeMap::new(),
             terminal_inventory: TerminalFleetInventory::default(),
+            version_observation_failures: 0,
         }
     }
 
@@ -524,6 +526,10 @@ impl EnsurePlatform for MockPlatform {
         action: &EnsureAction,
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<u64>, Self::Error> {
+        if matches!(action, EnsureAction::Install { .. }) && self.version_observation_failures > 0 {
+            self.version_observation_failures -= 1;
+            return Err(MockError);
+        }
         Ok(Self::principal(state, action)
             .and_then(|principal| self.live.get(principal))
             .and_then(|live| live.canister_version))
@@ -1147,6 +1153,30 @@ fn same_module_reinstall_runs_once_and_replay_is_effect_free() {
             ..
         }]
     ));
+    fixture.platform.version_observation_failures = 1;
+    assert!(matches!(
+        workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            &desired_sha256,
+            "test-fleet",
+            &planned.plan.plan_sha256,
+            &mut fixture.platform,
+        ),
+        Err(workflow::EnsureWorkflowError::Platform(MockError))
+    ));
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    let interrupted = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read interrupted reinstall journal")
+        .expect("interrupted reinstall journal");
+    assert_eq!(interrupted.plan_sha256, planned.plan.plan_sha256);
+    assert!(interrupted.effects.is_empty());
+    assert_eq!(fixture.platform.mutations.values().sum::<u32>(), 0);
+
     let applied = workflow::apply(
         &fixture.root,
         &fixture.desired,
@@ -1158,6 +1188,12 @@ fn same_module_reinstall_runs_once_and_replay_is_effect_free() {
     .expect("apply same-module reinstall");
     assert!(applied.terminal);
     assert_eq!(applied.effects_applied, 1);
+    let completed = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read completed reinstall journal")
+        .expect("completed reinstall journal");
+    assert_eq!(completed.effects.len(), 1);
+    assert_eq!(completed.effects[0].pre_canister_version, before);
+    assert_eq!(completed.effects[0].state, EffectState::Applied);
     assert!(
         fixture
             .platform
@@ -2833,11 +2869,12 @@ fn tampered_reviewed_plan_fails_before_any_effect() {
 }
 
 #[test]
+#[ignore = "the workspace runner supplies one shared PocketIC server and serial execution"]
 #[expect(
     clippy::too_many_lines,
     reason = "one governed journey keeps the inconsistent estate and second-run proof together"
 )]
-fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
+fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
     use pocket_ic::{CreateCanisterParams, PocketIcBuilder};
 
     struct PocketPlatform {
@@ -3198,7 +3235,7 @@ fn pocketic_generic_toko_shaped_estate_converges_then_has_zero_effects() {
     fs::create_dir_all(&root).expect("create PocketIC fixture root");
     let wasm = root.join("current.wasm");
     fs::write(&wasm, b"\0asm\x01\0\0\0").expect("write minimal Wasm");
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let treasury = pic
         .create_canister_with_params(
             None,

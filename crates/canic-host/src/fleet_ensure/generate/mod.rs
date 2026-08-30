@@ -153,6 +153,9 @@ pub enum FleetGenerateError {
     #[error(transparent)]
     StoppedRootStartRequired(Box<StoppedRootStartPrerequisite>),
 
+    #[error(transparent)]
+    SealedSuccessorConvergenceRequired(Box<SealedSuccessorConvergenceRequired>),
+
     #[error(
         "retained canister {canister} controller set differs: actual {actual:?}, expected {expected:?}"
     )]
@@ -203,6 +206,25 @@ pub struct StoppedRootStartPrerequisite {
     pub root_count: usize,
     pub subnet: String,
     pub successor_module_sha256: String,
+}
+
+/// Exact sealed and requested successor identities for a mandatory convergence boundary.
+#[derive(Debug, Eq, PartialEq, ThisError)]
+#[error(
+    "retained Root-start authority for Fleet {fleet} is sealed to release build \
+     {sealed_release_build_id} and Root successor {sealed_successor_module_sha256}, but generation \
+     requested release build {requested_release_build_id} and Root successor \
+     {requested_successor_module_sha256}; the sealed authority cannot be retargeted. First review, \
+     apply, and terminally converge the retained desired successor with \
+     `canic fleet ensure {fleet}`. Then rerun `canic fleet generate {fleet}` for release build \
+     {requested_release_build_id} and review its fresh plan"
+)]
+pub struct SealedSuccessorConvergenceRequired {
+    pub fleet: String,
+    pub requested_release_build_id: String,
+    pub requested_successor_module_sha256: String,
+    pub sealed_release_build_id: String,
+    pub sealed_successor_module_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1439,19 +1461,29 @@ fn predecessor_status_roots(
     if !has_matching_predecessor {
         return Ok(BTreeSet::new());
     }
-    let identity_matches = authority.environment == request.environment
+    let fleet_identity_matches = authority.environment == request.environment
         && authority.fleet == request.fleet
-        && authority.fleet_id == seed.fleet_id
-        && authority.release_build_id == request.release_build_id
-        && authority.successor_module_sha256 == successor_module_sha256;
-    if !identity_matches {
+        && authority.fleet_id == seed.fleet_id;
+    if !fleet_identity_matches {
         return Err(FleetGenerateError::Authority(
-            "retained Root-start authority does not bind the requested successor generation"
-                .to_string(),
+            "retained Root-start authority does not bind the current Fleet identity".to_string(),
         ));
     }
     verify_root_start_release_authority(request.root, &authority)
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let requested_successor_matches = authority.release_build_id == request.release_build_id
+        && authority.successor_module_sha256 == successor_module_sha256;
+    if !requested_successor_matches {
+        return Err(FleetGenerateError::SealedSuccessorConvergenceRequired(
+            Box::new(SealedSuccessorConvergenceRequired {
+                fleet: request.fleet.to_string(),
+                requested_release_build_id: request.release_build_id.to_string(),
+                requested_successor_module_sha256: successor_module_sha256.to_string(),
+                sealed_release_build_id: authority.release_build_id.to_string(),
+                sealed_successor_module_sha256: authority.successor_module_sha256,
+            }),
+        ));
+    }
     let expected_controller = operator.to_text();
     let mut accepted = BTreeSet::new();
     for binding in &authority.roots {

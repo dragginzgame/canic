@@ -1261,6 +1261,99 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &retained_authority_bytes,
     )
     .expect("restore retained Root-start authority bytes");
+    let later_release =
+        plan_release_build_for_profile(&root, crate::build_profile::CanisterBuildProfile::Debug)
+            .expect("plan later requested release");
+    let later_release_build_id = later_release.record.release_build_id;
+    assert_ne!(later_release_build_id, successor_release_build_id);
+    persist_test_release_authority(&root, &config, later_release_build_id);
+    let later_manifest = crate::release_set::load_persisted_canic_infrastructure_artifact_manifest(
+        &root,
+        later_release_build_id,
+    )
+    .expect("load later requested infrastructure manifest");
+    let later_root_hash = later_manifest
+        .manifest
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .expect("later requested Root artifact")
+        .wasm_sha256_hex
+        .clone();
+    assert_ne!(later_root_hash, requested_successor_root_hash);
+    write_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: coordinator_hash,
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &retained_pool,
+            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            root_module_hash: &stopped_root_hash,
+            root_runtime_status: "running",
+            root_status_error: None,
+            store: &store,
+            store_has_root_controller: true,
+            store_module_hash: store_hash,
+        },
+    );
+    let later_request = FleetGenerateRequest {
+        app_config: &app_config,
+        environment: &stopped_desired.environment,
+        fleet: &stopped_desired.fleet,
+        icp_executable: icp.to_str().expect("fake ICP path"),
+        release_build_id: later_release_build_id,
+        root: &root,
+        seed: &seed_path,
+        source: &source_path,
+    };
+    let Err(later_error) = generate_desired_fleet(&later_request) else {
+        panic!("a later successor cannot retarget the sealed predecessor authority");
+    };
+    let later_message = later_error.to_string();
+    assert!(
+        matches!(
+        &later_error,
+        FleetGenerateError::SealedSuccessorConvergenceRequired(details)
+            if details.fleet == stopped_desired.fleet
+                && details.sealed_release_build_id == successor_release_build_id.to_string()
+                && details.sealed_successor_module_sha256 == requested_successor_root_hash
+                && details.requested_release_build_id == later_release_build_id.to_string()
+                && details.requested_successor_module_sha256 == later_root_hash
+        ),
+        "unexpected later-successor result: {later_error:?}"
+    );
+    assert!(later_message.contains("canic fleet ensure retained-stopped-root"));
+    assert!(later_message.contains("terminally converge the retained desired successor"));
+    assert_eq!(
+        fs::read(&stopped_paths.root_start_authority)
+            .expect("read unchanged sealed Root-start authority"),
+        retained_authority_bytes
+    );
+    assert!(
+        !root_status_counter.exists(),
+        "later generation must reject before a protected predecessor query"
+    );
+    write_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: coordinator_hash,
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &retained_pool,
+            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            root_module_hash: &stopped_root_hash,
+            root_runtime_status: "stopped",
+            root_status_error: None,
+            store: &store,
+            store_has_root_controller: true,
+            store_module_hash: store_hash,
+        },
+    );
     let root_management = RootManagementObservation {
         operator_cycles: 500_000_000_000_000,
         roots: BTreeMap::from([(

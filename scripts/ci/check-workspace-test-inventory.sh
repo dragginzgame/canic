@@ -86,6 +86,7 @@ fi
 
 if rg -n -U \
     '(?s)PocketIcBuilder::new\(\).{0,250}\.build\(\)' \
+    "$ROOT/crates/canic-host" \
     "$ROOT/crates/canic-testing-internal" \
     "$ROOT/crates/canic-tests" \
     --glob '*.rs'; then
