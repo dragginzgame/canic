@@ -15,7 +15,8 @@ use crate::fleet_ensure::{
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
         compact_inline_plan, lock_operation, read_journal, read_plan, read_root_start_authority,
-        read_state, resolve_desired_artifacts, write_journal, write_plan, write_state,
+        read_state, resolve_desired_artifacts, verify_root_start_release_authority, write_journal,
+        write_plan, write_state,
     },
     policy::{
         EnsurePolicyError, RootStartPlanInput, compile_plan, compile_root_start_prerequisite_plan,
@@ -157,18 +158,19 @@ where
         }
     }
     let operation_id = operation_id(desired_sha256, &desired.environment, requested_fleet);
-    let artifacts = resolve_desired_artifacts(root, desired)?;
     if let Some(management) = platform
         .observe_root_management(&state, &BTreeSet::new())
         .map_err(EnsureWorkflowError::Platform)?
     {
         let root_start_authority = read_root_start_authority(&paths)?;
+        if let Some(authority) = &root_start_authority {
+            verify_root_start_release_authority(root, authority)?;
+        }
         if let Some(plan) = compile_root_start_prerequisite_plan(RootStartPlanInput {
             authority: root_start_authority.as_ref(),
             created_at_time,
             desired,
             desired_sha256,
-            artifacts: &artifacts,
             observation: &management,
             requested_fleet,
         })? {
@@ -181,6 +183,7 @@ where
             });
         }
     }
+    let artifacts = resolve_desired_artifacts(root, desired)?;
     let mut observation = platform
         .observe(&operation_id, &state)
         .map_err(EnsureWorkflowError::Platform)?;
@@ -615,19 +618,20 @@ where
     P: EnsurePlatform,
 {
     if retained_plan.scope == FleetEnsurePlanScope::RootStartPrerequisite {
+        if let Some(authority) = retained_plan.root_start_authority.as_deref() {
+            verify_root_start_release_authority(root, authority)?;
+        }
         let targets = reviewed_root_start_targets(retained_plan)?;
         let management = platform
             .observe_root_management(state, &targets)
             .map_err(EnsureWorkflowError::Platform)?
             .ok_or(EnsureWorkflowError::PlanIntegrity)?;
-        let artifacts = resolve_desired_artifacts(root, desired)?;
         let current = recompile_root_start_prerequisite_plan(
             RootStartPlanInput {
                 authority: retained_plan.root_start_authority.as_deref(),
                 created_at_time: retained_plan.planned_at_time,
                 desired,
                 desired_sha256,
-                artifacts: &artifacts,
                 observation: &management,
                 requested_fleet,
             },
@@ -683,19 +687,20 @@ fn complete_root_start_prerequisite<P>(
 where
     P: EnsurePlatform,
 {
+    if let Some(authority) = retained_plan.root_start_authority.as_deref() {
+        verify_root_start_release_authority(root, authority)?;
+    }
     let targets = reviewed_root_start_targets(retained_plan)?;
     let management = platform
         .observe_root_management(state, &targets)
         .map_err(EnsureWorkflowError::Platform)?
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
-    let artifacts = resolve_desired_artifacts(root, desired)?;
     let current = recompile_root_start_prerequisite_plan(
         RootStartPlanInput {
             authority: retained_plan.root_start_authority.as_deref(),
             created_at_time: retained_plan.planned_at_time,
             desired,
             desired_sha256: &retained_plan.desired_sha256,
-            artifacts: &artifacts,
             observation: &management,
             requested_fleet: &retained_plan.fleet,
         },
@@ -727,6 +732,9 @@ where
     P: EnsurePlatform,
 {
     verify_journal(journal, plan, requested_fleet)?;
+    if let Some(authority) = plan.root_start_authority.as_deref() {
+        verify_root_start_release_authority(root, authority)?;
+    }
     let actions = ordered_actions(plan);
     if actions.len() != journal.effects.len()
         || journal
@@ -751,14 +759,12 @@ where
         .observe_root_management(state, &targets)
         .map_err(EnsureWorkflowError::Platform)?
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
-    let artifacts = resolve_desired_artifacts(root, desired)?;
     let current = recompile_root_start_prerequisite_plan(
         RootStartPlanInput {
             authority: plan.root_start_authority.as_deref(),
             created_at_time: plan.planned_at_time,
             desired,
             desired_sha256: &plan.desired_sha256,
-            artifacts: &artifacts,
             observation: &management,
             requested_fleet: &plan.fleet,
         },

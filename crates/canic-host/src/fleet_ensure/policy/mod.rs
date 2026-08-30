@@ -532,7 +532,6 @@ pub(crate) struct RootStartPlanInput<'a> {
     pub created_at_time: u64,
     pub desired: &'a DesiredFleet,
     pub desired_sha256: &'a str,
-    pub artifacts: &'a DesiredFleetArtifacts,
     pub observation: &'a RootManagementObservation,
     pub requested_fleet: &'a str,
 }
@@ -569,7 +568,6 @@ fn compile_root_start_plan(
         created_at_time,
         desired,
         desired_sha256,
-        artifacts,
         observation,
         requested_fleet,
     } = *input;
@@ -591,7 +589,6 @@ fn compile_root_start_plan(
 
     let mut canisters = Vec::new();
     let mut root_start_bindings = Vec::new();
-    let mut retained_module_authority_required = false;
     let mut observed_controlled_cycles = 0_u128;
     for configured in configured_roots {
         let observed = observation.roots.get(&configured.name).ok_or_else(|| {
@@ -649,19 +646,12 @@ fn compile_root_start_plan(
                 name: configured.name.clone(),
             });
         }
-        let expected_module = artifacts
-            .wasm_sha256_by_canister
-            .get(&configured.name)
-            .ok_or_else(|| EnsurePolicyError::MissingWasmIdentity {
-                name: configured.name.clone(),
-            })?;
         let observed_module = observed.live.module_sha256.as_deref().ok_or_else(|| {
             EnsurePolicyError::RootManagementAuthorityMismatch {
                 field: "module SHA-256",
                 name: configured.name.clone(),
             }
         })?;
-        retained_module_authority_required |= observed_module != expected_module;
         root_start_bindings.push(RetainedRootStartBinding {
             controllers: actual_controllers.clone(),
             name: configured.name.clone(),
@@ -696,11 +686,10 @@ fn compile_root_start_plan(
     }
     let retained_authority = validate_root_start_authority(
         desired,
-        artifacts,
         requested_fleet,
         authority,
         &root_start_bindings,
-        retained_module_authority_required,
+        true,
     )?;
     if let Some(reviewed_targets) = reviewed_targets
         && (reviewed_targets.len() != canisters.len()
@@ -759,7 +748,6 @@ fn compile_root_start_plan(
 
 fn validate_root_start_authority<'a>(
     desired: &DesiredFleet,
-    artifacts: &DesiredFleetArtifacts,
     requested_fleet: &str,
     authority: Option<&'a RetainedRootStartAuthorityRecord>,
     root_start_bindings: &[RetainedRootStartBinding],
@@ -785,27 +773,19 @@ fn validate_root_start_authority<'a>(
             name: root_start_bindings[0].name.clone(),
         }
     })?;
-    let successor_matches = root_start_bindings.iter().all(|binding| {
-        artifacts
-            .wasm_sha256_by_canister
-            .get(&binding.name)
-            .is_some_and(|sha256| sha256 == &authority.successor_module_sha256)
-    });
     let mut expected_bindings = root_start_bindings.to_vec();
     expected_bindings.sort_by(|left, right| left.name.cmp(&right.name));
     let mut actual_bindings = authority.roots.clone();
     actual_bindings.sort_by(|left, right| left.name.cmp(&right.name));
     let path_identity_matches =
         authority.environment == desired.environment && authority.fleet == requested_fleet;
-    let release_identity_matches = authority.fleet_id == bootstrap.fleet_id
-        && authority.release_build_id == bootstrap.release_build_id;
+    let fleet_identity_matches = authority.fleet_id == bootstrap.fleet_id;
     let record_identity_matches =
         authority.schema_version == FLEET_ENSURE_SCHEMA_VERSION && authority.has_valid_digest();
     let bindings_match = actual_bindings == expected_bindings;
     if !(path_identity_matches
-        && release_identity_matches
+        && fleet_identity_matches
         && record_identity_matches
-        && successor_matches
         && bindings_match)
     {
         return Err(EnsurePolicyError::RootManagementAuthorityMismatch {

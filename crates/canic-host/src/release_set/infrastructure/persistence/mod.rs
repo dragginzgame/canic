@@ -78,6 +78,13 @@ pub struct CanicInfrastructureArtifactBuildOutput {
 
 #[derive(Debug, ThisError)]
 pub enum CanicInfrastructureArtifactPersistenceError {
+    #[error("infrastructure artifact {role:?} {kind} content differs from its manifest at {path}")]
+    ArtifactContentMismatch {
+        role: CanicInfrastructureRole,
+        kind: &'static str,
+        path: PathBuf,
+    },
+
     #[error("infrastructure artifact {role:?} {kind} path is outside the ICP root: {path}")]
     ArtifactOutsideRoot {
         role: CanicInfrastructureRole,
@@ -266,6 +273,38 @@ pub fn load_persisted_canic_infrastructure_artifact_manifest(
     let path = infrastructure_artifact_manifest_path(root, release_build_id);
     load_optional_persisted_manifest(&path, release_build_id)?
         .ok_or(CanicInfrastructureArtifactPersistenceError::MissingManifest { path })
+}
+
+/// Re-read and verify one manifest-bound raw infrastructure Wasm.
+pub(crate) fn verify_persisted_canic_infrastructure_artifact(
+    root: &Path,
+    artifact: &super::CanicInfrastructureArtifactEntry,
+) -> Result<(), CanicInfrastructureArtifactPersistenceError> {
+    let path = root.join(&artifact.wasm_relative_path);
+    let materialized = materialize_artifact(root, artifact.role, "raw Wasm", &path)?;
+    let size = u64::try_from(materialized.bytes.len()).map_err(|_| {
+        CanicInfrastructureArtifactPersistenceError::ArtifactContentMismatch {
+            role: artifact.role,
+            kind: "raw Wasm",
+            path: path.clone(),
+        }
+    })?;
+    let path_matches = materialized.relative_path == artifact.wasm_relative_path;
+    let size_matches = size == artifact.wasm_size_bytes;
+    let digest_matches =
+        canic_core::cdk::utils::hash::sha256_hex(&materialized.bytes) == artifact.wasm_sha256_hex;
+    let release_matches =
+        contains_release_build_identity(&materialized.bytes, artifact.release_build_id);
+    if !(path_matches && size_matches && digest_matches && release_matches) {
+        return Err(
+            CanicInfrastructureArtifactPersistenceError::ArtifactContentMismatch {
+                role: artifact.role,
+                kind: "raw Wasm",
+                path,
+            },
+        );
+    }
+    Ok(())
 }
 
 fn materialize_build_output(

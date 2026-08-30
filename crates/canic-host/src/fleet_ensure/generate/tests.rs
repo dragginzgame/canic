@@ -1114,17 +1114,40 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         BTreeSet::from([4_800_000_000_000, 5_000_000_000_000])
     );
 
+    let successor_release =
+        plan_release_build_for_profile(&root, crate::build_profile::CanisterBuildProfile::Fast)
+            .expect("plan distinct requested successor release");
+    let successor_release_build_id = successor_release.record.release_build_id;
+    assert_ne!(successor_release_build_id, release_build_id);
+    persist_test_release_authority(&root, &config, successor_release_build_id);
+    let successor_manifest =
+        crate::release_set::load_persisted_canic_infrastructure_artifact_manifest(
+            &root,
+            successor_release_build_id,
+        )
+        .expect("load requested successor infrastructure manifest");
+    let requested_successor_root_hash = successor_manifest
+        .manifest
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .expect("requested successor Root artifact")
+        .wasm_sha256_hex
+        .clone();
+
     let mut stopped_desired = recovery_desired.clone();
     stopped_desired.fleet = "retained-stopped-root".to_string();
     let stopped_artifacts =
         crate::fleet_ensure::ops::resolve_desired_artifacts(&root, &stopped_desired)
-            .expect("resolve desired successor artifacts");
-    let successor_root_hash = stopped_artifacts
+            .expect("resolve retained desired artifacts");
+    let retained_desired_root_hash = stopped_artifacts
         .wasm_sha256_by_canister
         .get("root-0")
-        .expect("desired successor Root artifact hash");
+        .expect("retained desired Root artifact hash");
     let stopped_root_hash = sha256_hex(b"retained predecessor Root");
-    assert_ne!(&stopped_root_hash, successor_root_hash);
+    assert_ne!(&stopped_root_hash, retained_desired_root_hash);
+    assert_ne!(&stopped_root_hash, &requested_successor_root_hash);
+    assert_ne!(retained_desired_root_hash, &requested_successor_root_hash);
     write_fake_icp(
         &root,
         FakeIcpFixture {
@@ -1157,7 +1180,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         environment: &stopped_desired.environment,
         fleet: &stopped_desired.fleet,
         icp_executable: icp.to_str().expect("fake ICP path"),
-        release_build_id,
+        release_build_id: successor_release_build_id,
         root: &root,
         seed: &seed_path,
         source: &source_path,
@@ -1169,13 +1192,57 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         stopped_error,
         FleetGenerateError::StoppedRootStartRequired(details)
             if details.module_sha256 == stopped_root_hash
-                && details.successor_module_sha256 == *successor_root_hash
+                && details.successor_module_sha256 == requested_successor_root_hash
     ));
     let stopped_paths =
         EnsurePaths::under(&root, &stopped_desired.environment, &stopped_desired.fleet);
     let stopped_authority = read_root_start_authority(&stopped_paths)
         .expect("read retained Root-start authority")
         .expect("generator retained Root-start authority");
+    assert_eq!(
+        stopped_authority.release_build_id,
+        successor_release_build_id
+    );
+    assert_eq!(
+        stopped_authority.successor_module_sha256,
+        requested_successor_root_hash
+    );
+    crate::fleet_ensure::ops::verify_root_start_release_authority(&root, &stopped_authority)
+        .expect("sealed authority resolves its exact finalized successor");
+    let mut wrong_release_authority = stopped_authority.clone();
+    wrong_release_authority.release_build_id = release_build_id;
+    wrong_release_authority.seal();
+    assert!(matches!(
+        crate::fleet_ensure::ops::verify_root_start_release_authority(
+            &root,
+            &wrong_release_authority,
+        ),
+        Err(crate::fleet_ensure::ops::EnsureStateError::InvalidRootStartReleaseAuthority { .. })
+    ));
+    let mut wrong_successor_authority = stopped_authority.clone();
+    wrong_successor_authority.successor_module_sha256 = "00".repeat(32);
+    wrong_successor_authority.seal();
+    assert!(matches!(
+        crate::fleet_ensure::ops::verify_root_start_release_authority(
+            &root,
+            &wrong_successor_authority,
+        ),
+        Err(crate::fleet_ensure::ops::EnsureStateError::InvalidRootStartReleaseAuthority { .. })
+    ));
+    let successor_root_entry = successor_manifest
+        .manifest
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .expect("requested successor Root entry");
+    let successor_root_path = root.join(&successor_root_entry.wasm_relative_path);
+    let successor_root_bytes = fs::read(&successor_root_path).expect("read successor Root bytes");
+    fs::write(&successor_root_path, b"changed successor Root").expect("tamper successor Root");
+    assert!(matches!(
+        crate::fleet_ensure::ops::verify_root_start_release_authority(&root, &stopped_authority,),
+        Err(crate::fleet_ensure::ops::EnsureStateError::InvalidRootStartReleaseAuthority { .. })
+    ));
+    fs::write(&successor_root_path, successor_root_bytes).expect("restore successor Root bytes");
     let retained_authority_bytes = fs::read(&stopped_paths.root_start_authority)
         .expect("read exact retained Root-start authority bytes");
     let mut tampered_authority = stopped_authority.clone();
@@ -1203,7 +1270,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                     canister_version: Some(7),
                     controllers: configured_root.controllers.clone(),
                     cycles: 30_000_000_000_000,
-                    module_sha256: Some(stopped_root_hash),
+                    module_sha256: Some(stopped_root_hash.clone()),
                     principal: fleet_root.clone(),
                     reinstall_required: false,
                     root_owned_lifecycle: None,
@@ -1221,7 +1288,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                 created_at_time: 1_800_000_000_000_000_150,
                 desired: &stopped_desired,
                 desired_sha256: &source_digest,
-                artifacts: &stopped_artifacts,
                 observation: &root_management,
                 requested_fleet: &stopped_desired.fleet,
             },
@@ -1243,7 +1309,27 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                 created_at_time: 1_800_000_000_000_000_150,
                 desired: &stopped_desired,
                 desired_sha256: &source_digest,
-                artifacts: &stopped_artifacts,
+                observation: &root_management,
+                requested_fleet: &stopped_desired.fleet,
+            },
+        ),
+        Err(
+            crate::fleet_ensure::policy::EnsurePolicyError::RootManagementAuthorityMismatch {
+                field: "retained module authority",
+                ..
+            }
+        )
+    ));
+    let mut wrong_fleet_identity = stopped_authority.clone();
+    wrong_fleet_identity.fleet_id = "ff".repeat(32).parse().expect("wrong Fleet ID");
+    wrong_fleet_identity.seal();
+    assert!(matches!(
+        crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
+            crate::fleet_ensure::policy::RootStartPlanInput {
+                authority: Some(&wrong_fleet_identity),
+                created_at_time: 1_800_000_000_000_000_150,
+                desired: &stopped_desired,
+                desired_sha256: &source_digest,
                 observation: &root_management,
                 requested_fleet: &stopped_desired.fleet,
             },
@@ -1261,7 +1347,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             created_at_time: 1_800_000_000_000_000_150,
             desired: &stopped_desired,
             desired_sha256: &source_digest,
-            artifacts: &stopped_artifacts,
             observation: &root_management,
             requested_fleet: &stopped_desired.fleet,
         },
@@ -1294,7 +1379,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                 created_at_time: 1_800_000_000_000_000_150,
                 desired: &stopped_desired,
                 desired_sha256: &source_digest,
-                artifacts: &stopped_artifacts,
                 observation: &drifted,
                 requested_fleet: &stopped_desired.fleet,
             },
@@ -1314,6 +1398,27 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             "unexpected {field} drift error: {error:?}"
         );
     }
+    let retained_release_manifest_path = root
+        .join(".canic/release-builds")
+        .join(release_build_id.to_string())
+        .join("current-release-set-manifest.json");
+    let retained_release_manifest_bytes = fs::read(&retained_release_manifest_path)
+        .expect("read retained desired release manifest bytes");
+    fs::write(
+        &retained_release_manifest_path,
+        b"{\"schema_version\":1,\"historical\":true}",
+    )
+    .expect("replace retained desired release manifest with unsupported historical bytes");
+    let retained_root_artifact_path = root.join(
+        configured_root
+            .wasm
+            .as_deref()
+            .expect("retained desired Root Wasm path"),
+    );
+    let retained_root_artifact_bytes =
+        fs::read(&retained_root_artifact_path).expect("read retained desired Root artifact");
+    fs::remove_file(&retained_root_artifact_path)
+        .expect("remove disposable retained desired Root artifact");
     write_state(
         &stopped_paths,
         &FleetEnsureStateRecord {
@@ -1369,6 +1474,57 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         Some(&stopped_authority)
     );
     let reviewed_plan_sha256 = stopped_plan.plan.plan_sha256.clone();
+    write_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: coordinator_hash,
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &retained_pool,
+            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            root_module_hash: &"00".repeat(32),
+            root_runtime_status: "stopped",
+            root_status_error: None,
+            store: &store,
+            store_has_root_controller: true,
+            store_module_hash: store_hash,
+        },
+    );
+    assert!(
+        workflow::apply(
+            &root,
+            &stopped_desired,
+            &source_digest,
+            &stopped_desired.fleet,
+            &reviewed_plan_sha256,
+            &mut stopped_platform,
+        )
+        .is_err()
+    );
+    assert!(
+        !root.join("root-start-count").exists(),
+        "pre-effect predecessor drift must reject before Start"
+    );
+    write_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: coordinator_hash,
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &retained_pool,
+            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            root_module_hash: &stopped_root_hash,
+            root_runtime_status: "stopped",
+            root_status_error: None,
+            store: &store,
+            store_has_root_controller: true,
+            store_module_hash: store_hash,
+        },
+    );
     let applied = workflow::apply(
         &root,
         &stopped_desired,
@@ -1415,8 +1571,28 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(retained_after_start.principals.is_empty());
     assert!(retained_after_start.topology.is_empty());
 
-    let regenerated = generate_desired_fleet(&request)
+    let regenerated = generate_desired_fleet(&stopped_request)
         .expect("rerun complete protected generation after reviewed Root Start");
+    assert_eq!(
+        regenerated
+            .desired
+            .bootstrap
+            .as_ref()
+            .expect("regenerated bootstrap")
+            .release_build_id,
+        successor_release_build_id
+    );
+    assert_eq!(
+        fs::read(&preserved_output).expect("read unchanged retained desired authority"),
+        b"retained desired authority\n"
+    );
+    fs::write(
+        &retained_release_manifest_path,
+        retained_release_manifest_bytes,
+    )
+    .expect("restore retained desired release manifest for later independent cases");
+    fs::write(&retained_root_artifact_path, retained_root_artifact_bytes)
+        .expect("restore retained desired Root artifact for later independent cases");
     assert_eq!(regenerated.observed_canisters, 5);
     assert_eq!(regenerated.observed_controlled_cycles, 319_899_950_000_000);
     assert!(root_status_counter.exists());
@@ -2654,8 +2830,14 @@ fn infrastructure_artifacts(
     .map(|(index, role)| {
         let marker = u8::try_from(index).expect("three infrastructure artifacts");
         let artifact_name = role.protocol_role_name();
-        let path = format!("artifacts/{artifact_name}/{artifact_name}.wasm");
-        let bytes = [b"\0asm\x01\0\0\0".as_slice(), &[marker]].concat();
+        let release_identity = release_build_id.to_string();
+        let path = format!("artifacts/{release_build_id}/{artifact_name}/{artifact_name}.wasm");
+        let bytes = [
+            b"\0asm\x01\0\0\0".as_slice(),
+            &[marker],
+            release_identity.as_bytes(),
+        ]
+        .concat();
         let absolute = root.join(&path);
         fs::create_dir_all(absolute.parent().expect("artifact parent"))
             .expect("create artifact parent");
@@ -2671,7 +2853,10 @@ fn infrastructure_artifacts(
             wasm_relative_path: path,
             wasm_size_bytes: bytes.len() as u64,
             wasm_sha256_hex: canic_core::cdk::utils::hash::sha256_hex(&bytes),
-            wasm_gz_relative_path: format!("artifacts/{}.wasm.gz", role.as_str()),
+            wasm_gz_relative_path: format!(
+                "artifacts/{release_build_id}/{}.wasm.gz",
+                role.as_str()
+            ),
             wasm_gz_size_bytes: 1,
             wasm_gz_sha256_hex: "00".repeat(32),
             candid_sha256: Sha256::digest(b"service : {};").into(),
@@ -2691,13 +2876,18 @@ fn candid_sidecar_uses_the_manifest_bound_wasm_basename() {
         .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
         .expect("Root artifact");
 
-    assert_eq!(root_artifact.wasm_relative_path, "artifacts/root/root.wasm");
+    assert_eq!(
+        root_artifact.wasm_relative_path,
+        format!("artifacts/{release_build_id}/root/root.wasm")
+    );
     assert_eq!(
         candid_sidecar(&root, root_artifact).expect("resolve Root sidecar"),
-        "artifacts/root/root.did"
+        format!("artifacts/{release_build_id}/root/root.did")
     );
 
-    let sidecar = root.join("artifacts/root/root.did");
+    let sidecar = root
+        .join(&root_artifact.wasm_relative_path)
+        .with_extension("did");
     fs::rename(&sidecar, sidecar.with_file_name("renamed.did")).expect("rename sidecar");
     assert!(matches!(
         candid_sidecar(&root, root_artifact),
@@ -2722,8 +2912,10 @@ fn candid_sidecar_rejects_a_symbolic_link() {
         .iter()
         .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
         .expect("Root artifact");
-    let sidecar = root.join("artifacts/root/root.did");
-    let target = root.join("artifacts/root/target.did");
+    let sidecar = root
+        .join(&root_artifact.wasm_relative_path)
+        .with_extension("did");
+    let target = sidecar.with_file_name("target.did");
     fs::rename(&sidecar, &target).expect("move real sidecar");
     symlink(&target, &sidecar).expect("link sidecar");
 

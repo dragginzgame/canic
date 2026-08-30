@@ -73,21 +73,31 @@ pool identity remains in the conservation set as it moves from idle bootstrap
 capacity through claimed state to a Component workload, without receiving pool
 minimum top-ups or being counted twice.
 
-A stopped retained Root is a separately reviewed prerequisite, not generator
-authority. Generation first verifies the exact management-observed Principal,
-Subnet, controller set and installed module hash, then returns a deterministic
-same-ID Start diagnostic before calling any protected Root endpoint or changing
-`fleets/<fleet>.toml`. Fleet Ensure recognizes this boundary even when the
-current schema-1 state has retained cycle balances but no Principal or topology
-projection. It emits an explicitly scoped plan containing only the same-ID Root
-`Start`; the plan has no create, replacement, reinstall, funding, transfer, fee
-or operator-debit authority and cannot publish or backfill Fleet topology. Text
-and JSON output expose the `root_start_prerequisite` plan scope. Apply
-that exact digest, then rerun generation. A stopping
-Root, missing module, changed identity, foreign controller, wrong Subnet or
-malformed management observation fails closed. Once the exact Root is running,
-generation performs the complete protected Fleet-authority and pool-inventory
-verification; management evidence never substitutes for those proofs.
+A stopped retained Root requires a separately reviewed prerequisite rather
+than a desired-document mutation. Generation first verifies the exact
+management-observed Principal, Subnet, controller set and installed module
+hash, then atomically seals the live predecessor to the newly requested
+finalized release and Root artifact. It returns a deterministic same-ID Start
+diagnostic before calling any protected Root endpoint or changing
+`fleets/<fleet>.toml`.
+
+Fleet Ensure uses the retained desired document only for stable Fleet and Root
+identity. It independently loads the sealed authority's finalized release-set
+and infrastructure manifests and re-reads the exact raw successor Wasm; it does
+not require the authority's release or successor to equal the older retained
+desired release, and does not decode or regenerate that old release manifest.
+This boundary works even when current schema-1 state has
+retained cycle balances but no Principal or topology projection. The explicitly
+scoped plan contains only the same-ID Root `Start`; it has no create,
+replacement, reinstall, funding, transfer, fee or operator-debit authority and
+cannot publish or backfill Fleet topology. Text and JSON output expose the
+`root_start_prerequisite` scope. Apply that exact digest, then rerun generation
+to publish and review the newly requested desired release. A stopping Root,
+missing module, changed identity, foreign controller, wrong Subnet, unfinalized
+or changed successor artifact, or malformed management observation fails
+closed. Once the exact Root is running, generation performs the complete
+protected Fleet-authority and pool-inventory verification; management evidence
+never substitutes for those proofs.
 
 Retained-estate treasury policy is explicit adoption, not discovery: it must
 name an already-present, non-replaceable controlled canister. Omitting
@@ -352,15 +362,12 @@ one same-Principal `Start` action. Child, Root, parent, topology and controller
 bindings must all match, and no other mutation is admitted from deferred
 evidence. After the Root starts, ordinary protected observation resumes.
 
-When that stopped Root still runs a predecessor module, no-effect generation
-first atomically retains a typed current-schema Start authority under the
-Fleet Ensure state directory. It binds the exact predecessor and current
-successor hashes together with Fleet ID, release build, Principal, Subnet and
-controllers. The reviewed prerequisite embeds that authority and still permits
-only `Start`; it cannot install either module or authorize a paid effect. A
-missing, changed or unrelated live module fails before a plan. The desired
-document is not rewritten to the predecessor: after Start, rerun generation so
-the ordinary protected plan can review convergence to the current successor.
+The reviewed prerequisite embeds the complete generator authority and still
+permits only `Start`; it cannot install either module or authorize a paid
+effect. Apply revalidates stopped status, Principal, Subnet, controllers and
+predecessor module before issuing that Start. A missing, changed or unrelated
+live module fails before a plan or effect. Terminal replay reuses the embedded
+authority and cannot issue a second Start.
 
 The resulting corrective graph reinstalls the Coordinator, replays the exact
 Root-owned Store-controller adoption, reinstalls the Store, and only then
