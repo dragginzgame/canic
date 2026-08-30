@@ -40,6 +40,7 @@ toml = { workspace = true }
 rustix = { workspace = true }
 
 [dev-dependencies]
+ic-testkit = { workspace = true }
 pocket-ic = { workspace = true }
 
 [lints]

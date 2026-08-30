@@ -41,6 +41,23 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
+#[derive(CandidType)]
+struct ManagementCanisterStatusRequest {
+    canister_id: Principal,
+}
+
+#[derive(CandidType, Deserialize)]
+struct ManagementCanisterStatusResponse {
+    canister_version: u64,
+    module_hash: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ExactInstallCanisterStatus {
+    canister_version: u64,
+    module_sha256: Option<String>,
+}
+
 /// Exact input expected by a configured cycle-safe retirement endpoint.
 
 #[derive(CandidType)]
@@ -237,8 +254,16 @@ pub enum IcpEnsurePlatformError {
         field: &'static str,
     },
 
-    #[error("ICP status omitted the canister version required to prove install on {canister}")]
-    MissingCanisterVersion { canister: String },
+    #[error(
+        "ICP CLI status JSON omitted canister_version for {canister}, and the exact typed \
+         management-canister status fallback failed: {source}; no install was issued. Restore \
+         controller and management-status access, then resume the same reviewed plan"
+    )]
+    InstallVersionProofUnavailable {
+        canister: String,
+        #[source]
+        source: Box<IcpCandidCallError>,
+    },
 
     #[error(transparent)]
     Candid(#[from] IcpCandidCallError),
@@ -500,6 +525,24 @@ impl IcpEnsurePlatform {
             root_owned_lifecycle: None,
             status,
         }))
+    }
+
+    fn install_status_optional(
+        &self,
+        principal: &str,
+    ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        let Some(mut live) = self.status_optional(principal)? else {
+            return Ok(None);
+        };
+        let exact = exact_install_canister_status(
+            &self.icp,
+            principal,
+            live.canister_version,
+            live.module_sha256.clone(),
+        )?;
+        live.canister_version = Some(exact.canister_version);
+        live.module_sha256 = exact.module_sha256;
+        Ok(Some(live))
     }
 
     fn has_stopped_retained_protocol_owner(
@@ -1485,7 +1528,8 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 wasm_sha256,
                 ..
             } => {
-                let live = self.status_optional(Self::action_principal(state, principal)?)?;
+                let live =
+                    self.install_status_optional(Self::action_principal(state, principal)?)?;
                 let applied = live.as_ref().is_some_and(|live| {
                     install_effect_applied(
                         *mode,
@@ -1879,14 +1923,49 @@ impl EnsurePlatform for IcpEnsurePlatform {
         };
         let principal = Self::action_principal(state, principal)?;
         let version = self
-            .icp
-            .canister_status_report(principal)?
-            .canister_version
-            .ok_or_else(|| IcpEnsurePlatformError::MissingCanisterVersion {
+            .install_status_optional(principal)?
+            .and_then(|live| live.canister_version)
+            .ok_or_else(|| IcpEnsurePlatformError::IncompleteCanisterStatus {
                 canister: principal.to_string(),
+                field: "canister_version",
             })?;
         Ok(Some(version))
     }
+}
+
+fn exact_install_canister_status(
+    icp: &IcpCli,
+    canister: &str,
+    projected_canister_version: Option<u64>,
+    projected_module_sha256: Option<String>,
+) -> Result<ExactInstallCanisterStatus, IcpEnsurePlatformError> {
+    if let Some(canister_version) = projected_canister_version {
+        return Ok(ExactInstallCanisterStatus {
+            canister_version,
+            module_sha256: projected_module_sha256,
+        });
+    }
+    let canister_id = parse_principal("install target", canister)?;
+    let management_canister = Principal::management_canister().to_text();
+    let response = icp
+        .canister_call_candid::<_, ManagementCanisterStatusResponse>(
+            &management_canister,
+            "canister_status",
+            &ManagementCanisterStatusRequest { canister_id },
+            None,
+        )
+        .map_err(
+            |source| IcpEnsurePlatformError::InstallVersionProofUnavailable {
+                canister: canister.to_string(),
+                source: Box::new(source),
+            },
+        )?;
+    Ok(ExactInstallCanisterStatus {
+        canister_version: response.canister_version,
+        module_sha256: response
+            .module_hash
+            .map(|hash| canic_core::cdk::utils::hash::hex_bytes(&hash)),
+    })
 }
 
 fn exact_retained_root_owned_topology<'a>(
@@ -2097,6 +2176,77 @@ const fn rejection_code_name(code: RejectionCode) -> &'static str {
 mod tests {
     use super::*;
     use canic_core::dto::pool::CanisterPoolAssetStatus;
+
+    #[cfg(unix)]
+    #[test]
+    fn versionless_icp_status_uses_exact_typed_management_version() {
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        let root = crate::test_support::temp_dir("canic-install-version-fallback");
+        fs::create_dir_all(&root).expect("create version fallback fixture");
+        let executable = root.join("icp");
+        let commands = root.join("commands.log");
+        let canister = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let status_json = format!(
+            r#"{{"id":"{canister}","name":"coordinator","status":"Running","settings":{{"controllers":["rdmx6-jaaaa-aaaaa-aaadq-cai"]}},"module_hash":"0x{}","memory_size":"1","cycles":"1000000000000","query_stats":{{}}}}"#,
+            "11".repeat(32),
+        );
+        let response_bytes = candid::encode_one(ManagementCanisterStatusResponse {
+            canister_version: 42,
+            module_hash: Some(vec![0x22; 32]),
+        })
+        .expect("encode typed management status");
+        let response_hex = canic_core::cdk::utils::hash::hex_bytes(&response_bytes);
+        let script = format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = \"--version\" ]; then printf '%s\\n' 'icp 1.3.0'; exit 0; fi\n\
+             printf '%s\\n' \"$*\" >> '{}'\n\
+             case \"$*\" in\n\
+               *\"canister status {canister}\"*) printf '%s\\n' '{}' ;;\n\
+               *\"canister call aaaaa-aa canister_status\"*) printf '%s\\n' '{{\"response_bytes\":\"{response_hex}\"}}' ;;\n\
+               *) printf '%s\\n' 'unexpected fake ICP command' >&2; exit 23 ;;\n\
+             esac\n",
+            commands.display(),
+            status_json,
+        );
+        fs::write(&executable, script).expect("write fake ICP 1.3.0");
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
+            .expect("make fake ICP executable");
+        let icp = IcpCli::new(executable.to_string_lossy(), Some("ic".to_string()));
+
+        let projected = icp
+            .canister_status_report(canister)
+            .expect("read ICP 1.3.0 status projection");
+        assert_eq!(projected.canister_version, None);
+        let exact = exact_install_canister_status(
+            &icp,
+            canister,
+            projected.canister_version,
+            projected.module_hash.map(|hash| normalize_hash(&hash)),
+        )
+        .expect("obtain exact typed management status");
+        assert_eq!(exact.canister_version, 42);
+        assert_eq!(exact.module_sha256, Some("22".repeat(32)));
+        let commands = fs::read_to_string(&commands).expect("read fake ICP commands");
+        assert!(commands.contains("canister status rrkah-fqaaa-aaaaa-aaaaq-cai"));
+        assert!(commands.contains("canister call aaaaa-aa canister_status"));
+
+        fs::write(
+            &executable,
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp 1.3.0'; exit 0; fi\necho '{\"not_response_bytes\":true}'\n",
+        )
+        .expect("replace unavailable management fixture");
+        let error = exact_install_canister_status(&icp, canister, None, None)
+            .expect_err("missing projected and typed version must fail closed");
+        assert!(matches!(
+            error,
+            IcpEnsurePlatformError::InstallVersionProofUnavailable { .. }
+        ));
+        assert!(error.to_string().contains("no install was issued"));
+        assert!(error.to_string().contains("resume the same reviewed plan"));
+
+        fs::remove_dir_all(root).expect("remove version fallback fixture");
+    }
 
     #[test]
     fn root_owned_observation_classifies_bootstrap_and_workload_lifecycle() {

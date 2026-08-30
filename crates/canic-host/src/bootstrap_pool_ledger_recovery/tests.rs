@@ -1,9 +1,9 @@
 use super::*;
 use crate::canister_build::cache::{canister_build_target_root, configure_canister_cargo_command};
-use crate::test_support::temp_dir;
+use crate::test_support::{start_pocket_ic, temp_dir};
 use candid::{CandidType, Deserialize, Nat, Principal, decode_one, encode_one};
 use canic_core::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
-use pocket_ic::PocketIcBuilder;
+use ic_testkit::pic::PocketIcBuilder;
 use std::path::Path;
 
 #[derive(CandidType)]
@@ -47,7 +47,8 @@ struct HelperReceipt {
 }
 
 #[test]
-fn generated_pool_ledger_recovery_helper_converts_one_account_exactly_once() {
+#[ignore = "the workspace runner supplies one shared PocketIC server and serial execution"]
+fn governed_pocketic_generated_pool_ledger_recovery_helper_converts_one_account_exactly_once() {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let icp_root = temp_dir("canic-pool-ledger-recovery-build");
     let release_build_id =
@@ -78,7 +79,7 @@ fn generated_pool_ledger_recovery_helper_converts_one_account_exactly_once() {
     let ledger_wasm = build_cycles_ledger_stub(&workspace_root);
     let helper_wasm = fs::read(&output.wasm_path).expect("read generated recovery helper");
     assert_release_build_identity(&helper_wasm, release_build_id);
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let subnet = *pic
         .topology()
         .get_app_subnets()
