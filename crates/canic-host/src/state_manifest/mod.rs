@@ -2,8 +2,8 @@
 //!
 //! Responsibility: build host-side state manifest and audit reports from
 //! Rust-authored Canic state declarations.
-//! Does not own: stable-memory inspection, migration execution, CLI parsing, or
-//! runtime introspection.
+//! Does not own: stable-memory inspection, CLI parsing, or runtime
+//! introspection.
 //! Boundary: consumes passive declaration metadata from `canic-core` and emits
 //! diagnostic-only reports.
 
@@ -95,11 +95,9 @@ pub enum StateAuditCategory {
     Lifecycle,
     Manifest,
     MemoryId,
-    Migration,
     Naming,
     SchemaVersion,
     Snapshot,
-    TestCoverage,
 }
 
 impl StateAuditCategory {
@@ -110,11 +108,9 @@ impl StateAuditCategory {
             Self::Lifecycle => "lifecycle",
             Self::Manifest => "manifest",
             Self::MemoryId => "memory_id",
-            Self::Migration => "migration",
             Self::Naming => "naming",
             Self::SchemaVersion => "schema_version",
             Self::Snapshot => "snapshot",
-            Self::TestCoverage => "test_coverage",
         }
     }
 }
@@ -241,8 +237,7 @@ mod tests {
             allocation::allocation_definition,
         },
         state_contract::{
-            MigrationPolicy, ReservedMemoryManifest, StateDomainManifest, StateMigrationManifest,
-            StateRoleManifest, StateStorage,
+            ReservedMemoryManifest, StateDomainManifest, StateRoleManifest, StateStorage,
         },
     };
     use std::{collections::BTreeSet, path::PathBuf};
@@ -478,6 +473,17 @@ mod tests {
                 .iter()
                 .all(|check| check.status != StateAuditStatus::Fail),
             "complete descriptor registry must satisfy audit metadata: {checks:#?}"
+        );
+    }
+
+    #[test]
+    fn current_manifest_domains_are_exactly_v1() {
+        let manifest = test_state_manifest(None);
+        assert!(
+            manifest
+                .roles
+                .iter()
+                .all(|role| { role.state.iter().all(|domain| domain.version == 1) })
         );
     }
 
@@ -724,11 +730,8 @@ mod tests {
                     owner: "canic-core".to_string(),
                     record: "ExternalAuthorityRecord".to_string(),
                     snapshot: "ExternalAuthorityData".to_string(),
-                    min_supported_version: 1,
-                    migration_policy: MigrationPolicy::NotApplicable,
                     restore_order: Some(10),
                     post_upgrade_invariant: Some("external_authority_invariants".to_string()),
-                    migrations: Vec::new(),
                 }],
                 reserved_memory: Vec::new(),
             }],
@@ -745,171 +748,6 @@ mod tests {
                 .iter()
                 .all(|check| check.code != "state_domain_missing_memory_id")
         );
-    }
-
-    #[test]
-    fn invalid_support_window_fails() {
-        let manifest = StateManifest {
-            schema_version: STATE_MANIFEST_SCHEMA_VERSION,
-            roles: vec![StateRoleManifest {
-                canister_role: "root".to_string(),
-                state: vec![StateDomainManifest {
-                    domain: "auth_sessions".to_string(),
-                    version: 2,
-                    storage: StateStorage::StableMemory,
-                    memory_id: Some(36),
-                    owner: "canic-core".to_string(),
-                    record: "AuthSessionRecord".to_string(),
-                    snapshot: "AuthSessionsData".to_string(),
-                    min_supported_version: 3,
-                    migration_policy: MigrationPolicy::NewDomain,
-                    restore_order: Some(10),
-                    post_upgrade_invariant: Some("auth_sessions_invariants".to_string()),
-                    migrations: Vec::new(),
-                }],
-                reserved_memory: Vec::new(),
-            }],
-        };
-
-        let checks = audit_checks(&manifest, None);
-
-        assert!(checks.iter().any(|check| {
-            check.code == "state_domain_invalid_support_window"
-                && check.status == StateAuditStatus::Fail
-        }));
-        assert!(
-            checks
-                .iter()
-                .all(|check| check.code != "migration_available")
-        );
-    }
-
-    #[test]
-    fn duplicate_migration_declaration_fails() {
-        let manifest = StateManifest {
-            schema_version: STATE_MANIFEST_SCHEMA_VERSION,
-            roles: vec![StateRoleManifest {
-                canister_role: "root".to_string(),
-                state: vec![StateDomainManifest {
-                    domain: "auth_sessions".to_string(),
-                    version: 3,
-                    storage: StateStorage::StableMemory,
-                    memory_id: Some(36),
-                    owner: "canic-core".to_string(),
-                    record: "AuthSessionRecord".to_string(),
-                    snapshot: "AuthSessionsData".to_string(),
-                    min_supported_version: 2,
-                    migration_policy: MigrationPolicy::Migrate,
-                    restore_order: Some(10),
-                    post_upgrade_invariant: Some("auth_sessions_invariants".to_string()),
-                    migrations: vec![
-                        StateMigrationManifest {
-                            from: 2,
-                            to: 3,
-                            kind: "function".to_string(),
-                            name: Some("migrate_auth_sessions_v2_to_v3".to_string()),
-                            test: Some(
-                                "auth_sessions_v2_to_v3_upgrade_preserves_sessions".to_string(),
-                            ),
-                        },
-                        StateMigrationManifest {
-                            from: 2,
-                            to: 3,
-                            kind: "function".to_string(),
-                            name: Some("migrate_auth_sessions_v2_to_v3_again".to_string()),
-                            test: Some(
-                                "auth_sessions_v2_to_v3_upgrade_preserves_sessions".to_string(),
-                            ),
-                        },
-                    ],
-                }],
-                reserved_memory: Vec::new(),
-            }],
-        };
-
-        let checks = audit_checks(&manifest, None);
-
-        assert!(checks.iter().any(|check| {
-            check.code == "migration_declaration_duplicate"
-                && check.status == StateAuditStatus::Fail
-        }));
-    }
-
-    #[test]
-    fn invalid_migration_declaration_fails() {
-        let manifest = StateManifest {
-            schema_version: STATE_MANIFEST_SCHEMA_VERSION,
-            roles: vec![StateRoleManifest {
-                canister_role: "root".to_string(),
-                state: vec![StateDomainManifest {
-                    domain: "auth_sessions".to_string(),
-                    version: 4,
-                    storage: StateStorage::StableMemory,
-                    memory_id: Some(36),
-                    owner: "canic-core".to_string(),
-                    record: "AuthSessionRecord".to_string(),
-                    snapshot: "AuthSessionsData".to_string(),
-                    min_supported_version: 2,
-                    migration_policy: MigrationPolicy::Migrate,
-                    restore_order: Some(10),
-                    post_upgrade_invariant: Some("auth_sessions_invariants".to_string()),
-                    migrations: vec![StateMigrationManifest {
-                        from: 2,
-                        to: 4,
-                        kind: "function".to_string(),
-                        name: Some("migrate_auth_sessions_v2_to_v4".to_string()),
-                        test: Some("auth_sessions_v2_to_v4_upgrade_preserves_sessions".to_string()),
-                    }],
-                }],
-                reserved_memory: Vec::new(),
-            }],
-        };
-
-        let checks = audit_checks(&manifest, None);
-
-        assert!(checks.iter().any(|check| {
-            check.code == "migration_declaration_invalid" && check.status == StateAuditStatus::Fail
-        }));
-    }
-
-    #[test]
-    fn missing_migration_test_warns_separately_from_missing_migration() {
-        let manifest = StateManifest {
-            schema_version: STATE_MANIFEST_SCHEMA_VERSION,
-            roles: vec![StateRoleManifest {
-                canister_role: "root".to_string(),
-                state: vec![StateDomainManifest {
-                    domain: "auth_sessions".to_string(),
-                    version: 3,
-                    storage: StateStorage::StableMemory,
-                    memory_id: Some(36),
-                    owner: "canic-core".to_string(),
-                    record: "AuthSessionRecord".to_string(),
-                    snapshot: "AuthSessionsData".to_string(),
-                    min_supported_version: 2,
-                    migration_policy: MigrationPolicy::Migrate,
-                    restore_order: Some(10),
-                    post_upgrade_invariant: Some("auth_sessions_invariants".to_string()),
-                    migrations: vec![StateMigrationManifest {
-                        from: 2,
-                        to: 3,
-                        kind: "function".to_string(),
-                        name: Some("migrate_auth_sessions_v2_to_v3".to_string()),
-                        test: None,
-                    }],
-                }],
-                reserved_memory: Vec::new(),
-            }],
-        };
-        let checks = audit_checks(&manifest, None);
-
-        assert!(
-            checks
-                .iter()
-                .any(|check| check.code == "upgrade_test_missing"
-                    && check.status == StateAuditStatus::Warn)
-        );
-        assert!(checks.iter().all(|check| check.code != "migration_missing"));
     }
 
     #[test]

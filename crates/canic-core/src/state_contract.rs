@@ -2,8 +2,7 @@
 //!
 //! Responsibility: declare Canic-owned stable state metadata for host-side
 //! state manifest and audit reports.
-//! Does not own: CLI rendering, migration execution, stable-memory reads, or
-//! stable-memory writes.
+//! Does not own: CLI rendering, stable-memory reads, or stable-memory writes.
 //! Boundary: declarations are static Rust metadata derived from the storage
 //! modules that own the records and memory IDs.
 
@@ -81,11 +80,8 @@ pub struct StateDomainManifest {
     pub owner: String,
     pub record: String,
     pub snapshot: String,
-    pub min_supported_version: u32,
-    pub migration_policy: MigrationPolicy,
     pub restore_order: Option<u32>,
     pub post_upgrade_invariant: Option<String>,
-    pub migrations: Vec<StateMigrationManifest>,
 }
 
 ///
@@ -111,50 +107,6 @@ impl StateStorage {
             Self::NotApplicable => "not_applicable",
         }
     }
-}
-
-///
-/// MigrationPolicy
-///
-/// Declared upgrade policy for the domain's supported version window.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MigrationPolicy {
-    NewDomain,
-    Migrate,
-    ManualMigrationRequired,
-    DiscardDeclared,
-    NotApplicable,
-}
-
-impl MigrationPolicy {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::NewDomain => "new_domain",
-            Self::Migrate => "migrate",
-            Self::ManualMigrationRequired => "manual_migration_required",
-            Self::DiscardDeclared => "discard_declared",
-            Self::NotApplicable => "not_applicable",
-        }
-    }
-}
-
-///
-/// StateMigrationManifest
-///
-/// Declared migration or migration coverage metadata.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct StateMigrationManifest {
-    pub from: u32,
-    pub to: u32,
-    pub kind: String,
-    pub name: Option<String>,
-    pub test: Option<String>,
 }
 
 ///
@@ -720,11 +672,8 @@ fn state_domain(
         owner: AllocationOwner::CanicCore.as_str().to_string(),
         record: record.to_string(),
         snapshot: snapshot.to_string(),
-        min_supported_version: 1,
-        migration_policy: MigrationPolicy::NewDomain,
         restore_order: Some(restore_order),
         post_upgrade_invariant: Some(invariant.to_string()),
-        migrations: Vec::new(),
     }
 }
 
@@ -758,21 +707,19 @@ mod tests {
     }
 
     #[test]
-    fn state_contract_enums_own_serialized_labels() {
+    fn state_contract_storage_owns_serialized_labels() {
         assert_eq!(StateStorage::StableMemory.as_str(), "stable_memory");
         assert_eq!(StateStorage::HeapOnly.as_str(), "heap_only");
         assert_eq!(StateStorage::NotApplicable.as_str(), "not_applicable");
-        assert_eq!(MigrationPolicy::NewDomain.as_str(), "new_domain");
-        assert_eq!(MigrationPolicy::Migrate.as_str(), "migrate");
-        assert_eq!(
-            MigrationPolicy::ManualMigrationRequired.as_str(),
-            "manual_migration_required"
+    }
+
+    #[test]
+    fn current_state_domains_use_exactly_schema_version_one() {
+        assert!(
+            canic_state_descriptors()
+                .iter()
+                .all(|descriptor| { descriptor.state.iter().all(|domain| domain.version == 1) })
         );
-        assert_eq!(
-            MigrationPolicy::DiscardDeclared.as_str(),
-            "discard_declared"
-        );
-        assert_eq!(MigrationPolicy::NotApplicable.as_str(), "not_applicable");
     }
 
     #[test]

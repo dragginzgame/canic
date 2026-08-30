@@ -174,7 +174,6 @@ fn text_renderers_include_stable_fields() {
     assert!(audit.contains("memory_id [pass] memory_id_unique"));
     assert!(audit.contains("source: state_manifest"));
     assert!(manifest.contains("canic state manifest"));
-    assert!(manifest.contains("migration_policy: new_domain"));
     assert!(manifest.contains("template_manifests"));
     assert!(!manifest.contains("reserved_memory"));
     assert!(manifest.contains("cycles_tracker"));

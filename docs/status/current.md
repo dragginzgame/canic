@@ -83,9 +83,32 @@ same Store Principal under the retained topology. No version is defaulted or
 inferred. Changed or incomplete retained authority returns a typed conflict
 before an install instead of silently suppressing or repeating the effect.
 
-## Open 0.109.29 CANIC-098 Correction
+## Open 0.109.30 CANIC-100 Hard Cut
 
-Published `v0.109.28` is the immutable predecessor. The retained downstream
+Published `v0.109.29` closes the retained E132 deployment blocker described
+below. The next source batch removes the separate pre-1.0 compatibility residue
+identified by the downstream hard-cut audit.
+
+The maintained state manifest now describes only the current v1 state contract:
+domain ownership, storage, memory IDs, record/snapshot identity, restore order
+and current lifecycle invariants. Generic support windows, migration policies,
+migration edges and migration-path/upgrade-test audit logic are removed rather
+than deprecated. The diagnostic state manifest and audit remain read-only
+current-contract tools.
+
+Runtime introspection and Component Group canonical graph identity are reset in
+place to schema/domain v1. No decoder accepts their former values. A narrow
+executable-source guard rejects new Canic-owned schema, protocol, manifest,
+format, wire or config versions above 1 and named migration/legacy readers. The
+guard's synthetic permitted case keeps external-tool versions and immutable
+audit-method revisions outside product compatibility policy.
+
+This is `CANIC-100`; it is required before 0.110 promotion but is independent of
+the already-published downstream deployment unblock.
+
+## Published 0.109.29 CANIC-098 Correction
+
+Published `v0.109.28` was the immutable predecessor. The retained downstream
 journal proves its Coordinator reinstall Applied, followed by one predecessor
 `AdoptStore` intent that synchronously rejected with typed E132 and retained no
 receipt. Store and Root were not reinstalled and no paid or identity-changing
@@ -348,11 +371,11 @@ restored.
 
 ## Next Authorized Action
 
-Run the maintainer-selected validation/version/publication flow for the narrow
-0.109.29 correction. Do not modify Toko Miner from this repository. After the
-immutable patch is adopted downstream, resume the exact retained operation and
-confirm terminal/effect-free replay. B9 remains separate, and 0.110/0.111 cannot
-delay this deployment unblock.
+Complete the targeted `CANIC-100` hard-cut batch and hand it to the
+maintainer-selected validation/version/publication flow. Do not modify Toko
+Miner from this repository. Downstream may adopt published `v0.109.29` and
+resume its exact retained operation independently. B9 remains separate, and no
+0.110 implementation begins before the human-owned 0.109 closeout.
 
 
 

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.30` hard-cuts the unused stable-state migration model and audit path,
+  resets runtime introspection plus Component Group canonical identity to their
+  sole current v1 contracts, and adds a source guard against new pre-1.0 product
+  version generations or migration readers.
 - `0.109.29` corrects `CANIC-098` by crossing one exact rejected predecessor
   Store-adoption intent into typed replanning without repeating the proved
   Coordinator reinstall. Exact live observations supply missing retained

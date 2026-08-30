@@ -2,8 +2,7 @@
 //!
 //! Responsibility: declare control-plane stable state metadata keyed by the
 //! canonical allocation registry.
-//! Does not own: role applicability, CLI rendering, migration execution, or
-//! stable-memory access.
+//! Does not own: role applicability, CLI rendering, or stable-memory access.
 //! Boundary: descriptors are static metadata supplied to host-side materialization.
 
 #[cfg(feature = "root-control-plane")]
@@ -62,9 +61,7 @@ use canic_core::{
             TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
         },
     },
-    state_contract::{
-        MigrationPolicy, StateAllocationDescriptor, StateDomainManifest, StateStorage,
-    },
+    state_contract::{StateAllocationDescriptor, StateDomainManifest, StateStorage},
 };
 
 #[must_use]
@@ -202,14 +199,11 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentRegistryStateRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(196),
                 post_upgrade_invariant: Some(
                     "root_component_registry_restores_exact_preparation_authority_and_allocation_sequence"
                         .to_string(),
                 ),
-                migrations: Vec::new(),
             },
             StateDomainManifest {
                 domain: "root_component_allocations".to_string(),
@@ -219,14 +213,11 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentAllocationRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(197),
                 post_upgrade_invariant: Some(
                     "root_component_allocations_restore_exact_operation_identity_and_capacity"
                         .to_string(),
                 ),
-                migrations: Vec::new(),
             },
             StateDomainManifest {
                 domain: "component_registry_entries".to_string(),
@@ -236,14 +227,11 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: ComponentRegistryEntryRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(198),
                 post_upgrade_invariant: Some(
                     "component_registry_entries_restore_exact_heads_reservations_and_counts"
                         .to_string(),
                 ),
-                migrations: Vec::new(),
             },
             StateDomainManifest {
                 domain: "component_registry_principal_index".to_string(),
@@ -253,14 +241,11 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: ComponentRegistryPrincipalIndexRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(199),
                 post_upgrade_invariant: Some(
                     "component_registry_principal_index_restores_unique_committed_bindings"
                         .to_string(),
                 ),
-                migrations: Vec::new(),
             },
             StateDomainManifest {
                 domain: "root_component_subtree_removal_history".to_string(),
@@ -271,14 +256,11 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 record: RootComponentSubtreeRemovalCompletedLeafRecord::STATE_CONTRACT_NAME
                     .to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(200),
                 post_upgrade_invariant: Some(
                     "root_component_subtree_removal_history_restores_exact_operation_step_receipts"
                         .to_string(),
                 ),
-                migrations: Vec::new(),
             },
             root_component_draining_domain(),
         ],
@@ -295,14 +277,11 @@ fn root_component_draining_domain() -> StateDomainManifest {
         owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
         record: RootComponentDrainingRecord::STATE_CONTRACT_NAME.to_string(),
         snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
-        min_supported_version: 1,
-        migration_policy: MigrationPolicy::NewDomain,
         restore_order: Some(201),
         post_upgrade_invariant: Some(
             "root_component_draining_restores_exact_funding_fence_quiescence_cursor_final_inventory_deletion_and_membership_removal"
                 .to_string(),
         ),
-        migrations: Vec::new(),
     }
 }
 
@@ -320,14 +299,11 @@ fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: CanisterPoolAssetRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: CanisterPoolData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(202),
                 post_upgrade_invariant: Some(
                     "root_canister_pool_assets_restore_exact_lifecycle_and_component_claims"
                         .to_string(),
                 ),
-                migrations: Vec::new(),
             },
             StateDomainManifest {
                 domain: "root_canister_pool_state".to_string(),
@@ -337,13 +313,10 @@ fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: CanisterPoolStateRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: CanisterPoolData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(203),
                 post_upgrade_invariant: Some(
                     "root_canister_pool_creation_restores_exact_paid_effect_authority".to_string(),
                 ),
-                migrations: Vec::new(),
             },
             StateDomainManifest {
                 domain: "root_canister_pool_handoff_receipts".to_string(),
@@ -353,13 +326,10 @@ fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: CanisterPoolHandoffReceiptRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: CanisterPoolHandoffReceiptData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(204),
                 post_upgrade_invariant: Some(
                     "root_canister_pool_handoff_receipts_restore_exact_terminal_replay".to_string(),
                 ),
-                migrations: Vec::new(),
             },
         ],
         reserved_memory: Vec::new(),
@@ -380,14 +350,11 @@ fn root_component_provisioning_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentOperationRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(205),
                 post_upgrade_invariant: Some(
                     "root_component_provisioning_operations_restore_exact_intent_and_receipts"
                         .to_string(),
                 ),
-                migrations: Vec::new(),
             },
             StateDomainManifest {
                 domain: "root_component_provisioning_placements".to_string(),
@@ -397,14 +364,11 @@ fn root_component_provisioning_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentProvisioningPlacementRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(206),
                 post_upgrade_invariant: Some(
                     "root_component_provisioning_placements_restore_permanent_unique_reservations"
                         .to_string(),
                 ),
-                migrations: Vec::new(),
             },
             StateDomainManifest {
                 domain: "root_component_provisioning_state".to_string(),
@@ -414,14 +378,11 @@ fn root_component_provisioning_descriptor() -> StateAllocationDescriptor {
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentProvisioningStateRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
-                min_supported_version: 1,
-                migration_policy: MigrationPolicy::NewDomain,
                 restore_order: Some(207),
                 post_upgrade_invariant: Some(
                     "root_component_provisioning_state_restores_capacity_and_active_operation_fence"
                         .to_string(),
                 ),
-                migrations: Vec::new(),
             },
         ],
         reserved_memory: Vec::new(),
@@ -460,11 +421,8 @@ fn descriptor(
             owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
             record: record.to_string(),
             snapshot: snapshot.to_string(),
-            min_supported_version: 1,
-            migration_policy: MigrationPolicy::NewDomain,
             restore_order: Some(restore_order),
             post_upgrade_invariant: Some(invariant.to_string()),
-            migrations: Vec::new(),
         }],
         reserved_memory: Vec::new(),
     }

@@ -2,8 +2,7 @@
 //!
 //! Responsibility: expose state manifest and audit reports as diagnostic CLI
 //! commands.
-//! Does not own: stable-memory reads, migration execution, generated files, or
-//! runtime introspection.
+//! Does not own: stable-memory reads, generated files, or runtime introspection.
 //! Boundary: parses `canic state` command forms and delegates report
 //! construction to `canic-host`.
 
@@ -42,8 +41,8 @@ Examples:
   canic state manifest
 
 State commands are diagnostic-only metadata reports. They do not read stable
-memory values, run migrations, repair memory IDs, write generated files, modify
-config, create a reviewed Fleet plan, or mutate canisters.";
+memory values, repair memory IDs, write generated files, modify config, create
+a reviewed Fleet plan, or mutate canisters.";
 
 const AUDIT_HELP_AFTER: &str = "\
 Examples:
@@ -343,14 +342,6 @@ fn render_manifest_text(manifest: &StateManifest) -> String {
             lines.push(format!("    owner: {}", domain.owner));
             lines.push(format!("    record: {}", domain.record));
             lines.push(format!("    snapshot: {}", domain.snapshot));
-            lines.push(format!(
-                "    min_supported_version: {}",
-                domain.min_supported_version
-            ));
-            lines.push(format!(
-                "    migration_policy: {}",
-                domain.migration_policy.as_str()
-            ));
         }
         if !role.reserved_memory.is_empty() {
             lines.push("reserved_memory".to_string());
