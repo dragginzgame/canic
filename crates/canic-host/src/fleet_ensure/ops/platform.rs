@@ -15,8 +15,10 @@ use crate::{
             RootManagementObservation, RootOwnedCanisterLifecycle, reconcile_retirement_transfer,
         },
         ops::{
-            EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
-            canic_init, current_protocol, protocol, root_owned_lifecycle,
+            EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
+            EnsureStateError, TerminalFleetInventory, canic_init, current_protocol,
+            predecessor_root_status, protocol, read_root_start_authority, root_owned_lifecycle,
+            verify_root_start_release_authority,
         },
     },
     icp::{IcpCandidCallError, IcpCli, IcpCommandError, IcpDiagnostic, run_status},
@@ -26,7 +28,7 @@ use crate::{
 use candid::{CandidType, Nat, Principal};
 use canic_core::{
     cdk::types::Cycles,
-    dto::pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
+    dto::pool::{CanisterPoolAsset, CanisterPoolResponse, CanisterPoolStatusRequest},
     ids::BuildNetwork,
     protocol as canic_protocol,
 };
@@ -299,6 +301,12 @@ pub enum IcpEnsurePlatformError {
 
     #[error(transparent)]
     Protocol(#[from] protocol::ProtocolEffectError),
+
+    #[error("retained Root status authority is invalid: {0}")]
+    RetainedRootStatusAuthority(#[source] Box<EnsureStateError>),
+
+    #[error("predecessor Root status is invalid: {0}")]
+    PredecessorRootStatus(#[source] Box<predecessor_root_status::PredecessorRootStatusError>),
 }
 
 /// Production ICP adapter for the current desired Fleet.
@@ -575,31 +583,47 @@ impl IcpEnsurePlatform {
         if self.required_root_status(&configured.name, root)? == CanisterRuntimeStatus::Stopped {
             return retained_observation(RetainedRootOwnedObservationMode::DeferredUntilRootStart);
         }
+        let predecessor_status = self.predecessor_root_status_authorized(parent, root)?;
+        if predecessor_status {
+            self.record_recovery_reinstalls(parent);
+        }
         let target = parse_principal("Root-owned canister", principal)?;
         let mut start_after = None;
         loop {
-            let response: Result<RootPoolStatusResponse, CanisterProtocolError> = query_with_candid(
-                &self.icp,
-                &candid,
-                parse_principal("Fleet Subnet Root", root)?,
-                canic_protocol::CANIC_STATUS,
-                &RootPoolStatusRequest::Pool(CanisterPoolStatusRequest {
+            let page = if predecessor_status {
+                predecessor_root_status::query_pool(
+                    &self.icp,
+                    parse_principal("Fleet Subnet Root", root)?,
                     start_after,
-                    limit: 256,
-                }),
-            );
-            let response = match response {
-                Ok(response) => response,
-                Err(error) if recoverable_root_status_error(&error) => {
-                    return retained_observation(
-                        RetainedRootOwnedObservationMode::ReinstallRecovery,
+                    256,
+                )
+                .map_err(|error| IcpEnsurePlatformError::PredecessorRootStatus(Box::new(error)))?
+            } else {
+                let response: Result<RootPoolStatusResponse, CanisterProtocolError> =
+                    query_with_candid(
+                        &self.icp,
+                        &candid,
+                        parse_principal("Fleet Subnet Root", root)?,
+                        canic_protocol::CANIC_STATUS,
+                        &RootPoolStatusRequest::Pool(CanisterPoolStatusRequest {
+                            start_after,
+                            limit: 256,
+                        }),
                     );
-                }
-                Err(error) => {
-                    return Err(current_protocol::CurrentProtocolError::from(error).into());
-                }
+                let response = match response {
+                    Ok(response) => response,
+                    Err(error) if recoverable_root_status_error(&error) => {
+                        return retained_observation(
+                            RetainedRootOwnedObservationMode::ReinstallRecovery,
+                        );
+                    }
+                    Err(error) => {
+                        return Err(current_protocol::CurrentProtocolError::from(error).into());
+                    }
+                };
+                let RootPoolStatusResponse::Pool(page) = response;
+                *page
             };
-            let RootPoolStatusResponse::Pool(page) = response;
             if let Some(asset) = page
                 .entries
                 .into_iter()
@@ -614,31 +638,7 @@ impl IcpEnsurePlatform {
                         RetainedRootOwnedObservationMode::ReinstallRecovery,
                     );
                 }
-                let Some(root_owned_lifecycle) =
-                    root_owned_lifecycle(configured.kind, &asset.status)
-                else {
-                    return Err(current_protocol::CurrentProtocolError::Configuration(format!(
-                        "Root-owned canister {} has a live pool role incompatible with desired {:?}",
-                        configured.name, configured.kind
-                    ))
-                    .into());
-                };
-                return Ok(Some(LiveCanister {
-                    canister_version: None,
-                    controllers: vec![root.to_string()],
-                    cycles: asset.cycles.to_u128(),
-                    module_sha256: None,
-                    principal: principal.to_string(),
-                    reinstall_required: false,
-                    root_owned_lifecycle: Some(root_owned_lifecycle),
-                    status: match root_owned_lifecycle {
-                        RootOwnedCanisterLifecycle::Store
-                        | RootOwnedCanisterLifecycle::Workload => CanisterRuntimeStatus::Running,
-                        RootOwnedCanisterLifecycle::Claimed
-                        | RootOwnedCanisterLifecycle::Idle
-                        | RootOwnedCanisterLifecycle::Retained => CanisterRuntimeStatus::Stopped,
-                    },
-                }));
+                return Self::observed_root_owned_asset(configured, principal, root, asset);
             }
             let next = page.next_start_after;
             if next.is_none() {
@@ -654,6 +654,116 @@ impl IcpEnsurePlatform {
             }
             start_after = next;
         }
+    }
+
+    fn observed_root_owned_asset(
+        configured: &crate::fleet_ensure::model::DesiredCanister,
+        principal: &str,
+        root: &str,
+        asset: CanisterPoolAsset,
+    ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        let Some(root_owned_lifecycle) = root_owned_lifecycle(configured.kind, &asset.status)
+        else {
+            return Err(
+                current_protocol::CurrentProtocolError::Configuration(format!(
+                    "Root-owned canister {} has a live pool role incompatible with desired {:?}",
+                    configured.name, configured.kind
+                ))
+                .into(),
+            );
+        };
+        let status = match root_owned_lifecycle {
+            RootOwnedCanisterLifecycle::Store | RootOwnedCanisterLifecycle::Workload => {
+                CanisterRuntimeStatus::Running
+            }
+            RootOwnedCanisterLifecycle::Claimed
+            | RootOwnedCanisterLifecycle::Idle
+            | RootOwnedCanisterLifecycle::Retained => CanisterRuntimeStatus::Stopped,
+        };
+        Ok(Some(LiveCanister {
+            canister_version: None,
+            controllers: vec![root.to_string()],
+            cycles: asset.cycles.to_u128(),
+            module_sha256: None,
+            principal: principal.to_string(),
+            reinstall_required: false,
+            root_owned_lifecycle: Some(root_owned_lifecycle),
+            status,
+        }))
+    }
+
+    fn predecessor_root_status_authorized(
+        &self,
+        root_name: &str,
+        root: &str,
+    ) -> Result<bool, IcpEnsurePlatformError> {
+        let paths = EnsurePaths::under(&self.root, &self.desired.environment, &self.desired.fleet);
+        let Some(authority) = read_root_start_authority(&paths).map_err(|error| {
+            IcpEnsurePlatformError::RetainedRootStatusAuthority(Box::new(error))
+        })?
+        else {
+            return Ok(false);
+        };
+        let Some(binding) = authority
+            .roots
+            .iter()
+            .find(|binding| binding.principal == root)
+        else {
+            return Ok(false);
+        };
+        let live = self.status_optional(root)?.ok_or_else(|| {
+            current_protocol::CurrentProtocolError::Configuration(format!(
+                "retained predecessor Root {root_name} is unavailable"
+            ))
+        })?;
+        if live.module_sha256.as_deref() != Some(binding.predecessor_module_sha256.as_str()) {
+            return Ok(false);
+        }
+        let bootstrap = self.desired.bootstrap.as_ref().ok_or_else(|| {
+            current_protocol::CurrentProtocolError::Configuration(
+                "predecessor Root status requires current Fleet bootstrap authority".to_string(),
+            )
+        })?;
+        let configured = self
+            .desired
+            .canisters
+            .iter()
+            .find(|configured| {
+                configured.name == root_name && configured.kind == DesiredCanisterKind::Root
+            })
+            .ok_or_else(|| {
+                current_protocol::CurrentProtocolError::Configuration(format!(
+                    "predecessor Root {root_name} is absent from desired topology"
+                ))
+            })?;
+        let successor_wasm = configured.wasm.as_deref().ok_or_else(|| {
+            current_protocol::CurrentProtocolError::Configuration(format!(
+                "predecessor Root {root_name} has no desired successor artifact"
+            ))
+        })?;
+        let successor_module = artifact_hash(&resolve_path(&self.root, successor_wasm))?;
+        let identity_matches = authority.environment == self.desired.environment
+            && authority.fleet == self.desired.fleet
+            && authority.fleet_id == bootstrap.fleet_id
+            && authority.release_build_id == bootstrap.release_build_id
+            && authority.successor_module_sha256 == successor_module
+            && binding.name == configured.name
+            && configured.principal.as_deref() == Some(root)
+            && binding.subnet == configured.subnet
+            && binding.controllers == configured.controllers
+            && live.controllers == configured.controllers;
+        if !identity_matches {
+            return Err(
+                current_protocol::CurrentProtocolError::Configuration(format!(
+                    "predecessor Root {root_name} conflicts with sealed successor authority"
+                ))
+                .into(),
+            );
+        }
+        verify_root_start_release_authority(&self.root, &authority).map_err(|error| {
+            IcpEnsurePlatformError::RetainedRootStatusAuthority(Box::new(error))
+        })?;
+        Ok(true)
     }
 
     fn root_protocol_candid(&self) -> Result<PathBuf, IcpEnsurePlatformError> {
