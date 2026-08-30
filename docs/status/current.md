@@ -358,4 +358,5 @@ delay this deployment unblock.
 
 
 
-<!-- canic-release-validation: version=0.109.28 source=9d4a6339cfd57c7c468462b031eae70d31992218 date=2026-08-30 gate=complete -->
+
+<!-- canic-release-validation: version=0.109.29 source=baf6b319b00e6369fd3e6790454ee48819bcf234 date=2026-08-30 gate=complete -->
