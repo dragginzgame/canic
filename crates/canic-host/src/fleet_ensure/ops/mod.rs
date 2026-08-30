@@ -86,6 +86,10 @@ pub struct EffectObservation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EffectRetry {
     None,
+    /// The retained intent was synchronously rejected before mutation and its
+    /// exact live prerequisite is now management-proved. Close the immutable
+    /// operation and require a newly reviewed plan.
+    ReplanRequiredAfterRejectedPrerequisite,
     ReplayExactIssuedCommand,
 }
 

@@ -79,6 +79,11 @@ where
     )]
     ConvergenceDrift,
 
+    #[error(
+        "retained Fleet prerequisite was synchronously rejected before mutation ({evidence}); the immutable operation is now replan-required"
+    )]
+    ReplanRequiredAfterRejectedPrerequisite { evidence: String },
+
     #[error(transparent)]
     Policy(#[from] EnsurePolicyError),
 
@@ -510,6 +515,16 @@ where
             let destination_cycles = platform
                 .action_destination_cycles(action, &state)
                 .map_err(EnsureWorkflowError::Platform)?;
+            let replan_after_rejection =
+                observed.retry == EffectRetry::ReplanRequiredAfterRejectedPrerequisite;
+            let retained_rejection_is_exact = !replan_after_rejection
+                || (journal.effects.len() == index + 1
+                    && journal.effects[..index]
+                        .iter()
+                        .all(|effect| effect.state == EffectState::Applied)
+                    && record.state == EffectState::Intent
+                    && record.created_principal.is_none()
+                    && record.receipt.is_none());
             let record = journal
                 .effects
                 .get_mut(index)
@@ -522,6 +537,23 @@ where
                 journal.stalled_observations = 0;
                 write_journal(&paths, &journal)?;
                 break;
+            }
+
+            if replan_after_rejection {
+                if !retained_rejection_is_exact {
+                    return Err(EnsureWorkflowError::JournalIntegrity);
+                }
+                record.progress_identity = Some(observed.progress_identity.clone());
+                retain_completed_reinstalls(&mut state, &retained_plan, &journal);
+                write_state(&paths, &state)?;
+                journal.completion = FleetEnsureCompletion::ReplanRequired;
+                journal.stalled_observations = 0;
+                write_journal(&paths, &journal)?;
+                return Err(
+                    EnsureWorkflowError::ReplanRequiredAfterRejectedPrerequisite {
+                        evidence: observed.progress_identity,
+                    },
+                );
             }
 
             if matches!(record.state, EffectState::Intent) {
@@ -1480,11 +1512,46 @@ pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
         .flat_map(|canister| canister.actions.iter())
         .chain(plan.protocol_actions.iter())
         .collect::<Vec<_>>();
-    actions.sort_by_key(|action| action_order(action));
+    // Current planning fences protocol work behind infrastructure convergence.
+    // Therefore Store installation plus typed adoption can only be the exact
+    // retained predecessor prerequisite that must stay ahead of installation.
+    let retained_store_prerequisite = actions.iter().any(|action| {
+        matches!(
+            action,
+            EnsureAction::Install {
+                canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Store { .. }),
+                ..
+            }
+        )
+    }) && actions.iter().any(|action| {
+        matches!(
+            action,
+            EnsureAction::Install {
+                canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Root { .. }),
+                ..
+            }
+        )
+    });
+    actions.sort_by_key(|action| {
+        if retained_store_prerequisite
+            && matches!(
+                action,
+                EnsureAction::FleetProtocol { action, .. }
+                    if matches!(
+                        action.as_ref(),
+                        crate::fleet_ensure::model::CurrentFleetProtocolAction::AdoptStore { .. }
+                    )
+            )
+        {
+            3
+        } else {
+            action_order(action)
+        }
+    });
     actions
 }
 
-pub(super) fn action_order(action: &EnsureAction) -> u8 {
+pub(super) const fn action_order(action: &EnsureAction) -> u8 {
     match action {
         EnsureAction::Create { .. } => 0,
         EnsureAction::Fund { .. } => 1,
@@ -1492,20 +1559,13 @@ pub(super) fn action_order(action: &EnsureAction) -> u8 {
             canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Coordinator),
             ..
         } => 2,
-        EnsureAction::FleetProtocol { action, .. }
-            if matches!(
-                action.as_ref(),
-                crate::fleet_ensure::model::CurrentFleetProtocolAction::AdoptStore { .. }
-            ) =>
-        {
-            3
-        }
+        EnsureAction::SetControllers { .. } => 3,
         EnsureAction::Install {
             canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Store { .. }),
             ..
         } => 4,
         EnsureAction::Install { .. } => 5,
-        EnsureAction::SetControllers { .. } | EnsureAction::Start { .. } => 6,
+        EnsureAction::Start { .. } => 6,
         EnsureAction::FleetProtocol { .. } | EnsureAction::Protocol { .. } => 7,
         EnsureAction::Transfer { .. } => 8,
         EnsureAction::Stop { .. } => 9,

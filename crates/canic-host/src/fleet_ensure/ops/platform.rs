@@ -61,6 +61,67 @@ struct ExactInstallCanisterStatus {
     module_sha256: Option<String>,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct RetainedStoreControlBinding {
+    action_root: String,
+    retained_root: Option<String>,
+    retained_store: Option<String>,
+    root_kind: Option<DesiredCanisterKind>,
+    root_parent: Option<String>,
+    store_kind: Option<DesiredCanisterKind>,
+    store_parent: Option<String>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct RetainedStoreControlLiveBinding {
+    root_controllers: Vec<String>,
+    root_module_sha256: Option<String>,
+    store_controllers: Vec<String>,
+    store_module_sha256: Option<String>,
+}
+
+fn retained_store_control_binding(
+    action_root: &str,
+    state: &FleetEnsureStateRecord,
+    root_name: &str,
+    store_name: &str,
+) -> RetainedStoreControlBinding {
+    let root = state.topology.get(root_name);
+    let store = state.topology.get(store_name);
+    RetainedStoreControlBinding {
+        action_root: action_root.to_string(),
+        retained_root: state.principals.get(root_name).cloned(),
+        retained_store: state.principals.get(store_name).cloned(),
+        root_kind: root.map(|topology| topology.kind),
+        root_parent: root.and_then(|topology| topology.parent.clone()),
+        store_kind: store.map(|topology| topology.kind),
+        store_parent: store.and_then(|topology| topology.parent.clone()),
+    }
+}
+
+fn retained_store_control_live_binding(
+    root: LiveCanister,
+    store: LiveCanister,
+) -> RetainedStoreControlLiveBinding {
+    RetainedStoreControlLiveBinding {
+        root_controllers: root.controllers,
+        root_module_sha256: root.module_sha256,
+        store_controllers: store.controllers,
+        store_module_sha256: store.module_sha256,
+    }
+}
+
+fn desired_root_by_principal<'a>(
+    desired: &'a DesiredFleet,
+    state: &FleetEnsureStateRecord,
+    principal: &str,
+) -> Option<&'a crate::fleet_ensure::model::DesiredCanister> {
+    desired.canisters.iter().find(|canister| {
+        canister.kind == DesiredCanisterKind::Root
+            && state.principals.get(&canister.name).map(String::as_str) == Some(principal)
+    })
+}
+
 /// Exact input expected by a configured cycle-safe retirement endpoint.
 
 #[derive(CandidType)]
@@ -435,6 +496,114 @@ impl IcpEnsurePlatform {
         resolved.sort();
         resolved.dedup();
         Ok(resolved)
+    }
+
+    fn retained_store_control_replan_is_exact(
+        &self,
+        operation_id: &str,
+        action: &EnsureAction,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<bool, IcpEnsurePlatformError> {
+        let EnsureAction::FleetProtocol {
+            action: current_action,
+            name,
+            principal,
+            ..
+        } = action
+        else {
+            return Ok(false);
+        };
+        let crate::fleet_ensure::model::CurrentFleetProtocolAction::AdoptStore { request } =
+            current_action.as_ref()
+        else {
+            return Ok(false);
+        };
+        let requested_root = request.authority.fleet_subnet_root.to_text();
+        let Some(root) = desired_root_by_principal(&self.desired, state, &requested_root) else {
+            return Ok(false);
+        };
+        let root_name = root.name.as_str();
+        if name != &format!("root-store-control:{root_name}") {
+            return Ok(false);
+        }
+        if !current_protocol::retained_store_control_request_is_exact(
+            &self.root,
+            &self.desired,
+            operation_id,
+            state,
+            root_name,
+            request,
+        )? {
+            return Ok(false);
+        }
+        let principals = self.protocol_principals(state);
+        let Some((_name, expected)) =
+            canic_init::compile_root_authorities(&self.root, &self.desired, &principals)?
+                .into_iter()
+                .find(|(name, _authority)| name == root_name)
+        else {
+            return Ok(false);
+        };
+        let root_principal = expected.binding.fleet_subnet_root.to_text();
+        let store_principal = expected.wasm_store_authority.wasm_store.to_text();
+        let root_topology = state.topology.get(root_name);
+        let store = self.desired.canisters.iter().find(|canister| {
+            canister.kind == DesiredCanisterKind::Store
+                && canister.parent.as_deref() == Some(root_name)
+        });
+        let Some(store) = store else {
+            return Ok(false);
+        };
+        let store_topology = state.topology.get(&store.name);
+        let observed_binding =
+            retained_store_control_binding(principal, state, root_name, &store.name);
+        let expected_binding = RetainedStoreControlBinding {
+            action_root: root_principal.clone(),
+            retained_root: Some(root_principal.clone()),
+            retained_store: Some(store_principal.clone()),
+            root_kind: Some(DesiredCanisterKind::Root),
+            root_parent: root.parent.clone(),
+            store_kind: Some(DesiredCanisterKind::Store),
+            store_parent: Some(root_name.to_string()),
+        };
+        let predecessor_modules_are_bound = root_topology
+            .and_then(|topology| topology.module_hash.as_ref())
+            .is_some()
+            && store_topology
+                .and_then(|topology| topology.module_hash.as_ref())
+                .is_some();
+        if observed_binding != expected_binding || !predecessor_modules_are_bound {
+            return Ok(false);
+        }
+
+        let Some(root_live) = self.status_optional(&root_principal)? else {
+            return Ok(false);
+        };
+        let Some(store_live) = self.status_optional(&store_principal)? else {
+            return Ok(false);
+        };
+        let Some(root_wasm) = root.wasm.as_ref() else {
+            return Ok(false);
+        };
+        let Some(store_wasm) = store.wasm.as_ref() else {
+            return Ok(false);
+        };
+        let root_successor = artifact_hash(&resolve_path(&self.root, root_wasm))?;
+        let store_successor = artifact_hash(&resolve_path(&self.root, store_wasm))?;
+        let root_controllers =
+            self.resolved_controllers(state, &root.controllers, &root.controller_canisters)?;
+        let store_controllers =
+            self.resolved_controllers(state, &store.controllers, &store.controller_canisters)?;
+        let observed_live = retained_store_control_live_binding(root_live, store_live);
+        let expected_live = RetainedStoreControlLiveBinding {
+            root_controllers,
+            root_module_sha256: root_topology.and_then(|topology| topology.module_hash.clone()),
+            store_controllers,
+            store_module_sha256: store_topology.and_then(|topology| topology.module_hash.clone()),
+        };
+        Ok(observed_live == expected_live
+            && observed_live.root_module_sha256.as_deref() != Some(root_successor.as_str())
+            && observed_live.store_module_sha256.as_deref() != Some(store_successor.as_str()))
     }
 
     fn observed_protocol_action(
@@ -1498,30 +1667,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             return Ok(Vec::new());
         }
         if !self.recovery_reinstalls.borrow().is_empty() {
-            let recovery = self.recovery_reinstalls.borrow();
-            let mut actions = current_protocol::compile_store_control_actions_unobserved(
-                &self.root,
-                &self.desired,
-                operation_id,
-                state,
-            )?;
-            actions.retain(|action| {
-                action
-                    .name()
-                    .strip_prefix("root-store-control:")
-                    .is_some_and(|root| recovery.contains(root))
-            });
-            return Ok(actions);
-        }
-        let store_control = current_protocol::compile_store_control_actions(
-            &self.icp,
-            &self.root,
-            &self.desired,
-            operation_id,
-            state,
-        )?;
-        if !store_control.is_empty() {
-            return Ok(store_control);
+            return Ok(Vec::new());
         }
         let coordinator = self
             .desired
@@ -1534,15 +1680,15 @@ impl EnsurePlatform for IcpEnsurePlatform {
             })
             .expect("typed topology validation requires one Coordinator");
         let Some(principal) = self.current_principal(state, &coordinator.name) else {
-            return Ok(store_control);
+            return Ok(Vec::new());
         };
         let Some(live) = self.status_optional(principal)? else {
-            return Ok(store_control);
+            return Ok(Vec::new());
         };
         if let Some(wasm) = &coordinator.wasm {
             let expected = artifact_hash(&resolve_path(&self.root, wasm))?;
             if live.module_sha256.as_deref() != Some(expected.as_str()) {
-                return Ok(store_control);
+                return Ok(Vec::new());
             }
         }
         current_protocol::compile(&self.icp, &self.root, &self.desired, operation_id, state)
@@ -1641,6 +1787,26 @@ impl EnsurePlatform for IcpEnsurePlatform {
             } => {
                 let observation = match current_protocol::observe(&self.icp, &self.root, action) {
                     Ok(observation) => observation,
+                    Err(error)
+                        if matches!(
+                            current_action.as_ref(),
+                            crate::fleet_ensure::model::CurrentFleetProtocolAction::AdoptStore { .. }
+                        ) && predecessor_store_control_rejection(&error) =>
+                    {
+                        if !self.retained_store_control_replan_is_exact(
+                            operation_id,
+                            action,
+                            state,
+                        )? {
+                            return Err(error.into());
+                        }
+                        EffectObservation {
+                            applied: false,
+                            progress_identity: "store-adoption:replan-required:diagnostic:132"
+                                .to_string(),
+                            retry: EffectRetry::ReplanRequiredAfterRejectedPrerequisite,
+                        }
+                    }
                     Err(error)
                         if matches!(
                             current_action.as_ref(),
@@ -2125,6 +2291,14 @@ fn recoverable_current_protocol_error(error: &current_protocol::CurrentProtocolE
         error,
         current_protocol::CurrentProtocolError::Transport(source)
             if recoverable_root_status_error(source)
+    )
+}
+
+fn predecessor_store_control_rejection(error: &current_protocol::CurrentProtocolError) -> bool {
+    matches!(
+        error,
+        current_protocol::CurrentProtocolError::Transport(source)
+            if source.is_rejected_with(canic_core::diagnostics::codes::STATE_CONFLICT)
     )
 }
 
