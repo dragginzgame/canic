@@ -623,6 +623,8 @@ pub struct FleetEnsurePlan {
     pub planned_at_time: u64,
     pub protocol_actions: Vec<EnsureAction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_start_authority: Option<Box<RetainedRootStartAuthorityRecord>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reviewed_desired: Option<Box<ReviewedDesiredFleetRecord>>,
     pub schema_version: u16,
     #[serde(default, skip_serializing_if = "FleetEnsurePlanScope::is_full")]
@@ -672,6 +674,55 @@ pub struct RootManagementCanisterObservation {
 pub struct RootManagementObservation {
     pub operator_cycles: u128,
     pub roots: BTreeMap<String, RootManagementCanisterObservation>,
+}
+
+/// One exact retained Root module accepted only for a same-identity Start prerequisite.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RetainedRootStartBinding {
+    pub controllers: Vec<String>,
+    pub name: String,
+    pub predecessor_module_sha256: String,
+    pub principal: String,
+    pub subnet: String,
+}
+
+/// Generator-owned authority for starting verified retained Roots before protected observation.
+///
+/// This record cannot authorize installation, replacement, funding, or any paid effect. The
+/// reviewed prerequisite plan embeds it so later apply and replay do not depend on a mutable file.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RetainedRootStartAuthorityRecord {
+    pub authority_sha256: String,
+    pub environment: String,
+    pub fleet: String,
+    pub fleet_id: canic_core::ids::FleetId,
+    pub release_build_id: canic_core::ids::ReleaseBuildId,
+    pub roots: Vec<RetainedRootStartBinding>,
+    pub schema_version: u16,
+    pub successor_module_sha256: String,
+}
+
+impl RetainedRootStartAuthorityRecord {
+    pub(crate) fn seal(&mut self) {
+        self.authority_sha256 = self.expected_sha256();
+    }
+
+    pub(crate) fn has_valid_digest(&self) -> bool {
+        self.authority_sha256 == self.expected_sha256()
+    }
+
+    fn expected_sha256(&self) -> String {
+        let mut canonical = self.clone();
+        canonical.authority_sha256.clear();
+        let bytes = serde_json::to_vec(&canonical)
+            .expect("retained Root-start authority is JSON serializable");
+        let mut framed = b"canic:fleet-ensure:root-start-authority:v1".to_vec();
+        framed.extend_from_slice(&u64::try_from(bytes.len()).unwrap_or(u64::MAX).to_be_bytes());
+        framed.extend_from_slice(&bytes);
+        canic_core::cdk::utils::hash::sha256_hex(&framed)
+    }
 }
 
 /// Durable state of one planned effect.

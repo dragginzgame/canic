@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.26` lets the stopped-Root prerequisite retain and embed exact
+  predecessor-module authority while keeping the current successor artifact
+  unchanged; only the reviewed same-identity Start is authorized.
 - `0.109.25` lets Fleet Ensure review and apply only the exact management-bound
   Start needed by a stopped retained Root, without inventing child topology or
   granting a paid or replacement effect; full protected convergence resumes

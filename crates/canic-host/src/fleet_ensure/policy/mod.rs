@@ -9,8 +9,8 @@ use crate::fleet_ensure::model::{
     CurrentFleetProtocolAction, CycleConservation, DesiredCanisterKind, DesiredFleet,
     DesiredFleetArtifacts, DesiredPresence, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION,
     FleetEnsurePlan, FleetEnsurePlanScope, FleetObservation, InstallMode, LiveCanister,
-    MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS, RootManagementObservation,
-    RootOwnedCanisterLifecycle,
+    MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS, RetainedRootStartAuthorityRecord,
+    RetainedRootStartBinding, RootManagementObservation, RootOwnedCanisterLifecycle,
 };
 use candid::Principal;
 use canic_core::{cdk::types::Cycles, ids::FleetName};
@@ -515,6 +515,7 @@ pub fn compile_plan(
         plan_sha256: String::new(),
         planned_at_time: created_at_time,
         protocol_actions,
+        root_start_authority: None,
         reviewed_desired: Some(Box::new(
             crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(desired),
         )),
@@ -525,47 +526,33 @@ pub fn compile_plan(
     Ok(plan)
 }
 
+/// Complete pure authority used to compile one management-only Root Start prerequisite.
+pub(crate) struct RootStartPlanInput<'a> {
+    pub authority: Option<&'a RetainedRootStartAuthorityRecord>,
+    pub created_at_time: u64,
+    pub desired: &'a DesiredFleet,
+    pub desired_sha256: &'a str,
+    pub artifacts: &'a DesiredFleetArtifacts,
+    pub observation: &'a RootManagementObservation,
+    pub requested_fleet: &'a str,
+}
+
 /// Compile the one management-only prerequisite allowed before protected Root observation.
 pub(crate) fn compile_root_start_prerequisite_plan(
-    desired: &DesiredFleet,
-    artifacts: &DesiredFleetArtifacts,
-    desired_sha256: &str,
-    requested_fleet: &str,
-    observation: &RootManagementObservation,
-    created_at_time: u64,
+    input: RootStartPlanInput<'_>,
 ) -> Result<Option<FleetEnsurePlan>, EnsurePolicyError> {
-    compile_root_start_plan(
-        desired,
-        artifacts,
-        desired_sha256,
-        requested_fleet,
-        observation,
-        created_at_time,
-        None,
-    )
+    compile_root_start_plan(&input, None)
 }
 
 /// Recompile one reviewed Root-start prerequisite while accepting an already-started exact target.
 pub(crate) fn recompile_root_start_prerequisite_plan(
-    desired: &DesiredFleet,
-    artifacts: &DesiredFleetArtifacts,
-    desired_sha256: &str,
-    requested_fleet: &str,
-    observation: &RootManagementObservation,
-    created_at_time: u64,
+    input: RootStartPlanInput<'_>,
     reviewed_targets: &BTreeSet<String>,
 ) -> Result<FleetEnsurePlan, EnsurePolicyError> {
-    compile_root_start_plan(
-        desired,
-        artifacts,
-        desired_sha256,
-        requested_fleet,
-        observation,
-        created_at_time,
-        Some(reviewed_targets),
-    )?
-    .ok_or_else(|| EnsurePolicyError::MissingRootManagementObservation {
-        name: "reviewed Root-start target".to_string(),
+    compile_root_start_plan(&input, Some(reviewed_targets))?.ok_or_else(|| {
+        EnsurePolicyError::MissingRootManagementObservation {
+            name: "reviewed Root-start target".to_string(),
+        }
     })
 }
 
@@ -574,14 +561,18 @@ pub(crate) fn recompile_root_start_prerequisite_plan(
     reason = "one pure boundary validates and compiles the complete Root-start authority"
 )]
 fn compile_root_start_plan(
-    desired: &DesiredFleet,
-    artifacts: &DesiredFleetArtifacts,
-    desired_sha256: &str,
-    requested_fleet: &str,
-    observation: &RootManagementObservation,
-    created_at_time: u64,
+    input: &RootStartPlanInput<'_>,
     reviewed_targets: Option<&BTreeSet<String>>,
 ) -> Result<Option<FleetEnsurePlan>, EnsurePolicyError> {
+    let RootStartPlanInput {
+        authority,
+        created_at_time,
+        desired,
+        desired_sha256,
+        artifacts,
+        observation,
+        requested_fleet,
+    } = *input;
     validate_authority(desired, requested_fleet)?;
     let bounds = cycle_bounds(desired)?;
     let configured_roots = desired
@@ -599,6 +590,8 @@ fn compile_root_start_plan(
     }
 
     let mut canisters = Vec::new();
+    let mut root_start_bindings = Vec::new();
+    let mut retained_module_authority_required = false;
     let mut observed_controlled_cycles = 0_u128;
     for configured in configured_roots {
         let observed = observation.roots.get(&configured.name).ok_or_else(|| {
@@ -662,12 +655,20 @@ fn compile_root_start_plan(
             .ok_or_else(|| EnsurePolicyError::MissingWasmIdentity {
                 name: configured.name.clone(),
             })?;
-        if observed.live.module_sha256.as_ref() != Some(expected_module) {
-            return Err(EnsurePolicyError::RootManagementAuthorityMismatch {
+        let observed_module = observed.live.module_sha256.as_deref().ok_or_else(|| {
+            EnsurePolicyError::RootManagementAuthorityMismatch {
                 field: "module SHA-256",
                 name: configured.name.clone(),
-            });
-        }
+            }
+        })?;
+        retained_module_authority_required |= observed_module != expected_module;
+        root_start_bindings.push(RetainedRootStartBinding {
+            controllers: actual_controllers.clone(),
+            name: configured.name.clone(),
+            predecessor_module_sha256: observed_module.to_string(),
+            principal: observed.live.principal.clone(),
+            subnet: observed.subnet.clone(),
+        });
         if observed.live.root_owned_lifecycle.is_some() || observed.live.reinstall_required {
             return Err(EnsurePolicyError::RootManagementAuthorityMismatch {
                 field: "runtime authority",
@@ -693,6 +694,14 @@ fn compile_root_start_plan(
     if canisters.is_empty() {
         return Ok(None);
     }
+    let retained_authority = validate_root_start_authority(
+        desired,
+        artifacts,
+        requested_fleet,
+        authority,
+        &root_start_bindings,
+        retained_module_authority_required,
+    )?;
     if let Some(reviewed_targets) = reviewed_targets
         && (reviewed_targets.len() != canisters.len()
             || canisters
@@ -737,6 +746,7 @@ fn compile_root_start_plan(
         plan_sha256: String::new(),
         planned_at_time: created_at_time,
         protocol_actions: Vec::new(),
+        root_start_authority: retained_authority.map(|authority| Box::new(authority.clone())),
         reviewed_desired: Some(Box::new(
             crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(desired),
         )),
@@ -745,6 +755,65 @@ fn compile_root_start_plan(
     };
     plan.plan_sha256 = expected_plan_sha256(&plan);
     Ok(Some(plan))
+}
+
+fn validate_root_start_authority<'a>(
+    desired: &DesiredFleet,
+    artifacts: &DesiredFleetArtifacts,
+    requested_fleet: &str,
+    authority: Option<&'a RetainedRootStartAuthorityRecord>,
+    root_start_bindings: &[RetainedRootStartBinding],
+    authority_required: bool,
+) -> Result<Option<&'a RetainedRootStartAuthorityRecord>, EnsurePolicyError> {
+    if !authority_required {
+        return Ok(None);
+    }
+    if root_start_bindings.is_empty() {
+        return Err(EnsurePolicyError::RootManagementAuthorityMismatch {
+            field: "retained module authority",
+            name: "Root-start prerequisite".to_string(),
+        });
+    }
+    let authority =
+        authority.ok_or_else(|| EnsurePolicyError::RootManagementAuthorityMismatch {
+            field: "retained module authority",
+            name: root_start_bindings[0].name.clone(),
+        })?;
+    let bootstrap = desired.bootstrap.as_ref().ok_or_else(|| {
+        EnsurePolicyError::RootManagementAuthorityMismatch {
+            field: "Fleet bootstrap authority",
+            name: root_start_bindings[0].name.clone(),
+        }
+    })?;
+    let successor_matches = root_start_bindings.iter().all(|binding| {
+        artifacts
+            .wasm_sha256_by_canister
+            .get(&binding.name)
+            .is_some_and(|sha256| sha256 == &authority.successor_module_sha256)
+    });
+    let mut expected_bindings = root_start_bindings.to_vec();
+    expected_bindings.sort_by(|left, right| left.name.cmp(&right.name));
+    let mut actual_bindings = authority.roots.clone();
+    actual_bindings.sort_by(|left, right| left.name.cmp(&right.name));
+    let path_identity_matches =
+        authority.environment == desired.environment && authority.fleet == requested_fleet;
+    let release_identity_matches = authority.fleet_id == bootstrap.fleet_id
+        && authority.release_build_id == bootstrap.release_build_id;
+    let record_identity_matches =
+        authority.schema_version == FLEET_ENSURE_SCHEMA_VERSION && authority.has_valid_digest();
+    let bindings_match = actual_bindings == expected_bindings;
+    if !(path_identity_matches
+        && release_identity_matches
+        && record_identity_matches
+        && successor_matches
+        && bindings_match)
+    {
+        return Err(EnsurePolicyError::RootManagementAuthorityMismatch {
+            field: "retained module authority",
+            name: root_start_bindings[0].name.clone(),
+        });
+    }
+    Ok(Some(authority))
 }
 
 fn retained_root_observation_is_start_only(
