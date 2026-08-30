@@ -167,4 +167,5 @@ no-effect preparation through the exact Start, post-Start protected
 verification, terminal plan and effect-free replay. Only then begin 0.109 B9
 simplification and its superseding audit.
 
-<!-- canic-release-validation: version=0.109.24 source=8aaeef70b91d289628d11c641858344928e69efe date=2026-08-29 gate=complete -->
+
+<!-- canic-release-validation: version=0.109.25 source=90329bde38fbafe72589359f9bdf4d1e43f5cb46 date=2026-08-30 gate=complete -->
