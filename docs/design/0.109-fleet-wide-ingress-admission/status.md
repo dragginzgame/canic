@@ -15,8 +15,9 @@ Roadmap reconciled: 2026-08-30
 
 - Current addendum (2026-08-30): published `v0.109.25` closes `CANIC-091` with
   the management-only stopped-Root Start prerequisite. The open 0.109.26
-  batch closes `CANIC-092` by retaining exact predecessor-module authority
-  without changing the desired successor artifact. `CANIC-034` is already
+  batch closes `CANIC-092` by binding live predecessor A to newly requested
+  finalized successor C independently of an older retained desired artifact B,
+  without rewriting that desired document. `CANIC-034` is already
   closed by direct reviewed Cycles Ledger creation funding for fresh pool
   assets. Current release and validation truth remains in
   [`docs/status/current.md`](../../status/current.md); the bridge chronology

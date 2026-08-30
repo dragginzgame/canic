@@ -28,6 +28,7 @@ pub use current::{
     CurrentReleaseSetManifest, CurrentReleaseSetManifestError, PersistedCurrentReleaseSetManifest,
     compile_and_persist_current_release_set_manifest, load_persisted_current_release_set_manifest,
 };
+pub(crate) use infrastructure::verify_persisted_canic_infrastructure_artifact;
 pub use infrastructure::{
     CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactEntry,
     CanicInfrastructureArtifactInput, CanicInfrastructureArtifactManifest,

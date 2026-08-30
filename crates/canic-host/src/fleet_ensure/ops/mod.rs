@@ -22,6 +22,13 @@ use crate::{
         FleetEnsureStateRecord, FleetObservation, ProtocolArtifactDigests,
         RetainedRootStartAuthorityRecord, RootManagementObservation, RootOwnedCanisterLifecycle,
     },
+    icp_config::resolve_icp_build_network_from_root,
+    release_build::validate_finalized_release_build_manifest,
+    release_set::{
+        CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest,
+        load_persisted_current_release_set_manifest,
+        verify_persisted_canic_infrastructure_artifact,
+    },
 };
 use canic_core::{cdk::utils::hash::sha256_hex, dto::pool::CanisterPoolAssetStatus};
 use serde::{Serialize, de::DeserializeOwned};
@@ -226,6 +233,9 @@ pub enum EnsureStateError {
     #[error("Fleet ensure retained Root-start authority is invalid at {}", path.display())]
     InvalidRootStartAuthority { path: PathBuf },
 
+    #[error("Fleet ensure retained Root-start release authority is invalid: {reason}")]
+    InvalidRootStartReleaseAuthority { reason: String },
+
     #[error("Fleet ensure document has unsupported schema {actual} at {}", path.display())]
     WrongSchema { path: PathBuf, actual: u16 },
 
@@ -325,6 +335,54 @@ pub(crate) fn read_root_start_authority(
                 })
         })
         .transpose()
+}
+
+/// Independently prove the finalized release and raw successor Wasm named by a Start authority.
+pub(crate) fn verify_root_start_release_authority(
+    root: &Path,
+    authority: &RetainedRootStartAuthorityRecord,
+) -> Result<(), EnsureStateError> {
+    let invalid = |reason: String| EnsureStateError::InvalidRootStartReleaseAuthority { reason };
+    let complete = load_persisted_current_release_set_manifest(root, authority.release_build_id)
+        .map_err(|error| invalid(error.to_string()))?;
+    validate_finalized_release_build_manifest(root, authority.release_build_id, &complete.path)
+        .map_err(|error| invalid(error.to_string()))?;
+    let expected_network = resolve_icp_build_network_from_root(root, &authority.environment)
+        .map_err(|error| invalid(error.to_string()))?;
+    if complete.manifest.build_network != expected_network {
+        return Err(invalid(format!(
+            "release build {} targets {}, but environment {} requires {}",
+            authority.release_build_id,
+            complete.manifest.build_network,
+            authority.environment,
+            expected_network,
+        )));
+    }
+    let infrastructure =
+        load_persisted_canic_infrastructure_artifact_manifest(root, authority.release_build_id)
+            .map_err(|error| invalid(error.to_string()))?;
+    if complete.manifest.infrastructure_artifact_manifest_sha256 != infrastructure.digest {
+        return Err(invalid(
+            "finalized release set does not bind its infrastructure manifest".to_string(),
+        ));
+    }
+    let successor = infrastructure
+        .manifest
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .ok_or_else(|| {
+            invalid("finalized release has no Fleet Subnet Root artifact".to_string())
+        })?;
+    let release_matches = successor.release_build_id == authority.release_build_id;
+    let successor_matches = successor.wasm_sha256_hex == authority.successor_module_sha256;
+    if !(release_matches && successor_matches) {
+        return Err(invalid(
+            "finalized release Root artifact differs from the sealed successor".to_string(),
+        ));
+    }
+    verify_persisted_canic_infrastructure_artifact(root, successor)
+        .map_err(|error| invalid(error.to_string()))
 }
 
 pub(crate) fn compact_inline_plan(

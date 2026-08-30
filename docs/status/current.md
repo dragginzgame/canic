@@ -39,31 +39,36 @@ Published 0.109.25 closes `CANIC-091`: a retained schema-1 state with cycle
 evidence but no Principal/topology maps can review and apply one exact
 management-bound Root Start before protected child observation.
 
-Downstream review then exposed `CANIC-092`. The retained stopped Root runs
-module A while the current desired release binds successor module B. The
-0.109.25 prerequisite required A to equal B, and its regression accidentally
-hid the defect by changing desired state to A.
+Downstream review then exposed `CANIC-092`. Production has live stopped
+predecessor A, retained desired release/artifact B and newly requested finalized
+release/artifact C. The first 0.109.26 candidate incorrectly required its
+generator authority for C to equal retained desired B.
 
 The current `canic-host` batch establishes this corrected invariant:
 
 1. management-observe A with exact Root Principal, Subnet, controllers and
    stopped state;
 2. atomically retain one typed generator authority binding A to the exact
-   current Fleet ID, release build and desired successor B;
-3. embed that authority into a content-addressed plan scoped only to same-ID
+   current Fleet ID and newly requested finalized release/successor C;
+3. independently load C's finalized current-release and infrastructure
+   manifests and re-read the exact manifest-bound raw Root Wasm;
+4. use retained desired B only for stable Fleet and Root identity, leaving its
+   bytes unchanged and never loading B's old release manifest or Root artifact;
+5. embed the authority into a content-addressed plan scoped only to same-ID
    Root Start, with zero install, replacement, creation, funding, transfer,
    fee or operator-debit authority;
-4. reject missing authority, changed authority and arbitrary module C before a
-   plan or effect;
-5. apply the Start once and make lost-response/terminal replay effect-free;
-   and
-6. leave desired B unchanged, then require generation and ordinary protected
-   convergence to be reviewed again after the Root runs.
+6. reject missing/tampered authority, wrong release or successor, and changed
+   live predecessor identity before a plan or effect;
+7. apply the Start once and make lost-response/terminal replay effect-free; and
+8. require generation and ordinary protected convergence to C to be reviewed
+   again after the Root runs.
 
-The production-shaped regression now keeps distinct predecessor and successor
-Wasm bytes. It proves deterministic authority retention, one zero-debit Start,
-unchanged state ownership and effect-free replay; Principal, Subnet,
-controller, runtime, missing-authority and arbitrary-module drift reject.
+The production-shaped regression keeps A, B and C distinct. It proves
+deterministic authority retention, finalized release and raw-Wasm verification,
+one zero-debit Start without B's release manifest/artifact, unchanged
+desired/state ownership and effect-free replay;
+missing/tampered authority, wrong release/successor, Fleet, Principal, Subnet,
+controller, predecessor-module and runtime drift reject.
 Targeted validation evidence is recorded below; no broad workspace or
 PocketIC gate is run during coding.
 
