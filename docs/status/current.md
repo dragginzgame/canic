@@ -80,8 +80,32 @@ the current Principal, Root/parent, kind and desired module independently.
 Directly observed canisters retain their live module. A Root-owned Store may
 use the exact content-bound journal proof only while the same Root reports the
 same Store Principal under the retained topology. No version is defaulted or
-inferred. Changed or incomplete authority schedules the conservative install
-instead of suppressing it.
+inferred. Changed or incomplete retained authority returns a typed conflict
+before an install instead of silently suppressing or repeating the effect.
+
+## Open 0.109.29 CANIC-098 Correction
+
+Published `v0.109.28` is the immutable predecessor. The retained downstream
+journal proves its Coordinator reinstall Applied, followed by one predecessor
+`AdoptStore` intent that synchronously rejected with typed E132 and retained no
+receipt. Store and Root were not reinstalled and no paid or identity-changing
+effect followed.
+
+The narrow correction keeps controller preparation separate from successor
+protocol adoption. It accepts only the exact rejected request and typed
+diagnostic, preserves the immutable action/hash sequence, marks the old
+operation `replan_required` without claiming adoption succeeded, and retains
+the proved Coordinator reinstall. The fresh exact-controller plan schedules no
+Coordinator install, funding or debit; it reinstalls Store then Root and only
+then adopts Store through the initialized successor Root. Wrong-controller
+evidence remains a typed pre-effect blocker; automatic controller repair is not
+a release gate for this downstream estate.
+
+The production-shaped regression applies that fresh plan, reaches terminal
+cycle conservation and immediately replays from a fresh process with zero
+effects. B9 source is preserved separately and is not present in this patch.
+No 0.110 or later work may delay validation, publication or downstream adoption
+of this correction.
 
 ## Published 0.109.26 Correctness Batch
 
@@ -231,6 +255,12 @@ evidence.
 
 ## Validation State
 
+The isolated `CANIC-098` source passes host formatting, its exact retained-E132
+journey and warning-denied `canic-host` library/test Clippy. The journey applies
+the fresh Store/Root plan, performs successor-only adoption, conserves cycles
+and immediately replays without effect. No broad workspace or PocketIC gate was
+run during this implementation pass.
+
 The production-shaped retained-estate journey now applies three exact
 infrastructure reinstalls and two Starts, persists a nonterminal state, and
 replans from a fresh process using ICP CLI 1.3.0-shaped status without a
@@ -313,13 +343,11 @@ restored.
 
 ## Next Authorized Action
 
-Finish targeted review of open 0.109.28 and leave broad validation to the
-maintainer-selected release flow. Do not modify Toko Miner from this
-repository. After an immutable correction is adopted downstream, generate one
-fresh read-only plan, reject any repeated infrastructure install or paid
-authority, apply only the remaining reviewed transition, reach terminal
-convergence, then prove immediate replay effect-free. Only then begin 0.109 B9
-simplification and its superseding audit.
+Run the maintainer-selected validation/version/publication flow for the narrow
+0.109.29 correction. Do not modify Toko Miner from this repository. After the
+immutable patch is adopted downstream, resume the exact retained operation and
+confirm terminal/effect-free replay. B9 remains separate, and 0.110/0.111 cannot
+delay this deployment unblock.
 
 
 

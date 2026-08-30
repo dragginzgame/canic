@@ -13,6 +13,14 @@ Roadmap reconciled: 2026-08-30
 
 ## Status
 
+- Current addendum (2026-08-30): open `0.109.29` corrects `CANIC-098` from
+  immutable `v0.109.28`. It proves one exact predecessor `AdoptStore` E132
+  rejection made no change, crosses typed replanning without marking that
+  action applied, retains the completed Coordinator reinstall, reinstalls Store
+  then Root, applies successor-only adoption and terminally replays without an
+  effect. Exact live controllers satisfy the separate management prerequisite;
+  wrong controllers fail closed and automatic repair is not a patch gate. B9
+  is preserved outside this candidate, and no later line may delay it.
 - Current addendum (2026-08-30): published `v0.109.25` closes `CANIC-091` with
   the management-only stopped-Root Start prerequisite. The open 0.109.26
   batch closes `CANIC-092` by binding live predecessor A to newly requested

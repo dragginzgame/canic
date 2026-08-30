@@ -294,36 +294,34 @@ pub(super) fn validate_component_pool_capacity(
     Ok(())
 }
 
-/// Compile the Root-mediated Store controller preparation required before a
-/// retained Store can be installed by the protected operator.
-pub(super) fn compile_store_control_actions(
-    icp: &IcpCli,
+/// Validate one retained controller-preparation action from the superseded
+/// plan shape without granting it current protocol authority.
+///
+/// This is deliberately validation-only: the old action may be closed at a
+/// typed replan boundary, but it is never compiled into a new plan or replayed
+/// against a successor Root.
+pub(in crate::fleet_ensure) fn retained_store_control_request_is_exact(
     root: &Path,
     desired: &DesiredFleet,
     operation_id: &str,
     state: &FleetEnsureStateRecord,
-) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
-    compile_store_control_actions_unobserved(root, desired, operation_id, state)?
-        .into_iter()
-        .filter_map(|action| match observe(icp, root, &action) {
-            Ok(observed) if observed.applied => None,
-            Ok(_) => Some(Ok(action)),
-            Err(error) => Some(Err(error)),
-        })
-        .collect()
+    root_name: &str,
+    request: &FleetSubnetWasmStoreAdoptionRequest,
+) -> Result<bool, CurrentProtocolError> {
+    Ok(
+        expected_retained_store_control_request(root, desired, operation_id, state, root_name)?
+            .as_ref()
+            == Some(request),
+    )
 }
 
-/// Compile exact Root-mediated Store controller preparation without claiming
-/// that its protected status is currently observable.
-pub(super) fn compile_store_control_actions_unobserved(
+fn expected_retained_store_control_request(
     root: &Path,
     desired: &DesiredFleet,
     operation_id: &str,
     state: &FleetEnsureStateRecord,
-) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
-    let Some(protocol_intent) = &desired.protocol else {
-        return Ok(Vec::new());
-    };
+    root_name: &str,
+) -> Result<Option<FleetSubnetWasmStoreAdoptionRequest>, CurrentProtocolError> {
     let principals = desired
         .canisters
         .iter()
@@ -333,29 +331,32 @@ pub(super) fn compile_store_control_actions_unobserved(
         })
         .collect::<BTreeMap<_, _>>();
     let operation_id = operation_bytes(operation_id)?;
-    canic_init::compile_root_authorities(root, desired, &principals)?
-        .into_iter()
-        .map(|(root_name, authority)| {
-            let target = authority.binding.fleet_subnet_root;
-            let request = FleetSubnetWasmStoreAdoptionRequest {
-                operation_id: derived_operation_id(operation_id, b"store-adoption", target),
-                authority: authority.wasm_store_authority,
-            };
-            bind_action(
-                root,
-                desired,
-                state,
-                protocol_intent,
-                CurrentFleetProtocolAction::AdoptStore { request },
-                target,
-                format!("root-store-control:{root_name}"),
-                desired_cycles(
-                    "maximum_update_burn_cycles",
-                    &desired.maximum_update_burn_cycles,
-                )?,
-            )
-        })
-        .collect()
+    let Some((_name, authority)) =
+        canic_init::compile_root_authorities(root, desired, &principals)?
+            .into_iter()
+            .find(|(name, _authority)| name == root_name)
+    else {
+        return Ok(None);
+    };
+    Ok(Some(FleetSubnetWasmStoreAdoptionRequest {
+        operation_id: derived_operation_id(
+            operation_id,
+            b"store-adoption",
+            authority.binding.fleet_subnet_root,
+        ),
+        authority: authority.wasm_store_authority,
+    }))
+}
+
+#[cfg(test)]
+pub(in crate::fleet_ensure) fn expected_retained_store_control_request_for_test(
+    root: &Path,
+    desired: &DesiredFleet,
+    operation_id: &str,
+    state: &FleetEnsureStateRecord,
+    root_name: &str,
+) -> Result<Option<FleetSubnetWasmStoreAdoptionRequest>, CurrentProtocolError> {
+    expected_retained_store_control_request(root, desired, operation_id, state, root_name)
 }
 
 /// Compile the complete current Store, Registry, Root-mirror, and Component sequence.
