@@ -276,7 +276,7 @@ pub fn load_persisted_canic_infrastructure_artifact_manifest(
 }
 
 /// Re-read and verify one manifest-bound raw infrastructure Wasm.
-pub(crate) fn verify_persisted_canic_infrastructure_artifact(
+pub fn verify_persisted_canic_infrastructure_artifact(
     root: &Path,
     artifact: &super::CanicInfrastructureArtifactEntry,
 ) -> Result<(), CanicInfrastructureArtifactPersistenceError> {
