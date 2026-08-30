@@ -2434,6 +2434,7 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
         protocol_actions: actions,
         reviewed_desired: None,
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+        scope: crate::fleet_ensure::model::FleetEnsurePlanScope::Full,
     };
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
 
@@ -2522,6 +2523,7 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         protocol_actions: actions,
         reviewed_desired: None,
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+        scope: crate::fleet_ensure::model::FleetEnsurePlanScope::Full,
     };
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
 

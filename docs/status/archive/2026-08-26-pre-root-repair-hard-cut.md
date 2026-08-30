@@ -8,9 +8,9 @@ This is the compact handoff for new agent sessions. Read it first, then inspect
 only the active design, source, validation or changelog material needed for the
 current task.
 
-Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
-[through 0.90.2](archive/2026-07-13-precompact.md) and
-[through 0.101.52 Q4](archive/2026-08-12-precompact.md).
+Historical handoffs: [through 2026-06-30](2026-06-30-precompact.md),
+[through 0.90.2](2026-07-13-precompact.md) and
+[through 0.101.52 Q4](2026-08-12-precompact.md).
 
 Release lineage: published `v0.109.11` is the immutable predecessor of the
 open `0.109.12` correction.
@@ -146,7 +146,7 @@ Release governance: source development state; no validated release candidate is 
   framework fixtures and generic audit probes only;
   the exact historical calibration and terminal disposition for external
   canister `w47na-gaaaa-aaaad-qmclq-cai` remains archived in the
-  [dated audit report](../audits/reports/2026-08/2026-08-24/saltz-mainnet-calibration.md).
+  [dated audit report](../../audits/reports/2026-08/2026-08-24/saltz-mainnet-calibration.md).
   Its approximately `2.590 Pcycles` remain externally funded, and this
   repository removal authorizes no reinstall, deletion, controller mutation,
   funding or other remote effect. Published 0.109.8 completes the exceptional
@@ -179,8 +179,8 @@ Release governance: source development state; no validated release candidate is 
   makes that released baseline tamper-evident, preserves the four genuine
   caller-continuation values and routes ordinary host failures through the
   prose catalogue. Active checklist:
-  [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
-- Application-safety and estate sequence: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 fresh-Fleet preflight and runtime admission](../design/0.107-fresh-fleet-preflight-and-runtime-admission/status.md), [0.108 Coordinator-backed root funding](../design/0.108-coordinator-backed-root-funding/status.md), [0.109 Fleet-wide ingress admission](../design/0.109-fleet-wide-ingress-admission/status.md), [0.110 reusable estates plus application retirement](../design/0.110-fleet-subnet-canister-estates/status.md), [0.111 stateful Fleet release adoption](../design/0.111-stateful-fleet-release-adoption/status.md) and [0.112 generic Fleet observatory](../design/0.112-fleet-observatory/status.md). External [Prequel Wars](https://github.com/dragginzgame/prequel-wars) replaces the checked-in Skynet App as the flagship demonstration. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
+  [0.102 compact diagnostic codes](../../design/0.102-compact-diagnostic-codes/status.md).
+- Application-safety and estate sequence then scheduled [0.103 role-owned Candid surface](../../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 fresh-Fleet preflight and runtime admission](../../design/0.107-fresh-fleet-preflight-and-runtime-admission/status.md), [0.108 Coordinator-backed root funding](../../design/0.108-coordinator-backed-root-funding/status.md), [0.109 Fleet-wide ingress admission](../../design/0.109-fleet-wide-ingress-admission/status.md), the former 0.110 estate scope, [0.111 stateful Fleet release adoption](../../design/0.111-stateful-fleet-release-adoption/status.md) and the former 0.112 Observatory. The maintained roadmap was later reoriented; current numbered designs and [unnumbered ideas](../../design/ideas/README.md) own present authority.
 - Release boundary: every pre-1.0 transition is reinstall-only. Every
   Canic-owned canister in a Fleet must come from one admitted release set
   before activation. Same-release interruption recovery, exact retry, backup
@@ -1008,7 +1008,7 @@ that snapshot is process-local while Canic's governed PocketIC lane crosses
 several Cargo test processes. Both optional reuse paths require a genuine guard
 over every source, manifest, tool and declared input; Canic does not hold one
 and deliberately stays on ordinary per-call validation. A deferred
-[immutable cross-process test checkout lease](../design/ideas/immutable-test-checkout-lease/design.md)
+[immutable cross-process test checkout lease](../../design/ideas/immutable-test-checkout-lease/design.md)
 now owns the possible runner snapshot, read-only process-tree boundary,
 external output roots and future upstream prepared-input service. It is a
 performance idea, not a 0.104 release gate or implementation authority. Every

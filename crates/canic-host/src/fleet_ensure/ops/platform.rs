@@ -11,8 +11,8 @@ use crate::{
             CanisterRuntimeStatus, DesiredCanisterKind, DesiredFleet, EffectRecord, EnsureAction,
             FleetEnsureStateRecord, FleetObservation, InstallMode, LiveCanister,
             RetirementTransferBalances, RetirementTransferInvariantError,
-            RetirementTransferReconciliation, RootOwnedCanisterLifecycle,
-            reconcile_retirement_transfer,
+            RetirementTransferReconciliation, RootManagementCanisterObservation,
+            RootManagementObservation, RootOwnedCanisterLifecycle, reconcile_retirement_transfer,
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
@@ -20,11 +20,14 @@ use crate::{
         },
     },
     icp::{IcpCandidCallError, IcpCli, IcpCommandError, IcpDiagnostic, run_status},
+    icp_config::resolve_icp_build_network_from_root,
+    subnet_catalog::load_mainnet_subnet_catalog,
 };
 use candid::{CandidType, Nat, Principal};
 use canic_core::{
     cdk::types::Cycles,
     dto::pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
+    ids::BuildNetwork,
     protocol as canic_protocol,
 };
 use serde::Deserialize;
@@ -32,6 +35,7 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -215,6 +219,12 @@ pub enum IcpEnsurePlatformError {
 
     #[error("active ICP identity is {actual}, but reviewed Fleet operator is {expected}")]
     OperatorMismatch { actual: String, expected: String },
+
+    #[error("management status for configured canister {expected} returned identity {actual}")]
+    StatusIdentityMismatch { actual: String, expected: String },
+
+    #[error("retained Root management observation failed: {0}")]
+    RootManagement(String),
 
     #[error("ICP status has invalid cycle balance for {canister}: {value}")]
     InvalidStatusCycles { canister: String, value: String },
@@ -440,6 +450,12 @@ impl IcpEnsurePlatform {
             }
             Err(error) => return Err(error.into()),
         };
+        if report.id != principal {
+            return Err(IcpEnsurePlatformError::StatusIdentityMismatch {
+                actual: report.id,
+                expected: principal.to_string(),
+            });
+        }
         let cycles_text =
             report
                 .cycles
@@ -1051,6 +1067,105 @@ impl EnsurePlatform for IcpEnsurePlatform {
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
         self.desired = desired.clone();
         Ok(())
+    }
+
+    fn observe_root_management(
+        &mut self,
+        state: &FleetEnsureStateRecord,
+        reviewed_targets: &BTreeSet<String>,
+    ) -> Result<Option<RootManagementObservation>, Self::Error> {
+        let configured_roots = self
+            .desired
+            .canisters
+            .iter()
+            .filter(|configured| {
+                configured.kind == DesiredCanisterKind::Root
+                    && configured.presence == crate::fleet_ensure::model::DesiredPresence::Present
+            })
+            .collect::<Vec<_>>();
+        if configured_roots.is_empty() {
+            return Ok(None);
+        }
+        self.require_operator()?;
+        let observed_roots = configured_roots
+            .into_iter()
+            .map(|configured| {
+                let principal =
+                    self.current_principal(state, &configured.name)
+                        .ok_or_else(|| {
+                            IcpEnsurePlatformError::RootManagement(format!(
+                                "configured Root {} has no exact Principal",
+                                configured.name
+                            ))
+                        })?;
+                let live = self.status_optional(principal)?.ok_or_else(|| {
+                    IcpEnsurePlatformError::RootManagement(format!(
+                        "configured Root {} is unavailable",
+                        configured.name
+                    ))
+                })?;
+                Ok((configured, live))
+            })
+            .collect::<Result<Vec<_>, IcpEnsurePlatformError>>()?;
+        if reviewed_targets.is_empty()
+            && observed_roots
+                .iter()
+                .all(|(_, live)| live.status == CanisterRuntimeStatus::Running)
+        {
+            return Ok(None);
+        }
+        let network = resolve_icp_build_network_from_root(&self.root, &self.desired.environment)
+            .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))?;
+        let catalog = if network == BuildNetwork::Ic {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| {
+                    IcpEnsurePlatformError::RootManagement(
+                        "system clock is before the Unix epoch".to_string(),
+                    )
+                })?
+                .as_secs();
+            Some(
+                load_mainnet_subnet_catalog(&self.root, now)
+                    .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))?,
+            )
+        } else {
+            None
+        };
+        let mut roots = BTreeMap::new();
+        for (configured, live) in observed_roots {
+            let principal = live.principal.clone();
+            let subnet = catalog.as_ref().map_or_else(
+                || Ok(configured.subnet.clone()),
+                |catalog| {
+                    catalog
+                        .catalog
+                        .resolve_canister_route(&principal)
+                        .map(|route| route.subnet.to_text())
+                        .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))
+                },
+            )?;
+            let name = configured.name.clone();
+            if roots
+                .insert(
+                    name.clone(),
+                    RootManagementCanisterObservation { live, name, subnet },
+                )
+                .is_some()
+            {
+                return Err(IcpEnsurePlatformError::RootManagement(
+                    "configured Root names are not unique".to_string(),
+                ));
+            }
+        }
+        let operator_cycles = self
+            .icp
+            .identity_cycles_balance()
+            .map_err(|error| IcpEnsurePlatformError::LedgerWithdraw(error.to_string()))?;
+        Ok(Some(RootManagementObservation {
+            operator_cycles,
+            roots,
+        }))
     }
 
     fn observe(

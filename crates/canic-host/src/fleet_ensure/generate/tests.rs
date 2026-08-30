@@ -3,11 +3,13 @@ use crate::{
     fleet_ensure::{
         model::{
             CanisterRuntimeStatus, CurrentFleetProtocolAction, EffectRecord, EnsureAction,
-            FleetEnsureStateRecord, FleetObservation, LiveCanister, RootOwnedCanisterLifecycle,
+            FleetEnsureStateRecord, FleetObservation, LiveCanister,
+            RootManagementCanisterObservation, RootManagementObservation,
+            RootOwnedCanisterLifecycle,
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
-            IcpEnsurePlatform, IcpEnsurePlatformError, write_state,
+            IcpEnsurePlatform, IcpEnsurePlatformError, read_state, write_state,
         },
         workflow,
     },
@@ -1112,6 +1114,22 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
 
     let mut stopped_desired = recovery_desired.clone();
     stopped_desired.fleet = "retained-stopped-root".to_string();
+    let retained_root_wasm = root.join("retained-root.wasm");
+    fs::write(&retained_root_wasm, b"retained predecessor Root")
+        .expect("write retained Root artifact");
+    stopped_desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Root)
+        .expect("retained desired Root")
+        .wasm = Some(retained_root_wasm.display().to_string());
+    let stopped_artifacts =
+        crate::fleet_ensure::ops::resolve_desired_artifacts(&root, &stopped_desired)
+            .expect("resolve retained predecessor artifacts");
+    let stopped_root_hash = stopped_artifacts
+        .wasm_sha256_by_canister
+        .get("root-0")
+        .expect("retained Root artifact hash");
     write_fake_icp(
         &root,
         FakeIcpFixture {
@@ -1122,7 +1140,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             operator: &operator,
             pool: &retained_pool,
             public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
-            root_module_hash: root_hash,
+            root_module_hash: stopped_root_hash,
             root_runtime_status: "stopped",
             root_status_error: None,
             store: &store,
@@ -1134,11 +1152,103 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     if root_status_counter.exists() {
         fs::remove_file(&root_status_counter).expect("reset Root query counter");
     }
-    write_state(
-        &EnsurePaths::under(&root, &stopped_desired.environment, &stopped_desired.fleet),
-        &retained_ensure_state(&stopped_desired, &observed, &artifacts),
+    let configured_root = stopped_desired
+        .canisters
+        .iter()
+        .find(|canister| canister.kind == DesiredCanisterKind::Root)
+        .expect("configured retained Root");
+    let root_management = RootManagementObservation {
+        operator_cycles: 500_000_000_000_000,
+        roots: BTreeMap::from([(
+            configured_root.name.clone(),
+            RootManagementCanisterObservation {
+                live: LiveCanister {
+                    canister_version: Some(7),
+                    controllers: configured_root.controllers.clone(),
+                    cycles: 30_000_000_000_000,
+                    module_sha256: Some(stopped_root_hash.clone()),
+                    principal: fleet_root.clone(),
+                    reinstall_required: false,
+                    root_owned_lifecycle: None,
+                    status: CanisterRuntimeStatus::Stopped,
+                },
+                name: configured_root.name.clone(),
+                subnet: configured_root.subnet.clone(),
+            },
+        )]),
+    };
+    crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
+        &stopped_desired,
+        &stopped_artifacts,
+        &source_digest,
+        &stopped_desired.fleet,
+        &root_management,
+        1_800_000_000_000_000_150,
     )
-    .expect("retain exact stopped-Root evidence");
+    .expect("exact Root management authority")
+    .expect("stopped Root prerequisite");
+    for (field, drift) in [
+        ("Principal", "principal"),
+        ("Subnet", "subnet"),
+        ("controllers", "controller"),
+        ("module SHA-256", "module"),
+        ("runtime", "runtime"),
+    ] {
+        let mut drifted = root_management.clone();
+        let observed = drifted
+            .roots
+            .get_mut(&configured_root.name)
+            .expect("drifted Root observation");
+        match drift {
+            "principal" => observed.live.principal = principal_text(98),
+            "subnet" => observed.subnet = principal_text(97),
+            "controller" => observed.live.controllers = vec![principal_text(96)],
+            "module" => observed.live.module_sha256 = Some("00".repeat(32)),
+            "runtime" => observed.live.status = CanisterRuntimeStatus::Stopping,
+            _ => unreachable!(),
+        }
+        let error = crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
+            &stopped_desired,
+            &stopped_artifacts,
+            &source_digest,
+            &stopped_desired.fleet,
+            &drifted,
+            1_800_000_000_000_000_150,
+        )
+        .expect_err("drifted Root authority must fail before planning");
+        assert!(
+            matches!(
+                (&error, drift),
+                (
+                    crate::fleet_ensure::policy::EnsurePolicyError::RootManagementAuthorityMismatch { .. },
+                    "principal" | "subnet" | "controller" | "module"
+                ) | (
+                    crate::fleet_ensure::policy::EnsurePolicyError::RootStopping { .. },
+                    "runtime"
+                )
+            ),
+            "unexpected {field} drift error: {error:?}"
+        );
+    }
+    let stopped_paths =
+        EnsurePaths::under(&root, &stopped_desired.environment, &stopped_desired.fleet);
+    write_state(
+        &stopped_paths,
+        &FleetEnsureStateRecord {
+            active_registry: None,
+            completed_reinstalls: BTreeMap::new(),
+            fleet: stopped_desired.fleet.clone(),
+            pending_principals: BTreeMap::new(),
+            principals: BTreeMap::new(),
+            retained_cycles_by_principal: observed
+                .iter()
+                .map(|(principal, canister)| (principal.clone(), canister.cycles))
+                .collect(),
+            schema_version: crate::fleet_ensure::model::FLEET_ENSURE_SCHEMA_VERSION,
+            topology: BTreeMap::new(),
+        },
+    )
+    .expect("retain real schema-1 state without synthesized topology");
     let mut stopped_platform = IcpEnsurePlatform::new(
         stopped_desired.clone(),
         icp.to_str().expect("fake ICP path"),
@@ -1168,6 +1278,63 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         stopped_plan.plan.conservation.maximum_operator_debit_cycles,
         0
     );
+    assert_eq!(
+        stopped_plan.plan.scope,
+        crate::fleet_ensure::model::FleetEnsurePlanScope::RootStartPrerequisite
+    );
+    let reviewed_plan_sha256 = stopped_plan.plan.plan_sha256.clone();
+    let applied = workflow::apply(
+        &root,
+        &stopped_desired,
+        &source_digest,
+        &stopped_desired.fleet,
+        &reviewed_plan_sha256,
+        &mut stopped_platform,
+    )
+    .expect("apply only the reviewed same-ID Root Start");
+    assert!(applied.terminal);
+    assert_eq!(applied.effects_applied, 1);
+    assert_eq!(
+        applied
+            .actual_conservation
+            .expect("Root-start conservation")
+            .operator_debit_cycles,
+        0
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("root-start-count")).expect("Root start count"),
+        "1\n"
+    );
+    assert!(
+        !root_status_counter.exists(),
+        "applying the prerequisite must not query a protected Root endpoint"
+    );
+    let replay = workflow::apply(
+        &root,
+        &stopped_desired,
+        &source_digest,
+        &stopped_desired.fleet,
+        &reviewed_plan_sha256,
+        &mut stopped_platform,
+    )
+    .expect("terminal Root-start replay is effect-free");
+    assert!(replay.terminal);
+    assert_eq!(replay.effects_applied, 1);
+    assert_eq!(
+        fs::read_to_string(root.join("root-start-count")).expect("replayed Root start count"),
+        "1\n"
+    );
+    let retained_after_start = read_state(&stopped_paths, &stopped_desired.fleet)
+        .expect("read state after Root-start prerequisite");
+    assert!(retained_after_start.principals.is_empty());
+    assert!(retained_after_start.topology.is_empty());
+
+    let regenerated = generate_desired_fleet(&request)
+        .expect("rerun complete protected generation after reviewed Root Start");
+    assert_eq!(regenerated.observed_canisters, 5);
+    assert_eq!(regenerated.observed_controlled_cycles, 319_899_950_000_000);
+    assert!(root_status_counter.exists());
+
     fs::write(&root_status_counter, b"1\n").expect("prime later pool-only fake query");
 
     let mut pending_pool = retained_pool;
@@ -2198,6 +2365,14 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
     } = fixture;
     let executable = root.join("fake-icp");
     let counter = root.join("root-status-count");
+    let root_started = root.join("root-started");
+    let root_start_count = root.join("root-start-count");
+    if root_started.exists() {
+        fs::remove_file(&root_started).expect("reset fake Root runtime state");
+    }
+    if root_start_count.exists() {
+        fs::remove_file(&root_start_count).expect("reset fake Root start count");
+    }
     let coordinator_status = canister_status_json(
         coordinator,
         operator,
@@ -2212,6 +2387,14 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
         root_module_hash.to_string(),
         30_000_000_000_000,
         root_runtime_status,
+        None,
+    );
+    let running_root_status = canister_status_json(
+        fleet_root,
+        operator,
+        root_module_hash.to_string(),
+        29_999_950_000_000,
+        "running",
         None,
     );
     let store_status = canister_status_json(
@@ -2275,13 +2458,27 @@ if [ "$1" = "canister" ] && [ "$2" = "status" ]; then
     exit 0
   fi
   if [ "$3" = "{fleet_root}" ]; then
-    printf '%s\n' '{root_status}'
+    if [ -f "{root_started}" ]; then
+      printf '%s\n' '{running_root_status}'
+    else
+      printf '%s\n' '{root_status}'
+    fi
     exit 0
   fi
   if [ "$3" = "{store}" ]; then
     printf '%s\n' '{store_status}'
     exit 0
   fi
+fi
+if [ "$1" = "canister" ] && [ "$2" = "start" ] && [ "$3" = "{fleet_root}" ]; then
+  count=0
+  if [ -f "{root_start_count}" ]; then
+    count=$(sed -n '1p' "{root_start_count}")
+  fi
+  count=$((count + 1))
+  printf '%s\n' "$count" > "{root_start_count}"
+  printf '%s\n' 'running' > "{root_started}"
+  exit 0
 fi
 if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
   {public_cycle_case}
@@ -2307,6 +2504,8 @@ printf '%s\n' 'unsupported fake ICP command' >&2
 exit 42
 "#,
         counter = counter.display(),
+        root_start_count = root_start_count.display(),
+        root_started = root_started.display(),
     );
     fs::write(&executable, script).expect("write fake ICP executable");
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))

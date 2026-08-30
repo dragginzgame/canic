@@ -520,6 +520,7 @@ fn render_report(report: &FleetEnsureReport, json: bool) -> Result<(), FleetComm
         format!("fleet: {}", report.plan.fleet),
         format!("operation_id: {}", report.plan.operation_id),
         format!("plan_sha256: {}", report.plan.plan_sha256),
+        format!("plan_scope: {}", report.plan.scope.as_str()),
         format!("terminal: {}", report.terminal),
         format!(
             "observed_controlled_cycles: {}",

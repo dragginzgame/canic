@@ -2,6 +2,15 @@
 
 Date: 2026-08-20
 
+## Roadmap Reconciliation
+
+The frozen evidence below truthfully uses its then-current 0.110 ownership
+labels. The 2026-08-30 roadmap amendment does not rewrite those observations:
+Q1 empty reserve-Fleet topology and bounded Q2-Q5 estate inputs now feed 0.112;
+the four Q6 current-state complexity constraints feed 0.110 B1/B4; parallel
+production lanes and 10/100/1,000 qualification are unscheduled. No label in
+this historical evidence grants implementation authority.
+
 ## Authority And Scope
 
 This bundle records the accepted repository-only B1 of the
@@ -47,8 +56,9 @@ here.
 - Remote or IC-mainnet calls: zero.
 - Sibling repositories changed: zero.
 
-B1 was accepted by the maintainer on 2026-08-20. That acceptance freezes
-protocol `canic-0.106-q3q4-v1`, assigns the Q1 blocker and four Q6 constraints
-to 0.110, and completes the repository-local batch. Q2 observations remain
-pending B2. The separately unbound network, identity and disposition cells
-block B2 execution. Nothing in this bundle authorizes B2.
+B1 was accepted by the maintainer on 2026-08-20. Its accepted record freezes
+protocol `canic-0.106-q3q4-v1`, originally assigned the Q1 blocker and four Q6
+constraints to the then-current 0.110 scope, and marks the repository-local
+batch complete. The reconciliation above owns their current destinations. Q2
+observations remain pending B2. The separately unbound network, identity and
+disposition cells block B2 execution. Nothing in this bundle authorizes B2.
