@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.28` preserves exact nonterminal Fleet topology and journal-proved
+  reinstall results across fresh-process replanning, preventing version-less
+  ICP status from repeating completed infrastructure effects; it also hardens
+  host process launch and portable backup safety fixtures.
 - `0.109.27` updates the isolated IcyDB qualification fixture, restores two
   Fleet Ensure proofs to the governed PocketIC lane, reports the exact sealed
   successor that must converge before a later release, and obtains atomic

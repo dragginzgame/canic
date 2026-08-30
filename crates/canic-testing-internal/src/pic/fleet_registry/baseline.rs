@@ -1774,6 +1774,8 @@ mod tests {
         let desired = current_protocol_desired(&configuration, coordinator, &installed.init_args);
         let state = FleetEnsureStateRecord {
             active_registry: None,
+            completed_reinstall_action_sha256: BTreeMap::new(),
+            completed_reinstall_operation_id: None,
             completed_reinstalls: BTreeMap::new(),
             fleet: desired.fleet.clone(),
             pending_principals: BTreeMap::new(),

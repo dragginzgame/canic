@@ -1,5 +1,6 @@
 use super::{
     model::IcpCliVersion,
+    run::run_status_inherit_unchecked,
     version::{is_supported_icp_cli_version, parse_icp_cli_version},
     *,
 };
@@ -129,6 +130,38 @@ fn command_output_retries_a_transient_executable_busy_race() {
 
     assert!(output.status.success());
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ready");
+    fs::remove_dir_all(root).expect("remove temp dir");
+}
+
+#[cfg(unix)]
+#[test]
+fn inherited_status_runner_retries_a_transient_executable_busy_race() {
+    use std::fs::{self, OpenOptions};
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::Duration;
+
+    let root = unique_temp_dir("canic-icp-inherited-executable-busy");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let executable = root.join("icp");
+    fs::write(&executable, "#!/bin/sh\nexit 0\n").expect("write fake executable");
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
+        .expect("make fake executable runnable");
+    let writer = OpenOptions::new()
+        .write(true)
+        .open(&executable)
+        .expect("hold executable open for writing");
+    let release_writer = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(8));
+        drop(writer);
+    });
+    let mut command = Command::new(&executable);
+
+    run_status_inherit_unchecked(&mut command)
+        .expect("retry transient executable-busy failure for inherited runner");
+    release_writer
+        .join()
+        .expect("release fake executable writer");
+
     fs::remove_dir_all(root).expect("remove temp dir");
 }
 

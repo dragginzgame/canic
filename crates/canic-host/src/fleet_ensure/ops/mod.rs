@@ -422,6 +422,8 @@ pub fn read_state(
     }
     Ok(value.unwrap_or_else(|| FleetEnsureStateRecord {
         active_registry: None,
+        completed_reinstall_action_sha256: BTreeMap::default(),
+        completed_reinstall_operation_id: None,
         completed_reinstalls: BTreeMap::default(),
         fleet: fleet.to_string(),
         pending_principals: BTreeMap::default(),

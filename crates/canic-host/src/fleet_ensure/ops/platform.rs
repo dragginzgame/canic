@@ -269,6 +269,14 @@ pub enum IcpEnsurePlatformError {
         source: Box<IcpManagementCallError>,
     },
 
+    #[error(
+        "completed reinstall proof for {canister} conflicts with current {field}; no install was authorized"
+    )]
+    CompletedReinstallAuthorityConflict {
+        canister: String,
+        field: &'static str,
+    },
+
     #[error(transparent)]
     Candid(#[from] IcpCandidCallError),
 
@@ -951,6 +959,69 @@ impl IcpEnsurePlatform {
         );
     }
 
+    fn completed_reinstall_is_current(
+        &self,
+        state: &FleetEnsureStateRecord,
+        name: &str,
+        live: &LiveCanister,
+    ) -> Result<bool, IcpEnsurePlatformError> {
+        if state.completed_reinstall_operation_id.is_none()
+            || !state.completed_reinstall_action_sha256.contains_key(name)
+        {
+            return Ok(false);
+        }
+        let Some(pre_canister_version) = state.completed_reinstalls.get(name) else {
+            return Ok(false);
+        };
+        let Some(configured) = self
+            .desired
+            .canisters
+            .iter()
+            .find(|configured| configured.name == name)
+        else {
+            return Ok(false);
+        };
+        let Some(wasm) = configured.wasm.as_deref() else {
+            return Ok(false);
+        };
+        let principal_matches = state
+            .principals
+            .get(name)
+            .is_some_and(|principal| principal == &live.principal);
+        let retained_topology = state.topology.get(name);
+        let topology_matches = retained_topology.is_some_and(|topology| {
+            topology.kind == configured.kind && topology.parent == configured.parent
+        });
+        let desired_module_sha256 = artifact_hash(&resolve_path(&self.root, wasm))?;
+        let root_owned_store_module = (live.module_sha256.is_none()
+            && live.root_owned_lifecycle == Some(RootOwnedCanisterLifecycle::Store))
+        .then(|| {
+            configured
+                .parent
+                .as_deref()
+                .and_then(|parent| state.principals.get(parent))
+                .filter(|root| live.controllers.as_slice() == [root.as_str()])
+                .and(retained_topology)
+                .and_then(|topology| topology.module_hash.as_deref())
+        })
+        .flatten();
+        completed_reinstall_continuity(
+            *pre_canister_version,
+            principal_matches,
+            topology_matches,
+            live.module_sha256.as_deref().or(root_owned_store_module),
+            &desired_module_sha256,
+            live.canister_version,
+        )
+        .map_err(
+            |field| IcpEnsurePlatformError::CompletedReinstallAuthorityConflict {
+                canister: name.to_string(),
+                field,
+            },
+        )?;
+        Ok(true)
+    }
+
     fn public_cycle_balance(&self, principal: &str) -> Option<u128> {
         let response: Result<ManagedCanisterStatusResponse, canic_core::dto::error::Error> = self
             .icp
@@ -1341,16 +1412,26 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 .flatten();
             canisters.insert(configured.name.clone(), observed);
         }
-        self.recovery_reinstalls.borrow_mut().retain(|name| {
-            let Some(live) = canisters.get(name).and_then(Option::as_ref) else {
-                return true;
+        let mut completed_reinstalls = BTreeSet::new();
+        for name in self.recovery_reinstalls.borrow().iter() {
+            let Some(live) = canisters.get_mut(name).and_then(Option::as_mut) else {
+                continue;
             };
-            state
-                .completed_reinstalls
-                .get(name)
-                .zip(live.canister_version)
-                .is_none_or(|(before, after)| after <= *before)
-        });
+            if self.completed_reinstall_is_current(state, name, live)? {
+                if live.module_sha256.is_none()
+                    && live.root_owned_lifecycle == Some(RootOwnedCanisterLifecycle::Store)
+                {
+                    live.module_sha256 = state
+                        .topology
+                        .get(name)
+                        .and_then(|topology| topology.module_hash.clone());
+                }
+                completed_reinstalls.insert(name.clone());
+            }
+        }
+        self.recovery_reinstalls
+            .borrow_mut()
+            .retain(|name| !completed_reinstalls.contains(name));
         for name in self.recovery_reinstalls.borrow().iter() {
             if let Some(live) = canisters.get_mut(name).and_then(Option::as_mut) {
                 live.reinstall_required = true;
@@ -2011,6 +2092,29 @@ fn exact_retained_root_owned_topology<'a>(
         .flatten()
 }
 
+fn completed_reinstall_continuity(
+    pre_canister_version: u64,
+    principal_matches: bool,
+    topology_matches: bool,
+    live_module_sha256: Option<&str>,
+    desired_module_sha256: &str,
+    live_canister_version: Option<u64>,
+) -> Result<(), &'static str> {
+    if !principal_matches {
+        return Err("Principal");
+    }
+    if !topology_matches {
+        return Err("Root/parent/kind topology");
+    }
+    if live_module_sha256 != Some(desired_module_sha256) {
+        return Err("module SHA-256");
+    }
+    if live_canister_version.is_some_and(|version| version <= pre_canister_version) {
+        return Err("canister version");
+    }
+    Ok(())
+}
+
 fn recoverable_root_status_error(error: &CanisterProtocolError) -> bool {
     error.is_rejected_with(canic_core::diagnostics::codes::STATE_CONFLICT)
         || error.is_rejected_with(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
@@ -2335,9 +2439,15 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the binding regression mutates each authority field independently"
+    )]
     fn retained_root_owned_topology_requires_exact_child_root_and_parent_binding() {
         let mut state = FleetEnsureStateRecord {
             active_registry: None,
+            completed_reinstall_action_sha256: BTreeMap::new(),
+            completed_reinstall_operation_id: None,
             completed_reinstalls: BTreeMap::new(),
             fleet: "fleet".to_string(),
             pending_principals: BTreeMap::new(),
@@ -2382,6 +2492,47 @@ mod tests {
             .is_none()
         );
         state
+            .principals
+            .insert("store".to_string(), "store-principal".to_string());
+        state
+            .principals
+            .insert("root".to_string(), "foreign-root".to_string());
+        assert!(
+            exact_retained_root_owned_topology(
+                &state,
+                "store",
+                DesiredCanisterKind::Store,
+                "root",
+                "store-principal",
+                "root-principal",
+            )
+            .is_none()
+        );
+        state
+            .principals
+            .insert("root".to_string(), "root-principal".to_string());
+        state
+            .topology
+            .get_mut("store")
+            .expect("Store topology")
+            .kind = DesiredCanisterKind::Pool;
+        assert!(
+            exact_retained_root_owned_topology(
+                &state,
+                "store",
+                DesiredCanisterKind::Store,
+                "root",
+                "store-principal",
+                "root-principal",
+            )
+            .is_none()
+        );
+        state
+            .topology
+            .get_mut("store")
+            .expect("Store topology")
+            .kind = DesiredCanisterKind::Store;
+        state
             .topology
             .get_mut("store")
             .expect("Store topology")
@@ -2397,5 +2548,45 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn completed_reinstall_requires_exact_continuity_when_ordinary_status_has_no_version() {
+        let desired = "11".repeat(32);
+        assert_eq!(
+            completed_reinstall_continuity(7, true, true, Some(&desired), &desired, None,),
+            Ok(())
+        );
+        assert_eq!(
+            completed_reinstall_continuity(7, true, true, Some(&desired), &desired, Some(8),),
+            Ok(())
+        );
+        for (rejected, field) in [
+            (
+                completed_reinstall_continuity(7, false, true, Some(&desired), &desired, None),
+                "Principal",
+            ),
+            (
+                completed_reinstall_continuity(7, true, false, Some(&desired), &desired, None),
+                "Root/parent/kind topology",
+            ),
+            (
+                completed_reinstall_continuity(
+                    7,
+                    true,
+                    true,
+                    Some(&"22".repeat(32)),
+                    &desired,
+                    None,
+                ),
+                "module SHA-256",
+            ),
+            (
+                completed_reinstall_continuity(7, true, true, Some(&desired), &desired, Some(7)),
+                "canister version",
+            ),
+        ] {
+            assert_eq!(rejected, Err(field));
+        }
     }
 }

@@ -5,7 +5,7 @@ use std::{
     thread,
 };
 
-use crate::output_with_executable_busy_retry;
+use crate::{output_with_executable_busy_retry, spawn_with_executable_busy_retry};
 
 use super::{
     command::{command_display, configure_inherited_fd, ensure_command_compatible},
@@ -110,11 +110,13 @@ pub fn run_status(command: &mut Command) -> Result<(), IcpCommandError> {
 /// Execute a command with inherited terminal I/O and require a successful status.
 pub(super) fn run_status_inherit(command: &mut Command) -> Result<(), IcpCommandError> {
     ensure_command_compatible(command)?;
+    run_status_inherit_unchecked(command)
+}
+
+pub(super) fn run_status_inherit_unchecked(command: &mut Command) -> Result<(), IcpCommandError> {
     let display = command_display(command);
-    let mut child = command
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    command.stdout(Stdio::inherit()).stderr(Stdio::piped());
+    let mut child = spawn_with_executable_busy_retry(command)?;
     let stderr_handle = child
         .stderr
         .take()

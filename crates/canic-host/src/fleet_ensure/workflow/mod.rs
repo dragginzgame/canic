@@ -147,14 +147,32 @@ where
     }
     let mut state = read_state(&paths, requested_fleet)?;
     let prior_plan = read_plan(&paths)?.map(verified_plan).transpose()?;
-    if let Some(prior) = prior_plan.as_ref().filter(|prior| {
+    let prior_journal = read_journal(&paths)?;
+    let matching_prior = prior_plan.as_ref().filter(|prior| {
         prior.fleet == requested_fleet
             && prior.environment == desired.environment
             && prior.desired_sha256 == desired_sha256
-    }) {
+    });
+    let retained_operation_matches =
+        matching_prior
+            .zip(prior_journal.as_ref())
+            .is_some_and(|(prior, journal)| {
+                retained_reinstall_operation_matches(
+                    &state,
+                    &prior.fleet,
+                    &prior.operation_id,
+                    journal,
+                )
+            });
+    if !retained_operation_matches {
+        state.completed_reinstall_action_sha256.clear();
+        state.completed_reinstall_operation_id = None;
+        state.completed_reinstalls.clear();
+    }
+    if let Some(prior) = matching_prior {
         retain_plan_cycles(&mut state, prior);
-        if let Some(journal) = read_journal(&paths)? {
-            retain_completed_reinstalls(&mut state, prior, &journal);
+        if let Some(journal) = &prior_journal {
+            retain_completed_reinstalls(&mut state, prior, journal);
         }
     }
     let operation_id = operation_id(desired_sha256, &desired.environment, requested_fleet);
@@ -219,23 +237,86 @@ fn retain_completed_reinstalls(
     plan: &FleetEnsurePlan,
     journal: &FleetEnsureJournalRecord,
 ) {
-    for (action, effect) in ordered_actions(plan).into_iter().zip(&journal.effects) {
+    if journal.fleet != plan.fleet || journal.operation_id != plan.operation_id {
+        return;
+    }
+    for action in ordered_actions(plan) {
         let EnsureAction::Install {
             mode: crate::fleet_ensure::model::InstallMode::Reinstall,
             name,
+            principal,
+            wasm_sha256,
             ..
         } = action
         else {
             continue;
         };
+        let action_sha256 = action_sha256(action);
+        let Some(effect) = journal
+            .effects
+            .iter()
+            .find(|effect| effect.action_sha256 == action_sha256)
+        else {
+            continue;
+        };
         if effect.state == EffectState::Applied
             && let Some(pre_canister_version) = effect.pre_canister_version
+            && state
+                .principals
+                .get(name)
+                .is_some_and(|retained| retained == principal)
         {
+            state.completed_reinstall_operation_id = Some(journal.operation_id.clone());
+            state
+                .completed_reinstall_action_sha256
+                .insert(name.clone(), action_sha256);
             state
                 .completed_reinstalls
                 .insert(name.clone(), pre_canister_version);
+            if let Some(topology) = state.topology.get_mut(name) {
+                topology.module_hash = Some(wasm_sha256.clone());
+            }
         }
     }
+}
+
+fn completed_reinstall_evidence_matches(
+    state: &FleetEnsureStateRecord,
+    journal: &FleetEnsureJournalRecord,
+) -> bool {
+    !state.completed_reinstalls.is_empty()
+        && state
+            .completed_reinstalls
+            .iter()
+            .all(|(name, pre_version)| {
+                state
+                    .completed_reinstall_action_sha256
+                    .get(name)
+                    .and_then(|action_sha256| {
+                        journal
+                            .effects
+                            .iter()
+                            .find(|effect| effect.action_sha256 == *action_sha256)
+                    })
+                    .is_some_and(|effect| {
+                        effect.state == EffectState::Applied
+                            && effect.pre_canister_version == Some(*pre_version)
+                    })
+            })
+        && state.completed_reinstall_action_sha256.len() == state.completed_reinstalls.len()
+}
+
+fn retained_reinstall_operation_matches(
+    state: &FleetEnsureStateRecord,
+    prior_fleet: &str,
+    prior_operation_id: &str,
+    journal: &FleetEnsureJournalRecord,
+) -> bool {
+    journal.completion == FleetEnsureCompletion::ReplanRequired
+        && journal.fleet == prior_fleet
+        && journal.operation_id == prior_operation_id
+        && state.completed_reinstall_operation_id.as_deref() == Some(journal.operation_id.as_str())
+        && completed_reinstall_evidence_matches(state, journal)
 }
 
 fn retain_plan_cycles(state: &mut FleetEnsureStateRecord, plan: &FleetEnsurePlan) {
@@ -575,6 +656,9 @@ where
             .any(|canister| !canister.actions.is_empty())
             || !converged.protocol_actions.is_empty()
         {
+            retain_observed_cycles(&mut terminal_state, &terminal_observation);
+            retain_completed_reinstalls(&mut terminal_state, &retained_plan, &journal);
+            write_state(&paths, &terminal_state)?;
             journal.completion = FleetEnsureCompletion::ReplanRequired;
             journal.stalled_observations = 0;
             write_journal(&paths, &journal)?;
@@ -593,6 +677,9 @@ where
     attach_terminal_cycles(&mut final_observation, terminal_cycles)?;
     let actual_conservation =
         verify_terminal_conservation(&retained_plan, &journal, &final_observation)?;
+    terminal_state.completed_reinstall_action_sha256.clear();
+    terminal_state.completed_reinstall_operation_id = None;
+    terminal_state.completed_reinstalls.clear();
     write_state(&paths, &terminal_state)?;
     journal.completion = FleetEnsureCompletion::Converged;
     journal.stalled_observations = 0;
@@ -1210,6 +1297,7 @@ fn publish_terminal_state(
     plan: &FleetEnsurePlan,
     state: &mut FleetEnsureStateRecord,
 ) {
+    let prior_topology = state.topology.clone();
     for canister in &plan.canisters {
         match canister.disposition {
             CanisterDisposition::Create | CanisterDisposition::Replace => {
@@ -1243,7 +1331,7 @@ fn publish_terminal_state(
                 canister.name.clone(),
                 crate::fleet_ensure::model::FleetEnsureTopologyRecord {
                     kind: canister.kind,
-                    module_hash: None,
+                    module_hash: projected_module_hash(plan, &prior_topology, canister),
                     parent: canister.parent.clone(),
                     protocol_binding: canister.protocol_binding.clone(),
                     role: canister
@@ -1254,6 +1342,33 @@ fn publish_terminal_state(
             )
         })
         .collect();
+}
+
+fn projected_module_hash(
+    plan: &FleetEnsurePlan,
+    prior_topology: &BTreeMap<String, crate::fleet_ensure::model::FleetEnsureTopologyRecord>,
+    canister: &crate::fleet_ensure::model::DesiredCanister,
+) -> Option<String> {
+    let installed = plan
+        .canisters
+        .iter()
+        .find(|planned| planned.name == canister.name)
+        .and_then(|planned| {
+            planned
+                .actions
+                .iter()
+                .rev()
+                .find_map(|action| match action {
+                    EnsureAction::Install { wasm_sha256, .. } => Some(wasm_sha256.clone()),
+                    _ => None,
+                })
+        });
+    installed.or_else(|| {
+        prior_topology
+            .get(&canister.name)
+            .filter(|retained| retained.kind == canister.kind && retained.parent == canister.parent)
+            .and_then(|retained| retained.module_hash.clone())
+    })
 }
 
 fn merge_terminal_inventory<E>(
@@ -1395,5 +1510,95 @@ pub(super) fn action_order(action: &EnsureAction) -> u8 {
         EnsureAction::Transfer { .. } => 8,
         EnsureAction::Stop { .. } => 9,
         EnsureAction::Delete { .. } => 10,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn retained_evidence() -> (FleetEnsureStateRecord, FleetEnsureJournalRecord) {
+        let state = FleetEnsureStateRecord {
+            active_registry: None,
+            completed_reinstall_action_sha256: BTreeMap::from([(
+                "root".to_string(),
+                "action".to_string(),
+            )]),
+            completed_reinstall_operation_id: Some("operation".to_string()),
+            completed_reinstalls: BTreeMap::from([("root".to_string(), 7)]),
+            fleet: "fleet".to_string(),
+            pending_principals: BTreeMap::new(),
+            principals: BTreeMap::new(),
+            retained_cycles_by_principal: BTreeMap::new(),
+            schema_version: crate::fleet_ensure::model::FLEET_ENSURE_SCHEMA_VERSION,
+            topology: BTreeMap::new(),
+        };
+        let journal = FleetEnsureJournalRecord {
+            completion: FleetEnsureCompletion::ReplanRequired,
+            effects: vec![crate::fleet_ensure::model::EffectRecord {
+                action_sha256: "action".to_string(),
+                created_principal: None,
+                destination_post_cycles: None,
+                destination_pre_cycles: None,
+                post_cycles: None,
+                pre_cycles: None,
+                pre_canister_version: Some(7),
+                progress_identity: None,
+                receipt: None,
+                state: EffectState::Applied,
+            }],
+            fleet: "fleet".to_string(),
+            initial_controlled_cycles: 0,
+            initial_operator_cycles: 0,
+            operation_id: "operation".to_string(),
+            plan_sha256: "plan".to_string(),
+            schema_version: crate::fleet_ensure::model::FLEET_ENSURE_SCHEMA_VERSION,
+            stalled_observations: 0,
+        };
+        (state, journal)
+    }
+
+    #[test]
+    fn completed_reinstall_evidence_requires_exact_operation_action_and_version() {
+        let (state, journal) = retained_evidence();
+        assert!(retained_reinstall_operation_matches(
+            &state,
+            "fleet",
+            "operation",
+            &journal,
+        ));
+
+        let mut wrong_action = journal.clone();
+        wrong_action.effects[0].action_sha256 = "other".to_string();
+        assert!(!retained_reinstall_operation_matches(
+            &state,
+            "fleet",
+            "operation",
+            &wrong_action,
+        ));
+
+        let mut wrong_version = journal.clone();
+        wrong_version.effects[0].pre_canister_version = Some(8);
+        assert!(!retained_reinstall_operation_matches(
+            &state,
+            "fleet",
+            "operation",
+            &wrong_version,
+        ));
+
+        for (fleet, operation) in [("other", "operation"), ("fleet", "other")] {
+            assert!(!retained_reinstall_operation_matches(
+                &state, fleet, operation, &journal,
+            ));
+        }
+
+        let mut incomplete = journal;
+        incomplete.effects[0].state = EffectState::Issued;
+        assert!(!retained_reinstall_operation_matches(
+            &state,
+            "fleet",
+            "operation",
+            &incomplete,
+        ));
     }
 }
