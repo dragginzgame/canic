@@ -24,7 +24,10 @@ use crate::{
         FLEET_ENSURE_SCHEMA_VERSION, MAX_FLEET_ENSURE_CANISTERS, RetainedRootStartAuthorityRecord,
         RetainedRootStartBinding,
     },
-    fleet_ensure::ops::{EnsurePaths, root_owned_lifecycle, write_root_start_authority},
+    fleet_ensure::ops::{
+        EnsurePaths, predecessor_root_status, read_root_start_authority, root_owned_lifecycle,
+        verify_root_start_release_authority, write_root_start_authority,
+    },
     icp::IcpCli,
     icp_config::resolve_icp_build_network_from_root,
     network::resolve_canonical_network_id_from_root,
@@ -595,6 +598,7 @@ struct RootEstateAuthorityRequest<'a, 'request> {
     generation: &'a FleetGenerateRequest<'request>,
     root_candid: &'a Path,
     root_wasm_sha256: &'a str,
+    predecessor_status_roots: &'a BTreeSet<String>,
     seed: &'a EstateSeed,
     source: &'a FleetSource,
     topology: &'a crate::component_topology::PlannedFleetTopology,
@@ -1385,6 +1389,15 @@ fn observe_estate(
             },
         )));
     }
+    let predecessor_status_roots = predecessor_status_roots(
+        request,
+        *operator,
+        seed,
+        source,
+        topology,
+        &observed,
+        root_wasm_sha256,
+    )?;
     observe_root_owned_pool_assets(
         &icp,
         &RootEstateAuthorityRequest {
@@ -1392,6 +1405,7 @@ fn observe_estate(
             generation: request,
             root_candid,
             root_wasm_sha256,
+            predecessor_status_roots: &predecessor_status_roots,
             seed,
             source,
             topology,
@@ -1399,6 +1413,87 @@ fn observe_estate(
         &mut observed,
     )?;
     Ok(observed)
+}
+
+fn predecessor_status_roots(
+    request: &FleetGenerateRequest<'_>,
+    operator: Principal,
+    seed: &EstateSeed,
+    source: &FleetSource,
+    topology: &PlannedFleetTopology,
+    observed: &BTreeMap<String, ObservedCanister>,
+    successor_module_sha256: &str,
+) -> Result<BTreeSet<String>, FleetGenerateError> {
+    let paths = EnsurePaths::under(request.root, request.environment, request.fleet);
+    let Some(authority) = read_root_start_authority(&paths)
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?
+    else {
+        return Ok(BTreeSet::new());
+    };
+    let has_matching_predecessor = authority.roots.iter().any(|binding| {
+        observed
+            .get(&binding.principal)
+            .and_then(|canister| canister.module_sha256.as_deref())
+            == Some(binding.predecessor_module_sha256.as_str())
+    });
+    if !has_matching_predecessor {
+        return Ok(BTreeSet::new());
+    }
+    let identity_matches = authority.environment == request.environment
+        && authority.fleet == request.fleet
+        && authority.fleet_id == seed.fleet_id
+        && authority.release_build_id == request.release_build_id
+        && authority.successor_module_sha256 == successor_module_sha256;
+    if !identity_matches {
+        return Err(FleetGenerateError::Authority(
+            "retained Root-start authority does not bind the requested successor generation"
+                .to_string(),
+        ));
+    }
+    verify_root_start_release_authority(request.root, &authority)
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let expected_controller = operator.to_text();
+    let mut accepted = BTreeSet::new();
+    for binding in &authority.roots {
+        let root = seed
+            .roots
+            .iter()
+            .find(|root| root.root == binding.principal)
+            .ok_or_else(|| {
+                FleetGenerateError::Authority(format!(
+                    "retained Root-start authority names unknown Root {}",
+                    binding.principal
+                ))
+            })?;
+        let expected_name = retained_root_name(source, seed, topology, &root.root)?;
+        let exact_binding = binding.name == expected_name
+            && binding.subnet == root.placement_subnet
+            && binding.controllers == [expected_controller.clone()];
+        if !exact_binding {
+            return Err(FleetGenerateError::Authority(format!(
+                "retained predecessor status authority for Root {} conflicts with current Fleet identity",
+                binding.principal
+            )));
+        }
+        let live_module = observed
+            .get(&binding.principal)
+            .and_then(|canister| canister.module_sha256.as_deref())
+            .ok_or_else(|| {
+                FleetGenerateError::Authority(format!(
+                    "retained predecessor status authority has no live module for Root {}",
+                    binding.principal
+                ))
+            })?;
+        if live_module == binding.predecessor_module_sha256 {
+            accepted.insert(binding.principal.clone());
+        } else if live_module != successor_module_sha256 {
+            return Err(FleetGenerateError::Authority(format!(
+                "Root {} module is neither the sealed predecessor nor successor",
+                binding.principal
+            )));
+        }
+    }
+    Ok(accepted)
 }
 
 fn retained_root_name(
@@ -1618,25 +1713,38 @@ fn observe_root_owned_pool_assets(
         let mut found = BTreeMap::new();
         let mut start_after = None;
         loop {
-            let response: RootEstateStatusResponse = query_with_candid(
-                icp,
-                request.root_candid,
-                root_principal,
-                protocol::CANIC_STATUS,
-                &RootEstateStatusRequest::Pool(CanisterPoolStatusRequest {
-                    start_after,
-                    limit: 256,
-                }),
-            )
-            .map_err(|error| FleetGenerateError::CanisterUnavailable {
-                canister: root.root.clone(),
-                reason: format!("protected Root pool observation failed: {error}"),
-            })?;
-            let RootEstateStatusResponse::Pool(page) = response else {
-                return Err(FleetGenerateError::SeedTopology(format!(
-                    "Root {} returned the wrong pool projection",
-                    root.root
-                )));
+            let status_request = RootEstateStatusRequest::Pool(CanisterPoolStatusRequest {
+                start_after,
+                limit: 256,
+            });
+            let page = if request.predecessor_status_roots.contains(&root.root) {
+                predecessor_root_status::query_pool(icp, root_principal, start_after, 256).map_err(
+                    |error| FleetGenerateError::CanisterUnavailable {
+                        canister: root.root.clone(),
+                        reason: format!(
+                            "protected predecessor Root pool observation failed: {error}"
+                        ),
+                    },
+                )?
+            } else {
+                let response: RootEstateStatusResponse = query_with_candid(
+                    icp,
+                    request.root_candid,
+                    root_principal,
+                    protocol::CANIC_STATUS,
+                    &status_request,
+                )
+                .map_err(|error| FleetGenerateError::CanisterUnavailable {
+                    canister: root.root.clone(),
+                    reason: format!("protected Root pool observation failed: {error}"),
+                })?;
+                let RootEstateStatusResponse::Pool(page) = response else {
+                    return Err(FleetGenerateError::SeedTopology(format!(
+                        "Root {} returned the wrong pool projection",
+                        root.root
+                    )));
+                };
+                *page
             };
             if page.config != authority.binding.limits.canister_pool {
                 return Err(FleetGenerateError::SeedTopology(format!(

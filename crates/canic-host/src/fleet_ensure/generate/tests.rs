@@ -1258,7 +1258,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     ));
     fs::write(
         &stopped_paths.root_start_authority,
-        retained_authority_bytes,
+        &retained_authority_bytes,
     )
     .expect("restore retained Root-start authority bytes");
     let root_management = RootManagementObservation {
@@ -1571,8 +1571,103 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(retained_after_start.principals.is_empty());
     assert!(retained_after_start.topology.is_empty());
 
+    fs::remove_file(&stopped_paths.root_start_authority)
+        .expect("remove disposable bridge authority");
+    fs::write(
+        root.join("predecessor-pool-status"),
+        b"exact predecessor shape\n",
+    )
+    .expect("select predecessor response without authority");
+    assert!(matches!(
+        generate_desired_fleet(&stopped_request),
+        Err(FleetGenerateError::CanisterUnavailable { .. })
+    ));
+    fs::write(
+        &stopped_paths.root_start_authority,
+        &retained_authority_bytes,
+    )
+    .expect("restore exact bridge authority");
+    fs::remove_file(&root_status_counter).expect("reset Root status fixture");
+
+    let mut wrong_bridge_successor = stopped_authority;
+    wrong_bridge_successor.successor_module_sha256 = "00".repeat(32);
+    wrong_bridge_successor.seal();
+    fs::write(
+        &stopped_paths.root_start_authority,
+        serde_json::to_vec_pretty(&wrong_bridge_successor).expect("encode wrong bridge authority"),
+    )
+    .expect("write wrong bridge authority");
+    assert!(matches!(
+        generate_desired_fleet(&stopped_request),
+        Err(FleetGenerateError::Authority(_))
+    ));
+    fs::write(
+        &stopped_paths.root_start_authority,
+        &retained_authority_bytes,
+    )
+    .expect("restore exact bridge authority");
+
+    let unrelated_running_module = "11".repeat(32);
+    write_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: coordinator_hash,
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &retained_pool,
+            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            root_module_hash: &unrelated_running_module,
+            root_runtime_status: "running",
+            root_status_error: None,
+            store: &store,
+            store_has_root_controller: true,
+            store_module_hash: store_hash,
+        },
+    );
+    if root_status_counter.exists() {
+        fs::remove_file(&root_status_counter).expect("reset exact bridge status fixture");
+    }
+    fs::write(
+        root.join("predecessor-pool-status"),
+        b"exact predecessor shape\n",
+    )
+    .expect("select predecessor response for unrelated module");
+    assert!(matches!(
+        generate_desired_fleet(&stopped_request),
+        Err(FleetGenerateError::CanisterUnavailable { .. })
+    ));
+    write_fake_icp(
+        &root,
+        FakeIcpFixture {
+            authority: &retained_authority,
+            coordinator: &coordinator,
+            coordinator_module_hash: coordinator_hash,
+            fleet_root: &fleet_root,
+            operator: &operator,
+            pool: &retained_pool,
+            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            root_module_hash: &stopped_root_hash,
+            root_runtime_status: "running",
+            root_status_error: None,
+            store: &store,
+            store_has_root_controller: true,
+            store_module_hash: store_hash,
+        },
+    );
+    if root_status_counter.exists() {
+        fs::remove_file(&root_status_counter).expect("reset successful bridge status fixture");
+    }
+    fs::write(root.join("root-started"), b"running\n")
+        .expect("restore terminal Root-start observation");
+    fs::write(
+        root.join("predecessor-pool-status"),
+        b"exact predecessor shape\n",
+    )
+    .expect("select exact predecessor Root pool response");
     let regenerated = generate_desired_fleet(&stopped_request)
-        .expect("rerun complete protected generation after reviewed Root Start");
+        .expect("bridge exact predecessor status after reviewed Root Start");
     assert_eq!(
         regenerated
             .desired
@@ -1596,6 +1691,67 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(regenerated.observed_canisters, 5);
     assert_eq!(regenerated.observed_controlled_cycles, 319_899_950_000_000);
     assert!(root_status_counter.exists());
+
+    let successor_desired_sha256 = sha256_hex(
+        &serde_json::to_vec(&regenerated.desired).expect("encode regenerated desired Fleet"),
+    );
+    let mut successor_platform = IcpEnsurePlatform::new(
+        regenerated.desired.clone(),
+        icp.to_str().expect("fake ICP path"),
+        &root,
+    );
+    let successor_plan = workflow::plan(
+        &root,
+        &regenerated.desired,
+        &successor_desired_sha256,
+        &regenerated.desired.fleet,
+        1_800_000_000_000_000_175,
+        &mut successor_platform,
+    )
+    .expect("review ordinary successor plan through predecessor status bridge");
+    let successor_actions = workflow::ordered_actions(&successor_plan.plan);
+    assert!(successor_actions.iter().any(|action| {
+        matches!(
+            action,
+            EnsureAction::Install {
+                mode: crate::fleet_ensure::model::InstallMode::Reinstall,
+                name,
+                wasm_sha256,
+                ..
+            } if name == "root-0" && wasm_sha256 == &requested_successor_root_hash
+        )
+    }));
+    assert!(successor_actions.iter().all(|action| {
+        !matches!(
+            action,
+            EnsureAction::Create { .. }
+                | EnsureAction::Delete { .. }
+                | EnsureAction::Fund { .. }
+                | EnsureAction::Transfer { .. }
+        )
+    }));
+    assert_eq!(
+        successor_plan
+            .plan
+            .conservation
+            .maximum_operator_debit_cycles,
+        0
+    );
+    assert_eq!(
+        successor_plan.plan.conservation.maximum_new_funding_cycles,
+        0
+    );
+    assert_eq!(
+        successor_plan
+            .plan
+            .conservation
+            .maximum_unavoidable_fee_cycles,
+        0
+    );
+    assert_eq!(
+        successor_plan.plan.conservation.scheduled_transfer_cycles,
+        0
+    );
 
     fs::write(&root_status_counter, b"1\n").expect("prime later pool-only fake query");
 
@@ -2627,6 +2783,7 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
     } = fixture;
     let executable = root.join("fake-icp");
     let counter = root.join("root-status-count");
+    let predecessor_pool_status = root.join("predecessor-pool-status");
     let root_started = root.join("root-started");
     let root_start_count = root.join("root-start-count");
     if root_started.exists() {
@@ -2634,6 +2791,9 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
     }
     if root_start_count.exists() {
         fs::remove_file(&root_start_count).expect("reset fake Root start count");
+    }
+    if predecessor_pool_status.exists() {
+        fs::remove_file(&predecessor_pool_status).expect("reset predecessor pool response");
     }
     let coordinator_status = canister_status_json(
         coordinator,
@@ -2682,6 +2842,12 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
             ))
         },
     );
+    let predecessor_pool_response = serde_json::json!({
+        "response_bytes": hex_bytes(
+            crate::fleet_ensure::ops::predecessor_root_status::encode_pool_response_fixture(pool)
+        )
+    })
+    .to_string();
     let ledger_response = candid_response_json(&Nat::from(100_000_000_u64));
     let public_cycle_case = public_cycle_balance.map_or_else(String::new, |(canister, cycles)| {
         let response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
@@ -2756,6 +2922,8 @@ if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
     if [ "$count" = "0" ]; then
       printf '%s\n' '1' > "{counter}"
       printf '%s\n' '{authority_response}'
+    elif [ -f "{predecessor_pool_status}" ]; then
+      printf '%s\n' '{predecessor_pool_response}'
     else
       printf '%s\n' '{pool_response}'
     fi
@@ -2766,6 +2934,7 @@ printf '%s\n' 'unsupported fake ICP command' >&2
 exit 42
 "#,
         counter = counter.display(),
+        predecessor_pool_status = predecessor_pool_status.display(),
         root_start_count = root_start_count.display(),
         root_started = root_started.display(),
     );

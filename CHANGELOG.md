@@ -14,7 +14,10 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
 - `0.109.26` lets the stopped-Root prerequisite bind the live predecessor to
   the newly requested finalized release independently of an older retained
-  desired document; only the reviewed same-identity Start is authorized.
+  desired document; only the reviewed same-identity Start is authorized. After
+  that Start, one exact sealed predecessor pool-status projection supports
+  read-only generation and ordinary successor planning without making current
+  Candid decoding permissive or granting a paid/identity-changing effect.
 - `0.109.25` lets Fleet Ensure review and apply only the exact management-bound
   Start needed by a stopped retained Root, without inventing child topology or
   granting a paid or replacement effect; full protected convergence resumes

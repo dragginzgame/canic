@@ -9,6 +9,7 @@ mod current_inventory;
 pub(super) mod current_protocol;
 mod plan_content;
 mod platform;
+pub(crate) mod predecessor_root_status;
 mod protocol;
 
 use crate::{

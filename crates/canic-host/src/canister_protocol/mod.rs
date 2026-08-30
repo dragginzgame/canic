@@ -6,7 +6,9 @@
 //! query or update operations.
 
 use crate::{
-    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
+    icp::{
+        IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response, response_bytes,
+    },
     protocol_binding::ResolvedProtocolBinding,
 };
 use candid::{CandidType, Principal};
@@ -169,6 +171,27 @@ where
     )
 }
 
+/// Query one method with binary arguments and retain its undecoded Candid response bytes.
+///
+/// This boundary is reserved for an explicitly selected, module-bound protocol projection whose
+/// response contract cannot be described by the current artifact's Candid sidecar.
+pub fn query_response_bytes<I>(
+    icp: &IcpCli,
+    canister: Principal,
+    method: &'static str,
+    input: &I,
+) -> Result<Vec<u8>, CanisterProtocolError>
+where
+    I: CandidType,
+{
+    let output = invoke_output(icp, None, canister, method, input, ProtocolCallMode::Query)?;
+    response_bytes(&output).map_err(|source| CanisterProtocolError::Response {
+        canister,
+        method,
+        source,
+    })
+}
+
 fn invoke_with_candid<I, O>(
     icp: &IcpCli,
     candid_path: &std::path::Path,
@@ -180,6 +203,21 @@ fn invoke_with_candid<I, O>(
 where
     I: CandidType,
     O: CandidType + DeserializeOwned,
+{
+    let output = invoke_output(icp, Some(candid_path), canister, method, input, mode)?;
+    decode_response(canister, method, &output)
+}
+
+fn invoke_output<I>(
+    icp: &IcpCli,
+    candid_path: Option<&std::path::Path>,
+    canister: Principal,
+    method: &'static str,
+    input: &I,
+    mode: ProtocolCallMode,
+) -> Result<String, CanisterProtocolError>
+where
+    I: CandidType,
 {
     let bytes =
         candid::encode_one(input).map_err(|source| CanisterProtocolError::ArgumentEncoding {
@@ -200,14 +238,14 @@ where
             method,
             &args_path,
             Some(ICP_JSON_OUTPUT),
-            Some(candid_path),
+            candid_path,
         ),
         ProtocolCallMode::Update => icp.canister_call_binary_args_output_with_candid(
             &canister_text,
             method,
             &args_path,
             Some(ICP_JSON_OUTPUT),
-            Some(candid_path),
+            candid_path,
         ),
     };
     let cleanup = fs::remove_file(&args_path);
@@ -221,7 +259,7 @@ where
         method,
         source,
     })?;
-    decode_response(canister, method, &output)
+    Ok(output)
 }
 
 fn write_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {

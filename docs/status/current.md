@@ -39,10 +39,17 @@ Published 0.109.25 closes `CANIC-091`: a retained schema-1 state with cycle
 evidence but no Principal/topology maps can review and apply one exact
 management-bound Root Start before protected child observation.
 
-Downstream review then exposed `CANIC-092`. Production has live stopped
+Downstream review then exposed `CANIC-092`. Production had live stopped
 predecessor A, retained desired release/artifact B and newly requested finalized
 release/artifact C. The first 0.109.26 candidate incorrectly required its
 generator authority for C to equal retained desired B.
+
+The exact corrected prerequisite was subsequently reviewed and applied once.
+The Root now runs predecessor A, but its protected pool response legitimately
+predates the current `recovering_ledger` field. `CANIC-093` exposed that both
+post-Start generation and ordinary successor planning still decoded that exact
+predecessor response as current release C and therefore stopped before any
+further effect.
 
 The current `canic-host` batch establishes this corrected invariant:
 
@@ -60,15 +67,26 @@ The current `canic-host` batch establishes this corrected invariant:
 6. reject missing/tampered authority, wrong release or successor, and changed
    live predecessor identity before a plan or effect;
 7. apply the Start once and make lost-response/terminal replay effect-free; and
-8. require generation and ordinary protected convergence to C to be reviewed
-   again after the Root runs.
+8. after the Root runs, select a narrow predecessor pool-status projection only
+   when the sealed A-to-C authority, exact live module and finalized successor
+   artifact all match;
+9. normalize only the semantically absent predecessor `recovering_ledger`
+   count, while requiring every other response field and keeping current Roots
+   on the current Candid/DTO path; and
+10. retain the observed Store/pool identities and cycles through generation C,
+    then produce an ordinary reviewed successor plan with no creation, funding,
+    transfer, deletion or operator debit.
 
 The production-shaped regression keeps A, B and C distinct. It proves
 deterministic authority retention, finalized release and raw-Wasm verification,
 one zero-debit Start without B's release manifest/artifact, unchanged
 desired/state ownership and effect-free replay;
 missing/tampered authority, wrong release/successor, Fleet, Principal, Subnet,
-controller, predecessor-module and runtime drift reject.
+controller, predecessor-module and runtime drift reject. Exact predecessor
+response bytes decode only under that authority; missing fields other than the
+one known absent inventory count fail closed. The same journey completes
+generation C and ordinary no-apply successor planning without paid or
+identity-changing authority.
 Targeted validation evidence is recorded below; no broad workspace or
 PocketIC gate is run during coding.
 
@@ -78,10 +96,14 @@ The retained downstream evidence reports:
 
 - default ICP identity restored to anonymous;
 - desired Fleet authority byte-identical;
-- finalized 0.109.25 release artifacts retained;
-- no prerequisite plan digest or apply authority produced;
+- the exact Root Start applied once under its reviewed prerequisite and replayed
+  without a second effect;
+- 84,279,333,025 cycles of measured Root execution burn, with zero funding,
+  transfer, fee or operator debit;
+- the same Root Principal now running predecessor module A;
+- finalized release artifacts and the sealed A-to-C authority retained;
 - no downstream state/archive edit or synthetic topology authority;
-- no canister, controller, cycle, database, catalogue or frontend mutation;
+- no later canister, controller, cycle, database, catalogue or frontend effect;
   and
 - no checksum, optimizer, size or authority bypass.
 
@@ -131,9 +153,11 @@ dependency.
   independent publication authority.
 - `CANIC-087`: eliminate release-LTO declaration links and serial compatible
   runtime links while preserving canonical artifact/determinism gates.
-- `CANIC-090`/`CANIC-091`/`CANIC-092`: a prerequisite effect may short-circuit
-  unavailable protected observation only under exact management and retained
-  module authority plus mandatory post-effect revalidation.
+- `CANIC-090`/`CANIC-091`/`CANIC-092`/`CANIC-093`: a prerequisite effect may
+  short-circuit unavailable protected observation only under exact management
+  and retained module authority plus mandatory post-effect revalidation; any
+  narrow predecessor response projection remains exact-module/release bound and
+  cannot become permissive current decoding.
 - Endpoint-heavy Toko evidence: Binaryen has converged; shared non-generic
   wrappers and role pruning must supply at least 350 KiB useful current-profile
   code-section headroom, with 500 KiB preferred.
@@ -151,10 +175,13 @@ evidence.
 
 ## Validation State
 
-Targeted `canic-host` library checking and warning-denied all-target Clippy,
-`canic-cli` all-target checking, the production-shaped retained-estate
-generator/ensure journey, current-plan JSON/content-addressing tests, layering,
-formatting, diff hygiene, changelog governance, release-draft preflight and the
+Targeted warning-denied `canic-host` all-target Clippy passes. The exact
+predecessor-response decoder regression passes, including fail-closed rejection
+of an incomplete response. The production-shaped retained-estate
+generator/ensure journey passes with distinct A, B and C, all authority
+negatives, exact old response bytes, generation C and an ordinary successor
+plan carrying no creation, funding, transfer or deletion. Formatting and diff
+hygiene, layering, changelog governance, release-draft preflight and the
 current-document semantics guard pass. The evidence intentionally excludes a
 broad workspace or PocketIC gate during coding.
 
@@ -166,11 +193,12 @@ B2 and is not pulled across the human closeout gate.
 
 ## Next Authorized Action
 
-Finish targeted review of the current `CANIC-092` batch without modifying Toko
-Miner. When the maintainer selects a release flow, publish and adopt the exact
-successor, then repeat downstream no-effect generation through the reviewed
-Start, post-Start protected verification, terminal plan and effect-free
-replay. Only then begin 0.109 B9 simplification and its superseding audit.
+Finish targeted review of the combined `CANIC-092`/`CANIC-093` batch without
+modifying Toko Miner. When the maintainer selects a release flow, publish and
+adopt the exact successor, then repeat downstream post-Start generation,
+review the ordinary successor plan, apply only its exact digest and prove
+terminal replay effect-free. Only then begin 0.109 B9 simplification and its
+superseding audit.
 
 
 <!-- canic-release-validation: version=0.109.25 source=90329bde38fbafe72589359f9bdf4d1e43f5cb46 date=2026-08-30 gate=complete -->
