@@ -52,10 +52,14 @@ review boundaries.
 `CANIC-095` then blocked the authorized retained-C apply before its first
 effect because ICP CLI 1.3.0 omits `canister_version` from status JSON. The open
 batch preserves the pre/post reinstall-version invariant and obtains the exact
-missing value from the typed management-canister `canister_status` response.
-The fallback binds module and version from one response rather than joining two
-snapshots. It neither defaults nor infers a version. If both observation
-boundaries fail, the typed diagnostic confirms no install ran and directs
+missing value from a typed management-canister `canister_status` response. Its
+agent route calls `aaaaa-aa` while setting the install target as the effective
+canister ID required by the IC interface. The selected ICP environment supplies
+the resolved API URL and root key. The exported selected identity is
+Principal-checked, and its PEM buffer is zeroed after identity construction.
+The fallback binds module and version from one response rather than joining
+two snapshots. It neither defaults nor infers a version. If either observation
+boundary fails, the typed diagnostic confirms no install ran and directs
 resume of the same reviewed plan after controller/management access is
 restored.
 
@@ -227,15 +231,19 @@ passes in 0.60 seconds after a 26.38-second incremental compile, and
 warning-denied `canic-host` library/test Clippy passes in 9.82 seconds. No broad
 gate was run.
 
-The exact ICP CLI 1.3.0-shaped versionless-status regression passes in 0.02
-seconds after a 34.52-second incremental compile. It decodes version 42 and the
-same-response module hash from typed management status, and rejects when both
-sources are unavailable.
-The reinstall replay regression passes in 0.09 seconds: its first version
+The exact ICP CLI 1.3.0-shaped versionless-status regression passes in 0.01
+seconds. It decodes version 42 and the same-response module hash from typed
+management status, rejects when both sources are unavailable, and proves the
+obsolete generic ICP CLI management call is absent. The adjacent agent-boundary
+regression passes and asserts the management destination and target effective
+canister ID independently.
+The reinstall replay regression passes in 0.07 seconds: its first version
 observation failure leaves the exact journal `in_progress` with zero effects,
 then the same digest records the pre-version, installs once, proves a newer
 terminal version and produces an effect-free terminal replay. No broad gate
-was run.
+was run. After the routing correction, warning-denied `canic-host` library/test
+Clippy passes in 13.92 seconds and `canic-cli` all-target compilation passes in
+52.61 seconds.
 
 `CANIC-034` is already closed by the maintained fresh-estate creation graph:
 each Root pool asset is funded directly by its reviewed Cycles Ledger creation
@@ -247,7 +255,7 @@ B2 and is not pulled across the human closeout gate.
 
 Finish targeted review of the open 0.109.27 support batch, including the
 CANIC-094 successor-order diagnostic and CANIC-095 typed install-version
-fallback. Do not modify Toko Miner from this repository. After a maintained
+transport. Do not modify Toko Miner from this repository. After a maintained
 successor is adopted downstream, resume only the unchanged authorized C plan
 if its retained digest still verifies, reach terminal convergence, reuse the
 finalized D build, generate and review a fresh D plan, then prove immediate

@@ -394,10 +394,14 @@ lost response.
 The normal ICP CLI status projection supplies module, controller, runtime and
 cycle evidence. If that projection omits `canister_version`, Canic obtains the
 exact install-only pre/post version from the typed management-canister
-`canister_status` response for the same Principal and controller identity. The
-fallback takes module hash and version from that one response so terminal proof
-cannot combine different observations. It never defaults or infers the value.
-If both boundaries cannot supply the proof,
+`canister_status` response. The direct agent calls the management Principal but
+routes through the install target as the HTTP effective canister ID. It uses
+the selected ICP environment's resolved root key and an in-memory export of the
+selected controller identity, rejects a Principal mismatch, and zeroes the PEM
+buffer without retaining it in Canic state. The fallback takes module hash and
+version from that one response so terminal proof cannot combine different
+observations. It never defaults or infers the value. If the identity is not
+exportable, or either observation boundary cannot supply the proof,
 apply stops before install and directs the operator to restore management
 status access and resume the same reviewed plan; an already-retained
 empty-effect journal remains the replay authority.

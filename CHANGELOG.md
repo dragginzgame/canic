@@ -15,8 +15,8 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 - `0.109.27` updates the isolated IcyDB qualification fixture, restores two
   Fleet Ensure proofs to the governed PocketIC lane, reports the exact sealed
   successor that must converge before a later release, and obtains atomic
-  module/version install evidence from typed management status when ICP CLI
-  omits its version projection.
+  module/version install evidence from an effective-ID-routed typed management
+  status call when ICP CLI omits its version projection.
 - `0.109.26` lets the stopped-Root prerequisite bind the live predecessor to
   the newly requested finalized release independently of an older retained
   desired document; only the reviewed same-identity Start is authorized. After
