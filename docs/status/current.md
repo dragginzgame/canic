@@ -57,11 +57,13 @@ agent route calls `aaaaa-aa` while setting the install target as the effective
 canister ID required by the IC interface. The selected ICP environment supplies
 the resolved API URL and root key. The exported selected identity is
 Principal-checked, and its PEM buffer is zeroed after identity construction.
-The fallback binds module and version from one response rather than joining
-two snapshots. It neither defaults nor infers a version. If either observation
-boundary fails, the typed diagnostic confirms no install ran and directs
-resume of the same reviewed plan after controller/management access is
-restored.
+The response boundary decodes the IC interface's exact `version : nat64` field
+and projects it into Canic's internal `canister_version`; it does not ask the
+management canister for a nonexistent `canister_version` field. The fallback
+binds module and version from one response rather than joining two snapshots.
+It neither defaults nor infers a version. If either observation boundary fails,
+the typed diagnostic confirms no install ran and directs resume of the same
+reviewed plan after controller/management access is restored.
 
 ## Published 0.109.26 Correctness Batch
 
@@ -191,6 +193,12 @@ dependency.
 - Endpoint-heavy Toko evidence: Binaryen has converged; shared non-generic
   wrappers and role pruning must supply at least 350 KiB useful current-profile
   code-section headroom, with 500 KiB preferred.
+- Managed roles already expose their application package version, Canic
+  framework version and IC `canister_version`, but the Fleet list currently
+  projects only Canic version and module hash. 0.110 B4 owns a host-only
+  verified per-role version inventory: semantic versions are operator labels,
+  exact observed hashes remain deployment authority, and unknown or conflicting
+  mappings fail visible rather than being guessed.
 
 0.110 does not inherit unresolved 0.109 work. It makes the accepted reductions
 durable budgets and adds only stateful retirement as a new safety capability.
@@ -232,11 +240,12 @@ warning-denied `canic-host` library/test Clippy passes in 9.82 seconds. No broad
 gate was run.
 
 The exact ICP CLI 1.3.0-shaped versionless-status regression passes in 0.01
-seconds. It decodes version 42 and the same-response module hash from typed
-management status, rejects when both sources are unavailable, and proves the
-obsolete generic ICP CLI management call is absent. The adjacent agent-boundary
-regression passes and asserts the management destination and target effective
-canister ID independently.
+seconds. An independently declared fixture encodes the canonical management
+response field `version : nat64`; production decoding projects version 42 and
+the same-response module hash into Canic's install evidence. It rejects when
+both sources are unavailable and proves the obsolete generic ICP CLI management
+call is absent. The adjacent agent-boundary regression passes and asserts the
+management destination and target effective canister ID independently.
 The reinstall replay regression passes in 0.07 seconds: its first version
 observation failure leaves the exact journal `in_progress` with zero effects,
 then the same digest records the pre-version, installs once, proves a newer

@@ -51,7 +51,7 @@ struct ManagementCanisterStatusRequest {
 
 #[derive(CandidType, Deserialize)]
 struct ManagementCanisterStatusResponse {
-    canister_version: u64,
+    version: u64,
     module_hash: Option<Vec<u8>>,
 }
 
@@ -1979,7 +1979,7 @@ fn exact_install_canister_status_with(
         }
     })?;
     Ok(ExactInstallCanisterStatus {
-        canister_version: response.canister_version,
+        canister_version: response.version,
         module_sha256: response
             .module_hash
             .map(|hash| canic_core::cdk::utils::hash::hex_bytes(&hash)),
@@ -2198,6 +2198,12 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn versionless_icp_status_uses_exact_typed_management_version() {
+        #[derive(CandidType)]
+        struct CanonicalManagementCanisterStatusFixture {
+            version: u64,
+            module_hash: Option<Vec<u8>>,
+        }
+
         use std::{fs, os::unix::fs::PermissionsExt};
 
         let root = crate::test_support::temp_dir("canic-install-version-fallback");
@@ -2209,11 +2215,11 @@ mod tests {
             r#"{{"id":"{canister}","name":"coordinator","status":"Running","settings":{{"controllers":["rdmx6-jaaaa-aaaaa-aaadq-cai"]}},"module_hash":"0x{}","memory_size":"1","cycles":"1000000000000","query_stats":{{}}}}"#,
             "11".repeat(32),
         );
-        let response_bytes = candid::encode_one(ManagementCanisterStatusResponse {
-            canister_version: 42,
+        let response_bytes = candid::encode_one(CanonicalManagementCanisterStatusFixture {
+            version: 42,
             module_hash: Some(vec![0x22; 32]),
         })
-        .expect("encode typed management status");
+        .expect("encode independently modelled management status");
         let script = format!(
             "#!/bin/sh\n\
              if [ \"$1\" = \"--version\" ]; then printf '%s\\n' 'icp 1.3.0'; exit 0; fi\n\
