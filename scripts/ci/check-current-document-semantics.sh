@@ -21,8 +21,8 @@ TIMER_CHANGELOG="$ROOT/docs/changelog/0.104.md"
 TIMER_GUIDE="$ROOT/docs/features/runtime/native-timers.md"
 ADMISSION_DESIGN="$ROOT/docs/design/0.109-fleet-wide-ingress-admission/0.109-design.md"
 ADMISSION_STATUS="$ROOT/docs/design/0.109-fleet-wide-ingress-admission/status.md"
-ESTATE_DESIGN="$ROOT/docs/design/0.110-fleet-subnet-canister-estates/0.110-design.md"
-ESTATE_STATUS="$ROOT/docs/design/0.110-fleet-subnet-canister-estates/status.md"
+CONTRACTION_DESIGN="$ROOT/docs/design/0.110-fleet-runtime-contraction-and-stateful-safety/0.110-design.md"
+CONTRACTION_STATUS="$ROOT/docs/design/0.110-fleet-runtime-contraction-and-stateful-safety/status.md"
 COMPLEXITY_AUDIT="$ROOT/docs/audits/release-lines/0.109-post-implementation-complexity-audit.md"
 
 operator_docs=(
@@ -51,8 +51,8 @@ require_files "$GUARD_LABEL" \
     "$TIMER_GUIDE" \
     "$ADMISSION_DESIGN" \
     "$ADMISSION_STATUS" \
-    "$ESTATE_DESIGN" \
-    "$ESTATE_STATUS" \
+    "$CONTRACTION_DESIGN" \
+    "$CONTRACTION_STATUS" \
     "$COMPLEXITY_AUDIT" \
     "${operator_docs[@]}"
 

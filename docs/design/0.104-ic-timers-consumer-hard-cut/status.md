@@ -1,6 +1,7 @@
 # Canic 0.104 Implementation Status
 
 Date: 2026-08-19
+Roadmap reconciled: 2026-08-30
 
 ## Status
 
@@ -105,10 +106,11 @@ B1 must deliver together:
 6. 0.108 closes replay-safe Coordinator-backed root operating funding.
 7. 0.109 establishes Coordinator-owned Fleet-wide ingress admission with
    complete local enforcement projections.
-8. 0.110 implements reusable Fleet Subnet Canister estates and proves the
-   10/100/1,000 progression.
+8. 0.110 contracts Fleet runtime/build/operator/validation surfaces and adds
+   stateful-retirement safety.
 9. 0.111 qualifies one explicit stateful predecessor-to-successor adoption.
-10. 0.112 serves the generic Fleet observatory from every installed Canister.
+10. 0.112 adds bounded indexed estates and one same-Subnet cross-Fleet
+    transfer.
 
 Unnumbered ideas remain outside this path. Historical releases, archived
 designs and deferred drafts retain their truthful old identities.

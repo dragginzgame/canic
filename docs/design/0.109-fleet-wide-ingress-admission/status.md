@@ -2,6 +2,7 @@
 
 Date: 2026-08-23
 Last updated: 2026-08-26
+Roadmap reconciled: 2026-08-30
 
 > Historical implementation record: retained-Root repair, install preflight,
 > and recovery-bundle claims below describe immutable bridge releases through
@@ -130,8 +131,10 @@ Last updated: 2026-08-26
   the maintainer required all Canic-owned Toko go-live support to precede the
   post-adoption complexity-remediation stage, accepted that audit's findings
   and required their in-repository remediation before 0.110 promotion.
-- Successors: 0.110 estates, 0.111 stateful adoption and 0.112 observatory are
-  renumbered but otherwise retain their accepted dependency order.
+- Successors: 0.110 is reoriented to Fleet runtime contraction plus stateful
+  retirement, 0.111 retains the exact stateful-adoption exception and 0.112
+  now owns bounded multi-Fleet estates. All remain blocked on accepted 0.109
+  closeout and their own explicit promotion.
 - Surface posture: the design hard-cuts `[app.whitelist]`,
   `caller::is_whitelisted()` and independent per-canister mutation into
   protected Fleet input, one Coordinator command/status authority, local

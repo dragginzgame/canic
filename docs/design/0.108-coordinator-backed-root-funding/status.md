@@ -1,6 +1,7 @@
 # Canic 0.108 Implementation Status
 
 Date: 2026-08-23
+Roadmap reconciled: 2026-08-30
 
 ## Status
 
@@ -106,8 +107,8 @@ Date: 2026-08-23
   envelope are available. The 0.107 closeout and complete M0 evidence are
   accepted. The held 0.106 B2 external work does not gate this line.
 - Successors: 0.109 Fleet-wide ingress admission remains blocked until this
-  line is complete; 0.110 estate implementation also depends on completed
-  0.109.
+  line is complete; the later 0.112 estate implementation also depends on
+  completed 0.109, 0.110 and 0.111.
 - Surface posture: 0.108.0 remains policy-only. Tagged 0.108.1 adds Coordinator
   `RequestRootFunding` and `SetRootFunding` plus Root `AcceptFunding` and
   `RefillCycles` commands, generated Candid contracts, timer-owned request/

@@ -20,7 +20,7 @@ use crate::{
         DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
         FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureJournalRecord, FleetEnsurePlan,
         FleetEnsureStateRecord, FleetObservation, ProtocolArtifactDigests,
-        RootOwnedCanisterLifecycle,
+        RootManagementObservation, RootOwnedCanisterLifecycle,
     },
 };
 use canic_core::{cdk::utils::hash::sha256_hex, dto::pool::CanisterPoolAssetStatus};
@@ -97,6 +97,16 @@ pub trait EnsurePlatform {
     /// reviewed operation. Production adapters must replace any newer caller
     /// input before resuming an in-progress journal.
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error>;
+
+    /// Observe configured Roots through management authority only. Production
+    /// returns this evidence before any protected Root-owned child query.
+    fn observe_root_management(
+        &mut self,
+        _state: &FleetEnsureStateRecord,
+        _reviewed_targets: &std::collections::BTreeSet<String>,
+    ) -> Result<Option<RootManagementObservation>, Self::Error> {
+        Ok(None)
+    }
 
     fn observe(
         &mut self,

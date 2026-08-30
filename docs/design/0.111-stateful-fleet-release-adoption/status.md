@@ -1,47 +1,45 @@
 # Canic 0.111 Implementation Status
 
-Date: 2026-08-18
-Last updated: 2026-08-23
+Date: 2026-08-30
 
 ## Status
 
-- State: accepted and scheduled as the production-safety gate after 0.110.
+- State: accepted and scheduled after the reoriented 0.110 line.
 - Outcome: one whole-Fleet, stop-the-world transition from one exact released
-  predecessor to one successor, preserving Principals, application stable
-  memory and Fleet identity.
-- Runtime impact: none from this planning cut.
-- Implementation approval: none. B1 requires completed 0.109 Fleet-wide
-  ingress admission, completed 0.110, an immutable released predecessor and
-  explicit maintainer promotion.
-- Exception scope: one named predecessor/successor only. No rolling,
-  mixed-version, arbitrary-old, downgrade or generic compatibility path.
-- Downstream posture: Prequel Wars and IcyDB remain read-only evidence sources;
-  stateful managed demo Fleets remain disposable until this line is published
-  and adopted downstream.
+  predecessor to one successor.
+- Runtime impact: none from this planning amendment.
+- Implementation approval: none.
+- Predecessor: accepted 0.110 closeout, its exact released source/artifacts and
+  explicit B1 promotion are mandatory.
+- Exception: one predecessor/successor pair only; no rolling, mixed-version,
+  downgrade, arbitrary-old or generic compatibility path.
+- Downstream steering: repository-owned Toko-shaped stateful fixture plus
+  read-only Toko evidence; no downstream production dependency.
+- Budget posture: 0.110 Wasm, build and validation ceilings are inherited and
+  may not be silently expanded.
 
 Design: [Stateful Fleet release adoption](0.111-design.md)
 
 ## Release-Batch Tracker
 
-| Batch | Outcome | Included evidence and fallout | Focused validation | Status |
-| --- | --- | --- | --- | --- |
-| B1 | Exact predecessor and transition contract | Released schemas/artifacts, role order, operation fences, backup/dry-run contract and ceilings | Reproducible inventory and explicit acceptance | Blocked on 0.109, 0.110, released predecessor and promotion |
-| B2 | Backup and dry-run qualification | Complete snapshot manifest, copied conversion, invariant failures and zero live mutation | Backup, corruption, first-excess and dry-run tests | Blocked on B1 |
-| B3 | Role-local stable conversion | Exact Coordinator/root/Store/managed conversions, receipts and atomic traps | State/property and lifecycle rollback tests | Blocked on B2 |
-| B4 | Whole-Fleet orchestration | Fence, stop/upgrade order, journal, response-loss recovery and convergence | Host fixtures and multi-role PocketIC interruption matrix | Blocked on B3 |
-| B5 | Stateful application composition | Principal/data preservation, 0.104 participant, 0.105 local auth, 0.109 Fleet admission and 0.110 retirement evidence | Stateful Canic+IcyDB PocketIC journey | Blocked on B4 |
-| B6 | Security/performance closeout | Unsupported predecessor denial, bounds, forward recovery, docs and residue cleanup | Targeted repository/security/performance gates | Blocked on B5 |
+| Batch | Outcome | Direct evidence | Status |
+| --- | --- | --- | --- |
+| B1 | Exact predecessor and transition contract | Released schemas/artifacts, multi-Root order, fences, backup/dry-run and inherited budgets | Blocked on 0.110 closeout, predecessor and promotion |
+| B2 | Backup and copied-state dry run | Complete manifest, conversion, corruption/first-excess rejection and zero mutation | Blocked on B1 |
+| B3 | Role-local exact conversion | Coordinator, Root, Store and managed conversions, receipts and atomic traps | Blocked on B2 |
+| B4 | Whole-Fleet transition | Fence, ordered stop/upgrade, journal, response loss and multi-Root convergence | Blocked on B3 |
+| B5 | Downstream-shaped stateful composition | Principal/data preservation, lifecycle, admission, local auth and retirement | Blocked on B4 |
+| B6 | Security, budgets and closeout | Unsupported predecessor, forward recovery, size/build/test budgets and immutable audit | Blocked on B5 |
 
 ## Admission Boundary
 
-B1 must freeze one exact released predecessor, every stable owner and encoding,
-all nonterminal external-effect fences, the whole-Fleet stop/upgrade ordering,
-verified backup/dry-run evidence and the forward-recovery boundary. Any
-unknown role, corrupt snapshot or uncertain paid/controller-changing effect
-blocks before mutation.
+B1 freezes one exact released predecessor, all stable owners, the stop/upgrade
+order, every nonterminal-effect fence, backup/dry-run evidence and forward-
+recovery rules. A stopped prerequisite must already have converged through its
+separate reviewed plan; transition admission requires full protected Fleet
+authority.
 
 ## Next Authorized Action
 
-No 0.111 work is authorized by this scheduling cut. Finish 0.110, select the
-exact released predecessor, then request explicit B1 promotion. Stateful
-production claims remain blocked until all six batches close.
+No implementation is authorized. Finish 0.110, accept its exact closeout,
+select the immutable predecessor and explicitly promote B1.

@@ -48,16 +48,18 @@ release-batch plan and explicit maintainer acceptance.
    [post-implementation complexity audit](../audits/release-lines/0.109-post-implementation-complexity-audit.md)
    enters remediation. That audit must then be superseded by an accepted
    passing immutable verdict before any 0.110 implementation or promotion.
-8. [0.110 Fleet Subnet Canister estates](0.110-fleet-subnet-canister-estates/status.md)
-   adds application retirement evidence before recycling, indexed reusable
-   estates, bounded parallel work, transfer and the 10/100/1,000 proof only to
-   the extent retained by its required post-audit scope retriage.
+8. [0.110 Fleet runtime contraction and stateful safety](0.110-fleet-runtime-contraction-and-stateful-safety/status.md)
+   contracts release builds, endpoint/runtime code, control-plane/operator
+   paths and validation before adding bounded stateful-retirement evidence.
 9. [0.111 stateful Fleet release adoption](0.111-stateful-fleet-release-adoption/status.md)
    qualifies one whole-Fleet stop-the-world predecessor-to-successor
    transition before stateful production claims.
-10. [0.112 generic Fleet observatory](0.112-fleet-observatory/status.md)
-   publishes supported downstream views/rendering with external Prequel Wars
-   as the flagship consumer.
+10. [0.112 bounded multi-Fleet estates](0.112-bounded-multi-fleet-estates/status.md)
+    adds indexed Root-local estates, an ordinary reserve Fleet and one
+    same-Subnet single-asset transfer under inherited contraction budgets.
+
+The former runtime-heavy generic Fleet Observatory is now an
+[unnumbered host-first idea](ideas/fleet-observatory/status.md).
 
 Deferred ideas do not gate this ten-line path unless a later explicit
 amendment moves one into a numbered design.

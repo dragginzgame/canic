@@ -9,7 +9,8 @@ use crate::fleet_ensure::{
     model::{
         ActualCycleConservation, CanisterDisposition, CycleConservation, EffectRecord, EffectState,
         EnsureAction, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion, FleetEnsureJournalRecord,
-        FleetEnsurePlan, FleetEnsureReport, FleetEnsureStateRecord, FleetObservation,
+        FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureReport, FleetEnsureStateRecord,
+        FleetObservation, RootManagementObservation,
     },
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
@@ -17,7 +18,8 @@ use crate::fleet_ensure::{
         resolve_desired_artifacts, write_journal, write_plan, write_state,
     },
     policy::{
-        EnsurePolicyError, compile_plan, expected_plan_sha256, operation_id,
+        EnsurePolicyError, compile_plan, compile_root_start_prerequisite_plan,
+        expected_plan_sha256, operation_id, recompile_root_start_prerequisite_plan,
         validate_path_identity, validate_path_labels,
     },
 };
@@ -155,6 +157,27 @@ where
         }
     }
     let operation_id = operation_id(desired_sha256, &desired.environment, requested_fleet);
+    let artifacts = resolve_desired_artifacts(root, desired)?;
+    if let Some(management) = platform
+        .observe_root_management(&state, &BTreeSet::new())
+        .map_err(EnsureWorkflowError::Platform)?
+        && let Some(plan) = compile_root_start_prerequisite_plan(
+            desired,
+            &artifacts,
+            desired_sha256,
+            requested_fleet,
+            &management,
+            created_at_time,
+        )?
+    {
+        write_plan(&paths, &plan)?;
+        return Ok(FleetEnsureReport {
+            actual_conservation: None,
+            effects_applied: 0,
+            plan,
+            terminal: false,
+        });
+    }
     let mut observation = platform
         .observe(&operation_id, &state)
         .map_err(EnsureWorkflowError::Platform)?;
@@ -167,7 +190,6 @@ where
     let protocol_actions = platform
         .protocol_actions(&operation_id, &state)
         .map_err(EnsureWorkflowError::Platform)?;
-    let artifacts = resolve_desired_artifacts(root, desired)?;
     let plan = compile_plan(
         desired,
         &artifacts,
@@ -300,6 +322,27 @@ where
         .bind_reviewed_desired(operation_desired)
         .map_err(EnsureWorkflowError::Platform)?;
     let operation_desired_sha256 = retained_plan.desired_sha256.as_str();
+    if retained_plan.scope == FleetEnsurePlanScope::RootStartPrerequisite
+        && let Some(journal) = retained_journal
+            .as_ref()
+            .filter(|journal| journal.completion == FleetEnsureCompletion::Converged)
+    {
+        verify_terminal_root_start_replay(
+            root,
+            operation_desired,
+            &retained_plan,
+            journal,
+            requested_fleet,
+            platform,
+            &state,
+        )?;
+        return Ok(FleetEnsureReport {
+            actual_conservation: None,
+            effects_applied: applied_count(journal),
+            plan: retained_plan,
+            terminal: true,
+        });
+    }
     let mut journal = match retained_journal {
         Some(journal) if journal.completion == FleetEnsureCompletion::InProgress => {
             verify_journal(&journal, &retained_plan, requested_fleet)?;
@@ -480,6 +523,26 @@ where
         }
     }
 
+    if retained_plan.scope == FleetEnsurePlanScope::RootStartPrerequisite {
+        let actual_conservation = complete_root_start_prerequisite(
+            root,
+            operation_desired,
+            &retained_plan,
+            platform,
+            &state,
+            &journal,
+        )?;
+        journal.completion = FleetEnsureCompletion::Converged;
+        journal.stalled_observations = 0;
+        write_journal(&paths, &journal)?;
+        return Ok(FleetEnsureReport {
+            actual_conservation: Some(actual_conservation),
+            effects_applied: applied_count(&journal),
+            plan: retained_plan,
+            terminal: true,
+        });
+    }
+
     let mut terminal_state = state.clone();
     publish_terminal_state(operation_desired, &retained_plan, &mut terminal_state);
     project_current_fleet_inventory(&terminal_state)?;
@@ -548,6 +611,28 @@ fn verify_fresh_plan<P>(
 where
     P: EnsurePlatform,
 {
+    if retained_plan.scope == FleetEnsurePlanScope::RootStartPrerequisite {
+        let targets = reviewed_root_start_targets(retained_plan)?;
+        let management = platform
+            .observe_root_management(state, &targets)
+            .map_err(EnsureWorkflowError::Platform)?
+            .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+        let artifacts = resolve_desired_artifacts(root, desired)?;
+        let current = recompile_root_start_prerequisite_plan(
+            desired,
+            &artifacts,
+            desired_sha256,
+            requested_fleet,
+            &management,
+            retained_plan.planned_at_time,
+            &targets,
+        )?;
+        if !compatible_root_start_prerequisite(retained_plan, &current, desired) {
+            return Err(EnsureWorkflowError::DriftedBeforeApply);
+        }
+        let observation = root_management_fleet_observation(&management, &targets)?;
+        return Ok((observation, current.conservation.observed_controlled_cycles));
+    }
     let mut observation = platform
         .observe(&retained_plan.operation_id, state)
         .map_err(EnsureWorkflowError::Platform)?;
@@ -579,6 +664,194 @@ where
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     Ok((observation, current.conservation.observed_controlled_cycles))
+}
+
+fn complete_root_start_prerequisite<P>(
+    root: &Path,
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    retained_plan: &FleetEnsurePlan,
+    platform: &mut P,
+    state: &FleetEnsureStateRecord,
+    journal: &FleetEnsureJournalRecord,
+) -> Result<ActualCycleConservation, EnsureWorkflowError<P::Error>>
+where
+    P: EnsurePlatform,
+{
+    let targets = reviewed_root_start_targets(retained_plan)?;
+    let management = platform
+        .observe_root_management(state, &targets)
+        .map_err(EnsureWorkflowError::Platform)?
+        .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+    let artifacts = resolve_desired_artifacts(root, desired)?;
+    let current = recompile_root_start_prerequisite_plan(
+        desired,
+        &artifacts,
+        &retained_plan.desired_sha256,
+        &retained_plan.fleet,
+        &management,
+        retained_plan.planned_at_time,
+        &targets,
+    )?;
+    if !compatible_root_start_prerequisite(retained_plan, &current, desired) {
+        return Err(EnsureWorkflowError::ConvergenceDrift);
+    }
+    if management.roots.iter().any(|(name, observed)| {
+        targets.contains(name)
+            && observed.live.status != crate::fleet_ensure::model::CanisterRuntimeStatus::Running
+    }) {
+        return Err(EnsureWorkflowError::ConvergenceDrift);
+    }
+    let terminal = root_management_fleet_observation(&management, &targets)?;
+    verify_terminal_conservation(retained_plan, journal, &terminal)
+}
+
+fn verify_terminal_root_start_replay<P>(
+    root: &Path,
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+    requested_fleet: &str,
+    platform: &mut P,
+    state: &FleetEnsureStateRecord,
+) -> Result<(), EnsureWorkflowError<P::Error>>
+where
+    P: EnsurePlatform,
+{
+    verify_journal(journal, plan, requested_fleet)?;
+    let actions = ordered_actions(plan);
+    if actions.len() != journal.effects.len()
+        || journal
+            .effects
+            .iter()
+            .any(|effect| effect.state != EffectState::Applied)
+    {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    }
+    for (action, record) in actions.into_iter().zip(&journal.effects) {
+        if action_sha256(action) != record.action_sha256
+            || !platform
+                .observe_effect(&journal.operation_id, action, record, state)
+                .map_err(EnsureWorkflowError::Platform)?
+                .applied
+        {
+            return Err(EnsureWorkflowError::ConvergenceDrift);
+        }
+    }
+    let targets = reviewed_root_start_targets(plan)?;
+    let management = platform
+        .observe_root_management(state, &targets)
+        .map_err(EnsureWorkflowError::Platform)?
+        .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+    let artifacts = resolve_desired_artifacts(root, desired)?;
+    let current = recompile_root_start_prerequisite_plan(
+        desired,
+        &artifacts,
+        &plan.desired_sha256,
+        &plan.fleet,
+        &management,
+        plan.planned_at_time,
+        &targets,
+    )?;
+    if normalized_plan(plan) != normalized_plan(&current)
+        || management.roots.iter().any(|(name, observed)| {
+            targets.contains(name)
+                && observed.live.status
+                    != crate::fleet_ensure::model::CanisterRuntimeStatus::Running
+        })
+    {
+        return Err(EnsureWorkflowError::ConvergenceDrift);
+    }
+    Ok(())
+}
+
+fn reviewed_root_start_targets<E>(
+    plan: &FleetEnsurePlan,
+) -> Result<BTreeSet<String>, EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    if plan.scope != FleetEnsurePlanScope::RootStartPrerequisite
+        || !plan.protocol_actions.is_empty()
+        || plan.canisters.is_empty()
+        || plan.conservation.maximum_new_funding_cycles != 0
+        || plan.conservation.maximum_operator_debit_cycles != 0
+        || plan.conservation.maximum_unavoidable_fee_cycles != 0
+        || plan.conservation.scheduled_transfer_cycles != 0
+        || plan.conservation.observed_controlled_cycles
+            != plan.conservation.retained_in_reused_canisters_cycles
+        || plan
+            .conservation
+            .observed_controlled_cycles
+            .checked_sub(plan.conservation.maximum_execution_burn_cycles)
+            != Some(plan.conservation.expected_post_operation_cycles)
+    {
+        return Err(EnsureWorkflowError::PlanIntegrity);
+    }
+    let mut targets = BTreeSet::new();
+    for canister in &plan.canisters {
+        if canister.disposition != CanisterDisposition::Reuse
+            || canister.principal.is_none()
+            || !matches!(
+                canister.actions.as_slice(),
+                [EnsureAction::Start { name, principal }]
+                    if name == &canister.name
+                        && Some(principal) == canister.principal.as_ref()
+            )
+            || !targets.insert(canister.name.clone())
+        {
+            return Err(EnsureWorkflowError::PlanIntegrity);
+        }
+    }
+    Ok(targets)
+}
+
+fn root_management_fleet_observation<E>(
+    management: &RootManagementObservation,
+    targets: &BTreeSet<String>,
+) -> Result<FleetObservation, EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    let canisters = targets
+        .iter()
+        .map(|name| {
+            management
+                .roots
+                .get(name)
+                .map(|observed| (name.clone(), Some(observed.live.clone())))
+                .ok_or(EnsureWorkflowError::PlanIntegrity)
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    Ok(FleetObservation {
+        additional_controlled_cycles: BTreeMap::new(),
+        canisters,
+        ledger_fee_cycles: 0,
+        operator_cycles: management.operator_cycles,
+        protocol_ready: BTreeMap::new(),
+    })
+}
+
+fn compatible_root_start_prerequisite(
+    retained: &FleetEnsurePlan,
+    current: &FleetEnsurePlan,
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+) -> bool {
+    let Ok(maximum_movement) = desired
+        .maximum_update_burn_cycles
+        .parse::<Cycles>()
+        .map(|cycles| cycles.to_u128())
+    else {
+        return false;
+    };
+    retained.canisters.len() == current.canisters.len()
+        && retained
+            .canisters
+            .iter()
+            .zip(&current.canisters)
+            .all(|(retained, current)| {
+                retained.observed_cycles.abs_diff(current.observed_cycles) <= maximum_movement
+            })
+        && normalized_plan(retained) == normalized_plan(current)
 }
 
 fn attach_terminal_inventory_cycles<P>(

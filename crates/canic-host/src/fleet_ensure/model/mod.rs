@@ -625,6 +625,53 @@ pub struct FleetEnsurePlan {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reviewed_desired: Option<Box<ReviewedDesiredFleetRecord>>,
     pub schema_version: u16,
+    #[serde(default, skip_serializing_if = "FleetEnsurePlanScope::is_full")]
+    pub scope: FleetEnsurePlanScope,
+}
+
+/// Exact authority scope of one current Fleet Ensure plan.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FleetEnsurePlanScope {
+    /// Complete desired-state convergence after all protected roles are observable.
+    #[default]
+    Full,
+    /// Same-identity start of exact management-verified retained Roots only.
+    RootStartPrerequisite,
+}
+
+impl FleetEnsurePlanScope {
+    /// Stable operator-facing name shared by text and JSON reports.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::RootStartPrerequisite => "root_start_prerequisite",
+        }
+    }
+
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "Serde skip_serializing_if requires a borrowed field predicate"
+    )]
+    const fn is_full(&self) -> bool {
+        matches!(self, Self::Full)
+    }
+}
+
+/// Exact management-canister observation of one configured Fleet Subnet Root.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootManagementCanisterObservation {
+    pub live: LiveCanister,
+    pub name: String,
+    pub subnet: String,
+}
+
+/// Read-only management evidence available before protected Root ingress can run.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootManagementObservation {
+    pub operator_cycles: u128,
+    pub roots: BTreeMap<String, RootManagementCanisterObservation>,
 }
 
 /// Durable state of one planned effect.

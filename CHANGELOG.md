@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.25` lets Fleet Ensure review and apply only the exact management-bound
+  Start needed by a stopped retained Root, without inventing child topology or
+  granting a paid or replacement effect; full protected convergence resumes
+  from a separately reviewed successor plan.
 - `0.109.24` makes generated build ownership match runtime ownership: Root no
   longer duplicates Component records in its runtime projection, ordinary
   parents retain compact child kind/funding authority, and Root alone emits the

@@ -77,8 +77,13 @@ A stopped retained Root is a separately reviewed prerequisite, not generator
 authority. Generation first verifies the exact management-observed Principal,
 Subnet, controller set and installed module hash, then returns a deterministic
 same-ID Start diagnostic before calling any protected Root endpoint or changing
-`fleets/<fleet>.toml`. Use the already-reviewed current Fleet Ensure authority
-to plan and apply only that exact Root Start, then rerun generation. A stopping
+`fleets/<fleet>.toml`. Fleet Ensure recognizes this boundary even when the
+current schema-1 state has retained cycle balances but no Principal or topology
+projection. It emits an explicitly scoped plan containing only the same-ID Root
+`Start`; the plan has no create, replacement, reinstall, funding, transfer, fee
+or operator-debit authority and cannot publish or backfill Fleet topology. Text
+and JSON output expose the `root_start_prerequisite` plan scope. Apply
+that exact digest, then rerun generation. A stopping
 Root, missing module, changed identity, foreign controller, wrong Subnet or
 malformed management observation fails closed. Once the exact Root is running,
 generation performs the complete protected Fleet-authority and pool-inventory
