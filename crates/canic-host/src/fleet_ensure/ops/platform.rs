@@ -21,7 +21,10 @@ use crate::{
             verify_root_start_release_authority,
         },
     },
-    icp::{IcpCandidCallError, IcpCli, IcpCommandError, IcpDiagnostic, run_status},
+    icp::{
+        IcpCandidCallError, IcpCli, IcpCommandError, IcpDiagnostic, IcpManagementCallError,
+        run_status,
+    },
     icp_config::resolve_icp_build_network_from_root,
     subnet_catalog::load_mainnet_subnet_catalog,
 };
@@ -256,13 +259,14 @@ pub enum IcpEnsurePlatformError {
 
     #[error(
         "ICP CLI status JSON omitted canister_version for {canister}, and the exact typed \
-         management-canister status fallback failed: {source}; no install was issued. Restore \
-         controller and management-status access, then resume the same reviewed plan"
+         effective-ID-routed management-canister status call failed: {source}; no install was \
+         issued. Restore the selected controller identity and management-status access, then \
+         resume the same reviewed plan"
     )]
     InstallVersionProofUnavailable {
         canister: String,
         #[source]
-        source: Box<IcpCandidCallError>,
+        source: Box<IcpManagementCallError>,
     },
 
     #[error(transparent)]
@@ -1939,6 +1943,28 @@ fn exact_install_canister_status(
     projected_canister_version: Option<u64>,
     projected_module_sha256: Option<String>,
 ) -> Result<ExactInstallCanisterStatus, IcpEnsurePlatformError> {
+    exact_install_canister_status_with(
+        canister,
+        projected_canister_version,
+        projected_module_sha256,
+        |canister_id| {
+            icp.management_canister_status_candid::<_, ManagementCanisterStatusResponse>(
+                canister_id,
+                &ManagementCanisterStatusRequest { canister_id },
+            )
+        },
+    )
+}
+
+fn exact_install_canister_status_with(
+    canister: &str,
+    projected_canister_version: Option<u64>,
+    projected_module_sha256: Option<String>,
+    management_status: impl FnOnce(
+        Principal,
+    )
+        -> Result<ManagementCanisterStatusResponse, IcpManagementCallError>,
+) -> Result<ExactInstallCanisterStatus, IcpEnsurePlatformError> {
     if let Some(canister_version) = projected_canister_version {
         return Ok(ExactInstallCanisterStatus {
             canister_version,
@@ -1946,20 +1972,12 @@ fn exact_install_canister_status(
         });
     }
     let canister_id = parse_principal("install target", canister)?;
-    let management_canister = Principal::management_canister().to_text();
-    let response = icp
-        .canister_call_candid::<_, ManagementCanisterStatusResponse>(
-            &management_canister,
-            "canister_status",
-            &ManagementCanisterStatusRequest { canister_id },
-            None,
-        )
-        .map_err(
-            |source| IcpEnsurePlatformError::InstallVersionProofUnavailable {
-                canister: canister.to_string(),
-                source: Box::new(source),
-            },
-        )?;
+    let response = management_status(canister_id).map_err(|source| {
+        IcpEnsurePlatformError::InstallVersionProofUnavailable {
+            canister: canister.to_string(),
+            source: Box::new(source),
+        }
+    })?;
     Ok(ExactInstallCanisterStatus {
         canister_version: response.canister_version,
         module_sha256: response
@@ -2196,14 +2214,12 @@ mod tests {
             module_hash: Some(vec![0x22; 32]),
         })
         .expect("encode typed management status");
-        let response_hex = canic_core::cdk::utils::hash::hex_bytes(&response_bytes);
         let script = format!(
             "#!/bin/sh\n\
              if [ \"$1\" = \"--version\" ]; then printf '%s\\n' 'icp 1.3.0'; exit 0; fi\n\
              printf '%s\\n' \"$*\" >> '{}'\n\
              case \"$*\" in\n\
                *\"canister status {canister}\"*) printf '%s\\n' '{}' ;;\n\
-               *\"canister call aaaaa-aa canister_status\"*) printf '%s\\n' '{{\"response_bytes\":\"{response_hex}\"}}' ;;\n\
                *) printf '%s\\n' 'unexpected fake ICP command' >&2; exit 23 ;;\n\
              esac\n",
             commands.display(),
@@ -2218,26 +2234,34 @@ mod tests {
             .canister_status_report(canister)
             .expect("read ICP 1.3.0 status projection");
         assert_eq!(projected.canister_version, None);
-        let exact = exact_install_canister_status(
-            &icp,
+        let exact = exact_install_canister_status_with(
             canister,
             projected.canister_version,
             projected.module_hash.map(|hash| normalize_hash(&hash)),
+            |effective_canister_id| {
+                assert_eq!(
+                    effective_canister_id,
+                    canister.parse().expect("target Principal")
+                );
+                candid::decode_one(&response_bytes).map_err(IcpManagementCallError::CandidResponse)
+            },
         )
         .expect("obtain exact typed management status");
         assert_eq!(exact.canister_version, 42);
         assert_eq!(exact.module_sha256, Some("22".repeat(32)));
         let commands = fs::read_to_string(&commands).expect("read fake ICP commands");
         assert!(commands.contains("canister status rrkah-fqaaa-aaaaa-aaaaq-cai"));
-        assert!(commands.contains("canister call aaaaa-aa canister_status"));
+        assert!(!commands.contains("canister call aaaaa-aa canister_status"));
 
         fs::write(
             &executable,
             "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp 1.3.0'; exit 0; fi\necho '{\"not_response_bytes\":true}'\n",
         )
         .expect("replace unavailable management fixture");
-        let error = exact_install_canister_status(&icp, canister, None, None)
-            .expect_err("missing projected and typed version must fail closed");
+        let error = exact_install_canister_status_with(canister, None, None, |_| {
+            Err(IcpManagementCallError::MissingEnvironment)
+        })
+        .expect_err("missing projected and typed version must fail closed");
         assert!(matches!(
             error,
             IcpEnsurePlatformError::InstallVersionProofUnavailable { .. }

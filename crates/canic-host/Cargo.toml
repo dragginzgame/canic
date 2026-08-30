@@ -27,6 +27,7 @@ canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
 ciborium = { workspace = true }
 flate2 = { workspace = true }
 getrandom = { workspace = true }
+ic-agent = { workspace = true }
 ic-query = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
@@ -34,6 +35,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 syn = { workspace = true, features = ["full", "visit"] }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 toml = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]

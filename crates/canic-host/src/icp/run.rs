@@ -20,6 +20,25 @@ pub(super) fn run_output(command: &mut Command) -> Result<String, IcpCommandErro
     run_output_unchecked(command)
 }
 
+/// Execute a command whose successful stdout contains secret material.
+///
+/// The caller owns and must zero the returned allocation. This path neither
+/// converts stdout into a `String` nor retains it in a diagnostic.
+pub(super) fn run_secret_output(command: &mut Command) -> Result<Vec<u8>, IcpCommandError> {
+    ensure_command_compatible(command)?;
+    let display = command_display(command);
+    let mut output = output_with_executable_busy_retry(command)?;
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        output.stdout.fill(0);
+        Err(IcpCommandError::Failed {
+            command: display,
+            stderr: command_stderr(&output),
+        })
+    }
+}
+
 fn run_output_unchecked(command: &mut Command) -> Result<String, IcpCommandError> {
     let display = command_display(command);
     let output = output_with_executable_busy_retry(command)?;

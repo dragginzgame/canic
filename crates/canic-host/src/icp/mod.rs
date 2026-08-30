@@ -5,6 +5,7 @@ mod command;
 mod diagnostic;
 mod error;
 mod identity;
+mod management;
 mod model;
 mod replica;
 mod response;
@@ -21,6 +22,7 @@ pub use command::{
 pub use diagnostic::{IcpDiagnostic, classify_icp_diagnostic};
 pub use error::IcpCommandError;
 pub use identity::IcpIdentityAccountFormat;
+pub use management::IcpManagementCallError;
 pub use model::{
     IcpCanisterStatusReport, IcpCanisterStatusSettings, IcpCli, IcpRawOutput, IcpSnapshot,
     LocalReplicaTarget,

@@ -600,6 +600,7 @@ dependencies = [
  "ciborium",
  "flate2",
  "getrandom 0.4.3",
+ "ic-agent",
  "ic-query",
  "ic-testkit",
  "pocket-ic",
@@ -610,6 +611,7 @@ dependencies = [
  "sha2 0.10.9",
  "syn 3.0.4",
  "thiserror 2.0.20",
+ "tokio",
  "toml 1.1.4+spec-1.1.0",
 ]
 
