@@ -352,6 +352,16 @@ one same-Principal `Start` action. Child, Root, parent, topology and controller
 bindings must all match, and no other mutation is admitted from deferred
 evidence. After the Root starts, ordinary protected observation resumes.
 
+When that stopped Root still runs a predecessor module, no-effect generation
+first atomically retains a typed current-schema Start authority under the
+Fleet Ensure state directory. It binds the exact predecessor and current
+successor hashes together with Fleet ID, release build, Principal, Subnet and
+controllers. The reviewed prerequisite embeds that authority and still permits
+only `Start`; it cannot install either module or authorize a paid effect. A
+missing, changed or unrelated live module fails before a plan. The desired
+document is not rewritten to the predecessor: after Start, rerun generation so
+the ordinary protected plan can review convergence to the current successor.
+
 The resulting corrective graph reinstalls the Coordinator, replays the exact
 Root-owned Store-controller adoption, reinstalls the Store, and only then
 reinstalls the Root. All later protocol work stays fenced until ordinary

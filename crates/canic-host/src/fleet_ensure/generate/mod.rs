@@ -10,7 +10,7 @@ mod tests;
 use crate::{
     canister_protocol::query_with_candid,
     component_topology::{
-        PlannedFleetSubnetRootTopology, PlannedFleetSubnetRootTopologyInput,
+        PlannedFleetSubnetRootTopology, PlannedFleetSubnetRootTopologyInput, PlannedFleetTopology,
         RootComponentAdmissionInput, RootPoolCapacityError, RootPoolCapacityInput,
         plan_initial_fleet_topology, validate_root_pool_capacity,
     },
@@ -21,9 +21,10 @@ use crate::{
         CanisterRuntimeStatus, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
         DesiredComponentGroupPlacement, DesiredFleet, DesiredFleetBootstrap,
         DesiredFleetBootstrapRoot, DesiredFleetProtocol, DesiredPresence,
-        FLEET_ENSURE_SCHEMA_VERSION, MAX_FLEET_ENSURE_CANISTERS,
+        FLEET_ENSURE_SCHEMA_VERSION, MAX_FLEET_ENSURE_CANISTERS, RetainedRootStartAuthorityRecord,
+        RetainedRootStartBinding,
     },
-    fleet_ensure::ops::root_owned_lifecycle,
+    fleet_ensure::ops::{EnsurePaths, root_owned_lifecycle, write_root_start_authority},
     icp::IcpCli,
     icp_config::resolve_icp_build_network_from_root,
     network::resolve_canonical_network_id_from_root,
@@ -183,16 +184,22 @@ pub enum FleetGenerateError {
 #[error(
     "retained Root {root} is stopped after exact management verification \
      (Subnet {subnet}, controller {controller}, module SHA-256 {module_sha256}); \
-     no protected Root query or output mutation was attempted. Review and apply only the \
-     same-ID Start through the current retained `canic fleet ensure {fleet}` authority, \
+     no protected Root query or desired-output mutation was attempted. Generator authority \
+     {authority_sha256} binds this exact module to desired successor {successor_module_sha256}. \
+     The authority covers {root_count} stopped Root(s). Review and apply only the same-ID Start \
+     through the current retained \
+     `canic fleet ensure {fleet}` authority, \
      then rerun `canic fleet generate`"
 )]
 pub struct StoppedRootStartPrerequisite {
+    pub authority_sha256: String,
     pub controller: String,
     pub fleet: String,
     pub module_sha256: String,
     pub root: String,
+    pub root_count: usize,
     pub subnet: String,
+    pub successor_module_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1219,6 +1226,7 @@ fn observe_estate(
             "treasury",
         )?;
     }
+    let mut stopped_roots = Vec::new();
     for root in &seed.roots {
         insert_expected_canister(
             &mut expected,
@@ -1325,15 +1333,14 @@ fn observe_estate(
                         reason: "retained Root has no installed module SHA-256".to_string(),
                     }
                 })?;
-                return Err(FleetGenerateError::StoppedRootStartRequired(Box::new(
-                    StoppedRootStartPrerequisite {
-                        controller: operator.to_text(),
-                        fleet: request.fleet.to_string(),
-                        module_sha256,
-                        root: root.root.clone(),
-                        subnet: observation.subnet.clone(),
-                    },
-                )));
+                let root_name = retained_root_name(source, seed, topology, &root.root)?;
+                stopped_roots.push(RetainedRootStartBinding {
+                    controllers: vec![operator.to_text()],
+                    name: root_name,
+                    predecessor_module_sha256: module_sha256,
+                    principal: root.root.clone(),
+                    subnet: observation.subnet.clone(),
+                });
             }
             Some(CanisterRuntimeStatus::Stopping) => {
                 return Err(FleetGenerateError::CanisterUnavailable {
@@ -1350,6 +1357,34 @@ fn observe_estate(
             }
         }
     }
+    if let Some(first) = stopped_roots.first() {
+        let authority = write_root_start_authority(
+            &EnsurePaths::under(request.root, request.environment, request.fleet),
+            RetainedRootStartAuthorityRecord {
+                authority_sha256: String::new(),
+                environment: request.environment.to_string(),
+                fleet: request.fleet.to_string(),
+                fleet_id: seed.fleet_id,
+                release_build_id: request.release_build_id,
+                roots: stopped_roots.clone(),
+                schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+                successor_module_sha256: (*root_wasm_sha256).to_string(),
+            },
+        )
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+        return Err(FleetGenerateError::StoppedRootStartRequired(Box::new(
+            StoppedRootStartPrerequisite {
+                authority_sha256: authority.authority_sha256,
+                controller: operator.to_text(),
+                fleet: request.fleet.to_string(),
+                module_sha256: first.predecessor_module_sha256.clone(),
+                root: first.principal.clone(),
+                root_count: stopped_roots.len(),
+                subnet: first.subnet.clone(),
+                successor_module_sha256: (*root_wasm_sha256).to_string(),
+            },
+        )));
+    }
     observe_root_owned_pool_assets(
         &icp,
         &RootEstateAuthorityRequest {
@@ -1364,6 +1399,27 @@ fn observe_estate(
         &mut observed,
     )?;
     Ok(observed)
+}
+
+fn retained_root_name(
+    source: &FleetSource,
+    seed: &EstateSeed,
+    topology: &PlannedFleetTopology,
+    principal: &str,
+) -> Result<String, FleetGenerateError> {
+    bind_root_generation_inputs(
+        &source.fleet_subnet_roots,
+        &seed.roots,
+        &topology.fleet_subnet_roots,
+    )?
+    .into_iter()
+    .enumerate()
+    .find_map(|(index, binding)| (binding.seed.root == principal).then(|| format!("root-{index}")))
+    .ok_or_else(|| {
+        FleetGenerateError::SeedTopology(format!(
+            "retained Root {principal} is absent from the compiled topology"
+        ))
+    })
 }
 
 fn parse_observed_runtime_status(

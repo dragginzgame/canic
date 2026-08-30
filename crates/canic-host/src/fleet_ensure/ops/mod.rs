@@ -20,13 +20,13 @@ use crate::{
         DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
         FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureJournalRecord, FleetEnsurePlan,
         FleetEnsureStateRecord, FleetObservation, ProtocolArtifactDigests,
-        RootManagementObservation, RootOwnedCanisterLifecycle,
+        RetainedRootStartAuthorityRecord, RootManagementObservation, RootOwnedCanisterLifecycle,
     },
 };
 use canic_core::{cdk::utils::hash::sha256_hex, dto::pool::CanisterPoolAssetStatus};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs::File,
     io,
     path::{Path, PathBuf},
@@ -182,6 +182,7 @@ pub struct EnsurePaths {
     pub journal: PathBuf,
     pub lock: PathBuf,
     pub plan: PathBuf,
+    pub root_start_authority: PathBuf,
     pub state: PathBuf,
 }
 
@@ -202,6 +203,7 @@ impl EnsurePaths {
             journal: directory.join("journal.json"),
             lock: directory.join("operation.lock"),
             plan: directory.join("plan.json"),
+            root_start_authority: directory.join("root-start-authority.json"),
             state: directory.join("state.json"),
         }
     }
@@ -220,6 +222,9 @@ pub enum EnsureStateError {
 
     #[error("Fleet ensure document is unsafe at {}", path.display())]
     Unsafe { path: PathBuf },
+
+    #[error("Fleet ensure retained Root-start authority is invalid at {}", path.display())]
+    InvalidRootStartAuthority { path: PathBuf },
 
     #[error("Fleet ensure document has unsupported schema {actual} at {}", path.display())]
     WrongSchema { path: PathBuf, actual: u16 },
@@ -300,6 +305,26 @@ pub fn read_plan(paths: &EnsurePaths) -> Result<Option<FleetEnsurePlan>, EnsureS
             source,
         })?;
     validate_schema(Some(value), &paths.plan, |record| record.schema_version)
+}
+
+/// Load and verify the exact generator-owned retained Root-start authority, when present.
+pub(crate) fn read_root_start_authority(
+    paths: &EnsurePaths,
+) -> Result<Option<RetainedRootStartAuthorityRecord>, EnsureStateError> {
+    let value: Option<RetainedRootStartAuthorityRecord> =
+        read_current(&paths.root_start_authority)?;
+    let value = validate_schema(value, &paths.root_start_authority, |record| {
+        record.schema_version
+    })?;
+    value
+        .map(|record| {
+            valid_root_start_authority(&record)
+                .then_some(record)
+                .ok_or_else(|| EnsureStateError::InvalidRootStartAuthority {
+                    path: paths.root_start_authority.clone(),
+                })
+        })
+        .transpose()
 }
 
 pub(crate) fn compact_inline_plan(
@@ -430,6 +455,50 @@ pub fn write_plan(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), Ens
     write_bytes(&paths.plan, &bytes).map_err(|source| EnsureStateError::Io {
         path: paths.plan.clone(),
         source,
+    })
+}
+
+/// Atomically retain one complete generator-owned Root-start authority.
+pub(crate) fn write_root_start_authority(
+    paths: &EnsurePaths,
+    mut authority: RetainedRootStartAuthorityRecord,
+) -> Result<RetainedRootStartAuthorityRecord, EnsureStateError> {
+    authority.seal();
+    write_current(&paths.root_start_authority, &authority)?;
+    read_root_start_authority(paths)?.ok_or_else(|| EnsureStateError::InvalidRootStartAuthority {
+        path: paths.root_start_authority.clone(),
+    })
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn valid_root_start_authority(authority: &RetainedRootStartAuthorityRecord) -> bool {
+    if authority.roots.is_empty()
+        || authority.roots.len() > crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS
+        || !is_sha256(&authority.successor_module_sha256)
+        || !authority.has_valid_digest()
+    {
+        return false;
+    }
+    let mut names = BTreeSet::new();
+    let mut principals = BTreeSet::new();
+    authority.roots.iter().all(|root| {
+        let mut controllers = root.controllers.clone();
+        controllers.sort();
+        controllers.dedup();
+        !root.name.is_empty()
+            && !root.principal.is_empty()
+            && !root.subnet.is_empty()
+            && controllers == root.controllers
+            && !controllers.is_empty()
+            && names.insert(root.name.as_str())
+            && principals.insert(root.principal.as_str())
+            && is_sha256(&root.predecessor_module_sha256)
     })
 }
 

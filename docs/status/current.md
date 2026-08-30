@@ -19,56 +19,53 @@ Historical handoffs:
 
 ## Published Release Truth
 
-`v0.109.24` is the immutable maintained release. The annotated tag peels to
-release commit `129a5c710778a5284b2163eacf93c255eaddb055`; workspace packages,
-`main` and tracked `origin/main` agreed at publication. Its complete validation
-marker binds source `8aaeef70b91d289628d11c641858344928e69efe`.
+`v0.109.25` is the immutable maintained release. The annotated tag object
+`3d5b9dde565fae333724ee8cd82f0278b40a57b5` peels to release commit
+`da62ae03f7fb782914936f6124f7aeeeac8b77cc`; workspace packages, `main` and
+tracked `origin/main` agree. Its complete validation marker binds source
+`90329bde38fbafe72589359f9bdf4d1e43f5cb46`.
 
 The former handoff incorrectly called 0.109.24 an unversioned draft and 0.109.23
 the maintained release. That recurring release-evidence defect is downstream
 `CANIC-014`. This handoff now treats structured version, tag, package and
 validation records as release authority; narrative is a summary only.
 
-No later version, release, tag, package publication or deployment is described
-or authorized here.
+`0.109.26` is an open changelog draft for the current source batch. It is not a
+versioned workspace, tag, published package or deployment.
 
 ## Current 0.109 Correctness Batch
 
-Toko Miner adopted immutable 0.109.24, passed complete CI and finalized all
-nine IC release artifacts. Its public no-effect generator correctly
-management-verifies the deliberately stopped retained Root, performs no
-protected Root query or desired replacement and returns one deterministic
-same-ID Start prerequisite.
+Published 0.109.25 closes `CANIC-091`: a retained schema-1 state with cycle
+evidence but no Principal/topology maps can review and apply one exact
+management-bound Root Start before protected child observation.
 
-The following public Fleet Ensure plan then fails before producing a digest.
-Toko's retained schema-1 state predates topology retention: it retains the
-cycle map but has empty `principals` and `topology`. Ordinary planning tries to
-observe Root-owned children before reaching the Root Start and rejects the
-missing topology authority. Toko records this as blocking `CANIC-091`.
+Downstream review then exposed `CANIC-092`. The retained stopped Root runs
+module A while the current desired release binds successor module B. The
+0.109.25 prerequisite required A to equal B, and its regression accidentally
+hid the defect by changing desired state to A.
 
-`0.109.25` is the open changelog draft for that correction. The current
-`canic-host` implementation establishes this invariant:
+The current `canic-host` batch establishes this corrected invariant:
 
-1. management-observe the configured Root and require exact Principal, Subnet,
-   controller, installed module and stopped state;
-2. compile one content-addressed plan scoped only to the same-ID Root Start;
-3. assign zero creation, replacement, reinstall, funding, transfer, fee or
-   operator-debit authority;
-4. perform no protected Root query, child observation or topology backfill;
-5. apply only the exact reviewed digest and make replay effect-free; and
-6. rerun generation after Start, requiring complete protected Fleet and pool
-   authority before any ordinary plan.
+1. management-observe A with exact Root Principal, Subnet, controllers and
+   stopped state;
+2. atomically retain one typed generator authority binding A to the exact
+   current Fleet ID, release build and desired successor B;
+3. embed that authority into a content-addressed plan scoped only to same-ID
+   Root Start, with zero install, replacement, creation, funding, transfer,
+   fee or operator-debit authority;
+4. reject missing authority, changed authority and arbitrary module C before a
+   plan or effect;
+5. apply the Start once and make lost-response/terminal replay effect-free;
+   and
+6. leave desired B unchanged, then require generation and ordinary protected
+   convergence to be reviewed again after the Root runs.
 
-The production-shaped retained-estate regression starts with exact retained
-cycle balances and empty Principal/topology maps. It passes from management
-observation through one Root Start, bounded measured burn, zero operator debit,
-unchanged authority maps and effect-free terminal replay, then performs the
-complete protected generator observation only after the Root is running.
-Principal, Subnet, controller, module and stopping-state drift reject before a
-plan or effect. Locked host and CLI compilation, that focused journey,
-current-plan JSON round trips, changelog governance, formatting, diff hygiene,
-the current-document semantics guard and warning-denied all-target host/CLI
-Clippy pass. No broad workspace or PocketIC gate was run during coding.
+The production-shaped regression now keeps distinct predecessor and successor
+Wasm bytes. It proves deterministic authority retention, one zero-debit Start,
+unchanged state ownership and effect-free replay; Principal, Subnet,
+controller, runtime, missing-authority and arbitrary-module drift reject.
+Targeted validation evidence is recorded below; no broad workspace or
+PocketIC gate is run during coding.
 
 ## Safety State
 
@@ -76,14 +73,16 @@ The retained downstream evidence reports:
 
 - default ICP identity restored to anonymous;
 - desired Fleet authority byte-identical;
-- finalized 0.109.24 release artifacts retained;
+- finalized 0.109.25 release artifacts retained;
 - no prerequisite plan digest or apply authority produced;
-- no state/archive edit or synthetic topology authority;
+- no downstream state/archive edit or synthetic topology authority;
 - no canister, controller, cycle, database, catalogue or frontend mutation;
   and
 - no checksum, optimizer, size or authority bypass.
 
 Canic does not authorize or perform downstream effects from this repository.
+The Canic regression creates the new digest-bound Root-start authority only in
+its disposable fixture directory.
 
 ## 0.109 Closeout State
 
@@ -127,9 +126,9 @@ dependency.
   independent publication authority.
 - `CANIC-087`: eliminate release-LTO declaration links and serial compatible
   runtime links while preserving canonical artifact/determinism gates.
-- `CANIC-090`/`CANIC-091`: a prerequisite effect may short-circuit unavailable
-  protected observation only under exact management authority and mandatory
-  post-effect revalidation.
+- `CANIC-090`/`CANIC-091`/`CANIC-092`: a prerequisite effect may short-circuit
+  unavailable protected observation only under exact management and retained
+  module authority plus mandatory post-effect revalidation.
 - Endpoint-heavy Toko evidence: Binaryen has converged; shared non-generic
   wrappers and role pruning must supply at least 350 KiB useful current-profile
   code-section headroom, with 500 KiB preferred.
@@ -147,25 +146,26 @@ evidence.
 
 ## Validation State
 
-This roadmap amendment changes documentation, status paths and the
-document-semantics guard's 0.110 path only. It does not qualify the concurrent
-`CANIC-091` source changes. Targeted documentation checks are the appropriate
-amendment boundary; code, workspace and PocketIC gates remain outside it.
+Targeted `canic-host` library checking and warning-denied all-target Clippy,
+`canic-cli` all-target checking, the production-shaped retained-estate
+generator/ensure journey, current-plan JSON/content-addressing tests, layering,
+formatting, diff hygiene, changelog governance, release-draft preflight and the
+current-document semantics guard pass. The evidence intentionally excludes a
+broad workspace or PocketIC gate during coding.
 
-The current-document semantics guard, Bash syntax, warning-level ShellCheck,
-diff whitespace and stale-roadmap-path scan pass for the amendment. The
-detailed [`CANIC-*` disposition](../design/0.110-fleet-runtime-contraction-and-stateful-safety/0.110-design.md#upstream-feedback-disposition)
-records the retained, sequenced and deferred Toko requirements through
-`CANIC-091`.
+`CANIC-034` is already closed by the maintained fresh-estate creation graph:
+each Root pool asset is funded directly by its reviewed Cycles Ledger creation
+action with exact creation and Ledger fees, so no Root-ledger bootstrap or
+parallel funding authority is needed. `CANIC-087` remains sequenced to 0.110
+B2 and is not pulled across the human closeout gate.
 
 ## Next Authorized Action
 
-Review the current `CANIC-091` implementation batch without modifying Toko
-Miner, then use the maintainer-selected release flow when explicitly directed.
-After an immutable successor is published and adopted, repeat downstream
-no-effect preparation through the exact Start, post-Start protected
-verification, terminal plan and effect-free replay. Only then begin 0.109 B9
-simplification and its superseding audit.
+Finish targeted review of the current `CANIC-092` batch without modifying Toko
+Miner. When the maintainer selects a release flow, publish and adopt the exact
+successor, then repeat downstream no-effect generation through the reviewed
+Start, post-Start protected verification, terminal plan and effect-free
+replay. Only then begin 0.109 B9 simplification and its superseding audit.
 
 
 <!-- canic-release-validation: version=0.109.25 source=90329bde38fbafe72589359f9bdf4d1e43f5cb46 date=2026-08-30 gate=complete -->

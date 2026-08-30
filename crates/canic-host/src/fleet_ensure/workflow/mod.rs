@@ -14,11 +14,11 @@ use crate::fleet_ensure::{
     },
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
-        compact_inline_plan, lock_operation, read_journal, read_plan, read_state,
-        resolve_desired_artifacts, write_journal, write_plan, write_state,
+        compact_inline_plan, lock_operation, read_journal, read_plan, read_root_start_authority,
+        read_state, resolve_desired_artifacts, write_journal, write_plan, write_state,
     },
     policy::{
-        EnsurePolicyError, compile_plan, compile_root_start_prerequisite_plan,
+        EnsurePolicyError, RootStartPlanInput, compile_plan, compile_root_start_prerequisite_plan,
         expected_plan_sha256, operation_id, recompile_root_start_prerequisite_plan,
         validate_path_identity, validate_path_labels,
     },
@@ -161,22 +161,25 @@ where
     if let Some(management) = platform
         .observe_root_management(&state, &BTreeSet::new())
         .map_err(EnsureWorkflowError::Platform)?
-        && let Some(plan) = compile_root_start_prerequisite_plan(
-            desired,
-            &artifacts,
-            desired_sha256,
-            requested_fleet,
-            &management,
-            created_at_time,
-        )?
     {
-        write_plan(&paths, &plan)?;
-        return Ok(FleetEnsureReport {
-            actual_conservation: None,
-            effects_applied: 0,
-            plan,
-            terminal: false,
-        });
+        let root_start_authority = read_root_start_authority(&paths)?;
+        if let Some(plan) = compile_root_start_prerequisite_plan(RootStartPlanInput {
+            authority: root_start_authority.as_ref(),
+            created_at_time,
+            desired,
+            desired_sha256,
+            artifacts: &artifacts,
+            observation: &management,
+            requested_fleet,
+        })? {
+            write_plan(&paths, &plan)?;
+            return Ok(FleetEnsureReport {
+                actual_conservation: None,
+                effects_applied: 0,
+                plan,
+                terminal: false,
+            });
+        }
     }
     let mut observation = platform
         .observe(&operation_id, &state)
@@ -619,12 +622,15 @@ where
             .ok_or(EnsureWorkflowError::PlanIntegrity)?;
         let artifacts = resolve_desired_artifacts(root, desired)?;
         let current = recompile_root_start_prerequisite_plan(
-            desired,
-            &artifacts,
-            desired_sha256,
-            requested_fleet,
-            &management,
-            retained_plan.planned_at_time,
+            RootStartPlanInput {
+                authority: retained_plan.root_start_authority.as_deref(),
+                created_at_time: retained_plan.planned_at_time,
+                desired,
+                desired_sha256,
+                artifacts: &artifacts,
+                observation: &management,
+                requested_fleet,
+            },
             &targets,
         )?;
         if !compatible_root_start_prerequisite(retained_plan, &current, desired) {
@@ -684,12 +690,15 @@ where
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
     let artifacts = resolve_desired_artifacts(root, desired)?;
     let current = recompile_root_start_prerequisite_plan(
-        desired,
-        &artifacts,
-        &retained_plan.desired_sha256,
-        &retained_plan.fleet,
-        &management,
-        retained_plan.planned_at_time,
+        RootStartPlanInput {
+            authority: retained_plan.root_start_authority.as_deref(),
+            created_at_time: retained_plan.planned_at_time,
+            desired,
+            desired_sha256: &retained_plan.desired_sha256,
+            artifacts: &artifacts,
+            observation: &management,
+            requested_fleet: &retained_plan.fleet,
+        },
         &targets,
     )?;
     if !compatible_root_start_prerequisite(retained_plan, &current, desired) {
@@ -744,12 +753,15 @@ where
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
     let artifacts = resolve_desired_artifacts(root, desired)?;
     let current = recompile_root_start_prerequisite_plan(
-        desired,
-        &artifacts,
-        &plan.desired_sha256,
-        &plan.fleet,
-        &management,
-        plan.planned_at_time,
+        RootStartPlanInput {
+            authority: plan.root_start_authority.as_deref(),
+            created_at_time: plan.planned_at_time,
+            desired,
+            desired_sha256: &plan.desired_sha256,
+            artifacts: &artifacts,
+            observation: &management,
+            requested_fleet: &plan.fleet,
+        },
         &targets,
     )?;
     if normalized_plan(plan) != normalized_plan(&current)

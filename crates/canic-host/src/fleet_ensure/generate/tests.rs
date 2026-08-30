@@ -9,7 +9,8 @@ use crate::{
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
-            IcpEnsurePlatform, IcpEnsurePlatformError, read_state, write_state,
+            IcpEnsurePlatform, IcpEnsurePlatformError, read_root_start_authority, read_state,
+            write_state,
         },
         workflow,
     },
@@ -644,6 +645,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             module_sha256,
             root: stopped_root,
             subnet,
+            ..
         } if controller == &operator
             && fleet == "retained-multi-component"
             && module_sha256 == &root_module_hash
@@ -1114,22 +1116,15 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
 
     let mut stopped_desired = recovery_desired.clone();
     stopped_desired.fleet = "retained-stopped-root".to_string();
-    let retained_root_wasm = root.join("retained-root.wasm");
-    fs::write(&retained_root_wasm, b"retained predecessor Root")
-        .expect("write retained Root artifact");
-    stopped_desired
-        .canisters
-        .iter_mut()
-        .find(|canister| canister.kind == DesiredCanisterKind::Root)
-        .expect("retained desired Root")
-        .wasm = Some(retained_root_wasm.display().to_string());
     let stopped_artifacts =
         crate::fleet_ensure::ops::resolve_desired_artifacts(&root, &stopped_desired)
-            .expect("resolve retained predecessor artifacts");
-    let stopped_root_hash = stopped_artifacts
+            .expect("resolve desired successor artifacts");
+    let successor_root_hash = stopped_artifacts
         .wasm_sha256_by_canister
         .get("root-0")
-        .expect("retained Root artifact hash");
+        .expect("desired successor Root artifact hash");
+    let stopped_root_hash = sha256_hex(b"retained predecessor Root");
+    assert_ne!(&stopped_root_hash, successor_root_hash);
     write_fake_icp(
         &root,
         FakeIcpFixture {
@@ -1140,7 +1135,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             operator: &operator,
             pool: &retained_pool,
             public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
-            root_module_hash: stopped_root_hash,
+            root_module_hash: &stopped_root_hash,
             root_runtime_status: "stopped",
             root_status_error: None,
             store: &store,
@@ -1157,6 +1152,48 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .iter()
         .find(|canister| canister.kind == DesiredCanisterKind::Root)
         .expect("configured retained Root");
+    let stopped_request = FleetGenerateRequest {
+        app_config: &app_config,
+        environment: &stopped_desired.environment,
+        fleet: &stopped_desired.fleet,
+        icp_executable: icp.to_str().expect("fake ICP path"),
+        release_build_id,
+        root: &root,
+        seed: &seed_path,
+        source: &source_path,
+    };
+    let Err(stopped_error) = generate_desired_fleet(&stopped_request) else {
+        panic!("stopped predecessor Root requires one retained Start prerequisite");
+    };
+    assert!(matches!(
+        stopped_error,
+        FleetGenerateError::StoppedRootStartRequired(details)
+            if details.module_sha256 == stopped_root_hash
+                && details.successor_module_sha256 == *successor_root_hash
+    ));
+    let stopped_paths =
+        EnsurePaths::under(&root, &stopped_desired.environment, &stopped_desired.fleet);
+    let stopped_authority = read_root_start_authority(&stopped_paths)
+        .expect("read retained Root-start authority")
+        .expect("generator retained Root-start authority");
+    let retained_authority_bytes = fs::read(&stopped_paths.root_start_authority)
+        .expect("read exact retained Root-start authority bytes");
+    let mut tampered_authority = stopped_authority.clone();
+    tampered_authority.successor_module_sha256 = "00".repeat(32);
+    fs::write(
+        &stopped_paths.root_start_authority,
+        serde_json::to_vec_pretty(&tampered_authority).expect("encode tampered authority"),
+    )
+    .expect("write tampered authority fixture");
+    assert!(matches!(
+        read_root_start_authority(&stopped_paths),
+        Err(crate::fleet_ensure::ops::EnsureStateError::InvalidRootStartAuthority { .. })
+    ));
+    fs::write(
+        &stopped_paths.root_start_authority,
+        retained_authority_bytes,
+    )
+    .expect("restore retained Root-start authority bytes");
     let root_management = RootManagementObservation {
         operator_cycles: 500_000_000_000_000,
         roots: BTreeMap::from([(
@@ -1166,7 +1203,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                     canister_version: Some(7),
                     controllers: configured_root.controllers.clone(),
                     cycles: 30_000_000_000_000,
-                    module_sha256: Some(stopped_root_hash.clone()),
+                    module_sha256: Some(stopped_root_hash),
                     principal: fleet_root.clone(),
                     reinstall_required: false,
                     root_owned_lifecycle: None,
@@ -1177,13 +1214,57 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             },
         )]),
     };
+    assert!(matches!(
+        crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
+            crate::fleet_ensure::policy::RootStartPlanInput {
+                authority: None,
+                created_at_time: 1_800_000_000_000_000_150,
+                desired: &stopped_desired,
+                desired_sha256: &source_digest,
+                artifacts: &stopped_artifacts,
+                observation: &root_management,
+                requested_fleet: &stopped_desired.fleet,
+            },
+        ),
+        Err(
+            crate::fleet_ensure::policy::EnsurePolicyError::RootManagementAuthorityMismatch {
+                field: "retained module authority",
+                ..
+            }
+        )
+    ));
+    let mut wrong_authority = stopped_authority.clone();
+    wrong_authority.fleet = "other-fleet".to_string();
+    wrong_authority.seal();
+    assert!(matches!(
+        crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
+            crate::fleet_ensure::policy::RootStartPlanInput {
+                authority: Some(&wrong_authority),
+                created_at_time: 1_800_000_000_000_000_150,
+                desired: &stopped_desired,
+                desired_sha256: &source_digest,
+                artifacts: &stopped_artifacts,
+                observation: &root_management,
+                requested_fleet: &stopped_desired.fleet,
+            },
+        ),
+        Err(
+            crate::fleet_ensure::policy::EnsurePolicyError::RootManagementAuthorityMismatch {
+                field: "retained module authority",
+                ..
+            }
+        )
+    ));
     crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
-        &stopped_desired,
-        &stopped_artifacts,
-        &source_digest,
-        &stopped_desired.fleet,
-        &root_management,
-        1_800_000_000_000_000_150,
+        crate::fleet_ensure::policy::RootStartPlanInput {
+            authority: Some(&stopped_authority),
+            created_at_time: 1_800_000_000_000_000_150,
+            desired: &stopped_desired,
+            desired_sha256: &source_digest,
+            artifacts: &stopped_artifacts,
+            observation: &root_management,
+            requested_fleet: &stopped_desired.fleet,
+        },
     )
     .expect("exact Root management authority")
     .expect("stopped Root prerequisite");
@@ -1208,12 +1289,15 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             _ => unreachable!(),
         }
         let error = crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
-            &stopped_desired,
-            &stopped_artifacts,
-            &source_digest,
-            &stopped_desired.fleet,
-            &drifted,
-            1_800_000_000_000_000_150,
+            crate::fleet_ensure::policy::RootStartPlanInput {
+                authority: Some(&stopped_authority),
+                created_at_time: 1_800_000_000_000_000_150,
+                desired: &stopped_desired,
+                desired_sha256: &source_digest,
+                artifacts: &stopped_artifacts,
+                observation: &drifted,
+                requested_fleet: &stopped_desired.fleet,
+            },
         )
         .expect_err("drifted Root authority must fail before planning");
         assert!(
@@ -1230,8 +1314,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             "unexpected {field} drift error: {error:?}"
         );
     }
-    let stopped_paths =
-        EnsurePaths::under(&root, &stopped_desired.environment, &stopped_desired.fleet);
     write_state(
         &stopped_paths,
         &FleetEnsureStateRecord {
@@ -1281,6 +1363,10 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(
         stopped_plan.plan.scope,
         crate::fleet_ensure::model::FleetEnsurePlanScope::RootStartPrerequisite
+    );
+    assert_eq!(
+        stopped_plan.plan.root_start_authority.as_deref(),
+        Some(&stopped_authority)
     );
     let reviewed_plan_sha256 = stopped_plan.plan.plan_sha256.clone();
     let applied = workflow::apply(
