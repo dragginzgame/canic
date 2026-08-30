@@ -35,13 +35,13 @@ pub(super) fn next_actions(status: StateAuditStatus, role: Option<&str>) -> Vec<
             "state metadata declarations for {scope} have no blocking findings"
         )],
         StateAuditStatus::Warn => vec![format!(
-            "review warning checks before using {scope} state metadata as an upgrade gate"
+            "review warning checks before using {scope} state metadata as a restore or release gate"
         )],
         StateAuditStatus::Fail => vec![format!(
-            "fix failing state metadata checks before upgrade or release gating for {scope}"
+            "fix failing state metadata checks before restore or release gating for {scope}"
         )],
         StateAuditStatus::NotEvaluated => vec![format!(
-            "declare state metadata before auditing {scope} upgrade safety"
+            "declare state metadata before auditing {scope} persistence safety"
         )],
     }
 }

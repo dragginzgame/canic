@@ -16,7 +16,10 @@ use crate::{
 };
 use candid::{CandidType, Deserialize, Principal, types::principal::PrincipalError};
 use canic_core::{
-    dto::runtime::{CanicRuntimeStatus, RuntimeFeatureStatus, RuntimeStatus},
+    dto::runtime::{
+        CanicRuntimeStatus, RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeFeatureStatus,
+        RuntimeStatus,
+    },
     protocol::CANIC_STATUS,
 };
 use canic_host::{
@@ -65,6 +68,11 @@ pub enum InspectCommandError {
     #[error("invalid canic_status Runtime response: {0}")]
     InvalidResponse(#[source] IcpJsonResponseError),
 
+    #[error(
+        "unsupported {subject} schema version {actual}; expected {RUNTIME_INTROSPECTION_SCHEMA_VERSION}"
+    )]
+    UnsupportedRuntimeSchema { subject: &'static str, actual: u32 },
+
     #[error("runtime status reported {0}")]
     ReportStatus(String),
 
@@ -85,6 +93,7 @@ impl InspectCommandError {
             | Self::CurrentFleet(_)
             | Self::Icp(_)
             | Self::InvalidResponse(_)
+            | Self::UnsupportedRuntimeSchema { .. }
             | Self::IcpRoot(_)
             | Self::Json(_) => 2,
             Self::ReportStatus(_) => 1,
@@ -355,12 +364,25 @@ fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, Inspec
     let response = decode_json_result_response::<RoleStatusResponse>(output)
         .map_err(InspectCommandError::InvalidResponse)?;
     let RoleStatusResponse::Runtime(status) = response;
+    require_current_runtime_schema(&status)?;
 
     Ok(RuntimeStatusPayload {
         source: RUNTIME_OBSERVED_SOURCE,
         status,
         response_format: CANDID_RESPONSE_FORMAT,
     })
+}
+
+fn require_current_runtime_schema(status: &CanicRuntimeStatus) -> Result<(), InspectCommandError> {
+    for (subject, actual) in [
+        ("runtime introspection", status.schema_version),
+        ("runtime readiness", status.readiness.schema_version),
+    ] {
+        if actual != RUNTIME_INTROSPECTION_SCHEMA_VERSION {
+            return Err(InspectCommandError::UnsupportedRuntimeSchema { subject, actual });
+        }
+    }
+    Ok(())
 }
 
 fn command_exit_result(report: &InspectReport) -> Result<(), InspectCommandError> {
@@ -725,6 +747,44 @@ mod tests {
     }
 
     #[test]
+    fn rejects_unsupported_runtime_schema() {
+        let mut status = sample_runtime_status(RuntimeStatus::Ok);
+        status.schema_version = RUNTIME_INTROSPECTION_SCHEMA_VERSION + 1;
+        let response = Ok::<_, canic_core::dto::error::Error>(RoleStatusResponse::Runtime(status));
+        let output = format!(
+            r#"{{"response_bytes":"{}"}}"#,
+            hex_bytes(Encode!(&response).expect("encode unsupported runtime status response"))
+        );
+
+        assert!(matches!(
+            runtime_response_payload(&output),
+            Err(InspectCommandError::UnsupportedRuntimeSchema {
+                subject: "runtime introspection",
+                actual,
+            }) if actual == RUNTIME_INTROSPECTION_SCHEMA_VERSION + 1
+        ));
+    }
+
+    #[test]
+    fn rejects_unsupported_readiness_schema() {
+        let mut status = sample_runtime_status(RuntimeStatus::Ok);
+        status.readiness.schema_version = RUNTIME_INTROSPECTION_SCHEMA_VERSION + 1;
+        let response = Ok::<_, canic_core::dto::error::Error>(RoleStatusResponse::Runtime(status));
+        let output = format!(
+            r#"{{"response_bytes":"{}"}}"#,
+            hex_bytes(Encode!(&response).expect("encode unsupported readiness response"))
+        );
+
+        assert!(matches!(
+            runtime_response_payload(&output),
+            Err(InspectCommandError::UnsupportedRuntimeSchema {
+                subject: "runtime readiness",
+                actual,
+            }) if actual == RUNTIME_INTROSPECTION_SCHEMA_VERSION + 1
+        ));
+    }
+
+    #[test]
     fn invalid_response_bytes_hex_is_rejected() {
         let err = runtime_response_payload(r#"{"response_bytes":"not-hex"}"#)
             .expect_err("invalid hex rejected");
@@ -747,7 +807,7 @@ mod tests {
         assert!(rendered.contains("response_format: candid"));
         assert!(rendered.contains("status: ok"));
         assert!(rendered.contains("runtime_status: ok"));
-        assert!(rendered.contains("schema_version: 3"));
+        assert!(rendered.contains("schema_version: 1"));
         assert!(rendered.contains("role: root"));
         assert!(rendered.contains("features: 2"));
         assert!(rendered.contains("timers: 1"));

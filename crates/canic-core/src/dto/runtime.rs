@@ -7,7 +7,7 @@ pub use crate::domain::runtime::{
     TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
 };
 
-pub const RUNTIME_INTROSPECTION_SCHEMA_VERSION: u32 = 3;
+pub const RUNTIME_INTROSPECTION_SCHEMA_VERSION: u32 = 1;
 
 //
 // CanicHealthStatus

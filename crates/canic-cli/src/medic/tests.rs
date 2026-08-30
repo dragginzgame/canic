@@ -270,7 +270,7 @@ fn renders_medic_json_report() {
     assert!(value["checks"].is_array());
 }
 
-// Ensure workspace medic summarizes state-audit metadata without owning or running migrations.
+// Ensure workspace medic summarizes state-audit metadata without owning stable state.
 #[test]
 fn workspace_medic_summarizes_state_audit_status() {
     let resolution = StateManifestResolution::Rejected {

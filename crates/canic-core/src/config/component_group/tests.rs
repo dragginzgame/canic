@@ -256,7 +256,7 @@ component_spec = "b"
 }
 
 #[test]
-fn component_group_graph_has_exact_schema_three_golden_bytes() {
+fn component_group_graph_has_exact_schema_one_golden_bytes() {
     let topology = parse(
         r#"
 [component_groups.cell.components.a]
@@ -267,8 +267,8 @@ labels = { tier = "api" }
     .expect("golden graph");
     let mut expected = Vec::new();
     expected.extend_from_slice(&30_u64.to_be_bytes());
-    expected.extend_from_slice(b"canic/component-group-graph/v3");
-    expected.extend_from_slice(&3_u32.to_be_bytes());
+    expected.extend_from_slice(b"canic/component-group-graph/v1");
+    expected.extend_from_slice(&1_u32.to_be_bytes());
     expected.extend_from_slice(&1_u64.to_be_bytes());
     expected.extend_from_slice(&4_u64.to_be_bytes());
     expected.extend_from_slice(b"cell");

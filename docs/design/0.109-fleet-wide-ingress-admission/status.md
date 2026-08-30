@@ -13,7 +13,14 @@ Roadmap reconciled: 2026-08-30
 
 ## Status
 
-- Current addendum (2026-08-30): open `0.109.29` corrects `CANIC-098` from
+- Current addendum (2026-08-30): open `0.109.30` closes `CANIC-100` before
+  0.110 promotion. The maintained state contract removes generic support
+  windows, migration policies/edges and migration-path auditing. Runtime
+  introspection and Component Group canonical identity become current v1
+  contracts without readers for their removed values. An executable-source
+  guard rejects new pre-1.0 product generations and generic migration/legacy
+  readers while ignoring external-tool and immutable audit-method revisions.
+- Current addendum (2026-08-30): published `v0.109.29` corrects `CANIC-098` from
   immutable `v0.109.28`. It proves one exact predecessor `AdoptStore` E132
   rejection made no change, crosses typed replanning without marking that
   action applied, retains the completed Coordinator reinstall, reinstalls Store

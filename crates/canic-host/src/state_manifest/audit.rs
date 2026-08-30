@@ -12,9 +12,8 @@ use crate::role_contract::finding_detail;
 use canic_core::{
     role_contract::RoleContractFinding,
     state_contract::{
-        MigrationPolicy, ReservedMemoryManifest, STATE_MANIFEST_SCHEMA_VERSION,
-        StateDomainManifest, StateManifest, StateMigrationManifest, StateRoleManifest,
-        StateStorage,
+        ReservedMemoryManifest, STATE_MANIFEST_SCHEMA_VERSION, StateDomainManifest, StateManifest,
+        StateRoleManifest, StateStorage,
     },
 };
 use std::collections::BTreeMap;
@@ -23,12 +22,10 @@ const SOURCE_STATE_MANIFEST: super::StateAuditSource = super::StateAuditSource::
 const CATEGORY_MANIFEST: StateAuditCategory = StateAuditCategory::Manifest;
 const CATEGORY_SCHEMA_VERSION: StateAuditCategory = StateAuditCategory::SchemaVersion;
 const CATEGORY_MEMORY_ID: StateAuditCategory = StateAuditCategory::MemoryId;
-const CATEGORY_MIGRATION: StateAuditCategory = StateAuditCategory::Migration;
 const CATEGORY_SNAPSHOT: StateAuditCategory = StateAuditCategory::Snapshot;
 const CATEGORY_NAMING: StateAuditCategory = StateAuditCategory::Naming;
 const CATEGORY_LIFECYCLE: StateAuditCategory = StateAuditCategory::Lifecycle;
 const CATEGORY_INVARIANT: StateAuditCategory = StateAuditCategory::Invariant;
-const CATEGORY_TEST_COVERAGE: StateAuditCategory = StateAuditCategory::TestCoverage;
 
 pub(super) fn role_contract_check(finding: &RoleContractFinding) -> StateAuditCheck {
     fail(
@@ -185,7 +182,7 @@ fn memory_id_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAud
                 "memory_id_duplicate",
                 &format!("{role}/memory_id/{memory_id}"),
                 format!("memory id {memory_id} is used by {}", domains.join(", ")),
-                "assign a unique memory id or add an explicit migration design",
+                "assign one unique owner to each memory id",
             )
         }));
     }
@@ -200,7 +197,6 @@ fn role_state_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAu
         checks.extend(storage_checks(role, domain));
         checks.extend(naming_checks(role, domain));
         checks.extend(export_import_contract_checks(role, domain));
-        checks.extend(migration_checks(role, domain));
         checks.extend(lifecycle_checks(role, domain));
     }
     checks
@@ -308,7 +304,7 @@ fn naming_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditChec
             "snapshot_name_invalid",
             &subject,
             format!("snapshot type {} does not end with Data", domain.snapshot),
-            "introduce canonical *Data snapshot types before relying on this domain for migration audits",
+            "introduce canonical *Data snapshot types before relying on this domain for snapshot or restore audits",
         )
     };
 
@@ -341,167 +337,6 @@ fn export_import_contract_checks(role: &str, domain: &StateDomainManifest) -> Ve
     }
 }
 
-fn migration_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
-    let subject = domain_subject(role, domain);
-    if domain.min_supported_version == 0 || domain.min_supported_version > domain.version {
-        return vec![fail(
-            CATEGORY_MIGRATION,
-            "state_domain_invalid_support_window",
-            &subject,
-            format!(
-                "min_supported_version {} is not valid for current version {}",
-                domain.min_supported_version, domain.version
-            ),
-            "set min_supported_version to a positive version less than or equal to the current version",
-        )];
-    }
-
-    if domain.min_supported_version == domain.version {
-        return vec![pass(
-            CATEGORY_MIGRATION,
-            "migration_available",
-            &subject,
-            "no older supported schema version requires migration".to_string(),
-        )];
-    }
-
-    match domain.migration_policy {
-        MigrationPolicy::Migrate => {
-            let mut checks = migration_declaration_checks(role, domain);
-            checks.extend(migration_path_checks(role, domain));
-            checks
-        }
-        MigrationPolicy::ManualMigrationRequired => vec![warn(
-            CATEGORY_MIGRATION,
-            "manual_migration_required_declared",
-            &subject,
-            format!(
-                "manual migration is declared for supported versions {} through {}",
-                domain.min_supported_version,
-                domain.version.saturating_sub(1)
-            ),
-            "treat manual migration as a release gate when the old version is in production support",
-        )],
-        MigrationPolicy::DiscardDeclared => vec![pass(
-            CATEGORY_MIGRATION,
-            "migration_unsupported_declared",
-            &subject,
-            "old supported state is declared as discarded by policy".to_string(),
-        )],
-        MigrationPolicy::NotApplicable | MigrationPolicy::NewDomain => vec![fail(
-            CATEGORY_MIGRATION,
-            "migration_missing",
-            &subject,
-            "supported old versions exist but no migration policy can handle them".to_string(),
-            "declare migration, manual migration, discard, or hard-cut min_supported_version",
-        )],
-    }
-}
-
-fn migration_declaration_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
-    let mut checks = Vec::new();
-    let mut by_edge = BTreeMap::<(u32, u32), usize>::new();
-
-    for migration in &domain.migrations {
-        *by_edge.entry((migration.from, migration.to)).or_default() += 1;
-        let expected_next = migration.from.checked_add(1);
-        if migration.from == 0
-            || migration.to == 0
-            || migration.from >= migration.to
-            || expected_next != Some(migration.to)
-            || migration.from < domain.min_supported_version
-            || migration.to > domain.version
-        {
-            let subject = format!(
-                "{}/{domain} v{} -> v{}",
-                role,
-                migration.from,
-                migration.to,
-                domain = domain.domain
-            );
-            checks.push(fail(
-                CATEGORY_MIGRATION,
-                "migration_declaration_invalid",
-                &subject,
-                format!(
-                    "declared migration edge v{} -> v{} is outside the supported window {}..={}",
-                    migration.from, migration.to, domain.min_supported_version, domain.version
-                ),
-                "declare only one-step migrations inside the supported version window",
-            ));
-        }
-    }
-
-    checks.extend(by_edge.into_iter().filter(|&(_, count)| count > 1).map(
-        |((from, to), count)| {
-            let subject = format!("{}/{domain} v{from} -> v{to}", role, domain = domain.domain);
-            fail(
-                CATEGORY_MIGRATION,
-                "migration_declaration_duplicate",
-                &subject,
-                format!("migration edge v{from} -> v{to} is declared {count} times"),
-                "declare each migration edge once",
-            )
-        },
-    ));
-    checks
-}
-
-fn migration_path_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
-    let mut checks = Vec::new();
-    for from in domain.min_supported_version..domain.version {
-        let to = from + 1;
-        let subject = format!("{}/{domain} v{from} -> v{to}", role, domain = domain.domain);
-        match migration_for(domain, from, to) {
-            Some(migration) => checks.push(migration_available_check(&subject, migration)),
-            None => checks.push(fail(
-                CATEGORY_MIGRATION,
-                "migration_missing",
-                &subject,
-                format!("no declared migration covers v{from} -> v{to}"),
-                "declare migration coverage or hard-cut min_supported_version",
-            )),
-        }
-    }
-    checks
-}
-
-fn migration_available_check(subject: &str, migration: &StateMigrationManifest) -> StateAuditCheck {
-    if migration.test.is_some() {
-        pass(
-            CATEGORY_TEST_COVERAGE,
-            "upgrade_test_declared",
-            subject,
-            format!(
-                "migration {} declares upgrade test coverage",
-                migration_label(migration)
-            ),
-        )
-    } else {
-        warn(
-            CATEGORY_TEST_COVERAGE,
-            "upgrade_test_missing",
-            subject,
-            format!(
-                "migration {} has no declared upgrade test",
-                migration_label(migration)
-            ),
-            "declare upgrade test coverage or hard-cut min_supported_version",
-        )
-    }
-}
-
-fn migration_for(
-    domain: &StateDomainManifest,
-    from: u32,
-    to: u32,
-) -> Option<&StateMigrationManifest> {
-    domain
-        .migrations
-        .iter()
-        .find(|migration| migration.from == from && migration.to == to)
-}
-
 fn lifecycle_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
     let subject = domain_subject(role, domain);
     let restore_check = if domain.restore_order.is_some() {
@@ -517,7 +352,7 @@ fn lifecycle_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditC
             "restore_order_missing",
             &subject,
             "restore order is not declared".to_string(),
-            "declare lifecycle restore order before broad upgrade gating",
+            "declare lifecycle restore order for same-release restore",
         )
     };
     let invariant_check = if domain.post_upgrade_invariant.is_some() {
@@ -568,7 +403,7 @@ fn reserved_memory_checks(
                     entry.label,
                     active_domains.join(", ")
                 ),
-                "declare one owner for the memory id or add an explicit migration design",
+                "declare one owner for the memory id",
             ));
         } else if reserved_by_id
             .get(&entry.memory_id)
@@ -619,13 +454,6 @@ fn active_memory_ids(domains: &[StateDomainManifest]) -> BTreeMap<u8, Vec<&str>>
 
 fn domain_subject(role: &str, domain: &StateDomainManifest) -> String {
     format!("{role}/{}", domain.domain)
-}
-
-fn migration_label(migration: &StateMigrationManifest) -> String {
-    migration
-        .name
-        .clone()
-        .unwrap_or_else(|| format!("{}->{}", migration.from, migration.to))
 }
 
 fn pass(

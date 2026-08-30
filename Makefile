@@ -340,6 +340,7 @@ dependency-risk-inventory-test:
 
 layering-gate:
 	bash scripts/ci/run-layering-guards.sh
+	bash scripts/ci/check-pre-1-0-hard-cut.sh
 
 lint-workflows:
 	"$(ACTIONLINT_BIN)"

@@ -27,8 +27,8 @@ pub use label::{
     MAX_COMPONENT_DEPLOYMENT_LABEL_VALUE_BYTES, MAX_COMPONENT_DEPLOYMENT_LABELS,
 };
 
-const COMPONENT_GROUP_GRAPH_DOMAIN: &[u8] = b"canic/component-group-graph/v3";
-const COMPONENT_GROUP_GRAPH_SCHEMA_VERSION: u32 = 3;
+const COMPONENT_GROUP_GRAPH_DOMAIN: &[u8] = b"canic/component-group-graph/v1";
+const COMPONENT_GROUP_GRAPH_SCHEMA_VERSION: u32 = 1;
 
 /// Maximum Component Group declarations in one App.
 pub const MAX_COMPONENT_GROUP_SPECS: usize = 256;

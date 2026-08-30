@@ -1,7 +1,7 @@
 //! Module: role_contract::allocation
 //!
 //! Responsibility: own canonical Canic stable-memory IDs and allocation definitions.
-//! Does not own: stable records, descriptor metadata, migrations, or role selection.
+//! Does not own: stable records, descriptor metadata, or role selection.
 //! Boundary: runtime storage imports IDs; pure role policy selects allocation keys.
 
 use crate::role_contract::model::{
