@@ -201,4 +201,5 @@ terminal replay effect-free. Only then begin 0.109 B9 simplification and its
 superseding audit.
 
 
-<!-- canic-release-validation: version=0.109.25 source=90329bde38fbafe72589359f9bdf4d1e43f5cb46 date=2026-08-30 gate=complete -->
+
+<!-- canic-release-validation: version=0.109.26 source=75b243f429c07b011fa11689947480169866ed00 date=2026-08-30 gate=complete -->
