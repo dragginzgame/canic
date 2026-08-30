@@ -111,6 +111,42 @@ fn retained_store_control_live_binding(
     }
 }
 
+fn retained_predecessor_module_matches(
+    retained_module_sha256: Option<&str>,
+    observed_module_sha256: Option<&str>,
+    reviewed_successor_sha256: &str,
+) -> bool {
+    let Some(observed_module_sha256) = observed_module_sha256 else {
+        return false;
+    };
+    observed_module_sha256 != reviewed_successor_sha256
+        && retained_module_sha256.is_none_or(|retained| retained == observed_module_sha256)
+}
+
+fn retained_store_control_live_is_exact(
+    observed: &RetainedStoreControlLiveBinding,
+    root_controllers: &[String],
+    store_controllers: &[String],
+    retained_root_module_sha256: Option<&str>,
+    retained_store_module_sha256: Option<&str>,
+    root_successor_sha256: &str,
+    store_successor_sha256: &str,
+) -> bool {
+    let controllers_match = observed.root_controllers == root_controllers
+        && observed.store_controllers == store_controllers;
+    let root_module_matches = retained_predecessor_module_matches(
+        retained_root_module_sha256,
+        observed.root_module_sha256.as_deref(),
+        root_successor_sha256,
+    );
+    let store_module_matches = retained_predecessor_module_matches(
+        retained_store_module_sha256,
+        observed.store_module_sha256.as_deref(),
+        store_successor_sha256,
+    );
+    controllers_match && root_module_matches && store_module_matches
+}
+
 fn desired_root_by_principal<'a>(
     desired: &'a DesiredFleet,
     state: &FleetEnsureStateRecord,
@@ -566,20 +602,14 @@ impl IcpEnsurePlatform {
             store_kind: Some(DesiredCanisterKind::Store),
             store_parent: Some(root_name.to_string()),
         };
-        let predecessor_modules_are_bound = root_topology
-            .and_then(|topology| topology.module_hash.as_ref())
-            .is_some()
-            && store_topology
-                .and_then(|topology| topology.module_hash.as_ref())
-                .is_some();
-        if observed_binding != expected_binding || !predecessor_modules_are_bound {
+        if observed_binding != expected_binding {
             return Ok(false);
         }
 
-        let Some(root_live) = self.status_optional(&root_principal)? else {
+        let Some(root_live) = self.install_status_optional(&root_principal)? else {
             return Ok(false);
         };
-        let Some(store_live) = self.status_optional(&store_principal)? else {
+        let Some(store_live) = self.install_status_optional(&store_principal)? else {
             return Ok(false);
         };
         let Some(root_wasm) = root.wasm.as_ref() else {
@@ -595,15 +625,15 @@ impl IcpEnsurePlatform {
         let store_controllers =
             self.resolved_controllers(state, &store.controllers, &store.controller_canisters)?;
         let observed_live = retained_store_control_live_binding(root_live, store_live);
-        let expected_live = RetainedStoreControlLiveBinding {
-            root_controllers,
-            root_module_sha256: root_topology.and_then(|topology| topology.module_hash.clone()),
-            store_controllers,
-            store_module_sha256: store_topology.and_then(|topology| topology.module_hash.clone()),
-        };
-        Ok(observed_live == expected_live
-            && observed_live.root_module_sha256.as_deref() != Some(root_successor.as_str())
-            && observed_live.store_module_sha256.as_deref() != Some(store_successor.as_str()))
+        Ok(retained_store_control_live_is_exact(
+            &observed_live,
+            &root_controllers,
+            &store_controllers,
+            root_topology.and_then(|topology| topology.module_hash.as_deref()),
+            store_topology.and_then(|topology| topology.module_hash.as_deref()),
+            &root_successor,
+            &store_successor,
+        ))
     }
 
     fn observed_protocol_action(
@@ -2472,6 +2502,74 @@ const fn rejection_code_name(code: RejectionCode) -> &'static str {
 mod tests {
     use super::*;
     use canic_core::dto::pool::CanisterPoolAssetStatus;
+
+    #[test]
+    fn retained_predecessor_modules_are_observed_and_optionally_cross_checked() {
+        let root_controllers = vec!["root-controller".to_string()];
+        let store_controllers = vec!["root-controller".to_string(), "operator".to_string()];
+        let observed = RetainedStoreControlLiveBinding {
+            root_controllers: root_controllers.clone(),
+            root_module_sha256: Some("root-predecessor".to_string()),
+            store_controllers: store_controllers.clone(),
+            store_module_sha256: Some("store-predecessor".to_string()),
+        };
+
+        assert!(retained_store_control_live_is_exact(
+            &observed,
+            &root_controllers,
+            &store_controllers,
+            None,
+            None,
+            "root-successor",
+            "store-successor",
+        ));
+        assert!(retained_store_control_live_is_exact(
+            &observed,
+            &root_controllers,
+            &store_controllers,
+            Some("root-predecessor"),
+            Some("store-predecessor"),
+            "root-successor",
+            "store-successor",
+        ));
+        assert!(!retained_store_control_live_is_exact(
+            &observed,
+            &root_controllers,
+            &store_controllers,
+            Some("wrong-root-predecessor"),
+            Some("store-predecessor"),
+            "root-successor",
+            "store-successor",
+        ));
+
+        let missing_live_module = RetainedStoreControlLiveBinding {
+            root_controllers: root_controllers.clone(),
+            root_module_sha256: None,
+            store_controllers: store_controllers.clone(),
+            store_module_sha256: Some("store-predecessor".to_string()),
+        };
+        assert!(!retained_store_control_live_is_exact(
+            &missing_live_module,
+            &root_controllers,
+            &store_controllers,
+            None,
+            None,
+            "root-successor",
+            "store-successor",
+        ));
+
+        let mut successor_is_already_live = observed;
+        successor_is_already_live.store_module_sha256 = Some("store-successor".to_string());
+        assert!(!retained_store_control_live_is_exact(
+            &successor_is_already_live,
+            &root_controllers,
+            &store_controllers,
+            None,
+            None,
+            "root-successor",
+            "store-successor",
+        ));
+    }
 
     #[cfg(unix)]
     #[test]

@@ -18,9 +18,12 @@ Roadmap reconciled: 2026-08-30
   rejection made no change, crosses typed replanning without marking that
   action applied, retains the completed Coordinator reinstall, reinstalls Store
   then Root, applies successor-only adoption and terminally replays without an
-  effect. Exact live controllers satisfy the separate management prerequisite;
-  wrong controllers fail closed and automatic repair is not a patch gate. B9
-  is preserved outside this candidate, and no later line may delay it.
+  effect. Exact live management observations provide mandatory predecessor
+  module identity when retained Root/Store topology hashes are absent; retained
+  hashes, when present, remain mandatory exact cross-checks. Exact live
+  controllers satisfy the separate management prerequisite; wrong controllers
+  fail closed and automatic repair is not a patch gate. B9 is preserved outside
+  this candidate, and no later line may delay it.
 - Current addendum (2026-08-30): published `v0.109.25` closes `CANIC-091` with
   the management-only stopped-Root Start prerequisite. The open 0.109.26
   batch closes `CANIC-092` by binding live predecessor A to newly requested

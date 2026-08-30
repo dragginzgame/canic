@@ -1309,12 +1309,14 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .topology
         .get_mut("root-0")
         .expect("retained Root topology")
-        .module_hash = Some(predecessor_root_hash.clone());
+        .module_hash = None;
     state
         .topology
         .get_mut("store-0")
         .expect("retained Store topology")
-        .module_hash = Some(predecessor_store_hash.clone());
+        .module_hash = None;
+    assert_eq!(state.topology["root-0"].module_hash, None);
+    assert_eq!(state.topology["store-0"].module_hash, None);
     write_state(
         &EnsurePaths::under(
             &root,

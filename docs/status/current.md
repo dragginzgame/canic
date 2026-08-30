@@ -95,17 +95,21 @@ The narrow correction keeps controller preparation separate from successor
 protocol adoption. It accepts only the exact rejected request and typed
 diagnostic, preserves the immutable action/hash sequence, marks the old
 operation `replan_required` without claiming adoption succeeded, and retains
-the proved Coordinator reinstall. The fresh exact-controller plan schedules no
-Coordinator install, funding or debit; it reinstalls Store then Root and only
-then adopts Store through the initialized successor Root. Wrong-controller
-evidence remains a typed pre-effect blocker; automatic controller repair is not
-a release gate for this downstream estate.
+the proved Coordinator reinstall. The mandatory predecessor Root and Store
+module identities come from exact live management observations when retained
+topology lacks those hashes. Any retained hash that is present must match the
+live observation exactly; a missing live hash or a live reviewed-successor hash
+fails closed and no value is defaulted. The fresh exact-controller plan
+schedules no Coordinator install, funding or debit; it reinstalls Store then
+Root and only then adopts Store through the initialized successor Root.
+Wrong-controller evidence remains a typed pre-effect blocker; automatic
+controller repair is not a release gate for this downstream estate.
 
-The production-shaped regression applies that fresh plan, reaches terminal
-cycle conservation and immediately replays from a fresh process with zero
-effects. B9 source is preserved separately and is not present in this patch.
-No 0.110 or later work may delay validation, publication or downstream adoption
-of this correction.
+The production-shaped regression begins with both retained module hashes
+absent, applies that fresh plan, reaches terminal cycle conservation and
+immediately replays from a fresh process with zero effects. B9 source is
+preserved separately and is not present in this patch. No 0.110 or later work
+may delay validation, publication or downstream adoption of this correction.
 
 ## Published 0.109.26 Correctness Batch
 
@@ -256,10 +260,11 @@ evidence.
 ## Validation State
 
 The isolated `CANIC-098` source passes host formatting, its exact retained-E132
-journey and warning-denied `canic-host` library/test Clippy. The journey applies
-the fresh Store/Root plan, performs successor-only adoption, conserves cycles
-and immediately replays without effect. No broad workspace or PocketIC gate was
-run during this implementation pass.
+journey and warning-denied `canic-host` library/test Clippy. The journey omits
+both retained predecessor module hashes, requires exact live observations,
+applies the fresh Store/Root plan, performs successor-only adoption, conserves
+cycles and immediately replays without effect. No broad workspace or PocketIC
+gate was run during this implementation pass.
 
 The production-shaped retained-estate journey now applies three exact
 infrastructure reinstalls and two Starts, persists a nonterminal state, and

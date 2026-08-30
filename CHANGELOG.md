@@ -14,9 +14,10 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
 - `0.109.29` corrects `CANIC-098` by crossing one exact rejected predecessor
   Store-adoption intent into typed replanning without repeating the proved
-  Coordinator reinstall. The fresh plan reinstalls Store then Root, performs
-  successor-only adoption, conserves controlled cycles and immediately replays
-  without effect.
+  Coordinator reinstall. Exact live observations supply missing retained
+  predecessor module identities without defaulting them. The fresh plan
+  reinstalls Store then Root, performs successor-only adoption, conserves
+  controlled cycles and immediately replays without effect.
 - `0.109.28` preserves exact nonterminal Fleet topology and journal-proved
   reinstall results across fresh-process replanning, preventing version-less
   ICP status from repeating completed infrastructure effects; it also hardens
