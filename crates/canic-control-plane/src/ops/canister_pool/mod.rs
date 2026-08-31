@@ -1982,7 +1982,7 @@ mod tests {
         let retained = CanisterPoolOps::ledger_recovery_status_by_operation(request.operation_id)
             .expect("first terminal receipt survives conflicting authority");
         assert_eq!(retained.phase, PoolLedgerRecoveryPhase::Complete);
-        assert_eq!(retained.receipt, Some(receipt.clone()));
+        assert_eq!(retained.receipt, Some(receipt));
         assert_eq!(retained.request, request);
 
         let second_canister_id = principal(92);
