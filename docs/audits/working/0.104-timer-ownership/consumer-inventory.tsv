@@ -8,6 +8,7 @@ crates/canic-control-plane/src/api/fleet_coordinator.rs	private lifecycle consum
 crates/canic-control-plane/src/api/lifecycle.rs	private lifecycle consumer	Root lifecycle invokes exact pool/snapshot owners and private deferral	Retained without participant registries
 crates/canic-control-plane/src/workflow/canister_pool/mod.rs	native registration custody	Pool owns maintenance and recovery-watchdog registrations	Retained with demand derived from pool journals and Fleet state
 crates/canic-control-plane/src/workflow/component_provisioning.rs	private lifecycle consumer	Provisioning schedules a bounded private continuation	Retained with the operation journal as authority
+crates/canic-control-plane/src/workflow/component_registry/lifecycle_drivers/mod.rs	private lifecycle consumer	Registry lifecycle drivers schedule bounded private continuations	Retained with Registry operations as authority
 crates/canic-control-plane/src/workflow/component_registry/mod.rs	private lifecycle consumer	Registry schedules bounded private continuations	Retained with registry operations as authority
 crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs	private lifecycle consumer	Coordinator removal schedules bounded private continuations	Retained with removal state as authority
 crates/canic-control-plane/src/workflow/fleet_registry_mirror/mod.rs	private lifecycle consumer	Mirror schedules one bounded private continuation	Retained with mirror state as authority

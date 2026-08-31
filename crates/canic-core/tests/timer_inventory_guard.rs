@@ -1069,7 +1069,7 @@ const fn application_ownership() -> [(&'static str, OwnershipClass); 5] {
     ]
 }
 
-const fn control_plane_ownership() -> [(&'static str, OwnershipClass); 9] {
+const fn control_plane_ownership() -> [(&'static str, OwnershipClass); 10] {
     use OwnershipClass::{
         NativeRegistrationCustody as Custody, PrivateLifecycleConsumer as Lifecycle,
     };
@@ -1086,6 +1086,10 @@ const fn control_plane_ownership() -> [(&'static str, OwnershipClass); 9] {
         ),
         (
             "crates/canic-control-plane/src/workflow/component_provisioning.rs",
+            Lifecycle,
+        ),
+        (
+            "crates/canic-control-plane/src/workflow/component_registry/lifecycle_drivers/mod.rs",
             Lifecycle,
         ),
         (
