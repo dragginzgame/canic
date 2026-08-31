@@ -251,4 +251,5 @@ Freeze the completed B9 contraction as one immutable candidate, run the
 canonical audit methods and maintainer gate, and obtain the human verdict. Do
 not begin 0.110 before accepted 0.109 closeout.
 
-<!-- canic-release-validation: version=0.109.31 source=3f4a047f2451ef76373350ce7215f3fd1ac96be2 date=2026-08-31 gate=complete -->
+
+<!-- canic-release-validation: version=0.109.32 source=641f843ac5bc1ddb823bef6b3c32427a5cca70dc date=2026-08-31 gate=complete -->
