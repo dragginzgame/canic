@@ -218,7 +218,10 @@ impl MockPlatform {
                 );
                 EffectOutcome {
                     created_principal: Some(principal),
-                    post_cycles: Some(retained_cycles),
+                    // The production Cycles Ledger response binds the reviewed
+                    // creation amount; live observation independently exposes
+                    // any post-effect balance drift.
+                    post_cycles: Some(*requested_initial_cycles),
                     receipt: Some("create-block".to_string()),
                 }
             }
