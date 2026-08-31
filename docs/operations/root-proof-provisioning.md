@@ -19,7 +19,7 @@ bridge-backed canister-signature flow.
 | Issuer active proof verification | `crates/canic-core/src/ops/auth/delegated/active_proof.rs` |
 | Issuer-local canister-signature proof support | `crates/canic-core/src/ops/auth/issuer_canister_sig.rs` |
 | Operator renewal CLI | `crates/canic-cli/src/auth/` |
-| PocketIC acceptance contract | `docs/design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md` |
+| PocketIC acceptance contract | `docs/design/archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md` |
 | Active architecture contract | `docs/architecture/authentication.md` |
 | Wire/protocol contract | `docs/contracts/AUTH_DELEGATED_SIGNATURES.md` |
 

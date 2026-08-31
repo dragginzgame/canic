@@ -22,14 +22,14 @@ release-batch plan and explicit maintainer acceptance.
 
 ## Scheduled Application-Safety And Estate Path
 
-1. [0.103 role-owned Candid surface](0.103-role-owned-candid-surface/status.md)
+1. [0.103 role-owned Candid surface](archive/0.103-role-owned-candid-surface/status.md)
    gives Root, Coordinator, Store and managed application canisters one
    bounded command/status control plane; capabilities add variants, never
    methods.
-2. [0.104 timer ownership and synchronous lifecycle composition](0.104-ic-timers-consumer-hard-cut/status.md)
+2. [0.104 timer ownership and synchronous lifecycle composition](archive/0.104-ic-timers-consumer-hard-cut/status.md)
    removes Canic-owned timer mechanics, documents native adoption and lets one
    application restore Canic with another synchronous runtime.
-3. [0.105 framework-neutral local application authorization](0.105-framework-neutral-local-application-authorization/status.md)
+3. [0.105 framework-neutral local application authorization](archive/0.105-framework-neutral-local-application-authorization/status.md)
    establishes bounded caller/scoped local authority before presentation or
    estate work.
 4. [0.106 Fleet estate platform qualification](0.106-fleet-estate-platform-qualification/status.md)

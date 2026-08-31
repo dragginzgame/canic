@@ -10,7 +10,7 @@ Date: 2026-07-26
 - Release boundary: reinstall only.
 - Implementation approval: none.
 - Dependency: the
-  [0.100 Fleet Coordinator design](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
+  [0.100 Fleet Coordinator design](../../archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
   establishes the sole Fleet Registry writer and Fleet Subnet Roots.
 - Purpose: reserve a bounded way for the Coordinator to create one or more
   infrastructure Canisters that partition high-cardinality coordination work.
@@ -123,7 +123,7 @@ Cycles-Ledger-backed creation where applicable. Listing possibilities here
 does not select one.
 
 Worker placement must consume the
-[0.100 qualified Subnet model](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md#physical-subnet-kind-and-topology-evidence)
+[0.100 qualified Subnet model](../../archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md#physical-subnet-kind-and-topology-evidence)
 rather than invent a narrower two-way classification. Host-side provider
 topology may inform an installation or operator policy only from one exact
 registry-version-bound observation. A Coordinator or Worker cannot read the

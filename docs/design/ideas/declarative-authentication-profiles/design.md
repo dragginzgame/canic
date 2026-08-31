@@ -12,11 +12,11 @@ Date: 2026-08-03
   verifier state.
 - Implementation approval: none.
 - Sequence: this idea follows the
-  [0.100 Fleet Coordinator design](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md),
+  [0.100 Fleet Coordinator design](../../archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md),
   the
-  [0.101 Component provisioning design](../../0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md),
+  [0.101 Component provisioning design](../../archive/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md),
   the scheduled
-  [0.105 framework-neutral local application authorization design](../../0.105-framework-neutral-local-application-authorization/0.105-design.md),
+  [0.105 framework-neutral local application authorization design](../../archive/0.105-framework-neutral-local-application-authorization/0.105-design.md),
   the
   [direct transport idea](../cross-subnet-data-transport-groundwork/design.md)
   and the proposed

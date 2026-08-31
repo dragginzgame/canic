@@ -14,8 +14,8 @@ ARCHITECTURE="$ROOT/docs/contracts/ARCHITECTURE.md"
 HYGIENE="$ROOT/docs/governance/code-hygiene/README.md"
 AUTH_DESIGN="$ROOT/docs/architecture/authentication.md"
 AUTH_CONTRACT="$ROOT/docs/contracts/AUTH_DELEGATED_SIGNATURES.md"
-TIMER_DESIGN="$ROOT/docs/design/0.104-ic-timers-consumer-hard-cut/0.104-design.md"
-TIMER_STATUS="$ROOT/docs/design/0.104-ic-timers-consumer-hard-cut/status.md"
+TIMER_DESIGN="$ROOT/docs/design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md"
+TIMER_STATUS="$ROOT/docs/design/archive/0.104-ic-timers-consumer-hard-cut/status.md"
 TIMER_EVIDENCE="$ROOT/docs/audits/working/0.104-timer-ownership/README.md"
 TIMER_CHANGELOG="$ROOT/docs/changelog/0.104.md"
 TIMER_GUIDE="$ROOT/docs/features/runtime/native-timers.md"
@@ -82,8 +82,8 @@ for design_dir in "$ROOT"/docs/design/0.* "$ROOT"/docs/design/archive/0.*; do
     [ -d "$design_dir" ] || continue
 
     max_files=2
-    if [ "${design_dir#"$ROOT"/}" = \
-        "docs/design/0.102-compact-diagnostic-codes" ]; then
+    if [ "$(basename "$design_dir")" = \
+        "0.102-compact-diagnostic-codes" ]; then
         max_files=4
         require_files "$GUARD_LABEL" \
             "$design_dir/0.102-design.md" \

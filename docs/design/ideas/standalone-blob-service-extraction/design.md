@@ -14,9 +14,9 @@ Date: 2026-08-06
   only. M1 through M7 and the Canic hard cut remain unapproved until M0 exits
   successfully.
 - Sequence: this design follows the
-  [0.100 Fleet Subnet Root design](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
+  [0.100 Fleet Subnet Root design](../../archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
   and the
-  [0.101 Component Group design](../../0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md).
+  [0.101 Component Group design](../../archive/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md).
 - Existing evidence: the archived 0.69, 0.70 and 0.71 designs and the current
   Caffeine/Cashier protocol inventories describe the behavior that must be
   re-inventoried before extraction. They are evidence, not authority for the
@@ -1809,8 +1809,8 @@ Exit: Canic operates the service only as an ordinary Component.
 
 ## Source Documents
 
-- [Canic 0.100 Fleet Subnet Roots](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
-- [Canic 0.101 Component Groups](../../0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md)
+- [Canic 0.100 Fleet Subnet Roots](../../archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
+- [Canic 0.101 Component Groups](../../archive/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md)
 - [Archived 0.69 blob protocol design](../../archive/0.69-blob-storage/0.69-design.md)
 - [Archived 0.70 blob billing design](../../archive/0.70-blob-storage-billing/0.70-design.md)
 - [Archived 0.71 operator design](../../archive/0.71-blob-storage-operator-readiness/0.71-design.md)
