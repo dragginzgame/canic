@@ -21,8 +21,8 @@ TIMER_CHANGELOG="$ROOT/docs/changelog/0.104.md"
 TIMER_GUIDE="$ROOT/docs/features/runtime/native-timers.md"
 ADMISSION_DESIGN="$ROOT/docs/design/0.109-fleet-wide-ingress-admission/0.109-design.md"
 ADMISSION_STATUS="$ROOT/docs/design/0.109-fleet-wide-ingress-admission/status.md"
-CONTRACTION_DESIGN="$ROOT/docs/design/0.110-fleet-runtime-contraction-and-stateful-safety/0.110-design.md"
-CONTRACTION_STATUS="$ROOT/docs/design/0.110-fleet-runtime-contraction-and-stateful-safety/status.md"
+CONTRACTION_DESIGN="$ROOT/docs/design/0.110-fleet-runtime-contraction/0.110-design.md"
+CONTRACTION_STATUS="$ROOT/docs/design/0.110-fleet-runtime-contraction/status.md"
 COMPLEXITY_AUDIT="$ROOT/docs/audits/release-lines/0.109-post-implementation-complexity-audit.md"
 
 operator_docs=(

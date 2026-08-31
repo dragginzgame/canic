@@ -27,7 +27,7 @@ Roadmap reconciled: 2026-08-30
 - Successors: 0.107 consumes the accepted B1 repository baseline for its
   deployment-readiness inventory, and 0.108 consumes the accepted B1 root-
   ownership/current-cost boundary; neither is gated on B2. Accepted B2
-  evidence is mandatory for mutating 0.112 Fleet-estate work. The accepted Q6
+  evidence is mandatory for mutating 0.111 Fleet-estate work. The accepted Q6
   current-state complexity constraints are inputs to 0.110 contraction.
 
 ## Release-Batch Tracker
@@ -52,7 +52,7 @@ B1 must deliver together:
    conditions, reset fixtures, latency/censoring rules and the Q4 horizon,
    safety-margin and recovery-reserve model;
 5. strict empty-topology host plan and PocketIC activation proof, or an exact
-   accepted blocker assigned to 0.112;
+   accepted blocker assigned to 0.111;
 6. bounded non-production lane, replay and controller-observation harnesses;
 7. local positive, first-excess, interruption and contradictory-evidence
    cases;
@@ -93,11 +93,11 @@ and cannot be marked complete.
 6. 0.108 closes replay-safe Coordinator-backed root operating funding; and
 7. 0.109 establishes Coordinator-owned Fleet-wide ingress admission with
    complete local enforcement projections; then
-8. 0.110 contracts Fleet runtime/build/operator/validation surfaces and adds
-   stateful-retirement safety; then
-9. 0.111 qualifies one exact stateful predecessor/successor transition; then
-10. 0.112 adds bounded indexed estates and one same-Subnet cross-Fleet
-    transfer.
+8. 0.110 creates absolute Wasm byte/function reserves through zero-capability
+   runtime contraction; then
+9. 0.111 adds bounded indexed estates and cycle-safe source disposition with
+   exact destination-credit and bounded source-debit reconciliation, without
+   preserving application data or an existing Principal.
 
 All unrelated future concepts are unnumbered under `docs/design/ideas/`.
 Published versions, historical changelogs, retained audit reports and archived
@@ -111,8 +111,9 @@ any external effect. Its operation, asset, concurrency, fee/refund, reserve
 and funded-exposure ceilings are already frozen. Protocol
 `canic-0.106-q3q4-v1`, the exact Q1 `EmptyRootAdmissions` blocker and the four
 Q6 constraints were accepted on 2026-08-20. The roadmap now assigns the Q1
-reserve-Fleet blocker to 0.112 and the Q6 complexity constraints to 0.110 B1
-and B4; none is corrected by 0.106. The protocol's exact
+reserve-Fleet blocker to 0.111 and sends the Q6 complexity constraints through
+0.110 B1 reclassification. Only fresh marginal Wasm evidence may retain one in
+B4; none is corrected by 0.106. The protocol's exact
 predecessor-built fixture hash and initialized memory observations are now
 frozen, and its 1/8/16/32 creation and empty/installed reset lanes, exact
 uncertainty retry, first excess and controller/routing transitions pass
@@ -120,12 +121,12 @@ locally. The terminal dependency/source guard also passes. Q2 freezes the deploy
 Cycles Ledger v1.0.6 interface/source authority and keeps every empirical cell
 pending B2. Q6 now
 freezes its current encoded shapes, generic receipt/cost ceilings and snapshot
-owners, including four explicit 0.110 contraction constraints. The current
+owners, including four explicit 0.110 reclassification inputs. The current
 empty-topology path fails at exact `EmptyRootAdmissions`. No repository-local
 B1 work remains.
 Because 0.107 consumes accepted B1 and is not gated on B2, its baseline and
 contract batch is the next in-repository sequence. The renumbered 0.108 B1
 proof remains historical accepted evidence. Parallel creation/reset and
 10/100/1,000 qualification are unscheduled; bounded estate work remains behind
-0.109 closeout, 0.110, 0.111 and explicit 0.112 promotion. Do not run a remote
+0.109 closeout, 0.110 closeout and explicit 0.111 promotion. Do not run a remote
 or IC-mainnet experiment without its separate exact authorization.

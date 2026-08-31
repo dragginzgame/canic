@@ -558,6 +558,9 @@ impl CanisterPoolOps {
     }
 
     /// Commit one recovery only after the helper is absent and both balance sides were proven.
+    ///
+    /// A distinct later recovery may rotate the bounded terminal slot; reusing an operation ID
+    /// with different authority remains a conflict.
     pub fn complete_ledger_recovery(
         request: &PoolLedgerRecoveryRequest,
         final_native_cycles: Cycles,
@@ -569,7 +572,9 @@ impl CanisterPoolOps {
             if existing.authority == authority {
                 return Ok(ledger_recovery_receipt_to_dto(existing));
             }
-            return Err(InternalError::conflict());
+            if existing.authority.operation_id == request.operation_id {
+                return Err(InternalError::conflict());
+            }
         }
         let current = state
             .ledger_recovery
@@ -1966,6 +1971,48 @@ mod tests {
             receipt
         );
         assert_eq!(CanisterPoolOps::ready_count(), 1);
+        assert!(!CanisterPoolOps::has_pending_lifecycle_work());
+        assert!(!CanisterPoolOps::has_pending_ledger_recovery());
+        let mut terminal_conflict = request.clone();
+        terminal_conflict.maximum_execution_burn_cycles = Cycles::new(21);
+        assert!(
+            CanisterPoolOps::prepare_ledger_recovery(&terminal_conflict, Cycles::new(2_970), 6,)
+                .is_err()
+        );
+        let retained = CanisterPoolOps::ledger_recovery_status_by_operation(request.operation_id)
+            .expect("first terminal receipt survives conflicting authority");
+        assert_eq!(retained.phase, PoolLedgerRecoveryPhase::Complete);
+        assert_eq!(retained.receipt, Some(receipt.clone()));
+        assert_eq!(retained.request, request);
+
+        let second_canister_id = principal(92);
+        imported_ready(second_canister_id, Cycles::new(4_000), 6);
+        let mut second_request = ledger_recovery_request(second_canister_id);
+        second_request.created_at_time_ns = 10;
+        second_request.operation_id = [6; 32];
+
+        CanisterPoolOps::prepare_ledger_recovery(&second_request, Cycles::new(4_000), 7)
+            .expect("prepare distinct second recovery after terminal first receipt");
+        for transition in [
+            CanisterPoolLedgerRecoveryTransition::HelperInstallIssued,
+            CanisterPoolLedgerRecoveryTransition::HelperInstalled,
+            CanisterPoolLedgerRecoveryTransition::WithdrawalIssued,
+            CanisterPoolLedgerRecoveryTransition::WithdrawalVerified { block_index: 8 },
+            CanisterPoolLedgerRecoveryTransition::HelperUninstallIssued { block_index: 8 },
+        ] {
+            CanisterPoolOps::advance_ledger_recovery(&second_request, transition)
+                .expect("advance distinct second recovery");
+        }
+        let second_receipt =
+            CanisterPoolOps::complete_ledger_recovery(&second_request, Cycles::new(4_970), 8)
+                .expect("complete distinct second recovery");
+        assert_eq!(second_receipt.block_index, 8);
+        assert_eq!(
+            CanisterPoolOps::complete_ledger_recovery(&second_request, Cycles::new(4_970), 9,)
+                .expect("replay distinct second terminal receipt"),
+            second_receipt
+        );
+        assert_eq!(CanisterPoolOps::ready_count(), 2);
         assert!(!CanisterPoolOps::has_pending_lifecycle_work());
         assert!(!CanisterPoolOps::has_pending_ledger_recovery());
         CanisterPoolStore::clear();

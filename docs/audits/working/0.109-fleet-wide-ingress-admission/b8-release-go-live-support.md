@@ -888,11 +888,11 @@ capability to B9:
 | `CANIC-045` receipt/operation convergence | Corrected in published 0.109.7: a published receipt can terminalize only the exact retained `AssetReady` operation without a remote effect; earlier or conflicting state fails closed. |
 | `CANIC-046` IcyDB patch alignment | Corrected in published 0.109.7: all six locked IcyDB packages and the composed-framework fixture/evidence use exact published 0.240.1. |
 | `CANIC-030` retained funded Saltz asset | The open repository-estate cleanup now archives the exact calibration and terminal disposition record instead of deleting the only retained evidence for the live external canister and its approximately `2.590 Pcycles`; it authorizes no external effect. |
-| `CANIC-006` state-preserving release transition | Already owned by scheduled 0.111's exact stop-the-world predecessor-to-successor transition. It remains blocked on the accepted 0.109 and 0.110 gates. |
-| `CANIC-005` application retirement acknowledgement | Already owned by scheduled 0.110 B2. It remains blocked on 0.109 closeout and explicit 0.110 promotion. |
+| `CANIC-006` state-preserving release transition | Rejected by the complete pre-1.0 hard cut. The cancelled stateful-adoption proposal is archived and has no implementation authority. |
+| `CANIC-005` application retirement acknowledgement | Rejected as application-state preservation. Active 0.111 instead requires exact controlled destination credit and bounded source debit before deletion. |
 | `CANIC-015` saved plan consumption | Accepted as unscheduled deployment ergonomics; it is not an admission-authority or current planning-correctness blocker and receives no implementation authority here. |
 | Long-running multi-Subnet local showcase | Useful future qualification work, but not part of the bounded 0.109 admission release. |
-| Generic Fleet observatory | Already owned by scheduled 0.112 and remains blocked on its predecessors. |
+| Generic Fleet observatory | Deferred as an unnumbered host-first idea with no implementation authority. |
 
 ## Result
 

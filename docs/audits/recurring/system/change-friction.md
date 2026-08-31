@@ -5,15 +5,21 @@
 ## Method Contract
 
 - Audit ID: `CANIC-CHANGE-FRICTION-001`
-- Method version: `2`
+- Method version: `3`
 - Disposition: `retain`
 - Owner: empirical edit blast radius and decision-axis friction
 - Kind/profile: `trend` plus manual attribution
 - Trace mode: `code_trace`
 - Cost/runtime: medium; 30-60 minutes for the frozen sample and current-tree evidence
-- Prerequisites: Git history, Bash, GNU awk/coreutils, the frozen v2 sample, and the canonical complexity and layering methods
+- Prerequisites: Git history, Bash, GNU awk/coreutils, the retained frozen v2 sample, and the canonical complexity and layering methods
 - False-positive boundary: formatting, generated output, release sweeps, tests, and mechanical movement are classified explicitly; pressure alone is not a correctness defect
 - Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
+Version 3 corrects the matching exhaustive-scope defect in v2. It classifies
+`diagnostics/**` as the `diagnostics` subsystem in `model-storage`, changes the
+complete containment denominator from 23 to 24, and retains the exact frozen
+five-slice v2 population, axes, formulas and thresholds. Valid comparisons
+require v3 reruns of the original product baseline and current source.
 
 ## Purpose And Authority
 
@@ -28,11 +34,11 @@ Authority is deliberately singular:
 - `CANIC-LAYERING-001/v2` and `scripts/ci/run-layering-guards.sh` own current
   boundary violations. This method consumes their exact result and does not
   implement another import parser.
-- `CANIC-COMPLEXITY-001/v2` and
-  `docs/audits/scripts/measure-complexity-v2.sh` own current-tree file scope,
+- `CANIC-COMPLEXITY-001/v3` and
+  `docs/audits/scripts/measure-complexity-v3.sh` own current-tree file scope,
   reference-file counts, LOC, and hub evidence. This method does not recount
   those signals.
-- This definition and `measure-change-friction-v2.sh` own the sample,
+- This definition and `measure-change-friction-v3.sh` own the sample,
   per-slice classifications, formulas, percentiles, and final friction score.
 
 Pressure may support an existing canonical product finding. It creates a new
@@ -61,7 +67,7 @@ artifacts, and non-Rust files are outside this method.
 Run the canonical measurement as:
 
 ```bash
-bash docs/audits/scripts/measure-change-friction-v2.sh <full-source-commit>
+bash docs/audits/scripts/measure-change-friction-v3.sh <full-source-commit>
 ```
 
 Changing the script or fixture is a method-version change. A valid report
@@ -84,6 +90,7 @@ Production files map by first path component:
 | bootstrap | `bootstrap/**` | workflow |
 | cdk | `cdk/**` | ops |
 | config | `config/**` | policy |
+| diagnostics | `diagnostics/**` | model-storage |
 | dispatch | `dispatch/**` | endpoints |
 | domain | `domain/policy/**` | policy |
 | domain | other `domain/**` | model-storage |
@@ -109,7 +116,7 @@ Root files form subsystem `root` and map exactly as follows:
 - model-storage: `error.rs`, `memory_macros.rs`, `shared_support.rs`,
   `state_contract.rs`.
 
-The complete denominator is 23 subsystems, including `root` and
+The complete denominator is 24 subsystems, including `root` and
 `test-support`. An unknown first component or root file makes the run
 `partial`, invalidates its score, and requires a method-version update. Files
 are never classified by reviewer preference.
@@ -130,7 +137,7 @@ For each slice:
 - `ELS = files_in_primary_subsystem / files`;
 - `locality = files_in_primary_module / files`, where module means the
   directory containing the relative Rust path and root files use `root`;
-- `containment = subsystems / 23`; and
+- `containment = subsystems / 24`; and
 - primary ties resolve lexicographically by subsystem or module name.
 
 Aggregate file statistics include `feature_slice` rows only. Average is the
@@ -144,7 +151,7 @@ aggregate and never alter routine feature values.
 ### Enum shock
 
 Use the non-test reference-file counts emitted by
-`measure-complexity-v2.sh` for `Request`, `Response`, `CapabilityProof`,
+`measure-complexity-v3.sh` for `Request`, `Response`, `CapabilityProof`,
 `BuiltinPredicate`, and `RootCapability`. For each type, multiply its declared
 variant count at the exact source commit by its reference-file count. The
 maximum product is `enum_shock`. Variant counts come directly from the named
@@ -163,7 +170,7 @@ this run `partial`. The canonical layering report owns the resulting defect.
 
 ### Gravity wells
 
-Use the exact `CANIC-COMPLEXITY-001/v2` strict-hub evidence: a production file
+Use the exact `CANIC-COMPLEXITY-001/v3` strict-hub evidence: a production file
 with logical LOC greater than 600 and at least three of that method's fixed
 domain categories. `strict_hubs` is the retained exact file count. This method
 does not reinterpret domain membership or issue a second hub finding.
@@ -215,8 +222,8 @@ behavior only; they do not lower a pressure score.
 
 ## Finding And Comparison Rules
 
-The first valid v2 run is a non-comparable baseline. Later runs provide both
-immediate-parent causal comparison and original-v2 cumulative comparison.
+The first valid v3 run is a non-comparable baseline. Later runs provide both
+immediate-parent causal comparison and original-v3 cumulative comparison.
 No percentage delta is shown when either denominator is zero or either result
 was produced by a different method fingerprint.
 

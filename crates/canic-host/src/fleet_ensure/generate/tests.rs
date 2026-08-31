@@ -408,6 +408,51 @@ pool_imports = []
 }
 
 #[test]
+fn human_admission_principals_compile_to_one_canonical_set() {
+    let (first, second) = divergent_principal_order_pair();
+    let authored = [
+        first.to_text(),
+        second.to_text(),
+        Principal::from_slice(&[73; 29]).to_text(),
+    ];
+    let mut canonical = authored
+        .iter()
+        .map(|value| Principal::from_text(value).expect("typed admission Principal"))
+        .collect::<Vec<_>>();
+    canonical.sort_unstable();
+
+    let mut expected = None;
+    for order in [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ] {
+        let values = order.map(|index| authored[index].clone());
+        let compiled = compile_source_admission_policy(&values)
+            .expect("human-authored Principal set compiles");
+        assert_eq!(compiled.fleet_principals, canonical);
+        if let Some(expected) = &expected {
+            assert_eq!(&compiled, expected);
+        } else {
+            expected = Some(compiled);
+        }
+    }
+
+    let duplicate = authored[0].clone();
+    assert!(matches!(
+        compile_source_admission_policy(&[duplicate.clone(), duplicate.clone()]),
+        Err(FleetGenerateError::Authority(reason)) if reason.contains(&duplicate)
+    ));
+    assert!(matches!(
+        compile_source_admission_policy(&[Principal::anonymous().to_text()]),
+        Err(FleetGenerateError::Authority(reason)) if reason.contains("anonymous")
+    ));
+}
+
+#[test]
 fn protected_policy_rejects_unsuffixed_cycle_amounts_before_generation() {
     let principal = Principal::from_slice(&[8]).to_text();
     let source = multi_component_source_toml(&principal, &principal, &principal);
@@ -511,7 +556,28 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let pool_two = principal_text(25);
     let placement = principal_text(26);
     let coordinator_subnet = principal_text(27);
-    let source = multi_component_source(&operator, &coordinator_subnet, &placement);
+    let (admission_first, admission_second) = divergent_principal_order_pair();
+    let mut authored_admission = vec![
+        operator.clone(),
+        admission_first.to_text(),
+        admission_second.to_text(),
+    ];
+    authored_admission.sort();
+    let mut canonical_admission = authored_admission
+        .iter()
+        .map(|value| Principal::from_text(value).expect("typed admission Principal"))
+        .collect::<Vec<_>>();
+    canonical_admission.sort_unstable();
+    assert_ne!(
+        authored_admission
+            .iter()
+            .map(|value| Principal::from_text(value).expect("typed authored Principal"))
+            .collect::<Vec<_>>(),
+        canonical_admission,
+        "fixture must distinguish display-text and typed Principal order"
+    );
+    let mut source = multi_component_source(&operator, &coordinator_subnet, &placement);
+    source.admission.principals.clone_from(&authored_admission);
     let seed = EstateSeed {
         schema_version: 1,
         fleet_id: "a8".repeat(32).parse().expect("Fleet ID"),
@@ -557,11 +623,20 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let seed_path = root.join("deployments/retained-multi-component.estate.toml");
     fs::create_dir_all(source_path.parent().expect("deployment parent"))
         .expect("create deployment parent");
-    fs::write(
-        &source_path,
-        multi_component_source_toml(&operator, &coordinator_subnet, &placement),
-    )
-    .expect("write protected Fleet source");
+    let source_document = multi_component_source_toml(&operator, &coordinator_subnet, &placement)
+        .replacen(
+            &format!("principals = [\"{operator}\"]"),
+            &format!(
+                "principals = [{}]",
+                authored_admission
+                    .iter()
+                    .map(|principal| format!("\"{principal}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            1,
+        );
+    fs::write(&source_path, source_document).expect("write protected Fleet source");
     fs::write(
         &seed_path,
         retained_estate_seed_toml(
@@ -671,6 +746,16 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(generated.observed_controlled_cycles, 319_900_000_000_000);
     assert_eq!(generated.release_build_id, release_build_id);
     let desired = generated.desired;
+    assert_eq!(
+        desired
+            .bootstrap
+            .as_ref()
+            .expect("generated bootstrap authority")
+            .admission
+            .fleet_principals,
+        canonical_admission,
+        "human-authored Principal text order must not affect runtime authority"
+    );
     let observed = [
         (&coordinator, 270_000_000_000_000_u128, &coordinator_subnet),
         (&fleet_root, 30_000_000_000_000, &placement),
@@ -898,6 +983,102 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             .iter()
             .all(|action| !matches!(action, EnsureAction::Fund { .. }))
     }));
+
+    let root_status_count = root.join("root-status-count");
+    if root_status_count.exists() {
+        fs::remove_file(&root_status_count).expect("clear retained Root observation count");
+    }
+    let fresh_source_digest = "75".repeat(32);
+    let mut fresh_platform = IcpEnsurePlatform::new(
+        fresh.desired.clone(),
+        icp.to_str().expect("fake ICP path"),
+        &root,
+    );
+    let public_fresh_plan = workflow::plan(
+        &root,
+        &fresh.desired,
+        &fresh_source_digest,
+        &fresh.desired.fleet,
+        1_800_000_000_000_000_001,
+        &mut fresh_platform,
+    )
+    .expect("public Fleet Ensure plans a literally empty estate");
+    assert_eq!(public_fresh_plan.effects_applied, 0);
+    assert!(!public_fresh_plan.terminal);
+    assert!(
+        public_fresh_plan
+            .plan
+            .canisters
+            .iter()
+            .all(|canister| canister.disposition
+                == crate::fleet_ensure::model::CanisterDisposition::Create)
+    );
+    assert_eq!(
+        public_fresh_plan
+            .plan
+            .conservation
+            .maximum_operator_debit_cycles,
+        fresh_plan.conservation.maximum_operator_debit_cycles
+    );
+    assert!(
+        !root_status_count.exists(),
+        "an unallocated fresh Root must not be queried before reviewed creation"
+    );
+
+    let empty_fresh_state = read_state(
+        &EnsurePaths::under(
+            &root,
+            &fresh.desired.environment,
+            "fresh-unallocated-negative",
+        ),
+        "fresh-unallocated-negative",
+    )
+    .expect("construct empty current state");
+    let mut retained_missing_desired = fresh.desired.clone();
+    retained_missing_desired.fleet = "retained-missing-root".to_string();
+    retained_missing_desired
+        .bootstrap
+        .as_mut()
+        .expect("generated bootstrap")
+        .fresh_estate = false;
+    let mut retained_missing_platform = IcpEnsurePlatform::new(
+        retained_missing_desired,
+        icp.to_str().expect("fake ICP path"),
+        &root,
+    );
+    assert!(matches!(
+        retained_missing_platform.observe_root_management(&empty_fresh_state, &BTreeSet::new(),),
+        Err(IcpEnsurePlatformError::RootManagement(_))
+    ));
+
+    let mut targeted_fresh_platform = IcpEnsurePlatform::new(
+        fresh.desired.clone(),
+        icp.to_str().expect("fake ICP path"),
+        &root,
+    );
+    assert!(matches!(
+        targeted_fresh_platform
+            .observe_root_management(&empty_fresh_state, &BTreeSet::from(["root-0".to_string()]),),
+        Err(IcpEnsurePlatformError::RootManagement(_))
+    ));
+
+    write_icp("stopped");
+    let mut allocated_fresh_state = empty_fresh_state;
+    allocated_fresh_state
+        .pending_principals
+        .insert("root-0".to_string(), fleet_root.clone());
+    let mut allocated_fresh_platform = IcpEnsurePlatform::new(
+        fresh.desired.clone(),
+        icp.to_str().expect("fake ICP path"),
+        &root,
+    );
+    assert!(
+        allocated_fresh_platform
+            .observe_root_management(&allocated_fresh_state, &BTreeSet::new())
+            .expect("observe the exact allocated fresh Root")
+            .is_some(),
+        "once allocation retains a Principal, ordinary Root management applies"
+    );
     assert!(matches!(
         initialize_fresh_estate_seed(&FreshEstateSeedRequest {
             cycles_ledger: &mainnet_cycles_ledger(),

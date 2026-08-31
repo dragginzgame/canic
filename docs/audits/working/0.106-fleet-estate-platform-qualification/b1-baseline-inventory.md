@@ -261,7 +261,7 @@ snapshot payload or migration lane.
 | 0.106 working evidence | audit evidence | none |
 | 0.106 design/status and current handoff | documentation | none |
 | 0.105 changelog reconciliation | documentation | none |
-| 0.107-0.112 renumbering and linked historical/current guidance | documentation | none; preserves the settled successor sequence without implementing it |
+| 0.107-0.111 renumbering and linked historical/current guidance | documentation | none; preserves the settled successor sequence without implementing it |
 | 0.108 B1 working evidence and root `Unreleased` note | successor test evidence and documentation | none in shipped runtime; deliberately remains outside the 0.106 patch summary |
 
 One production-owned source file gains only code gated by `#[cfg(test)]`.

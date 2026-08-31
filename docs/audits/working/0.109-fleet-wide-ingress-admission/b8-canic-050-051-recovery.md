@@ -107,9 +107,9 @@ The maintained loop is now:
    publish only if both gates identify it.
 
 B9 owns extraction of dependency-light pure recovery-plan validation from the
-heavy IC/PocketIC drivers. After this Fleet reaches terminal installation,
-scheduled 0.111 remains the owner of the exact managed transition; CANIC-055
-does not broaden arbitrary historical-version compatibility.
+heavy IC/PocketIC drivers. The former scheduled 0.111 managed transition is
+cancelled and has no active owner; CANIC-055 remains exact same-release
+recovery evidence and does not broaden historical-version compatibility.
 
 ## Local evidence
 

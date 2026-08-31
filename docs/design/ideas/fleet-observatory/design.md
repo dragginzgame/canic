@@ -13,8 +13,8 @@ Deferred from former 0.112: 2026-08-30
   recovery pressure, while Toko's endpoint-heavy Wasm evidence requires
   contraction rather than another every-role runtime surface.
 
-The former 0.112 number is retired for this concept. 0.112 now owns bounded
-multi-Fleet estates.
+The former 0.112 number is retired for this concept. Bounded multi-Fleet
+estates were later promoted to active 0.111.
 
 ## Retained Product Need
 
@@ -62,7 +62,7 @@ This idea does not currently authorize:
 
 Promotion requires:
 
-- accepted 0.110–0.112 closeout evidence;
+- accepted 0.110 and 0.111 closeout evidence;
 - a current downstream need that existing status surfaces cannot satisfy;
 - a read-only host prototype proving field ownership and bounds;
 - measured canonical and endpoint-heavy Wasm/build cost;

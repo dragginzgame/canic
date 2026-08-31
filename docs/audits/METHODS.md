@@ -42,8 +42,8 @@ retained-method owner below.
 | `access-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns access-boundary placement; run after access or endpoint-auth changes. |
 | `bootstrap-lifecycle-symmetry.md` | `revise` | `CANIC-LIFECYCLE-001/v3` | invariant/manual | Lifecycle boundary; run after lifecycle, restore, bootstrap, timer, or start-macro changes. |
 | `capability-surface.md` | `revise` | `CANIC-CAPABILITY-SURFACE-001/v2` | trend/invariant | Public capability and generated endpoint surface; run after endpoint bundle/Candid changes. |
-| `change-friction.md` | `retain` | `CANIC-CHANGE-FRICTION-001/v2` | trend/manual | Reproducible empirical edit blast radius with an exhaustive map, frozen sample, and one score; run for hardening/refactor planning. |
-| `complexity-accretion.md` | `retain` | `CANIC-COMPLEXITY-001/v2` | trend/manual | Structural complexity with deterministic scope/counters/scoring; run after cross-cutting model/control-flow growth. |
+| `change-friction.md` | `retain` | `CANIC-CHANGE-FRICTION-001/v3` | trend/manual | Reproducible empirical edit blast radius with an exhaustive map, frozen sample, and one score; run for hardening/refactor planning. |
+| `complexity-accretion.md` | `retain` | `CANIC-COMPLEXITY-001/v3` | trend/manual | Structural complexity with deterministic scope/counters/scoring; run after cross-cutting model/control-flow growth. |
 | `dependency-hygiene.md` | `revise` | `CANIC-DEPENDENCY-001/v2` | invariant/trend | Cargo graph, feature, advisory, declared-license metadata, and lockfile posture; run after dependency/package graph changes and before closeout. |
 | `dry-consolidation.md` | `revise` | `CANIC-DUPLICATION-001/v1` | manual | Duplicate behavior/authority; run after broad host/CLI/runtime workflow work. |
 | `instruction-footprint.md` | `retain` | `CANIC-INSTRUCTION-001/v3` | measured | Fixed authoritative update/install instruction roster and checkpoint coverage; run after relevant hot-path changes or explicit perf review. |

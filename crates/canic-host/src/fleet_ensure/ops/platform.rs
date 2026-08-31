@@ -158,6 +158,22 @@ fn desired_root_by_principal<'a>(
     })
 }
 
+fn is_unallocated_fresh_root(
+    desired: &DesiredFleet,
+    configured: &crate::fleet_ensure::model::DesiredCanister,
+    reviewed_targets: &BTreeSet<String>,
+) -> bool {
+    reviewed_targets.is_empty()
+        && configured.principal.is_none()
+        && desired.bootstrap.as_ref().is_some_and(|bootstrap| {
+            bootstrap.fresh_estate
+                && bootstrap
+                    .roots
+                    .iter()
+                    .any(|root| root.root == configured.name)
+        })
+}
+
 /// Exact input expected by a configured cycle-safe retirement endpoint.
 
 #[derive(CandidType)]
@@ -1514,26 +1530,25 @@ impl EnsurePlatform for IcpEnsurePlatform {
             return Ok(None);
         }
         self.require_operator()?;
-        let observed_roots = configured_roots
-            .into_iter()
-            .map(|configured| {
-                let principal =
-                    self.current_principal(state, &configured.name)
-                        .ok_or_else(|| {
-                            IcpEnsurePlatformError::RootManagement(format!(
-                                "configured Root {} has no exact Principal",
-                                configured.name
-                            ))
-                        })?;
-                let live = self.status_optional(principal)?.ok_or_else(|| {
-                    IcpEnsurePlatformError::RootManagement(format!(
-                        "configured Root {} is unavailable",
-                        configured.name
-                    ))
-                })?;
-                Ok((configured, live))
-            })
-            .collect::<Result<Vec<_>, IcpEnsurePlatformError>>()?;
+        let mut observed_roots = Vec::new();
+        for configured in configured_roots {
+            let Some(principal) = self.current_principal(state, &configured.name) else {
+                if is_unallocated_fresh_root(&self.desired, configured, reviewed_targets) {
+                    continue;
+                }
+                return Err(IcpEnsurePlatformError::RootManagement(format!(
+                    "configured Root {} has no exact Principal",
+                    configured.name
+                )));
+            };
+            let live = self.status_optional(principal)?.ok_or_else(|| {
+                IcpEnsurePlatformError::RootManagement(format!(
+                    "configured Root {} is unavailable",
+                    configured.name
+                ))
+            })?;
+            observed_roots.push((configured, live));
+        }
         if reviewed_targets.is_empty()
             && observed_roots
                 .iter()

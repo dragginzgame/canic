@@ -3,18 +3,25 @@
 ## Method Contract
 
 - Audit ID: `CANIC-COMPLEXITY-001`
-- Method version: `2`
+- Method version: `3`
 - Disposition: `retain`
 - Owner: structural branching, decision-axis, and hub complexity trends
 - Kind/profile: `trend` plus manual attribution
 - Trace mode: `code_trace`
 - Cost/runtime: high; 60-120 minutes
 - Prerequisites: Git, ripgrep, GNU awk/coreutils,
-  `docs/audits/scripts/measure-complexity-v2.sh`, and a method-compatible
+  `docs/audits/scripts/measure-complexity-v3.sh`, and a method-compatible
   baseline
 - False-positive boundary: size or fan-in alone is pressure, not a defect;
   findings require a concrete ownership, correctness, or change-risk link
 - Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
+Version 3 corrects one exhaustive-scope defect in v2: the maintained
+`diagnostics/**` production owner appeared after the frozen baseline but had no
+canonical subsystem row. V3 adds only that row. It retains the v2 Git-tree
+scope, counters, thresholds, formulas and manual-classification rules; valid
+comparisons require v3 reruns of both the original product baseline and the
+current source.
 
 ## Purpose
 
@@ -115,6 +122,7 @@ Subsystem ownership for this audit:
 | bootstrap | `bootstrap/**` |
 | cdk | `cdk/**` |
 | config | `config/**` |
+| diagnostics | `diagnostics/**` |
 | dispatch | `dispatch/**` |
 | domain | `domain/**` |
 | dto | `dto/**` |
@@ -155,12 +163,12 @@ Module counts are file-level counts.
 `LOC` is the count of lines whose whitespace-trimmed form is nonempty and does
 not start with `//`. This intentionally does not parse block comments or Rust
 syntax. The exact counter is owned by
-`docs/audits/scripts/measure-complexity-v2.sh`; changing that implementation is
+`docs/audits/scripts/measure-complexity-v3.sh`; changing that implementation is
 a method-version change.
 
 ### Mechanical Measurement Identity
 
-The v2 script is the canonical owner of file scope, test classification,
+The v3 script is the canonical owner of file scope, test classification,
 subsystem assignment, logical LOC, large-file counts, capability-mention file
 count, fixed enum reference-file counts, fixed fan-in reference-file counts,
 and lexical branch density.
@@ -168,14 +176,14 @@ and lexical branch density.
 Run it as:
 
 ```bash
-bash docs/audits/scripts/measure-complexity-v2.sh <full-source-commit>
+bash docs/audits/scripts/measure-complexity-v3.sh <full-source-commit>
 ```
 
 The report records the script fingerprint and retains its complete normalized
 stdout. Search commands elsewhere in this definition are navigation aids, not
 alternative counters.
 
-V2 scope is the sorted Git tree at the named full commit under
+V3 scope is the sorted Git tree at the named full commit under
 `crates/canic-core/src/**/*.rs`. A file is test support when any relative path
 component is `test` or `tests`, or its basename is `test.rs`, `tests.rs`, or
 `test_support.rs`. Test classification takes precedence over subsystem
@@ -553,7 +561,7 @@ A signal may be discussed elsewhere but contributes to exactly one bucket.
   informational and never changes this score.
 
 Round the weighted result to the nearest integer, with exact `.5` rounding
-up. That rounded value is the report risk score; v2 permits no additive
+up. That rounded value is the report risk score; v3 permits no additive
 override or duplicate modifier.
 
 Interpretation:
@@ -729,7 +737,7 @@ Pressure score guidance:
 
 When complexity pressure increases due to recent feature slices, record the largest amplifiers.
 
-For v2, CAF is informational and uses the fixed formula
+For v3, CAF is informational and uses the fixed formula
 `max(subsystem_count, architecture_layer_count) * flow_axis_count`.
 `subsystem_count` uses the canonical subsystem map above.
 `architecture_layer_count` uses the exact set `endpoints`, `api`, `workflow`,
@@ -737,7 +745,7 @@ For v2, CAF is informational and uses the fixed formula
 matching relative path component; `flow_axis_count` is the count of explicitly
 listed runtime decision axes from the allowed axis families. The report must
 name the exact commit range, touched file set, subsystem set, layer set, and
-axis set. CAF does not alter the v2 risk score.
+axis set. CAF does not alter the v3 risk score.
 
 | Commit | Feature Slice | Files Touched | Subsystems | CAF | Risk |
 | --- | --- | ---: | --- | ---: | --- |

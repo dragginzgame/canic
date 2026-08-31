@@ -674,15 +674,7 @@ pub fn generate_desired_fleet(
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
     let deployment_configuration = ComponentDeploymentConfiguration::compile(config.model())
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
-    let admission_principals = source
-        .admission
-        .principals
-        .iter()
-        .map(|value| parse_principal("Fleet admission", value))
-        .collect::<Result<Vec<_>, _>>()?;
-    let admission: FleetAdmissionPolicyTemplate =
-        compile_fleet_admission_policy_template(admission_principals, Vec::new())
-            .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let admission = compile_source_admission_policy(&source.admission.principals)?;
     let root_inputs = source
         .fleet_subnet_roots
         .iter()
@@ -2287,6 +2279,36 @@ fn parse_principal(field: &str, value: &str) -> Result<Principal, FleetGenerateE
     Principal::from_text(value).map_err(|error| {
         FleetGenerateError::Authority(format!("invalid {field} Principal: {error}"))
     })
+}
+
+fn compile_source_admission_policy(
+    values: &[String],
+) -> Result<FleetAdmissionPolicyTemplate, FleetGenerateError> {
+    let mut principals = values
+        .iter()
+        .map(|value| parse_principal("Fleet admission", value))
+        .collect::<Result<Vec<_>, _>>()?;
+    if principals
+        .iter()
+        .any(|principal| principal == &Principal::anonymous())
+    {
+        return Err(FleetGenerateError::Authority(
+            "Fleet admission must not contain the anonymous Principal".to_string(),
+        ));
+    }
+    principals.sort_unstable();
+    if let Some(duplicate) = principals
+        .windows(2)
+        .find(|items| items[0] == items[1])
+        .map(|items| items[0])
+    {
+        return Err(FleetGenerateError::Authority(format!(
+            "duplicate Fleet admission Principal {}",
+            duplicate.to_text()
+        )));
+    }
+    compile_fleet_admission_policy_template(principals, Vec::new())
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))
 }
 
 fn parse_subnet(field: &str, value: &str) -> Result<SubnetId, FleetGenerateError> {
