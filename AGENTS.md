@@ -38,6 +38,8 @@ with this file, the code is wrong.
   owns the exact validated-release marker after validation succeeds; a missing,
   stale or repeated development marker must not block or invalidate an
   otherwise valid source candidate.
+- Every successful one-shot `make release-*` flow must cross the post-release
+  Cargo cleanup boundary defined by the authoritative CI/deployment policy.
 
 ## Delivery Cadence
 - Follow `docs/governance/delivery-cadence.md`; it is the authoritative policy

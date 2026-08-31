@@ -1292,19 +1292,19 @@ impl IcpEnsurePlatform {
             .icp
             .canister_call_candid(authority.ledger, "create_canister", &request, None)?;
         match response {
-            Ok(success) => Ok(EffectOutcome {
-                created_principal: Some(success.canister_id.to_text()),
-                post_cycles: None,
-                receipt: Some(success.block_id.to_string()),
-            }),
+            Ok(success) => Ok(created_canister_outcome(
+                success.canister_id,
+                success.block_id.to_string(),
+                authority.requested_initial_cycles,
+            )),
             Err(CreateCanisterError::Duplicate {
                 duplicate_of,
                 canister_id: Some(canister_id),
-            }) => Ok(EffectOutcome {
-                created_principal: Some(canister_id.to_text()),
-                post_cycles: None,
-                receipt: Some(duplicate_of.to_string()),
-            }),
+            }) => Ok(created_canister_outcome(
+                canister_id,
+                duplicate_of.to_string(),
+                authority.requested_initial_cycles,
+            )),
             Err(CreateCanisterError::Duplicate {
                 canister_id: None, ..
             }) => Err(IcpEnsurePlatformError::LedgerCreatePending),
@@ -2369,6 +2369,18 @@ pub fn native_funding_applied(expected_post_cycles: u128, live_cycles: Option<u1
     expected_post_cycles > 0 && live_cycles.is_some_and(|actual| actual >= expected_post_cycles)
 }
 
+fn created_canister_outcome(
+    canister_id: Principal,
+    receipt: String,
+    requested_initial_cycles: u128,
+) -> EffectOutcome {
+    EffectOutcome {
+        created_principal: Some(canister_id.to_text()),
+        post_cycles: Some(requested_initial_cycles),
+        receipt: Some(receipt),
+    }
+}
+
 fn ledger_fee_cycles(value: Nat) -> Result<u128, IcpEnsurePlatformError> {
     let rendered = value.to_string();
     u128::try_from(value.0).map_err(|_| IcpEnsurePlatformError::InvalidLedgerFee(rendered))
@@ -2875,5 +2887,19 @@ mod tests {
         ] {
             assert_eq!(rejected, Err(field));
         }
+    }
+
+    #[test]
+    fn toko_fresh_fleet_create_retains_the_exact_requested_balance() {
+        let canister = Principal::from_slice(&[9; 29]);
+        let canister_text = canister.to_text();
+        let outcome = created_canister_outcome(canister, "ledger-block".to_string(), 5_000);
+
+        assert_eq!(
+            outcome.created_principal.as_deref(),
+            Some(canister_text.as_str())
+        );
+        assert_eq!(outcome.post_cycles, Some(5_000));
+        assert_eq!(outcome.receipt.as_deref(), Some("ledger-block"));
     }
 }

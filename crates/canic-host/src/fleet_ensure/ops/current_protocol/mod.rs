@@ -1087,13 +1087,21 @@ pub(super) fn observe(
             observation(applied, &status)
         }
         CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
-            let response: RootStatusResponseFragment = query_with_candid(
-                icp,
-                &resolved.candid_path,
-                resolved.target,
-                protocol::CANIC_STATUS,
-                &RootStatusRequestFragment::ComponentRegistry(request.clone()),
-            )?;
+            let response: Result<RootStatusResponseFragment, CanisterProtocolError> =
+                query_with_candid(
+                    icp,
+                    &resolved.candid_path,
+                    resolved.target,
+                    protocol::CANIC_STATUS,
+                    &RootStatusRequestFragment::ComponentRegistry(request.clone()),
+                );
+            let response = match response {
+                Ok(response) => response,
+                Err(error) if component_registry_status_unavailable(&error) => {
+                    return Ok(unavailable_observation());
+                }
+                Err(error) => return Err(error.into()),
+            };
             let RootStatusResponseFragment::ComponentRegistry(status) = response else {
                 return Err(CurrentProtocolError::ResponseMismatch);
             };
@@ -1425,6 +1433,10 @@ fn unavailable_observation() -> EffectObservation {
         progress_identity: "unavailable".to_string(),
         retry: EffectRetry::None,
     }
+}
+
+fn component_registry_status_unavailable(error: &CanisterProtocolError) -> bool {
+    error.is_rejected_with(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
 }
 
 fn component_registry_progresses(
@@ -1821,7 +1833,19 @@ fn require_exact_store(
                 store.name
             ))
         })?;
+    for controller in &store.controller_canisters {
+        let principal = retained_principal(desired, state, controller)
+            .and_then(|principal| Principal::from_text(principal).ok())
+            .ok_or_else(|| {
+                CurrentProtocolError::RegistrySequenceConflict(format!(
+                    "Store {} controller {controller} has no exact Principal",
+                    store.name
+                ))
+            })?;
+        configured_controllers.push(principal);
+    }
     configured_controllers.sort_unstable();
+    configured_controllers.dedup();
     if store_principal != authority.wasm_store_authority.wasm_store
         || store.subnet != authority.binding.placement_subnet.to_string()
         || configured_controllers != expected_store_controllers(&authority.wasm_store_authority)
@@ -1938,16 +1962,67 @@ pub fn compile_current_store_sequence(
             )
         })?;
     let bytes = read_infrastructure_artifact(root, helper)?;
+    let artifact = PoolLedgerRecoveryArtifact {
+        candid_sha256: helper.candid_sha256,
+        payload_hash: decode_sha256(&helper.wasm_gz_sha256_hex)?,
+        payload_size_bytes: helper.wasm_gz_size_bytes,
+        raw_module_hash: decode_sha256(&helper.wasm_sha256_hex)?,
+        release_build_id: authority.initial_release_set.release_build_id,
+    };
+    append_qualified_pool_ledger_recovery_artifact(&mut sequence, artifact, &bytes)?;
+    Ok(sequence)
+}
+
+/// Append one qualified temporary recovery helper after the exact Root bootstrap.
+///
+/// Production calls this only after validating the persisted infrastructure
+/// manifest and artifact bytes. The public boundary exists for governed
+/// PocketIC fixtures to exercise the same ordering and publication compiler.
+#[doc(hidden)]
+pub fn append_qualified_pool_ledger_recovery_artifact(
+    sequence: &mut CompiledCurrentStoreSequence,
+    artifact: PoolLedgerRecoveryArtifact,
+    bytes: &[u8],
+) -> Result<(), CurrentProtocolError> {
+    if sequence.pool_ledger_recovery_artifact.is_some() {
+        return Err(CurrentProtocolError::Configuration(
+            "Store sequence already contains a pool Ledger recovery helper".to_string(),
+        ));
+    }
+    if artifact.release_build_id != sequence.expected_bootstrap.release_set.release_build_id {
+        return Err(CurrentProtocolError::Configuration(
+            "pool Ledger recovery helper release differs from Root bootstrap".to_string(),
+        ));
+    }
+    let payload_hash = canic_core::cdk::utils::hash::wasm_hash(bytes);
+    if bytes.is_empty()
+        || artifact.payload_size_bytes != bytes.len() as u64
+        || artifact.payload_hash.as_slice() != payload_hash.as_slice()
+    {
+        return Err(CurrentProtocolError::Configuration(
+            "pool Ledger recovery helper bytes differ from qualified evidence".to_string(),
+        ));
+    }
+    let role = CanisterRole::owned("pool_ledger_recovery".to_string());
+    if sequence
+        .expected_bootstrap
+        .catalog
+        .iter()
+        .any(|entry| entry.role == role)
+    {
+        return Err(CurrentProtocolError::Configuration(
+            "pool Ledger recovery helper must not enter the application catalog".to_string(),
+        ));
+    }
     let template_id = TemplateId::owned("canic:pool-ledger-recovery".to_string());
-    let version =
-        TemplateVersion::owned(authority.initial_release_set.release_build_id.to_string());
+    let version = TemplateVersion::owned(artifact.release_build_id.to_string());
     let mut helper_actions = vec![CurrentFleetProtocolAction::StageStoreManifest {
         request: TemplateManifestInput {
             template_id: template_id.clone(),
-            role: CanisterRole::owned("pool_ledger_recovery".to_string()),
+            role,
             version: version.clone(),
-            payload_hash: decode_sha256(&helper.wasm_gz_sha256_hex)?.to_vec(),
-            payload_size_bytes: helper.wasm_gz_size_bytes,
+            payload_hash,
+            payload_size_bytes: artifact.payload_size_bytes,
             store_binding: WasmStoreBinding::new("bootstrap"),
             chunking_mode: TemplateChunkingMode::Chunked,
             manifest_state: TemplateManifestState::Approved,
@@ -1955,25 +2030,23 @@ pub fn compile_current_store_sequence(
             created_at: 0,
         },
     }];
-    append_chunk_actions(&mut helper_actions, template_id, version, &bytes)?;
+    append_chunk_actions(&mut helper_actions, template_id, version, bytes)?;
     let insertion = sequence
         .actions
         .iter()
-        .position(|action| matches!(action, CurrentFleetProtocolAction::AdoptStore { .. }))
+        .position(|action| matches!(action, CurrentFleetProtocolAction::BootstrapStore { .. }))
+        .map(|index| index + 1)
         .ok_or_else(|| {
-            CurrentProtocolError::Configuration("Store sequence omits adoption".to_string())
+            CurrentProtocolError::Configuration("Store sequence omits bootstrap".to_string())
         })?;
+    // Root bootstraps the exact application catalog first. The temporary
+    // recovery helper remains available in Store, but is not part of that
+    // initial application release-set contract.
     sequence
         .actions
         .splice(insertion..insertion, helper_actions);
-    sequence.pool_ledger_recovery_artifact = Some(PoolLedgerRecoveryArtifact {
-        candid_sha256: helper.candid_sha256,
-        payload_hash: decode_sha256(&helper.wasm_gz_sha256_hex)?,
-        payload_size_bytes: helper.wasm_gz_size_bytes,
-        raw_module_hash: decode_sha256(&helper.wasm_sha256_hex)?,
-        release_build_id: authority.initial_release_set.release_build_id,
-    });
-    Ok(sequence)
+    sequence.pool_ledger_recovery_artifact = Some(artifact);
+    Ok(())
 }
 
 /// Compile Store actions from one already-qualified current artifact union.

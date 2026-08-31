@@ -46,6 +46,11 @@ where
     )]
     RetainedDesiredUnavailable { actual: String, expected: String },
 
+    #[error(
+        "replan-required Fleet operation owns completed reinstall evidence for desired input {expected}; refusing alternate desired input {actual}"
+    )]
+    RetainedReinstallDesiredConflict { actual: String, expected: String },
+
     #[error("reviewed Fleet plan {expected} does not match retained plan {actual}")]
     PlanDigestMismatch { actual: String, expected: String },
 
@@ -153,27 +158,14 @@ where
     let mut state = read_state(&paths, requested_fleet)?;
     let prior_plan = read_plan(&paths)?.map(verified_plan).transpose()?;
     let prior_journal = read_journal(&paths)?;
-    let matching_prior = prior_plan.as_ref().filter(|prior| {
-        prior.fleet == requested_fleet
-            && prior.environment == desired.environment
-            && prior.desired_sha256 == desired_sha256
-    });
-    let retained_operation_matches =
-        matching_prior
-            .zip(prior_journal.as_ref())
-            .is_some_and(|(prior, journal)| {
-                retained_reinstall_operation_matches(
-                    &state,
-                    &prior.fleet,
-                    &prior.operation_id,
-                    journal,
-                )
-            });
-    if !retained_operation_matches {
-        state.completed_reinstall_action_sha256.clear();
-        state.completed_reinstall_operation_id = None;
-        state.completed_reinstalls.clear();
-    }
+    let matching_prior = reconcile_retained_planning_state(
+        &mut state,
+        prior_plan.as_ref(),
+        prior_journal.as_ref(),
+        requested_fleet,
+        &desired.environment,
+        desired_sha256,
+    )?;
     if let Some(prior) = matching_prior {
         retain_plan_cycles(&mut state, prior);
         if let Some(journal) = &prior_journal {
@@ -235,6 +227,58 @@ where
         plan,
         terminal: false,
     })
+}
+
+fn reconcile_retained_planning_state<'a, E>(
+    state: &mut FleetEnsureStateRecord,
+    prior_plan: Option<&'a FleetEnsurePlan>,
+    prior_journal: Option<&FleetEnsureJournalRecord>,
+    requested_fleet: &str,
+    desired_environment: &str,
+    desired_sha256: &str,
+) -> Result<Option<&'a FleetEnsurePlan>, EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    if let Some((prior, journal)) = prior_plan.zip(prior_journal)
+        && prior.fleet == requested_fleet
+        && prior.environment == desired_environment
+        && retained_reinstall_desired_conflict(
+            state,
+            &prior.fleet,
+            &prior.operation_id,
+            &prior.desired_sha256,
+            desired_sha256,
+            journal,
+        )
+    {
+        return Err(EnsureWorkflowError::RetainedReinstallDesiredConflict {
+            actual: desired_sha256.to_string(),
+            expected: prior.desired_sha256.clone(),
+        });
+    }
+    let matching_prior = prior_plan.filter(|prior| {
+        prior.fleet == requested_fleet
+            && prior.environment == desired_environment
+            && prior.desired_sha256 == desired_sha256
+    });
+    let retained_operation_matches =
+        matching_prior
+            .zip(prior_journal)
+            .is_some_and(|(prior, journal)| {
+                retained_reinstall_operation_matches(
+                    state,
+                    &prior.fleet,
+                    &prior.operation_id,
+                    journal,
+                )
+            });
+    if !retained_operation_matches {
+        state.completed_reinstall_action_sha256.clear();
+        state.completed_reinstall_operation_id = None;
+        state.completed_reinstalls.clear();
+    }
+    Ok(matching_prior)
 }
 
 fn retain_completed_reinstalls(
@@ -322,6 +366,18 @@ fn retained_reinstall_operation_matches(
         && journal.operation_id == prior_operation_id
         && state.completed_reinstall_operation_id.as_deref() == Some(journal.operation_id.as_str())
         && completed_reinstall_evidence_matches(state, journal)
+}
+
+fn retained_reinstall_desired_conflict(
+    state: &FleetEnsureStateRecord,
+    prior_fleet: &str,
+    prior_operation_id: &str,
+    prior_desired_sha256: &str,
+    supplied_desired_sha256: &str,
+    journal: &FleetEnsureJournalRecord,
+) -> bool {
+    prior_desired_sha256 != supplied_desired_sha256
+        && retained_reinstall_operation_matches(state, prior_fleet, prior_operation_id, journal)
 }
 
 fn retain_plan_cycles(state: &mut FleetEnsureStateRecord, plan: &FleetEnsurePlan) {
@@ -1192,18 +1248,27 @@ where
             retained.insert(principal, cycles);
             continue;
         };
-        if configured.root_owned_lifecycle
-            != Some(crate::fleet_ensure::model::RootOwnedCanisterLifecycle::Workload)
-        {
-            return Err(EnsureWorkflowError::TerminalInventory(
-                "terminal cycle observation duplicates a configured canister outside its exact Root-owned workload lifecycle"
-                    .to_string(),
-            ));
+        match configured.root_owned_lifecycle {
+            Some(crate::fleet_ensure::model::RootOwnedCanisterLifecycle::Workload) => {
+                // Both protected observations identify the same running workload, but
+                // execution may burn cycles between them. Retain the conservative lower value.
+                configured.cycles = configured.cycles.min(cycles);
+            }
+            Some(crate::fleet_ensure::model::RootOwnedCanisterLifecycle::Idle)
+                if configured.cycles == cycles => {}
+            Some(crate::fleet_ensure::model::RootOwnedCanisterLifecycle::Idle) => {
+                return Err(EnsureWorkflowError::TerminalInventory(
+                    "terminal Root-owned Idle canister has conflicting exact cycle observations"
+                        .to_string(),
+                ));
+            }
+            _ => {
+                return Err(EnsureWorkflowError::TerminalInventory(
+                    "terminal cycle observation duplicates a configured canister outside its exact Root-owned Idle or workload lifecycle"
+                        .to_string(),
+                ));
+            }
         }
-        // Both protected observations identify the same Root-owned workload, but execution
-        // may burn cycles between them. Retaining the lower balance is conservative in both
-        // planning and terminal conservation regardless of observation order.
-        configured.cycles = configured.cycles.min(cycles);
     }
     observation.additional_controlled_cycles = retained;
     Ok(())
@@ -1660,5 +1725,92 @@ mod tests {
             "operation",
             &incomplete,
         ));
+    }
+
+    #[test]
+    fn toko_fresh_fleet_alternate_desired_cannot_clear_completed_reinstall_evidence() {
+        let (state, journal) = retained_evidence();
+        assert!(retained_reinstall_desired_conflict(
+            &state,
+            "fleet",
+            "operation",
+            "reviewed-desired",
+            "alternate-desired",
+            &journal,
+        ));
+        assert!(!retained_reinstall_desired_conflict(
+            &state,
+            "fleet",
+            "operation",
+            "reviewed-desired",
+            "reviewed-desired",
+            &journal,
+        ));
+
+        let mut terminal = journal;
+        terminal.completion = FleetEnsureCompletion::Converged;
+        assert!(!retained_reinstall_desired_conflict(
+            &state,
+            "fleet",
+            "operation",
+            "reviewed-desired",
+            "alternate-desired",
+            &terminal,
+        ));
+    }
+
+    fn cycle_observation(
+        lifecycle: crate::fleet_ensure::model::RootOwnedCanisterLifecycle,
+        cycles: u128,
+    ) -> FleetObservation {
+        FleetObservation {
+            additional_controlled_cycles: BTreeMap::new(),
+            canisters: BTreeMap::from([(
+                "asset".to_string(),
+                Some(crate::fleet_ensure::model::LiveCanister {
+                    canister_version: Some(1),
+                    controllers: Vec::new(),
+                    cycles,
+                    module_sha256: None,
+                    principal: "controlled-principal".to_string(),
+                    reinstall_required: false,
+                    root_owned_lifecycle: Some(lifecycle),
+                    status: crate::fleet_ensure::model::CanisterRuntimeStatus::Stopped,
+                }),
+            )]),
+            ledger_fee_cycles: 0,
+            operator_cycles: 0,
+            protocol_ready: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn toko_fresh_fleet_idle_cycle_duplicate_requires_exact_balance() {
+        use crate::fleet_ensure::model::RootOwnedCanisterLifecycle;
+
+        let additional = BTreeMap::from([("controlled-principal".to_string(), 100)]);
+        let mut idle = cycle_observation(RootOwnedCanisterLifecycle::Idle, 100);
+        attach_terminal_cycles::<std::io::Error>(&mut idle, additional.clone())
+            .expect("merge exact Idle observation");
+        assert!(idle.additional_controlled_cycles.is_empty());
+
+        let mut conflicting_idle = cycle_observation(RootOwnedCanisterLifecycle::Idle, 99);
+        assert!(matches!(
+            attach_terminal_cycles::<std::io::Error>(&mut conflicting_idle, additional.clone()),
+            Err(EnsureWorkflowError::TerminalInventory(reason))
+                if reason.contains("Idle canister has conflicting exact cycle observations")
+        ));
+
+        let mut workload = cycle_observation(RootOwnedCanisterLifecycle::Workload, 99);
+        attach_terminal_cycles::<std::io::Error>(&mut workload, additional)
+            .expect("merge conservative workload observation");
+        assert_eq!(
+            workload
+                .canisters
+                .get("asset")
+                .and_then(Option::as_ref)
+                .map(|live| live.cycles),
+            Some(99),
+        );
     }
 }

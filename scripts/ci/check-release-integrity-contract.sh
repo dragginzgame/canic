@@ -547,6 +547,19 @@ rg -F '$(RELEASE_VALIDATION_LANE) fast patch' <<<"$patch_fast_recipe" >/dev/null
 if rg -F '$(MAKE) --no-print-directory validate' <<<"$patch_fast_recipe" >/dev/null; then
     fail "the fast patch target repeats the complete validation gate"
 fi
+release_clean_recipe="$(sed -n '/^release-clean:/,/^$/p' "$MAKEFILE")"
+rg -F 'bash scripts/ci/cleanup-release-artifacts.sh' <<<"$release_clean_recipe" >/dev/null ||
+    fail "the post-release cleanup does not invoke the governed Cargo cleanup"
+rg -F "run 'make clean' without rerunning the release" <<<"$release_clean_recipe" >/dev/null ||
+    fail "the post-release cleanup does not distinguish local cleanup failure from release success"
+release_cleanup_tail=$'\t@$(MAKE) release-push\n\t@$(MAKE) release-clean'
+for release_target in release-patch release-patch-fast release-minor release-major; do
+    release_recipe="$(sed -n "/^$release_target:/,/^$/p" "$MAKEFILE")"
+    [[ "$release_recipe" == *"$release_cleanup_tail" ]] ||
+        fail "make $release_target does not clean Cargo artifacts after successful push"
+    [[ "$(rg -c -F '$(MAKE) release-clean' <<<"$release_recipe")" -eq 1 ]] ||
+        fail "make $release_target does not own exactly one post-release cleanup"
+done
 rg -F 'set -euo pipefail' "$RELEASE_VALIDATION_LANE" >/dev/null ||
     fail "the release validation owner is not fail-fast"
 rg -F 'make --no-print-directory validate' "$RELEASE_VALIDATION_LANE" >/dev/null ||
@@ -947,6 +960,19 @@ fi
     fail "release cleanup exceeded its bounded Cargo retry"
 [ -e "$release_cleanup_fixture/target" ] ||
     fail "failed fake Cargo cleanup unexpectedly removed its target fixture"
+
+printf '%s\n' "$release_clean_recipe" >"$release_cleanup_fixture/Makefile"
+rm -f "$release_cleanup_fixture/cargo-clean-attempts"
+post_release_cleanup_log="$release_cleanup_fixture/post-release-cleanup.log"
+if ! FAKE_CARGO_FAILURES=2 PATH="$release_cleanup_bin:$PATH" \
+    make --no-print-directory -s -C "$release_cleanup_fixture" release-clean \
+    >"$post_release_cleanup_log" 2>&1; then
+    fail "post-release cleanup changed a successful release into a failed command"
+fi
+rg -F "run 'make clean' without rerunning the release" "$post_release_cleanup_log" >/dev/null ||
+    fail "post-release cleanup did not report its local failure separately"
+[ -e "$release_cleanup_fixture/target" ] ||
+    fail "failed post-release cleanup unexpectedly removed its target fixture"
 
 borrowed_test_scratch="$release_cleanup_fixture/.tmp/test-runtime.BORROW"
 mkdir -p "$borrowed_test_scratch"

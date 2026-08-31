@@ -53,6 +53,21 @@ placement.minimum_distinct_roots = 2
 "#;
 
 #[test]
+fn toko_fresh_fleet_registry_prepare_classifies_typed_unavailable_status() {
+    let error = CanisterProtocolError::Response {
+        canister: Principal::anonymous(),
+        method: protocol::CANIC_STATUS,
+        source: crate::icp::IcpJsonResponseError::Rejected(
+            canic_core::dto::error::Error::from_registered(
+                canic_core::diagnostics::codes::STATE_UNAVAILABLE,
+            ),
+        ),
+    };
+
+    assert!(component_registry_status_unavailable(&error));
+}
+
+#[test]
 fn typed_placements_compile_to_exact_active_root_batches() {
     let config = parse_config_model(CONFIG).expect("valid Component deployment config");
     let configuration = config
@@ -175,6 +190,61 @@ fn live_root_authority_compiles_one_deterministic_registry_sequence() {
         compile_current_registry_sequence(&desired, &state(), &topology, &active, &authorities)
             .expect("recognize exact Active Registry");
     assert_eq!(terminal.current_stage, CurrentRegistryStage::Active);
+}
+
+#[test]
+fn toko_fresh_fleet_generated_store_controllers_resolve_exact_principals() {
+    let config = parse_config_model(CONFIG).expect("valid Component deployment config");
+    let topology = config
+        .compile_component_topology()
+        .expect("Component topology");
+    let active = active_registry(&config);
+    let genesis = FleetRegistryOps::compile_genesis(
+        &active.authority.binding.fleet.app,
+        active.authority.clone(),
+        &topology,
+        active.admission.clone(),
+    )
+    .expect("genesis Registry");
+    let mut desired = desired(vec![
+        placement("cells", 0, "root-one"),
+        placement("cells", 1, "root-two"),
+    ]);
+    for store in desired
+        .canisters
+        .iter_mut()
+        .filter(|canister| canister.kind == DesiredCanisterKind::Store)
+    {
+        store.controllers = vec![principal(50).to_string()];
+        store.controller_canisters = vec![store.parent.clone().expect("Store Root")];
+    }
+
+    compile_current_registry_sequence(
+        &desired,
+        &state(),
+        &topology,
+        &genesis,
+        &root_authorities(&active),
+    )
+    .expect("resolve generated Store controller names");
+
+    desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Store)
+        .expect("Store")
+        .controller_canisters = vec!["missing-root".to_string()];
+    assert!(matches!(
+        compile_current_registry_sequence(
+            &desired,
+            &state(),
+            &topology,
+            &genesis,
+            &root_authorities(&active),
+        ),
+        Err(CurrentProtocolError::RegistrySequenceConflict(reason))
+            if reason.contains("has no exact Principal")
+    ));
 }
 
 #[test]
@@ -452,7 +522,11 @@ fn current_desired_state_rejects_component_demand_above_pool_target() {
 }
 
 #[test]
-fn store_sequence_binds_qualified_bytes_and_deterministic_replay_identities() {
+#[expect(
+    clippy::too_many_lines,
+    reason = "one fixture binds application catalog bootstrap, support-artifact staging, and deterministic replay"
+)]
+fn toko_fresh_fleet_store_bootstraps_before_staging_recovery_helper() {
     let root = crate::test_support::temp_dir("current-store-sequence");
     let release = crate::release_build::plan_release_build(&root).expect("plan release build");
     let release_build_id = release.record.release_build_id;
@@ -546,11 +620,31 @@ fn store_sequence_binds_qualified_bytes_and_deterministic_replay_identities() {
         compiled.actions.first(),
         Some(CurrentFleetProtocolAction::PrepareStoreChunkSet { .. })
     ));
-    assert!(matches!(
-        compiled.actions.last(),
-        Some(CurrentFleetProtocolAction::BootstrapStore { .. })
-    ));
+    let bootstrap = compiled
+        .actions
+        .iter()
+        .position(|action| matches!(action, CurrentFleetProtocolAction::BootstrapStore { .. }))
+        .expect("Root bootstrap action");
+    let helper_stage = compiled
+        .actions
+        .iter()
+        .position(|action| {
+            matches!(
+                action,
+                CurrentFleetProtocolAction::StageStoreManifest { request }
+                    if request.role.as_str() == "pool_ledger_recovery"
+            )
+        })
+        .expect("pool Ledger recovery helper stage");
+    assert!(bootstrap < helper_stage);
     assert_eq!(compiled.expected_bootstrap.catalog.len(), 1);
+    assert!(
+        compiled
+            .expected_bootstrap
+            .catalog
+            .iter()
+            .all(|entry| entry.role.as_str() != "pool_ledger_recovery")
+    );
     assert!(compiled.pool_ledger_recovery_artifact.is_some());
     assert_ne!(compiled.bootstrap_request.operation_id, [0; 32]);
 

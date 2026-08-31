@@ -25,7 +25,7 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker. This handoff does not maintain a second
 mutable latest-release claim.
 
-Current development begins from published `v0.109.30`. Its immutable details
+Current development begins from published `v0.109.31`. Its immutable details
 are in [the 0.109 changelog](../changelog/0.109.md). Source-development truth
 comes from Git and the working tree; explanatory prose is not a release guard.
 
@@ -53,27 +53,27 @@ Published correctness history relevant to current operators:
 - `0.109.29` separated controller preparation from successor Store adoption
   and closed the retained predecessor-E132 replan boundary; and
 - `0.109.30` removed generic stable-state migration authority and reset the
-  maintained Canic-owned product schemas to `v1`.
+  maintained Canic-owned product schemas to `v1`; and `0.109.31` published the
+  fresh-estate, Principal-canonicalization, pool-recovery and first B9 splits.
 
-Current source corrects downstream `CANIC-099`: the initial plan for an
-explicitly fresh estate may omit management observation only for an
-unallocated Root named by the exact bootstrap authority and only when no Root
-management target is under review. Retained desired Roots still require a
-Principal, an explicitly targeted Root cannot use the exception, and a fresh
-Root returns to ordinary management observation as soon as creation retains
-its Principal.
+Published `0.109.31` closes `CANIC-099` by restricting the unobserved Root
+exception to one explicitly fresh, unallocated bootstrap Root, and closes
+`CANIC-101` by rejecting anonymous/duplicate identities before sorting the
+authored set once with `Principal::Ord`. It also permits the temporary pool
+Ledger terminal slot to rotate for one distinct later operation while exact
+replay and same-operation retargeting stay fenced. That helper remains until
+both live recoveries and terminal Fleet replay are immutably proven.
 
-Current source also corrects `CANIC-101`: human-authored Fleet input rejects
-anonymous and duplicate decoded identities, then sorts once by `Principal::Ord`.
-The strict runtime compiler gives every permutation one digest-bound authority.
+The open `0.109.32` draft addresses `CANIC-102` through `CANIC-110`: exact create balances, symbolic Store controllers, typed unavailable Registry status, bounded terminal proof, reinstall-evidence fencing, post-bootstrap helper staging, manifest-bound no-follow Candid, exact activation revision and exact Idle-cycle reconciliation.
+These are current 0.109 correctness repairs, not new capability or downstream mutation.
+A focused governed PocketIC journey now closes the `CANIC-107` proof gap: a
+real Store publishes the application set, a real Root adopts and bootstraps
+it, the temporary helper stages only afterward, and immediate Store/Root
+replay has no nonterminal action. The helper-bearing five-Component journey
+also crosses Registry synchronization, runtime provisioning and activation,
+then reaches terminal Fleet state and immediate effect-free replay.
 
-Current source also lets the temporary pool Ledger recovery terminal slot
-rotate for a distinct later operation while exact replay and same-operation
-retargeting remain fenced. The feature stays present until the two-pool live
-recovery and terminal Fleet replay are immutably proven.
-
-The detailed changelog owns the complete tests and negative cases for those
-batches. No downstream repository or live IC state is owned by this handoff.
+The detailed changelog owns the complete tests and negative cases; this handoff owns no downstream repository or live IC state.
 
 ## Safety State
 
@@ -113,52 +113,56 @@ change-friction population and reruns both the original 0.92 baseline and
 | non-test logical LOC | 64,216 | 103,414 |
 | non-test files at least 600 logical LOC | 14 | 32 |
 
-The corrected current measurement confirms the direct source pressure used to
-select the first seams:
+The [working contraction evidence](../audits/working/0.109-fleet-wide-ingress-admission/b9-complexity-contraction.md)
+uses the corrected measurement to select the first seams:
 
 | Owner | Direct lines | Disposition |
 | --- | ---: | --- |
-| `ops/component_registry/mod.rs` | 17,452 | pending allocation/directory/retirement decomposition |
-| `workflow/component_registry/mod.rs` | 8,751 | pending lifecycle-driver decomposition |
-| `ops/fleet_coordinator/mod.rs` | 8,997 | admission, Registry history and Root lifecycle authority extracted first |
+| `ops/component_registry/mod.rs` | 17,452 | 6,303-line parent; focused allocation, Directory and retirement owners |
+| `workflow/component_registry/mod.rs` | 8,751 | 5,838-line parent; focused lifecycle, install, authority and response owners |
+| `ops/fleet_coordinator/mod.rs` | 8,997 | 2,688-line parent; focused admission, lifecycle and provisioning owners |
 
-The first production simplification keeps the Coordinator record as the sole
-durable owner while separating three existing responsibilities:
+The production simplification keeps the Coordinator record as the sole durable owner while separating focused responsibilities:
 
 | Coordinator owner | Lines | Exact responsibility |
 | --- | ---: | --- |
-| parent `mod.rs` | 7,493 | single-step Coordinator state operations and remaining provisioning logic |
+| parent `mod.rs` | 2,688 | single-step Coordinator state operations and remaining provisioning logic |
 | `admission.rs` | 304 | admission publication, capacity, canonical mutation and replay |
+| `component_provisioning_projection` | 245 | current status and terminal receipt projection |
+| `component_provisioning_progress` | 665 | read-only Directory/runtime progress reconstruction and advance classification |
+| `component_provisioning_reconciliation` | 338 | observed Root acceptance/provisioning response validation |
+| `component_provisioning_root_progress` | 572 | read-only Root progress reconstruction and replay/advance classification |
+| `component_provisioning_directory` | 482 | Directory call/receipt authority and response validation |
+| `component_provisioning_retry` | 67 | active-intent retry authority and pending-failure projection |
+| `component_provisioning_validation` | 1,954 | retained Root acceptance/provisioning plus Directory/runtime response and receipt validation |
+| `service_publication` | 326 | canonical Fleet services plus atomic Registry/receipt evidence |
 | `registry_history.rs` | 924 | ordered canonical Registry reconstruction and validation |
-| `root_lifecycle.rs` | 361 | Root draining/removal reservation and publication authority |
+| `root_lifecycle.rs` | 598 | Root join/snapshot, grouped fences, draining/removal reservation and publication authority |
+No DTO, Candid, record, endpoint or effect-ordering changes. The parent is now 2,688 lines, down from 8,997.
 
-No DTO, Candid, digest, stable record, endpoint or effect ordering changes.
-The split removes 1,504 direct lines from the former 8,997-line parent, but the
-remaining parent and the two Component Registry gravity wells still require
-material decomposition before the finding can pass.
-
-The Component Registry now has focused owners for Root/Store retirement (508
-lines), Directory refresh (326), top-level allocation/activation (397/477),
+The Component Registry now has a 1,647-line Root/Store retirement owner with
+complete durable operations, validation and hashes; Directory refresh (326),
+top-level allocation/activation (397/477),
 direct-child allocation/activation (518/379) and top-level Component retirement
 (618). A 1,143-line `subtree_retirement` owner now retains bounded traversal,
 stop/delete, Directory synchronization and membership-removal evidence for
 descendants. A 311-line `initial_inventory` owner seals active membership and
-monotonically retains Directory and Root-runtime convergence. Every owner uses
-the same Registry store and `ComponentRegistryOps`; workflow, transport,
-Candid, stable schemas and effect ordering are unchanged. The parent is now
-13,158 lines, down from 17,452. Remaining provisioning and validation-helper
-families still require material separation.
+monotonically retains Directory and Root-runtime convergence. Its 5,628-line
+unit-test corpus now has a dedicated test owner. All use the same Registry ops
+authority; workflow, transport, Candid, schemas and effect ordering are unchanged. The production
+parent is now 6,303 lines, down from 17,452 total lines. The workflow
+gravity well now owns scheduling (651), installation (986) and authority
+validation (709), Registry/allocation response projection (341) and retirement
+response projection (309) separately; its parent is 5,838 lines, down from
+8,751. These passive response owners read no store and make no lifecycle or
+effect decision.
 Remaining B9 work:
 
-1. materially narrow all three named gravity-well responsibilities;
-2. localize remaining admission decisions and retain one authority owner;
-3. separate dependency-light pure recovery-plan validation from IC/PocketIC drivers;
-4. retain this handoff below 250 lines;
-5. record bounded PocketIC elapsed-time, RSS, process/thread and case-count evidence;
-6. preserve retained-decision diagnostics and retriage the 0.110 scope; and
-7. complete the manual v3 complexity/change-friction attribution plus the
-   structure and duplication methods on one immutable candidate, then obtain
-   an accepted superseding verdict.
+1. freeze one immutable candidate and rerun the canonical v3 complexity,
+   change-friction, structure, duplication and module-surface methods;
+2. run the maintainer-owned complete gate and record actual PocketIC elapsed,
+   RSS, thread and case-count evidence against the provisional envelope; and
+3. obtain the human-owned accepted superseding verdict.
 ## B10 And Closeout
 
 After B9 passes, B10 reconciles the already-published managed-App
@@ -225,16 +229,17 @@ For the current B9 slice:
 - the top-level and direct-child allocation/activation regressions pass
   reservation, creation, installation, Registry commit, runtime activation,
   membership and exact-retry boundaries after extraction;
-- warning-denied `canic-control-plane` library/test Clippy and the layering
-  guard pass;
+- warning-denied control-plane Clippy and layering pass; focused scale-out restore preserves cross-document authority;
+  retained Root acceptance, provisioning and coalesced Directory/runtime tests pass through the completed validation owner;
 - the focused pool Ledger regression passes sequential terminal recovery and
   exact replay for two distinct assets while same-operation retargeting fails;
-- the targeted public generated-estate host regression passes fresh no-effect
-  planning, the retained/targeted missing-Principal rejection cases and
-  post-allocation Root management observation; the same production-shaped
-  journey accepts noncanonical display-text ordering and emits exact typed
-  Principal order, while all six permutations, duplicate and anonymous cases
-  pass their focused regression; and
+- the relocated Component Registry test owner recompiles; focused preparation/idempotency, Root/Store retirement,
+  grouped lifecycle/install and peer-caller regressions pass through extracted owners; changed-package Clippy passes;
+- focused Component deletion, subtree terminal fence-release and grouped-allocation regressions pass through the
+  extracted retirement and Registry-response projection owners;
+- dependency-light conservation and public generated-estate regressions pass no-effect planning, Principal rejection,
+  Root observation, typed ordering and all permutations, including duplicate and anonymous cases;
+  retained-input and pre-retention digest regressions also pass without reissuing an effect; and
 - no broad workspace or PocketIC gate was run during coding.
 
 Published-batch validation remains in the detailed changelog and immutable
@@ -242,9 +247,8 @@ release evidence; it is not duplicated here.
 
 ## Next Authorized Action
 
-Continue B9 with the next measured control-plane ownership split. Keep the
-changes behavior-preserving, run only targeted changed-package checks during
-coding, and do not begin 0.110 before accepted 0.109 closeout.
-
+Freeze the completed B9 contraction as one immutable candidate, run the
+canonical audit methods and maintainer gate, and obtain the human verdict. Do
+not begin 0.110 before accepted 0.109 closeout.
 
 <!-- canic-release-validation: version=0.109.31 source=3f4a047f2451ef76373350ce7215f3fd1ac96be2 date=2026-08-31 gate=complete -->

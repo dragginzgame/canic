@@ -1,6 +1,6 @@
 .PHONY: help version tags patch patch-fast minor major \
         release-patch release-patch-fast release-minor release-major \
-        release-stage release-candidate release-commit release-push release-cadence package publish \
+        release-stage release-candidate release-commit release-push release-clean release-cadence package publish \
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm validate build check clippy fmt fmt-check clean clean-wasm \
@@ -77,10 +77,10 @@ help:
 	@echo "  patch-fast       Target-check an eligible non-runtime patch, then bump (0.0.x)"
 	@echo "  minor            Validate, then bump minor version files (0.x.0)"
 	@echo "  major            Validate, then bump major version files (x.0.0)"
-	@echo "  release-patch    Completely validate, bump, stage, commit, tag, and push a patch release"
-	@echo "  release-patch-fast  Target-check and publish an eligible non-runtime patch release"
-	@echo "  release-minor    Bump, stage, commit, tag, and push a minor release"
-	@echo "  release-major    Bump, stage, commit, tag, and push a major release"
+	@echo "  release-patch    Validate, publish a patch release, then clean Cargo artifacts"
+	@echo "  release-patch-fast  Target-check, publish a non-runtime patch, then clean Cargo artifacts"
+	@echo "  release-minor    Validate, publish a minor release, then clean Cargo artifacts"
+	@echo "  release-major    Validate, publish a major release, then clean Cargo artifacts"
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-candidate Verify post-bump package-version and lock consistency"
 	@echo "  release-commit   Commit and tag the staged release"
@@ -193,24 +193,28 @@ release-patch:
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push
+	@$(MAKE) release-clean
 
 release-patch-fast:
 	@$(MAKE) patch-fast
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push
+	@$(MAKE) release-clean
 
 release-minor:
 	@$(MAKE) minor
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push
+	@$(MAKE) release-clean
 
 release-major:
 	@$(MAKE) major
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push
+	@$(MAKE) release-clean
 
 release-stage:
 	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
@@ -237,6 +241,11 @@ release-commit:
 release-push:
 	@bash scripts/ci/check-release-push-ready.sh
 	@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh
+
+release-clean:
+	@if ! bash scripts/ci/cleanup-release-artifacts.sh; then \
+		echo "warning: release push succeeded, but Cargo cleanup failed; run 'make clean' without rerunning the release" >&2; \
+	fi
 
 release-cadence:
 	@bash scripts/dev/report-release-cadence.sh

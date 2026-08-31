@@ -1,27 +1,48 @@
 //! Module: ops::component_registry::root_retirement
 //!
-//! Responsibility: validate and hash Root terminal inventory and Wasm Store retirement evidence.
-//! Does not own: durable storage, Store effects, Root orchestration, or Fleet publication.
-//! Boundary: compiles exact retained records from already-authenticated, single-step evidence.
+//! Responsibility: commit and validate Root terminal inventory and Wasm Store retirement progress.
+//! Does not own: Store effects, Root orchestration, or Fleet publication.
+//! Boundary: advances exact retained records from already-authenticated, single-step evidence.
 
 use super::{
-    ROOT_FINAL_INVENTORY_HASH_DOMAIN, ROOT_STORE_BINDING_FINALIZATION_HASH_DOMAIN,
-    ROOT_STORE_DELETION_HASH_DOMAIN, ROOT_STORE_FINAL_CATALOG_HASH_DOMAIN,
-    ROOT_STORE_RECLAMATION_HASH_DOMAIN, RootFleetSubnetFinalInventoryPlan, domain_hash,
-    terminal_root_inventory_plan,
+    ComponentRegistryOps, ROOT_FINAL_INVENTORY_HASH_DOMAIN,
+    ROOT_STORE_BINDING_FINALIZATION_HASH_DOMAIN, ROOT_STORE_DELETION_HASH_DOMAIN,
+    ROOT_STORE_FINAL_CATALOG_HASH_DOMAIN, ROOT_STORE_RECLAMATION_HASH_DOMAIN,
+    RootFleetSubnetFinalInventoryPlan, deletion_retained_cycles_target, domain_hash,
+    root_deletion_preparation_intent_record_to_view, root_deletion_preparation_record_to_view,
+    root_draining_record_to_view, root_final_inventory_record_matches_response,
+    root_final_inventory_record_to_view, root_removal_publication_record_to_view,
+    root_store_binding_finalization_intent_record_to_view,
+    root_store_binding_finalization_record_to_view, root_store_deletion_intent_record_to_view,
+    root_store_deletion_record_to_view, root_store_reclamation_intent_record_to_view,
+    root_store_reclamation_record_to_view, terminal_root_inventory_plan,
+    validate_root_draining_record,
 };
 use crate::{
     dto::template::WasmStoreStatusResponse,
-    ids::WasmStoreGcMode,
+    ids::{WasmStoreBinding, WasmStoreGcMode},
     storage::stable::component_registry::{
-        RootComponentRegistryMetaRecord, RootFleetSubnetDrainingRecord,
+        RootComponentRegistryCommitError, RootComponentRegistryMetaRecord,
+        RootComponentRegistryStore, RootFleetSubnetDeletionPreparationIntentRecord,
+        RootFleetSubnetDeletionPreparationRecord, RootFleetSubnetDrainingRecord,
         RootFleetSubnetFinalInventoryIntentRecord, RootFleetSubnetFinalInventoryRecord,
-        RootFleetSubnetStoreBindingFinalizationRecord, RootFleetSubnetStoreDeletionRecord,
+        RootFleetSubnetRemovalPublicationRecord,
+        RootFleetSubnetStoreBindingFinalizationIntentRecord,
+        RootFleetSubnetStoreBindingFinalizationRecord, RootFleetSubnetStoreDeletionIntentRecord,
+        RootFleetSubnetStoreDeletionRecord, RootFleetSubnetStoreReclamationIntentRecord,
         RootFleetSubnetStoreReclamationRecord,
     },
     view::component_registry::{
-        RootFleetSubnetStoreBindingFinalizationEvidence, RootFleetSubnetStoreDeletionAuthority,
-        RootFleetSubnetStoreDeletionEvidence, RootFleetSubnetStoreReclamationEvidence,
+        RootFleetSubnetDeletionPreparationAuthority, RootFleetSubnetDeletionPreparationIntentView,
+        RootFleetSubnetDeletionPreparationView, RootFleetSubnetDrainingView,
+        RootFleetSubnetFinalInventoryView, RootFleetSubnetRemovalPublicationView,
+        RootFleetSubnetStoreBindingFinalizationEvidence,
+        RootFleetSubnetStoreBindingFinalizationIntentView,
+        RootFleetSubnetStoreBindingFinalizationView, RootFleetSubnetStoreCycleReclamationEvidence,
+        RootFleetSubnetStoreDeletionAuthority, RootFleetSubnetStoreDeletionEvidence,
+        RootFleetSubnetStoreDeletionIntentView, RootFleetSubnetStoreDeletionView,
+        RootFleetSubnetStoreReclamationEvidence, RootFleetSubnetStoreReclamationIntentView,
+        RootFleetSubnetStoreReclamationView,
     },
 };
 use candid::CandidType;
@@ -29,7 +50,10 @@ use canic_core::{
     cdk::types::Principal,
     control_plane_support::error::InternalError,
     dto::{
-        fleet_registry::FleetRegistryVersion,
+        fleet_registry::{
+            FleetRegistryVersion, FleetSubnetRootDrainingReservationResponse,
+            FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootStatus,
+        },
         root_store::{RootStoreBootstrapResponse, RootStoreCatalogEntry},
     },
     ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId},
@@ -505,4 +529,1119 @@ pub(super) fn validate_root_store_deletion_authority(
         return Err(InternalError::invalid_input());
     }
     Ok(())
+}
+
+impl ComponentRegistryOps {
+    pub(crate) fn begin_root_draining(
+        operation_id: [u8; 32],
+        expected_registry: &FleetRegistryVersion,
+        reservation: &FleetSubnetRootDrainingReservationResponse,
+        started_at_ns: u64,
+    ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        if operation_id == [0; 32] {
+            return Err(InternalError::invalid_input());
+        }
+        if started_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        if reservation.reservation_hash == [0; 32] {
+            return Err(InternalError::invalid_input());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        if let Some(existing) = current.root_draining.as_ref() {
+            validate_root_draining_record(&current, existing)?;
+            return if existing.operation_id == operation_id
+                && &existing.active_registry == expected_registry
+                && &existing.reservation == reservation
+            {
+                Ok(root_draining_record_to_view(existing.clone()))
+            } else {
+                Err(InternalError::conflict())
+            };
+        }
+        if !Self::registry_covers_preparation(&current.prepared_against_registry, expected_registry)
+        {
+            return Err(InternalError::conflict());
+        }
+        let record = RootFleetSubnetDrainingRecord {
+            operation_id,
+            fleet_subnet_root: current.root.fleet_subnet_root,
+            placement_subnet: current.root.placement_subnet,
+            active_registry: expected_registry.clone(),
+            reservation: reservation.clone(),
+            component_topology_digest: current.root.component_topology_digest,
+            active_release_set: current.release_set,
+            next_allocation_sequence: current.next_allocation_sequence,
+            reserved_component_instances: current.reserved_component_instances,
+            committed_component_instances: current.committed_component_instances,
+            managed_descendants: current.managed_descendants,
+            known_created_component_canisters: current.known_created_component_canisters,
+            root_registry_encoded_bytes: current.encoded_bytes,
+            started_at_ns,
+            funding_fenced_at_ns: None,
+            final_inventory_intent: None,
+            final_inventory: None,
+            removal_publication: None,
+            store_reclamation_intent: None,
+            store_reclamation: None,
+            store_binding_finalization_intent: None,
+            store_binding_finalization: None,
+            store_deletion_intent: None,
+            store_deletion: None,
+            root_deletion_preparation_intent: None,
+            root_deletion_preparation: None,
+        };
+        RootComponentRegistryStore::begin_root_draining(&current, record.clone()).map_err(
+            |error| match error {
+                RootComponentRegistryCommitError::ConflictingState => InternalError::conflict(),
+            },
+        )?;
+        Ok(root_draining_record_to_view(record))
+    }
+
+    pub(crate) fn root_draining(
+        operation_id: [u8; 32],
+    ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        Self::root_draining_if_present(operation_id)?.ok_or_else(InternalError::unavailable)
+    }
+
+    pub(crate) fn root_draining_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetDrainingView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let Some(record) = current.root_draining.as_ref() else {
+            return Ok(None);
+        };
+        validate_root_draining_record(&current, record)?;
+        if record.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(Some(root_draining_record_to_view(record.clone())))
+    }
+
+    /// Resolve funding eligibility from the exact local lifecycle fence and Registry state.
+    pub(crate) fn root_funding_eligible(
+        status: FleetSubnetRootStatus,
+    ) -> Result<bool, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current.root_draining.as_ref();
+        if let Some(draining) = draining {
+            validate_root_draining_record(&current, draining)?;
+        }
+        match status {
+            FleetSubnetRootStatus::Active => {
+                Ok(draining.is_none_or(|draining| draining.funding_fenced_at_ns.is_none()))
+            }
+            FleetSubnetRootStatus::Draining => draining
+                .map(|draining| draining.funding_fenced_at_ns.is_none())
+                .ok_or_else(InternalError::invariant),
+            FleetSubnetRootStatus::Joining | FleetSubnetRootStatus::Removed => Ok(false),
+        }
+    }
+
+    pub(crate) fn validate_published_root_draining(
+        current_registry: &FleetRegistryVersion,
+    ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let record = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::invariant)?;
+        validate_root_draining_record(&current, record)?;
+        let publication_is_later = record.active_registry.authority == current_registry.authority
+            && record.active_registry.revision < current_registry.revision;
+        if !publication_is_later {
+            return Err(InternalError::invariant());
+        }
+        Ok(root_draining_record_to_view(record.clone()))
+    }
+
+    pub(crate) fn require_root_store_admin_open() -> Result<(), InternalError> {
+        let Some(current) = RootComponentRegistryStore::current() else {
+            return Ok(());
+        };
+        if current.root_draining.is_some() {
+            return Err(InternalError::conflict());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn prepare_root_final_inventory(
+        operation_id: [u8; 32],
+        expected_registry: &FleetRegistryVersion,
+    ) -> Result<RootFleetSubnetFinalInventoryPlan, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        let plan =
+            terminal_root_inventory_plan(&current, draining, operation_id, expected_registry)?;
+        if let Some(intent) = draining.final_inventory_intent.as_ref() {
+            validate_root_final_inventory_intent_record(&current, draining, intent, &plan)?;
+        }
+        Ok(plan)
+    }
+
+    pub(crate) fn root_final_inventory_intent_registry(
+        operation_id: [u8; 32],
+    ) -> Result<Option<FleetRegistryVersion>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        let Some(intent) = draining.final_inventory_intent.as_ref() else {
+            return Ok(None);
+        };
+        let plan =
+            terminal_root_inventory_plan(&current, draining, operation_id, &intent.registry)?;
+        validate_root_final_inventory_intent_record(&current, draining, intent, &plan)?;
+        Ok(Some(intent.registry.clone()))
+    }
+
+    pub(crate) fn record_root_funding_fence(
+        operation_id: [u8; 32],
+        fenced_at_ns: u64,
+    ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        if fenced_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        if draining.funding_fenced_at_ns.is_some() {
+            return Ok(root_draining_record_to_view(draining.clone()));
+        }
+        RootComponentRegistryStore::record_root_funding_fence(&current, fenced_at_ns).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        Self::root_draining(operation_id)
+    }
+
+    pub(crate) fn begin_root_final_inventory(
+        operation_id: [u8; 32],
+        expected_registry: &FleetRegistryVersion,
+        prepared_at_ns: u64,
+    ) -> Result<RootFleetSubnetFinalInventoryPlan, InternalError> {
+        if prepared_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        let plan = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        if let Some(intent) = draining.final_inventory_intent.as_ref() {
+            validate_root_final_inventory_intent_record(&current, draining, intent, &plan)?;
+            return Ok(plan);
+        }
+        if prepared_at_ns < draining.started_at_ns {
+            return Err(InternalError::invalid_input());
+        }
+        let record = RootFleetSubnetFinalInventoryIntentRecord {
+            operation_id,
+            registry: expected_registry.clone(),
+            removed_component_instances: plan.removed_component_instances,
+            terminal_component_history_hash: plan.terminal_component_history_hash,
+            root_registry_encoded_bytes: plan.root_registry_encoded_bytes,
+            prepared_at_ns,
+        };
+        RootComponentRegistryStore::prepare_root_final_inventory(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        let committed = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
+        if committed != plan {
+            return Err(InternalError::invariant());
+        }
+        Ok(committed)
+    }
+
+    pub(crate) fn root_final_inventory(
+        operation_id: [u8; 32],
+    ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
+        Self::root_final_inventory_if_present(operation_id)?.ok_or_else(InternalError::unavailable)
+    }
+
+    pub(crate) fn root_final_inventory_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetFinalInventoryView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        let Some(inventory) = draining.final_inventory.as_ref() else {
+            return Ok(None);
+        };
+        validate_root_final_inventory_record(&current, draining, inventory)?;
+        Ok(Some(root_final_inventory_record_to_view(inventory.clone())))
+    }
+
+    pub(crate) fn verify_root_final_inventory_store(
+        operation_id: [u8; 32],
+        store: &RootStoreBootstrapResponse,
+        store_status: &WasmStoreStatusResponse,
+    ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        let inventory = draining
+            .final_inventory
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_final_inventory_record(&current, draining, inventory)?;
+        let evidence = root_store_final_inventory_evidence(&current, store, store_status)?;
+        let store_is_exact = [
+            store.wasm_store == inventory.wasm_store,
+            evidence.catalog_hash == inventory.wasm_store_catalog_hash,
+            evidence.catalog_entries == inventory.wasm_store_catalog_entries,
+            store_status.occupied_store_bytes == inventory.wasm_store_occupied_bytes,
+            store_status.template_count == inventory.wasm_store_template_count,
+            store_status.release_count == inventory.wasm_store_release_count,
+            evidence.gc_prepared_at_secs == inventory.wasm_store_gc_prepared_at_secs,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !store_is_exact {
+            return Err(InternalError::conflict());
+        }
+        Ok(root_final_inventory_record_to_view(inventory.clone()))
+    }
+
+    pub(crate) fn root_removal_publication_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetRemovalPublicationView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(draining
+            .removal_publication
+            .clone()
+            .map(root_removal_publication_record_to_view))
+    }
+
+    pub(crate) fn record_root_removal_publication(
+        operation_id: [u8; 32],
+        response: &FleetSubnetRootRemovalPublicationResponse,
+        recorded_at_ns: u64,
+    ) -> Result<RootFleetSubnetRemovalPublicationView, InternalError> {
+        if let Some(existing) = Self::root_removal_publication_if_present(operation_id)? {
+            let response_is_exact = [
+                existing.operation_id == operation_id,
+                existing.final_inventory_hash == response.final_inventory.inventory_hash,
+                existing.previous_registry == response.previous_version,
+                existing.registry == response.version,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if response_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let inventory = draining
+            .final_inventory
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        if !root_final_inventory_record_matches_response(inventory, &response.final_inventory) {
+            return Err(InternalError::invalid_input());
+        }
+        let record = RootFleetSubnetRemovalPublicationRecord {
+            operation_id,
+            final_inventory_hash: inventory.inventory_hash,
+            previous_registry: response.previous_version.clone(),
+            registry: response.version.clone(),
+            recorded_at_ns,
+        };
+        RootComponentRegistryStore::record_root_removal_publication(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        Self::root_removal_publication_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)
+    }
+
+    pub(crate) fn root_store_reclamation_intent_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreReclamationIntentView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(draining
+            .store_reclamation_intent
+            .map(root_store_reclamation_intent_record_to_view))
+    }
+
+    pub(crate) fn begin_root_store_reclamation(
+        operation_id: [u8; 32],
+        expected_final_inventory_hash: [u8; 32],
+        prepared_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreReclamationIntentView, InternalError> {
+        if expected_final_inventory_hash == [0; 32] {
+            return Err(InternalError::invalid_input());
+        }
+        if prepared_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        if let Some(existing) = Self::root_store_reclamation_intent_if_present(operation_id)? {
+            if existing.final_inventory_hash == expected_final_inventory_hash {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let inventory = draining
+            .final_inventory
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        if draining.removal_publication.is_none() {
+            return Err(InternalError::unavailable());
+        }
+        if inventory.inventory_hash != expected_final_inventory_hash {
+            return Err(InternalError::conflict());
+        }
+        let record = RootFleetSubnetStoreReclamationIntentRecord {
+            operation_id,
+            final_inventory_hash: inventory.inventory_hash,
+            wasm_store: inventory.wasm_store,
+            prepared_at_ns,
+        };
+        RootComponentRegistryStore::prepare_root_store_reclamation(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        Self::root_store_reclamation_intent_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)
+    }
+
+    pub(crate) fn root_store_reclamation_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreReclamationView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(draining
+            .store_reclamation
+            .map(root_store_reclamation_record_to_view))
+    }
+
+    pub(crate) fn record_root_store_reclamation(
+        operation_id: [u8; 32],
+        evidence: RootFleetSubnetStoreReclamationEvidence,
+        completed_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreReclamationView, InternalError> {
+        if let Some(existing) = Self::root_store_reclamation_if_present(operation_id)? {
+            return Ok(existing);
+        }
+        if completed_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let record = root_store_reclamation_record(draining, evidence, completed_at_ns)?;
+        RootComponentRegistryStore::record_root_store_reclamation(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        let committed = Self::root_store_reclamation_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)?;
+        if committed != root_store_reclamation_record_to_view(record) {
+            return Err(InternalError::invariant());
+        }
+        Ok(committed)
+    }
+
+    pub(crate) fn root_store_binding_finalization_intent_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreBindingFinalizationIntentView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(draining
+            .store_binding_finalization_intent
+            .clone()
+            .map(root_store_binding_finalization_intent_record_to_view))
+    }
+
+    pub(crate) fn begin_root_store_binding_finalization(
+        operation_id: [u8; 32],
+        expected_reclamation_hash: [u8; 32],
+        binding: WasmStoreBinding,
+        source_generation: u64,
+        prepared_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreBindingFinalizationIntentView, InternalError> {
+        let request_is_valid = [
+            expected_reclamation_hash != [0; 32],
+            !binding.as_str().is_empty(),
+            source_generation > 0,
+            prepared_at_ns > 0,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !request_is_valid {
+            return Err(InternalError::invalid_input());
+        }
+        if let Some(existing) =
+            Self::root_store_binding_finalization_intent_if_present(operation_id)?
+        {
+            let retry_is_exact = [
+                existing.reclamation_hash == expected_reclamation_hash,
+                existing.binding == binding,
+                existing.source_generation == source_generation,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if retry_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let reclamation = draining
+            .store_reclamation
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        if reclamation.reclamation_hash != expected_reclamation_hash {
+            return Err(InternalError::conflict());
+        }
+        let record = RootFleetSubnetStoreBindingFinalizationIntentRecord {
+            operation_id,
+            final_inventory_hash: reclamation.final_inventory_hash,
+            reclamation_hash: reclamation.reclamation_hash,
+            wasm_store: reclamation.wasm_store,
+            binding: binding.as_str().to_string(),
+            source_generation,
+            prepared_at_ns,
+        };
+        RootComponentRegistryStore::prepare_root_store_binding_finalization(&current, record)
+            .map_err(|RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict()
+            })?;
+        Self::root_store_binding_finalization_intent_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)
+    }
+
+    pub(crate) fn root_store_binding_finalization_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreBindingFinalizationView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(draining
+            .store_binding_finalization
+            .clone()
+            .map(root_store_binding_finalization_record_to_view))
+    }
+
+    pub(crate) fn record_root_store_binding_finalization(
+        operation_id: [u8; 32],
+        evidence: RootFleetSubnetStoreBindingFinalizationEvidence,
+        completed_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreBindingFinalizationView, InternalError> {
+        if let Some(existing) = Self::root_store_binding_finalization_if_present(operation_id)? {
+            return Ok(existing);
+        }
+        if completed_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let record = root_store_binding_finalization_record(draining, evidence, completed_at_ns)?;
+        RootComponentRegistryStore::record_root_store_binding_finalization(
+            &current,
+            record.clone(),
+        )
+        .map_err(|RootComponentRegistryCommitError::ConflictingState| InternalError::conflict())?;
+        let committed = Self::root_store_binding_finalization_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)?;
+        if committed != root_store_binding_finalization_record_to_view(record) {
+            return Err(InternalError::invariant());
+        }
+        Ok(committed)
+    }
+
+    pub(crate) fn root_store_deletion_intent_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreDeletionIntentView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(draining
+            .store_deletion_intent
+            .clone()
+            .map(root_store_deletion_intent_record_to_view))
+    }
+
+    pub(crate) fn begin_root_store_deletion(
+        operation_id: [u8; 32],
+        expected_binding_finalization_hash: [u8; 32],
+        authority: RootFleetSubnetStoreDeletionAuthority,
+        prepared_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreDeletionIntentView, InternalError> {
+        validate_root_store_deletion_authority(
+            expected_binding_finalization_hash,
+            &authority,
+            prepared_at_ns,
+        )?;
+        let RootFleetSubnetStoreDeletionAuthority {
+            wasm_store,
+            binding,
+            observed_module_hash,
+            observed_controllers,
+            observed_cycles_before_reclamation,
+            retained_cycles_target,
+        } = authority;
+        if let Some(existing) = Self::root_store_deletion_intent_if_present(operation_id)? {
+            let retry_is_exact = [
+                existing.binding_finalization_hash == expected_binding_finalization_hash,
+                existing.wasm_store == wasm_store,
+                existing.binding == binding,
+                existing.observed_module_hash == observed_module_hash,
+                existing.observed_controllers == observed_controllers,
+                existing.observed_cycles_before_reclamation == observed_cycles_before_reclamation,
+                existing.retained_cycles_target == retained_cycles_target,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if retry_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let finalization = draining
+            .store_binding_finalization
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        if finalization.finalization_hash != expected_binding_finalization_hash {
+            return Err(InternalError::conflict());
+        }
+        if finalization.binding != binding.as_str() {
+            return Err(InternalError::conflict());
+        }
+        if finalization.wasm_store != wasm_store {
+            return Err(InternalError::conflict());
+        }
+        if !observed_controllers.contains(&draining.fleet_subnet_root) {
+            return Err(InternalError::conflict());
+        }
+        let record = RootFleetSubnetStoreDeletionIntentRecord {
+            operation_id,
+            binding_finalization_hash: finalization.finalization_hash,
+            wasm_store: finalization.wasm_store,
+            binding: finalization.binding.clone(),
+            observed_module_hash,
+            observed_controllers,
+            observed_cycles_before_reclamation,
+            retained_cycles_target,
+            observed_cycles_after_reclamation: None,
+            cycles_reclaimed_at_ns: None,
+            prepared_at_ns,
+        };
+        RootComponentRegistryStore::prepare_root_store_deletion(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        Self::root_store_deletion_intent_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)
+    }
+
+    pub(crate) fn record_root_store_cycle_reclamation(
+        operation_id: [u8; 32],
+        evidence: RootFleetSubnetStoreCycleReclamationEvidence,
+    ) -> Result<RootFleetSubnetStoreDeletionIntentView, InternalError> {
+        let existing = Self::root_store_deletion_intent_if_present(operation_id)?
+            .ok_or_else(InternalError::unavailable)?;
+        if existing.observed_cycles_after_reclamation.is_some() {
+            let retry_is_exact = [
+                existing.observed_cycles_after_reclamation
+                    == Some(evidence.observed_cycles_after_reclamation),
+                existing.cycles_reclaimed_at_ns == Some(evidence.cycles_reclaimed_at_ns),
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if retry_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict());
+        }
+        let evidence_is_valid = [
+            evidence.observed_cycles_after_reclamation
+                <= existing.observed_cycles_before_reclamation,
+            evidence.observed_cycles_after_reclamation <= existing.retained_cycles_target,
+            evidence.cycles_reclaimed_at_ns >= existing.prepared_at_ns,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !evidence_is_valid {
+            return Err(InternalError::conflict());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let mut record = draining
+            .store_deletion_intent
+            .clone()
+            .expect("validated Store deletion intent");
+        record.observed_cycles_after_reclamation = Some(evidence.observed_cycles_after_reclamation);
+        record.cycles_reclaimed_at_ns = Some(evidence.cycles_reclaimed_at_ns);
+        RootComponentRegistryStore::record_root_store_cycle_reclamation(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        Self::root_store_deletion_intent_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)
+    }
+
+    pub(crate) fn root_store_deletion_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetStoreDeletionView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(draining
+            .store_deletion
+            .clone()
+            .map(root_store_deletion_record_to_view))
+    }
+
+    pub(crate) fn record_root_store_deletion(
+        operation_id: [u8; 32],
+        evidence: RootFleetSubnetStoreDeletionEvidence,
+        completed_at_ns: u64,
+    ) -> Result<RootFleetSubnetStoreDeletionView, InternalError> {
+        if let Some(existing) = Self::root_store_deletion_if_present(operation_id)? {
+            return Ok(existing);
+        }
+        if completed_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let record = root_store_deletion_record(draining, evidence, completed_at_ns)?;
+        RootComponentRegistryStore::record_root_store_deletion(&current, record.clone()).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        let committed = Self::root_store_deletion_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)?;
+        if committed != root_store_deletion_record_to_view(record) {
+            return Err(InternalError::invariant());
+        }
+        Ok(committed)
+    }
+
+    pub(crate) fn root_deletion_preparation_intent_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetDeletionPreparationIntentView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(draining
+            .root_deletion_preparation_intent
+            .clone()
+            .map(root_deletion_preparation_intent_record_to_view))
+    }
+
+    pub(crate) fn begin_root_deletion_preparation(
+        operation_id: [u8; 32],
+        authority: RootFleetSubnetDeletionPreparationAuthority,
+        prepared_at_ns: u64,
+    ) -> Result<RootFleetSubnetDeletionPreparationIntentView, InternalError> {
+        let RootFleetSubnetDeletionPreparationAuthority {
+            store_deletion_hash: expected_store_deletion_hash,
+            coordinator,
+            observed_cycles_before_reclamation,
+            retained_cycles_target,
+            observed_reserved_cycles,
+            observed_idle_cycles_burned_per_day,
+            observed_freezing_threshold_seconds,
+        } = authority;
+        let expected_target = deletion_retained_cycles_target(
+            observed_idle_cycles_burned_per_day,
+            observed_freezing_threshold_seconds,
+        );
+        let input_is_valid = [
+            expected_store_deletion_hash != [0; 32],
+            coordinator != Principal::anonymous(),
+            observed_cycles_before_reclamation > 0,
+            retained_cycles_target > 0,
+            expected_target == Some(retained_cycles_target),
+            observed_reserved_cycles == 0,
+            prepared_at_ns > 0,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !input_is_valid {
+            return Err(InternalError::invalid_input());
+        }
+        if let Some(existing) = Self::root_deletion_preparation_intent_if_present(operation_id)? {
+            let retry_is_exact = [
+                existing.store_deletion_hash == expected_store_deletion_hash,
+                existing.coordinator == coordinator,
+                existing.observed_cycles_before_reclamation == observed_cycles_before_reclamation,
+                existing.retained_cycles_target == retained_cycles_target,
+                existing.observed_reserved_cycles == observed_reserved_cycles,
+                existing.observed_idle_cycles_burned_per_day == observed_idle_cycles_burned_per_day,
+                existing.observed_freezing_threshold_seconds == observed_freezing_threshold_seconds,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if retry_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let inventory = draining
+            .final_inventory
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        let deletion = draining
+            .store_deletion
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        if deletion.deletion_hash != expected_store_deletion_hash {
+            return Err(InternalError::conflict());
+        }
+        if draining.active_registry.authority.binding.coordinator != coordinator {
+            return Err(InternalError::conflict());
+        }
+        let record = RootFleetSubnetDeletionPreparationIntentRecord {
+            operation_id,
+            coordinator,
+            final_inventory_hash: inventory.inventory_hash,
+            store_deletion_hash: deletion.deletion_hash,
+            observed_cycles_before_reclamation,
+            retained_cycles_target,
+            observed_reserved_cycles,
+            observed_idle_cycles_burned_per_day,
+            observed_freezing_threshold_seconds,
+            coordinator_intent_hash: None,
+            observed_cycles_after_reclamation: None,
+            cycles_reclaimed_at_ns: None,
+            prepared_at_ns,
+        };
+        RootComponentRegistryStore::prepare_root_deletion(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        Self::root_deletion_preparation_intent_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)
+    }
+
+    pub(crate) fn record_root_deletion_cycle_reclamation(
+        operation_id: [u8; 32],
+        coordinator_intent_hash: [u8; 32],
+        observed_cycles_after_reclamation: u128,
+        cycles_reclaimed_at_ns: u64,
+    ) -> Result<RootFleetSubnetDeletionPreparationIntentView, InternalError> {
+        let existing = Self::root_deletion_preparation_intent_if_present(operation_id)?
+            .ok_or_else(InternalError::unavailable)?;
+        if existing.coordinator_intent_hash.is_some() {
+            let retry_is_exact = [
+                existing.coordinator_intent_hash == Some(coordinator_intent_hash),
+                existing.observed_cycles_after_reclamation
+                    == Some(observed_cycles_after_reclamation),
+                existing.cycles_reclaimed_at_ns == Some(cycles_reclaimed_at_ns),
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if retry_is_exact {
+                return Ok(existing);
+            }
+            return Err(InternalError::conflict());
+        }
+        let evidence_is_valid = [
+            coordinator_intent_hash != [0; 32],
+            observed_cycles_after_reclamation <= existing.observed_cycles_before_reclamation,
+            observed_cycles_after_reclamation <= existing.retained_cycles_target,
+            cycles_reclaimed_at_ns >= existing.prepared_at_ns,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !evidence_is_valid {
+            return Err(InternalError::conflict());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let mut record = draining
+            .root_deletion_preparation_intent
+            .clone()
+            .expect("validated root deletion preparation intent");
+        record.coordinator_intent_hash = Some(coordinator_intent_hash);
+        record.observed_cycles_after_reclamation = Some(observed_cycles_after_reclamation);
+        record.cycles_reclaimed_at_ns = Some(cycles_reclaimed_at_ns);
+        RootComponentRegistryStore::record_root_deletion_cycle_reclamation(&current, record)
+            .map_err(|RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict()
+            })?;
+        Self::root_deletion_preparation_intent_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)
+    }
+
+    pub(crate) fn root_deletion_preparation_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetDeletionPreparationView>, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        Ok(draining
+            .root_deletion_preparation
+            .clone()
+            .map(root_deletion_preparation_record_to_view))
+    }
+
+    pub(crate) fn record_root_deletion_preparation(
+        operation_id: [u8; 32],
+        coordinator_readiness_hash: [u8; 32],
+        completed_at_ns: u64,
+    ) -> Result<RootFleetSubnetDeletionPreparationView, InternalError> {
+        if let Some(existing) = Self::root_deletion_preparation_if_present(operation_id)? {
+            return Ok(existing);
+        }
+        let fields_are_valid = [coordinator_readiness_hash != [0; 32], completed_at_ns > 0]
+            .into_iter()
+            .all(|valid| valid);
+        if !fields_are_valid {
+            return Err(InternalError::invalid_input());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        let intent = draining
+            .root_deletion_preparation_intent
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        let record = RootFleetSubnetDeletionPreparationRecord {
+            operation_id,
+            fleet_subnet_root: draining.fleet_subnet_root,
+            coordinator: intent.coordinator,
+            final_inventory_hash: intent.final_inventory_hash,
+            store_deletion_hash: intent.store_deletion_hash,
+            observed_cycles_before_reclamation: intent.observed_cycles_before_reclamation,
+            retained_cycles_target: intent.retained_cycles_target,
+            observed_reserved_cycles: intent.observed_reserved_cycles,
+            observed_idle_cycles_burned_per_day: intent.observed_idle_cycles_burned_per_day,
+            observed_freezing_threshold_seconds: intent.observed_freezing_threshold_seconds,
+            observed_cycles_after_reclamation: intent
+                .observed_cycles_after_reclamation
+                .ok_or_else(InternalError::unavailable)?,
+            cycles_reclaimed_at_ns: intent
+                .cycles_reclaimed_at_ns
+                .ok_or_else(InternalError::unavailable)?,
+            coordinator_intent_hash: intent
+                .coordinator_intent_hash
+                .ok_or_else(InternalError::unavailable)?,
+            coordinator_readiness_hash,
+            prepared_at_ns: intent.prepared_at_ns,
+            completed_at_ns,
+        };
+        RootComponentRegistryStore::record_root_deletion_preparation(&current, record).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        Self::root_deletion_preparation_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)
+    }
+
+    pub(crate) fn finalize_root_inventory(
+        operation_id: [u8; 32],
+        expected_registry: &FleetRegistryVersion,
+        store: &RootStoreBootstrapResponse,
+        store_status: &WasmStoreStatusResponse,
+        finalized_at_ns: u64,
+    ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
+        if let Some(existing) = Self::root_final_inventory_if_present(operation_id)? {
+            if &existing.registry != expected_registry {
+                return Err(InternalError::conflict());
+            }
+            return Ok(existing);
+        }
+        if finalized_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        let intent_registry = Self::root_final_inventory_intent_registry(operation_id)?
+            .ok_or_else(InternalError::unavailable)?;
+        if &intent_registry != expected_registry {
+            return Err(InternalError::conflict());
+        }
+        let plan = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .expect("validated root draining authority");
+        if finalized_at_ns < draining.started_at_ns {
+            return Err(InternalError::invalid_input());
+        }
+        let store_evidence = root_store_final_inventory_evidence(&current, store, store_status)?;
+        let mut record = RootFleetSubnetFinalInventoryRecord {
+            operation_id,
+            fleet_subnet_root: current.root.fleet_subnet_root,
+            placement_subnet: current.root.placement_subnet,
+            registry: plan.registry,
+            component_topology_digest: current.root.component_topology_digest,
+            active_release_set: current.release_set,
+            next_allocation_sequence: current.next_allocation_sequence,
+            removed_component_instances: plan.removed_component_instances,
+            terminal_component_history_hash: plan.terminal_component_history_hash,
+            root_registry_encoded_bytes: plan.root_registry_encoded_bytes,
+            wasm_store: store.wasm_store,
+            wasm_store_catalog_hash: store_evidence.catalog_hash,
+            wasm_store_catalog_entries: store_evidence.catalog_entries,
+            wasm_store_occupied_bytes: store_status.occupied_store_bytes,
+            wasm_store_template_count: store_status.template_count,
+            wasm_store_release_count: store_status.release_count,
+            wasm_store_gc_prepared_at_secs: store_evidence.gc_prepared_at_secs,
+            finalized_at_ns,
+            inventory_hash: [0; 32],
+        };
+        record.inventory_hash = root_final_inventory_hash(&record)?;
+        RootComponentRegistryStore::finalize_root_inventory(&current, record.clone()).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        let committed = Self::root_final_inventory(operation_id)?;
+        if committed != root_final_inventory_record_to_view(record) {
+            return Err(InternalError::invariant());
+        }
+        Ok(committed)
+    }
 }
