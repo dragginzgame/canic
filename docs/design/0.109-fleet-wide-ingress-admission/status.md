@@ -13,20 +13,20 @@ Roadmap reconciled: 2026-08-30
 
 ## Status
 
-- Current addendum (2026-08-31): the open `0.109.32` draft addresses `CANIC-102`
-  through `CANIC-110` as one fresh-estate correctness batch. It retains exact
-  create-cycle evidence, resolves symbolic Store controllers, classifies typed
-  unavailable preparation status, removes unobserved descendant multiplication,
-  fences completed reinstall evidence from alternate desired input, stages the
-  temporary recovery helper after application bootstrap, derives terminal
-  Candid from immutable artifact authority, requires the exact activation
-  successor and reconciles Idle cycles only on exact equality. B9 remains open.
-  The governed `CANIC-107` PocketIC proof now runs the real Store/Root
-  publication, adoption and bootstrap path, stages the helper afterward and
-  reaches immediate effect-free replay with every exact Store/Root action
-  terminal. The helper-bearing five-Component journey also crosses Root
-  Registry synchronization, provisions and activates every runtime, reaches
-  terminal Fleet state and immediately replays without an effect.
+- Current addendum (2026-08-31): the B10 candidate proves the host-only
+  `canic::testing` facade through an isolated packaged consumer and exact
+  managed composed-IcyDB plus standalone-local PocketIC lifecycles. Generated
+  infrastructure retains the compiled Candid declaration instead of
+  re-extracting it from a stripped final runtime. Canic-owned work is complete;
+  the read-only downstream still owns its private adapter and direct
+  `canic-core`/`ic-testkit` test dependencies, so immutable publication and
+  downstream removal remain before closeout.
+- Current addendum (2026-08-31): published `v0.109.32` closes `CANIC-102`
+  through `CANIC-111` and completes the B9 source contraction. The immutable
+  superseding B9 audit reports `pass` with no competing authority or surface;
+  its high canonical trend scores remain inherited runtime pressure routed to
+  blocked 0.110. The human maintainer accepted that verdict on 2026-08-31;
+  Canic-owned B10 proof is complete and downstream adapter removal is pending.
 - Current addendum (2026-08-30): open `0.109.30` closes `CANIC-100` before
   0.110 promotion. The maintained state contract removes generic support
   windows, migration policies/edges and migration-path auditing. Runtime
@@ -108,9 +108,10 @@ Roadmap reconciled: 2026-08-30
   accepts any strictly monotonic, bounded Root progress under the existing
   operation/receipt/timestamp authority, including a terminal first
   observation after every intermediate Component state was missed.
-  The accepted post-implementation complexity audit has a
-  `fail` closeout verdict; B9 must
-  supersede it with a pass before B10, 0.109 minor closeout or 0.110 promotion.
+  The accepted post-implementation complexity audit's historical `fail` is
+  superseded by the immutable `v0.109.32` B9 `pass`, accepted by the human
+  maintainer on 2026-08-31. B10 remains before 0.109 minor closeout; 0.110
+  promotion remains blocked on the accepted closeout.
   Direct managed-application ingress architecture is positively qualified.
   Published 0.109.6, the authorized Root upgrade and asset refresh close the
   `CANIC-035` work. The final 0.109.6 source passed the complete unmodified
@@ -206,9 +207,9 @@ B8 correction evidence:
 | B5 | Composed-framework adapter | Synchronous managed-projection caller guard and generic IcyDB-style fixture | Native parity and direct-ingress PocketIC journey | Ready |
 | B6 | Runtime convergence | Pre-effect catalog reserve/release, fence/activate/open journals, participant fences, exact retry and forward recovery | Stale-catalog, interruption, unavailable-target, add/remove and new-Component PocketIC matrix | Ready |
 | B7 | Security closeout and propagation | Docs/generated surfaces, residue cleanup, measurements and read-only Toko adoption review | Targeted repository gates and adversarial multi-Root journey | Ready |
-| B8 | Release and downstream go-live support | Maintain the current hard-cut Fleet Ensure operator loop, consume separately authorized downstream evidence and correct every Canic-owned blocker without restoring historical install/recovery owners | Fresh/reused estate, interruption, replay, cycle-conservation, exact artifact/authority, immutable package-pair, read-only downstream adoption and terminal/effect-free rerun evidence | Active: published 0.109.27 closes CANIC-094/095. Open 0.109.28 preserves post-effect topology and exact journal-proved reinstalls across version-less fresh-process replanning for CANIC-096/097. Immutable downstream adoption, terminal convergence, successor regeneration and effect-free replay remain |
-| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, dependency-light current-plan policy validation separated from ICP/PocketIC platform drivers, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Source contraction complete: the three measured parents are down 64%, 33% and 70%; current-plan policy is pure and platform-free; retained source-digest diagnostics and the provisional resource envelope are recorded. Immutable method reruns and the superseding verdict remain |
-| B10 | Published managed-App qualification support | One bounded downstream test-support surface for exact managed init/activation, admission fencing, fresh install and same-release recovery without private `canic-core`/`ic-testkit` reconstruction | Public-package consumer build plus managed/standalone lifecycle qualification and downstream adapter removal | Published surface and downstream qualification available; final closeout reconciliation remains |
+| B8 | Release and downstream go-live support | Maintain the current hard-cut Fleet Ensure operator loop, consume separately authorized downstream evidence and correct every Canic-owned blocker without restoring historical install/recovery owners | Fresh/reused estate, interruption, replay, cycle-conservation, exact artifact/authority, immutable package-pair, read-only downstream adoption and terminal/effect-free rerun evidence | Complete; published corrections and downstream operator evidence retained |
+| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, dependency-light current-plan policy validation separated from ICP/PocketIC platform drivers, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Complete; superseding `pass` accepted 2026-08-31 |
+| B10 | Published managed-App qualification support | One bounded downstream test-support surface for exact managed init/activation, admission fencing, fresh install and same-release recovery without private `canic-core`/`ic-testkit` reconstruction | Public-package consumer build plus managed/standalone lifecycle qualification and downstream adapter removal | Canic-owned implementation and proof complete; downstream removal pending |
 
 Ten batches fit the normal minor-line guideline. They are not preassigned
 patch releases.
@@ -412,10 +413,10 @@ current handoff, validation-capacity growth, the downstream-loop prerequisite
 now assigned to B8 and the unearned breadth of the scheduled 0.110 plan.
 
 B9 remediation began only after the published B8 correctness line and retained
-downstream loop cleared its prerequisite. It must still fix every remaining
-complexity finding and retain a passing superseding verdict from one immutable
-candidate. Publication and adoption establish the real product loop that B9
-audits; neither event alone closes the complexity gate or authorizes 0.110.
+downstream loop cleared its prerequisite. The immutable `v0.109.32` audit fixes
+all six accepted findings and reports a passing superseding verdict. That
+verdict did not authorize B10 until the human maintainer accepted it on
+2026-08-31.
 
 B9 remains a pure simplification batch. It localizes admission decisions and
 decomposes `ops::component_registry`, `workflow::component_registry` and
@@ -427,7 +428,8 @@ policy, endpoint or effect owner. Component Registry ops and workflow now give
 retirement, installation, scheduling and authority validation focused owners
 without moving their durable stores or mutations. `fleet_ensure::policy`
 remains synchronous and platform-free while ICP and PocketIC mechanics stay in
-ops/testing owners. These slices are progress evidence, not a passing verdict.
+ops/testing owners. These slices and their immutable audit form the passing
+verdict accepted by the human maintainer on 2026-08-31.
 The preceding B8 `CANIC-028` correction preserves exact selected-root
 observation but tells a named-environment fresh plan that initial install owns
 build/finalization; it adds no fallback lookup, manual copying or new build
@@ -461,31 +463,9 @@ fenced behavior and same-release recovery.
 
 ## Next Authorized Action
 
-B1 is accepted and B2-B7 compile generation-one authority through the plan,
-Registry, sole Coordinator mutation record, exact managed local projection,
-one synchronous composed-framework caller guard and replay-safe runtime
-convergence. `CANIC-109-GOLIVE-003` is published; `v0.109.2` closes the
-executable-path gaps in `001` and `002` with targeted recovery evidence,
-and `v0.109.1` publishes `CANIC-027`. The 0.109.2 correction closes the
-funding/journal side of `CANIC-029`, and the exact-source read-only recovery
-plan passes. Published `v0.109.4` corrects `CANIC-033`, and published
-`v0.109.6` closes the subsequent pool, repair-adoption, terminal-completion and
-coalesced-activation defects. Published `v0.109.7` completes the exact repair
-procedure, non-mutating Registry proof, diagnostic, governance and
-IcyDB-fixture corrections. Published 0.109.8 corrects `CANIC-047` coalesced
-Directory publication under the retained authority and receipt checks, and
-published 0.109.9 closes CANIC-050/051/052. The current 0.109.10 source closes
-CANIC-053/054/055 and passes its focused and targeted PocketIC checks. Freeze
-one immutable source candidate; the downstream owner must run that exact
-candidate's no-effect installer preflight before the human-owned full gate and
-publication. Only after publication may the downstream owner separately
-authorize the exact retained-session resume; Canic does not authorize or
-perform that effect here.
-Accept B8 only after deployed-state/admission evidence confirms convergence;
-then
-continue with B9's evidence-first simplification and immutable superseding
-audit, then B10's separate managed-App qualification support. Do not begin
-0.110 until
-those 0.109 gates pass, the maintainer accepts closeout and then explicitly
-promotes the revised 0.110 B1. Do not treat this in-repository gate as external
-mutation or deployment authority.
+The human maintainer accepted the immutable B9 superseding verdict on
+2026-08-31. The current candidate completes Canic's B10 facade, isolated
+package consumer and managed/standalone runtime proof. The read-only downstream
+still owns a private adapter and direct test dependencies, so it must adopt the
+immutable package and remove that reconstruction before 0.109 is ready for its
+human-owned closeout audit. Do not begin 0.110 before that closeout is accepted.

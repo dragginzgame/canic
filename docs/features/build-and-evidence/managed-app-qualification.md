@@ -36,9 +36,9 @@ public, admitted, denied and application-ownership assertions. The fixture can
 read the protected admission status, prepare an exact successor projection so
 the App becomes fenced, and upgrade the exact same Wasm to prove stable
 same-release recovery. `install_standalone_app` covers the corresponding
-standalone-local build. The module re-exports the required PocketIC call
-traits, so the downstream test does not pin or reconstruct `canic-core` or
-`ic-testkit` internals.
+standalone-local build and its exact same-release upgrade. The module
+re-exports the required PocketIC call traits, so the downstream test does not
+pin or reconstruct `canic-core` or `ic-testkit` internals.
 
 The input requires one exact Component Group deployment and one Component Spec.
 An absent or repeated occurrence, invalid release-build identity, empty

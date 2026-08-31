@@ -3,16 +3,18 @@
 Date: 2026-08-31
 
 ```text
-evidence_status: working
+evidence_status: superseded
 baseline_tag: v0.109.31
 baseline_commit: 43f0d80d884053720fed253d52b3603a3a439ca2
-candidate: dirty main working tree
-immutable_superseding_verdict: pending
+candidate: v0.109.32 source 641f843ac5bc1ddb823bef6b3c32427a5cca70dc
+immutable_superseding_verdict: pass; accepted 2026-08-31
 external_effects: none
 ```
 
-This evidence records the accepted simplification boundary. It is not the
-immutable canonical rerun or the human-owned closeout verdict.
+This evidence records the accepted simplification boundary. The
+[immutable superseding audit](../../reports/2026-08/2026-08-31/0.109-b9-superseding-complexity-audit.md)
+now owns the canonical rerun and accepted passing B9 verdict. The later minor
+closeout remains a separate human-owned gate.
 
 ## Gravity-Well Ownership
 
@@ -209,22 +211,17 @@ the canonical methods:
 - all moved public/internal behavior retains the same module surface and is
   exercised through the focused regressions above.
 
-The mechanical complexity, change-friction, structure, duplication and
-module-surface results remain deliberately ungraded until they are rerun from
-the immutable candidate commit. This working document does not substitute a
-dirty-tree measurement for that release evidence.
+The immutable audit now grades the canonical complexity, change-friction,
+structure, duplication and module-surface methods. This working document
+remains the extraction and ownership ledger; it does not compete with that
+release evidence.
 
 ## Remaining Closeout Evidence
 
-Before a passing superseding verdict:
-
-1. freeze one immutable candidate and rerun the v3 complexity/change-friction,
-   structure, duplication and module-surface methods;
-2. complete the manual attribution using the authority map above;
-3. run the maintainer-owned complete gate and record actual resource output
-   against the provisional envelope;
-4. reconcile B10's already-published managed-App support; and
-5. obtain the human-owned closeout audit and verdict.
+The human maintainer accepted the passing superseding verdict on 2026-08-31.
+Canic-owned B10 implementation and direct proof are complete; immutable
+publication plus downstream private-adapter removal remain before the separate
+human-owned 0.109 closeout audit.
 
 No item here authorizes versioning, publication, deployment, downstream
 mutation or 0.110 implementation.

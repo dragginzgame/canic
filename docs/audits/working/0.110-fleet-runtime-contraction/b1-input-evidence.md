@@ -33,6 +33,53 @@ monomorphization bloat after optimization, dominated by stable-sort machinery.
 The accepted source follow-up recovered another 27,665 code-section bytes and
 46 defined functions. Those savings are predecessor facts, not 0.110 forecasts.
 
+## Binding Toko Canary Routing Input
+
+The 2026-08-31 downstream review supplied a current Toko `project_instance`
+observation with:
+
+| Measurement | Supplied value |
+| --- | ---: |
+| code-section bytes | 10,275,629 |
+| retained 10 MiB limit headroom | 210,131 |
+| exported Candid methods | 268 |
+| reduction required for 512 KiB headroom | 314,157 |
+
+The same review reports a combined surface containing delegated-token and
+Root-signature verification, blob storage and billing, extensive IcyDB-
+generated entity/query code, lifecycle, status and recovery behavior. This is
+materially larger and broader than the earlier 5,290,184-byte downstream row
+and cannot be represented by naming a generic endpoint-heavy fixture.
+
+These supplied values are routing evidence, not yet a reproducible B1 row. No
+immutable source commit, clean-source assertion, lockfile digest, complete
+feature set, generated Candid digest, optimizer manifest, validator count or
+instruction vector accompanied the observation. B1 must freeze and reproduce
+that exact snapshot before B2 promotion; it must not attach the values to a
+later moving Toko worktree or silently substitute a smaller artifact.
+
+The binding canary manifest records:
+
+- the exact Toko source commit, clean-source assertion and paired baseline/
+  candidate `Cargo.lock` digests;
+- resolved Canic/IcyDB sources and versions;
+- Cargo features, toolchain, linker, finalizer and optimizer arguments;
+- generated Candid digest and exact exported-method count;
+- the complete byte, validator/defined-function, table and instruction vector;
+  and
+- a capability matrix covering both authentication paths, blob economics,
+  generated IcyDB code, lifecycle, status, metrics, timers and applicable
+  same-release recovery.
+
+Only the Canic input changes in paired predecessor/candidate builds. Both
+lockfiles are frozen and their retained diff is limited to the required Canic
+package source/version/checksum entries. B1 and B5 must reproduce the canary,
+and a B2-B4 checkpoint must rebuild it whenever the changed Canic surface is
+reachable. The current binding minimum is 5% of the dated network code-section
+limit—512 KiB under the retained 10 MiB limit—and 5% of the declared-function
+limit under the frozen replica-equivalent validator. One MiB of code-section
+headroom is preferred.
+
 ## Downstream Generic-Instantiation Routing Evidence
 
 A later read-only Toko/IcyDB generator experiment compared a generated
@@ -147,6 +194,13 @@ function, type, static, provider, dispatcher, serializer, timer and recovery
 roots. Importing or splitting a macro is not savings evidence; paired builds
 and optimized-artifact absence own that conclusion.
 
+If accepted Canic-owned contraction cannot place this exact canary above both
+absolute reserves, the evidence must stop with a residual-owner handoff. That
+handoff separates Canic, IcyDB and Toko application families, records marginal
+and inclusive values without adding overlaps and names the exact remaining
+byte/function/instruction gap. It is not authority to modify either downstream
+repository.
+
 ## Promotion Condition
 
 The design may promote B2 only after the maintainer accepts:
@@ -154,10 +208,15 @@ The design may promote B2 only after the maintainer accepts:
 - exact dated network code-section, total-module and declared-function limits
   plus the frozen replica-equivalent validator used to enforce them;
 - the canonical role and endpoint-heavy fixture set;
+- the exact Toko `project_instance` source/lock/tool manifest and capability
+  matrix, with the supplied 10,275,629-byte observation reproduced or replaced
+  by an explicitly accepted immutable successor of no smaller capability and
+  endpoint scale;
 - the complete reproducible baseline and ablation ledger;
 - the `1..=N` Canic generic-instantiation cohort and named post-`-Oz`
   monomorphization report;
 - the current generated-surface inventory for every canonical role;
 - instruction/table allowances;
 - destroyed-state and reconstruction inventory; and
-- the independent absolute byte and function reserves.
+- the independent 5% absolute byte and function reserves, including the
+  binding 512 KiB Toko code-section reserve under the retained 10 MiB limit.

@@ -9,6 +9,7 @@ PACKAGE_STAGING_ROOT="$ROOT/target/package"
 GENERATED_TOOL_ROOT="$TMP_ROOT/tool-root-generated"
 GENERATED_PACKAGE_ROOT="$GENERATED_TOOL_ROOT/package-root"
 GENERATED_DOWNSTREAM_ROOT="$TMP_ROOT/downstream-generated"
+GENERATED_TESTING_ROOT="$TMP_ROOT/testing-consumer-generated"
 GENERATED_TARGET_DIR="$TMP_ROOT/cargo-target-generated"
 CANONICAL_TOOL_ROOT="$TMP_ROOT/tool-root-canonical"
 CANONICAL_PACKAGE_ROOT="$CANONICAL_TOOL_ROOT/package-root"
@@ -248,6 +249,65 @@ canic::finish!();
 EOF
 }
 
+prepare_testing_consumer() {
+    local consumer_root="$1"
+    local package_root="$2"
+
+    mkdir -p "$consumer_root/src"
+    prepare_packaged_canic_patch_config "$consumer_root" "$package_root"
+
+    cat > "$consumer_root/Cargo.toml" <<EOF
+[package]
+name = "canic-packaged-testing-consumer"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.91.0"
+publish = false
+
+[dependencies]
+canic = { path = "$package_root/canic-$VERSION", default-features = false, features = ["testing"] }
+EOF
+
+    cat > "$consumer_root/src/lib.rs" <<'EOF'
+use canic::testing::{
+    ManagedAppFixture, ManagedAppQualificationError, ManagedAppQualificationInput,
+    StandaloneAppFixture, install_managed_app, install_standalone_app,
+};
+use std::time::Duration;
+
+pub fn compile_managed_consumer(
+    input: ManagedAppQualificationInput<'_>,
+) -> Result<ManagedAppFixture, ManagedAppQualificationError> {
+    install_managed_app(input)
+}
+
+pub fn compile_standalone_consumer(
+    wasm: Vec<u8>,
+) -> Result<StandaloneAppFixture, ManagedAppQualificationError> {
+    let fixture = install_standalone_app(wasm, 10_000_000_000_000);
+    fixture.upgrade_same_release(Duration::from_secs(300))?;
+    Ok(fixture)
+}
+EOF
+}
+
+run_packaged_testing_consumer() {
+    local consumer_root="$1"
+    local target_dir="$2-testing"
+
+    mkdir -p "$PROOF_HOME" "$target_dir" "$PROOF_TMPDIR"
+    (
+        cd "$consumer_root"
+        HOME="$PROOF_HOME" \
+            CARGO_HOME="$HOST_CARGO_HOME" \
+            CARGO_TARGET_DIR="$target_dir" \
+            RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
+            RUSTUP_HOME="$HOST_RUSTUP_HOME" \
+            TMPDIR="$PROOF_TMPDIR" \
+            cargo +1.91.0 check --offline --locked >/dev/null
+    )
+}
+
 run_packaged_canister_probe() {
     local downstream_root="$1"
     local target_dir="$2-canister"
@@ -263,6 +323,7 @@ run_packaged_canister_probe() {
     }
     (
         cd "$downstream_root"
+        CANIC_INTERNAL_CANDID_BUILD=1 \
         CANIC_ROLE_CONTRACT_VALIDATED=1 \
             ICP_ENVIRONMENT=local \
             HOME="$PROOF_HOME" \
@@ -437,9 +498,12 @@ main() {
     populate_isolated_package_root "$GENERATED_PACKAGE_ROOT" no
     prepare_tool_root "$GENERATED_TOOL_ROOT"
     prepare_downstream_root "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_PACKAGE_ROOT"
+    prepare_testing_consumer "$GENERATED_TESTING_ROOT" "$GENERATED_PACKAGE_ROOT"
     prepare_lockfile "$GENERATED_TOOL_ROOT"
     prepare_lockfile "$GENERATED_DOWNSTREAM_ROOT" wasm32-unknown-unknown
+    prepare_lockfile "$GENERATED_TESTING_ROOT"
     run_packaged_canister_probe "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR"
+    run_packaged_testing_consumer "$GENERATED_TESTING_ROOT" "$GENERATED_TARGET_DIR"
     run_probe "$GENERATED_TOOL_ROOT" "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR"
     assert_generated_probe_outputs "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT"
 
@@ -452,7 +516,7 @@ main() {
     run_probe "$CANONICAL_TOOL_ROOT" "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_DOWNSTREAM_ROOT" "$CANONICAL_TARGET_DIR"
     assert_canonical_probe_outputs "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_DOWNSTREAM_ROOT"
 
-    echo "packaged downstream Canister and wasm_store probe passed"
+    echo "packaged downstream Canister, managed-App testing and wasm_store probe passed"
 }
 
 main "$@"

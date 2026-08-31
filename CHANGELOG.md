@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.33` completes the host-only managed-App qualification package boundary,
+  retains generated infrastructure Candid sidecars and reopens `CANIC-102` so
+  unavailable Create-cycle observation cannot erase exact journal evidence.
 - `0.109.32` completes the B9 source contraction across the three measured
   control-plane gravity wells and corrects the current fresh-estate planning,
   authority, terminal-proof and cycle-reconciliation paths without adding a

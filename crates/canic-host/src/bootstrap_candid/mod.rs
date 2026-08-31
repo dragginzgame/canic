@@ -13,6 +13,7 @@ pub fn resolve_infrastructure_candid(
     role: &str,
     canonical_did_path: Option<&Path>,
     refresh_canonical_did: bool,
+    generated_candid: Option<&[u8]>,
     debug_wasm_path: &Path,
     build_debug_wasm: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -27,11 +28,16 @@ pub fn resolve_infrastructure_candid(
             )
             .into());
         }
-    } else if refresh_canonical_did {
-        return Err(format!(
-            "cannot refresh canonical {role} Candid without the canonical source package"
-        )
-        .into());
+    } else {
+        if refresh_canonical_did {
+            return Err(format!(
+                "cannot refresh canonical {role} Candid without the canonical source package"
+            )
+            .into());
+        }
+        return generated_candid.map(<[u8]>::to_vec).ok_or_else(|| {
+            format!("generated {role} source omitted its compiled Candid declaration").into()
+        });
     }
 
     build_debug_wasm()?;
@@ -60,6 +66,7 @@ mod tests {
             "test_role",
             Some(&canonical),
             false,
+            None,
             &root.join("missing.wasm"),
             || panic!("ordinary canonical build must not compile debug Wasm"),
         )
@@ -79,6 +86,7 @@ mod tests {
             "test_role",
             Some(&canonical),
             false,
+            None,
             &root.join("missing.wasm"),
             || panic!("missing canonical DID must fail before a debug build"),
         )
@@ -90,5 +98,23 @@ mod tests {
                 .contains("canonical test_role Candid file is missing")
         );
         fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
+    fn generated_source_reuses_the_compiled_declaration_without_runtime_extraction() {
+        let root = temp_dir("canic-bootstrap-candid-generated");
+        let compiled = b"service : {}\n";
+
+        let candid = resolve_infrastructure_candid(
+            "test_role",
+            None,
+            false,
+            Some(compiled),
+            &root.join("runtime-without-candid.wasm"),
+            || panic!("generated source already supplied the compiled declaration"),
+        )
+        .expect("reuse generated declaration");
+
+        assert_eq!(candid, compiled);
     }
 }

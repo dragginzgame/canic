@@ -1291,27 +1291,7 @@ impl IcpEnsurePlatform {
         let response: Result<CreateCanisterSuccess, CreateCanisterError> = self
             .icp
             .canister_call_candid(authority.ledger, "create_canister", &request, None)?;
-        match response {
-            Ok(success) => Ok(created_canister_outcome(
-                success.canister_id,
-                success.block_id.to_string(),
-                authority.requested_initial_cycles,
-            )),
-            Err(CreateCanisterError::Duplicate {
-                duplicate_of,
-                canister_id: Some(canister_id),
-            }) => Ok(created_canister_outcome(
-                canister_id,
-                duplicate_of.to_string(),
-                authority.requested_initial_cycles,
-            )),
-            Err(CreateCanisterError::Duplicate {
-                canister_id: None, ..
-            }) => Err(IcpEnsurePlatformError::LedgerCreatePending),
-            Err(error) => Err(IcpEnsurePlatformError::LedgerCreate(render_create_error(
-                error,
-            ))),
-        }
+        create_canister_response_outcome(response, authority.requested_initial_cycles)
     }
 
     fn apply_fund(
@@ -2381,6 +2361,33 @@ fn created_canister_outcome(
     }
 }
 
+fn create_canister_response_outcome(
+    response: Result<CreateCanisterSuccess, CreateCanisterError>,
+    requested_initial_cycles: u128,
+) -> Result<EffectOutcome, IcpEnsurePlatformError> {
+    match response {
+        Ok(success) => Ok(created_canister_outcome(
+            success.canister_id,
+            success.block_id.to_string(),
+            requested_initial_cycles,
+        )),
+        Err(CreateCanisterError::Duplicate {
+            duplicate_of,
+            canister_id: Some(canister_id),
+        }) => Ok(created_canister_outcome(
+            canister_id,
+            duplicate_of.to_string(),
+            requested_initial_cycles,
+        )),
+        Err(CreateCanisterError::Duplicate {
+            canister_id: None, ..
+        }) => Err(IcpEnsurePlatformError::LedgerCreatePending),
+        Err(error) => Err(IcpEnsurePlatformError::LedgerCreate(render_create_error(
+            error,
+        ))),
+    }
+}
+
 fn ledger_fee_cycles(value: Nat) -> Result<u128, IcpEnsurePlatformError> {
     let rendered = value.to_string();
     u128::try_from(value.0).map_err(|_| IcpEnsurePlatformError::InvalidLedgerFee(rendered))
@@ -2890,16 +2897,33 @@ mod tests {
     }
 
     #[test]
-    fn toko_fresh_fleet_create_retains_the_exact_requested_balance() {
+    fn toko_fresh_fleet_create_responses_retain_the_exact_requested_balance() {
         let canister = Principal::from_slice(&[9; 29]);
         let canister_text = canister.to_text();
-        let outcome = created_canister_outcome(canister, "ledger-block".to_string(), 5_000);
-
-        assert_eq!(
-            outcome.created_principal.as_deref(),
-            Some(canister_text.as_str())
-        );
-        assert_eq!(outcome.post_cycles, Some(5_000));
-        assert_eq!(outcome.receipt.as_deref(), Some("ledger-block"));
+        for (response, receipt) in [
+            (
+                Ok(CreateCanisterSuccess {
+                    block_id: Nat::from(41_u8),
+                    canister_id: canister,
+                }),
+                "41",
+            ),
+            (
+                Err(CreateCanisterError::Duplicate {
+                    duplicate_of: Nat::from(41_u8),
+                    canister_id: Some(canister),
+                }),
+                "41",
+            ),
+        ] {
+            let outcome = create_canister_response_outcome(response, 5_000)
+                .expect("successful or duplicate-with-Principal Create response");
+            assert_eq!(
+                outcome.created_principal.as_deref(),
+                Some(canister_text.as_str())
+            );
+            assert_eq!(outcome.post_cycles, Some(5_000));
+            assert_eq!(outcome.receipt.as_deref(), Some(receipt));
+        }
     }
 }

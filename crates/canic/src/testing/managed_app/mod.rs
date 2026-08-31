@@ -291,6 +291,7 @@ impl ManagedAppFixture {
 pub struct StandaloneAppFixture {
     app: Principal,
     pic: PocketIc,
+    wasm: Vec<u8>,
 }
 
 impl StandaloneAppFixture {
@@ -304,6 +305,24 @@ impl StandaloneAppFixture {
     #[must_use]
     pub const fn pic(&self) -> &PocketIc {
         &self.pic
+    }
+
+    /// Upgrade the standalone-local App to the same Wasm.
+    pub fn upgrade_same_release(
+        &self,
+        install_code_cooldown: Duration,
+    ) -> Result<(), ManagedAppQualificationError> {
+        self.pic
+            .wait_out_install_code_rate_limit(install_code_cooldown);
+        self.pic
+            .upgrade_canister(
+                self.app,
+                self.wasm.clone(),
+                encode_one(())
+                    .map_err(|error| ManagedAppQualificationError::Candid(error.to_string()))?,
+                None,
+            )
+            .map_err(|error| ManagedAppQualificationError::Install(error.to_string()))
     }
 }
 
@@ -342,11 +361,11 @@ pub fn install_standalone_app(wasm: Vec<u8>, install_cycles: u128) -> Standalone
     pic.add_cycles(app, install_cycles);
     pic.install_canister(
         app,
-        wasm,
+        wasm.clone(),
         encode_one(None::<Vec<u8>>).expect("encode standalone-local init argument"),
         None,
     );
-    StandaloneAppFixture { app, pic }
+    StandaloneAppFixture { app, pic, wasm }
 }
 
 #[derive(Debug)]

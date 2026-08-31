@@ -558,7 +558,25 @@ where
             if record.action_sha256 != action_hash {
                 return Err(EnsureWorkflowError::DriftedBeforeApply);
             }
+            if !create_record_is_exact(action, record, &state) {
+                return Err(EnsureWorkflowError::JournalIntegrity);
+            }
             if matches!(record.state, EffectState::Applied) {
+                if applied_create_requires_exact_balance_recovery(action, record) {
+                    let outcome = platform
+                        .apply(&journal.operation_id, action, record, &state)
+                        .map_err(EnsureWorkflowError::Platform)?;
+                    if !create_outcome_is_exact(action, record, &state, &outcome) {
+                        return Err(EnsureWorkflowError::JournalIntegrity);
+                    }
+                    let record = journal
+                        .effects
+                        .get_mut(index)
+                        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+                    record.post_cycles = outcome.post_cycles;
+                    journal.stalled_observations = 0;
+                    write_journal(&paths, &journal)?;
+                }
                 break;
             }
 
@@ -585,8 +603,7 @@ where
                 .effects
                 .get_mut(index)
                 .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-            record.post_cycles = source_cycles;
-            record.destination_post_cycles = destination_cycles;
+            merge_observed_cycles(record, source_cycles, destination_cycles);
             if observed.applied {
                 record.progress_identity = Some(observed.progress_identity);
                 record.state = EffectState::Applied;
@@ -629,6 +646,9 @@ where
                         return Err(EnsureWorkflowError::Platform(source));
                     }
                 };
+                if !create_outcome_is_exact(action, record, &state, &outcome) {
+                    return Err(EnsureWorkflowError::JournalIntegrity);
+                }
                 if let Some(created) = &outcome.created_principal {
                     state
                         .pending_principals
@@ -778,6 +798,124 @@ where
         plan: retained_plan,
         terminal: true,
     })
+}
+
+const fn merge_observed_cycles(
+    record: &mut EffectRecord,
+    source_cycles: Option<u128>,
+    destination_cycles: Option<u128>,
+) {
+    if let Some(cycles) = source_cycles {
+        record.post_cycles = Some(cycles);
+    }
+    if let Some(cycles) = destination_cycles {
+        record.destination_post_cycles = Some(cycles);
+    }
+}
+
+fn create_record_is_exact(
+    action: &EnsureAction,
+    record: &EffectRecord,
+    state: &FleetEnsureStateRecord,
+) -> bool {
+    let EnsureAction::Create {
+        name,
+        requested_initial_cycles,
+        ..
+    } = action
+    else {
+        return true;
+    };
+    match record.state {
+        EffectState::Intent => {
+            record.created_principal.is_none()
+                && record.receipt.is_none()
+                && record.post_cycles.is_none()
+        }
+        EffectState::Issued => {
+            create_identity_is_exact(name, record, state)
+                && record.post_cycles == Some(*requested_initial_cycles)
+        }
+        EffectState::Applied => create_identity_is_exact(name, record, state),
+    }
+}
+
+fn create_identity_is_exact(
+    name: &str,
+    record: &EffectRecord,
+    state: &FleetEnsureStateRecord,
+) -> bool {
+    let Some(created_principal) = record
+        .created_principal
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    else {
+        return false;
+    };
+    if record.receipt.as_deref().is_none_or(str::is_empty) {
+        return false;
+    }
+    state_create_principal_matches(name, created_principal, state, true)
+}
+
+fn state_create_principal_matches(
+    name: &str,
+    created_principal: &str,
+    state: &FleetEnsureStateRecord,
+    require_retained: bool,
+) -> bool {
+    let pending = state.pending_principals.get(name).map(String::as_str);
+    let terminal = state.principals.get(name).map(String::as_str);
+    let retained = pending.is_some() || terminal.is_some();
+    let pending_matches = pending.is_none_or(|principal| principal == created_principal);
+    let terminal_matches = terminal.is_none_or(|principal| principal == created_principal);
+    (!require_retained || retained) && pending_matches && terminal_matches
+}
+
+const fn applied_create_requires_exact_balance_recovery(
+    action: &EnsureAction,
+    record: &EffectRecord,
+) -> bool {
+    matches!(action, EnsureAction::Create { .. }) && record.post_cycles.is_none()
+}
+
+fn create_outcome_is_exact(
+    action: &EnsureAction,
+    record: &EffectRecord,
+    state: &FleetEnsureStateRecord,
+    outcome: &crate::fleet_ensure::ops::EffectOutcome,
+) -> bool {
+    let EnsureAction::Create {
+        name,
+        requested_initial_cycles,
+        ..
+    } = action
+    else {
+        return true;
+    };
+    let Some(created_principal) = outcome
+        .created_principal
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    else {
+        return false;
+    };
+    let Some(receipt) = outcome.receipt.as_deref().filter(|value| !value.is_empty()) else {
+        return false;
+    };
+    if outcome.post_cycles != Some(*requested_initial_cycles) {
+        return false;
+    }
+    let principal_matches = record
+        .created_principal
+        .as_deref()
+        .is_none_or(|retained| retained == created_principal);
+    let receipt_matches = record
+        .receipt
+        .as_deref()
+        .is_none_or(|retained| retained == receipt);
+    let state_matches = state_create_principal_matches(name, created_principal, state, false);
+    principal_matches && receipt_matches && state_matches
 }
 
 fn verify_fresh_plan<P>(
@@ -1384,6 +1522,16 @@ where
         || journal.operation_id != plan.operation_id
         || journal.plan_sha256 != plan.plan_sha256
     {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    }
+    let actions = ordered_actions(plan);
+    let effect_count_matches = journal.effects.len() <= actions.len();
+    let action_hashes_match = journal
+        .effects
+        .iter()
+        .zip(actions)
+        .all(|(effect, action)| effect.action_sha256 == action_sha256(action));
+    if !(effect_count_matches && action_hashes_match) {
         return Err(EnsureWorkflowError::JournalIntegrity);
     }
     Ok(())
