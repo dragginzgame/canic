@@ -246,4 +246,5 @@ Continue B9 with the next measured control-plane ownership split. Keep the
 changes behavior-preserving, run only targeted changed-package checks during
 coding, and do not begin 0.110 before accepted 0.109 closeout.
 
-<!-- canic-release-validation: version=0.109.30 source=fc3ac147494ddef8bdf4f199e3e16633c75d5fb8 date=2026-08-30 gate=complete -->
+
+<!-- canic-release-validation: version=0.109.31 source=3f4a047f2451ef76373350ce7215f3fd1ac96be2 date=2026-08-31 gate=complete -->
