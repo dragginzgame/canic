@@ -15,7 +15,8 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 - `0.109.32` completes the B9 source contraction across the three measured
   control-plane gravity wells and corrects the current fresh-estate planning,
   authority, terminal-proof and cycle-reconciliation paths without adding a
-  second policy, journal or effect owner.
+  second policy, journal or effect owner, while reconciling completed design
+  archives with maintained documentation checks.
 - `0.109.31` combines the current Fleet generation and bounded pool-recovery
   corrections with behavior-preserving B9 ownership contraction and the
   hard-cut 0.110/0.111 runtime-contraction and cycle-safe-estate roadmap, and

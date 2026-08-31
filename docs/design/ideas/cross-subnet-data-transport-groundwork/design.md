@@ -16,11 +16,11 @@ Date: 2026-07-26
   resolved before a later data protocol is implemented.
 - Sequence: this is the 0.106 design line. It follows:
   - [0.99 App/Fleet identity and terminology](../../archive/0.99-app-fleet-identity-and-terminology-hard-cut/0.99-design.md);
-  - [0.100 Fleet coordination and Registry synchronization](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md);
-  - [0.101 composable Component deployment and Fleet service publication](../../0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md);
-  - [0.102 compact diagnostic codes](../../0.102-compact-diagnostic-codes/0.102-design.md);
-  - the scheduled [0.105 local application authorization design](../../0.105-framework-neutral-local-application-authorization/0.105-design.md);
-  - the scheduled [0.104 synchronous lifecycle-participant contract](../../0.104-ic-timers-consumer-hard-cut/0.104-design.md); and
+  - [0.100 Fleet coordination and Registry synchronization](../../archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md);
+  - [0.101 composable Component deployment and Fleet service publication](../../archive/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md);
+  - [0.102 compact diagnostic codes](../../archive/0.102-compact-diagnostic-codes/0.102-design.md);
+  - the released [0.105 local application authorization design](../../archive/0.105-framework-neutral-local-application-authorization/0.105-design.md);
+  - the released [0.104 synchronous lifecycle-participant contract](../../archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md); and
   - the evidence-only [0.106 Fleet-estate platform qualification](../../0.106-fleet-estate-platform-qualification/0.106-design.md), which supplies no transport authority.
 - Dependency posture: the Fleet-aware route model depends on the protected
   topology and Fleet service bindings designed by 0.100 and 0.101. The
@@ -301,7 +301,7 @@ does not add one NNS lookup before every application call.
 ### Subnet Kind and Cloud Engine Qualification
 
 The
-[0.100 Subnet topology amendment](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md#physical-subnet-kind-and-topology-evidence)
+[0.100 Subnet topology amendment](../../archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md#physical-subnet-kind-and-topology-evidence)
 preserves the IC-native
 `SubnetKind::{Application, CloudEngine, System, Unknown}`, the host-side
 registry-version-bound provider observation and the eventual protected

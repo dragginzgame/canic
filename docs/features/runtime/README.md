@@ -97,4 +97,4 @@ remain in their separately documented reliability classes.
 - [Minimal managed Fleet](../../getting-started/minimal-managed-fleet.md)
 - [Configuration reference](../../../CONFIG.md)
 - [Runtime architecture contract](../../contracts/ARCHITECTURE.md)
-- [Scheduled 0.104 timer/lifecycle hard cut](../../design/0.104-ic-timers-consumer-hard-cut/0.104-design.md)
+- [Released 0.104 timer/lifecycle hard cut](../../design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md)
