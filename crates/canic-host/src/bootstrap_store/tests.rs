@@ -109,6 +109,41 @@ fn wasm_store_build_uses_the_locked_resolver() {
 }
 
 #[test]
+fn wasm_store_declaration_build_uses_the_canonical_candid_environment() {
+    let context = WorkspaceBuildContext {
+        role: WASM_STORE_ROLE.to_string(),
+        profile: CanisterBuildProfile::Fast,
+        environment: "local".to_string(),
+        build_network: canic_core::ids::BuildNetwork::Local,
+        workspace_root: "/workspace".into(),
+        icp_root: "/project".into(),
+        config_path: "/workspace/apps/demo/canic.toml".into(),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    let command = wasm_store_cargo_build_command(
+        &context,
+        Path::new("/workspace/crates/canic-wasm-store/Cargo.toml"),
+        true,
+    );
+
+    assert_eq!(
+        command.get_args().next(),
+        Some(std::ffi::OsStr::new("build"))
+    );
+    assert_eq!(
+        command.get_envs().find(|(key, _)| {
+            *key == std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
+        }),
+        Some((
+            std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV),
+            Some(std::ffi::OsStr::new("1")),
+        ))
+    );
+}
+
+#[test]
 fn bootstrap_wasm_store_rejects_competing_canic_packages() {
     let mut metadata = cargo_metadata_fixture(vec![package("canic", "canic@1", "0.98.2")]);
     metadata

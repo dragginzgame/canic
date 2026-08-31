@@ -1113,6 +1113,30 @@ mod tests {
                 .phase,
             FleetAdmissionProjectionPhase::Fenced
         );
+
+        let standalone_target = test_target_dir(&workspace_root, "pic-runtime-wasm");
+        build_canisters_once(&workspace_root);
+        let standalone = canic::testing::install_standalone_app(
+            read_wasm(
+                &standalone_target,
+                "runtime_probe",
+                CanicWasmBuildProfile::Fast.target_dir_name(),
+            ),
+            INSTALL_CYCLES,
+        );
+        let before_upgrade: Result<(), Error> =
+            standalone
+                .pic()
+                .update_candid_as_or_panic(standalone.app(), admitted, "test", ());
+        assert!(before_upgrade.is_ok());
+        standalone
+            .upgrade_same_release(Duration::from_mins(5))
+            .expect("same-release standalone-local upgrade");
+        let after_upgrade: Result<(), Error> =
+            standalone
+                .pic()
+                .update_candid_as_or_panic(standalone.app(), admitted, "test", ());
+        assert!(after_upgrade.is_ok());
     }
 
     fn activate_projection(

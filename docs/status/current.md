@@ -25,7 +25,7 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker. This handoff does not maintain a second
 mutable latest-release claim.
 
-Current development begins from published `v0.109.31`. Its immutable details
+Current development begins from published `v0.109.32`. Its immutable details
 are in [the 0.109 changelog](../changelog/0.109.md). Source-development truth
 comes from Git and the working tree; explanatory prose is not a release guard.
 
@@ -51,27 +51,25 @@ Published correctness history relevant to current operators:
 - `0.109.28` retained fresh-process projected estate state and prevented
   repeated applied reinstalls under version-less ordinary status;
 - `0.109.29` separated controller preparation from successor Store adoption
-  and closed the retained predecessor-E132 replan boundary; and
-- `0.109.30` removed generic stable-state migration authority and reset the
-  maintained Canic-owned product schemas to `v1`; and `0.109.31` published the
-  fresh-estate, Principal-canonicalization, pool-recovery and first B9 splits.
+  and closed the retained predecessor-E132 replan boundary;
+- `0.109.30` removed generic migration authority and reset current Canic-owned
+  product schemas to `v1`;
+- `0.109.31` published fresh-estate, Principal-canonicalization, pool-recovery
+  and first B9 splits; and
+- `0.109.32` publishes the initial `CANIC-102` through `CANIC-111` corrections,
+  including creation balances, Store controllers, Registry retry, bounded
+  terminal proof, reinstall fencing, post-bootstrap helper staging, manifest-
+  bound Candid, activation revision, cycle reconciliation and timer inventory.
 
-Published `0.109.31` closes `CANIC-099` by restricting the unobserved Root
-exception to one explicitly fresh, unallocated bootstrap Root, and closes
-`CANIC-101` by rejecting anonymous/duplicate identities before sorting the
-authored set once with `Principal::Ord`. It also permits the temporary pool
-Ledger terminal slot to rotate for one distinct later operation while exact
-replay and same-operation retargeting stay fenced. That helper remains until
-both live recoveries and terminal Fleet replay are immutably proven.
-
-The open `0.109.32` draft addresses `CANIC-102` through `CANIC-110`: exact create balances, symbolic Store controllers, typed unavailable Registry status, bounded terminal proof, reinstall-evidence fencing, post-bootstrap helper staging, manifest-bound no-follow Candid, exact activation revision and exact Idle-cycle reconciliation.
-These are current 0.109 correctness repairs, not new capability or downstream mutation.
-A focused governed PocketIC journey now closes the `CANIC-107` proof gap: a
-real Store publishes the application set, a real Root adopts and bootstraps
-it, the temporary helper stages only afterward, and immediate Store/Root
-replay has no nonterminal action. The helper-bearing five-Component journey
-also crosses Registry synchronization, runtime provisioning and activation,
-then reaches terminal Fleet state and immediate effect-free replay.
+`CANIC-102` is reopened in the current 0.109.33 draft. The published workflow
+retained the exact requested balance from both successful and duplicate-with-
+Principal Create responses, but its next observation replaced that evidence
+with `None` because production cannot resolve `action_cycles(Create)`. The
+current correction makes observation merging monotonic. One affected applied
+0.109.32 record may replay only the same operation's exact idempotent Ledger
+request; operation, plan/action hashes, state-bound Principal, retained receipt
+and returned requested balance must all match. It adds no inferred value,
+migration, compatibility path, fallback or schema generation.
 
 The detailed changelog owns the complete tests and negative cases; this handoff owns no downstream repository or live IC state.
 
@@ -92,89 +90,50 @@ interruption recovery, retry, idempotency, exact authority and cycle-safe
 source deletion remain mandatory even where cross-release compatibility is
 absent.
 
-## Open 0.109 B9 Complexity Contraction
+## 0.109 B9 Complexity Contraction
 
-0.109 remains open. Functional admission and the deployment corrections are
-published, but the
-[binding post-implementation complexity audit](../audits/release-lines/0.109-post-implementation-complexity-audit.md)
-still has `closeout_verdict: fail`. B9 must produce an immutable superseding
-pass before human closeout.
+The immutable
+[superseding B9 audit](../audits/reports/2026-08/2026-08-31/0.109-b9-superseding-complexity-audit.md)
+reports `closeout_verdict: pass` on the exact `v0.109.32` source. The human
+maintainer accepted it on 2026-08-31. It supersedes the binding preliminary
+`fail` without erasing that historical gate.
 
-The first fresh v2 measurement correctly stopped on the post-baseline
-`diagnostics/` owner. The governed
-[v3 correction and rerun](../audits/reports/2026-08/2026-08-31/0.109-b9-complexity-method-v3.md)
-keeps v2 byte-identical, adds exactly that subsystem, retains the five-slice
-change-friction population and reruns both the original 0.92 baseline and
-`v0.109.30` twice with deterministic output.
+The three measured control-plane parents contract from 17,452 to 6,303 lines,
+8,751 to 5,838 lines and 8,997 to 2,688 lines along existing authority and
+lifecycle seams. One Coordinator record, one Component Registry store family,
+one admission policy, one timer owner and the existing effect owners remain.
+No extraction adds a DTO, Candid variant, endpoint, stable record, journal,
+policy decision or effect path.
 
-| Mechanical v3 measure | 0.92 baseline | `v0.109.30` |
-| --- | ---: | ---: |
-| non-test files | 516 | 553 |
-| non-test logical LOC | 64,216 | 103,414 |
-| non-test files at least 600 logical LOC | 14 | 32 |
+The canonical v3 runs are deterministic. Their 8/10 complexity and 7/10
+change-friction scores remain truthful inherited pressure rather than product
+defects; blocked 0.110 owns the broader runtime graph. Structure, duplication,
+layering and Tier-2 module-surface reviews pass. The 63-case serial PocketIC
+inventory retains a 2,100-second, 6-GiB and 300-thread ceiling at capacity one.
 
-The [working contraction evidence](../audits/working/0.109-fleet-wide-ingress-admission/b9-complexity-contraction.md)
-uses the corrected measurement to select the first seams:
+No broad gate was rerun for this audit. The governed release marker binds a
+complete gate to the exact source. Its local resource transcript was not
+retained separately, so the audit labels the nearest 1,718-second,
+5,037,288-kB and 257-thread run as capacity evidence rather than as the exact
+0.109.32 transcript.
 
-| Owner | Direct lines | Disposition |
-| --- | ---: | --- |
-| `ops/component_registry/mod.rs` | 17,452 | 6,303-line parent; focused allocation, Directory and retirement owners |
-| `workflow/component_registry/mod.rs` | 8,751 | 5,838-line parent; focused lifecycle, install, authority and response owners |
-| `ops/fleet_coordinator/mod.rs` | 8,997 | 2,688-line parent; focused admission, lifecycle and provisioning owners |
-
-The production simplification keeps the Coordinator record as the sole durable owner while separating focused responsibilities:
-
-| Coordinator owner | Lines | Exact responsibility |
-| --- | ---: | --- |
-| parent `mod.rs` | 2,688 | single-step Coordinator state operations and remaining provisioning logic |
-| `admission.rs` | 304 | admission publication, capacity, canonical mutation and replay |
-| `component_provisioning_projection` | 245 | current status and terminal receipt projection |
-| `component_provisioning_progress` | 665 | read-only Directory/runtime progress reconstruction and advance classification |
-| `component_provisioning_reconciliation` | 338 | observed Root acceptance/provisioning response validation |
-| `component_provisioning_root_progress` | 572 | read-only Root progress reconstruction and replay/advance classification |
-| `component_provisioning_directory` | 482 | Directory call/receipt authority and response validation |
-| `component_provisioning_retry` | 67 | active-intent retry authority and pending-failure projection |
-| `component_provisioning_validation` | 1,954 | retained Root acceptance/provisioning plus Directory/runtime response and receipt validation |
-| `service_publication` | 326 | canonical Fleet services plus atomic Registry/receipt evidence |
-| `registry_history.rs` | 924 | ordered canonical Registry reconstruction and validation |
-| `root_lifecycle.rs` | 598 | Root join/snapshot, grouped fences, draining/removal reservation and publication authority |
-No DTO, Candid, record, endpoint or effect-ordering changes. The parent is now 2,688 lines, down from 8,997.
-
-The Component Registry now has a 1,647-line Root/Store retirement owner with
-complete durable operations, validation and hashes; Directory refresh (326),
-top-level allocation/activation (397/477),
-direct-child allocation/activation (518/379) and top-level Component retirement
-(618). A 1,143-line `subtree_retirement` owner now retains bounded traversal,
-stop/delete, Directory synchronization and membership-removal evidence for
-descendants. A 311-line `initial_inventory` owner seals active membership and
-monotonically retains Directory and Root-runtime convergence. Its 5,628-line
-unit-test corpus now has a dedicated test owner. All use the same Registry ops
-authority; workflow, transport, Candid, schemas and effect ordering are unchanged. The production
-parent is now 6,303 lines, down from 17,452 total lines. The workflow
-gravity well now owns scheduling (651), installation (986) and authority
-validation (709), Registry/allocation response projection (341) and retirement
-response projection (309) separately; its parent is 5,838 lines, down from
-8,751. These passive response owners read no store and make no lifecycle or
-effect decision.
-Remaining B9 work:
-
-1. freeze one immutable candidate and rerun the canonical v3 complexity,
-   change-friction, structure, duplication and module-surface methods;
-2. run the maintainer-owned complete gate and record actual PocketIC elapsed,
-   RSS, thread and case-count evidence against the provisional envelope; and
-3. obtain the human-owned accepted superseding verdict.
 ## B10 And Closeout
 
-After B9 passes, B10 reconciles the already-published managed-App
-qualification support. It must replace downstream private init/activation and
-admission-fixture machinery without adding runtime authority. The final 0.109
-closeout remains human-owned.
+B9 is accepted. The current candidate completes the Canic-owned B10 facade,
+isolated packaged consumer and managed plus standalone-local lifecycle proof
+without adding runtime authority. The exact read-only downstream still owns
+its private init/activation adapter and direct `canic-core`/`ic-testkit` test
+dependencies, so B10 is pending that separately owned adoption and removal.
+The [reconciliation report](../audits/reports/2026-08/2026-08-31/0.109-b10-managed-app-qualification-reconciliation.md)
+records the exact boundary. The final 0.109 closeout remains human-owned.
 
 Required order:
 
-1. complete B9 simplification and immutable evidence;
-2. complete B10 public-package consumer and managed/standalone qualification;
-3. request the human closeout audit against the complete candidate; and
+1. publish the current Canic B10 candidate through the maintainer-owned release
+   workflow;
+2. let the downstream adopt that immutable package, remove its private adapter
+   and direct test pins, and retain its exact managed/standalone qualification;
+3. request the human closeout audit against the complete evidence; and
 4. begin 0.110 only after the maintainer accepts that verdict.
 
 ## Roadmap Boundary
@@ -195,8 +154,15 @@ timer and recovery roots. B1 includes a `1..=N` generic-instantiation cohort;
 downstream slopes remain non-forecast routing evidence. The temporary pool
 Ledger recovery family is also measured, but hard deletion waits for both live
 recoveries, conservation, official Root restoration and terminal zero-effect
-replay. Completion requires at least 350 KiB code-section and 5% frozen replica-
-validator function headroom. Build acceleration remains parallel support.
+replay. The exact frozen Toko `project_instance` is now a binding read-only
+B1/B5 canary with an explicit authentication/blob/IcyDB/lifecycle/status/
+recovery capability matrix. Completion requires 5% code-section headroom
+(512 KiB under the retained 10 MiB limit) and 5% frozen replica-validator
+function headroom in both the canonical worst case and that canary; 1 MiB code
+headroom is preferred. B4 cannot stop while known role-inapplicable generated
+machinery remains. A canary deficit after safe Canic cuts produces an explicit
+Toko/IcyDB residual handoff rather than downstream mutation. Build acceleration
+remains parallel support.
 
 The former stateful-retirement and cross-release-adoption proposal is
 cancelled and archived. Active 0.111 preserves no application data, stable
@@ -210,7 +176,7 @@ batches, 1,000-canister qualification and a universal runtime observatory.
 
 ## Validation State
 
-For the current B9 slice:
+For the current B9, B10 and reopened `CANIC-102` slices:
 
 - frozen v2 remains unchanged; governed v3 definitions, scripts, catalog and
   fingerprints pass, and deterministic original/current mechanical reruns are
@@ -240,16 +206,33 @@ For the current B9 slice:
 - dependency-light conservation and public generated-estate regressions pass no-effect planning, Principal rejection,
   Root observation, typed ordering and all permutations, including duplicate and anonymous cases;
   retained-input and pre-retention digest regressions also pass without reissuing an effect; and
-- no broad workspace or PocketIC gate was run during coding.
+- the B10 isolated packaged consumer compiles through packaged `canic` alone,
+  including managed construction and standalone same-release upgrade; generated
+  and canonical Store probes report 2,988,974-byte and 2,986,771-byte code
+  sections;
+- the B10 governed lifecycle case passes managed composed-IcyDB fencing,
+  activation, admission, same-release upgrade and successor fencing plus
+  standalone-local install, public call, same-release upgrade and replay in
+  136.27 seconds;
+- warning-denied Clippy passes for `canic` with `testing`, `canic-host` and
+  `canic-testing-internal`; and
+- focused reopened `CANIC-102` regressions pass successful and duplicate-with-
+  Principal Create journalling, terminal and zero-effect replay; exact retained
+  0.109.32 balance recovery; six authority-mismatch rejections; and the existing
+  interruption-at-every-effect and logical-controller Create journeys; the
+  production response mapper also retains the exact Principal, receipt and
+  requested balance for both Ledger response forms;
+- no broad workspace or full PocketIC gate was run during coding.
 
 Published-batch validation remains in the detailed changelog and immutable
 release evidence; it is not duplicated here.
 
 ## Next Authorized Action
 
-Freeze the completed B9 contraction as one immutable candidate, run the
-canonical audit methods and maintainer gate, and obtain the human verdict. Do
-not begin 0.110 before accepted 0.109 closeout.
+Hand the targeted-ready 0.109.33 draft to the maintainer-owned validation and
+publication workflow. Downstream adapter adoption follows the immutable
+package; the final human-owned 0.109 closeout audit follows that evidence. Do
+not begin 0.110 before the accepted closeout.
 
 
 <!-- canic-release-validation: version=0.109.32 source=641f843ac5bc1ddb823bef6b3c32427a5cca70dc date=2026-08-31 gate=complete -->

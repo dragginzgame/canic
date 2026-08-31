@@ -538,15 +538,9 @@ fn canister_profile_candid_command(
     profile: CanisterBuildProfile,
     options: &CanisterArtifactBuildOptions,
 ) -> Command {
-    let mut command = canister_cargo_command(context, manifest_path, profile, "rustc");
+    let mut command = canister_cargo_build_command(context, manifest_path, profile);
+    command.env(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1");
     apply_cargo_feature_selection(&mut command, options);
-    command.args([
-        "--lib",
-        "--",
-        "--cfg",
-        "canic_export_candid",
-        "--check-cfg=cfg(canic_export_candid)",
-    ]);
     command
 }
 
@@ -744,13 +738,15 @@ mod tests {
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>();
+        let environment = command.get_envs().collect::<BTreeMap<_, _>>();
 
-        assert_eq!(args.first().map(String::as_str), Some("rustc"));
-        assert!(
-            args.windows(2)
-                .any(|args| args == ["--cfg", "canic_export_candid"])
+        assert_eq!(args.first().map(String::as_str), Some("build"));
+        assert_eq!(
+            environment.get(std::ffi::OsStr::new(
+                canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV
+            )),
+            Some(&Some(std::ffi::OsStr::new("1")))
         );
-        assert!(args.contains(&"--check-cfg=cfg(canic_export_candid)".to_string()));
     }
 
     #[test]
@@ -792,8 +788,26 @@ mod tests {
                     .any(|args| { args == ["--features", "qualification,standalone-local"] })
             );
         }
-        assert!(declaration_args.contains(&"canic_export_candid".to_string()));
-        assert!(!runtime_args.contains(&"canic_export_candid".to_string()));
+        assert_eq!(
+            declaration
+                .get_envs()
+                .find(|(key, _)| {
+                    *key == std::ffi::OsStr::new(
+                        canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV,
+                    )
+                })
+                .and_then(|(_, value)| value),
+            Some(std::ffi::OsStr::new("1"))
+        );
+        assert_eq!(
+            runtime.get_envs().find(|(key, _)| {
+                *key == std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
+            }),
+            Some((
+                std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV,),
+                None,
+            ))
+        );
     }
 
     #[test]

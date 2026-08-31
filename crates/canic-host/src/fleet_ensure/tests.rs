@@ -64,6 +64,7 @@ struct MockError;
 
 struct MockPlatform {
     completed: BTreeMap<String, EffectOutcome>,
+    duplicate_create_responses: BTreeMap<String, u32>,
     create_shortfalls: BTreeMap<String, u128>,
     desired: DesiredFleet,
     fail_once: BTreeSet<String>,
@@ -92,6 +93,7 @@ impl MockPlatform {
             .expect("fixture ledger fee");
         Self {
             completed: BTreeMap::new(),
+            duplicate_create_responses: BTreeMap::new(),
             create_shortfalls: BTreeMap::new(),
             desired,
             fail_once: BTreeSet::new(),
@@ -544,6 +546,9 @@ impl EnsurePlatform for MockPlatform {
     ) -> Result<EffectOutcome, Self::Error> {
         let hash = crate::fleet_ensure::ops::action_sha256(action);
         if let Some(outcome) = self.completed.get(&hash) {
+            if matches!(action, EnsureAction::Create { .. }) {
+                *self.duplicate_create_responses.entry(hash).or_default() += 1;
+            }
             return Ok(outcome.clone());
         }
         if let Some(remaining) = self.stall_before_mutation.get_mut(&hash)
@@ -560,6 +565,317 @@ impl EnsurePlatform for MockPlatform {
         }
         Ok(outcome)
     }
+}
+
+#[test]
+fn successful_create_response_retains_exact_applied_evidence_and_replays_without_effect() {
+    assert_create_response_journey(false);
+}
+
+#[test]
+fn duplicate_create_response_with_principal_retains_exact_applied_evidence_and_replays_without_effect()
+ {
+    assert_create_response_journey(true);
+}
+
+fn assert_create_response_journey(response_is_duplicate: bool) {
+    let mut fixture = fixture();
+    let desired_sha256 = "102".repeat(21) + "1";
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan production-shaped Create journey");
+    let create = workflow::ordered_actions(&planned.plan)
+        .into_iter()
+        .find(|action| matches!(action, EnsureAction::Create { name, .. } if name == "created"))
+        .expect("reviewed Create action");
+    let create_hash = crate::fleet_ensure::ops::action_sha256(create);
+    let EnsureAction::Create {
+        requested_initial_cycles,
+        ..
+    } = create
+    else {
+        unreachable!("selected action is Create");
+    };
+    let requested_initial_cycles = *requested_initial_cycles;
+    if response_is_duplicate {
+        fixture.platform.fail_once.insert(create_hash.clone());
+        let error = workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            &desired_sha256,
+            "test-fleet",
+            &planned.plan.plan_sha256,
+            &mut fixture.platform,
+        )
+        .expect_err("first Create response is lost after the Ledger effect");
+        assert!(matches!(error, workflow::EnsureWorkflowError::Platform(_)));
+    }
+
+    let applied = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("apply successful or duplicate-with-Principal Create response");
+    assert!(applied.terminal);
+    assert_eq!(fixture.platform.mutations.get(&create_hash), Some(&1));
+    assert_eq!(
+        fixture
+            .platform
+            .duplicate_create_responses
+            .get(&create_hash)
+            .copied()
+            .unwrap_or_default(),
+        u32::from(response_is_duplicate)
+    );
+
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read Create journal")
+        .expect("retained Create journal");
+    let effect = journal
+        .effects
+        .iter()
+        .find(|effect| effect.action_sha256 == create_hash)
+        .expect("retained Create effect");
+    assert_eq!(effect.state, EffectState::Applied);
+    assert_eq!(effect.created_principal.as_deref(), Some("created-created"));
+    assert_eq!(effect.receipt.as_deref(), Some("create-block"));
+    assert_eq!(effect.post_cycles, Some(requested_initial_cycles));
+
+    let mutations = fixture.platform.mutations.clone();
+    let replay_plan = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut fixture.platform,
+    )
+    .expect("plan terminal Create replay");
+    assert!(workflow::ordered_actions(&replay_plan.plan).is_empty());
+    let replay = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &replay_plan.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("apply effect-free Create replay");
+    assert!(replay.terminal);
+    assert_eq!(replay.effects_applied, 0);
+    assert_eq!(fixture.platform.mutations, mutations);
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+#[test]
+fn retained_0_109_32_create_balance_recovers_only_from_the_exact_duplicate_response() {
+    let (mut fixture, desired_sha256, plan, create_hash, requested_initial_cycles) =
+        completed_create_journey();
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    let mut journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read completed Create journal")
+        .expect("completed Create journal");
+    journal.completion = FleetEnsureCompletion::InProgress;
+    journal
+        .effects
+        .iter_mut()
+        .find(|effect| effect.action_sha256 == create_hash)
+        .expect("retained Create effect")
+        .post_cycles = None;
+    crate::fleet_ensure::ops::write_journal(&paths, &journal)
+        .expect("retain exact 0.109.32 missing-balance shape");
+    let mutations = fixture.platform.mutations.clone();
+
+    let recovered = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("recover exact retained Create evidence");
+    assert!(recovered.terminal);
+    assert_eq!(fixture.platform.mutations, mutations);
+    assert_eq!(
+        fixture
+            .platform
+            .duplicate_create_responses
+            .get(&create_hash),
+        Some(&1)
+    );
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read recovered Create journal")
+        .expect("recovered Create journal");
+    let effect = journal
+        .effects
+        .iter()
+        .find(|effect| effect.action_sha256 == create_hash)
+        .expect("recovered Create effect");
+    assert_eq!(effect.state, EffectState::Applied);
+    assert_eq!(effect.post_cycles, Some(requested_initial_cycles));
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+#[test]
+fn retained_0_109_32_create_balance_recovery_rejects_every_authority_mismatch() {
+    #[derive(Clone, Copy, Debug)]
+    enum Mismatch {
+        Action,
+        Operation,
+        Plan,
+        Principal,
+        Receipt,
+        RequestedBalance,
+    }
+
+    for mismatch in [
+        Mismatch::Action,
+        Mismatch::Operation,
+        Mismatch::Plan,
+        Mismatch::Principal,
+        Mismatch::Receipt,
+        Mismatch::RequestedBalance,
+    ] {
+        let (mut fixture, desired_sha256, plan, create_hash, requested_initial_cycles) =
+            completed_create_journey();
+        let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+            &fixture.root,
+            &fixture.desired.environment,
+            "test-fleet",
+        );
+        let mut journal = crate::fleet_ensure::ops::read_journal(&paths)
+            .expect("read completed Create journal")
+            .expect("completed Create journal");
+        journal.completion = FleetEnsureCompletion::InProgress;
+        let effect = journal
+            .effects
+            .iter_mut()
+            .find(|effect| effect.action_sha256 == create_hash)
+            .expect("retained Create effect");
+        effect.post_cycles = None;
+        match mismatch {
+            Mismatch::Action => effect.action_sha256 = "wrong-action".to_string(),
+            Mismatch::Operation => journal.operation_id = "wrong-operation".to_string(),
+            Mismatch::Plan => journal.plan_sha256 = "wrong-plan".to_string(),
+            Mismatch::Principal => {
+                fixture
+                    .platform
+                    .completed
+                    .get_mut(&create_hash)
+                    .expect("retained Create response")
+                    .created_principal = Some("different-principal".to_string());
+            }
+            Mismatch::Receipt => {
+                fixture
+                    .platform
+                    .completed
+                    .get_mut(&create_hash)
+                    .expect("retained Create response")
+                    .receipt = Some("different-receipt".to_string());
+            }
+            Mismatch::RequestedBalance => {
+                fixture
+                    .platform
+                    .completed
+                    .get_mut(&create_hash)
+                    .expect("retained Create response")
+                    .post_cycles = Some(requested_initial_cycles - 1);
+            }
+        }
+        crate::fleet_ensure::ops::write_journal(&paths, &journal)
+            .expect("retain mismatched Create recovery shape");
+        let retained_journal = fs::read(&paths.journal).expect("read mismatched journal bytes");
+        let mutations = fixture.platform.mutations.clone();
+
+        let error = workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            &desired_sha256,
+            "test-fleet",
+            &plan.plan_sha256,
+            &mut fixture.platform,
+        )
+        .expect_err("mismatched Create recovery authority must reject");
+        assert!(
+            matches!(
+                error,
+                workflow::EnsureWorkflowError::JournalIntegrity
+                    | workflow::EnsureWorkflowError::DriftedBeforeApply
+            ),
+            "unexpected {mismatch:?} error: {error:?}"
+        );
+        assert_eq!(fixture.platform.mutations, mutations);
+        assert_eq!(
+            fs::read(&paths.journal).expect("reread mismatched journal bytes"),
+            retained_journal
+        );
+        fs::remove_dir_all(fixture.root).expect("remove test directory");
+    }
+}
+
+fn completed_create_journey() -> (Fixture, String, FleetEnsurePlan, String, u128) {
+    let mut fixture = fixture();
+    let desired_sha256 = "102".repeat(21) + "2";
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan retained Create journey");
+    let create = workflow::ordered_actions(&planned.plan)
+        .into_iter()
+        .find(|action| matches!(action, EnsureAction::Create { name, .. } if name == "created"))
+        .expect("reviewed Create action");
+    let create_hash = crate::fleet_ensure::ops::action_sha256(create);
+    let EnsureAction::Create {
+        requested_initial_cycles,
+        ..
+    } = create
+    else {
+        unreachable!("selected action is Create");
+    };
+    let requested_initial_cycles = *requested_initial_cycles;
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("complete retained Create journey");
+    (
+        fixture,
+        desired_sha256,
+        planned.plan,
+        create_hash,
+        requested_initial_cycles,
+    )
 }
 
 #[test]

@@ -88,7 +88,7 @@ help:
 	@echo "  release-cadence  Report the current minor's advisory release-batch count"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
-	@echo "  test-packaged-downstream-wasm-store  Verify packaged Canister macros and wasm_store bootstrap paths"
+	@echo "  test-packaged-downstream-wasm-store  Verify packaged Canister, testing facade and wasm_store paths"
 	@echo "  test-packaged-downstream-cli  Verify packaged CLI/support crates from an isolated downstream root"
 	@echo "  test-installed-canic-cli  Verify the installed canic binary with the v1 readiness smoke"
 	@echo ""

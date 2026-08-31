@@ -102,7 +102,7 @@ pub fn build_bootstrap_wasm_store_artifact(
     let profile_path = artifact_root.join(".build-profile");
     let embed_candid = should_embed_candid_metadata(context.build_network);
     let artifact_candid = if embed_candid {
-        resolve_wasm_store_candid(context, &source)?
+        resolve_wasm_store_candid(context, &source, &candid)?
     } else {
         candid.clone()
     };
@@ -543,11 +543,7 @@ fn wasm_store_cargo_build_command(
             canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
         )
         .args([
-            if force_candid_export {
-                "rustc"
-            } else {
-                "build"
-            },
+            "build",
             "--locked",
             "--manifest-path",
             &manifest_path.display().to_string(),
@@ -558,13 +554,7 @@ fn wasm_store_cargo_build_command(
     append_wasm_store_profile_config_args(&mut command, context.profile);
     command.args(context.profile.cargo_args());
     if force_candid_export {
-        command.args([
-            "--lib",
-            "--",
-            "--cfg",
-            "canic_export_candid",
-            "--check-cfg=cfg(canic_export_candid)",
-        ]);
+        command.env(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1");
     }
     command
 }
@@ -594,6 +584,7 @@ pub fn append_profile_config_args(command: &mut Command, profile: &str, settings
 fn resolve_wasm_store_candid(
     context: &WorkspaceBuildContext,
     source: &BootstrapWasmStoreSource,
+    generated_candid: &[u8],
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let target_root = canister_build_target_root(&context.workspace_root);
     let selected_wasm_path = target_root
@@ -605,6 +596,7 @@ fn resolve_wasm_store_candid(
         WASM_STORE_ROLE,
         source.canonical_did_path.as_deref(),
         context.refresh_canonical_infrastructure_did,
+        Some(generated_candid),
         &selected_wasm_path,
         || Ok(()),
     )

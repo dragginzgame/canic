@@ -56,18 +56,22 @@ fn local_coordinator_build_exports_candid_in_the_selected_leaf_pass() {
     };
     let manifest = Path::new("/workspace/coordinator/Cargo.toml");
 
-    let local = coordinator_cargo_build_command(&context, manifest, true)
+    let local_command = coordinator_cargo_build_command(&context, manifest, true);
+    let local = local_command
         .get_args()
         .map(|argument| argument.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
-    assert_eq!(local.first().map(String::as_str), Some("rustc"));
+    assert_eq!(local.first().map(String::as_str), Some("build"));
     assert!(local.contains(&"--locked".to_string()));
-    assert!(
-        local
-            .windows(2)
-            .any(|args| args == ["--cfg", "canic_export_candid"])
+    assert_eq!(
+        local_command.get_envs().find(|(key, _)| {
+            *key == std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
+        }),
+        Some((
+            std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV),
+            Some(std::ffi::OsStr::new("1")),
+        ))
     );
-    assert!(local.contains(&"--check-cfg=cfg(canic_export_candid)".to_string()));
 
     context.build_network = BuildNetwork::Ic;
     let ic = coordinator_cargo_build_command(&context, manifest, false)
@@ -76,7 +80,17 @@ fn local_coordinator_build_exports_candid_in_the_selected_leaf_pass() {
         .collect::<Vec<_>>();
     assert_eq!(ic.first().map(String::as_str), Some("build"));
     assert!(ic.contains(&"--locked".to_string()));
-    assert!(!ic.contains(&"canic_export_candid".to_string()));
+    assert_eq!(
+        coordinator_cargo_build_command(&context, manifest, false)
+            .get_envs()
+            .find(|(key, _)| {
+                *key == std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
+            }),
+        Some((
+            std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV),
+            None,
+        ))
+    );
 }
 
 #[test]
