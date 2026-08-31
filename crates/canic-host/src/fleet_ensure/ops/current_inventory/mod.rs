@@ -12,10 +12,11 @@ use super::current_protocol::{
 };
 use crate::{
     canister_protocol::query_with_candid,
+    durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_ensure::model::{
         DesiredCanisterKind, DesiredFleet, DesiredPresence, FleetEnsureStateRecord,
     },
-    icp::{IcpCli, existing_local_canister_candid_path},
+    icp::IcpCli,
     protocol_binding::RegistryProtocolBinding,
     registry::RegistryEntry,
     release_build::load_finalized_release_build,
@@ -23,6 +24,7 @@ use crate::{
         AppConfigSnapshot, CanicInfrastructureArtifactEntry, CanicInfrastructureRole,
         load_persisted_application_artifact_union,
         load_persisted_canic_infrastructure_artifact_manifest,
+        validate_release_artifact_relative_path,
     },
     role_contract::{PackageValidationMode, resolve_declared_role_contract},
 };
@@ -38,8 +40,8 @@ use canic_core::{
             RootComponentProvisioningStatusResponse,
         },
         component_registry::{
-            ComponentLifecycleStatus, ComponentRegistryPartitionRequest,
-            ComponentRegistryPartitionResponse,
+            ComponentLifecycleStatus, ComponentProvisioningOrigin,
+            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
         },
         fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
         page::{Page, PageRequest},
@@ -105,6 +107,13 @@ struct ProtocolEntry {
     module_hash: String,
 }
 
+struct ComponentPartitionAuthority<'a> {
+    active_release_set: &'a FleetSubnetRootReleaseSet,
+    group_placement: &'a canic_core::ids::ComponentGroupPlacementId,
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+}
+
 /// Query one complete bounded current Fleet tree after protocol convergence.
 pub(super) fn terminal_inventory(
     icp: &IcpCli,
@@ -142,7 +151,6 @@ pub(super) fn terminal_inventory(
         root,
         &config_path,
         &config,
-        &desired.environment,
         release_set,
         &coordinator_candid,
         &root_candid,
@@ -166,15 +174,10 @@ pub(super) fn terminal_inventory(
 }
 
 impl ProtocolCatalog {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "terminal protocol binding keeps all three configured infrastructure sidecars explicit"
-    )]
     fn load(
         root: &Path,
         config_path: &Path,
         config: &AppConfigSnapshot,
-        artifact_environment: &str,
         release_set: FleetSubnetRootReleaseSet,
         coordinator_candid: &Path,
         root_candid: &Path,
@@ -228,17 +231,7 @@ impl ProtocolCatalog {
                     )));
                 }
             };
-            let candid_path = existing_local_canister_candid_path(
-                root,
-                artifact_environment,
-                artifact.role.as_str(),
-            )
-            .ok_or_else(|| {
-                inventory_error(format!(
-                    "role {} has no exact current Candid sidecar",
-                    artifact.role
-                ))
-            })?;
+            let candid_path = application_candid_sidecar(root, &artifact.wasm_relative_path)?;
             let binding = RegistryProtocolBinding {
                 release_identity: finalized.record.builder_version.clone(),
                 role: artifact.role.clone(),
@@ -594,11 +587,17 @@ fn append_root_components(
                     binding.role
                 ))
             })?;
+            let partition_authority = ComponentPartitionAuthority {
+                active_release_set: &batch.active_release_set,
+                group_placement: &expected_placement.group_placement,
+                operation_id: compiled.request.operation_id,
+                plan_hash: compiled.plan_hash,
+            };
             validate_component_partition(
                 icp,
                 &protocols.root.candid_path,
                 root.fleet_subnet_root,
-                batch,
+                &partition_authority,
                 member,
                 protocol,
             )?;
@@ -639,7 +638,7 @@ fn validate_component_partition(
     icp: &IcpCli,
     candid_path: &Path,
     root: Principal,
-    batch: &FleetSubnetRootProvisioningBatch,
+    authority: &ComponentPartitionAuthority<'_>,
     member: &canic_core::dto::component_provisioning::RootProvisionedGroupMember,
     protocol_entry: &ProtocolEntry,
 ) -> Result<(), CurrentProtocolError> {
@@ -657,19 +656,39 @@ fn validate_component_partition(
     let RootInventoryStatusResponse::ComponentRegistryPartition(partition) = response else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };
+    let expected_origin = ComponentProvisioningOrigin::ComponentGroup {
+        operation_id: authority.operation_id,
+        plan_hash: authority.plan_hash,
+        group_placement: (*authority.group_placement).clone(),
+        member_path: member.member_path.clone(),
+    };
     if partition.head.component != member.binding.component
-        || partition.head.revision != member.component_registry_revision
-        || partition.head.content_hash != member.component_registry_content_hash
+        || !component_partition_head_is_exact_activation(
+            partition.head.revision,
+            partition.status,
+            member.component_registry_revision,
+        )
         || partition.binding != member.binding
         || partition.protocol_profile_digest != protocol_entry.binding.protocol_profile_digest
-        || partition.release_set != batch.active_release_set
-        || partition.status != ComponentLifecycleStatus::Active
+        || partition.provisioning_origin != expected_origin
+        || partition.release_set != *authority.active_release_set
     {
         return Err(inventory_error(
             "Root Component partition conflicts with its terminal result",
         ));
     }
     Ok(())
+}
+
+fn component_partition_head_is_exact_activation(
+    observed_revision: u64,
+    observed_status: ComponentLifecycleStatus,
+    provisioned_revision: u64,
+) -> bool {
+    observed_status == ComponentLifecycleStatus::Active
+        && provisioned_revision
+            .checked_add(1)
+            .is_some_and(|revision| observed_revision == revision)
 }
 
 #[expect(
@@ -1032,10 +1051,36 @@ fn verify_protocol(
     path: &Path,
     binding: &RegistryProtocolBinding,
 ) -> Result<(), CurrentProtocolError> {
-    let bytes = fs::read(path).map_err(|source| CurrentProtocolError::ReadCandid {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    let bytes = match read_optional_regular_bytes(path) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => {
+            return Err(CurrentProtocolError::ReadCandid {
+                path: path.to_path_buf(),
+                source: std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "current protocol sidecar is missing",
+                ),
+            });
+        }
+        Err(RegularFileReadError::NotRegular) => {
+            return Err(inventory_error(format!(
+                "current protocol sidecar is not a regular no-follow file: {}",
+                path.display()
+            )));
+        }
+        Err(RegularFileReadError::Io(source)) => {
+            return Err(CurrentProtocolError::ReadCandid {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+        #[cfg(not(unix))]
+        Err(RegularFileReadError::UnsupportedPlatform) => {
+            return Err(inventory_error(
+                "regular no-follow protocol sidecar reads are unsupported",
+            ));
+        }
+    };
     let observed = derive_protocol_profile_hashes(
         &binding.release_identity,
         &binding.role,
@@ -1051,6 +1096,39 @@ fn verify_protocol(
         )));
     }
     Ok(())
+}
+
+fn application_candid_sidecar(
+    root: &Path,
+    wasm_relative_path: &str,
+) -> Result<PathBuf, CurrentProtocolError> {
+    validate_release_artifact_relative_path(wasm_relative_path)
+        .map_err(|error| inventory_error(error.to_string()))?;
+    let mut candid_relative_path = PathBuf::from(wasm_relative_path);
+    candid_relative_path.set_extension("did");
+    let candid_path = root.join(&candid_relative_path);
+    let canonical_root = fs::canonicalize(root).map_err(|source| {
+        inventory_error(format!(
+            "cannot resolve current protocol root {}: {source}",
+            root.display()
+        ))
+    })?;
+    let parent = candid_path
+        .parent()
+        .ok_or_else(|| inventory_error("current protocol sidecar has no parent"))?;
+    let canonical_parent = fs::canonicalize(parent).map_err(|source| {
+        inventory_error(format!(
+            "cannot resolve current protocol sidecar parent {}: {source}",
+            parent.display()
+        ))
+    })?;
+    if !canonical_parent.starts_with(&canonical_root) {
+        return Err(inventory_error(format!(
+            "current protocol sidecar escapes the canonical ICP root: {}",
+            candid_path.display()
+        )));
+    }
+    Ok(candid_path)
 }
 
 fn resolve_path(root: &Path, configured: &str) -> PathBuf {
@@ -1111,6 +1189,30 @@ mod tests {
     }
 
     #[test]
+    fn toko_fresh_fleet_component_partition_accepts_only_exact_activation_successor() {
+        assert!(component_partition_head_is_exact_activation(
+            5,
+            ComponentLifecycleStatus::Active,
+            4,
+        ));
+        assert!(!component_partition_head_is_exact_activation(
+            4,
+            ComponentLifecycleStatus::Active,
+            4,
+        ));
+        assert!(!component_partition_head_is_exact_activation(
+            6,
+            ComponentLifecycleStatus::Active,
+            4,
+        ));
+        assert!(!component_partition_head_is_exact_activation(
+            5,
+            ComponentLifecycleStatus::Prepared,
+            4,
+        ));
+    }
+
+    #[test]
     fn protocol_sidecar_binds_hash_and_complete_profile() {
         let root = crate::test_support::temp_dir("terminal-protocol-sidecar");
         fs::create_dir_all(&root).expect("create sidecar fixture");
@@ -1133,6 +1235,50 @@ mod tests {
             verify_protocol(&path, &binding),
             Err(CurrentProtocolError::Configuration(reason))
                 if reason.contains("protocol sidecar changed")
+        ));
+    }
+
+    #[test]
+    fn toko_fresh_fleet_application_candid_comes_from_immutable_artifact_path() {
+        let root = crate::test_support::temp_dir("terminal-artifact-candid");
+        let artifact_parent = root.join(".icp/release/artifacts/managed_component");
+        fs::create_dir_all(&artifact_parent).expect("create immutable artifact directory");
+        let candid = application_candid_sidecar(
+            &root,
+            ".icp/release/artifacts/managed_component/release-bound-module.wasm",
+        )
+        .expect("derive immutable Candid sidecar");
+
+        assert_eq!(candid, artifact_parent.join("release-bound-module.did"),);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn toko_fresh_fleet_protocol_candid_rejects_final_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let root = crate::test_support::temp_dir("terminal-protocol-sidecar-link");
+        fs::create_dir_all(&root).expect("create sidecar fixture");
+        let target = root.join("target.did");
+        let link = root.join("managed_component.did");
+        let candid = b"service : { ping : () -> () query; };";
+        fs::write(&target, candid).expect("write target sidecar");
+        symlink(&target, &link).expect("link mutable sidecar");
+        let role = CanisterRole::from("managed_component");
+        let capabilities = BTreeSet::new();
+        let hashes = derive_protocol_profile_hashes("0.109.test", &role, &capabilities, candid);
+        let binding = RegistryProtocolBinding {
+            release_identity: "0.109.test".to_string(),
+            role,
+            capabilities,
+            candid_sha256: hashes.candid_sha256,
+            protocol_profile_digest: hashes.protocol_profile_digest,
+        };
+
+        assert!(matches!(
+            verify_protocol(&link, &binding),
+            Err(CurrentProtocolError::Configuration(reason))
+                if reason.contains("not a regular no-follow file")
         ));
     }
 }

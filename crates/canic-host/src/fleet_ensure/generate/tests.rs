@@ -1771,6 +1771,43 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(!rejected_state.completed_reinstalls.contains_key("root-0"));
     assert!(!rejected_state.completed_reinstalls.contains_key("store-0"));
 
+    let retained_replan_files = [
+        fs::read(&production_paths.state).expect("read retained replan state"),
+        fs::read(&production_paths.plan).expect("read retained replan plan"),
+        fs::read(&production_paths.journal).expect("read retained replan journal"),
+    ];
+    let alternate_source_digest = "fe".repeat(32);
+    let alternate_error = workflow::plan(
+        &root,
+        &production_recovery_desired,
+        &alternate_source_digest,
+        &production_recovery_desired.fleet,
+        1_800_000_000_000_000_100,
+        &mut production_platform,
+    )
+    .expect_err("alternate desired input cannot clear completed reinstall evidence");
+    assert!(matches!(
+        alternate_error,
+        workflow::EnsureWorkflowError::RetainedReinstallDesiredConflict {
+            actual,
+            expected,
+        } if actual == alternate_source_digest && expected == source_digest
+    ));
+    assert_eq!(
+        [
+            fs::read(&production_paths.state).expect("reread retained replan state"),
+            fs::read(&production_paths.plan).expect("reread retained replan plan"),
+            fs::read(&production_paths.journal).expect("reread retained replan journal"),
+        ],
+        retained_replan_files,
+        "rejected read-only planning must leave every retained authority byte unchanged"
+    );
+    assert_eq!(
+        read_state(&production_paths, &production_recovery_desired.fleet)
+            .expect("reread exact rejected state"),
+        rejected_state,
+    );
+
     fs::write(root.join("root-status-count"), b"1\n")
         .expect("retain typed predecessor Root status for fresh planning");
     let fresh_replan = workflow::plan(

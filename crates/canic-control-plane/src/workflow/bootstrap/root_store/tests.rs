@@ -130,6 +130,44 @@ fn live_catalog_must_equal_the_complete_ordered_release_set() {
 }
 
 #[test]
+fn post_bootstrap_catalog_projects_only_the_exact_recovery_helper_lane() {
+    let release_build_id: ReleaseBuildId = "11".repeat(32).parse().expect("release-build ID");
+    let application = manifest("database", 1);
+    let helper = WasmStoreCatalogEntryResponse {
+        role: CanisterRole::owned(POOL_LEDGER_RECOVERY_ROLE.to_string()),
+        template_id: TemplateId::new(POOL_LEDGER_RECOVERY_TEMPLATE_ID),
+        version: TemplateVersion::owned(release_build_id.to_string()),
+        payload_hash: vec![2; 32],
+        payload_size_bytes: 1_024,
+    };
+
+    assert_eq!(
+        application_catalog_after_bootstrap(
+            vec![catalog(&application), helper.clone()],
+            release_build_id,
+        )
+        .expect("exact support artifact lane"),
+        vec![catalog(&application)]
+    );
+
+    let mut wrong_template = helper.clone();
+    wrong_template.template_id = TemplateId::new("canic:other-support-artifact");
+    assert!(application_catalog_after_bootstrap(vec![wrong_template], release_build_id).is_err());
+    let mut wrong_version = helper.clone();
+    wrong_version.version = TemplateVersion::new("other-release");
+    assert!(application_catalog_after_bootstrap(vec![wrong_version], release_build_id).is_err());
+    let mut empty_payload = helper.clone();
+    empty_payload.payload_hash.clear();
+    empty_payload.payload_size_bytes = 0;
+    assert!(application_catalog_after_bootstrap(vec![empty_payload], release_build_id).is_err());
+    assert!(
+        application_catalog_after_bootstrap(vec![helper.clone(), helper], release_build_id)
+            .is_err(),
+        "one release may expose at most one exact recovery helper"
+    );
+}
+
+#[test]
 fn expected_artifact_metadata_is_derived_without_local_staging_state() {
     let entry = release_set_entry("app");
     let manifest = RootStoreReleaseSetManifest {

@@ -38,7 +38,8 @@ mod tests {
     #[cfg(test)]
     use canic::dto::pool::{
         CanisterPoolAssetOrigin, CanisterPoolAssetStatus, PoolCanisterRequest, PoolImportResponse,
-        PoolLedgerRecoveryPhase, PoolLedgerRecoveryReceipt, PoolLedgerRecoveryRequest,
+        PoolLedgerRecoveryArtifact, PoolLedgerRecoveryPhase, PoolLedgerRecoveryReceipt,
+        PoolLedgerRecoveryRequest,
     };
     use canic::dto::pool::{
         CanisterPoolResponse, CanisterPoolStatusRequest, PoolMaintenanceResponse,
@@ -153,10 +154,10 @@ mod tests {
     #[cfg(test)]
     use canic_host::fleet_ensure::{
         CompiledCurrentComponentProvisioning, CompiledCurrentProtocolStep,
-        CurrentComponentGroupPlacement, CurrentRegistryStage,
-        compile_current_component_provisioning, compile_current_protocol_sequence,
-        compile_current_registry_sequence, compile_current_registry_sequence_with_status,
-        compile_current_store_sequence_from_union,
+        CompiledCurrentStoreSequence, CurrentComponentGroupPlacement, CurrentRegistryStage,
+        append_qualified_pool_ledger_recovery_artifact, compile_current_component_provisioning,
+        compile_current_protocol_sequence, compile_current_registry_sequence,
+        compile_current_registry_sequence_with_status, compile_current_store_sequence_from_union,
     };
     use canic_host::release_set::AppConfigSnapshot;
     #[cfg(test)]
@@ -1652,6 +1653,147 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
+        reason = "one governed journey keeps exact Store publication, Root bootstrap, helper staging, and replay evidence together"
+    )]
+    fn current_store_stages_recovery_helper_after_root_bootstrap_and_replays_zero_effects() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = five_component_root_canister_config_path(&workspace_root);
+        let config = AppConfigSnapshot::load(&config_path).expect("load five-Component config");
+        let configuration = config
+            .model()
+            .compile_component_deployment_configuration()
+            .expect("compile five-Component deployment configuration");
+        let root_wasm = build_five_component_root_wasm();
+        let store_fixture =
+            build_root_store_fixture_with_config(&config_path, build_five_component_wasms());
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let installed = install_current_root_with_config_and_pool_setup(
+            &pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
+                coordinator_subnet: None,
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &config_path,
+            create_prepaid_pool_assets,
+        );
+        let operation_id = [0x67; 32];
+        let artifact_root = test_target_dir(&workspace_root, "current-store-helper-protocol")
+            .join(format!("artifact-union-{}", std::process::id()));
+        if artifact_root.exists() {
+            std::fs::remove_dir_all(&artifact_root).expect("clear prior artifact-union fixture");
+        }
+        std::fs::create_dir_all(&artifact_root).expect("create artifact-union fixture");
+        let union = fixture_application_artifact_union(&artifact_root, &installed);
+        let mut store_sequence = compile_current_store_sequence_from_union(
+            &artifact_root,
+            &configuration.component_topology,
+            &installed.init_args.authority,
+            operation_id,
+            &union,
+        )
+        .expect("compile current Store sequence");
+        let helper_manifest = append_fixture_pool_ledger_recovery_artifact(
+            &mut store_sequence,
+            installed.manifest.release_build_id,
+        );
+        assert!(
+            store_sequence
+                .expected_bootstrap
+                .catalog
+                .iter()
+                .all(|entry| entry.role.as_str() != "pool_ledger_recovery"),
+            "the temporary helper must remain outside the application catalog"
+        );
+        let wasm_store = installed
+            .init_args
+            .authority
+            .wasm_store_authority
+            .wasm_store;
+        let installation_controller = installed
+            .init_args
+            .authority
+            .wasm_store_authority
+            .installation_controller;
+        let bootstrap_position = store_sequence
+            .actions
+            .iter()
+            .position(|action| matches!(action, CurrentFleetProtocolAction::BootstrapStore { .. }))
+            .expect("Root bootstrap protocol step");
+        let helper_position = store_sequence
+            .actions
+            .iter()
+            .position(|action| {
+                matches!(
+                    action,
+                    CurrentFleetProtocolAction::StageStoreManifest { request }
+                        if request.role.as_str() == "pool_ledger_recovery"
+                )
+            })
+            .expect("recovery helper Store protocol step");
+        assert!(
+            bootstrap_position < helper_position,
+            "Root must bootstrap its application catalog before helper staging"
+        );
+        let actions = store_sequence
+            .actions
+            .iter()
+            .enumerate()
+            .map(|(index, action)| CompiledCurrentProtocolStep {
+                action: action.clone(),
+                name: format!("store-helper-{index}"),
+                target: match action {
+                    CurrentFleetProtocolAction::AdoptStore { .. }
+                    | CurrentFleetProtocolAction::BootstrapStore { .. } => installed.root_id,
+                    CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
+                    | CurrentFleetProtocolAction::PublishStoreChunk { .. }
+                    | CurrentFleetProtocolAction::StageStoreManifest { .. } => wasm_store,
+                    _ => panic!("Store sequence emitted a non-Store/Root action"),
+                },
+            })
+            .collect::<Vec<_>>();
+        for step in &actions {
+            issue_current_protocol_step(&pic, step, installation_controller);
+            await_current_protocol_step(&pic, step, installation_controller);
+        }
+        let helper_status = current_store_staging_status(
+            &pic,
+            wasm_store,
+            installation_controller,
+            &helper_manifest.template_id,
+            &helper_manifest.version,
+        );
+        assert_eq!(
+            helper_status.manifest.as_ref(),
+            Some(&current_manifest_response(&helper_manifest)),
+            "the real Store must retain the exact post-bootstrap helper manifest"
+        );
+        let nonterminal = actions
+            .iter()
+            .filter(|step| !current_protocol_step_is_terminal(&pic, step, installation_controller))
+            .map(|step| step.name.clone())
+            .collect::<Vec<_>>();
+        assert!(
+            nonterminal.is_empty(),
+            "an immediate Store/Root replay must issue no update; nonterminal={nonterminal:?}"
+        );
+        std::fs::remove_dir_all(artifact_root).expect("remove artifact-union fixture");
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
         reason = "one governed journey proves the full ordered graph and its zero-effect replay"
     )]
     fn fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog() {
@@ -1696,7 +1838,7 @@ mod tests {
         }
         std::fs::create_dir_all(&artifact_root).expect("create artifact-union fixture");
         let union = fixture_application_artifact_union(&artifact_root, &installed);
-        let store_sequence = compile_current_store_sequence_from_union(
+        let mut store_sequence = compile_current_store_sequence_from_union(
             &artifact_root,
             &configuration.component_topology,
             &installed.init_args.authority,
@@ -1704,6 +1846,18 @@ mod tests {
             &union,
         )
         .expect("compile current Store sequence");
+        let helper_manifest = append_fixture_pool_ledger_recovery_artifact(
+            &mut store_sequence,
+            installed.manifest.release_build_id,
+        );
+        assert!(
+            store_sequence
+                .expected_bootstrap
+                .catalog
+                .iter()
+                .all(|entry| entry.role.as_str() != "pool_ledger_recovery"),
+            "the temporary helper must remain outside the application catalog"
+        );
         let fixture = BootstrappedRootFixture {
             root_id: installed.root_id,
             init_args: installed.init_args.clone(),
@@ -1812,6 +1966,29 @@ mod tests {
             actions.is_sorted_by_key(|step| current_protocol_test_stage(&step.action)),
             "current protocol actions must preserve Store -> join -> sync -> activate -> mirror -> Component order"
         );
+        let bootstrap_position = actions
+            .iter()
+            .position(|step| {
+                matches!(
+                    step.action,
+                    CurrentFleetProtocolAction::BootstrapStore { .. }
+                )
+            })
+            .expect("Root bootstrap protocol step");
+        let helper_position = actions
+            .iter()
+            .position(|step| {
+                matches!(
+                    &step.action,
+                    CurrentFleetProtocolAction::StageStoreManifest { request }
+                        if request.role.as_str() == "pool_ledger_recovery"
+                )
+            })
+            .expect("recovery helper Store protocol step");
+        assert!(
+            bootstrap_position < helper_position,
+            "Root must bootstrap its application catalog before helper staging"
+        );
         let mut replayed_component_command = false;
         for step in &actions {
             if let CurrentFleetProtocolAction::ProvisionComponents { request, .. } = &step.action {
@@ -1894,6 +2071,18 @@ mod tests {
             terminal_status.root_batch_count
         );
         assert!(terminal_status.runtimes_activated_at_ns.is_some());
+        let helper_status = current_store_staging_status(
+            &pic,
+            wasm_store,
+            installation_controller,
+            &helper_manifest.template_id,
+            &helper_manifest.version,
+        );
+        assert_eq!(
+            helper_status.manifest.as_ref(),
+            Some(&current_manifest_response(&helper_manifest)),
+            "the real Store must retain the exact post-bootstrap helper manifest"
+        );
         let terminal_pool = root_pool_status(&pic, fixture.root_id);
         assert_eq!(terminal_pool.workload, 5);
         assert!(!terminal_pool.entries.is_empty());
@@ -1962,6 +2151,44 @@ mod tests {
             fleet_component_topology_digest: installed.manifest.component_topology_digest,
             entries: entries.into_values().collect(),
         }
+    }
+
+    #[cfg(test)]
+    fn append_fixture_pool_ledger_recovery_artifact(
+        sequence: &mut CompiledCurrentStoreSequence,
+        release_build_id: canic_core::ids::ReleaseBuildId,
+    ) -> TemplateManifestInput {
+        let helper_raw = b"\0asm\x01\0\0\0";
+        let helper_compressed = gzip(helper_raw);
+        let helper_payload_hash: [u8; 32] = wasm_hash(&helper_compressed)
+            .try_into()
+            .expect("recovery helper payload SHA-256");
+        append_qualified_pool_ledger_recovery_artifact(
+            sequence,
+            PoolLedgerRecoveryArtifact {
+                candid_sha256: [0x17; 32],
+                payload_hash: helper_payload_hash,
+                payload_size_bytes: helper_compressed.len() as u64,
+                raw_module_hash: wasm_hash(helper_raw)
+                    .try_into()
+                    .expect("recovery helper raw SHA-256"),
+                release_build_id,
+            },
+            &helper_compressed,
+        )
+        .expect("append qualified pool Ledger recovery helper");
+        sequence
+            .actions
+            .iter()
+            .find_map(|action| match action {
+                CurrentFleetProtocolAction::StageStoreManifest { request }
+                    if request.role.as_str() == "pool_ledger_recovery" =>
+                {
+                    Some(request.clone())
+                }
+                _ => None,
+            })
+            .expect("post-bootstrap recovery helper manifest")
     }
 
     #[cfg(test)]
@@ -7336,6 +7563,10 @@ mod tests {
             (
                 "fresh provisioning automatic pool readiness",
                 fresh_five_component_acceptance_seeds_the_root_owned_pool_before_effects,
+            ),
+            (
+                "post-bootstrap recovery helper Store publication",
+                current_store_stages_recovery_helper_after_root_bootstrap_and_replays_zero_effects,
             ),
             (
                 "fresh provisioning terminal runtime activation",

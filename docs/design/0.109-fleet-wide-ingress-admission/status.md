@@ -1,7 +1,7 @@
 # Canic 0.109 Implementation Status
 
 Date: 2026-08-23
-Last updated: 2026-08-26
+Last updated: 2026-08-31
 Roadmap reconciled: 2026-08-30
 
 > Historical implementation record: retained-Root repair, install preflight,
@@ -13,6 +13,20 @@ Roadmap reconciled: 2026-08-30
 
 ## Status
 
+- Current addendum (2026-08-31): the open `0.109.32` draft addresses `CANIC-102`
+  through `CANIC-110` as one fresh-estate correctness batch. It retains exact
+  create-cycle evidence, resolves symbolic Store controllers, classifies typed
+  unavailable preparation status, removes unobserved descendant multiplication,
+  fences completed reinstall evidence from alternate desired input, stages the
+  temporary recovery helper after application bootstrap, derives terminal
+  Candid from immutable artifact authority, requires the exact activation
+  successor and reconciles Idle cycles only on exact equality. B9 remains open.
+  The governed `CANIC-107` PocketIC proof now runs the real Store/Root
+  publication, adoption and bootstrap path, stages the helper afterward and
+  reaches immediate effect-free replay with every exact Store/Root action
+  terminal. The helper-bearing five-Component journey also crosses Root
+  Registry synchronization, provisions and activates every runtime, reaches
+  terminal Fleet state and immediately replays without an effect.
 - Current addendum (2026-08-30): open `0.109.30` closes `CANIC-100` before
   0.110 promotion. The maintained state contract removes generic support
   windows, migration policies/edges and migration-path auditing. Runtime
@@ -193,7 +207,7 @@ B8 correction evidence:
 | B6 | Runtime convergence | Pre-effect catalog reserve/release, fence/activate/open journals, participant fences, exact retry and forward recovery | Stale-catalog, interruption, unavailable-target, add/remove and new-Component PocketIC matrix | Ready |
 | B7 | Security closeout and propagation | Docs/generated surfaces, residue cleanup, measurements and read-only Toko adoption review | Targeted repository gates and adversarial multi-Root journey | Ready |
 | B8 | Release and downstream go-live support | Maintain the current hard-cut Fleet Ensure operator loop, consume separately authorized downstream evidence and correct every Canic-owned blocker without restoring historical install/recovery owners | Fresh/reused estate, interruption, replay, cycle-conservation, exact artifact/authority, immutable package-pair, read-only downstream adoption and terminal/effect-free rerun evidence | Active: published 0.109.27 closes CANIC-094/095. Open 0.109.28 preserves post-effect topology and exact journal-proved reinstalls across version-less fresh-process replanning for CANIC-096/097. Immutable downstream adoption, terminal convergence, successor regeneration and effect-free replay remain |
-| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, dependency-light pure recovery-plan validation separated from IC/PocketIC drivers, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Active: governed v3 repairs the measurement method; Coordinator admission, Registry-history and Root-lifecycle plus Component Registry Root-retirement ownership splits pass focused validation; further Component Registry/workflow decomposition and the immutable superseding verdict remain |
+| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, dependency-light current-plan policy validation separated from ICP/PocketIC platform drivers, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Source contraction complete: the three measured parents are down 64%, 33% and 70%; current-plan policy is pure and platform-free; retained source-digest diagnostics and the provisional resource envelope are recorded. Immutable method reruns and the superseding verdict remain |
 | B10 | Published managed-App qualification support | One bounded downstream test-support surface for exact managed init/activation, admission fencing, fresh install and same-release recovery without private `canic-core`/`ic-testkit` reconstruction | Public-package consumer build plus managed/standalone lifecycle qualification and downstream adapter removal | Published surface and downstream qualification available; final closeout reconciliation remains |
 
 Ten batches fit the normal minor-line guideline. They are not preassigned
@@ -407,19 +421,20 @@ B9 remains a pure simplification batch. It localizes admission decisions and
 decomposes `ops::component_registry`, `workflow::component_registry` and
 `ops::fleet_coordinator` along existing owner seams, contracts this handoff
 below 250 lines and freezes a bounded PocketIC time/RSS/process envelope.
-The first Coordinator slices now isolate admission publication, canonical
-Registry-history reconstruction and Root draining/removal authority without a
-second record, policy, endpoint or effect owner. The Coordinator parent remains
-large. The first Component Registry slice likewise isolates terminal Root/Store
-retirement evidence without moving its durable store or mutation owner. These
-slices are progress evidence rather than a passing verdict.
+Coordinator admission, Registry history, Root lifecycle, Component-provisioning
+validation and read-only projection are isolated without a second record,
+policy, endpoint or effect owner. Component Registry ops and workflow now give
+retirement, installation, scheduling and authority validation focused owners
+without moving their durable stores or mutations. `fleet_ensure::policy`
+remains synchronous and platform-free while ICP and PocketIC mechanics stay in
+ops/testing owners. These slices are progress evidence, not a passing verdict.
 The preceding B8 `CANIC-028` correction preserves exact selected-root
 observation but tells a named-environment fresh plan that initial install owns
 build/finalization; it adds no fallback lookup, manual copying or new build
-capability. B9 must still classify a retained-decision mismatch as source
-drift, name the exact retained source identity/revision and avoid unrelated
-identity or funding advice when those checks already pass. Current downstream
-need is input to B9's later 0.110 retriage: retain only evidence-backed
+capability. B9 now records that an in-progress operation reopens its normalized
+reviewed input before newer working bytes, while the bounded pre-retention
+fallback names exact expected/actual source digests without identity or funding
+advice. Current downstream need is input to B9's later 0.110 retriage: retain only evidence-backed
 zero-capability Wasm contraction. Bounded cycle-safe estates move to 0.111;
 broad funding automation and 1,000-canister qualification remain deferred
 unless fresh demand earns them. The retriage decision itself still occurs only

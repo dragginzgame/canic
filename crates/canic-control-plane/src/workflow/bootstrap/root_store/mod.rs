@@ -39,6 +39,9 @@ use canic_core::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+const POOL_LEDGER_RECOVERY_ROLE: &str = "pool_ledger_recovery";
+const POOL_LEDGER_RECOVERY_TEMPLATE_ID: &str = "canic:pool-ledger-recovery";
+
 /// Manifest authority the root can reproduce from its embedded Component topology.
 ///
 /// The configured role package is a workspace-relative package selector, while the artifact
@@ -109,6 +112,8 @@ pub async fn status(
     request: RootStoreBootstrapRequest,
 ) -> Result<RootStoreBootstrapResponse, InternalError> {
     let (authority, root) = validated_root_authority()?;
+    let bootstrap_complete =
+        RootWasmStoreStateOps::root_store_bootstrap_receipt(&request)?.is_some();
     let store = exact_adopted_store(authority.wasm_store_authority.wasm_store)?;
     let manifest = load_and_validate_manifest(&authority, request).await?;
     let artifact_identities = artifact_identities(&manifest)?;
@@ -117,6 +122,14 @@ pub async fn status(
     // re-reading and hashing every staged payload here makes its query cost scale with Wasm bytes.
     let staged = expected_artifact_manifests(&manifest, store.binding)?;
     let (wasm_store, live_catalog) = WasmStorePublicationWorkflow::single_store_catalog().await?;
+    let live_catalog = if bootstrap_complete {
+        application_catalog_after_bootstrap(
+            live_catalog,
+            authority.initial_release_set.release_build_id,
+        )?
+    } else {
+        live_catalog
+    };
     let catalog = verify_live_catalog(&staged, live_catalog, &artifact_identities)?;
 
     Ok(RootStoreBootstrapResponse {
@@ -379,6 +392,31 @@ fn verify_live_catalog(
             })
         })
         .collect()
+}
+
+fn application_catalog_after_bootstrap(
+    observed: Vec<WasmStoreCatalogEntryResponse>,
+    release_build_id: ReleaseBuildId,
+) -> Result<Vec<WasmStoreCatalogEntryResponse>, InternalError> {
+    let expected_version = release_build_id.to_string();
+    let mut helper_seen = false;
+    let mut application = Vec::with_capacity(observed.len());
+    for entry in observed {
+        if entry.role.as_str() != POOL_LEDGER_RECOVERY_ROLE {
+            application.push(entry);
+            continue;
+        }
+        let exact_helper_lane = !helper_seen
+            && entry.template_id.as_str() == POOL_LEDGER_RECOVERY_TEMPLATE_ID
+            && entry.version.as_str() == expected_version
+            && entry.payload_hash.len() == 32
+            && entry.payload_size_bytes != 0;
+        if !exact_helper_lane {
+            return Err(InternalError::conflict());
+        }
+        helper_seen = true;
+    }
+    Ok(application)
 }
 
 fn release_set_template_id(digest: canic_core::ids::ReleaseSetDigest) -> TemplateId {

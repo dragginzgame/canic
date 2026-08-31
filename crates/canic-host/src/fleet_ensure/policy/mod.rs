@@ -1876,21 +1876,27 @@ fn terminal_protocol_observation_bound(
                     .iter()
                     .try_fold(root_base, |subtotal, placement| {
                         placement.entries.iter().try_fold(subtotal, |sum, entry| {
-                            sum.checked_add(3)
-                                .and_then(|value| {
-                                    value.checked_add(
-                                        u128::from(entry.limits.maximum_descendants) * 2,
-                                    )
-                                })
-                                .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                            sum.checked_add(terminal_initial_component_observation_count(
+                                entry.limits.maximum_descendants,
+                            ))
+                            .ok_or(
+                                EnsurePolicyError::ArithmeticOverflow {
                                     field: "terminal protocol observation count",
-                                })
+                                },
+                            )
                         })
                     })
             })
             .map(|current_bound| bound.max(current_bound))
     })?;
     Ok(observed_bound.max(planned_bound))
+}
+
+const fn terminal_initial_component_observation_count(_future_descendant_capacity: u32) -> u128 {
+    // The fresh-estate terminal walk observes only the provisioned top-level
+    // Component here. Future descendant capacity bounds later pagination; it
+    // does not multiply the initial Component proof.
+    3
 }
 
 fn canister_cycle_policy(
@@ -2020,4 +2026,19 @@ pub(crate) fn expected_plan_sha256(plan: &FleetEnsurePlan) -> String {
 fn hash_field(hasher: &mut Sha256, value: &[u8]) {
     hasher.update(u64::try_from(value.len()).unwrap_or(u64::MAX).to_be_bytes());
     hasher.update(value);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::terminal_initial_component_observation_count;
+
+    #[test]
+    fn toko_fresh_fleet_descendant_capacity_does_not_multiply_terminal_proof() {
+        for maximum_descendants in [0, 1, 10_000, u32::MAX] {
+            assert_eq!(
+                terminal_initial_component_observation_count(maximum_descendants),
+                3,
+            );
+        }
+    }
 }

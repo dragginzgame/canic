@@ -12,9 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.32` completes the B9 source contraction across the three measured
+  control-plane gravity wells and corrects the current fresh-estate planning,
+  authority, terminal-proof and cycle-reconciliation paths without adding a
+  second policy, journal or effect owner.
 - `0.109.31` combines the current Fleet generation and bounded pool-recovery
   corrections with behavior-preserving B9 ownership contraction and the
-  hard-cut 0.110/0.111 runtime-contraction and cycle-safe-estate roadmap.
+  hard-cut 0.110/0.111 runtime-contraction and cycle-safe-estate roadmap, and
+  cleans Cargo artifacts after every successful one-shot release push.
 - `0.109.30` hard-cuts the unused stable-state migration model and audit path,
   resets runtime introspection plus Component Group canonical identity to their
   sole current v1 contracts, and adds a source guard against new pre-1.0 product
