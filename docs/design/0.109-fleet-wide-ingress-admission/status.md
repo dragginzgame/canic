@@ -158,10 +158,10 @@ Roadmap reconciled: 2026-08-30
   the maintainer required all Canic-owned Toko go-live support to precede the
   post-adoption complexity-remediation stage, accepted that audit's findings
   and required their in-repository remediation before 0.110 promotion.
-- Successors: 0.110 is reoriented to Fleet runtime contraction plus stateful
-  retirement, 0.111 retains the exact stateful-adoption exception and 0.112
-  now owns bounded multi-Fleet estates. All remain blocked on accepted 0.109
-  closeout and their own explicit promotion.
+- Successors: 0.110 is zero-capability Fleet runtime contraction and 0.111 owns
+  bounded cycle-safe multi-Fleet estates without application-state or
+  Principal preservation. Both remain blocked on accepted 0.109 closeout and
+  their own explicit promotion. Stateful adoption is cancelled.
 - Surface posture: the design hard-cuts `[app.whitelist]`,
   `caller::is_whitelisted()` and independent per-canister mutation into
   protected Fleet input, one Coordinator command/status authority, local
@@ -193,7 +193,7 @@ B8 correction evidence:
 | B6 | Runtime convergence | Pre-effect catalog reserve/release, fence/activate/open journals, participant fences, exact retry and forward recovery | Stale-catalog, interruption, unavailable-target, add/remove and new-Component PocketIC matrix | Ready |
 | B7 | Security closeout and propagation | Docs/generated surfaces, residue cleanup, measurements and read-only Toko adoption review | Targeted repository gates and adversarial multi-Root journey | Ready |
 | B8 | Release and downstream go-live support | Maintain the current hard-cut Fleet Ensure operator loop, consume separately authorized downstream evidence and correct every Canic-owned blocker without restoring historical install/recovery owners | Fresh/reused estate, interruption, replay, cycle-conservation, exact artifact/authority, immutable package-pair, read-only downstream adoption and terminal/effect-free rerun evidence | Active: published 0.109.27 closes CANIC-094/095. Open 0.109.28 preserves post-effect topology and exact journal-proved reinstalls across version-less fresh-process replanning for CANIC-096/097. Immutable downstream adoption, terminal convergence, successor regeneration and effect-free replay remain |
-| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, dependency-light pure recovery-plan validation separated from IC/PocketIC drivers, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Accepted; blocked on B8 |
+| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, dependency-light pure recovery-plan validation separated from IC/PocketIC drivers, active handoff below 250 lines, bounded PocketIC resource envelope, retained-decision source-drift diagnostics and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Active: governed v3 repairs the measurement method; Coordinator admission, Registry-history and Root-lifecycle plus Component Registry Root-retirement ownership splits pass focused validation; further Component Registry/workflow decomposition and the immutable superseding verdict remain |
 | B10 | Published managed-App qualification support | One bounded downstream test-support surface for exact managed init/activation, admission fencing, fresh install and same-release recovery without private `canic-core`/`ic-testkit` reconstruction | Public-package consumer build plus managed/standalone lifecycle qualification and downstream adapter removal | Published surface and downstream qualification available; final closeout reconciliation remains |
 
 Ten batches fit the normal minor-line guideline. They are not preassigned
@@ -397,7 +397,8 @@ findings cover 0.109 change radius, mature gravity-well modules, the oversized
 current handoff, validation-capacity growth, the downstream-loop prerequisite
 now assigned to B8 and the unearned breadth of the scheduled 0.110 plan.
 
-B9 remediation must not begin until B8 closes. It must then fix every remaining
+B9 remediation began only after the published B8 correctness line and retained
+downstream loop cleared its prerequisite. It must still fix every remaining
 complexity finding and retain a passing superseding verdict from one immutable
 candidate. Publication and adoption establish the real product loop that B9
 audits; neither event alone closes the complexity gate or authorizes 0.110.
@@ -406,16 +407,23 @@ B9 remains a pure simplification batch. It localizes admission decisions and
 decomposes `ops::component_registry`, `workflow::component_registry` and
 `ops::fleet_coordinator` along existing owner seams, contracts this handoff
 below 250 lines and freezes a bounded PocketIC time/RSS/process envelope.
+The first Coordinator slices now isolate admission publication, canonical
+Registry-history reconstruction and Root draining/removal authority without a
+second record, policy, endpoint or effect owner. The Coordinator parent remains
+large. The first Component Registry slice likewise isolates terminal Root/Store
+retirement evidence without moving its durable store or mutation owner. These
+slices are progress evidence rather than a passing verdict.
 The preceding B8 `CANIC-028` correction preserves exact selected-root
 observation but tells a named-environment fresh plan that initial install owns
 build/finalization; it adds no fallback lookup, manual copying or new build
 capability. B9 must still classify a retained-decision mismatch as source
 drift, name the exact retained source identity/revision and avoid unrelated
-identity or funding advice when those checks already pass. Current
-downstream need is input to B9's later 0.110 retriage: retain stateful
-application retirement first and defer reserve Fleets, cross-Fleet transfer,
-broad funding automation and 1,000-canister qualification unless fresh demand
-earns them. The retriage decision itself still occurs only after B9 evidence.
+identity or funding advice when those checks already pass. Current downstream
+need is input to B9's later 0.110 retriage: retain only evidence-backed
+zero-capability Wasm contraction. Bounded cycle-safe estates move to 0.111;
+broad funding automation and 1,000-canister qualification remain deferred
+unless fresh demand earns them. The retriage decision itself still occurs only
+after B9 evidence.
 
 `CANIC-026` is deliberately not part of B9. B10 owns a small published
 managed-App qualification harness after simplification passes, and may not add

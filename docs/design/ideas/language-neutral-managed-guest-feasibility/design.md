@@ -32,7 +32,7 @@ Date: 2026-08-10
 
 ## Decision
 
-0.112 begins with one executable feasibility proof for a language-neutral
+This idea begins with one executable feasibility proof for a language-neutral
 managed-guest boundary. The proof must answer three questions before Canic
 changes its production Rust guest protocol:
 
@@ -652,7 +652,7 @@ rewrite of any product.
 
 ## Held Work
 
-The following remain outside 0.112 M0 even if feasibility succeeds:
+The following remain outside M0 even if feasibility succeeds:
 
 - production hard cut of the ordinary Rust guest ABI;
 - tagged Cargo/Mops role configuration;
@@ -671,7 +671,7 @@ Rust in every later slice.
 
 ## Exit Criteria
 
-0.112 M0 is complete only when:
+M0 is complete only when:
 
 - the candidate contract and golden vectors are checked in;
 - real Rust and Motoko fixtures pass the same conformance matrix;

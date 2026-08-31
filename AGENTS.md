@@ -100,17 +100,23 @@ with this file, the code is wrong.
   Exact upstream version names, immutable historical records and versioned
   audit-method/evidence revisions are not product compatibility generations
   and may retain their truthful versions.
-- Every pre-1.0 release transition is reinstall-only. Active designs must not
-  specify cross-release upgrades, state migration or import, authority
-  handoff, existing-installation adoption, mixed-version operation, rollback,
-  or compatibility recovery unless the maintainer explicitly asks for an
-  exception.
-- The maintainer approved one bounded exception on 2026-08-18 and moved its
-  scheduled line on 2026-08-23: 0.111 may define one whole-Fleet,
-  stop-the-world transition from one exact
-  released predecessor to one successor. This does not authorize rolling or
-  mixed-version operation, arbitrary historical adoption, downgrade, generic
-  compatibility code or implementation before the design's own gates.
+- Every pre-1.0 release transition is reinstall-only, without an active
+  exception. Active designs must not specify cross-release upgrades, state
+  migration or import, authority handoff, existing-installation adoption,
+  mixed-version operation, rollback or compatibility recovery.
+- Application data, stable memory, canister identities, topology, historical
+  release authority, old plans, old journal formats and predecessor
+  compatibility may be discarded at a release boundary. The sole
+  cross-release compatibility invariant is cycle conservation: every observed
+  controlled cycle remains controlled, reaches an exact controlled
+  destination, or is accounted for as bounded observed protocol debit or an
+  explicitly reviewed terminal residual discard.
+- Reinstall-only release procedures remain governed by exact observed
+  authority and controller checks, intent-before-effect journalling,
+  lost-response reconciliation, bounded paid effects, cycle-safe source
+  deletion, typed failures, same-operation interruption recovery, terminal
+  conservation and immediate effect-free replay. They do not promise reuse of
+  an identity, controller set or topology across releases.
 - Same-release interruption recovery, retry, idempotency, backup, and restore
   remain required. They are operational safety, not compatibility behavior.
 - Do not add anti-resurrection tests for removed legacy behavior or command

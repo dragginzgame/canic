@@ -7,10 +7,10 @@ Roadmap reconciled: 2026-08-30
 
 - Classification: deferred, unnumbered idea. It is not a scheduled release or
   implementation authority.
-- Need: the 0.112 pre-funded estate model is sufficient for bounded
+- Need: the 0.111 pre-funded estate model is sufficient for bounded
   qualification but a continuously growing Fleet can exhaust the exact root
   Cycles Ledger account.
-- Sequence: review only after the pre-funded 0.112 journey is qualified and
+- Sequence: review only after the pre-funded 0.111 journey is qualified and
   its real funding/cost evidence is accepted.
 - Separation: this is distinct from 0.108 Coordinator-backed root operating
   funding and from every application/player economy.
@@ -39,7 +39,7 @@ into infrastructure authority.
 
 ## Required Evidence Before Promotion
 
-- completed 0.108 and 0.112 funding/accounting contracts;
+- completed 0.108 and 0.111 funding/accounting contracts;
 - measured estate depletion and replenishment need from the pre-funded v1
   journey;
 - exact source authority and destination account derivation;

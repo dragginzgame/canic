@@ -6,8 +6,9 @@ Date: 2026-08-20
 
 The frozen evidence below truthfully uses its then-current 0.110 ownership
 labels. The 2026-08-30 roadmap amendment does not rewrite those observations:
-Q1 empty reserve-Fleet topology and bounded Q2-Q5 estate inputs now feed 0.112;
-the four Q6 current-state complexity constraints feed 0.110 B1/B4; parallel
+Q1 empty reserve-Fleet topology and bounded Q2-Q5 estate inputs now feed 0.111.
+The four Q6 current-state complexity constraints enter 0.110 B1 for
+reclassification and reach B4 only with fresh marginal Wasm evidence; parallel
 production lanes and 10/100/1,000 qualification are unscheduled. No label in
 this historical evidence grants implementation authority.
 

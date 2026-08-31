@@ -48,20 +48,24 @@ release-batch plan and explicit maintainer acceptance.
    [post-implementation complexity audit](../audits/release-lines/0.109-post-implementation-complexity-audit.md)
    enters remediation. That audit must then be superseded by an accepted
    passing immutable verdict before any 0.110 implementation or promotion.
-8. [0.110 Fleet runtime contraction and stateful safety](0.110-fleet-runtime-contraction-and-stateful-safety/status.md)
-   contracts release builds, endpoint/runtime code, control-plane/operator
-   paths and validation before adding bounded stateful-retirement evidence.
-9. [0.111 stateful Fleet release adoption](0.111-stateful-fleet-release-adoption/status.md)
-   qualifies one whole-Fleet stop-the-world predecessor-to-successor
-   transition before stateful production claims.
-10. [0.112 bounded multi-Fleet estates](0.112-bounded-multi-fleet-estates/status.md)
-    adds indexed Root-local estates, an ordinary reserve Fleet and one
-    same-Subnet single-asset transfer under inherited contraction budgets.
+8. [0.110 Fleet runtime contraction](0.110-fleet-runtime-contraction/status.md)
+   creates absolute Wasm code-section and replica-validator function reserves
+   through a zero-capability storage, codec, whole generated-surface,
+   generic-instantiation, endpoint and recovery hard cut.
+9. [0.111 bounded multi-Fleet estates](0.111-bounded-multi-fleet-estates/status.md)
+   adds indexed Root-local estates, an ordinary reserve Fleet and one
+   cycle-safe source-disposition/destination-credit operation without data,
+   stable-memory or Principal preservation. B1 is held behind Q0 proof of the
+   finalized source-executed cycle-disposition capsule.
+
+The former stateful-retirement/release-adoption proposal is
+[cancelled and archived](archive/0.111-rescinded-stateful-fleet-release-adoption/status.md).
+It grants no compatibility exception or implementation authority.
 
 The former runtime-heavy generic Fleet Observatory is now an
 [unnumbered host-first idea](ideas/fleet-observatory/status.md).
 
-Deferred ideas do not gate this ten-line path unless a later explicit
+Deferred ideas do not gate this nine-line path unless a later explicit
 amendment moves one into a numbered design.
 
 ## Release-Batch Plan Template

@@ -106,11 +106,10 @@ B1 must deliver together:
 6. 0.108 closes replay-safe Coordinator-backed root operating funding.
 7. 0.109 establishes Coordinator-owned Fleet-wide ingress admission with
    complete local enforcement projections.
-8. 0.110 contracts Fleet runtime/build/operator/validation surfaces and adds
-   stateful-retirement safety.
-9. 0.111 qualifies one explicit stateful predecessor-to-successor adoption.
-10. 0.112 adds bounded indexed estates and one same-Subnet cross-Fleet
-    transfer.
+8. 0.110 creates absolute Wasm byte/function reserves through zero-capability
+   runtime contraction.
+9. 0.111 adds bounded indexed estates and cycle-safe source disposition with
+   no application-data or existing-Principal preservation promise.
 
 Unnumbered ideas remain outside this path. Historical releases, archived
 designs and deferred drafts retain their truthful old identities.

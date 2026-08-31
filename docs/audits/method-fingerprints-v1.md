@@ -31,8 +31,8 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-LIFECYCLE-001` | `3` | `f35101e6f877dadcba678d2b2db5695b3ffdecd23d6f6eb4e737200b2b1bf405` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
 | `CANIC-BUILD-INTEGRITY-001` | `2` | `e75c8fdc54f090bd901482f50c88e2b6272830d1425f24d7165904c1b206a94b` | `docs/audits/recurring/system/build-integrity.md` |
 | `CANIC-CAPABILITY-SURFACE-001` | `2` | `91e61f3385882d108b8541e31715b1ee1e126299f7ad64890c979043a9d7c759` | `docs/audits/recurring/system/capability-surface.md` |
-| `CANIC-CHANGE-FRICTION-001` | `2` | `5f4377f00907f36f59388f797f210bdfed9398832f983529cdccd4bd747d2ab6` | `docs/audits/recurring/system/change-friction.md` |
-| `CANIC-COMPLEXITY-001` | `2` | `76bb53a536f252348567d32fd0779a40347e54c254c5fd726207253dcd069fce` | `docs/audits/recurring/system/complexity-accretion.md` |
+| `CANIC-CHANGE-FRICTION-001` | `3` | `c23af3f87879a3223893b11ef4568340789a291d4c98b33f83d7fab5efa67cda` | `docs/audits/recurring/system/change-friction.md` |
+| `CANIC-COMPLEXITY-001` | `3` | `4e20ddfbf9b33e5cc9ca2b6535aaeab0b5f30ffbf053b06b55f4d9a3c0831a2a` | `docs/audits/recurring/system/complexity-accretion.md` |
 | `CANIC-DEPENDENCY-001` | `2` | `ad7b459667545ec5b3adfd33a614803e2c11fa77a28af873392a1d3344333f6f` | `docs/audits/recurring/system/dependency-hygiene.md` |
 | `CANIC-DUPLICATION-001` | `1` | `c4b2b2828f551a5419de394d442ecb04932900d7b15665177a3c8529ee340262` | `docs/audits/recurring/system/dry-consolidation.md` |
 | `CANIC-INSTRUCTION-001` | `3` | `515dbe0d4957dd4705f3e21ce88cca1a34b8c4cc86ccd34483479abedf5c2ab8` | `docs/audits/recurring/system/instruction-footprint.md` |
@@ -48,6 +48,8 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 
 | Audit ID | Version | SHA-256 | Definition | Superseded by |
 | --- | --- | --- | --- | --- |
+| `CANIC-CHANGE-FRICTION-001` | `2` | `5f4377f00907f36f59388f797f210bdfed9398832f983529cdccd4bd747d2ab6` | `docs/audits/recurring/system/change-friction.md` | `CANIC-CHANGE-FRICTION-001/v3` |
+| `CANIC-COMPLEXITY-001` | `2` | `76bb53a536f252348567d32fd0779a40347e54c254c5fd726207253dcd069fce` | `docs/audits/recurring/system/complexity-accretion.md` | `CANIC-COMPLEXITY-001/v3` |
 | `CANIC-WASM-001` | `3` | `9747666aeee64eff0af26b92f90bd1ccf12f318023780aa7148fdd55fc29d745` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v4` |
 | `CANIC-LIFECYCLE-001` | `2` | `89202cda4ed08ced7d9f70fd98ff1e68e04bc1877a528a489060242f5acd8059` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` | `CANIC-LIFECYCLE-001/v3` |
 | `CANIC-WASM-001` | `2` | `e33fc36ee904fa6a9af8c7aa399a94b98c441e25fe6590ac1548c548ba2f3ffb` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v3` |
@@ -92,7 +94,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
 | `0eb8e77d81af93338dcc6051255ddfcf71790dfacd67edb5ec4eae64e9ef393d` | `docs/audits/META-AUDIT.md` |
-| `928f8672c6ec9c6287930f93caea289aea8a70eb45664d1c71af0b48b88c2b36` | `docs/audits/METHODS.md` |
+| `839cf950f609c2c03f53f0a82673a61eb5497a8053d620207a8451eec744e338` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |
@@ -101,7 +103,9 @@ and executable fixture inputs and record the resulting value in each run.
 | `4135092a556dbcabfe895b27b6666f5d54f041526ee8e040c2777c9b875f0437` | `docs/audits/fixtures/layering/forbidden-grouped-import.txt` |
 | `c4db862c85b44585f88562030560907a6ef1a8a5926fd4682445a10a8be41b6e` | `docs/audits/fixtures/layering/forbidden-nested-grouped-import.txt` |
 | `42b440e2fc4d47394b7b8b99a69d1c05a91e79aa7eb3cd8872aa0520746078d3` | `docs/audits/fixtures/change-friction-v2-sample.tsv` |
+| `77ceab2352ccce278aba0c698bc16eabb7f3dadf66256c8bf6db957d64863371` | `docs/audits/scripts/measure-change-friction-v3.sh` |
 | `7ffa84f792ef90208bbfcdd11d386ddc5e482521ba314e71a17f6070a4352c5c` | `docs/audits/scripts/measure-change-friction-v2.sh` |
+| `f08e975e3b68e483d736a62b376e2ec83c9038d0901c688c2a2f1d69d0f55aaa` | `docs/audits/scripts/measure-complexity-v3.sh` |
 | `4ff697d1ed68db19bca8810f609ea40547486a2174e81271312828ef034ca7c8` | `docs/audits/scripts/measure-complexity-v2.sh` |
 | `8f4a46a26e56b845290c3adc4994826b8a10084c97a2c68579ca60038f8e1be8` | `docs/audits/scripts/run-nonempty-cargo-test.sh` |
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |

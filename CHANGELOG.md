@@ -8,10 +8,42 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Corrects fresh-estate Fleet Ensure planning so an explicitly unallocated
+  bootstrap Root reaches reviewed creation without a premature management
+  query. Retained, targeted and already allocated Roots keep exact Principal
+  observation and fail-closed management checks.
+- Canonicalizes human-authored Fleet admission Principal sets after parsing,
+  while rejecting duplicate and anonymous identities and retaining the strict
+  deterministic runtime policy representation.
+- Continues the 0.109 complexity-contraction batch with a corrected governed
+  measurement method and explicit Coordinator admission, Registry-history,
+  Root-lifecycle, Component Registry Root/Store, top-level and descendant
+  retirement, Component Directory-refresh plus top-level and direct-child
+  Component allocation/activation and initial-inventory owners,
+  without changing durable authority or public protocol.
+- Restores the evidence-backed 0.110 storage-contraction amendment with
+  absolute code-section and replica-validator function reserves, differential
+  batch gates, whole generated-surface inventories and effect-free upgrade
+  rejection. Canonical role artifacts must exclude unselected endpoint,
+  storage, Candid, provider, timer, recovery and control-plane machinery; macro
+  imports or source splitting receive no size credit. B1 also requires a
+  controlled `1..=N` Canic generic-instantiation cohort and named post-`-Oz`
+  monomorphization report, while retaining downstream generator costs only as
+  non-forecast routing evidence. The line removes its stateful-retirement
+  capability, cancels the pre-1.0 cross-release adoption exception and
+  promotes bounded cycle-safe estates to active 0.111 without application-
+  state or Principal preservation. The 0.111 B1 is held behind a disposable-
+  canister proof of its finalized cycle-disposition capsule, two-Root
+  activation, atomic credit receipt and terminal residual-discard accounting.
+
 ## [0.109.x] - Fleet-Wide Ingress Admission
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.31` lets the temporary pool Ledger recovery receipt slot advance to a
+  distinct second asset while preserving exact replay and fail-closed
+  same-operation authority, with complete helper deletion gated on terminal
+  two-pool live evidence.
 - `0.109.30` hard-cuts the unused stable-state migration model and audit path,
   resets runtime introspection plus Component Group canonical identity to their
   sole current v1 contracts, and adds a source guard against new pre-1.0 product
