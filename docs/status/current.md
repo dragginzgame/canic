@@ -204,4 +204,5 @@ the active B1 evidence and do not begin B2 until the maintainer accepts the
 complete B1 baseline.
 
 
-<!-- canic-release-validation: version=0.109.35 source=033990cdfa86b13053a46c8fb887675a6adeb0d1 date=2026-09-01 gate=complete -->
+
+<!-- canic-release-validation: version=0.110.0 source=d288f985e38d33508dd6631ecf247e5d7d2c04a9 date=2026-09-01 gate=complete -->
