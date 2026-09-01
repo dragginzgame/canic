@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.1` opens the remaining B1 measurement and attribution batch from
+  immutable `v0.110.0` without claiming contraction or B1 completion.
 - `0.110.0` opens the reinstall-only runtime-contraction line on an immutable
   nine-role Wasm baseline and carries the final fresh-estate cycle/readiness
   correction with exact interruption, conservation and no-effect replay proof.
