@@ -23,8 +23,8 @@ use crate::{
         },
     },
     icp::{
-        IcpCandidCallError, IcpCli, IcpCommandError, IcpDiagnostic, IcpManagementCallError,
-        run_status,
+        IcpCandidCallError, IcpCanisterStatusReport, IcpCli, IcpCommandError, IcpDiagnostic,
+        IcpManagementCallError, run_status,
     },
     icp_config::resolve_icp_build_network_from_root,
     subnet_catalog::load_mainnet_subnet_catalog,
@@ -383,6 +383,19 @@ pub enum IcpEnsurePlatformError {
     },
 
     #[error(
+        "ICP returned only public non-controller status for {canister}; exact runtime and cycle evidence is unavailable"
+    )]
+    PublicCanisterStatusUnavailable { canister: String },
+
+    #[error(
+        "Root-owned observation for {canister} conflicts with reviewed {field}; no paid effect was repeated"
+    )]
+    RootOwnedObservationAuthorityConflict {
+        canister: String,
+        field: &'static str,
+    },
+
+    #[error(
         "ICP CLI status JSON omitted canister_version for {canister}, and the exact typed \
          effective-ID-routed management-canister status call failed: {source}; no install was \
          issued. Restore the selected controller identity and management-status access, then \
@@ -736,6 +749,14 @@ impl IcpEnsurePlatform {
                 expected: principal.to_string(),
             });
         }
+        reject_public_status_projection(&report, principal)?;
+        let status_text =
+            report
+                .status
+                .ok_or_else(|| IcpEnsurePlatformError::IncompleteCanisterStatus {
+                    canister: principal.to_string(),
+                    field: "status",
+                })?;
         let cycles_text =
             report
                 .cycles
@@ -757,7 +778,7 @@ impl IcpEnsurePlatform {
             })?
             .controllers;
         controllers.sort();
-        let status = match report.status.to_ascii_lowercase().as_str() {
+        let status = match status_text.to_ascii_lowercase().as_str() {
             "stopped" => CanisterRuntimeStatus::Stopped,
             "stopping" => CanisterRuntimeStatus::Stopping,
             _ => CanisterRuntimeStatus::Running,
@@ -772,6 +793,145 @@ impl IcpEnsurePlatform {
             root_owned_lifecycle: None,
             status,
         }))
+    }
+
+    fn inspect_root_owned_canister(
+        &self,
+        configured: &crate::fleet_ensure::model::DesiredCanister,
+        principal: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<CanisterStatusResponse>, IcpEnsurePlatformError> {
+        let parent = configured.parent.as_deref().ok_or_else(|| {
+            IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                canister: configured.name.clone(),
+                field: "Root parent",
+            }
+        })?;
+        let root = self.current_principal(state, parent).ok_or_else(|| {
+            IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                canister: configured.name.clone(),
+                field: "Root Principal",
+            }
+        })?;
+        let root_configured = self
+            .desired
+            .canisters
+            .iter()
+            .find(|candidate| {
+                candidate.name == parent && candidate.kind == DesiredCanisterKind::Root
+            })
+            .ok_or_else(
+                || IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                    canister: configured.name.clone(),
+                    field: "Root desired authority",
+                },
+            )?;
+        let root_wasm = root_configured.wasm.as_deref().ok_or_else(|| {
+            IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                canister: configured.name.clone(),
+                field: "Root artifact",
+            }
+        })?;
+        let expected_root_module = artifact_hash(&resolve_path(&self.root, root_wasm))?;
+        let root_live = self.status_optional(root)?.ok_or_else(|| {
+            IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                canister: configured.name.clone(),
+                field: "live Root",
+            }
+        })?;
+        let expected_root_controllers = self.resolved_controllers(
+            state,
+            &root_configured.controllers,
+            &root_configured.controller_canisters,
+        )?;
+        if root_live.controllers != expected_root_controllers {
+            return Err(
+                IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                    canister: configured.name.clone(),
+                    field: "Root controllers",
+                },
+            );
+        }
+        let Some(root_module) = root_live.module_sha256.as_deref() else {
+            return Ok(None);
+        };
+        if root_module != expected_root_module {
+            return Err(
+                IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                    canister: configured.name.clone(),
+                    field: "Root module SHA-256",
+                },
+            );
+        }
+        if root_live.status != CanisterRuntimeStatus::Running {
+            return Ok(None);
+        }
+        self.require_operator()?;
+        let response: RootInspectionResponse = call_with_candid(
+            &self.icp,
+            &self.root_protocol_candid()?,
+            parse_principal("Fleet Subnet Root", root)?,
+            canic_protocol::CANIC_ROOT_COMMAND,
+            &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                canister_id: parse_principal("Root-owned canister", principal)?,
+            }),
+        )
+        .map_err(current_protocol::CurrentProtocolError::from)?;
+        let RootInspectionResponse::InspectCanister(response) = response;
+        Ok(Some(response))
+    }
+
+    fn created_canister_cycles(
+        &self,
+        name: &str,
+        principal: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<(Option<u128>, bool), IcpEnsurePlatformError> {
+        match self.status_optional(principal) {
+            Ok(live) => return Ok((live.map(|live| live.cycles), false)),
+            Err(IcpEnsurePlatformError::PublicCanisterStatusUnavailable { .. }) => {}
+            Err(error) => return Err(error),
+        }
+        let configured = self
+            .desired
+            .canisters
+            .iter()
+            .find(|configured| configured.name == name)
+            .ok_or_else(
+                || IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                    canister: name.to_string(),
+                    field: "desired canister",
+                },
+            )?;
+        if configured.kind != DesiredCanisterKind::Pool {
+            return Err(IcpEnsurePlatformError::PublicCanisterStatusUnavailable {
+                canister: principal.to_string(),
+            });
+        }
+        let Some(response) = self.inspect_root_owned_canister(configured, principal, state)? else {
+            return Ok((None, true));
+        };
+        let parent = configured.parent.as_deref().ok_or_else(|| {
+            IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                canister: name.to_string(),
+                field: "Root parent",
+            }
+        })?;
+        let root = self.current_principal(state, parent).ok_or_else(|| {
+            IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                canister: name.to_string(),
+                field: "Root Principal",
+            }
+        })?;
+        let cycles = validate_root_funding_inspection(
+            name,
+            configured.kind,
+            root,
+            &response.settings.controllers,
+            response.module_hash.as_deref(),
+            &response.cycles,
+        )?;
+        Ok((Some(cycles), false))
     }
 
     fn install_status_optional(
@@ -1826,21 +1986,23 @@ impl EnsurePlatform for IcpEnsurePlatform {
         let mut post_cycles = None;
         let (applied, progress_identity) = match action {
             EnsureAction::Create {
+                name,
                 requested_initial_cycles,
                 ..
             } => {
-                let live_cycles = if record.created_principal.is_some() && record.receipt.is_some()
-                {
-                    self.status_optional(
-                        record
-                            .created_principal
-                            .as_deref()
-                            .ok_or(IcpEnsurePlatformError::LedgerCreatePending)?,
-                    )?
-                    .map(|live| live.cycles)
-                } else {
-                    None
-                };
+                let (live_cycles, deferred) =
+                    if record.created_principal.is_some() && record.receipt.is_some() {
+                        self.created_canister_cycles(
+                            name,
+                            record
+                                .created_principal
+                                .as_deref()
+                                .ok_or(IcpEnsurePlatformError::LedgerCreatePending)?,
+                            state,
+                        )?
+                    } else {
+                        (None, false)
+                    };
                 post_cycles = live_cycles;
                 let maximum_observation_burn_cycles = self
                     .desired
@@ -1855,6 +2017,8 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 );
                 if live_cycles.is_some() && !applied {
                     retry = EffectRetry::ReplanRequiredAfterCreateBalanceDrift;
+                } else if deferred {
+                    retry = EffectRetry::DeferUntilControllerObservation;
                 }
                 (
                     applied,
@@ -2004,16 +2168,41 @@ impl EnsurePlatform for IcpEnsurePlatform {
             EnsureAction::SetControllers {
                 controller_canisters,
                 controllers,
+                name,
                 principal,
                 ..
             } => {
                 let expected =
                     self.resolved_controllers(state, controllers, controller_canisters)?;
-                let live = self.status_optional(Self::action_principal(state, principal)?)?;
+                let principal = Self::action_principal(state, principal)?;
+                let configured = self
+                    .desired
+                    .canisters
+                    .iter()
+                    .find(|configured| configured.name == *name);
+                let mut observed_controllers = if let Some(configured) =
+                    configured.filter(|configured| configured.kind == DesiredCanisterKind::Pool)
+                {
+                    self.inspect_root_owned_canister(configured, principal, state)?
+                        .map(|response| {
+                            response
+                                .settings
+                                .controllers
+                                .into_iter()
+                                .map(|controller| controller.to_text())
+                                .collect::<Vec<_>>()
+                        })
+                } else {
+                    self.status_optional(principal)?
+                        .map(|live| live.controllers)
+                };
+                if let Some(controllers) = &mut observed_controllers {
+                    controllers.sort();
+                    controllers.dedup();
+                }
                 (
-                    live.as_ref()
-                        .is_some_and(|live| live.controllers == expected),
-                    format!("controllers:{:?}", live.map(|live| live.controllers)),
+                    observed_controllers.as_ref() == Some(&expected),
+                    format!("controllers:{observed_controllers:?}"),
                 )
             }
             EnsureAction::Start { principal, .. } => {
@@ -2621,6 +2810,22 @@ fn parse_principal(field: &'static str, value: &str) -> Result<Principal, IcpEns
     })
 }
 
+fn reject_public_status_projection(
+    report: &IcpCanisterStatusReport,
+    principal: &str,
+) -> Result<(), IcpEnsurePlatformError> {
+    if report.status.is_none()
+        && report.settings.is_none()
+        && report.cycles.is_none()
+        && report.public_controllers.is_some()
+    {
+        return Err(IcpEnsurePlatformError::PublicCanisterStatusUnavailable {
+            canister: principal.to_string(),
+        });
+    }
+    Ok(())
+}
+
 fn resolve_path(root: &Path, path: &str) -> PathBuf {
     let path = Path::new(path);
     if path.is_absolute() {
@@ -2738,6 +2943,60 @@ const fn rejection_code_name(code: RejectionCode) -> &'static str {
 mod tests {
     use super::*;
     use canic_core::dto::pool::CanisterPoolAssetStatus;
+
+    #[cfg(unix)]
+    #[test]
+    fn icp_1_3_public_non_controller_status_is_typed_unavailable_evidence() {
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        let canister = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let root = crate::test_support::temp_dir("canic-public-status-projection");
+        fs::create_dir_all(&root).expect("create public status fixture");
+        let executable = root.join("icp");
+        let commands = root.join("commands.log");
+        let script = format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = \"--version\" ]; then echo 'icp 1.3.0'; exit 0; fi\n\
+             printf '%s\\n' \"$*\" >> '{}'\n\
+             printf '%s\\n' '{{\"id\":\"{canister}\",\"controllers\":[\"rdmx6-jaaaa-aaaaa-aaadq-cai\"],\"module_hash\":null}}'\n",
+            commands.display(),
+        );
+        fs::write(&executable, script).expect("write fake ICP 1.3.0");
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
+            .expect("make fake ICP executable");
+        let desired = DesiredFleet {
+            bootstrap: None,
+            canisters: Vec::new(),
+            cycles_ledger: "um5iw-rqaaa-aaaaq-qaaba-cai".to_string(),
+            environment: "local".to_string(),
+            fleet: "public-status".to_string(),
+            ledger_fee_cycles: "100M".to_string(),
+            management_creation_fee_cycles: "500B".to_string(),
+            material_cycle_threshold: "1B".to_string(),
+            maximum_observation_burn_cycles: "1B".to_string(),
+            maximum_stalled_observations: 4,
+            maximum_update_burn_cycles: "1B".to_string(),
+            operator: "rdmx6-jaaaa-aaaaa-aaadq-cai".to_string(),
+            protocol: None,
+            protocol_steps: Vec::new(),
+            schema_version: 1,
+            treasury: "treasury".to_string(),
+        };
+        let platform =
+            IcpEnsurePlatform::new(desired, executable.to_string_lossy().as_ref(), &root);
+
+        assert!(matches!(
+            platform.status_optional(canister),
+            Err(IcpEnsurePlatformError::PublicCanisterStatusUnavailable {
+                canister: unavailable,
+            }) if unavailable == canister
+        ));
+        assert!(
+            fs::read_to_string(commands)
+                .expect("read fake ICP commands")
+                .contains("canister status rrkah-fqaaa-aaaaa-aaaaq-cai --json")
+        );
+    }
 
     #[test]
     fn retained_predecessor_modules_are_observed_and_optionally_cross_checked() {

@@ -167,22 +167,20 @@ Direct PocketIC test commands outside the governed runner must supply
 `CANIC_POCKET_IC_SERVER_URL`; they fail immediately when it is absent rather
 than spawning an implicit or unobservable child process.
 
-## Post-Release Cargo Cleanup
+## Explicit Cargo Cleanup
 
-Each successful one-shot `make release-patch`, `make release-patch-fast`,
-`make release-minor` and `make release-major` flow finishes by running the
-repository release cleanup, which invokes `cargo clean` from the Canic root.
-The cleanup step runs only after the exact release commit and tag have been
-atomically pushed. A failed validation, version, stage, commit, tag or push
-retains Cargo artifacts for diagnosis and retry.
+Release and push targets retain Cargo artifacts. This lets a following
+`make publish` reuse the exact build cache populated by validation instead of
+performing a clean package compilation immediately after the release push.
+Failed validation, version, stage, commit, tag, push or package publication
+also retains those artifacts for diagnosis and retry.
 
 The primitive `release-push` target remains limited to readiness verification
-and the atomic network update; version-only targets and separately invoked
-release primitives do not infer one-shot completion. Post-release cleanup is a
-local storage action, not release authority. If its bounded `cargo clean`
-attempts fail after a successful push, the one-shot release still reports the
-remote release as successful, emits a cleanup warning and never republishes or
-replays the network effect. The operator may retry only `make clean`.
+and the atomic network update; version-only and one-shot release targets do not
+infer local cleanup. Cargo cleanup is an explicit storage-maintenance action:
+use `make release-clean` for fail-soft cleanup after all intended package work,
+or `make clean` when cleanup failure should be returned to the caller. Neither
+command changes release authority or replays a network effect.
 
 ## Development Slices and Validation Tiers
 
@@ -360,8 +358,8 @@ release commit/tag pair from committed `HEAD`, refreshes the current `origin`
 branch, requires fast-forward ancestry and rejects any conflicting remote tag.
 An idempotent retry may observe the exact same annotated tag object. It does
 not format, compile, test, validate, or clean. A successful parent one-shot
-release invokes the non-authoritative post-release cleanup only after this
-primitive returns. Local
+release also retains the validated Cargo artifacts for subsequent packaging or
+publication. Local
 staged, unstaged and untracked changes neither block the push nor join it; they
 remain local. The release version is read from `HEAD`'s committed `Cargo.toml`,
 so a later local manifest edit cannot redirect tag selection. Test scratch has

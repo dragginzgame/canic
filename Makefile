@@ -77,14 +77,15 @@ help:
 	@echo "  patch-fast       Target-check an eligible non-runtime patch, then bump (0.0.x)"
 	@echo "  minor            Validate, then bump minor version files (0.x.0)"
 	@echo "  major            Validate, then bump major version files (x.0.0)"
-	@echo "  release-patch    Validate, publish a patch release, then clean Cargo artifacts"
-	@echo "  release-patch-fast  Target-check, publish a non-runtime patch, then clean Cargo artifacts"
-	@echo "  release-minor    Validate, publish a minor release, then clean Cargo artifacts"
-	@echo "  release-major    Validate, publish a major release, then clean Cargo artifacts"
+	@echo "  release-patch    Validate and publish a patch release; retain Cargo artifacts"
+	@echo "  release-patch-fast  Target-check and publish a non-runtime patch; retain Cargo artifacts"
+	@echo "  release-minor    Validate and publish a minor release; retain Cargo artifacts"
+	@echo "  release-major    Validate and publish a major release; retain Cargo artifacts"
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-candidate Verify post-bump package-version and lock consistency"
 	@echo "  release-commit   Commit and tag the staged release"
 	@echo "  release-push     Atomically push the verified release commit and tag"
+	@echo "  release-clean    Explicitly clean Cargo artifacts after release and package publication"
 	@echo "  release-cadence  Report the current minor's advisory release-batch count"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
@@ -193,28 +194,24 @@ release-patch:
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push
-	@$(MAKE) release-clean
 
 release-patch-fast:
 	@$(MAKE) patch-fast
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push
-	@$(MAKE) release-clean
 
 release-minor:
 	@$(MAKE) minor
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push
-	@$(MAKE) release-clean
 
 release-major:
 	@$(MAKE) major
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push
-	@$(MAKE) release-clean
 
 release-stage:
 	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
@@ -244,7 +241,7 @@ release-push:
 
 release-clean:
 	@if ! bash scripts/ci/cleanup-release-artifacts.sh; then \
-		echo "warning: release push succeeded, but Cargo cleanup failed; run 'make clean' without rerunning the release" >&2; \
+		echo "warning: Cargo cleanup failed; retry with 'make clean' when convenient" >&2; \
 	fi
 
 release-cadence:

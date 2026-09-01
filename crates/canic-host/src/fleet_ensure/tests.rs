@@ -6,7 +6,8 @@ use crate::{
             DesiredFleet, DesiredFleetProtocol, DesiredPresence, DesiredProtocolStep,
             DrainAuthority, EffectRecord, EffectState, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION,
             FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
-            FleetEnsureStateRecord, FleetObservation, LiveCanister, create_balance_is_terminal,
+            FleetEnsureStateRecord, FleetObservation, LiveCanister, RootOwnedCanisterLifecycle,
+            create_balance_is_terminal,
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
@@ -60,13 +61,14 @@ const LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 
 #[derive(Debug, ThisError)]
 #[error("simulated lost response")]
-struct MockError;
+pub(super) struct MockError;
 
-struct MockPlatform {
+pub(super) struct MockPlatform {
     completed: BTreeMap<String, EffectOutcome>,
     duplicate_create_responses: BTreeMap<String, u32>,
     create_shortfalls: BTreeMap<String, u128>,
     desired: DesiredFleet,
+    deferred_created_canisters: BTreeMap<String, String>,
     fail_once: BTreeSet<String>,
     failed: BTreeSet<String>,
     live: BTreeMap<String, LiveCanister>,
@@ -88,7 +90,7 @@ struct MockPlatform {
 }
 
 impl MockPlatform {
-    fn new(desired: DesiredFleet, live: impl IntoIterator<Item = LiveCanister>) -> Self {
+    pub(super) fn new(desired: DesiredFleet, live: impl IntoIterator<Item = LiveCanister>) -> Self {
         let ledger_fee_cycles = desired
             .ledger_fee_cycles
             .parse::<Cycles>()
@@ -99,6 +101,7 @@ impl MockPlatform {
             duplicate_create_responses: BTreeMap::new(),
             create_shortfalls: BTreeMap::new(),
             desired,
+            deferred_created_canisters: BTreeMap::new(),
             fail_once: BTreeSet::new(),
             failed: BTreeSet::new(),
             live: live
@@ -121,6 +124,37 @@ impl MockPlatform {
             terminal_inventory_operation_ids: Vec::new(),
             version_observation_failures: 0,
         }
+    }
+
+    pub(super) fn defer_created_until_root_install(&mut self, name: &str, root: &str) {
+        self.deferred_created_canisters
+            .insert(name.to_string(), root.to_string());
+    }
+
+    pub(super) fn fail_once(&mut self, action_sha256: String) {
+        self.fail_once.insert(action_sha256);
+    }
+
+    pub(super) fn mutation_count(&self, action_sha256: &str) -> u32 {
+        self.mutations
+            .get(action_sha256)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub(super) fn duplicate_create_response_count(&self, action_sha256: &str) -> u32 {
+        self.duplicate_create_responses
+            .get(action_sha256)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub(super) fn set_operator_cycles(&mut self, cycles: u128) {
+        self.operator_cycles = cycles;
+    }
+
+    pub(super) const fn operator_cycles(&self) -> u128 {
+        self.operator_cycles
     }
 
     fn principal<'a>(
@@ -182,14 +216,32 @@ impl MockPlatform {
         &self,
         action: &EnsureAction,
         record: &EffectRecord,
+        state: &FleetEnsureStateRecord,
     ) -> Option<EffectObservation> {
         let EnsureAction::Create {
+            name,
             requested_initial_cycles,
             ..
         } = action
         else {
             return None;
         };
+        if let Some(root) = self.deferred_created_canisters.get(name)
+            && record.created_principal.is_some()
+            && state
+                .pending_principals
+                .get(root)
+                .or_else(|| state.principals.get(root))
+                .and_then(|principal| self.live.get(principal))
+                .is_none_or(|live| live.module_sha256.is_none())
+        {
+            return Some(EffectObservation {
+                applied: false,
+                post_cycles: None,
+                progress_identity: format!("created:{name}:controller-observation-deferred"),
+                retry: EffectRetry::DeferUntilControllerObservation,
+            });
+        }
         let post_cycles = record
             .created_principal
             .as_deref()
@@ -295,7 +347,9 @@ impl MockPlatform {
                     receipt: Some("withdraw-block".to_string()),
                 }
             }
-            EnsureAction::Install { wasm_sha256, .. } => {
+            EnsureAction::Install {
+                name, wasm_sha256, ..
+            } => {
                 let live = self
                     .live
                     .get_mut(principal.as_deref().expect("install principal"))
@@ -308,6 +362,24 @@ impl MockPlatform {
                         .expect("fixture canister version"),
                 );
                 live.reinstall_required = false;
+                let imported_pools = self
+                    .desired
+                    .canisters
+                    .iter()
+                    .filter(|configured| {
+                        configured.kind == DesiredCanisterKind::Pool
+                            && configured.parent.as_deref() == Some(name)
+                    })
+                    .filter_map(|configured| {
+                        state.pending_principals.get(&configured.name).cloned()
+                    })
+                    .collect::<Vec<_>>();
+                for principal in imported_pools {
+                    if let Some(pool) = self.live.get_mut(&principal) {
+                        pool.root_owned_lifecycle = Some(RootOwnedCanisterLifecycle::Idle);
+                        pool.status = CanisterRuntimeStatus::Stopped;
+                    }
+                }
                 empty_outcome()
             }
             EnsureAction::FleetProtocol { name, .. } | EnsureAction::Protocol { name, .. } => {
@@ -484,7 +556,7 @@ impl EnsurePlatform for MockPlatform {
         record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectObservation, Self::Error> {
-        if let Some(observation) = self.create_observation(action, record) {
+        if let Some(observation) = self.create_observation(action, record, state) {
             return Ok(observation);
         }
         if matches!(action, EnsureAction::Fund { .. }) {

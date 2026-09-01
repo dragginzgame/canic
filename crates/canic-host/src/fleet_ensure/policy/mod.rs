@@ -1019,9 +1019,25 @@ fn create_plan(
     accumulator.add_fee(bounds.ledger_fee)?;
     accumulator.add_fee(bounds.management_creation_fee)?;
     let symbolic = format!("created:{}", configured.name);
+    let temporary_pool_observation_controller = configured.kind == DesiredCanisterKind::Pool
+        && desired
+            .bootstrap
+            .as_ref()
+            .is_some_and(|bootstrap| bootstrap.fresh_estate)
+        && configured.principal.is_none()
+        && configured.controllers.is_empty()
+        && configured.parent.as_ref().is_some_and(|parent| {
+            configured.controller_canisters.as_slice() == std::slice::from_ref(parent)
+        });
+    let mut creation_controllers = configured.controllers.clone();
+    if temporary_pool_observation_controller {
+        creation_controllers.push(desired.operator.clone());
+        creation_controllers.sort();
+        creation_controllers.dedup();
+    }
     let mut actions = vec![EnsureAction::Create {
         controller_canisters: configured.controller_canisters.clone(),
-        controllers: configured.controllers.clone(),
+        controllers: creation_controllers,
         created_at_time,
         ledger: desired.cycles_ledger.clone(),
         name: configured.name.clone(),
@@ -1039,9 +1055,18 @@ fn create_plan(
             init_candid_sha256: optional_init_candid_sha256(artifacts, configured)?,
             mode: InstallMode::Install,
             name: configured.name.clone(),
-            principal: symbolic,
+            principal: symbolic.clone(),
             wasm: wasm.clone(),
             wasm_sha256,
+        });
+        accumulator.add_burn(bounds.update_burn)?;
+    }
+    if temporary_pool_observation_controller {
+        actions.push(EnsureAction::SetControllers {
+            controller_canisters: configured.controller_canisters.clone(),
+            controllers: configured.controllers.clone(),
+            name: configured.name.clone(),
+            principal: symbolic,
         });
         accumulator.add_burn(bounds.update_burn)?;
     }

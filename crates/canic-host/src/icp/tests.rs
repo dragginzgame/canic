@@ -325,10 +325,34 @@ fn parses_canister_status_report_json() {
     )
     .expect("parse status report");
 
-    assert_eq!(report.status, "Running");
+    assert_eq!(report.status.as_deref(), Some("Running"));
     assert_eq!(report.canister_version, Some(42));
     assert_eq!(
         report.settings.expect("settings").controllers.as_slice(),
         &["zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae"]
     );
+}
+
+#[test]
+fn parses_public_non_controller_canister_status_report_json() {
+    let report = serde_json::from_str::<IcpCanisterStatusReport>(
+        r#"{
+  "id": "t63gs-up777-77776-aaaba-cai",
+  "controllers": ["zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae"],
+  "module_hash": null
+}"#,
+    )
+    .expect("parse public non-controller status report");
+
+    assert_eq!(report.status, None);
+    assert_eq!(
+        report
+            .public_controllers
+            .as_deref()
+            .and_then(|controllers| controllers.first())
+            .map(String::as_str),
+        Some("zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae")
+    );
+    assert_eq!(report.cycles, None);
+    assert_eq!(report.settings, None);
 }
