@@ -25,9 +25,11 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.109.35`. Its immutable details
-are in [the 0.109 changelog](../changelog/0.109.md). Source-development truth
-comes from Git and the working tree.
+Current development begins from published `v0.110.0` at
+`d29a7cc72f801ee4a86d6e47f5e5e138a17f029f`. Its complete gate validated
+source `d288f985e38d33508dd6631ecf247e5d7d2c04a9`; immutable details are in
+[the 0.110 changelog](../changelog/0.110.md). `0.110.1` is the single open
+patch draft. Source-development truth comes from Git and the working tree.
 
 ## Maintained 0.109 Contract
 
@@ -168,7 +170,7 @@ runtime or repository dependency.
 | Line | Active owner | State |
 | --- | --- | --- |
 | [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | first release batch ready; B1 remains active after its canonical baseline |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.0` published; B1 remains active in the open `0.110.1` batch |
 | [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
@@ -196,12 +198,10 @@ release flow owns that boundary.
 
 ## Next Authorized Action
 
-Run the explicitly authorized governed minor-release flow for 0.110.0. The
-release carries the complete CANIC-119-CANIC-121 correction and the corrected
-canonical B1 baseline/audit method without claiming B1 completion. After the
-immutable release, downstream qualification remains separately owned. Retain
-the active B1 evidence and do not begin B2 until the maintainer accepts the
-complete B1 baseline.
+Continue the open `0.110.1` B1 evidence batch from immutable `v0.110.0`:
+complete the frozen downstream canary, controlled ablations, generated-surface
+inventory and generic-instantiation cohort. Retain the active B1 evidence and
+do not begin B2 until the maintainer accepts the complete B1 baseline.
 
 
 

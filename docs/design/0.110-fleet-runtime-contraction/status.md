@@ -24,9 +24,11 @@ Date: 2026-09-01
 - Successor: 0.111 owns bounded cycle-safe multi-Fleet estates after 0.110
   closeout.
 - Downstream: 0.110 cannot delay the published 0.109 Toko Miner unblock.
-- First release: `0.110.0` carries the complete `CANIC-119` through
-  `CANIC-121` fresh-estate correction and corrected canonical-role baseline;
-  it does not claim B1 completion or authorize B2.
+- First release: immutable `v0.110.0` at `d29a7cc72` carries the complete
+  `CANIC-119` through `CANIC-121` fresh-estate correction and corrected
+  canonical-role baseline; it does not claim B1 completion or authorize B2.
+- Open patch: `0.110.1` owns the remaining B1 measurement and attribution
+  evidence before any B2 promotion.
 
 Design: [Fleet runtime contraction](0.110-design.md)
 
@@ -114,8 +116,7 @@ Planning evidence: [B1 Wasm input evidence](../../audits/working/0.110-fleet-run
 
 ## Next Authorized Action
 
-Publish the explicitly authorized first 0.110 release with the complete
-fresh-estate correction and corrected canonical-role baseline. Then complete
-the frozen downstream canary, controlled ablations, generated-surface
-inventory and generic cohort. Do not begin B2 until the maintainer accepts the
-complete B1 evidence.
+Complete the open `0.110.1` B1 batch: freeze the downstream canary, controlled
+ablations, generated-surface inventory and generic cohort against immutable
+`v0.110.0`. Do not begin B2 until the maintainer accepts the complete B1
+evidence.
