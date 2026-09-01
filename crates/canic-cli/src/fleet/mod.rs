@@ -76,7 +76,7 @@ pub enum FleetCommandError {
     Json(#[from] serde_json::Error),
 
     #[error(transparent)]
-    Workflow(#[from] EnsureWorkflowError<IcpEnsurePlatformError>),
+    Workflow(Box<EnsureWorkflowError<IcpEnsurePlatformError>>),
 
     #[error(transparent)]
     Generate(#[from] FleetGenerateError),
@@ -99,6 +99,12 @@ pub enum FleetCommandError {
 
     #[error(transparent)]
     TomlSerialize(#[from] toml::ser::Error),
+}
+
+impl From<EnsureWorkflowError<IcpEnsurePlatformError>> for FleetCommandError {
+    fn from(error: EnsureWorkflowError<IcpEnsurePlatformError>) -> Self {
+        Self::Workflow(Box::new(error))
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
