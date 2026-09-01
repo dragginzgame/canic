@@ -15,7 +15,8 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 - `0.109.35` corrects fresh Root-owned pool observation by using bounded
   temporary operator authority in new plans and exact installed-Root
   inspection when resuming an immutable Root-only plan, without repeating a
-  paid creation or weakening terminal Root-only controllers.
+  paid creation or weakening terminal Root-only controllers, and keeps backup
+  lifecycle preflight fail-closed when public ICP status omits lifecycle state.
 - `0.109.34` completes exact terminal creation-balance publication for
   `CANIC-102`, rejects impossible Root bootstrap import capacity before effect,
   keeps successor verification on the exact active terminal operation until a
