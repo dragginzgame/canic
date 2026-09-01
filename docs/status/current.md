@@ -350,4 +350,5 @@ accepted closeout.
 
 
 
-<!-- canic-release-validation: version=0.109.33 source=32ab90d4c05dc719d3771c915a861594786afa6f date=2026-08-31 gate=complete -->
+
+<!-- canic-release-validation: version=0.109.34 source=2e48628b1127568a47430e02e15791006ea5d2a0 date=2026-09-01 gate=complete -->
