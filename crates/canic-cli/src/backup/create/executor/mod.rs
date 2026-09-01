@@ -154,13 +154,17 @@ fn runner_canister_status(
             ),
         ));
     }
-    match report.status.as_str() {
-        "Running" => Ok(BackupRunnerCanisterStatus::Running),
-        "Stopped" => Ok(BackupRunnerCanisterStatus::Stopped),
-        "Stopping" => Ok(BackupRunnerCanisterStatus::Stopping),
-        status => Err(BackupRunnerCommandError::failed(
+    match report.status.as_deref() {
+        Some("Running") => Ok(BackupRunnerCanisterStatus::Running),
+        Some("Stopped") => Ok(BackupRunnerCanisterStatus::Stopped),
+        Some("Stopping") => Ok(BackupRunnerCanisterStatus::Stopping),
+        Some(status) => Err(BackupRunnerCommandError::failed(
             "icp-status",
             format!("unsupported canister status {status}"),
+        )),
+        None => Err(BackupRunnerCommandError::failed(
+            "icp-status",
+            "canister lifecycle status is unavailable",
         )),
     }
 }

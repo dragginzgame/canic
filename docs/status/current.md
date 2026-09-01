@@ -146,7 +146,9 @@ Development checks for the open correction currently pass:
   performs one mutation per pool, converges and immediately replays with zero
   effects;
 - exact funding-inspection controller and module predicates pass;
-- `canic-host` locked all-target checking and warning-denied Clippy pass; and
+- `canic-host` locked all-target checking and warning-denied Clippy pass;
+- backup lifecycle mapping, `canic-cli` locked all-target checking and
+  warning-denied Clippy pass; and
 - formatting and diff hygiene pass after the final source review.
 
 No broad workspace or full PocketIC gate is run during coding. The maintainer's

@@ -3,9 +3,10 @@ use super::*;
 fn report(id: &str, status: &str) -> IcpCanisterStatusReport {
     IcpCanisterStatusReport {
         canister_version: Some(1),
+        public_controllers: None,
         id: id.to_string(),
         name: None,
-        status: status.to_string(),
+        status: Some(status.to_string()),
         settings: None,
         module_hash: None,
         memory_size: None,
@@ -39,6 +40,17 @@ fn backup_status_mapping_rejects_wrong_identity_and_unknown_state() {
 
     assert_eq!(wrong_id.status, "icp-status");
     assert_eq!(unknown.status, "icp-status");
+}
+
+#[test]
+fn backup_status_mapping_rejects_unavailable_lifecycle_state() {
+    let mut unavailable = report("aaaaa-aa", "Stopped");
+    unavailable.status = None;
+
+    let error = runner_canister_status("aaaaa-aa", &unavailable)
+        .expect_err("missing lifecycle state must fail closed");
+
+    assert_eq!(error.status, "icp-status");
 }
 
 #[test]
