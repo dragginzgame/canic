@@ -5,8 +5,8 @@ Last updated: 2026-09-01
 ## Purpose
 
 This is the compact handoff for active Canic source and roadmap work. Read it
-first, then open only the linked design, audit or implementation owner needed
-for the task.
+first, then open only the linked design, changelog or audit owner needed for the
+task.
 
 Historical handoffs:
 
@@ -19,336 +19,144 @@ Historical handoffs:
 
 ## Release Evidence Contract
 
-Release truth comes from workspace package versions, dated root and detailed
+Release truth comes from workspace package versions, the root and detailed
 changelogs, the annotated Git tag and release commit, the complete published
 package set, and the governed validation marker at the end of this file. The
-version transaction owns that marker. This handoff does not maintain a second
-mutable latest-release claim.
+version transaction owns that marker; explanatory prose is not a second release
+guard.
 
-Current development begins from published `v0.109.33`. Its immutable details
+Current development begins from published `v0.109.34`. Its immutable details
 are in [the 0.109 changelog](../changelog/0.109.md). Source-development truth
-comes from Git and the working tree; explanatory prose is not a release guard.
+comes from Git and the working tree.
 
 ## Maintained 0.109 Contract
 
-Fleet-wide ingress admission retains one Coordinator-owned canonical policy,
-one Root-owned distribution operation per Root, and one exact local projection
-on each enrolled non-Root target. `caller::is_fleet_admitted()` and
-`canic::fleet_admission::require_caller()` read that same local projection and
-the observed transport caller. Admission never replaces application
-membership, resource ownership, service or infrastructure authority.
+Fleet admission retains one Coordinator-owned canonical policy, one Root-owned
+distribution operation per Root, and one exact local projection on each
+enrolled non-Root target. `caller::is_fleet_admitted()` and
+`canic::fleet_admission::require_caller()` read that same projection and the
+observed transport caller. Admission never replaces application membership,
+resource ownership, service authority or infrastructure authority.
 
-The hard-cut Fleet Ensure path remains desired-state and live-observation
-driven. Paid or identity-changing effects require exact reviewed authority,
-durable intent, bounded debit and lost-response reconciliation. Terminal
-convergence proves cycle conservation and immediate replay is effect-free.
-Historical install/recovery compatibility is not restored.
+Fleet Ensure remains the sole desired-state reconciliation owner. Paid or
+identity-changing effects require exact reviewed authority, durable intent,
+bounded debit and lost-response reconciliation. Terminal convergence proves
+cycle conservation and immediate replay is effect-free. Historical install,
+repair, migration and recovery compatibility is not restored.
 
-Published correctness history relevant to current operators:
+Published `v0.109.34` owns the complete `CANIC-102` and `CANIC-112` through
+`CANIC-117` corrections: terminal Create balances, exact available/required/
+shortfall guidance, bounded first-observation burn, active Registry-operation
+binding, retained terminal Component inventory, issued withdrawal evidence,
+bootstrap import capacity, role-specific command entrypoints and the managed
+cross-release runtime fence. Exact tests and negative cases are retained in the
+detailed changelog.
 
-- `0.109.27` added the IcyDB `0.249.1` test-only lifecycle graph and exact
-  management-canister version observation;
-- `0.109.28` retained fresh-process projected estate state and prevented
-  repeated applied reinstalls under version-less ordinary status;
-- `0.109.29` separated controller preparation from successor Store adoption
-  and closed the retained predecessor-E132 replan boundary;
-- `0.109.30` removed generic migration authority and reset current Canic-owned
-  product schemas to `v1`;
-- `0.109.31` published fresh-estate, Principal-canonicalization, pool-recovery
-  and first B9 splits; and
-- `0.109.32` publishes the initial `CANIC-102` through `CANIC-111` corrections,
-  including creation balances, Store controllers, Registry retry, bounded
-  terminal proof, reinstall fencing, post-bootstrap helper staging, manifest-
-  bound Candid, activation revision, cycle reconciliation and timer inventory;
-  and
-- `0.109.33` publishes monotonic Create-evidence retention, exact duplicate-
-  response recovery, role-owned Root and Coordinator command entrypoints and
-  the packaged managed-App qualification facade.
+## Open 0.109.35 Correction
 
-`CANIC-102` is completed in the current 0.109.34 draft. Published 0.109.33
-retains the exact requested balance from successful and duplicate-with-
-Principal Create responses, but terminal Fleet publication did not project
-that evidence into `retained_cycles_by_principal`. The current correction
-publishes every matching Applied Create balance before terminal inventory,
-bound to the exact action digest, Principal, non-empty Ledger receipt and
-reviewed amount. Missing or contradictory evidence rejects without publishing
-state or repeating an effect. Terminal inventory remains a consumer of the
-retained map and does not become a second journal interpreter.
+`CANIC-118` is the only open Canic-owned 0.109 blocker. ICP CLI 1.3.0 returns
+only public identity/controller/module fields when the operator is not a newly
+created Root-owned pool's controller; those fields cannot prove its live cycle
+balance.
 
-`CANIC-117` is also completed in the current draft. One pure topology decision
-requires every Root's total retained bootstrap imports to fit
-`canister_pool.maximum_size`. Both high-level generation and immutable-plan
-policy invoke it, so an impossible Root initializer rejects before live
-observation or the first funding/install effect with the exact Root, import
-count and configured maximum. `minimum_size` remains the Idle target; the
-initial maximum covers all origins, including one that will become a workload.
+The correction keeps one executable authority sequence:
 
-`CANIC-114` is completed in the current draft. A successor plan now retains the
-exact operation that owns the active terminal Registry and uses it for planning,
-pre-effect verification and no-effect replay. Effect-free and management-only
-plans carry that authority forward instead of presenting their unused operation
-IDs to the Root. After every configured Coordinator, Root and Store reinstall is
-proved Applied by the exact journal action hashes, Fleet Ensure clears the
-obsolete Registry snapshot before asking current policy for the fresh protocol
-bootstrap. A partial or mismatched reinstall cannot clear it.
+- a new fresh-estate plan creates each Root-only pool with the exact operator
+  as a temporary direct controller, observes its real balance, installs the
+  Root, then removes the operator before protocol convergence;
+- an immutable 0.109.34 plan is not rewritten: its issued Create retains the
+  exact Ledger receipt and Principal, defers only the unavailable balance
+  observation, advances its reviewed infrastructure prerequisites, then uses
+  the installed Root's protected inspection;
+- the inspecting Root must match the retained Principal, exact desired
+  controllers, successor module and running state;
+- the target must retain the exact Root-only controller set, module-free pool
+  shape and live native balance; and
+- public status never supplies inferred cycles, controllers or runtime state.
 
-`CANIC-115` is completed in the current draft. Terminal inventory no longer
-recompiles a predecessor Component provisioning batch through the successor App
-configuration. The Root's retained terminal result supplies the exact operation
-and plan evidence; Canic validates its active Registry/Root binding, terminal
-counters and receipts, admission and instance bounds, Component partitions,
-release-set/protocol binding, parent tree and live cycles. A later compiler's
-configuration digest is not substituted for the retained one. Failed terminal
-predicates report their exact field plus expected and observed values.
+The deferral is restricted to an issued fresh Root-only pool Create with exact
+retained identity and a later Root install in an infrastructure-only plan. It
+cannot authorize protocol work, duplicate creation, funding or a different
+effect. The global stalled-observation budget resets only on genuine progress.
 
-`CANIC-113` is completed in the current draft. A Create response retains the
-requested funding target, exact returned Principal and Ledger block; the first
-live status observation independently supplies actual cycles. An exact balance
-or downward delta within `maximum_observation_burn_cycles` completes normally
-with the observed balance retained. A larger deficit or any surplus marks only
-that proved Create Applied, retains the actual balance and topology, and closes
-the operation as replan-required before any later controller, install or
-protocol action. Its typed diagnostic reports configured creation fee,
-requested, actual and deficit integers. The successor plan reuses the Principal
-and cannot repeat the paid creation.
+Primary owners:
 
-`CANIC-116` is completed in the current draft. An issued Root-owned pool
-withdrawal is terminal only when its exact Ledger receipt is retained and the
-Root's controller-only management inspection proves the exact target,
-Root-only controllers, module-free pool shape and a live balance above the
-checked `expected - reviewed burn margin` lower bound. That lower bound must
-also equal `pre-effect + funding deficit`, so the stale pre-withdrawal snapshot
-cannot pass. The observed balance is retained in the effect journal and Fleet
-cycle state; response loss reuses the exact Ledger idempotency identity and
-cannot issue a second debit.
+- `crates/canic-host/src/icp/model.rs` — typed full/public ICP status shapes;
+- `crates/canic-host/src/fleet_ensure/policy/mod.rs` — temporary-controller plan;
+- `crates/canic-host/src/fleet_ensure/ops/platform.rs` — exact observations;
+- `crates/canic-host/src/fleet_ensure/workflow/mod.rs` — bounded deferral; and
+- `crates/canic-host/src/fleet_ensure/generate/tests.rs` — production-shaped
+  fresh and immutable-plan replay evidence.
 
-`CANIC-112` is completed in the current draft. Fleet Ensure reports exact
-available, required and shortfall cycle integers when conservation cannot
-cover the reviewed maximum burn. The pure compiler walks the already validated
-protocol order and retains only its largest affordable non-empty prefix. An
-unaffordable first indivisible action returns that typed guidance without a
-plan or effect; pool-Ledger recovery cycles, transfer and fee count only when
-the corresponding action remains selected.
+## B1-B10 State
 
-Published 0.109.33 also hard-cuts the two infrastructure command
-exports to `canic_root_command(RootCommand)` and
-`canic_coordinator_command(CoordinatorCommand)`. Managed application and Wasm
-Store command traffic remains on `canic_command`; Root and Coordinator retain
-no old-name alias, fallback or mixed endpoint contract. Root-owned admission
-distribution continues to address managed non-Root targets through
-`canic_command`; only Coordinator-to-Root traffic uses `canic_root_command`.
-
-The current candidate also closes the lazy-child release-skew path. Every
-Fleet-managed Root, Store, Component and Component Child compares the Wasm's
-embedded release-build identity with the exact retained Fleet activation
-identity before post-upgrade runtime work starts. An exact same-release upgrade
-continues to preserve current state. A foreign release build traps atomically,
-so it cannot run newer code and later provision a child from the immutable
-initial release set. Cross-release movement remains reinstall-only; this guard
-does not add release-set rotation, migration or mixed-version authority.
-
-The detailed changelog owns the complete tests and negative cases; this handoff owns no downstream repository or live IC state.
-
-## Safety State
-
-The retained downstream evidence for the last deployment unblock reports:
-
-- the reviewed Root prerequisite applied once and replayed without a second
-  effect;
-- zero funding, transfer, fee or operator debit authority;
-- measured execution burn retained in the conservation equation;
-- exact Root, Store, controller, module and operation identities retained;
-- successor Store adoption delayed until the successor Root existed; and
-- no later database, catalogue or frontend publication effect.
-
-Canic repository work must not mutate that downstream estate. Same-release
-interruption recovery, retry, idempotency, exact authority and cycle-safe
-source deletion remain mandatory even where cross-release compatibility is
-absent.
-
-## 0.109 B9 Complexity Contraction
+| Batch | State | Current evidence owner |
+| --- | --- | --- |
+| B1 | Accepted | 0.109 design baseline |
+| B2-B7 | Complete | design/status tracker and governed admission suites |
+| B8 | Active | CANIC-118 correction and downstream fresh-Fleet proof |
+| B9 | Complete | accepted immutable superseding audit |
+| B10 | Complete | published host-only facade and downstream adoption report |
 
 The immutable
-[superseding B9 audit](../audits/reports/2026-08/2026-08-31/0.109-b9-superseding-complexity-audit.md)
-reports `closeout_verdict: pass` on the exact `v0.109.32` source. The human
-maintainer accepted it on 2026-08-31. It supersedes the binding preliminary
-`fail` without erasing that historical gate.
+[B9 superseding audit](../audits/reports/2026-08/2026-08-31/0.109-b9-superseding-complexity-audit.md)
+reports `closeout_verdict: pass` on `v0.109.32`; the human maintainer accepted
+it on 2026-08-31. The three control-plane parents remain 6,303, 5,838 and 2,688
+lines. Canonical complexity and change-friction remain 8/10 and 7/10 pressure,
+routed to blocked 0.110 rather than a second 0.109 authority. This active
+handoff remains below the accepted 250-physical-line ceiling.
 
-The three measured control-plane parents contract from 17,452 to 6,303 lines,
-8,751 to 5,838 lines and 8,997 to 2,688 lines along existing authority and
-lifecycle seams. One Coordinator record, one Component Registry store family,
-one admission policy, one timer owner and the existing effect owners remain.
-No extraction adds a DTO, Candid variant, endpoint, stable record, journal,
-policy decision or effect path.
+Published `v0.109.33` completed the host-only `canic::testing` facade, isolated
+packaged consumer and managed plus standalone-local lifecycle proof. Read-only
+downstream evidence confirms adoption of that facade, removal of the private
+payload adapter and direct `canic-core`/`ic-testkit` test dependencies, and a
+passing exact managed-Wasm lifecycle. The
+[B10 reconciliation](../audits/reports/2026-08/2026-08-31/0.109-b10-managed-app-qualification-reconciliation.md)
+records the boundary.
 
-The canonical v3 runs are deterministic. Their 8/10 complexity and 7/10
-change-friction scores remain truthful inherited pressure rather than product
-defects; blocked 0.110 owns the broader runtime graph. Structure, duplication,
-layering and Tier-2 module-surface reviews pass. The 63-case serial PocketIC
-inventory retains a 2,100-second, 6-GiB and 300-thread ceiling at capacity one.
-
-No broad gate was rerun for this audit. The governed release marker binds a
-complete gate to the exact source. Its local resource transcript was not
-retained separately, so the audit labels the nearest 1,718-second,
-5,037,288-kB and 257-thread run as capacity evidence rather than as the exact
-0.109.32 transcript.
-
-## B10 And Closeout
-
-B9 is accepted. The current candidate completes the Canic-owned B10 facade,
-isolated packaged consumer and managed plus standalone-local lifecycle proof
-without adding runtime authority. The exact read-only downstream still owns
-its private init/activation adapter and direct `canic-core`/`ic-testkit` test
-dependencies, so B10 is pending that separately owned adoption and removal.
-The [reconciliation report](../audits/reports/2026-08/2026-08-31/0.109-b10-managed-app-qualification-reconciliation.md)
-records the exact boundary. The final 0.109 closeout remains human-owned.
-
-Required order:
-
-1. publish the current Canic B10 candidate through the maintainer-owned release
-   workflow;
-2. let the downstream adopt that immutable package, remove its private adapter
-   and direct test pins, and retain its exact managed/standalone qualification;
-3. request the human closeout audit against the complete evidence; and
-4. begin 0.110 only after the maintainer accepts that verdict.
+The human-requested closeout audit against `v0.109.34` is retained at
+[the canonical report](../audits/release-lines/0.109-closeout-audit.md). Its
+CANIC-118, active-handoff and documentation blockers are correction inputs, not
+an accepted closeout verdict.
 
 ## Roadmap Boundary
 
-Toko Miner remains a read-only application steering source. Canic retains its
-own fixtures and gains no downstream production dependency.
+Toko Miner remains a read-only steering source. Canic gains no downstream
+runtime or repository dependency.
 
 | Line | Active owner | State |
 | --- | --- | --- |
-| [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | Fleet-wide admission, B9 contraction and B10 qualification | open |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | runtime contraction | blocked on accepted 0.109 closeout |
-| [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded multi-Fleet estates | blocked on 0.110, then Q0 capsule proof |
+| [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | CANIC-118 correction before a fresh closeout audit |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | blocked on accepted 0.109 closeout |
+| [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
-0.110 is a zero-capability contraction line. It owns controlled ablations,
-direct role storage wiring, capability-owned records, conditional codecs and
-whole generated-surface pruning across lifecycle, endpoint, Candid, provider,
-timer and recovery roots. B1 includes a `1..=N` generic-instantiation cohort;
-downstream slopes remain non-forecast routing evidence. The temporary pool
-Ledger recovery family is also measured, but hard deletion waits for both live
-recoveries, conservation, official Root restoration and terminal zero-effect
-replay. The exact frozen Toko `project_instance` is now a binding read-only
-B1/B5 canary with an explicit authentication/blob/IcyDB/lifecycle/status/
-recovery capability matrix. Completion requires 5% code-section headroom
-(512 KiB under the retained 10 MiB limit) and 5% frozen replica-validator
-function headroom in both the canonical worst case and that canary; 1 MiB code
-headroom is preferred. B4 cannot stop while known role-inapplicable generated
-machinery remains. A canary deficit after safe Canic cuts produces an explicit
-Toko/IcyDB residual handoff rather than downstream mutation. Build acceleration
-remains parallel support.
+The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
+transitions are reinstall-only; cycle conservation is the sole cross-release
+compatibility invariant. Same-release interruption recovery, idempotency,
+backup, restore, authority and cycle-safe retirement remain mandatory.
 
-The former stateful-retirement and cross-release-adoption proposal is
-cancelled and archived. Active 0.111 preserves no application data, stable
-memory or Principal. Its B1 is held behind Q0 proof that a finalized one-shot
-capsule can attach exact source cycles, obtain an atomic destination receipt,
-recover response loss, retain execution slack and account for the final
-discarded residual before source deletion.
+## Targeted Validation State
 
-Deferred scope remains adaptive pool/reset lanes, broad funding and transfer
-batches, 1,000-canister qualification and a universal runtime observatory.
+Development checks for the open correction currently pass:
 
-## Validation State
+- public ICP 1.3.0 non-controller status decodes as typed unavailable evidence;
+- fresh plans add temporary authority only to exact Root-only pools and order
+  final removal after Root installation;
+- the immutable Root-only plan retains Create identity across lost response,
+  performs one mutation per pool, converges and immediately replays with zero
+  effects;
+- exact funding-inspection controller and module predicates pass;
+- `canic-host` locked all-target checking and warning-denied Clippy pass; and
+- formatting and diff hygiene pass after the final source review.
 
-For the current B9, B10 and completed `CANIC-102`, `CANIC-112`, `CANIC-113`, `CANIC-114`,
-`CANIC-115`, `CANIC-116` and `CANIC-117` slices:
-
-- frozen v2 remains unchanged; governed v3 definitions, scripts, catalog and
-  fingerprints pass, and deterministic original/current mechanical reruns are
-  retained in the linked report;
-- `cargo fmt --all -- --check` and `git diff --check` pass;
-- all 21 focused admission tests, 45 Registry-family tests, 10 draining tests
-  and 5 removal tests pass; the top-level draining-fence, deletion-replay and
-  atomic membership-removal regressions pass after extraction, as does the
-  terminal Root/Store retirement restart-and-replay test; bounded deterministic
-  subtree restart and terminal fence-release regressions also pass;
-- exact Registry preparation and the initial-inventory seal, Directory flag,
-  Root-runtime flag and idempotent activation receipt regressions pass;
-- the Component Directory refresh selection, prepare, commit and intent-replay
-  regression passes before and after the exact stable transition, including
-  duplicate selection, stale timestamp and conflicting-intent rejection;
-- the top-level and direct-child allocation/activation regressions pass
-  reservation, creation, installation, Registry commit, runtime activation,
-  membership and exact-retry boundaries after extraction;
-- warning-denied control-plane Clippy and layering pass; focused scale-out restore preserves cross-document authority;
-  retained Root acceptance, provisioning and coalesced Directory/runtime tests pass through the completed validation owner;
-- the focused pool Ledger regression passes sequential terminal recovery and
-  exact replay for two distinct assets while same-operation retargeting fails;
-- the relocated Component Registry test owner recompiles; focused preparation/idempotency, Root/Store retirement,
-  grouped lifecycle/install and peer-caller regressions pass through extracted owners; changed-package Clippy passes;
-- focused Component deletion, subtree terminal fence-release and grouped-allocation regressions pass through the
-  extracted retirement and Registry-response projection owners;
-- dependency-light conservation and public generated-estate regressions pass no-effect planning, Principal rejection,
-  Root observation, typed ordering and all permutations, including duplicate and anonymous cases;
-  retained-input and pre-retention digest regressions also pass without reissuing an effect; and
-- the B10 isolated packaged consumer compiles through packaged `canic` alone,
-  including managed construction and standalone same-release upgrade; generated
-  and canonical Store probes report 2,988,974-byte and 2,986,771-byte code
-  sections;
-- the B10 governed lifecycle case passes managed composed-IcyDB fencing,
-  activation, admission, same-release upgrade and successor fencing plus
-  standalone-local install, public call, same-release upgrade and replay in
-  136.27 seconds;
-- warning-denied Clippy passes for `canic` with `testing`, `canic-host` and
-  `canic-testing-internal`;
-- the canonical Fleet Coordinator artifact build resolves its checked-in DID,
-  derives the exact profile and completes the sidecar-only optimized Wasm
-  without runtime Candid extraction; the governed serial runner now preflights
-  this shared artifact once before its scenario loop; and
-- focused published 0.109.33 `CANIC-102` regressions pass successful and duplicate-with-
-  Principal Create journalling, terminal and zero-effect replay; exact retained
-  0.109.32 balance recovery; six authority-mismatch rejections; and the existing
-  interruption-at-every-effect and logical-controller Create journeys; the
-  production response mapper also retains the exact Principal, receipt and
-  requested balance for both Ledger response forms;
-- focused 0.109.34 regressions prove that successful and exact duplicate-
-  response Create journeys publish the retained balance into terminal Fleet
-  state, replay without another effect, and reject a contradictory retained
-  balance without changing state, journal or platform effects;
-- focused topology, generator and apply-policy regressions prove that a
-  three-origin Root under maximum two rejects before effect while maximum three
-  is admitted explicitly;
-- focused CANIC-116 host regressions prove the checked burn-aware balance
-  predicate, exact Root controller/module binding, lost-response duplicate
-  receipt adoption, one total funding mutation, retained post-balance and a
-  fresh zero-action terminal replay; warning-denied `canic-host` Clippy passes;
-- focused CANIC-113 host regressions prove exact and duplicate Create response
-  handling, bounded observation-burn acceptance, an immediate typed
-  above-bound short-balance replan boundary, one creation, retained live
-  cycles/topology, successor funding without recreation and terminal replay;
-- focused CANIC-112 host regressions prove largest-affordable-prefix selection,
-  replan-required prefix closure, one-time successor application, terminal
-  convergence, zero-effect replay, exact available/required/shortfall guidance,
-  no plan or mutation when the first action cannot fit, unchanged pool-Ledger
-  recovery accounting and warning-denied `canic-host` Clippy;
-- the focused managed lifecycle boundary passes all six cases, including a
-  foreign release-build upgrade that retains the committed module and Prepared
-  state followed by a successful exact same-release retry; the typed retained-
-  identity unit regression and all affected package targets also pass;
-- all 41 focused protocol-surface tests pass with distinct Root and Coordinator
-  command exports; the replay-policy, sealed-authority and prepared-Root
-  policy tests pass, and all directly affected packages compile across all
-  targets;
-- focused Root-admission compilation and warning-denied control-plane Clippy
-  pass after correcting managed-target prepare, activate and open routing; the
-  complete governed admission PocketIC matrix remains maintainer-owned release
-  validation;
-- no broad workspace or full PocketIC gate was run during coding.
-
-Published-batch validation remains in the detailed changelog and immutable
-release evidence; it is not duplicated here.
+No broad workspace or full PocketIC gate is run during coding. The maintainer's
+release flow owns that boundary.
 
 ## Next Authorized Action
 
-Continue the sequenced current-schema Fleet Ensure correctness batch in the
-0.109.34 draft, then hand the complete targeted-ready batch to the maintainer-
-owned validation and publication workflow. The final human-owned 0.109 closeout
-audit follows downstream adoption evidence. Do not begin 0.110 before the
-accepted closeout.
-
-
-
+Run the maintainer-owned release validation and publication workflow for the
+targeted-complete CANIC-118 batch, then qualify the downstream fresh Fleet
+against that immutable tag. After that, request a fresh human-owned 0.109
+closeout audit. Do not begin 0.110 before the maintainer accepts that verdict.
 
 <!-- canic-release-validation: version=0.109.34 source=2e48628b1127568a47430e02e15791006ea5d2a0 date=2026-09-01 gate=complete -->

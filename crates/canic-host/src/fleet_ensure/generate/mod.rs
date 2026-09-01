@@ -1313,7 +1313,16 @@ fn observe_estate(
             .map(|hash| normalize_observed_module_sha256(&canister, hash))
             .transpose()?;
         if root_principals.contains(canister.as_str()) {
-            let runtime_status = parse_observed_runtime_status(&canister, &status.status)?;
+            let runtime_status = parse_observed_runtime_status(
+                &canister,
+                status.status.as_deref().ok_or_else(|| {
+                    FleetGenerateError::CanisterUnavailable {
+                        canister: canister.clone(),
+                        reason: "management runtime status is unavailable to the selected identity"
+                            .to_string(),
+                    }
+                })?,
+            )?;
             if module_sha256.is_none() {
                 return Err(FleetGenerateError::CanisterUnavailable {
                     canister,

@@ -576,257 +576,308 @@ where
 
     let actions = ordered_actions(&retained_plan);
     let mut replayed_issued_commands = BTreeSet::new();
-    for (index, action) in actions.iter().enumerate() {
-        let action_hash = action_sha256(action);
-        if journal.effects.len() <= index {
-            let pre_cycles = platform
-                .action_cycles(action, &state)
-                .map_err(EnsureWorkflowError::Platform)?;
-            let destination_pre_cycles = platform
-                .action_destination_cycles(action, &state)
-                .map_err(EnsureWorkflowError::Platform)?;
-            let pre_canister_version = platform
-                .action_canister_version(action, &state)
-                .map_err(EnsureWorkflowError::Platform)?;
-            journal.effects.push(EffectRecord {
-                action_sha256: action_hash.clone(),
-                created_principal: None,
-                destination_post_cycles: destination_pre_cycles,
-                destination_pre_cycles,
-                post_cycles: None,
-                pre_cycles,
-                pre_canister_version,
-                progress_identity: None,
-                receipt: None,
-                state: EffectState::Intent,
-            });
-            write_journal(&paths, &journal)?;
-        }
-        loop {
-            let record = journal
-                .effects
-                .get(index)
-                .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-            if record.action_sha256 != action_hash {
-                return Err(EnsureWorkflowError::DriftedBeforeApply);
+    loop {
+        let mut deferred_controller_observation = false;
+        for (index, action) in actions.iter().enumerate() {
+            let action_hash = action_sha256(action);
+            if journal.effects.len() <= index {
+                let pre_cycles = platform
+                    .action_cycles(action, &state)
+                    .map_err(EnsureWorkflowError::Platform)?;
+                let destination_pre_cycles = platform
+                    .action_destination_cycles(action, &state)
+                    .map_err(EnsureWorkflowError::Platform)?;
+                let pre_canister_version = platform
+                    .action_canister_version(action, &state)
+                    .map_err(EnsureWorkflowError::Platform)?;
+                journal.effects.push(EffectRecord {
+                    action_sha256: action_hash.clone(),
+                    created_principal: None,
+                    destination_post_cycles: destination_pre_cycles,
+                    destination_pre_cycles,
+                    post_cycles: None,
+                    pre_cycles,
+                    pre_canister_version,
+                    progress_identity: None,
+                    receipt: None,
+                    state: EffectState::Intent,
+                });
+                write_journal(&paths, &journal)?;
             }
-            if !create_record_is_exact(action, record, &state) {
-                return Err(EnsureWorkflowError::JournalIntegrity);
-            }
-            if matches!(record.state, EffectState::Applied) {
-                if applied_create_requires_exact_balance_recovery(action, record) {
+            loop {
+                let record = journal
+                    .effects
+                    .get(index)
+                    .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+                if record.action_sha256 != action_hash {
+                    return Err(EnsureWorkflowError::DriftedBeforeApply);
+                }
+                if !create_record_is_exact(action, record, &state) {
+                    return Err(EnsureWorkflowError::JournalIntegrity);
+                }
+                if matches!(record.state, EffectState::Applied) {
+                    if applied_create_requires_exact_balance_recovery(action, record) {
+                        let outcome = platform
+                            .apply(&journal.operation_id, action, record, &state)
+                            .map_err(EnsureWorkflowError::Platform)?;
+                        if !create_outcome_is_exact(action, record, &state, &outcome) {
+                            return Err(EnsureWorkflowError::JournalIntegrity);
+                        }
+                        let record = journal
+                            .effects
+                            .get_mut(index)
+                            .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+                        record.post_cycles = outcome.post_cycles;
+                        journal.stalled_observations = 0;
+                        write_journal(&paths, &journal)?;
+                    }
+                    let retained_funding = journal.effects.get(index).is_some_and(|record| {
+                        retain_applied_funding_cycles(&mut state, action, record)
+                    });
+                    if retained_funding {
+                        write_state(&paths, &state)?;
+                    }
+                    break;
+                }
+
+                let observed = platform
+                    .observe_effect(&journal.operation_id, action, record, &state)
+                    .map_err(EnsureWorkflowError::Platform)?;
+                let source_cycles = if observed.post_cycles.is_some() {
+                    observed.post_cycles
+                } else {
+                    platform
+                        .action_cycles(action, &state)
+                        .map_err(EnsureWorkflowError::Platform)?
+                };
+                let destination_cycles = platform
+                    .action_destination_cycles(action, &state)
+                    .map_err(EnsureWorkflowError::Platform)?;
+                let replan_after_create_balance =
+                    observed.retry == EffectRetry::ReplanRequiredAfterCreateBalanceDrift;
+                let replan_after_rejection =
+                    observed.retry == EffectRetry::ReplanRequiredAfterRejectedPrerequisite;
+                let retained_create_balance_is_exact = !replan_after_create_balance
+                    || (journal.effects.len() == index + 1
+                        && journal.effects[..index]
+                            .iter()
+                            .all(|effect| effect.state == EffectState::Applied)
+                        && record.state == EffectState::Issued
+                        && create_identity_is_exact(action.name(), record, &state)
+                        && observed.post_cycles.is_some()
+                        && observed.post_cycles == source_cycles);
+                let retained_rejection_is_exact = !replan_after_rejection
+                    || (journal.effects.len() == index + 1
+                        && journal.effects[..index]
+                            .iter()
+                            .all(|effect| effect.state == EffectState::Applied)
+                        && record.state == EffectState::Intent
+                        && record.created_principal.is_none()
+                        && record.receipt.is_none());
+                let record = journal
+                    .effects
+                    .get_mut(index)
+                    .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+                merge_observed_cycles(record, source_cycles, destination_cycles);
+                if replan_after_create_balance {
+                    if !retained_create_balance_is_exact {
+                        return Err(EnsureWorkflowError::JournalIntegrity);
+                    }
+                    let EnsureAction::Create {
+                        name,
+                        requested_initial_cycles,
+                        ..
+                    } = action
+                    else {
+                        return Err(EnsureWorkflowError::JournalIntegrity);
+                    };
+                    let actual_cycles = record
+                        .post_cycles
+                        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+                    record.progress_identity = Some(observed.progress_identity);
+                    record.state = EffectState::Applied;
+                    retain_created_canister_for_replan(
+                        operation_desired,
+                        name,
+                        record,
+                        &mut state,
+                    )?;
+                    journal.completion = FleetEnsureCompletion::ReplanRequired;
+                    journal.stalled_observations = 0;
+                    write_journal(&paths, &journal)?;
+                    write_state(&paths, &state)?;
+                    let configured_fee_cycles = operation_desired
+                        .management_creation_fee_cycles
+                        .parse::<Cycles>()
+                        .map(|cycles| cycles.to_u128())
+                        .map_err(|_| EnsureWorkflowError::JournalIntegrity)?;
+                    return Err(EnsureWorkflowError::ReplanRequiredAfterCreateBalanceDrift {
+                        actual_cycles,
+                        canister: name.clone(),
+                        configured_fee_cycles,
+                        deficit_cycles: requested_initial_cycles.saturating_sub(actual_cycles),
+                        requested_cycles: *requested_initial_cycles,
+                    });
+                }
+                if observed.applied {
+                    record.progress_identity = Some(observed.progress_identity);
+                    record.state = EffectState::Applied;
+                    journal.stalled_observations = 0;
+                    let retained_funding =
+                        retain_applied_funding_cycles(&mut state, action, record);
+                    write_journal(&paths, &journal)?;
+                    if retained_funding {
+                        write_state(&paths, &state)?;
+                    }
+                    break;
+                }
+
+                if replan_after_rejection {
+                    if !retained_rejection_is_exact {
+                        return Err(EnsureWorkflowError::JournalIntegrity);
+                    }
+                    record.progress_identity = Some(observed.progress_identity.clone());
+                    retain_completed_reinstalls(&mut state, &retained_plan, &journal);
+                    write_state(&paths, &state)?;
+                    journal.completion = FleetEnsureCompletion::ReplanRequired;
+                    journal.stalled_observations = 0;
+                    write_journal(&paths, &journal)?;
+                    return Err(
+                        EnsureWorkflowError::ReplanRequiredAfterRejectedPrerequisite {
+                            evidence: observed.progress_identity,
+                        },
+                    );
+                }
+
+                if observed.retry == EffectRetry::DeferUntilControllerObservation {
+                    if !deferred_create_observation_is_exact(
+                        operation_desired,
+                        &actions,
+                        index,
+                        action,
+                        record,
+                        &state,
+                    ) {
+                        return Err(EnsureWorkflowError::JournalIntegrity);
+                    }
+                    if record.progress_identity.as_deref() == Some(&observed.progress_identity) {
+                        journal.stalled_observations =
+                            journal.stalled_observations.saturating_add(1);
+                    } else {
+                        record.progress_identity = Some(observed.progress_identity);
+                        journal.stalled_observations = 0;
+                    }
+                    write_journal(&paths, &journal)?;
+                    if journal.stalled_observations
+                        >= operation_desired.maximum_stalled_observations
+                    {
+                        return Err(EnsureWorkflowError::Stalled {
+                            observations: journal.stalled_observations,
+                        });
+                    }
+                    deferred_controller_observation = true;
+                    break;
+                }
+
+                if matches!(record.state, EffectState::Intent) {
+                    let outcome =
+                        match platform.apply(&journal.operation_id, action, record, &state) {
+                            Ok(outcome) => outcome,
+                            Err(source) => {
+                                journal.stalled_observations =
+                                    journal.stalled_observations.saturating_add(1);
+                                write_journal(&paths, &journal)?;
+                                if journal.stalled_observations
+                                    >= operation_desired.maximum_stalled_observations
+                                {
+                                    return Err(EnsureWorkflowError::Stalled {
+                                        observations: journal.stalled_observations,
+                                    });
+                                }
+                                return Err(EnsureWorkflowError::Platform(source));
+                            }
+                        };
+                    if !create_outcome_is_exact(action, record, &state, &outcome) {
+                        return Err(EnsureWorkflowError::JournalIntegrity);
+                    }
+                    if let Some(created) = &outcome.created_principal {
+                        state
+                            .pending_principals
+                            .insert(action.name().to_string(), created.clone());
+                        write_state(&paths, &state)?;
+                    }
+                    let record = journal
+                        .effects
+                        .get_mut(index)
+                        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+                    record.created_principal = outcome.created_principal;
+                    record.receipt = outcome.receipt;
+                    record.post_cycles = outcome.post_cycles;
+                    record.progress_identity = Some(observed.progress_identity);
+                    record.state = EffectState::Issued;
+                    journal.stalled_observations = 0;
+                    write_journal(&paths, &journal)?;
+                    continue;
+                }
+
+                if observed.retry == EffectRetry::ReplayExactIssuedCommand
+                    && !replayed_issued_commands.contains(&index)
+                {
+                    if !matches!(
+                        action,
+                        EnsureAction::FleetProtocol { action, .. }
+                            if matches!(
+                                action.as_ref(),
+                                crate::fleet_ensure::model::CurrentFleetProtocolAction::ProvisionComponents { .. }
+                            )
+                    ) {
+                        return Err(EnsureWorkflowError::JournalIntegrity);
+                    }
+                    let retained_receipt = record.receipt.clone();
                     let outcome = platform
                         .apply(&journal.operation_id, action, record, &state)
                         .map_err(EnsureWorkflowError::Platform)?;
-                    if !create_outcome_is_exact(action, record, &state, &outcome) {
+                    if outcome.created_principal.is_some()
+                        || outcome.receipt != retained_receipt
+                        || outcome.post_cycles.is_some()
+                    {
                         return Err(EnsureWorkflowError::JournalIntegrity);
                     }
                     let record = journal
                         .effects
                         .get_mut(index)
                         .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-                    record.post_cycles = outcome.post_cycles;
+                    record.progress_identity = Some(observed.progress_identity);
                     journal.stalled_observations = 0;
                     write_journal(&paths, &journal)?;
+                    replayed_issued_commands.insert(index);
+                    continue;
                 }
-                let retained_funding = journal.effects.get(index).is_some_and(|record| {
-                    retain_applied_funding_cycles(&mut state, action, record)
-                });
-                if retained_funding {
-                    write_state(&paths, &state)?;
-                }
-                break;
-            }
 
-            let observed = platform
-                .observe_effect(&journal.operation_id, action, record, &state)
-                .map_err(EnsureWorkflowError::Platform)?;
-            let source_cycles = if observed.post_cycles.is_some() {
-                observed.post_cycles
-            } else {
-                platform
-                    .action_cycles(action, &state)
-                    .map_err(EnsureWorkflowError::Platform)?
-            };
-            let destination_cycles = platform
-                .action_destination_cycles(action, &state)
-                .map_err(EnsureWorkflowError::Platform)?;
-            let replan_after_create_balance =
-                observed.retry == EffectRetry::ReplanRequiredAfterCreateBalanceDrift;
-            let replan_after_rejection =
-                observed.retry == EffectRetry::ReplanRequiredAfterRejectedPrerequisite;
-            let retained_create_balance_is_exact = !replan_after_create_balance
-                || (journal.effects.len() == index + 1
-                    && journal.effects[..index]
-                        .iter()
-                        .all(|effect| effect.state == EffectState::Applied)
-                    && record.state == EffectState::Issued
-                    && create_identity_is_exact(action.name(), record, &state)
-                    && observed.post_cycles.is_some()
-                    && observed.post_cycles == source_cycles);
-            let retained_rejection_is_exact = !replan_after_rejection
-                || (journal.effects.len() == index + 1
-                    && journal.effects[..index]
-                        .iter()
-                        .all(|effect| effect.state == EffectState::Applied)
-                    && record.state == EffectState::Intent
-                    && record.created_principal.is_none()
-                    && record.receipt.is_none());
-            let record = journal
+                if record.progress_identity.as_deref() == Some(&observed.progress_identity) {
+                    journal.stalled_observations = journal.stalled_observations.saturating_add(1);
+                } else {
+                    record.progress_identity = Some(observed.progress_identity);
+                    journal.stalled_observations = 0;
+                }
+                write_journal(&paths, &journal)?;
+                if journal.stalled_observations >= operation_desired.maximum_stalled_observations {
+                    return Err(EnsureWorkflowError::Stalled {
+                        observations: journal.stalled_observations,
+                    });
+                }
+            }
+        }
+        if journal.effects.len() == actions.len()
+            && journal
                 .effects
-                .get_mut(index)
-                .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-            merge_observed_cycles(record, source_cycles, destination_cycles);
-            if replan_after_create_balance {
-                if !retained_create_balance_is_exact {
-                    return Err(EnsureWorkflowError::JournalIntegrity);
-                }
-                let EnsureAction::Create {
-                    name,
-                    requested_initial_cycles,
-                    ..
-                } = action
-                else {
-                    return Err(EnsureWorkflowError::JournalIntegrity);
-                };
-                let actual_cycles = record
-                    .post_cycles
-                    .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-                record.progress_identity = Some(observed.progress_identity);
-                record.state = EffectState::Applied;
-                retain_created_canister_for_replan(operation_desired, name, record, &mut state)?;
-                journal.completion = FleetEnsureCompletion::ReplanRequired;
-                journal.stalled_observations = 0;
-                write_journal(&paths, &journal)?;
-                write_state(&paths, &state)?;
-                let configured_fee_cycles = operation_desired
-                    .management_creation_fee_cycles
-                    .parse::<Cycles>()
-                    .map(|cycles| cycles.to_u128())
-                    .map_err(|_| EnsureWorkflowError::JournalIntegrity)?;
-                return Err(EnsureWorkflowError::ReplanRequiredAfterCreateBalanceDrift {
-                    actual_cycles,
-                    canister: name.clone(),
-                    configured_fee_cycles,
-                    deficit_cycles: requested_initial_cycles.saturating_sub(actual_cycles),
-                    requested_cycles: *requested_initial_cycles,
-                });
-            }
-            if observed.applied {
-                record.progress_identity = Some(observed.progress_identity);
-                record.state = EffectState::Applied;
-                journal.stalled_observations = 0;
-                let retained_funding = retain_applied_funding_cycles(&mut state, action, record);
-                write_journal(&paths, &journal)?;
-                if retained_funding {
-                    write_state(&paths, &state)?;
-                }
-                break;
-            }
-
-            if replan_after_rejection {
-                if !retained_rejection_is_exact {
-                    return Err(EnsureWorkflowError::JournalIntegrity);
-                }
-                record.progress_identity = Some(observed.progress_identity.clone());
-                retain_completed_reinstalls(&mut state, &retained_plan, &journal);
-                write_state(&paths, &state)?;
-                journal.completion = FleetEnsureCompletion::ReplanRequired;
-                journal.stalled_observations = 0;
-                write_journal(&paths, &journal)?;
-                return Err(
-                    EnsureWorkflowError::ReplanRequiredAfterRejectedPrerequisite {
-                        evidence: observed.progress_identity,
-                    },
-                );
-            }
-
-            if matches!(record.state, EffectState::Intent) {
-                let outcome = match platform.apply(&journal.operation_id, action, record, &state) {
-                    Ok(outcome) => outcome,
-                    Err(source) => {
-                        journal.stalled_observations =
-                            journal.stalled_observations.saturating_add(1);
-                        write_journal(&paths, &journal)?;
-                        if journal.stalled_observations
-                            >= operation_desired.maximum_stalled_observations
-                        {
-                            return Err(EnsureWorkflowError::Stalled {
-                                observations: journal.stalled_observations,
-                            });
-                        }
-                        return Err(EnsureWorkflowError::Platform(source));
-                    }
-                };
-                if !create_outcome_is_exact(action, record, &state, &outcome) {
-                    return Err(EnsureWorkflowError::JournalIntegrity);
-                }
-                if let Some(created) = &outcome.created_principal {
-                    state
-                        .pending_principals
-                        .insert(action.name().to_string(), created.clone());
-                    write_state(&paths, &state)?;
-                }
-                let record = journal
-                    .effects
-                    .get_mut(index)
-                    .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-                record.created_principal = outcome.created_principal;
-                record.receipt = outcome.receipt;
-                record.post_cycles = outcome.post_cycles;
-                record.progress_identity = Some(observed.progress_identity);
-                record.state = EffectState::Issued;
-                journal.stalled_observations = 0;
-                write_journal(&paths, &journal)?;
-                continue;
-            }
-
-            if observed.retry == EffectRetry::ReplayExactIssuedCommand
-                && !replayed_issued_commands.contains(&index)
-            {
-                if !matches!(
-                    action,
-                    EnsureAction::FleetProtocol { action, .. }
-                        if matches!(
-                            action.as_ref(),
-                            crate::fleet_ensure::model::CurrentFleetProtocolAction::ProvisionComponents { .. }
-                        )
-                ) {
-                    return Err(EnsureWorkflowError::JournalIntegrity);
-                }
-                let retained_receipt = record.receipt.clone();
-                let outcome = platform
-                    .apply(&journal.operation_id, action, record, &state)
-                    .map_err(EnsureWorkflowError::Platform)?;
-                if outcome.created_principal.is_some()
-                    || outcome.receipt != retained_receipt
-                    || outcome.post_cycles.is_some()
-                {
-                    return Err(EnsureWorkflowError::JournalIntegrity);
-                }
-                let record = journal
-                    .effects
-                    .get_mut(index)
-                    .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-                record.progress_identity = Some(observed.progress_identity);
-                journal.stalled_observations = 0;
-                write_journal(&paths, &journal)?;
-                replayed_issued_commands.insert(index);
-                continue;
-            }
-
-            if record.progress_identity.as_deref() == Some(&observed.progress_identity) {
-                journal.stalled_observations = journal.stalled_observations.saturating_add(1);
-            } else {
-                record.progress_identity = Some(observed.progress_identity);
-                journal.stalled_observations = 0;
-            }
-            write_journal(&paths, &journal)?;
-            if journal.stalled_observations >= operation_desired.maximum_stalled_observations {
-                return Err(EnsureWorkflowError::Stalled {
-                    observations: journal.stalled_observations,
-                });
-            }
+                .iter()
+                .all(|record| record.state == EffectState::Applied)
+        {
+            break;
+        }
+        if !deferred_controller_observation {
+            return Err(EnsureWorkflowError::JournalIntegrity);
         }
     }
 
@@ -2081,6 +2132,42 @@ pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
             }
         )
     });
+    let temporary_pool_observation_finalizations = plan
+        .reviewed_desired
+        .as_deref()
+        .map(|reviewed| {
+            let desired = reviewed.desired();
+            plan.canisters
+                .iter()
+                .filter_map(|canister_plan| {
+                    let configured = desired.canisters.iter().find(|configured| {
+                        configured.name == canister_plan.name
+                            && configured.kind
+                                == crate::fleet_ensure::model::DesiredCanisterKind::Pool
+                    })?;
+                    let temporary_create = desired
+                        .bootstrap
+                        .as_ref()
+                        .is_some_and(|bootstrap| bootstrap.fresh_estate)
+                        && configured.principal.is_none()
+                        && configured.controllers.is_empty()
+                        && configured.controller_canisters.len() == 1
+                        && canister_plan.actions.iter().any(|action| {
+                            matches!(
+                                action,
+                                EnsureAction::Create {
+                                    controller_canisters,
+                                    controllers,
+                                    ..
+                                } if controller_canisters == &configured.controller_canisters
+                                    && controllers == std::slice::from_ref(&desired.operator)
+                            )
+                        });
+                    temporary_create.then_some(canister_plan.name.as_str())
+                })
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
     actions.sort_by_key(|action| {
         if retained_store_prerequisite
             && matches!(
@@ -2093,11 +2180,73 @@ pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
             )
         {
             3
+        } else if matches!(action, EnsureAction::SetControllers { name, .. } if temporary_pool_observation_finalizations.contains(name.as_str()))
+        {
+            6
         } else {
             action_order(action)
         }
     });
     actions
+}
+
+fn deferred_create_observation_is_exact(
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    actions: &[&EnsureAction],
+    index: usize,
+    action: &EnsureAction,
+    record: &EffectRecord,
+    state: &FleetEnsureStateRecord,
+) -> bool {
+    let EnsureAction::Create {
+        controller_canisters,
+        controllers,
+        name,
+        ..
+    } = action
+    else {
+        return false;
+    };
+    let Some(configured) = desired.canisters.iter().find(|canister| {
+        canister.name == *name
+            && canister.kind == crate::fleet_ensure::model::DesiredCanisterKind::Pool
+    }) else {
+        return false;
+    };
+    let Some(parent) = configured.parent.as_deref() else {
+        return false;
+    };
+    let fresh_root_only_create = desired
+        .bootstrap
+        .as_ref()
+        .is_some_and(|bootstrap| bootstrap.fresh_estate)
+        && configured.principal.is_none()
+        && configured.controllers.is_empty()
+        && configured.controller_canisters.as_slice() == [parent]
+        && controller_canisters == &configured.controller_canisters
+        && controllers.is_empty();
+    let exact_issued_create = record.state == EffectState::Issued
+        && create_identity_is_exact(name, record, state)
+        && record.post_cycles.is_some();
+    let later_root_install = actions[index.saturating_add(1)..].iter().any(|candidate| {
+        matches!(
+            candidate,
+            EnsureAction::Install {
+                canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Root { root }),
+                name: install_name,
+                ..
+            } if root == parent && install_name == parent
+        )
+    });
+    let infrastructure_only = actions.iter().all(|candidate| {
+        matches!(
+            candidate,
+            EnsureAction::Create { .. }
+                | EnsureAction::Install { .. }
+                | EnsureAction::SetControllers { .. }
+        )
+    });
+    fresh_root_only_create && exact_issued_create && later_root_install && infrastructure_only
 }
 
 pub(super) const fn action_order(action: &EnsureAction) -> u8 {

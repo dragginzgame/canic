@@ -69,9 +69,11 @@ pub struct IcpSnapshot {
 pub struct IcpCanisterStatusReport {
     #[serde(default, rename = "version", alias = "canister_version")]
     pub canister_version: Option<u64>,
+    #[serde(default, rename = "controllers")]
+    pub public_controllers: Option<Vec<String>>,
     pub id: String,
     pub name: Option<String>,
-    pub status: String,
+    pub status: Option<String>,
     pub settings: Option<IcpCanisterStatusSettings>,
     pub module_hash: Option<String>,
     pub memory_size: Option<String>,

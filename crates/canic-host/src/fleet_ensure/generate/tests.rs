@@ -954,6 +954,55 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         1_800_000_000_000_000_000,
     )
     .expect("compile fresh estate creation plan");
+    let ordered_fresh_actions = workflow::ordered_actions(&fresh_plan);
+    let root_install_index = ordered_fresh_actions
+        .iter()
+        .position(|action| {
+            matches!(
+                action,
+                EnsureAction::Install {
+                    canic_init: Some(DesiredCanisterInit::Root { root }),
+                    name,
+                    ..
+                } if root == "root-0" && name == "root-0"
+            )
+        })
+        .expect("fresh Root installation action");
+    for pool in &fresh_pools {
+        let pool_plan = fresh_plan
+            .canisters
+            .iter()
+            .find(|canister| canister.name == pool.name)
+            .expect("fresh pool plan");
+        assert!(pool_plan.actions.iter().any(|action| {
+            matches!(
+                action,
+                EnsureAction::Create {
+                    controller_canisters,
+                    controllers,
+                    ..
+                } if controller_canisters == &["root-0"]
+                    && controllers == std::slice::from_ref(&fresh.desired.operator)
+            )
+        }));
+        let finalization_index = ordered_fresh_actions
+            .iter()
+            .position(|action| {
+                matches!(
+                    action,
+                    EnsureAction::SetControllers {
+                        controller_canisters,
+                        controllers,
+                        name,
+                        ..
+                    } if name == &pool.name
+                        && controller_canisters == &["root-0"]
+                        && controllers.is_empty()
+                )
+            })
+            .expect("fresh pool final controller action");
+        assert!(finalization_index > root_install_index);
+    }
     assert!(
         fresh_plan
             .canisters
@@ -1020,6 +1069,135 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             .iter()
             .all(|action| !matches!(action, EnsureAction::Fund { .. }))
     }));
+
+    let mut retained_root_only_plan = fresh_plan.clone();
+    for canister in retained_root_only_plan
+        .canisters
+        .iter_mut()
+        .filter(|canister| {
+            fresh.desired.canisters.iter().any(|configured| {
+                configured.name == canister.name && configured.kind == DesiredCanisterKind::Pool
+            })
+        })
+    {
+        canister
+            .actions
+            .retain(|action| !matches!(action, EnsureAction::SetControllers { .. }));
+        for action in &mut canister.actions {
+            if let EnsureAction::Create { controllers, .. } = action {
+                controllers.clear();
+            }
+        }
+    }
+    retained_root_only_plan.plan_sha256 =
+        crate::fleet_ensure::policy::expected_plan_sha256(&retained_root_only_plan);
+    let retained_root = root.join("retained-root-only-resume");
+    copy_test_tree(&root.join("artifacts"), &retained_root.join("artifacts"))
+        .expect("copy retained release artifacts");
+    let retained_paths = EnsurePaths::under(
+        &retained_root,
+        &fresh.desired.environment,
+        &fresh.desired.fleet,
+    );
+    write_plan(&retained_paths, &retained_root_only_plan)
+        .expect("retain exact pre-correction Root-only plan");
+    write_state(
+        &retained_paths,
+        &read_state(&retained_paths, &fresh.desired.fleet).expect("fresh retained state"),
+    )
+    .expect("retain empty fresh state");
+    let mut retained_platform = crate::fleet_ensure::tests::MockPlatform::new(
+        fresh.desired.clone(),
+        Vec::<LiveCanister>::new(),
+    );
+    retained_platform.set_operator_cycles(u128::MAX);
+    for pool in &fresh_pools {
+        retained_platform.defer_created_until_root_install(&pool.name, "root-0");
+    }
+    let retained_actions = workflow::ordered_actions(&retained_root_only_plan);
+    let pool_creates = retained_actions
+        .iter()
+        .filter(|action| {
+            matches!(
+                action,
+                EnsureAction::Create { name, .. }
+                    if fresh_pools.iter().any(|pool| pool.name == *name)
+            )
+        })
+        .map(|action| action_sha256(action))
+        .collect::<Vec<_>>();
+    assert_eq!(pool_creates.len(), 2);
+    retained_platform.fail_once(pool_creates[1].clone());
+    write_journal(
+        &retained_paths,
+        &FleetEnsureJournalRecord {
+            completion: FleetEnsureCompletion::InProgress,
+            effects: Vec::new(),
+            fleet: fresh.desired.fleet.clone(),
+            initial_controlled_cycles: 0,
+            initial_operator_cycles: retained_platform.operator_cycles(),
+            operation_id: retained_root_only_plan.operation_id.clone(),
+            plan_sha256: retained_root_only_plan.plan_sha256.clone(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            stalled_observations: 0,
+        },
+    )
+    .expect("retain empty pre-correction journal");
+    assert!(matches!(
+        workflow::apply(
+            &retained_root,
+            &fresh.desired,
+            &"74".repeat(32),
+            &fresh.desired.fleet,
+            &retained_root_only_plan.plan_sha256,
+            &mut retained_platform,
+        ),
+        Err(workflow::EnsureWorkflowError::Platform(_))
+    ));
+    let interrupted = read_journal(&retained_paths)
+        .expect("read interrupted Root-only journal")
+        .expect("interrupted Root-only journal");
+    assert_eq!(interrupted.effects[3].state, EffectState::Issued);
+    assert_eq!(interrupted.effects[4].state, EffectState::Intent);
+
+    let resumed = workflow::apply(
+        &retained_root,
+        &fresh.desired,
+        &"74".repeat(32),
+        &fresh.desired.fleet,
+        &retained_root_only_plan.plan_sha256,
+        &mut retained_platform,
+    )
+    .expect("resume Root-only creates through exact Root installation");
+    assert!(resumed.terminal);
+    for create in &pool_creates {
+        assert_eq!(retained_platform.mutation_count(create), 1);
+    }
+    assert_eq!(
+        retained_platform.duplicate_create_response_count(&pool_creates[1]),
+        1
+    );
+    let replay_plan = workflow::plan(
+        &retained_root,
+        &fresh.desired,
+        &"74".repeat(32),
+        &fresh.desired.fleet,
+        1_800_000_000_000_000_100,
+        &mut retained_platform,
+    )
+    .expect("plan terminal Root-only replay");
+    assert!(workflow::ordered_actions(&replay_plan.plan).is_empty());
+    let replay = workflow::apply(
+        &retained_root,
+        &fresh.desired,
+        &"74".repeat(32),
+        &fresh.desired.fleet,
+        &replay_plan.plan.plan_sha256,
+        &mut retained_platform,
+    )
+    .expect("apply effect-free Root-only replay");
+    assert!(replay.terminal);
+    assert_eq!(replay.effects_applied, 0);
 
     let root_status_count = root.join("root-status-count");
     if root_status_count.exists() {
@@ -3988,6 +4166,20 @@ fn gzip(bytes: &[u8]) -> Vec<u8> {
         .write(Vec::new(), Compression::best());
     encoder.write_all(bytes).expect("write gzip");
     encoder.finish().expect("finish gzip")
+}
+
+fn copy_test_tree(source: &Path, destination: &Path) -> io::Result<()> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let destination = destination.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_test_tree(&entry.path(), &destination)?;
+        } else {
+            fs::copy(entry.path(), destination)?;
+        }
+    }
+    Ok(())
 }
 
 #[expect(

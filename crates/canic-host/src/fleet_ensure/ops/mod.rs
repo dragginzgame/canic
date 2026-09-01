@@ -93,6 +93,10 @@ pub struct EffectObservation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EffectRetry {
     None,
+    /// A created Root-owned canister is intentionally not observable by the
+    /// operator until the exact Root installation later in this same plan.
+    /// Continue the reviewed prerequisites, then revisit this issued effect.
+    DeferUntilControllerObservation,
     /// The exact created Principal and Ledger receipt are retained, but the
     /// first live balance is outside the reviewed target and observation-burn
     /// bound. Close the immutable operation before any later action.
