@@ -103,12 +103,14 @@ predicates report their exact field plus expected and observed values.
 
 `CANIC-113` is completed in the current draft. A Create response retains the
 requested funding target, exact returned Principal and Ledger block; the first
-live status observation independently supplies actual cycles. A mismatch
-marks only that proved Create Applied, retains the actual balance and topology,
-and closes the operation as replan-required before any later controller,
-install or protocol action. Its typed diagnostic reports configured creation
-fee, requested, actual and deficit integers. The successor plan reuses the
-Principal and cannot repeat the paid creation.
+live status observation independently supplies actual cycles. An exact balance
+or downward delta within `maximum_observation_burn_cycles` completes normally
+with the observed balance retained. A larger deficit or any surplus marks only
+that proved Create Applied, retains the actual balance and topology, and closes
+the operation as replan-required before any later controller, install or
+protocol action. Its typed diagnostic reports configured creation fee,
+requested, actual and deficit integers. The successor plan reuses the Principal
+and cannot repeat the paid creation.
 
 `CANIC-116` is completed in the current draft. An issued Root-owned pool
 withdrawal is terminal only when its exact Ledger receipt is retained and the
@@ -313,9 +315,9 @@ For the current B9, B10 and completed `CANIC-102`, `CANIC-112`, `CANIC-113`, `CA
   receipt adoption, one total funding mutation, retained post-balance and a
   fresh zero-action terminal replay; warning-denied `canic-host` Clippy passes;
 - focused CANIC-113 host regressions prove exact and duplicate Create response
-  handling, an immediate typed short-balance replan boundary, one creation,
-  retained live cycles/topology, successor funding without recreation and
-  terminal replay;
+  handling, bounded observation-burn acceptance, an immediate typed
+  above-bound short-balance replan boundary, one creation, retained live
+  cycles/topology, successor funding without recreation and terminal replay;
 - focused CANIC-112 host regressions prove largest-affordable-prefix selection,
   replan-required prefix closure, one-time successor application, terminal
   convergence, zero-effect replay, exact available/required/shortfall guidance,

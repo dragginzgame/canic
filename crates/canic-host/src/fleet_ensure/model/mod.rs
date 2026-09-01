@@ -548,6 +548,26 @@ pub struct ActualCycleConservation {
     pub received_new_funding_cycles: u128,
 }
 
+/// Whether the first live balance of a newly created canister is covered by
+/// the exact observation-burn authority reviewed in the desired Fleet.
+///
+/// Creation response evidence owns the requested amount. The subsequent live
+/// status owns the retained balance, which may be lower only by the explicitly
+/// bounded observation burn incurred before that status is read.
+pub(crate) const fn create_balance_is_terminal(
+    actual_cycles: Option<u128>,
+    requested_initial_cycles: u128,
+    maximum_observation_burn_cycles: u128,
+) -> bool {
+    let Some(actual_cycles) = actual_cycles else {
+        return false;
+    };
+    if actual_cycles > requested_initial_cycles {
+        return false;
+    }
+    requested_initial_cycles - actual_cycles <= maximum_observation_burn_cycles
+}
+
 /// Exact normalized desired input retained by one in-progress operation.
 ///
 /// The public desired document cannot declare internal protocol steps. This

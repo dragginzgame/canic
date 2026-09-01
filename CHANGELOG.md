@@ -19,8 +19,9 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   inventories terminal Components from the Root's retained result instead of
   reconstructing the predecessor provisioning plan with successor semantics,
   separates a Create receipt's requested funding target from the first exact
-  live balance and crosses any mismatch into an effect-preserving replan before
-  later actions,
+  live balance, admits only a downward delta within the plan's reviewed
+  observation-burn bound, and crosses every larger deficit or surplus into an
+  effect-preserving replan before later actions,
   reconciles an issued pool withdrawal from exact Root-authorized live balance
   evidence within its reviewed burn margin without repeating the debit,
   deterministically tranches protocol work to exact available cycle headroom

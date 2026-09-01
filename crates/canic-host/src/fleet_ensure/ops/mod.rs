@@ -94,8 +94,8 @@ pub struct EffectObservation {
 pub enum EffectRetry {
     None,
     /// The exact created Principal and Ledger receipt are retained, but the
-    /// first live balance differs from the reviewed native target. Close the
-    /// immutable operation before any controller or protocol action.
+    /// first live balance is outside the reviewed target and observation-burn
+    /// bound. Close the immutable operation before any later action.
     ReplanRequiredAfterCreateBalanceDrift,
     /// The retained intent was synchronously rejected before mutation and its
     /// exact live prerequisite is now management-proved. Close the immutable

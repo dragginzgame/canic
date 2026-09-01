@@ -39,13 +39,15 @@ Roadmap reconciled: 2026-08-30
   burn margin, rejects the stale pre-effect balance, retains the observed cycle
   evidence and cannot repeat the debit.
   `CANIC-113` separately treats a Create response as requested-target evidence
-  and the returned Principal's first status as live-balance evidence. A
-  mismatch closes the one-effect journal as replan-required before later
-  actions, retaining the Principal, receipt, actual cycles and topology so a
-  successor can fund without recreating it. `CANIC-112` replaces conservation
-  underflow with exact cycle guidance and deterministically retains the largest
-  affordable non-empty prefix of the already validated protocol action order;
-  an unaffordable first action produces no plan or effect.
+  and the returned Principal's first status as live-balance evidence. A bounded
+  downward delta consumes only the reviewed observation-burn authority; a
+  larger deficit or surplus closes the one-effect journal as replan-required
+  before later actions, retaining the Principal, receipt, actual cycles and
+  topology so a successor can fund without recreating it. `CANIC-112` replaces
+  conservation underflow with exact cycle guidance and deterministically
+  retains the largest affordable non-empty prefix of the already validated
+  protocol action order; an unaffordable first action produces no plan or
+  effect.
 - Current addendum (2026-08-31): the B10 candidate proves the host-only
   `canic::testing` facade through an isolated packaged consumer and exact
   managed composed-IcyDB plus standalone-local PocketIC lifecycles. Generated

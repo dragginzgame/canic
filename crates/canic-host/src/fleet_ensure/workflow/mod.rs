@@ -10,7 +10,7 @@ use crate::fleet_ensure::{
         ActualCycleConservation, CanisterDisposition, CycleConservation, EffectRecord, EffectState,
         EnsureAction, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion, FleetEnsureJournalRecord,
         FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureReport, FleetEnsureStateRecord,
-        FleetObservation, RootManagementObservation,
+        FleetObservation, RootManagementObservation, create_balance_is_terminal,
     },
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
@@ -1833,6 +1833,11 @@ fn publish_terminal_state(
     journal: &FleetEnsureJournalRecord,
     state: &mut FleetEnsureStateRecord,
 ) -> Result<(), TerminalStatePublicationError> {
+    let maximum_observation_burn_cycles = desired
+        .maximum_observation_burn_cycles
+        .parse::<Cycles>()
+        .map(|cycles| cycles.to_u128())
+        .map_err(|_| TerminalStatePublicationError::JournalIntegrity)?;
     let actions = ordered_actions(plan);
     if actions.len() != journal.effects.len() {
         return Err(TerminalStatePublicationError::JournalIntegrity);
@@ -1855,8 +1860,11 @@ fn publish_terminal_state(
         let Some(post_cycles) = record.post_cycles else {
             return Err(TerminalStatePublicationError::JournalIntegrity);
         };
-        if post_cycles != *requested_initial_cycles
-            || !create_identity_is_exact(name, record, state)
+        if !create_balance_is_terminal(
+            Some(post_cycles),
+            *requested_initial_cycles,
+            maximum_observation_burn_cycles,
+        ) || !create_identity_is_exact(name, record, state)
             || state
                 .retained_cycles_by_principal
                 .get(created_principal)
