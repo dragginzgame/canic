@@ -161,4 +161,5 @@ targeted-complete CANIC-118 batch, then qualify the downstream fresh Fleet
 against that immutable tag. After that, request a fresh human-owned 0.109
 closeout audit. Do not begin 0.110 before the maintainer accepts that verdict.
 
-<!-- canic-release-validation: version=0.109.34 source=2e48628b1127568a47430e02e15791006ea5d2a0 date=2026-09-01 gate=complete -->
+
+<!-- canic-release-validation: version=0.109.35 source=033990cdfa86b13053a46c8fb887675a6adeb0d1 date=2026-09-01 gate=complete -->
