@@ -173,14 +173,26 @@ mod governed_suite {
         run_governed_test_cases(cases);
     }
 
+    #[test]
+    fn governed_pocketic_inventory_is_exact() {
+        assert_governed_pocketic_order();
+    }
+
     fn assert_governed_pocketic_order() {
         let mut cases = fleet_registry::governed_pocketic_cases();
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_pocketic_cases());
         let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
-        assert_eq!(names.len(), 33);
+        assert_eq!(names.len(), 34);
         assert_eq!(names[0], "Fleet deployment restore");
         assert_eq!(names[1], "autonomous Root removal");
+        assert_eq!(
+            names
+                .iter()
+                .filter(|name| **name == "literal zero-estate host/control-plane convergence")
+                .count(),
+            1
+        );
         assert_eq!(
             names.iter().copied().collect::<BTreeSet<_>>().len(),
             names.len()

@@ -2597,14 +2597,8 @@ fn exact_retained_root_owned_topology<'a>(
     principal: &str,
     root: &str,
 ) -> Option<&'a crate::fleet_ensure::model::FleetEnsureTopologyRecord> {
-    let child_identity_matches = state
-        .principals
-        .get(name)
-        .is_some_and(|retained| retained == principal);
-    let root_identity_matches = state
-        .principals
-        .get(parent)
-        .is_some_and(|retained| retained == root);
+    let child_identity_matches = retained_state_principal_matches(state, name, principal);
+    let root_identity_matches = retained_state_principal_matches(state, parent, root);
     let topology = state
         .topology
         .get(name)
@@ -2612,6 +2606,19 @@ fn exact_retained_root_owned_topology<'a>(
     (child_identity_matches && root_identity_matches)
         .then_some(topology)
         .flatten()
+}
+
+fn retained_state_principal_matches(
+    state: &FleetEnsureStateRecord,
+    name: &str,
+    principal: &str,
+) -> bool {
+    let pending = state.pending_principals.get(name).map(String::as_str);
+    let terminal = state.principals.get(name).map(String::as_str);
+    let retained = pending.is_some() || terminal.is_some();
+    retained
+        && pending.is_none_or(|retained| retained == principal)
+        && terminal.is_none_or(|retained| retained == principal)
 }
 
 fn completed_reinstall_continuity(
@@ -3304,6 +3311,41 @@ mod tests {
             .get_mut("store")
             .expect("Store topology")
             .parent = Some("foreign-root".to_string());
+        assert!(
+            exact_retained_root_owned_topology(
+                &state,
+                "store",
+                DesiredCanisterKind::Store,
+                "root",
+                "store-principal",
+                "root-principal",
+            )
+            .is_none()
+        );
+        state
+            .topology
+            .get_mut("store")
+            .expect("Store topology")
+            .parent = Some("root".to_string());
+        state.principals.clear();
+        state.pending_principals = BTreeMap::from([
+            ("root".to_string(), "root-principal".to_string()),
+            ("store".to_string(), "store-principal".to_string()),
+        ]);
+        assert!(
+            exact_retained_root_owned_topology(
+                &state,
+                "store",
+                DesiredCanisterKind::Store,
+                "root",
+                "store-principal",
+                "root-principal",
+            )
+            .is_some()
+        );
+        state
+            .principals
+            .insert("store".to_string(), "foreign-store".to_string());
         assert!(
             exact_retained_root_owned_topology(
                 &state,

@@ -1,15 +1,77 @@
 # 0.110 B1 Wasm Input Evidence
 
-Date frozen: 2026-08-31
+Date frozen: 2026-09-01
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
-Current Canic source baseline: `936043db9` (`v0.109.30`)
+Current Canic source baseline: `3185dc45b` (`v0.109.35`)
 
 ## Authority Boundary
 
-This file retains planning inputs. It is not B1 completion evidence and does
-not authorize implementation. B1 must reproduce its accepted baseline and
+This file retains planning inputs and the active B1 ledger. It is not B1
+completion evidence. B1 must reproduce its accepted baseline and
 controlled ablations from one immutable post-0.109 source, toolchain, feature
 set and optimizer configuration.
+
+The human maintainer accepted 0.109 closeout and explicitly promoted B1 on
+2026-09-01. B2 remains blocked on accepted B1 completion evidence.
+
+## Frozen Network Limits
+
+The dated 2026-09-01 authority is the IC
+[resource-limit reference](https://docs.internetcomputer.org/references/resource-limits/)
+and its normative
+[WebAssembly module requirements](https://docs.internetcomputer.org/references/ic-interface-spec/canister-interface/#webassembly-module-requirements):
+
+| Limit | Frozen value | Binding 5% reserve |
+| --- | ---: | ---: |
+| Wasm code section | 10,485,760 bytes | 524,288 bytes |
+| Total Wasm module | 104,857,600 bytes | independent strict upper bound |
+| Declared functions | 50,000 | 2,500 functions |
+
+The function quantity includes imported and defined functions. Defined
+functions remain a separate attribution metric.
+
+## Baseline Attempts
+
+The first isolated `v0.109.35` run built the canonical App artifact, then
+stopped before retaining evidence because the v4 optimizer parser required the
+obsolete final `<role>/<role>.wasm` log path. The current builder correctly
+reports a path-confined staged `candidate.wasm`. `CANIC-WASM-001/v5` assigns
+one log to each role build and binds the exact metric record independently of
+that disposable path. No partial run is treated as baseline evidence.
+
+The next complete run proved the role-local parser over all 27 role/profile
+builds, but exposed contradictory hard-coded v4 prose in the generated v5
+report. That attempt is retained as explicitly invalid evidence. The report
+generator and executable method fingerprint were then corrected and the whole
+audit was rerun from the same clean immutable source; no build output from the
+invalid attempt was reused as artifact evidence.
+
+## Canonical v5 Baseline
+
+The corrected
+[CANIC-WASM-001/v5 baseline](../../reports/2026-09/2026-09-01/wasm-footprint-v5-2.md)
+passed from `v0.109.35` source `3185dc45b` with executable method fingerprint
+`e5fea20658708141f9ec95545536c73306fe725f5410567a045cb8ce5df8cc27`.
+It built all nine canonical roles twice from independent clean release targets
+and once from a debug target. Exact Wasm, gzip, Candid and optimizer metrics
+matched between release builds; all artifacts passed the governed host build,
+gzip integrity, `ic-wasm` and bounded `twiggy` analyses.
+
+The largest baseline role is the Fleet Subnet Root:
+
+| Quantity | Observed | Frozen limit | Absolute headroom |
+| --- | ---: | ---: | ---: |
+| code section | 6,709,592 bytes | 10,485,760 bytes | 3,776,168 bytes |
+| total module | 7,149,541 bytes | 104,857,600 bytes | 97,708,059 bytes |
+| declared functions | 9,678 | 50,000 | 40,322 |
+
+Every repository-owned canonical role therefore exceeds both binding 5%
+reserves at the accepted predecessor. This does not complete B1: the exact
+downstream canary remains unreproduced, and the controlled ablation ledger,
+generated-surface inventory, generic cohort and destroyed-state inventory are
+still outstanding. The baseline risk score is `6/10`, driven by first-method
+baseline status, Component spread, Root-to-Component size ratio and the large
+retained indirect-call table rather than a limit violation.
 
 The repository-owned predecessor measurement is
 [0.109 B9 governed release Wasm optimization](../0.109-fleet-wide-ingress-admission/b9-release-wasm-optimization.md).

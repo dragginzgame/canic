@@ -51,6 +51,15 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::{collections::BTreeSet, fs, io, io::Write as _};
 
 #[test]
+fn fresh_pool_creation_funding_preserves_toko_shaped_readiness_floor() {
+    assert_eq!(
+        fresh_pool_creation_funding(1_900_000_000_000)
+            .expect("compile Toko-shaped fresh pool funding"),
+        3_000_000_000_000
+    );
+}
+
+#[test]
 fn estate_seed_retains_explicit_fleet_id_independent_from_operator() {
     let fleet_id = "a5".repeat(32);
     let coordinator = Principal::from_slice(&[2]).to_text();
@@ -933,6 +942,46 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let fresh_artifacts =
         crate::fleet_ensure::ops::resolve_desired_artifacts(&root, &fresh.desired)
             .expect("resolve fresh release artifacts");
+    let mut insufficient_fresh = fresh.desired.clone();
+    for pool in insufficient_fresh
+        .canisters
+        .iter_mut()
+        .filter(|canister| canister.kind == DesiredCanisterKind::Pool)
+    {
+        pool.initial_cycles = "1.9T".to_string();
+        pool.minimum_cycles = "1.9T".to_string();
+    }
+    let insufficient_error = crate::fleet_ensure::policy::compile_plan(
+        &insufficient_fresh,
+        &fresh_artifacts,
+        &[],
+        &"73".repeat(32),
+        &insufficient_fresh.fleet,
+        &FleetObservation {
+            additional_controlled_cycles: BTreeMap::new(),
+            canisters: insufficient_fresh
+                .canisters
+                .iter()
+                .map(|canister| (canister.name.clone(), None))
+                .collect(),
+            ledger_fee_cycles: 100_000_000,
+            operator_cycles: u128::MAX,
+            protocol_ready: BTreeMap::new(),
+        },
+        1_800_000_000_000_000_000,
+    )
+    .expect_err("fresh pool funding without its execution margin rejects before effects");
+    assert!(matches!(
+        insufficient_error,
+        crate::fleet_ensure::policy::EnsurePolicyError::FreshPoolCreationFundingInsufficient {
+            admissible_burn_cycles: 1_100_000_000_000,
+            creation_funding_cycles: 1_900_000_000_000,
+            readiness_floor_cycles: 1_900_000_000_000,
+            required_creation_funding_cycles: 3_000_000_000_000,
+            shortfall_cycles: 1_100_000_000_000,
+            ..
+        }
+    ));
     let fresh_plan = crate::fleet_ensure::policy::compile_plan(
         &fresh.desired,
         &fresh_artifacts,
@@ -1035,7 +1084,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             .iter()
             .find(|(_, name, _)| name.as_str() == pool.name.as_str())
             .expect("fresh pool creation is reviewed directly");
-        assert_eq!(pool.initial_cycles, "5T");
+        assert_eq!(pool.initial_cycles, "6.1T");
+        assert_eq!(pool.minimum_cycles, "5T");
         assert_eq!(
             pool.initial_cycles
                 .parse::<Cycles>()
@@ -1043,6 +1093,67 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             Ok(*funded),
         );
     }
+    let legacy_pool = fresh_pools.first().expect("first fresh pool");
+    let mut legacy_desired = fresh.desired.clone();
+    let legacy_desired_pool = legacy_desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.name == legacy_pool.name)
+        .expect("Toko-shaped published-line pool");
+    legacy_desired_pool.initial_cycles = "1.9T".to_string();
+    legacy_desired_pool.minimum_cycles = "1.9T".to_string();
+    let legacy_principal = Principal::from_slice(&[91]).to_text();
+    let mut legacy_state = read_state(
+        &EnsurePaths::under(&root, "local", "legacy-underfunded-pool"),
+        "legacy-underfunded-pool",
+    )
+    .expect("construct legacy underfunded state");
+    legacy_state
+        .pending_principals
+        .insert(legacy_pool.name.clone(), legacy_principal.clone());
+    let legacy_action = EnsureAction::Create {
+        controller_canisters: legacy_pool.controller_canisters.clone(),
+        controllers: vec![fresh.desired.operator.clone()],
+        created_at_time: 1_800_000_000_000_000_000,
+        ledger: fresh.desired.cycles_ledger.clone(),
+        name: legacy_pool.name.clone(),
+        requested_initial_cycles: 1_900_000_000_000,
+        subnet: legacy_pool.subnet.clone(),
+    };
+    let legacy_record = EffectRecord {
+        action_sha256: action_sha256(&legacy_action),
+        created_principal: Some(legacy_principal),
+        destination_post_cycles: None,
+        destination_pre_cycles: None,
+        post_cycles: Some(1_899_998_056_000),
+        pre_cycles: None,
+        pre_canister_version: None,
+        progress_identity: Some("legacy-first-live-balance".to_string()),
+        receipt: Some("legacy-create-receipt".to_string()),
+        state: EffectState::Applied,
+    };
+    let legacy_error = workflow::retain_applied_create_authority::<io::Error>(
+        &legacy_desired,
+        &legacy_action,
+        &legacy_record,
+        &mut legacy_state,
+    )
+    .expect_err("underfunded published-line pool stops before controller finalization");
+    assert!(matches!(
+        legacy_error,
+        workflow::EnsureWorkflowError::FreshPoolCreationUnderfunded(details)
+        if matches!(details.as_ref(), workflow::FreshPoolCreationUnderfundedError {
+            live_balance_cycles: 1_899_998_056_000,
+            maximum_observation_burn_cycles: 1_000_000_000_000,
+            pre_finalization_shortfall_cycles: 100_001_944_000,
+            readiness_floor_cycles: 1_900_000_000_000,
+            readiness_shortfall_cycles: 1_944_000,
+            remaining_controller_burn_cycles: 100_000_000_000,
+            requested_creation_funding_cycles: 1_900_000_000_000,
+            required_pre_finalization_balance_cycles: 2_000_000_000_000,
+            ..
+        })
+    ));
     let requested = created
         .iter()
         .try_fold(0_u128, |total, (_, _, amount)| total.checked_add(*amount))
@@ -1069,6 +1180,202 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             .iter()
             .all(|action| !matches!(action, EnsureAction::Fund { .. }))
     }));
+
+    let fresh_apply_root = root.join("fresh-controller-finalization");
+    copy_test_tree(&root.join("artifacts"), &fresh_apply_root.join("artifacts"))
+        .expect("copy fresh release artifacts");
+    let fresh_apply_paths = EnsurePaths::under(
+        &fresh_apply_root,
+        &fresh.desired.environment,
+        &fresh.desired.fleet,
+    );
+    write_plan(&fresh_apply_paths, &fresh_plan).expect("retain literal fresh plan");
+    write_state(
+        &fresh_apply_paths,
+        &read_state(&fresh_apply_paths, &fresh.desired.fleet)
+            .expect("construct fresh application state"),
+    )
+    .expect("retain fresh application state");
+    write_journal(
+        &fresh_apply_paths,
+        &FleetEnsureJournalRecord {
+            completion: FleetEnsureCompletion::InProgress,
+            effects: Vec::new(),
+            fleet: fresh.desired.fleet.clone(),
+            initial_controlled_cycles: 0,
+            initial_operator_cycles: u128::MAX,
+            operation_id: fresh_plan.operation_id.clone(),
+            plan_sha256: fresh_plan.plan_sha256.clone(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            stalled_observations: 0,
+        },
+    )
+    .expect("retain fresh application journal");
+    let fresh_finalizations = workflow::ordered_actions(&fresh_plan)
+        .into_iter()
+        .filter(|action| matches!(action, EnsureAction::SetControllers { .. }))
+        .map(action_sha256)
+        .collect::<Vec<_>>();
+    let fresh_creates = workflow::ordered_actions(&fresh_plan)
+        .into_iter()
+        .filter(|action| matches!(action, EnsureAction::Create { .. }))
+        .map(action_sha256)
+        .collect::<Vec<_>>();
+    assert_eq!(fresh_finalizations.len(), 2);
+    assert_eq!(fresh_creates.len(), fresh.desired.canisters.len());
+    let mut fresh_apply_platform = crate::fleet_ensure::tests::MockPlatform::new(
+        fresh.desired.clone(),
+        Vec::<LiveCanister>::new(),
+    );
+    fresh_apply_platform.set_operator_cycles(u128::MAX);
+    fresh_apply_platform.require_root_owned_topology();
+    fresh_apply_platform.stall_before_mutation(fresh_finalizations[0].clone(), 1);
+    fresh_apply_platform.fail_once(fresh_finalizations[0].clone());
+
+    let before_finalization_error = workflow::apply(
+        &fresh_apply_root,
+        &fresh.desired,
+        &"74".repeat(32),
+        &fresh.desired.fleet,
+        &fresh_plan.plan_sha256,
+        &mut fresh_apply_platform,
+    )
+    .expect_err("interrupt before the first controller finalization");
+    assert!(
+        matches!(
+            before_finalization_error,
+            workflow::EnsureWorkflowError::Platform(_)
+        ),
+        "unexpected pre-finalization error: {before_finalization_error:?}"
+    );
+    let mut before_finalization = read_state(&fresh_apply_paths, &fresh.desired.fleet)
+        .expect("read pre-finalization fresh authority");
+    assert_eq!(
+        before_finalization.pending_principals.len(),
+        fresh.desired.canisters.len()
+    );
+    assert!(before_finalization.principals.is_empty());
+    assert_eq!(
+        before_finalization.retained_cycles_by_principal.len(),
+        fresh.desired.canisters.len()
+    );
+    assert_eq!(
+        before_finalization.topology.len(),
+        fresh.desired.canisters.len()
+    );
+    let mut before_finalization_journal = read_journal(&fresh_apply_paths)
+        .expect("read pre-finalization journal")
+        .expect("pre-finalization journal");
+    assert_eq!(before_finalization_journal.effects.len(), 9);
+    assert_eq!(
+        before_finalization_journal.effects[8].state,
+        EffectState::Intent
+    );
+    assert_eq!(
+        fresh_apply_platform.mutation_count(&fresh_finalizations[0]),
+        0
+    );
+
+    let removed_intent = before_finalization_journal
+        .effects
+        .pop()
+        .expect("remove first finalization intent");
+    assert_eq!(removed_intent.state, EffectState::Intent);
+    assert_eq!(before_finalization_journal.effects.len(), 8);
+    write_journal(&fresh_apply_paths, &before_finalization_journal)
+        .expect("restore published pre-finalization journal shape");
+    before_finalization.retained_cycles_by_principal.clear();
+    before_finalization.topology.clear();
+    write_state(&fresh_apply_paths, &before_finalization)
+        .expect("restore published pre-finalization state shape");
+
+    let after_first_effect_error = workflow::apply(
+        &fresh_apply_root,
+        &fresh.desired,
+        &"74".repeat(32),
+        &fresh.desired.fleet,
+        &fresh_plan.plan_sha256,
+        &mut fresh_apply_platform,
+    )
+    .expect_err("interrupt after the first controller finalization effect");
+    assert!(
+        matches!(
+            after_first_effect_error,
+            workflow::EnsureWorkflowError::Platform(_)
+        ),
+        "unexpected post-effect error: {after_first_effect_error:?}"
+    );
+    let after_first_effect = read_journal(&fresh_apply_paths)
+        .expect("read first-finalization interruption journal")
+        .expect("first-finalization interruption journal");
+    assert_eq!(after_first_effect.effects[8].state, EffectState::Intent);
+    let reconstructed_state = read_state(&fresh_apply_paths, &fresh.desired.fleet)
+        .expect("read reconstructed fresh authority");
+    assert_eq!(
+        reconstructed_state.retained_cycles_by_principal.len(),
+        fresh.desired.canisters.len()
+    );
+    assert_eq!(
+        reconstructed_state.topology.len(),
+        fresh.desired.canisters.len()
+    );
+    assert_eq!(
+        fresh_apply_platform.mutation_count(&fresh_finalizations[0]),
+        1
+    );
+
+    let fresh_terminal = workflow::apply(
+        &fresh_apply_root,
+        &fresh.desired,
+        &"74".repeat(32),
+        &fresh.desired.fleet,
+        &fresh_plan.plan_sha256,
+        &mut fresh_apply_platform,
+    )
+    .expect("resume both fresh controller finalizations");
+    assert!(fresh_terminal.terminal);
+    assert_eq!(fresh_terminal.effects_applied, 10);
+    for hash in &fresh_creates {
+        assert_eq!(fresh_apply_platform.mutation_count(hash), 1);
+    }
+    for hash in &fresh_finalizations {
+        assert_eq!(fresh_apply_platform.mutation_count(hash), 1);
+    }
+    for pool in &fresh_pools {
+        assert!(
+            fresh_apply_platform
+                .live_controllers(&pool.name)
+                .is_some_and(|controllers| controllers == ["created-root-0"])
+        );
+    }
+    let fresh_terminal_state =
+        read_state(&fresh_apply_paths, &fresh.desired.fleet).expect("read terminal fresh state");
+    assert!(fresh_terminal_state.pending_principals.is_empty());
+    assert_eq!(
+        fresh_terminal_state.principals.len(),
+        fresh.desired.canisters.len()
+    );
+    let controller_replay_plan = workflow::plan(
+        &fresh_apply_root,
+        &fresh.desired,
+        &"74".repeat(32),
+        &fresh.desired.fleet,
+        1_800_000_000_000_000_100,
+        &mut fresh_apply_platform,
+    )
+    .expect("plan effect-free fresh replay");
+    assert!(workflow::ordered_actions(&controller_replay_plan.plan).is_empty());
+    let controller_replay = workflow::apply(
+        &fresh_apply_root,
+        &fresh.desired,
+        &"74".repeat(32),
+        &fresh.desired.fleet,
+        &controller_replay_plan.plan.plan_sha256,
+        &mut fresh_apply_platform,
+    )
+    .expect("apply effect-free fresh replay");
+    assert!(controller_replay.terminal);
+    assert_eq!(controller_replay.effects_applied, 0);
 
     let mut retained_root_only_plan = fresh_plan.clone();
     for canister in retained_root_only_plan

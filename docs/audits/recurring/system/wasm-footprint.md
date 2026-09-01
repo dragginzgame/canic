@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-WASM-001`
-- Method version: `4`
+- Method version: `5`
 - Disposition: `revise`
 - Owner: canonical Canic-produced Wasm size and retained-size attribution
 - Kind/profile: `measured` and `trend`
@@ -36,12 +36,17 @@ code-limit, and gzip rules, and copies the result to the ICP-visible artifact
 path. Optimization is complete before any canonical gzip or artifact identity
 is derived.
 
-V4 retains v3's removal of the direct Cargo Wasm build and inferred
+V5 retains v4's removal of the direct Cargo Wasm build and inferred
 "pre-shrink" artifact. It consumes the release transform's governed
 before/after metrics without retaining the pre-optimization module as a second
 artifact. The runner must not recreate it with direct
 `cargo build --target wasm32-unknown-unknown`, copy a target-directory Wasm,
 or bypass the build guard.
+
+V5 also binds each role build to its own captured log and parses the governed
+optimizer metric record independently of the builder's path-confined staging
+filename. The metric shape, not a disposable `candidate.wasm` path or the
+later final artifact path, is the authority-bearing contract.
 
 The authoritative measured classes are therefore:
 
@@ -53,7 +58,7 @@ The authoritative measured classes are therefore:
 - `ic-wasm`/`twiggy` analysis of the canonical release `.wasm`.
 
 No alias, fallback, reconstructed pre-transform path, or duplicate gzip path is
-part of v4.
+part of v5.
 
 ## Fixed Scope
 
@@ -86,11 +91,13 @@ and Wasm Store infrastructure. Every other role is an application Component.
 There is no dedicated minimal role in this roster. Repeated retained hotspots
 across at least three Components are the shared fan-in signal.
 
-V4 retains v3's corrected nine-role roster and separately built Coordinator
+V5 retains v4's corrected nine-role roster and separately built Coordinator
 and Store. V3 results lack optimizer and clean-build evidence, so they are
-non-comparable and cannot baseline v4.
+non-comparable and cannot baseline v5. V4 results use the same artifact
+authority but are non-comparable because their optimizer-log parser cannot
+consume the current path-confined staged artifact record.
 
-V4 always captures three isolated build runs:
+V5 always captures three isolated build runs:
 
 - two `release` runs, each using a fresh Cargo target and generated artifact
   tree, whose canonical Wasm, gzip, Candid, and optimization metrics must match;
@@ -149,8 +156,8 @@ A predecessor is compatible only when all of these match exactly:
 - execution-path key; and
 - external-tool key.
 
-The first valid v4 run records `N/A` deltas. Later runs compare causally to the
-immediate compatible predecessor and retain the original v4 baseline identity
+The first valid v5 run records `N/A` deltas. Later runs compare causally to the
+immediate compatible predecessor and retain the original v5 baseline identity
 for cumulative release-line comparison. A missing or zero denominator is
 `N/A`, never an invented percentage.
 

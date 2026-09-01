@@ -161,7 +161,7 @@ grep -Fq -- 'candidate_method_fingerprint' "$ROOT/scripts/ci/instruction-audit-r
 grep -Fq -- '"$candidate_method_fingerprint" != "$METHOD_FINGERPRINT"' "$ROOT/scripts/ci/instruction-audit-report.sh"
 grep -Fq -- 'BASELINE_REPORT="N/A"' "$ROOT/scripts/ci/instruction-audit-report.sh"
 grep -Fq -- 'evidence-manifest.yml' "$ROOT/scripts/ci/instruction-audit-report.sh"
-grep -Fq -- 'METHOD_VERSION="4"' "$ROOT/scripts/ci/wasm-audit-report.sh"
+grep -Fq -- 'METHOD_VERSION="5"' "$ROOT/scripts/ci/wasm-audit-report.sh"
 grep -Fq -- 'disposable linked Git worktree' "$ROOT/scripts/ci/wasm-audit-report.sh"
 grep -Fq -- 'CARGO_NET_OFFLINE="true"' "$ROOT/scripts/ci/wasm-audit-report.sh"
 grep -Fq -- 'root_independent_composite' "$ROOT/scripts/ci/wasm-audit-report.sh"

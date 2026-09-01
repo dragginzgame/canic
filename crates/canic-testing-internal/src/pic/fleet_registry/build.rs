@@ -38,6 +38,8 @@ static FIVE_COMPONENT_BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
 static FIVE_TRILLION_COMPONENT_BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
+static TOKO_SHAPED_SINGLETON_BUILD_ONCE: Once = Once::new();
+#[cfg(test)]
 static ICP_REFILL_STUB_BUILD_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
@@ -139,6 +141,31 @@ pub(super) fn build_five_trillion_component_root_wasm() -> Vec<u8> {
     let target_dir = test_target_dir(&workspace_root).join("five-trillion-component");
     FIVE_TRILLION_COMPONENT_BUILD_ONCE.call_once_force(|_| {
         let config_path = five_trillion_component_root_canister_config_path(&workspace_root);
+        let canonical_config_env = (
+            canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+            config_path.to_str().expect("config path UTF-8"),
+        );
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &[ROOT_CANISTER_PACKAGE],
+            CanicWasmBuildProfile::Fast,
+            &[canonical_config_env],
+        );
+    });
+    read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE)
+}
+
+/// Build the exact local Toko-shaped singleton Root with a 1.9T Component grant.
+#[cfg(test)]
+pub(super) fn build_toko_shaped_singleton_root_wasm() -> Vec<u8> {
+    let workspace_root = workspace_root();
+    let _serial_guard = CANISTER_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let target_dir = test_target_dir(&workspace_root).join("toko-shaped-singleton");
+    TOKO_SHAPED_SINGLETON_BUILD_ONCE.call_once_force(|_| {
+        let config_path = toko_shaped_singleton_root_canister_config_path(&workspace_root);
         let canonical_config_env = (
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
             config_path.to_str().expect("config path UTF-8"),
@@ -395,6 +422,16 @@ pub(super) fn five_trillion_component_root_canister_config_path(workspace_root: 
         .join("test")
         .join(ROOT_CANISTER_PACKAGE)
         .join("canic.five-trillion-component.toml")
+}
+
+/// Resolve the exact Toko-shaped singleton 1.9T qualification config.
+#[cfg(test)]
+pub(super) fn toko_shaped_singleton_root_canister_config_path(workspace_root: &Path) -> PathBuf {
+    workspace_root
+        .join("canisters")
+        .join("test")
+        .join(ROOT_CANISTER_PACKAGE)
+        .join("canic.toko-shaped-singleton.toml")
 }
 
 // Read one built fast-profile wasm artifact from an explicit target directory.

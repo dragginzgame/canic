@@ -4,8 +4,9 @@
 use super::build::{
     build_five_component_root_wasm, build_five_trillion_component_root_wasm, build_icp_refill_pic,
     build_icp_refill_stub_wasm, build_mainnet_five_component_refill_wasms,
-    build_mainnet_refill_wasms, build_two_root_pic, five_component_root_canister_config_path,
-    five_trillion_component_root_canister_config_path,
+    build_mainnet_refill_wasms, build_toko_shaped_singleton_root_wasm, build_two_root_pic,
+    five_component_root_canister_config_path, five_trillion_component_root_canister_config_path,
+    toko_shaped_singleton_root_canister_config_path,
 };
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
@@ -1330,9 +1331,12 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
                 canister_pool_minimum_size: Some(2),
                 canister_pool_cycles: Some(Cycles::new(2_000_000_000_000)),
                 coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
                 root_subnet: None,
                 component_admission_limits: None,
                 fleet_id: None,
@@ -1528,9 +1532,12 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
                 canister_pool_minimum_size: Some(5),
                 canister_pool_cycles: None,
                 coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
                 root_subnet: None,
                 component_admission_limits: None,
                 fleet_id: None,
@@ -1680,9 +1687,12 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
                 canister_pool_minimum_size: None,
                 canister_pool_cycles: None,
                 coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
                 root_subnet: None,
                 component_admission_limits: None,
                 fleet_id: None,
@@ -1822,9 +1832,12 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
                 canister_pool_minimum_size: None,
                 canister_pool_cycles: None,
                 coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
                 root_subnet: None,
                 component_admission_limits: None,
                 fleet_id: None,
@@ -2110,6 +2123,345 @@ mod tests {
             "an immediate second ensure must issue no update; nonterminal={nonterminal:?}"
         );
         std::fs::remove_dir_all(artifact_root).expect("remove artifact-union fixture");
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one governed zero-estate gate keeps host effect replay, real control-plane convergence, conservation and terminal replay together"
+    )]
+    fn literal_zero_estate_reaches_one_workload_and_one_ready_pool_asset() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = toko_shaped_singleton_root_canister_config_path(&workspace_root);
+        let config =
+            AppConfigSnapshot::load(&config_path).expect("load singleton Component config");
+        let mut component_specs = config.model().component_specs.values();
+        let component_spec = component_specs
+            .next()
+            .expect("one singleton Component Spec");
+        assert!(component_specs.next().is_none());
+        assert_eq!(component_spec.initial_cycles.to_u128(), 1_900_000_000_000);
+        let configuration = config
+            .model()
+            .compile_component_deployment_configuration()
+            .expect("compile singleton Component deployment configuration");
+        let root_wasm = build_toko_shaped_singleton_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let store_fixture = build_root_store_fixture_with_config(
+            &config_path,
+            build_toko_shaped_singleton_component_wasms(),
+        );
+        let pic = build_pic();
+
+        let readiness_floor = 1_900_000_000_000_u128;
+        let pool_creation_funding =
+            canic_host::fleet_ensure::fresh_pool_creation_funding(readiness_floor)
+                .expect("generated fresh-pool creation funding");
+        assert_eq!(pool_creation_funding, 3_000_000_000_000);
+        let requested = [
+            ("coordinator", COORDINATOR_INSTALL_CYCLES),
+            ("root", ROOT_INSTALL_CYCLES),
+            ("store", ROOT_INSTALL_CYCLES),
+            ("pool-0", pool_creation_funding),
+            ("pool-1", pool_creation_funding),
+        ];
+        let mut creations = BTreeMap::<String, (Principal, String, u32)>::new();
+        let mut placement_subnet = None;
+        for (name, cycles) in requested {
+            let create = |pic: &PocketIc, placement_subnet: Option<Principal>| {
+                pic.create_canister_with_params(
+                    None,
+                    CreateCanisterParams {
+                        cycles: Some(cycles),
+                        placement: placement_subnet.map(CreateCanisterPlacement::SubnetId),
+                        ..CreateCanisterParams::default()
+                    },
+                )
+                .expect("apply exact fresh Create")
+            };
+            let principal = create(&pic, placement_subnet);
+            placement_subnet.get_or_insert_with(|| {
+                pic.get_subnet(principal)
+                    .expect("fresh Coordinator placement Subnet")
+            });
+            let receipt = format!("zero-estate-create:{name}:{principal}");
+            assert!(
+                creations
+                    .insert(name.to_string(), (principal, receipt.clone(), 1))
+                    .is_none()
+            );
+
+            // Lose every Create response, then recover the same retained receipt and Principal.
+            let replayed = creations.get(name).expect("retained Create response");
+            assert_eq!(replayed.0, principal);
+            assert_eq!(replayed.1, receipt);
+            assert_eq!(replayed.2, 1);
+        }
+        assert_eq!(creations.len(), 5);
+        assert!(
+            creations
+                .values()
+                .all(|(_, receipt, count)| { !receipt.is_empty() && *count == 1 })
+        );
+
+        let coordinator = creations["coordinator"].0;
+        let root = creations["root"].0;
+        let store = creations["store"].0;
+        let pools = [creations["pool-0"].0, creations["pool-1"].0];
+        let installed = install_current_root_with_config_and_pool_setup(
+            &pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                canister_pool_maximum_size: Some(2),
+                canister_pool_minimum_size: Some(2),
+                canister_pool_cycles: Some(Cycles::new(readiness_floor)),
+                coordinator_subnet: placement_subnet,
+                existing_root: Some(root),
+                existing_wasm_store: Some(store),
+                root_subnet: placement_subnet,
+                component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
+                fleet_id: Some(FleetId::from_generated_bytes([0x79; 32])),
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &config_path,
+            |_pic, _root| pools.to_vec(),
+        );
+        assert_eq!(installed.root_id, root);
+        assert_eq!(
+            installed
+                .init_args
+                .authority
+                .wasm_store_authority
+                .wasm_store,
+            store
+        );
+
+        let mut controller_mutations = BTreeMap::new();
+        for pool in pools {
+            pic.set_controllers(pool, None, vec![root])
+                .expect("finalize fresh pool controller");
+            controller_mutations.insert(pool, 1_u32);
+
+            // Lose each update response; exact live Root-only control closes the intent.
+            let status = pic
+                .canister_status(pool, Some(root))
+                .expect("observe Root-owned pool after lost controller response");
+            assert_eq!(status.settings.controllers, vec![root]);
+            assert_eq!(controller_mutations[&pool], 1);
+        }
+
+        // Each Root import/reset is allowed to lose its response; replay observes Maintained.
+        reset_prepaid_pool_assets_for_count(&pic, root, 2);
+        let RootCommandResponseFragment::MaintainPool(replayed_reset) =
+            root_command(&pic, root, RootCommandFragment::MaintainPool)
+                .expect("replay lost pool reset response")
+        else {
+            panic!("Root returned a differently correlated pool response");
+        };
+        assert!(matches!(
+            replayed_reset,
+            PoolMaintenanceResponse::Maintained
+        ));
+        let ready_pool = root_pool_status(&pic, root);
+        assert_eq!(ready_pool.ready, 2);
+        assert_eq!(ready_pool.failed, 0);
+        let ready_imports = ready_pool
+            .entries
+            .iter()
+            .filter(|entry| pools.contains(&entry.canister_id))
+            .collect::<Vec<_>>();
+        assert_eq!(ready_imports.len(), 2);
+        assert!(ready_imports.iter().all(|entry| {
+            entry.origin == CanisterPoolAssetOrigin::Imported
+                && entry.status == CanisterPoolAssetStatus::Ready
+                && entry.cycles.to_u128() >= readiness_floor
+        }));
+
+        let operation_id = [0x7a; 32];
+        let artifact_root = test_target_dir(&workspace_root, "literal-zero-estate-protocol")
+            .join(format!("artifact-union-{}", std::process::id()));
+        if artifact_root.exists() {
+            std::fs::remove_dir_all(&artifact_root)
+                .expect("clear prior literal zero-estate fixture");
+        }
+        std::fs::create_dir_all(&artifact_root)
+            .expect("create literal zero-estate artifact fixture");
+        let union = fixture_application_artifact_union(&artifact_root, &installed);
+        let mut store_sequence = compile_current_store_sequence_from_union(
+            &artifact_root,
+            &configuration.component_topology,
+            &installed.init_args.authority,
+            operation_id,
+            &union,
+        )
+        .expect("compile singleton Store sequence");
+        append_fixture_pool_ledger_recovery_artifact(
+            &mut store_sequence,
+            installed.manifest.release_build_id,
+        );
+        let fixture = BootstrappedRootFixture {
+            root_id: installed.root_id,
+            init_args: installed.init_args.clone(),
+            coordinator_root_funding: installed.coordinator_root_funding.clone(),
+            request: store_sequence.bootstrap_request.clone(),
+            response: store_sequence.expected_bootstrap.clone(),
+        };
+        install_fixture_coordinator_with_config(
+            &pic,
+            coordinator,
+            coordinator_wasm,
+            &fixture,
+            &config_path,
+        );
+        let CoordinatorStatusResponse::Registry(genesis) =
+            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query zero-estate Registry genesis")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
+        let desired = current_protocol_desired(&configuration, coordinator, &installed.init_args);
+        let state = FleetEnsureStateRecord {
+            active_registry: None,
+            completed_reinstall_action_sha256: BTreeMap::new(),
+            completed_reinstall_operation_id: None,
+            completed_reinstalls: BTreeMap::new(),
+            fleet: desired.fleet.clone(),
+            pending_principals: BTreeMap::new(),
+            principals: BTreeMap::new(),
+            retained_cycles_by_principal: BTreeMap::new(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            topology: BTreeMap::new(),
+        };
+        let authorities = vec![installed.init_args.authority.clone()];
+        let registry_sequence = compile_current_registry_sequence(
+            &desired,
+            &state,
+            &configuration.component_topology,
+            &genesis,
+            &authorities,
+        )
+        .expect("compile zero-estate Registry sequence");
+        let stores = BTreeMap::from([(root, store_sequence)]);
+        let actions = compile_current_protocol_sequence(
+            &desired,
+            &state,
+            &configuration,
+            &registry_sequence,
+            &authorities,
+            &stores,
+            operation_id,
+        )
+        .expect("compile complete zero-estate production protocol");
+        let installation_controller = installed
+            .init_args
+            .authority
+            .wasm_store_authority
+            .installation_controller;
+        for step in &actions {
+            issue_current_protocol_step(&pic, step, installation_controller);
+            if matches!(
+                step.action,
+                CurrentFleetProtocolAction::ProvisionComponents { .. }
+            ) {
+                // Lose the claim response and replay the exact operation before observing it.
+                issue_current_protocol_step(&pic, step, installation_controller);
+            }
+            await_current_protocol_step(&pic, step, installation_controller);
+        }
+
+        let terminal_pool = root_pool_status(&pic, root);
+        assert_eq!(terminal_pool.workload, 1);
+        assert_eq!(terminal_pool.ready, 1);
+        assert_eq!(terminal_pool.failed, 0);
+        assert_eq!(
+            terminal_pool
+                .entries
+                .iter()
+                .filter(|entry| pools.contains(&entry.canister_id))
+                .count(),
+            2
+        );
+        let workload = terminal_pool
+            .entries
+            .iter()
+            .filter(|entry| pools.contains(&entry.canister_id))
+            .find(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
+            .expect("one singleton Workload");
+        let ready = terminal_pool
+            .entries
+            .iter()
+            .filter(|entry| pools.contains(&entry.canister_id))
+            .find(|entry| entry.status == CanisterPoolAssetStatus::Ready)
+            .expect("one retained Ready pool asset");
+        assert_ne!(workload.canister_id, ready.canister_id);
+        for pool in pools {
+            let status = pic
+                .canister_status(pool, Some(root))
+                .expect("observe terminal pool controller set");
+            assert_eq!(status.settings.controllers, vec![root]);
+        }
+
+        let requested_controlled_cycles = requested
+            .into_iter()
+            .map(|(_, cycles)| cycles)
+            .sum::<u128>();
+        let final_controlled_cycles = [coordinator, root, store, pools[0], pools[1]]
+            .into_iter()
+            .map(|canister| pic.cycle_balance(canister))
+            .sum::<u128>();
+        let measured_execution_burn_cycles = requested_controlled_cycles
+            .checked_sub(final_controlled_cycles)
+            .expect("fresh estate cannot gain unreviewed controlled cycles");
+        assert_eq!(
+            final_controlled_cycles + measured_execution_burn_cycles,
+            requested_controlled_cycles
+        );
+
+        let CoordinatorStatusResponse::Registry(terminal_registry) =
+            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query terminal zero-estate Registry")
+        else {
+            panic!("Coordinator returned a differently correlated terminal Registry");
+        };
+        let CoordinatorStatusResponse::Operation(
+            CoordinatorOperationStatusResponse::ComponentProvisioning(terminal_status),
+        ) = coordinator_status(
+            &pic,
+            coordinator,
+            CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+        )
+        .expect("query terminal singleton Component operation")
+        else {
+            panic!("Coordinator returned a differently correlated Component operation");
+        };
+        let terminal_sequence = compile_current_registry_sequence_with_status(
+            &desired,
+            &state,
+            &configuration.component_topology,
+            &terminal_registry,
+            &authorities,
+            Some(&terminal_status),
+        )
+        .expect("recognize terminal zero-estate Registry");
+        let replay = compile_current_protocol_sequence(
+            &desired,
+            &state,
+            &configuration,
+            &terminal_sequence,
+            &authorities,
+            &stores,
+            operation_id,
+        )
+        .expect("compile immediate zero-estate replay");
+        assert!(replay.iter().all(|step| {
+            current_protocol_step_is_terminal(&pic, step, installation_controller)
+        }));
+        std::fs::remove_dir_all(artifact_root)
+            .expect("remove literal zero-estate artifact fixture");
     }
 
     #[cfg(test)]
@@ -3588,9 +3940,12 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
                 canister_pool_minimum_size: None,
                 canister_pool_cycles: None,
                 coordinator_subnet: Some(subnet),
+                existing_root: None,
+                existing_wasm_store: None,
                 root_subnet: Some(subnet),
                 component_admission_limits: None,
                 fleet_id: None,
@@ -3692,9 +4047,12 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
                 canister_pool_minimum_size: None,
                 canister_pool_cycles: None,
                 coordinator_subnet: Some(subnet),
+                existing_root: None,
+                existing_wasm_store: None,
                 root_subnet: Some(subnet),
                 component_admission_limits: None,
                 fleet_id: None,
@@ -3756,9 +4114,12 @@ mod tests {
                 coordinator,
                 build_root_store_fixture(),
                 BootstrappedRootPlacement {
+                    canister_pool_maximum_size: None,
                     canister_pool_minimum_size: None,
                     canister_pool_cycles: None,
                     coordinator_subnet: Some(*first_subnet),
+                    existing_root: None,
+                    existing_wasm_store: None,
                     root_subnet: Some(subnet),
                     component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
                     fleet_id: Some(FleetId::from_generated_bytes([0x78; 32])),
@@ -6838,9 +7199,12 @@ mod tests {
     }
 
     struct BootstrappedRootPlacement {
+        canister_pool_maximum_size: Option<u32>,
         canister_pool_minimum_size: Option<u32>,
         canister_pool_cycles: Option<canic_core::cdk::types::Cycles>,
         coordinator_subnet: Option<Principal>,
+        existing_root: Option<Principal>,
+        existing_wasm_store: Option<Principal>,
         root_subnet: Option<Principal>,
         component_admission_limits: Option<RootComponentAdmissionLimits>,
         fleet_id: Option<FleetId>,
@@ -6877,9 +7241,12 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
                 canister_pool_minimum_size: None,
                 canister_pool_cycles: None,
                 coordinator_subnet: Some(coordinator_subnet),
+                existing_root: None,
+                existing_wasm_store: None,
                 root_subnet: Some(placement_subnet),
                 component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
                 fleet_id: Some(FleetId::from_generated_bytes([fleet_id_byte; 32])),
@@ -6908,9 +7275,12 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
                 canister_pool_minimum_size: None,
                 canister_pool_cycles: None,
                 coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
                 root_subnet: None,
                 component_admission_limits: None,
                 fleet_id: None,
@@ -7024,14 +7394,20 @@ mod tests {
                 .try_into()
                 .expect("SHA-256 digest"),
         );
-        let root_id = placement.root_subnet.map_or_else(
-            || pic.create_canister(),
-            |subnet| pic.create_canister_on_subnet(None, None, subnet),
-        );
-        pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
+        let root_id = placement.existing_root.unwrap_or_else(|| {
+            let root = placement.root_subnet.map_or_else(
+                || pic.create_canister(),
+                |subnet| pic.create_canister_on_subnet(None, None, subnet),
+            );
+            pic.add_cycles(root, ROOT_INSTALL_CYCLES);
+            root
+        });
         let root_subnet = pic.get_subnet(root_id).expect("root placement Subnet");
-        let wasm_store = pic.create_canister_on_subnet(None, None, root_subnet);
-        pic.add_cycles(wasm_store, ROOT_INSTALL_CYCLES);
+        let wasm_store = placement.existing_wasm_store.unwrap_or_else(|| {
+            let store = pic.create_canister_on_subnet(None, None, root_subnet);
+            pic.add_cycles(store, ROOT_INSTALL_CYCLES);
+            store
+        });
         let wasm_store_wasm = build_test_wasm_store_wasm();
         let installation_controller = Principal::from_slice(&[0x46; 29]);
         let init_bytes =
@@ -7049,6 +7425,9 @@ mod tests {
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
         let pool = &mut init_args.authority.binding.limits.canister_pool;
+        if let Some(maximum_size) = placement.canister_pool_maximum_size {
+            pool.maximum_size = maximum_size;
+        }
         if let Some(minimum_size) = placement.canister_pool_minimum_size {
             pool.minimum_size = minimum_size;
         }
@@ -7444,6 +7823,21 @@ mod tests {
         })
     }
 
+    #[cfg(test)]
+    fn build_toko_shaped_singleton_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
+        static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
+        WASMS.get_or_init(|| {
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let config_path = toko_shaped_singleton_root_canister_config_path(&workspace_root);
+            build_component_fixture_wasms(
+                &workspace_root,
+                &config_path,
+                "fleet-registry-toko-shaped-singleton",
+                &[("issuer", ISSUER_PACKAGE)],
+            )
+        })
+    }
+
     fn build_component_fixture_wasms(
         workspace_root: &Path,
         config_path: &Path,
@@ -7575,6 +7969,10 @@ mod tests {
             (
                 "fresh provisioning terminal runtime activation",
                 fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog,
+            ),
+            (
+                "literal zero-estate host/control-plane convergence",
+                literal_zero_estate_reaches_one_workload_and_one_ready_pool_asset,
             ),
             (
                 "Coordinator attached-cycle grant",

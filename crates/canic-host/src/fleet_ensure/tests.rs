@@ -63,6 +63,12 @@ const LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 #[error("simulated lost response")]
 pub(super) struct MockError;
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum MockRootOwnedTopologyPolicy {
+    Direct,
+    Exact,
+}
+
 pub(super) struct MockPlatform {
     completed: BTreeMap<String, EffectOutcome>,
     duplicate_create_responses: BTreeMap<String, u32>,
@@ -79,6 +85,7 @@ pub(super) struct MockPlatform {
     protocol_action: Option<EnsureAction>,
     protocol_ready: BTreeSet<String>,
     protocol_retry: EffectRetry,
+    root_owned_topology_policy: MockRootOwnedTopologyPolicy,
     typed_protocol: bool,
     typed_protocol_burns: Vec<u128>,
     skip_transfer_credit: bool,
@@ -115,6 +122,7 @@ impl MockPlatform {
             protocol_action: None,
             protocol_ready: BTreeSet::new(),
             protocol_retry: EffectRetry::None,
+            root_owned_topology_policy: MockRootOwnedTopologyPolicy::Direct,
             typed_protocol: false,
             typed_protocol_burns: Vec::new(),
             skip_transfer_credit: false,
@@ -133,6 +141,14 @@ impl MockPlatform {
 
     pub(super) fn fail_once(&mut self, action_sha256: String) {
         self.fail_once.insert(action_sha256);
+    }
+
+    pub(super) fn require_root_owned_topology(&mut self) {
+        self.root_owned_topology_policy = MockRootOwnedTopologyPolicy::Exact;
+    }
+
+    pub(super) fn stall_before_mutation(&mut self, action_sha256: String, attempts: u32) {
+        self.stall_before_mutation.insert(action_sha256, attempts);
     }
 
     pub(super) fn mutation_count(&self, action_sha256: &str) -> u32 {
@@ -155,6 +171,47 @@ impl MockPlatform {
 
     pub(super) const fn operator_cycles(&self) -> u128 {
         self.operator_cycles
+    }
+
+    pub(super) fn live_controllers(&self, name: &str) -> Option<&[String]> {
+        self.live
+            .get(&format!("created-{name}"))
+            .map(|live| live.controllers.as_slice())
+    }
+
+    fn root_owned_action_authority_is_exact(
+        &self,
+        action: &EnsureAction,
+        state: &FleetEnsureStateRecord,
+    ) -> bool {
+        if self.root_owned_topology_policy == MockRootOwnedTopologyPolicy::Direct {
+            return true;
+        }
+        let EnsureAction::SetControllers { name, .. } = action else {
+            return true;
+        };
+        let Some(configured) = self.desired.canisters.iter().find(|configured| {
+            configured.name == *name && configured.kind == DesiredCanisterKind::Pool
+        }) else {
+            return true;
+        };
+        let Some(parent) = configured.parent.as_deref() else {
+            return false;
+        };
+        let retained_principal = |name: &str| {
+            state
+                .pending_principals
+                .get(name)
+                .or_else(|| state.principals.get(name))
+        };
+        let Some(principal) = retained_principal(name) else {
+            return false;
+        };
+        retained_principal(parent).is_some()
+            && state.retained_cycles_by_principal.contains_key(principal)
+            && state.topology.get(name).is_some_and(|topology| {
+                topology.kind == configured.kind && topology.parent.as_deref() == Some(parent)
+            })
     }
 
     fn principal<'a>(
@@ -556,6 +613,9 @@ impl EnsurePlatform for MockPlatform {
         record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectObservation, Self::Error> {
+        if !self.root_owned_action_authority_is_exact(action, state) {
+            return Err(MockError);
+        }
         if let Some(observation) = self.create_observation(action, record, state) {
             return Ok(observation);
         }
@@ -657,6 +717,9 @@ impl EnsurePlatform for MockPlatform {
         action: &EnsureAction,
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error> {
+        if !self.root_owned_action_authority_is_exact(action, state) {
+            return Err(MockError);
+        }
         Ok(Self::principal(state, action)
             .and_then(|principal| self.live.get(principal))
             .map(|live| live.cycles))

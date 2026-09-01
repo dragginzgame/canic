@@ -1,0 +1,10 @@
+canister	kind	release_wasm_bytes	release_gzip_bytes	debug_wasm_bytes	debug_gzip_bytes	debug_delta_bytes	debug_delta_percent	baseline_delta_bytes	baseline_delta_percent	functions	data_sections	data_bytes	exports	top_name	top_bytes	retained_name	retained_bytes
+app	component	2885999	1038424	6494693	1619528	+3608694	125.04	N/A	N/A	4694	179	198277	9	code[923]	126498	table[0]	1190384
+test	component	3200574	1139640	7268887	1817132	+4068313	127.11	N/A	N/A	5213	194	212228	11	code[1020]	126498	table[0]	1468514
+user_hub	component	3326921	1188287	7618236	1914980	+4291315	128.99	N/A	N/A	5489	195	216316	13	code[1091]	126498	table[0]	1586486
+scale_hub	component	3250522	1157419	7401719	1856121	+4151197	127.71	N/A	N/A	5319	194	213985	11	code[1047]	126498	table[0]	1515773
+user_shard	component	3254719	1160530	7412893	1860589	+4158174	127.76	N/A	N/A	5363	195	212680	12	code[1048]	126498	table[0]	1453073
+scale_replica	component	2896719	1043642	6514713	1626483	+3617994	124.90	N/A	N/A	4722	180	198623	10	code[929]	126498	table[0]	1199208
+root	fleet-subnet-root	7149541	2539590	16032374	3983835	+8882833	124.24	N/A	N/A	9678	283	332247	11	code[7684]	244339	table[0]	4660365
+fleet_coordinator	fleet-coordinator	3496090	1214593	7849875	1868539	+4353785	124.53	N/A	N/A	4497	233	196954	6	code[147]	255287	table[0]	1240111
+wasm_store	wasm-store	2452234	889967	5563466	1394929	+3111232	126.87	N/A	N/A	4278	164	175531	10	code[817]	126542	table[0]	1001371
