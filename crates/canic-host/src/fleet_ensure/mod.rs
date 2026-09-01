@@ -19,7 +19,8 @@ mod tests;
 pub use dto::{DesiredFleetLoadError, LoadedDesiredFleet, load_desired_fleet};
 pub use generate::{
     FleetGenerateError, FleetGenerateRequest, FreshEstateSeedRequest, GeneratedDesiredFleet,
-    SealedSuccessorConvergenceRequired, generate_desired_fleet, initialize_fresh_estate_seed,
+    SealedSuccessorConvergenceRequired, fresh_pool_creation_funding, generate_desired_fleet,
+    initialize_fresh_estate_seed,
 };
 pub use inventory::{
     CurrentFleetInventory, CurrentFleetInventoryError, CurrentFleetRegistry,

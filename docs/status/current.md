@@ -25,7 +25,7 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.109.34`. Its immutable details
+Current development begins from published `v0.109.35`. Its immutable details
 are in [the 0.109 changelog](../changelog/0.109.md). Source-development truth
 comes from Git and the working tree.
 
@@ -52,14 +52,14 @@ bootstrap import capacity, role-specific command entrypoints and the managed
 cross-release runtime fence. Exact tests and negative cases are retained in the
 detailed changelog.
 
-## Open 0.109.35 Correction
+## Accepted 0.109 Closeout
 
-`CANIC-118` is the only open Canic-owned 0.109 blocker. ICP CLI 1.3.0 returns
+Published `v0.109.35` closes `CANIC-118`. ICP CLI 1.3.0 returns
 only public identity/controller/module fields when the operator is not a newly
 created Root-owned pool's controller; those fields cannot prove its live cycle
 balance.
 
-The correction keeps one executable authority sequence:
+The accepted correction keeps one executable authority sequence:
 
 - a new fresh-estate plan creates each Root-only pool with the exact operator
   as a temporary direct controller, observes its real balance, installs the
@@ -88,13 +88,52 @@ Primary owners:
 - `crates/canic-host/src/fleet_ensure/generate/tests.rs` — production-shaped
   fresh and immutable-plan replay evidence.
 
+## CANIC-119-CANIC-121 First 0.110 Release Correction
+
+Read-only Toko Miner qualification after the accepted closeout exposed one
+fresh-estate ordering defect in published `v0.109.35`. Five exact Creates and
+the Coordinator, Store and Root installs were Applied, but the first temporary
+pool-controller finalization could not observe its pre-effect cycles through
+the installed Root. The applied identities remained under
+`pending_principals`, while exact cycles and topology were published only after
+every action, including both finalizations, had completed.
+
+The targeted-complete source correction keeps pending identities nonterminal.
+After a Create is durably journaled Applied, workflow separately retains its
+exact observed cycles and sealed desired topology. Resume reconstructs that
+authority from the unchanged plan, journal and state before later actions. The
+production Root observer accepts a pending Principal only when the pending and
+terminal identity slots do not conflict and the retained child kind/parent
+topology is exact. Issued Creates still cannot cross the boundary.
+
+`CANIC-120` additionally separates a pool's configured readiness floor from
+its creation funding. Fresh generation adds the exact 1T observation and 100B
+controller-effect ceilings, so the downstream-shaped 1.9T floor produces a 3T
+Create. Planning rejects an insufficient contract before effects with typed
+requested/floor/burn/required/shortfall fields. Resume rejects the preserved
+1,899,998,056,000-cycle applied result before controller or protocol work and
+reports its exact 1,944,000 readiness shortfall.
+
+`CANIC-121` adds one governed production-shaped PocketIC journey from no
+application canisters. It creates the Coordinator, Root, Store and two pool
+assets exactly once, loses and reconciles every Create and pool-controller
+response, imports/resets the real 1.9T-floor assets, provisions one Component
+with its exact 1.9T grant, and finishes with exactly one Workload plus one Ready
+asset. Exact measured
+controlled-cycle conservation and immediate zero-effect replay pass.
+
+Focused host and governed PocketIC evidence now passes. The complete correction
+is assigned to the first reinstall-only 0.110 release instead of reopening the
+accepted 0.109 line. No downstream or network effect is part of this source
+correction.
+
 ## B1-B10 State
 
 | Batch | State | Current evidence owner |
 | --- | --- | --- |
 | B1 | Accepted | 0.109 design baseline |
 | B2-B7 | Complete | design/status tracker and governed admission suites |
-| B8 | Active | CANIC-118 correction and downstream fresh-Fleet proof |
+| B8 | Complete | published CANIC-118 correction and downstream evidence |
 | B9 | Complete | accepted immutable superseding audit |
 | B10 | Complete | published host-only facade and downstream adoption report |
 
@@ -117,7 +156,9 @@ records the boundary.
 The human-requested closeout audit against `v0.109.34` is retained at
 [the canonical report](../audits/release-lines/0.109-closeout-audit.md). Its
 CANIC-118, active-handoff and documentation blockers are correction inputs, not
-an accepted closeout verdict.
+an accepted verdict for that older candidate. Published `v0.109.35` corrected
+those blockers, and the human maintainer accepted the 0.109 closeout on
+2026-09-01 before explicitly promoting 0.110 B1.
 
 ## Roadmap Boundary
 
@@ -126,8 +167,8 @@ runtime or repository dependency.
 
 | Line | Active owner | State |
 | --- | --- | --- |
-| [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | CANIC-118 correction before a fresh closeout audit |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | blocked on accepted 0.109 closeout |
+| [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | first release batch ready; B1 remains active after its canonical baseline |
 | [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
@@ -135,31 +176,32 @@ transitions are reinstall-only; cycle conservation is the sole cross-release
 compatibility invariant. Same-release interruption recovery, idempotency,
 backup, restore, authority and cycle-safe retirement remain mandatory.
 
-## Targeted Validation State
+## Active 0.110 B1
 
-Development checks for the open correction currently pass:
+The accepted first batch freezes the post-0.109 artifact, tool and capability
+baseline before any runtime contraction. Initial work:
 
-- public ICP 1.3.0 non-controller status decodes as typed unavailable evidence;
-- fresh plans add temporary authority only to exact Root-only pools and order
-  final removal after Root installation;
-- the immutable Root-only plan retains Create identity across lost response,
-  performs one mutation per pool, converges and immediately replays with zero
-  effects;
-- exact funding-inspection controller and module predicates pass;
-- `canic-host` locked all-target checking and warning-denied Clippy pass;
-- backup lifecycle mapping, `canic-cli` locked all-target checking and
-  warning-denied Clippy pass; and
-- formatting and diff hygiene pass after the final source review.
+- freezes `v0.109.35` (`3185dc45b`) as the Canic predecessor;
+- confirms dated IC limits of 10 MiB code section, 100 MiB total module and
+  50,000 declared functions from the authoritative IC documentation;
+- promotes `CANIC-WASM-001/v5` so path-confined staged release artifacts are
+  measured from one role-local build log;
+- retains the corrected deterministic nine-role baseline, whose largest role
+  has 3,776,168 code-section bytes and 40,322 declared functions of absolute
+  headroom; and
+- keeps the exact downstream canary read-only and separate from Canic source.
 
 No broad workspace or full PocketIC gate is run during coding. The maintainer's
 release flow owns that boundary.
 
 ## Next Authorized Action
 
-Run the maintainer-owned release validation and publication workflow for the
-targeted-complete CANIC-118 batch, then qualify the downstream fresh Fleet
-against that immutable tag. After that, request a fresh human-owned 0.109
-closeout audit. Do not begin 0.110 before the maintainer accepts that verdict.
+Run the explicitly authorized governed minor-release flow for 0.110.0. The
+release carries the complete CANIC-119-CANIC-121 correction and the corrected
+canonical B1 baseline/audit method without claiming B1 completion. After the
+immutable release, downstream qualification remains separately owned. Retain
+the active B1 evidence and do not begin B2 until the maintainer accepts the
+complete B1 baseline.
 
 
 <!-- canic-release-validation: version=0.109.35 source=033990cdfa86b13053a46c8fb887675a6adeb0d1 date=2026-09-01 gate=complete -->

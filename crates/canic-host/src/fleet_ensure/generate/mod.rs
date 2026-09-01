@@ -74,6 +74,21 @@ const GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD: u128 = 1_000_000;
 const GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES: u128 = 1_000_000_000_000;
 const GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES: u128 = 100_000_000_000;
 
+/// Return the generated fresh-pool funding that preserves one readiness floor
+/// across the bounded first observation and controller-finalization effects.
+#[doc(hidden)]
+pub fn fresh_pool_creation_funding(readiness_floor: u128) -> Result<u128, FleetGenerateError> {
+    readiness_floor
+        .checked_add(GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES)
+        .and_then(|funding| funding.checked_add(GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES))
+        .ok_or_else(|| {
+            FleetGenerateError::Authority(
+                "fresh pool creation funding plus its bounded pre-import execution margin overflowed"
+                    .to_string(),
+            )
+        })
+}
+
 /// Exact local and live inputs for one no-effect desired-state generation.
 pub struct FleetGenerateRequest<'a> {
     pub app_config: &'a Path,
@@ -1004,6 +1019,12 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         for (pool_index, pool) in seed.pool_imports.iter().enumerate() {
             let name = format!("root-{index}-pool-{pool_index}");
             pool_names.push(name.clone());
+            let readiness_floor = source.canister_pool.canister_cycles.to_u128();
+            let creation_funding = if input.seed.fresh_estate {
+                fresh_pool_creation_funding(readiness_floor)?
+            } else {
+                readiness_floor
+            };
             canisters.push(DesiredCanister {
                 canic_init: None,
                 controller_canisters: if input.seed.fresh_estate {
@@ -1017,7 +1038,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
                     vec![seed.root.clone()]
                 },
                 drain: None,
-                initial_cycles: source.canister_pool.canister_cycles.to_config_string(),
+                initial_cycles: config_cycles(creation_funding),
                 init_arg: None,
                 init_candid: None,
                 kind: DesiredCanisterKind::Pool,

@@ -31,6 +31,24 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
+/// Exact no-effect evidence that a fresh pool cannot retain its readiness floor.
+
+#[derive(Debug, ThisError)]
+#[error(
+    "fresh pool canister {canister} requested {requested_creation_funding_cycles} creation cycles for readiness floor {readiness_floor_cycles}; its first live balance is {live_balance_cycles} cycles (readiness shortfall {readiness_shortfall_cycles}) and must retain {remaining_controller_burn_cycles} cycles for controller finalization (required pre-finalization balance {required_pre_finalization_balance_cycles}, pre-finalization shortfall {pre_finalization_shortfall_cycles}; maximum first-observation burn {maximum_observation_burn_cycles}); no controller or protocol action followed"
+)]
+pub struct FreshPoolCreationUnderfundedError {
+    pub canister: String,
+    pub live_balance_cycles: u128,
+    pub maximum_observation_burn_cycles: u128,
+    pub pre_finalization_shortfall_cycles: u128,
+    pub readiness_floor_cycles: u128,
+    pub readiness_shortfall_cycles: u128,
+    pub remaining_controller_burn_cycles: u128,
+    pub requested_creation_funding_cycles: u128,
+    pub required_pre_finalization_balance_cycles: u128,
+}
+
 /// Fleet ensure planning or convergence failure.
 
 #[derive(Debug, ThisError)]
@@ -99,6 +117,9 @@ where
         deficit_cycles: u128,
         requested_cycles: u128,
     },
+
+    #[error(transparent)]
+    FreshPoolCreationUnderfunded(Box<FreshPoolCreationUnderfundedError>),
 
     #[error(transparent)]
     Policy(#[from] EnsurePolicyError),
@@ -631,10 +652,22 @@ where
                         journal.stalled_observations = 0;
                         write_journal(&paths, &journal)?;
                     }
+                    let retained_create = journal
+                        .effects
+                        .get(index)
+                        .ok_or(EnsureWorkflowError::JournalIntegrity)
+                        .and_then(|record| {
+                            retain_applied_create_authority(
+                                operation_desired,
+                                action,
+                                record,
+                                &mut state,
+                            )
+                        })?;
                     let retained_funding = journal.effects.get(index).is_some_and(|record| {
                         retain_applied_funding_cycles(&mut state, action, record)
                     });
-                    if retained_funding {
+                    if retained_create || retained_funding {
                         write_state(&paths, &state)?;
                     }
                     break;
@@ -723,10 +756,20 @@ where
                     record.progress_identity = Some(observed.progress_identity);
                     record.state = EffectState::Applied;
                     journal.stalled_observations = 0;
+                    write_journal(&paths, &journal)?;
+                    let record = journal
+                        .effects
+                        .get(index)
+                        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+                    let retained_create = retain_applied_create_authority(
+                        operation_desired,
+                        action,
+                        record,
+                        &mut state,
+                    )?;
                     let retained_funding =
                         retain_applied_funding_cycles(&mut state, action, record);
-                    write_journal(&paths, &journal)?;
-                    if retained_funding {
+                    if retained_create || retained_funding {
                         write_state(&paths, &state)?;
                     }
                     break;
@@ -992,6 +1035,157 @@ const fn merge_observed_cycles(
     if let Some(cycles) = destination_cycles {
         record.destination_post_cycles = Some(cycles);
     }
+}
+
+pub(super) fn retain_applied_create_authority<E>(
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    action: &EnsureAction,
+    record: &EffectRecord,
+    state: &mut FleetEnsureStateRecord,
+) -> Result<bool, EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    let EnsureAction::Create {
+        name,
+        requested_initial_cycles,
+        ..
+    } = action
+    else {
+        return Ok(false);
+    };
+    if record.state != EffectState::Applied {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    }
+    let configured = desired
+        .canisters
+        .iter()
+        .find(|canister| {
+            canister.name == *name
+                && canister.presence == crate::fleet_ensure::model::DesiredPresence::Present
+        })
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    let principal = record
+        .created_principal
+        .as_deref()
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    let cycles = record
+        .post_cycles
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    let maximum_observation_burn_cycles = desired
+        .maximum_observation_burn_cycles
+        .parse::<Cycles>()
+        .map(|cycles| cycles.to_u128())
+        .map_err(|_| EnsureWorkflowError::JournalIntegrity)?;
+    if !create_identity_is_exact(name, record, state)
+        || !create_balance_is_terminal(
+            Some(cycles),
+            *requested_initial_cycles,
+            maximum_observation_burn_cycles,
+        )
+        || state
+            .retained_cycles_by_principal
+            .get(principal)
+            .is_some_and(|retained| *retained != cycles)
+    {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    }
+    validate_fresh_pool_creation_balance(
+        desired,
+        configured,
+        name,
+        cycles,
+        maximum_observation_burn_cycles,
+        *requested_initial_cycles,
+    )?;
+
+    let prior_topology = state.topology.get(name);
+    let topology_identity_matches = prior_topology.is_some_and(|topology| {
+        topology.kind == configured.kind
+            && topology.parent == configured.parent
+            && topology.protocol_binding == configured.protocol_binding
+            && topology.role
+                == configured
+                    .protocol_binding
+                    .as_ref()
+                    .map(|binding| binding.role.to_string())
+    });
+    let topology = crate::fleet_ensure::model::FleetEnsureTopologyRecord {
+        kind: configured.kind,
+        module_hash: if topology_identity_matches {
+            prior_topology.and_then(|topology| topology.module_hash.clone())
+        } else {
+            None
+        },
+        parent: configured.parent.clone(),
+        protocol_binding: configured.protocol_binding.clone(),
+        role: configured
+            .protocol_binding
+            .as_ref()
+            .map(|binding| binding.role.to_string()),
+    };
+    let changed = state.retained_cycles_by_principal.get(principal) != Some(&cycles)
+        || state.topology.get(name) != Some(&topology);
+    state
+        .retained_cycles_by_principal
+        .insert(principal.to_string(), cycles);
+    state.topology.insert(name.clone(), topology);
+    Ok(changed)
+}
+
+fn validate_fresh_pool_creation_balance<E>(
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    configured: &crate::fleet_ensure::model::DesiredCanister,
+    name: &str,
+    cycles: u128,
+    maximum_observation_burn_cycles: u128,
+    requested_initial_cycles: u128,
+) -> Result<(), EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    if configured.kind == crate::fleet_ensure::model::DesiredCanisterKind::Pool
+        && desired
+            .bootstrap
+            .as_ref()
+            .is_some_and(|bootstrap| bootstrap.fresh_estate)
+        && configured.principal.is_none()
+        && configured.controllers.is_empty()
+        && configured.parent.as_ref().is_some_and(|parent| {
+            configured.controller_canisters.as_slice() == std::slice::from_ref(parent)
+        })
+    {
+        let readiness_floor_cycles = configured
+            .minimum_cycles
+            .parse::<Cycles>()
+            .map(|cycles| cycles.to_u128())
+            .map_err(|_| EnsureWorkflowError::JournalIntegrity)?;
+        let remaining_controller_burn_cycles = desired
+            .maximum_update_burn_cycles
+            .parse::<Cycles>()
+            .map(|cycles| cycles.to_u128())
+            .map_err(|_| EnsureWorkflowError::JournalIntegrity)?;
+        let required_pre_finalization_balance_cycles = readiness_floor_cycles
+            .checked_add(remaining_controller_burn_cycles)
+            .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+        if cycles < required_pre_finalization_balance_cycles {
+            return Err(EnsureWorkflowError::FreshPoolCreationUnderfunded(Box::new(
+                FreshPoolCreationUnderfundedError {
+                    canister: name.to_string(),
+                    live_balance_cycles: cycles,
+                    maximum_observation_burn_cycles,
+                    pre_finalization_shortfall_cycles: required_pre_finalization_balance_cycles
+                        - cycles,
+                    readiness_floor_cycles,
+                    readiness_shortfall_cycles: readiness_floor_cycles.saturating_sub(cycles),
+                    remaining_controller_burn_cycles,
+                    requested_creation_funding_cycles: requested_initial_cycles,
+                    required_pre_finalization_balance_cycles,
+                },
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn retain_applied_funding_cycles(

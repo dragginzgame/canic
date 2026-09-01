@@ -41,13 +41,14 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-PUBLISH-001` | `1` | `8e2eff6ac0c60c9903cd68f6354f7536636a987fd437306e851643464bdef884` | `docs/audits/recurring/system/publish-surface.md` |
 | `CANIC-RELEASE-INTEGRITY-001` | `1` | `3f6b87b30a3c1f9c80803a8be5d45292e73217d260ea435a956bd05f10d63438` | `docs/audits/recurring/system/release-integrity.md` |
 | `CANIC-AUTH-ORDERING-001` | `1` | `2619b50394d35381cb2be0d124868f8249218bf41591fad2713730e20f266b87` | `docs/audits/recurring/system/security-boundary-ordering.md` |
-| `CANIC-WASM-001` | `4` | `85dd9bd380f0c7b8efe1a50ab574f144ca86ce9c71a24406b29a708ff522e3f5` | `docs/audits/recurring/system/wasm-footprint.md` |
+| `CANIC-WASM-001` | `5` | `a51d17f9e744bf6452005e543ba6f6e77a3c2257d385aa2ad58f1acad2439c19` | `docs/audits/recurring/system/wasm-footprint.md` |
 | `CANIC-MODULE-SURFACE-001` | `2.0` | `404a359b4448ea7288055f0444e3178ae972f4eb7e1a0814aa693ce67df59030` | `docs/audits/modular/module-surface-hardening.md` |
 
 ## Superseded Definition Identities
 
 | Audit ID | Version | SHA-256 | Definition | Superseded by |
 | --- | --- | --- | --- | --- |
+| `CANIC-WASM-001` | `4` | `85dd9bd380f0c7b8efe1a50ab574f144ca86ce9c71a24406b29a708ff522e3f5` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v5` |
 | `CANIC-CHANGE-FRICTION-001` | `2` | `5f4377f00907f36f59388f797f210bdfed9398832f983529cdccd4bd747d2ab6` | `docs/audits/recurring/system/change-friction.md` | `CANIC-CHANGE-FRICTION-001/v3` |
 | `CANIC-COMPLEXITY-001` | `2` | `76bb53a536f252348567d32fd0779a40347e54c254c5fd726207253dcd069fce` | `docs/audits/recurring/system/complexity-accretion.md` | `CANIC-COMPLEXITY-001/v3` |
 | `CANIC-WASM-001` | `3` | `9747666aeee64eff0af26b92f90bd1ccf12f318023780aa7148fdd55fc29d745` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v4` |
@@ -77,6 +78,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 - `CANIC-WASM-001/v2`: `7e6bd9d57f7791ff2a6fa4b3a2d2cbd153f56d1c9a5c4269a869ff72a7675f18`
 - `CANIC-WASM-001/v3`: `0eb95225272ca531e4104454d24c2e2fa26d4fc26cfefbe4d151383ad0c6b6a6`
 - `CANIC-WASM-001/v4`: `25fa2b50f14838c8debfd77d274b55ce9e0edb1befc4e14cea64c665908f7ce4`
+- `CANIC-WASM-001/v5`: `e5fea20658708141f9ec95545536c73306fe725f5410567a045cb8ce5df8cc27`
 
 The runtime runners calculate these composites from their definition, script,
 and executable fixture inputs and record the resulting value in each run.
@@ -94,7 +96,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
 | `0eb8e77d81af93338dcc6051255ddfcf71790dfacd67edb5ec4eae64e9ef393d` | `docs/audits/META-AUDIT.md` |
-| `839cf950f609c2c03f53f0a82673a61eb5497a8053d620207a8451eec744e338` | `docs/audits/METHODS.md` |
+| `d5dd4b91e15b0290fb2080a65f59c7e665d8c305c194329fc24c50136d95b844` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |
@@ -109,11 +111,11 @@ and executable fixture inputs and record the resulting value in each run.
 | `4ff697d1ed68db19bca8810f609ea40547486a2174e81271312828ef034ca7c8` | `docs/audits/scripts/measure-complexity-v2.sh` |
 | `8f4a46a26e56b845290c3adc4994826b8a10084c97a2c68579ca60038f8e1be8` | `docs/audits/scripts/run-nonempty-cargo-test.sh` |
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |
-| `b1ce1791965387ce7fe8bd27dc2d741732997d48552b75be8fae3de7b13caa97` | `scripts/ci/check-audit-method-catalog.sh` |
+| `a2b6f247438f894c155d93d250b49d1ede22cf3e29a04a05eb1b0adea3c5f104` | `scripts/ci/check-audit-method-catalog.sh` |
 | `b6890c680167d19bc7fb6ea59ec12ed7ae882f186535bab72f758579c2765508` | `scripts/ci/check-release-integrity-contract.sh` |
 | `eee02a45e2fd6512b2641209c12ad33e08b9d1659114bf9a828face730a044cc` | `scripts/ci/instruction-audit-report.sh` |
 | `f42462d5b69b05ecbcb90ed9ff39f24fe296870a1341c79ffe6af5628f5a5bca` | `scripts/ci/run-layering-guards.sh` |
 | `839ee5608894b029fc466056e166a782f04d8f3c6e5f601d248a5b8e475e94ca` | `scripts/ci/list-config-canisters.sh` |
 | `089e5408ede48b45d95813d96ed7ad9bfa9814453a0630af7eff3fa80b5636b2` | `scripts/ci/require_icp.sh` |
-| `3a454f3c02838d05ce6be30bb97883108e954d66ad5988fe76981a47e189eb4d` | `scripts/ci/wasm-audit-report.sh` |
+| `54ed640fb1d5d2ae6e7425a1e2d8a12e5650fe4ef7aad8a55e6c7e3b89b4bc0a` | `scripts/ci/wasm-audit-report.sh` |
 | `9e320086c5118d965b8333be0af8682f6348674c8e388f9d737634854f05c4dd` | `tool-versions.env` |

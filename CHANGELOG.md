@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+
+## [0.110.x] - Fleet Runtime Contraction
+
+Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
+
+- `0.110.0` opens the reinstall-only runtime-contraction line on an immutable
+  nine-role Wasm baseline and carries the final fresh-estate cycle/readiness
+  correction with exact interruption, conservation and no-effect replay proof.
+
 ## [0.109.x] - Fleet-Wide Ingress Admission
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)

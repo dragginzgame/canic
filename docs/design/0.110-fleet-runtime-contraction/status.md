@@ -1,10 +1,10 @@
 # Canic 0.110 Implementation Status
 
-Date: 2026-08-31
+Date: 2026-09-01
 
 ## Status
 
-- State: contraction-only design corrected; implementation not promoted.
+- State: B1 promoted and active after accepted 0.109 closeout.
 - Review verdict: the frozen replica-validator, whole generated-surface and
   exact Toko `project_instance` canary gates are binding. Predecessor closeout
   and explicit promotion remain mandatory.
@@ -14,16 +14,19 @@ Date: 2026-08-31
 - Capability boundary: zero new runtime capability. Retirement, cycle
   transfer, estates, host-only version inventory and status redesign do not
   enter or block this line.
-- Provenance: source baseline `936043db9` (`v0.109.30`), superseding the older
+- Provenance: immutable predecessor `3185dc45b` (`v0.109.35`), superseding the older
   tracked 0.110 revision last changed at `ef3acc17c`.
 - Compatibility: reinstall-only. Selected codec cuts retain no predecessor
   decoder and require complete destroyed-state/reconstruction evidence.
-- Predecessor: 0.109 B8-B10, a passing immutable complexity audit and explicit
-  human minor-closeout acceptance remain mandatory.
-- Promotion: none. Only a later explicit maintainer decision may start B1.
+- Predecessor: 0.109 B8-B10, its immutable complexity evidence and the human
+  minor-closeout acceptance are complete.
+- Promotion: the human maintainer explicitly promoted B1 on 2026-09-01.
 - Successor: 0.111 owns bounded cycle-safe multi-Fleet estates after 0.110
   closeout.
 - Downstream: 0.110 cannot delay the published 0.109 Toko Miner unblock.
+- First release: `0.110.0` carries the complete `CANIC-119` through
+  `CANIC-121` fresh-estate correction and corrected canonical-role baseline;
+  it does not claim B1 completion or authorize B2.
 
 Design: [Fleet runtime contraction](0.110-design.md)
 
@@ -93,7 +96,7 @@ Planning evidence: [B1 Wasm input evidence](../../audits/working/0.110-fleet-run
 
 | Batch | Outcome | Direct evidence | Status |
 | --- | --- | --- | --- |
-| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, exact Toko canary manifest/capability matrix, replica-validator function count, generated-surface inventory, complete artifact vector, controlled ablations including the full temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Blocked on 0.109 closeout and promotion |
+| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, exact Toko canary manifest/capability matrix, replica-validator function count, generated-surface inventory, complete artifact vector, controlled ablations including the full temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active; corrected `v0.109.35` `CANIC-WASM-001/v5` canonical baseline retained, downstream canary and differential evidence still open |
 | B2 | Role-selected storage reachability | Lazy TLS, direct generated wiring, storage/lifecycle inventory contraction, data-only reservations, symbol absence and full remeasurement | Blocked on B1 |
 | B3 | Capability-owned activation/auth records and only still-justified codecs | Concrete records, phase cache, bounded codec evidence and full remeasurement | Blocked on B2 decision |
 | B4 | Endpoint, recovery and role-capability pruning | Complete generated-surface inventory, exact Candid/provider reachability, optimized body/function evidence, direct dispatch, gated hard deletion of the temporary pool Ledger recovery family, role pruning and full remeasurement | Mandatory after the B3 decision while known role-inapplicable reachability remains |
@@ -111,6 +114,8 @@ Planning evidence: [B1 Wasm input evidence](../../audits/working/0.110-fleet-run
 
 ## Next Authorized Action
 
-Complete 0.109 B8-B10 and the human-owned closeout. Do not implement or measure
-a 0.110 candidate until the maintainer explicitly promotes B1 against one
-accepted predecessor and dated network profile.
+Publish the explicitly authorized first 0.110 release with the complete
+fresh-estate correction and corrected canonical-role baseline. Then complete
+the frozen downstream canary, controlled ablations, generated-surface
+inventory and generic cohort. Do not begin B2 until the maintainer accepts the
+complete B1 evidence.

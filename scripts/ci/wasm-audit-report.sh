@@ -3,10 +3,10 @@
 set -euo pipefail
 
 METHOD_ID="CANIC-WASM-001"
-METHOD_VERSION="4"
+METHOD_VERSION="5"
 METHOD_TAG="$METHOD_ID/v$METHOD_VERSION"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
-AUDIT_STEM="wasm-footprint-v4"
+AUDIT_STEM="wasm-footprint-v5"
 PROFILE_KEY="release-clean-a+release-clean-b+debug"
 EXPECTED_ROSTER_KEY="app,test,user_hub,scale_hub,user_shard,scale_replica,root,fleet_coordinator,wasm_store"
 
@@ -183,8 +183,8 @@ capture_optimizer_metrics() {
     local metric_pattern
 
     line="$(
-        rg "release Wasm optimization for .*/$canister/$canister\\.wasm:" "$log_path" |
-            tail -n 1
+        rg 'release Wasm optimization for .*\.wasm:' "$log_path" |
+            tail -n 1 || true
     )"
     metric_pattern='raw ([0-9]+) -> ([0-9]+), gzip ([0-9]+) -> ([0-9]+), code section ([0-9]+) -> ([0-9]+), data section ([0-9]+) -> ([0-9]+), functions ([0-9]+) -> ([0-9]+)$'
     if [[ ! "$line" =~ $metric_pattern ]]; then
@@ -203,7 +203,7 @@ build_profile() {
     local run_label="$2"
     local target_dir="$3"
     local output_dir="$RUN_TMP/artifacts/$run_label"
-    local build_log="$RUN_TMP/build-$run_label.log"
+    local build_log
     local canister
     local artifact_root
     rm -rf "$PRODUCT_ROOT/.icp"
@@ -211,6 +211,7 @@ build_profile() {
     mkdir -p "$output_dir"
 
     for canister in "${CANISTERS[@]}"; do
+        build_log="$RUN_TMP/build-$run_label-$canister.log"
         printf 'building %s profile (%s) for %s through Canic host authority\n' \
             "$profile" "$run_label" "$canister"
         if ! (
@@ -377,7 +378,7 @@ while IFS= read -r candidate_method_path; do
     fi
 done < <(
     find "$METHOD_ROOT/docs/audits/reports" -type f \
-        -path '*/artifacts/wasm-footprint-v4*/method.json' -print 2>/dev/null | sort -r
+        -path '*/artifacts/wasm-footprint-v5*/method.json' -print 2>/dev/null | sort -r
 )
 
 build_profile release release-clean-a "$RUN_TMP/target-release"
@@ -576,7 +577,7 @@ RISK_SCORE=0
 declare -a RISK_DRIVERS=()
 if [[ "$BASELINE_REPORT" == "N/A" ]]; then
     RISK_SCORE=$((RISK_SCORE + 2))
-    RISK_DRIVERS+=("no compatible v4 predecessor: +2")
+    RISK_DRIVERS+=("no compatible v5 predecessor: +2")
 fi
 if awk -v value="$component_spread_ratio" 'BEGIN { exit !(value >= 1.25) }'; then
     RISK_SCORE=$((RISK_SCORE + 2))
@@ -615,7 +616,7 @@ else
     RUN_RESULT="pass"
 fi
 if [[ "$BASELINE_REPORT" == "N/A" ]]; then
-    COMPARABILITY="first-v4-baseline"
+    COMPARABILITY="first-v5-baseline"
     ORIGINAL_BASELINE_REPORT="$REPORT_RELATIVE"
 else
     COMPARABILITY="comparable to immediate compatible predecessor"
@@ -720,7 +721,7 @@ EOF
 COMPLETED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 mkdir -p "$DAY_DIR"
 cat >"$REPORT_PATH" <<EOF
-# Wasm Footprint Audit v4 - $RUN_DATE
+# Wasm Footprint Audit v5 - $RUN_DATE
 
 ## Verdict
 
@@ -729,19 +730,19 @@ cat >"$REPORT_PATH" <<EOF
 - Comparability: \`$COMPARABILITY\`.
 - Authoritative risk score: \`$RISK_SCORE/10\`.
 
-V4 completed two isolated clean release builds and one debug build for every frozen configured role
+V5 completed two isolated clean release builds and one debug build for every frozen configured role
 plus Fleet Coordinator and Wasm Store through Canic's authoritative host
 artifact builder. It did not invoke direct Cargo
 Wasm compilation, infer a target-directory artifact, or retain a competing
 pre-optimization Wasm. The governed release transform supplies its own exact
-before/after measurements. Historical v3 evidence remains valid but is not
-comparable with v4.
+before/after measurements. Historical v4 evidence remains valid but is not
+comparable with v5.
 
 ## Scope And Identity
 
 - Definition: \`$DEFINITION_PATH\`.
 - Compared predecessor: \`$BASELINE_REPORT\`.
-- Original v4 baseline: \`$ORIGINAL_BASELINE_REPORT\`.
+- Original v5 baseline: \`$ORIGINAL_BASELINE_REPORT\`.
 - Release anchor: \`$RELEASE_ANCHOR\`.
 - Source commit: \`$PRODUCT_COMMIT\`.
 - Source tree: \`$SOURCE_TREE_HASH\`.
@@ -877,9 +878,10 @@ nor duplicated here.
 
 ## Findings
 
-- Method revision: v4 qualifies the canonical Binaryen transform and two-clean-build
-  determinism across the full roster; valid v3 history cannot baseline v4.
-- New product findings: none. The first v4 measurement is a baseline, and no
+- Method revision: v5 qualifies path-confined role-local optimizer records and
+  two-clean-build determinism across the full roster; valid v4 history cannot
+  baseline v5.
+- New product findings: none. The first v5 measurement is a baseline, and no
   comparable regression exists to attribute.
 
 ## Required Checklist
@@ -899,7 +901,7 @@ nor duplicated here.
 | \`twiggy dominators\` | PASS | bounded role excerpts retained |
 | \`twiggy monos\` | PASS | bounded role excerpts retained |
 | compatible predecessor selection | PASS | exact method/roster/profile/path/tool keys; \`$BASELINE_REPORT\` |
-| direct Cargo/pre-optimization fallback absent | PASS | v4 invokes only the host artifact authority |
+| direct Cargo/pre-optimization fallback absent | PASS | v5 invokes only the host artifact authority |
 | source mutation | PASS | no tracked mutation or unexpected untracked path |
 
 ## Verification Readout

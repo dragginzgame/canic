@@ -83,6 +83,18 @@ pub enum EnsurePolicyError {
     InitialCyclesBelowMinimum { name: String },
 
     #[error(
+        "fresh pool canister {name} requests {creation_funding_cycles} creation cycles for readiness floor {readiness_floor_cycles}, but its bounded pre-import burn is {admissible_burn_cycles} cycles; required funding {required_creation_funding_cycles}, shortfall {shortfall_cycles}; no effect was authorized"
+    )]
+    FreshPoolCreationFundingInsufficient {
+        admissible_burn_cycles: u128,
+        creation_funding_cycles: u128,
+        name: String,
+        readiness_floor_cycles: u128,
+        required_creation_funding_cycles: u128,
+        shortfall_cycles: u128,
+    },
+
+    #[error(
         "live observation for controlled canister {name} returned Principal {actual}, expected {expected}"
     )]
     ObservationAuthorityMismatch {
@@ -1015,10 +1027,6 @@ fn create_plan(
     accumulator: &mut PlanAccumulator,
     replaced: Option<&LiveCanister>,
 ) -> Result<CanisterPlan, EnsurePolicyError> {
-    accumulator.add_funding(cycle_policy.initial_cycles)?;
-    accumulator.add_fee(bounds.ledger_fee)?;
-    accumulator.add_fee(bounds.management_creation_fee)?;
-    let symbolic = format!("created:{}", configured.name);
     let temporary_pool_observation_controller = configured.kind == DesiredCanisterKind::Pool
         && desired
             .bootstrap
@@ -1029,6 +1037,32 @@ fn create_plan(
         && configured.parent.as_ref().is_some_and(|parent| {
             configured.controller_canisters.as_slice() == std::slice::from_ref(parent)
         });
+    if temporary_pool_observation_controller {
+        let admissible_burn_cycles = checked_add(
+            bounds.observation_burn,
+            bounds.update_burn,
+            "fresh pool pre-import burn",
+        )?;
+        let required_creation_funding_cycles = checked_add(
+            cycle_policy.minimum_cycles,
+            admissible_burn_cycles,
+            "fresh pool creation funding",
+        )?;
+        if cycle_policy.initial_cycles < required_creation_funding_cycles {
+            return Err(EnsurePolicyError::FreshPoolCreationFundingInsufficient {
+                admissible_burn_cycles,
+                creation_funding_cycles: cycle_policy.initial_cycles,
+                name: configured.name.clone(),
+                readiness_floor_cycles: cycle_policy.minimum_cycles,
+                required_creation_funding_cycles,
+                shortfall_cycles: required_creation_funding_cycles - cycle_policy.initial_cycles,
+            });
+        }
+    }
+    accumulator.add_funding(cycle_policy.initial_cycles)?;
+    accumulator.add_fee(bounds.ledger_fee)?;
+    accumulator.add_fee(bounds.management_creation_fee)?;
+    let symbolic = format!("created:{}", configured.name);
     let mut creation_controllers = configured.controllers.clone();
     if temporary_pool_observation_controller {
         creation_controllers.push(desired.operator.clone());

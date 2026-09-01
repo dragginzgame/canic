@@ -201,11 +201,23 @@ authority and cannot be inferred from release metadata. Zero is appropriate
 only where the selected local platform actually charges zero. A wrong value
 cannot silently change the reviewed debit or conservation equation.
 
-Initial pool assets are direct Fleet Ensure creation actions. Their configured
-native funding, one exact Cycles Ledger creation fee and one exact management
-creation fee are included in the reviewed maximum operator debit before any
-effect. Fresh convergence does not fund a Root's default Ledger account and
-does not rely on Root pool maintenance to discover an unreviewed payer.
+Initial pool assets are direct Fleet Ensure creation actions. The configured
+`canister_pool.canister_cycles` value is their readiness floor, not their fresh
+creation amount. Fresh generation adds the exact bounded first-observation and
+controller-finalization margins to that floor; retained assets keep the floor
+as their target. Creation funding, one exact Cycles Ledger creation fee and one
+exact management creation fee are included in the reviewed maximum operator
+debit before any effect. Fresh convergence does not fund a Root's default
+Ledger account and does not rely on Root pool maintenance to discover an
+unreviewed payer.
+
+Planning rejects a fresh pool whose creation amount is below its readiness
+floor plus those margins. The typed failure reports the requested creation
+funding, floor, admissible burn, required funding and exact shortfall. After a
+Create is applied, its first exact balance must still cover the readiness floor
+plus the remaining controller-finalization margin; otherwise resume stops
+before any controller or protocol effect and reports both readiness and
+pre-finalization shortfalls.
 
 ## Desired State
 
@@ -446,7 +458,9 @@ Creation funding, Cycles Ledger fees, management creation fees, update burn,
 observation burn, and retirement transfers are separate report fields. Apply
 cannot issue actions whose planned debit exceeds the reviewed operator bound;
 terminal success additionally requires measured burn to remain within its
-reviewed ceiling.
+reviewed ceiling. Fresh-pool creation funding includes its bounded pre-import
+margin in both the reviewed debit and terminal conservation equation; the
+readiness floor remains a separate invariant.
 Each existing-canister funding action also reports the exact observed deficit,
 target-local uncertainty margin and expected post-funding native balance. The
 margin covers only that target's planned update actions plus one observation;
