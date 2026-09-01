@@ -75,7 +75,9 @@ The open 0.109.33 candidate also hard-cuts the two infrastructure command
 exports to `canic_root_command(RootCommand)` and
 `canic_coordinator_command(CoordinatorCommand)`. Managed application and Wasm
 Store command traffic remains on `canic_command`; Root and Coordinator retain
-no old-name alias, fallback or mixed endpoint contract.
+no old-name alias, fallback or mixed endpoint contract. Root-owned admission
+distribution continues to address managed non-Root targets through
+`canic_command`; only Coordinator-to-Root traffic uses `canic_root_command`.
 
 The detailed changelog owns the complete tests and negative cases; this handoff owns no downstream repository or live IC state.
 
@@ -236,6 +238,10 @@ For the current B9, B10 and reopened `CANIC-102` slices:
   command exports; the replay-policy, sealed-authority and prepared-Root
   policy tests pass, and all directly affected packages compile across all
   targets;
+- focused Root-admission compilation and warning-denied control-plane Clippy
+  pass after correcting managed-target prepare, activate and open routing; the
+  complete governed admission PocketIC matrix remains maintainer-owned release
+  validation;
 - no broad workspace or full PocketIC gate was run during coding.
 
 Published-batch validation remains in the detailed changelog and immutable
