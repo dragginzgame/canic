@@ -12,7 +12,8 @@ use crate::{
             FleetEnsureStateRecord, FleetObservation, InstallMode, LiveCanister,
             RetirementTransferBalances, RetirementTransferInvariantError,
             RetirementTransferReconciliation, RootManagementCanisterObservation,
-            RootManagementObservation, RootOwnedCanisterLifecycle, reconcile_retirement_transfer,
+            RootManagementObservation, RootOwnedCanisterLifecycle, create_balance_is_terminal,
+            reconcile_retirement_transfer,
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
@@ -1841,7 +1842,17 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     None
                 };
                 post_cycles = live_cycles;
-                let applied = live_cycles == Some(*requested_initial_cycles);
+                let maximum_observation_burn_cycles = self
+                    .desired
+                    .maximum_observation_burn_cycles
+                    .parse::<Cycles>()
+                    .map(|cycles| cycles.to_u128())
+                    .map_err(|_| IcpEnsurePlatformError::Arithmetic("observation burn"))?;
+                let applied = create_balance_is_terminal(
+                    live_cycles,
+                    *requested_initial_cycles,
+                    maximum_observation_burn_cycles,
+                );
                 if live_cycles.is_some() && !applied {
                     retry = EffectRetry::ReplanRequiredAfterCreateBalanceDrift;
                 }

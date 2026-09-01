@@ -6,7 +6,7 @@ use crate::{
             DesiredFleet, DesiredFleetProtocol, DesiredPresence, DesiredProtocolStep,
             DrainAuthority, EffectRecord, EffectState, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION,
             FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
-            FleetEnsureStateRecord, FleetObservation, LiveCanister,
+            FleetEnsureStateRecord, FleetObservation, LiveCanister, create_balance_is_terminal,
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
@@ -195,7 +195,17 @@ impl MockPlatform {
             .as_deref()
             .and_then(|principal| self.live.get(principal))
             .map(|live| live.cycles);
-        let applied = post_cycles == Some(*requested_initial_cycles);
+        let maximum_observation_burn_cycles = self
+            .desired
+            .maximum_observation_burn_cycles
+            .parse::<Cycles>()
+            .map(|cycles| cycles.to_u128())
+            .expect("fixture observation burn");
+        let applied = create_balance_is_terminal(
+            post_cycles,
+            *requested_initial_cycles,
+            maximum_observation_burn_cycles,
+        );
         Some(EffectObservation {
             applied,
             post_cycles,
@@ -645,6 +655,61 @@ fn successful_create_response_retains_exact_applied_evidence_and_replays_without
 fn duplicate_create_response_with_principal_retains_exact_applied_evidence_and_replays_without_effect()
  {
     assert_create_response_journey(true);
+}
+
+#[test]
+fn first_create_balance_within_reviewed_observation_burn_converges() {
+    let mut fixture = fixture();
+    fixture.desired.maximum_observation_burn_cycles = "2".to_string();
+    fixture
+        .desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.name == "created")
+        .expect("created desired canister")
+        .minimum_cycles = "18".to_string();
+    fixture
+        .platform
+        .create_shortfalls
+        .insert("created".to_string(), 1);
+    let desired_sha256 = "113".repeat(21) + "1";
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan burn-bounded Create journey");
+
+    let applied = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("accept first live balance inside reviewed observation burn");
+    assert!(applied.terminal);
+
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    assert_retained_create_balance(&paths, 19);
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+#[test]
+fn create_balance_terminal_predicate_is_exact_and_bounded() {
+    assert!(create_balance_is_terminal(Some(1_000), 1_000, 0));
+    assert!(create_balance_is_terminal(Some(999), 1_000, 1));
+    assert!(!create_balance_is_terminal(Some(998), 1_000, 1));
+    assert!(!create_balance_is_terminal(Some(1_001), 1_000, 1));
+    assert!(!create_balance_is_terminal(None, 1_000, 1));
 }
 
 fn assert_create_response_journey(response_is_duplicate: bool) {
@@ -3752,7 +3817,17 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                     .as_deref()
                     .and_then(|principal| self.live(principal))
                     .map(|live| live.cycles);
-                let applied = post_cycles == Some(*requested_initial_cycles);
+                let maximum_observation_burn_cycles = self
+                    .desired
+                    .maximum_observation_burn_cycles
+                    .parse::<Cycles>()
+                    .map(|cycles| cycles.to_u128())
+                    .expect("PocketIC observation burn");
+                let applied = create_balance_is_terminal(
+                    post_cycles,
+                    *requested_initial_cycles,
+                    maximum_observation_burn_cycles,
+                );
                 return Ok(EffectObservation {
                     applied,
                     post_cycles,
