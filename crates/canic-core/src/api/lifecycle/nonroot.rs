@@ -87,19 +87,26 @@ impl LifecycleApi {
     #[must_use]
     pub fn post_upgrade_nonroot_canister_before_bootstrap(
         role: CanisterRole,
+        embedded_release_build_id: Option<&str>,
         authority: RoleRuntimeAuthority,
     ) -> bool {
-        lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_before_bootstrap(role, authority)
+        lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_before_bootstrap(
+            role,
+            embedded_release_build_id,
+            authority,
+        )
     }
 
     #[doc(hidden)]
     #[must_use]
     pub fn post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
         role: CanisterRole,
+        embedded_release_build_id: Option<&str>,
         authority: RoleRuntimeAuthority,
     ) -> bool {
         lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
             role,
+            embedded_release_build_id,
             authority,
         )
     }

@@ -95,6 +95,32 @@ fn admission(component_spec: &str, maximum_root_instances: u32) -> RootComponent
     }
 }
 
+#[test]
+fn retained_pool_imports_must_fit_the_root_initialisation_maximum() {
+    let input = RootPoolImportCapacityInput {
+        import_count: 3,
+        maximum_size: 2,
+        root: "root-0".to_string(),
+    };
+    assert_eq!(
+        validate_root_pool_import_capacity(&input),
+        Err(RootPoolImportCapacityError {
+            import_count: 3,
+            maximum_size: 2,
+            root: "root-0".to_string(),
+        })
+    );
+
+    assert!(
+        validate_root_pool_import_capacity(&RootPoolImportCapacityInput {
+            import_count: 3,
+            maximum_size: 3,
+            root: "root-0".to_string(),
+        })
+        .is_ok()
+    );
+}
+
 fn root(
     root_byte: u8,
     subnet_byte: u8,

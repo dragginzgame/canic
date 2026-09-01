@@ -211,25 +211,37 @@ fn register_nonroot_runtime_contract(canister_role: &CanisterRole) -> Result<(),
 
 pub fn post_upgrade_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
+    embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
-    post_upgrade_nonroot_canister_with_runtime(canister_role, RuntimeWorkflow::start_all)
+    post_upgrade_nonroot_canister_with_runtime(
+        canister_role,
+        embedded_release_build_id,
+        RuntimeWorkflow::start_all,
+    )
 }
 
 /// Restore one managed profile with compile-selected automatic top-up custody.
 pub fn post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init(
     canister_role: CanisterRole,
+    embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
     post_upgrade_nonroot_canister_with_runtime(
         canister_role,
+        embedded_release_build_id,
         RuntimeWorkflow::start_all_with_automatic_topup,
     )
 }
 
 fn post_upgrade_nonroot_canister_with_runtime(
     canister_role: CanisterRole,
+    embedded_release_build_id: Option<&str>,
     start_runtime: fn() -> Result<(), InternalError>,
 ) -> Result<bool, InternalError> {
     FleetActivationRuntimeOps::set_managed();
+    let embedded_release_build_id =
+        ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;
+    FleetActivationOps::require_release_build(embedded_release_build_id)
+        .map_err(crate::ops::storage::StorageOpsError::from)?;
     restore_nonroot_after_upgrade(canister_role)?;
     let active = FleetActivationOps::status(false)
         .map_err(crate::ops::storage::StorageOpsError::from)?

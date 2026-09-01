@@ -13,6 +13,39 @@ Roadmap reconciled: 2026-08-30
 
 ## Status
 
+- Current addendum (2026-09-01): published `v0.109.33` retained exact Create
+  response evidence but did not publish its balance into terminal Fleet state.
+  The open `0.109.34` draft closes the remaining `CANIC-102` boundary by
+  projecting each exact Applied Create balance before terminal inventory,
+  rejecting action, Principal, receipt or balance contradictions without
+  mutation or a repeated creation. It also rejects any Fleet-managed
+  post-upgrade Wasm whose embedded release-build identity differs from the
+  retained activation identity, so a cross-release upgrade cannot combine
+  newer runtime code with lazy provisioning from the initial release set. The
+  same draft closes `CANIC-117`: the sole Root import-capacity decision now
+  rejects total bootstrap imports above the exact initial pool maximum during
+  generation and apply-time policy, before any funding or installation effect.
+  It also closes `CANIC-114`: successor plans bind and retain the current
+  terminal Registry operation across planning, pre-effect verification and
+  no-effect replay. Only journal-proved Applied reinstalls for every configured
+  Coordinator, Root and Store retire the obsolete Registry before the fresh
+  current-release protocol bootstrap is compiled. `CANIC-115` likewise removes
+  successor reconstruction of a predecessor Component batch: terminal inventory
+  validates the Root's retained terminal result directly against live Registry,
+  Root, partition, release-set, protocol, topology-bound and cycle evidence, with
+  typed field-level failures. `CANIC-116` adopts an already-issued pool
+  withdrawal only from its retained Ledger receipt plus exact Root-authorized
+  live management inspection. Its checked lower bound admits only the reviewed
+  burn margin, rejects the stale pre-effect balance, retains the observed cycle
+  evidence and cannot repeat the debit.
+  `CANIC-113` separately treats a Create response as requested-target evidence
+  and the returned Principal's first status as live-balance evidence. A
+  mismatch closes the one-effect journal as replan-required before later
+  actions, retaining the Principal, receipt, actual cycles and topology so a
+  successor can fund without recreating it. `CANIC-112` replaces conservation
+  underflow with exact cycle guidance and deterministically retains the largest
+  affordable non-empty prefix of the already validated protocol action order;
+  an unaffordable first action produces no plan or effect.
 - Current addendum (2026-08-31): the B10 candidate proves the host-only
   `canic::testing` facade through an isolated packaged consumer and exact
   managed composed-IcyDB plus standalone-local PocketIC lifecycles. Generated

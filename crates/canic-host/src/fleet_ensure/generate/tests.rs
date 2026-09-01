@@ -68,6 +68,43 @@ roots = []
 }
 
 #[test]
+fn retained_pool_imports_above_root_initialisation_maximum_reject_during_generation() {
+    let operator = Principal::from_slice(&[31]).to_text();
+    let coordinator_subnet = Principal::from_slice(&[32]).to_text();
+    let placement = Principal::from_slice(&[33]).to_text();
+    let root = Principal::from_slice(&[34]).to_text();
+    let source = multi_component_source(&operator, &coordinator_subnet, &placement);
+    let seed = EstateSeed {
+        schema_version: 1,
+        fleet_id: "a4".repeat(32).parse().expect("Fleet ID"),
+        fresh_estate: false,
+        coordinator: Principal::from_slice(&[35]).to_text(),
+        treasury: None,
+        cycles_ledger: mainnet_cycles_ledger(),
+        management_creation_fee_cycles: None,
+        roots: vec![RootSeed {
+            placement_subnet: placement,
+            root: root.clone(),
+            store: Principal::from_slice(&[36]).to_text(),
+            pool_imports: [37, 38, 39]
+                .map(|byte| Principal::from_slice(&[byte]).to_text())
+                .to_vec(),
+        }],
+    };
+
+    assert!(matches!(
+        validate_identity_seed(&source, &seed),
+        Err(FleetGenerateError::PoolImportCapacity(
+            RootPoolImportCapacityError {
+                import_count: 3,
+                maximum_size: 2,
+                root: rejected_root,
+            }
+        )) if rejected_root == root
+    ));
+}
+
+#[test]
 fn treasury_adoption_requires_one_observed_seeded_identity() {
     let seed = EstateSeed {
         schema_version: 1,
@@ -3317,6 +3354,7 @@ impl EnsurePlatform for RetainedEnsurePlatform {
         };
         Ok(EffectObservation {
             applied,
+            post_cycles: None,
             progress_identity: format!("retained:{}:{applied}", action.name()),
             retry: EffectRetry::None,
         })

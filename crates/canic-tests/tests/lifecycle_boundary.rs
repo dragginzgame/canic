@@ -13,7 +13,7 @@ use canic::{
 };
 use canic_testing_internal::pic::{
     install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
-    lifecycle_participant_trap_wasm, upgrade_args,
+    lifecycle_participant_trap_wasm, managed_test_init_identity, upgrade_args,
 };
 use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIc, RetryPolicy};
 use std::{any::Any, time::Duration};
@@ -109,6 +109,54 @@ fn prepared_non_root_remains_fenced_across_repeated_upgrades() {
             .pic
             .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     }
+}
+
+#[test]
+fn managed_cross_release_upgrade_fails_before_runtime_can_reuse_the_initial_release_set() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let canic_id = fixture.install_canic_canister();
+    let committed_module_hash = fixture
+        .pic
+        .canister_status(canic_id, None)
+        .expect("query managed Wasm before cross-release upgrade")
+        .module_hash;
+    let retained_release_build_id = managed_test_init_identity().release_build_id.to_string();
+    let foreign_wasm = replace_release_build_id(
+        &fixture.canic_wasm,
+        &retained_release_build_id,
+        &"22".repeat(32),
+    );
+    fixture
+        .pic
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+
+    fixture
+        .pic
+        .upgrade_canister(canic_id, foreign_wasm, upgrade_args(), None)
+        .expect_err("managed cross-release upgrade must fail closed");
+    assert_prepared_and_not_ready(&fixture.pic, canic_id, fixture.root);
+    assert_eq!(
+        fixture
+            .pic
+            .canister_status(canic_id, None)
+            .expect("query managed Wasm after rejected cross-release upgrade")
+            .module_hash,
+        committed_module_hash,
+        "failed cross-release upgrade must retain the committed same-release Wasm"
+    );
+
+    fixture
+        .pic
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+    fixture
+        .pic
+        .retry_install_code(install_retry_policy(), || {
+            fixture
+                .pic
+                .upgrade_canister(canic_id, fixture.canic_wasm.clone(), upgrade_args(), None)
+        })
+        .expect("same-release upgrade must remain valid after rejection");
+    assert_prepared_and_not_ready(&fixture.pic, canic_id, fixture.root);
 }
 
 #[test]
@@ -274,6 +322,28 @@ fn non_root_post_upgrade_failure_reports_phase_error() {
 fn install_retry_policy() -> RetryPolicy {
     RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
         .expect("install retry policy")
+}
+
+fn replace_release_build_id(wasm: &[u8], retained: &str, replacement: &str) -> Vec<u8> {
+    assert_eq!(retained.len(), replacement.len());
+    assert_ne!(retained, replacement);
+    let retained = retained.as_bytes();
+    let replacement = replacement.as_bytes();
+    let offsets = wasm
+        .windows(retained.len())
+        .enumerate()
+        .filter_map(|(offset, bytes)| (bytes == retained).then_some(offset))
+        .collect::<Vec<_>>();
+    assert!(
+        !offsets.is_empty(),
+        "managed Wasm must contain its embedded release-build identity"
+    );
+
+    let mut foreign = wasm.to_vec();
+    for offset in offsets {
+        foreign[offset..offset + replacement.len()].copy_from_slice(replacement);
+    }
+    foreign
 }
 
 fn assert_phase_error(phase: &str, err: &impl ToString) {

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 ## Purpose
 
@@ -25,7 +25,7 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker. This handoff does not maintain a second
 mutable latest-release claim.
 
-Current development begins from published `v0.109.32`. Its immutable details
+Current development begins from published `v0.109.33`. Its immutable details
 are in [the 0.109 changelog](../changelog/0.109.md). Source-development truth
 comes from Git and the working tree; explanatory prose is not a release guard.
 
@@ -59,25 +59,91 @@ Published correctness history relevant to current operators:
 - `0.109.32` publishes the initial `CANIC-102` through `CANIC-111` corrections,
   including creation balances, Store controllers, Registry retry, bounded
   terminal proof, reinstall fencing, post-bootstrap helper staging, manifest-
-  bound Candid, activation revision, cycle reconciliation and timer inventory.
+  bound Candid, activation revision, cycle reconciliation and timer inventory;
+  and
+- `0.109.33` publishes monotonic Create-evidence retention, exact duplicate-
+  response recovery, role-owned Root and Coordinator command entrypoints and
+  the packaged managed-App qualification facade.
 
-`CANIC-102` is reopened in the current 0.109.33 draft. The published workflow
-retained the exact requested balance from both successful and duplicate-with-
-Principal Create responses, but its next observation replaced that evidence
-with `None` because production cannot resolve `action_cycles(Create)`. The
-current correction makes observation merging monotonic. One affected applied
-0.109.32 record may replay only the same operation's exact idempotent Ledger
-request; operation, plan/action hashes, state-bound Principal, retained receipt
-and returned requested balance must all match. It adds no inferred value,
-migration, compatibility path, fallback or schema generation.
+`CANIC-102` is completed in the current 0.109.34 draft. Published 0.109.33
+retains the exact requested balance from successful and duplicate-with-
+Principal Create responses, but terminal Fleet publication did not project
+that evidence into `retained_cycles_by_principal`. The current correction
+publishes every matching Applied Create balance before terminal inventory,
+bound to the exact action digest, Principal, non-empty Ledger receipt and
+reviewed amount. Missing or contradictory evidence rejects without publishing
+state or repeating an effect. Terminal inventory remains a consumer of the
+retained map and does not become a second journal interpreter.
 
-The open 0.109.33 candidate also hard-cuts the two infrastructure command
+`CANIC-117` is also completed in the current draft. One pure topology decision
+requires every Root's total retained bootstrap imports to fit
+`canister_pool.maximum_size`. Both high-level generation and immutable-plan
+policy invoke it, so an impossible Root initializer rejects before live
+observation or the first funding/install effect with the exact Root, import
+count and configured maximum. `minimum_size` remains the Idle target; the
+initial maximum covers all origins, including one that will become a workload.
+
+`CANIC-114` is completed in the current draft. A successor plan now retains the
+exact operation that owns the active terminal Registry and uses it for planning,
+pre-effect verification and no-effect replay. Effect-free and management-only
+plans carry that authority forward instead of presenting their unused operation
+IDs to the Root. After every configured Coordinator, Root and Store reinstall is
+proved Applied by the exact journal action hashes, Fleet Ensure clears the
+obsolete Registry snapshot before asking current policy for the fresh protocol
+bootstrap. A partial or mismatched reinstall cannot clear it.
+
+`CANIC-115` is completed in the current draft. Terminal inventory no longer
+recompiles a predecessor Component provisioning batch through the successor App
+configuration. The Root's retained terminal result supplies the exact operation
+and plan evidence; Canic validates its active Registry/Root binding, terminal
+counters and receipts, admission and instance bounds, Component partitions,
+release-set/protocol binding, parent tree and live cycles. A later compiler's
+configuration digest is not substituted for the retained one. Failed terminal
+predicates report their exact field plus expected and observed values.
+
+`CANIC-113` is completed in the current draft. A Create response retains the
+requested funding target, exact returned Principal and Ledger block; the first
+live status observation independently supplies actual cycles. A mismatch
+marks only that proved Create Applied, retains the actual balance and topology,
+and closes the operation as replan-required before any later controller,
+install or protocol action. Its typed diagnostic reports configured creation
+fee, requested, actual and deficit integers. The successor plan reuses the
+Principal and cannot repeat the paid creation.
+
+`CANIC-116` is completed in the current draft. An issued Root-owned pool
+withdrawal is terminal only when its exact Ledger receipt is retained and the
+Root's controller-only management inspection proves the exact target,
+Root-only controllers, module-free pool shape and a live balance above the
+checked `expected - reviewed burn margin` lower bound. That lower bound must
+also equal `pre-effect + funding deficit`, so the stale pre-withdrawal snapshot
+cannot pass. The observed balance is retained in the effect journal and Fleet
+cycle state; response loss reuses the exact Ledger idempotency identity and
+cannot issue a second debit.
+
+`CANIC-112` is completed in the current draft. Fleet Ensure reports exact
+available, required and shortfall cycle integers when conservation cannot
+cover the reviewed maximum burn. The pure compiler walks the already validated
+protocol order and retains only its largest affordable non-empty prefix. An
+unaffordable first indivisible action returns that typed guidance without a
+plan or effect; pool-Ledger recovery cycles, transfer and fee count only when
+the corresponding action remains selected.
+
+Published 0.109.33 also hard-cuts the two infrastructure command
 exports to `canic_root_command(RootCommand)` and
 `canic_coordinator_command(CoordinatorCommand)`. Managed application and Wasm
 Store command traffic remains on `canic_command`; Root and Coordinator retain
 no old-name alias, fallback or mixed endpoint contract. Root-owned admission
 distribution continues to address managed non-Root targets through
 `canic_command`; only Coordinator-to-Root traffic uses `canic_root_command`.
+
+The current candidate also closes the lazy-child release-skew path. Every
+Fleet-managed Root, Store, Component and Component Child compares the Wasm's
+embedded release-build identity with the exact retained Fleet activation
+identity before post-upgrade runtime work starts. An exact same-release upgrade
+continues to preserve current state. A foreign release build traps atomically,
+so it cannot run newer code and later provision a child from the immutable
+initial release set. Cross-release movement remains reinstall-only; this guard
+does not add release-set rotation, migration or mixed-version authority.
 
 The detailed changelog owns the complete tests and negative cases; this handoff owns no downstream repository or live IC state.
 
@@ -184,7 +250,8 @@ batches, 1,000-canister qualification and a universal runtime observatory.
 
 ## Validation State
 
-For the current B9, B10 and reopened `CANIC-102` slices:
+For the current B9, B10 and completed `CANIC-102`, `CANIC-112`, `CANIC-113`, `CANIC-114`,
+`CANIC-115`, `CANIC-116` and `CANIC-117` slices:
 
 - frozen v2 remains unchanged; governed v3 definitions, scripts, catalog and
   fingerprints pass, and deterministic original/current mechanical reruns are
@@ -228,12 +295,36 @@ For the current B9, B10 and reopened `CANIC-102` slices:
   derives the exact profile and completes the sidecar-only optimized Wasm
   without runtime Candid extraction; the governed serial runner now preflights
   this shared artifact once before its scenario loop; and
-- focused reopened `CANIC-102` regressions pass successful and duplicate-with-
+- focused published 0.109.33 `CANIC-102` regressions pass successful and duplicate-with-
   Principal Create journalling, terminal and zero-effect replay; exact retained
   0.109.32 balance recovery; six authority-mismatch rejections; and the existing
   interruption-at-every-effect and logical-controller Create journeys; the
   production response mapper also retains the exact Principal, receipt and
   requested balance for both Ledger response forms;
+- focused 0.109.34 regressions prove that successful and exact duplicate-
+  response Create journeys publish the retained balance into terminal Fleet
+  state, replay without another effect, and reject a contradictory retained
+  balance without changing state, journal or platform effects;
+- focused topology, generator and apply-policy regressions prove that a
+  three-origin Root under maximum two rejects before effect while maximum three
+  is admitted explicitly;
+- focused CANIC-116 host regressions prove the checked burn-aware balance
+  predicate, exact Root controller/module binding, lost-response duplicate
+  receipt adoption, one total funding mutation, retained post-balance and a
+  fresh zero-action terminal replay; warning-denied `canic-host` Clippy passes;
+- focused CANIC-113 host regressions prove exact and duplicate Create response
+  handling, an immediate typed short-balance replan boundary, one creation,
+  retained live cycles/topology, successor funding without recreation and
+  terminal replay;
+- focused CANIC-112 host regressions prove largest-affordable-prefix selection,
+  replan-required prefix closure, one-time successor application, terminal
+  convergence, zero-effect replay, exact available/required/shortfall guidance,
+  no plan or mutation when the first action cannot fit, unchanged pool-Ledger
+  recovery accounting and warning-denied `canic-host` Clippy;
+- the focused managed lifecycle boundary passes all six cases, including a
+  foreign release-build upgrade that retains the committed module and Prepared
+  state followed by a successful exact same-release retry; the typed retained-
+  identity unit regression and all affected package targets also pass;
 - all 41 focused protocol-surface tests pass with distinct Root and Coordinator
   command exports; the replay-policy, sealed-authority and prepared-Root
   policy tests pass, and all directly affected packages compile across all
@@ -249,10 +340,11 @@ release evidence; it is not duplicated here.
 
 ## Next Authorized Action
 
-Hand the targeted-ready 0.109.33 draft to the maintainer-owned validation and
-publication workflow. Downstream adapter adoption follows the immutable
-package; the final human-owned 0.109 closeout audit follows that evidence. Do
-not begin 0.110 before the accepted closeout.
+Continue the sequenced current-schema Fleet Ensure correctness batch in the
+0.109.34 draft, then hand the complete targeted-ready batch to the maintainer-
+owned validation and publication workflow. The final human-owned 0.109 closeout
+audit follows downstream adoption evidence. Do not begin 0.110 before the
+accepted closeout.
 
 
 

@@ -100,6 +100,14 @@ pub enum FleetActivationOpsError {
     #[error("Fleet activation identity does not match the protected operation")]
     IdentityMismatch,
 
+    #[error(
+        "embedded release-build identity {embedded} does not match retained Fleet activation identity {retained}"
+    )]
+    ReleaseBuildMismatch {
+        retained: ReleaseBuildId,
+        embedded: ReleaseBuildId,
+    },
+
     #[error("Fleet activation evidence does not match protected state")]
     EvidenceMismatch,
 
@@ -193,6 +201,21 @@ impl FleetActivationOps {
     ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
         let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
         mapper::record_to_status(record, is_root)
+    }
+
+    /// Require upgraded managed Wasm to retain the exact installed release-build identity.
+    pub(crate) fn require_release_build(
+        embedded: ReleaseBuildId,
+    ) -> Result<(), FleetActivationOpsError> {
+        let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let retained = match record.state {
+            FleetActivationStateRecord::Prepared { identity, .. }
+            | FleetActivationStateRecord::Active { identity, .. } => identity.release_build_id,
+        };
+        if retained != embedded {
+            return Err(FleetActivationOpsError::ReleaseBuildMismatch { retained, embedded });
+        }
+        Ok(())
     }
 
     pub(crate) fn fleet_binding() -> Result<FleetBinding, FleetActivationOpsError> {
@@ -1753,6 +1776,27 @@ mod tests {
             FleetActivationOps::snapshot(),
             FleetActivationData::default()
         );
+    }
+
+    #[test]
+    fn managed_upgrade_requires_the_retained_release_build_identity() {
+        FleetActivationOps::reset_for_tests();
+        let retained = release_build(29);
+        let foreign = release_build(30);
+        initialize_root(input(retained), retained).expect("initialize Prepared root");
+        let snapshot = FleetActivationOps::snapshot();
+
+        assert_eq!(FleetActivationOps::require_release_build(retained), Ok(()));
+        assert_eq!(
+            FleetActivationOps::require_release_build(foreign),
+            Err(FleetActivationOpsError::ReleaseBuildMismatch {
+                retained,
+                embedded: foreign,
+            })
+        );
+        assert_eq!(FleetActivationOps::snapshot(), snapshot);
+
+        FleetActivationOps::reset_for_tests();
     }
 
     #[test]
