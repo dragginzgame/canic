@@ -12,7 +12,8 @@ use crate::{
     component_topology::{
         PlannedFleetSubnetRootTopology, PlannedFleetSubnetRootTopologyInput, PlannedFleetTopology,
         RootComponentAdmissionInput, RootPoolCapacityError, RootPoolCapacityInput,
-        plan_initial_fleet_topology, validate_root_pool_capacity,
+        RootPoolImportCapacityError, RootPoolImportCapacityInput, plan_initial_fleet_topology,
+        validate_root_pool_capacity, validate_root_pool_import_capacity,
     },
     durable_io::{
         RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
@@ -180,6 +181,9 @@ pub enum FleetGenerateError {
 
     #[error(transparent)]
     ComponentPoolCapacity(#[from] RootPoolCapacityError),
+
+    #[error(transparent)]
+    PoolImportCapacity(#[from] RootPoolImportCapacityError),
 
     #[error("system clock is before the Unix epoch")]
     Clock,
@@ -1917,6 +1921,11 @@ fn validate_identity_seed(
             .iter()
             .find(|candidate| candidate.placement_subnet == root.placement_subnet)
             .expect("validated Root placement");
+        validate_root_pool_import_capacity(&RootPoolImportCapacityInput {
+            import_count: root.pool_imports.len(),
+            maximum_size: source_root.canister_pool.maximum_size,
+            root: root.root.clone(),
+        })?;
         insert_seed_identity(&mut identities, "Fleet Subnet Root", &root.root)?;
         insert_seed_identity(&mut identities, "Wasm Store", &root.store)?;
         for pool in &root.pool_imports {

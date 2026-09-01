@@ -225,6 +225,15 @@ pub enum CurrentProtocolError {
     #[error("current Fleet protocol response does not match its reviewed action")]
     ResponseMismatch,
 
+    #[error(
+        "terminal Fleet inventory field {field} differs: expected {expected}, observed {observed}"
+    )]
+    TerminalInventoryField {
+        field: &'static str,
+        expected: String,
+        observed: String,
+    },
+
     #[error(transparent)]
     ComponentPoolCapacity(#[from] RootPoolCapacityError),
 
@@ -1422,6 +1431,7 @@ fn observation<T: CandidType>(
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     Ok(EffectObservation {
         applied,
+        post_cycles: None,
         progress_identity: canic_core::cdk::utils::hash::sha256_hex(&bytes),
         retry: EffectRetry::None,
     })
@@ -1430,6 +1440,7 @@ fn observation<T: CandidType>(
 fn unavailable_observation() -> EffectObservation {
     EffectObservation {
         applied: false,
+        post_cycles: None,
         progress_identity: "unavailable".to_string(),
         retry: EffectRetry::None,
     }

@@ -92,6 +92,14 @@ pub struct RootPoolCapacityInput {
     pub root: String,
 }
 
+/// Exact retained import count checked against one Root's initial pool capacity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootPoolImportCapacityInput {
+    pub import_count: usize,
+    pub maximum_size: u32,
+    pub root: String,
+}
+
 /// Exact fail-closed mismatch between admitted Component demand and pool capacity.
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum RootPoolCapacityError {
@@ -110,6 +118,17 @@ pub enum RootPoolCapacityError {
         component_spec: ComponentSpecId,
         root: String,
     },
+}
+
+/// Exact fail-closed mismatch between retained imports and Root initialisation capacity.
+#[derive(Debug, Eq, PartialEq, ThisError)]
+#[error(
+    "Root {root} has {import_count} retained pool imports, above initialisation maximum {maximum_size}"
+)]
+pub struct RootPoolImportCapacityError {
+    pub import_count: usize,
+    pub maximum_size: u32,
+    pub root: String,
 }
 
 ///
@@ -182,6 +201,22 @@ pub fn validate_root_pool_capacity(
         }
     }
     Ok(())
+}
+
+/// Reject a Root bootstrap whose complete retained import set cannot be initialised.
+pub fn validate_root_pool_import_capacity(
+    input: &RootPoolImportCapacityInput,
+) -> Result<(), RootPoolImportCapacityError> {
+    if let Ok(import_count) = u32::try_from(input.import_count)
+        && import_count <= input.maximum_size
+    {
+        return Ok(());
+    }
+    Err(RootPoolImportCapacityError {
+        import_count: input.import_count,
+        maximum_size: input.maximum_size,
+        root: input.root.clone(),
+    })
 }
 
 /// Finalize canonical pre-creation root plans without inventing Canister principals.

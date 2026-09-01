@@ -78,9 +78,12 @@ struct MockPlatform {
     protocol_ready: BTreeSet<String>,
     protocol_retry: EffectRetry,
     typed_protocol: bool,
+    typed_protocol_burns: Vec<u128>,
     skip_transfer_credit: bool,
     stall_before_mutation: BTreeMap<String, u32>,
     terminal_inventory: TerminalFleetInventory,
+    terminal_inventory_expected_operation_id: Option<String>,
+    terminal_inventory_operation_ids: Vec<String>,
     version_observation_failures: u8,
 }
 
@@ -110,9 +113,12 @@ impl MockPlatform {
             protocol_ready: BTreeSet::new(),
             protocol_retry: EffectRetry::None,
             typed_protocol: false,
+            typed_protocol_burns: Vec::new(),
             skip_transfer_credit: false,
             stall_before_mutation: BTreeMap::new(),
             terminal_inventory: TerminalFleetInventory::default(),
+            terminal_inventory_expected_operation_id: None,
+            terminal_inventory_operation_ids: Vec::new(),
             version_observation_failures: 0,
         }
     }
@@ -170,6 +176,36 @@ impl MockPlatform {
         resolved.sort();
         resolved.dedup();
         resolved
+    }
+
+    fn create_observation(
+        &self,
+        action: &EnsureAction,
+        record: &EffectRecord,
+    ) -> Option<EffectObservation> {
+        let EnsureAction::Create {
+            requested_initial_cycles,
+            ..
+        } = action
+        else {
+            return None;
+        };
+        let post_cycles = record
+            .created_principal
+            .as_deref()
+            .and_then(|principal| self.live.get(principal))
+            .map(|live| live.cycles);
+        let applied = post_cycles == Some(*requested_initial_cycles);
+        Some(EffectObservation {
+            applied,
+            post_cycles,
+            progress_identity: format!("created:{:?}", record.created_principal),
+            retry: if post_cycles.is_some() && !applied {
+                EffectRetry::ReplanRequiredAfterCreateBalanceDrift
+            } else {
+                EffectRetry::None
+            },
+        })
     }
 
     #[expect(
@@ -387,6 +423,27 @@ impl EnsurePlatform for MockPlatform {
                 .into_iter()
                 .collect());
         }
+        if !self.typed_protocol_burns.is_empty() {
+            return Ok(self
+                .typed_protocol_burns
+                .iter()
+                .enumerate()
+                .filter_map(|(index, burn)| {
+                    let mut action = typed_protocol_action(operation_id);
+                    let EnsureAction::FleetProtocol {
+                        maximum_execution_burn_cycles,
+                        name,
+                        ..
+                    } = &mut action
+                    else {
+                        unreachable!("typed fixture action is FleetProtocol");
+                    };
+                    *maximum_execution_burn_cycles = *burn;
+                    *name = format!("fleet-component-provisioning-{index}");
+                    (!self.protocol_ready.contains(name.as_str())).then_some(action)
+                })
+                .collect());
+        }
         if !self.typed_protocol || self.protocol_ready.contains("fleet-component-provisioning") {
             return Ok(Vec::new());
         }
@@ -395,9 +452,18 @@ impl EnsurePlatform for MockPlatform {
 
     fn terminal_inventory(
         &mut self,
-        _operation_id: &str,
+        operation_id: &str,
         _state: &FleetEnsureStateRecord,
     ) -> Result<TerminalFleetInventory, Self::Error> {
+        self.terminal_inventory_operation_ids
+            .push(operation_id.to_string());
+        if self
+            .terminal_inventory_expected_operation_id
+            .as_deref()
+            .is_some_and(|expected| expected != operation_id)
+        {
+            return Err(MockError);
+        }
         Ok(self.terminal_inventory.clone())
     }
 
@@ -408,16 +474,15 @@ impl EnsurePlatform for MockPlatform {
         record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectObservation, Self::Error> {
-        if matches!(action, EnsureAction::Create { .. }) {
-            return Ok(EffectObservation {
-                applied: record.created_principal.is_some(),
-                progress_identity: format!("created:{:?}", record.created_principal),
-                retry: EffectRetry::None,
-            });
+        if let Some(observation) = self.create_observation(action, record) {
+            return Ok(observation);
         }
         if matches!(action, EnsureAction::Fund { .. }) {
             return Ok(EffectObservation {
                 applied: record.receipt.is_some(),
+                post_cycles: Self::principal(state, action)
+                    .and_then(|principal| self.live.get(principal))
+                    .map(|live| live.cycles),
                 progress_identity: format!("fund:{:?}", record.receipt),
                 retry: EffectRetry::None,
             });
@@ -486,6 +551,7 @@ impl EnsurePlatform for MockPlatform {
         };
         Ok(EffectObservation {
             applied,
+            post_cycles: None,
             progress_identity: format!("mock:{action:?}:{applied}"),
             retry: if !applied
                 && self.protocol_retry == EffectRetry::ReplayExactIssuedCommand
@@ -658,6 +724,7 @@ fn assert_create_response_journey(response_is_duplicate: bool) {
     assert_eq!(effect.created_principal.as_deref(), Some("created-created"));
     assert_eq!(effect.receipt.as_deref(), Some("create-block"));
     assert_eq!(effect.post_cycles, Some(requested_initial_cycles));
+    assert_retained_create_balance(&paths, requested_initial_cycles);
 
     let mutations = fixture.platform.mutations.clone();
     let replay_plan = workflow::plan(
@@ -737,8 +804,73 @@ fn retained_0_109_32_create_balance_recovers_only_from_the_exact_duplicate_respo
         .expect("recovered Create effect");
     assert_eq!(effect.state, EffectState::Applied);
     assert_eq!(effect.post_cycles, Some(requested_initial_cycles));
+    assert_retained_create_balance(&paths, requested_initial_cycles);
 
     fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+#[test]
+fn terminal_create_publication_rejects_a_conflicting_retained_balance() {
+    let (mut fixture, desired_sha256, plan, create_hash, requested_initial_cycles) =
+        completed_create_journey();
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    let mut journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read completed Create journal")
+        .expect("completed Create journal");
+    journal.completion = FleetEnsureCompletion::InProgress;
+    crate::fleet_ensure::ops::write_journal(&paths, &journal)
+        .expect("reopen exact Create operation");
+    let mut state = crate::fleet_ensure::ops::read_state(&paths, "test-fleet")
+        .expect("read completed Create state");
+    state
+        .retained_cycles_by_principal
+        .insert("created-created".to_string(), requested_initial_cycles - 1);
+    crate::fleet_ensure::ops::write_state(&paths, &state)
+        .expect("retain conflicting Create balance");
+    let mutations = fixture.platform.mutations.clone();
+
+    let error = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect_err("conflicting retained Create balance must fail closed");
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::JournalIntegrity
+    ));
+    assert_eq!(fixture.platform.mutations, mutations);
+    let retained_state = crate::fleet_ensure::ops::read_state(&paths, "test-fleet")
+        .expect("read rejected Create state");
+    assert_eq!(retained_state, state);
+    let retained_journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read rejected Create journal")
+        .expect("rejected Create journal");
+    assert_eq!(retained_journal, journal);
+    assert!(
+        retained_journal
+            .effects
+            .iter()
+            .any(|effect| effect.action_sha256 == create_hash)
+    );
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+fn assert_retained_create_balance(paths: &crate::fleet_ensure::ops::EnsurePaths, expected: u128) {
+    let state = crate::fleet_ensure::ops::read_state(paths, "test-fleet")
+        .expect("read terminal Create state");
+    assert_eq!(
+        state.retained_cycles_by_principal.get("created-created"),
+        Some(&expected)
+    );
 }
 
 #[test]
@@ -1401,6 +1533,109 @@ fn infrastructure_install_order_keeps_store_before_root_initialization() {
 }
 
 #[test]
+fn active_registry_is_retired_only_after_every_infrastructure_reinstall_is_applied() {
+    let mut fixture = fixture();
+    let mut plan = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"70".repeat(32),
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("compile fixture plan")
+    .plan;
+    fixture.desired.protocol = Some(DesiredFleetProtocol {
+        app_config: "canic.toml".to_string(),
+        component_group_placements: Vec::new(),
+        coordinator_candid: "coordinator.did".to_string(),
+        root_candid: "root.did".to_string(),
+        store_candid: "store.did".to_string(),
+    });
+    let roles = [
+        (
+            "treasury",
+            DesiredCanisterKind::Coordinator,
+            DesiredCanisterInit::Coordinator,
+        ),
+        (
+            "app",
+            DesiredCanisterKind::Root,
+            DesiredCanisterInit::Root {
+                root: "app".to_string(),
+            },
+        ),
+        (
+            "created",
+            DesiredCanisterKind::Store,
+            DesiredCanisterInit::Store {
+                root: "app".to_string(),
+            },
+        ),
+    ];
+    let mut planned = Vec::new();
+    let mut effects = Vec::new();
+    for (name, kind, init) in roles {
+        fixture
+            .desired
+            .canisters
+            .iter_mut()
+            .find(|canister| canister.name == name)
+            .expect("fixture infrastructure role")
+            .kind = kind;
+        let action = install_action(
+            name,
+            init,
+            crate::fleet_ensure::model::InstallMode::Reinstall,
+        );
+        effects.push(EffectRecord {
+            action_sha256: crate::fleet_ensure::ops::action_sha256(&action),
+            created_principal: None,
+            destination_post_cycles: None,
+            destination_pre_cycles: None,
+            post_cycles: None,
+            pre_cycles: Some(1),
+            pre_canister_version: Some(1),
+            progress_identity: Some(format!("applied-{name}")),
+            receipt: None,
+            state: EffectState::Applied,
+        });
+        planned.push(crate::fleet_ensure::model::CanisterPlan {
+            actions: vec![action],
+            disposition: CanisterDisposition::Reinstall,
+            name: name.to_string(),
+            observed_cycles: 1,
+            principal: Some(Principal::from_slice(&[99; 29]).to_text()),
+        });
+    }
+    plan.canisters = planned;
+    plan.protocol_actions.clear();
+    let mut journal = FleetEnsureJournalRecord {
+        completion: FleetEnsureCompletion::InProgress,
+        effects,
+        fleet: plan.fleet.clone(),
+        initial_controlled_cycles: 3,
+        initial_operator_cycles: 0,
+        operation_id: plan.operation_id.clone(),
+        plan_sha256: plan.plan_sha256.clone(),
+        schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+        stalled_observations: 0,
+    };
+
+    assert!(workflow::completed_infrastructure_reinstall(
+        &fixture.desired,
+        &plan,
+        &journal
+    ));
+    journal.effects[2].state = EffectState::Issued;
+    assert!(!workflow::completed_infrastructure_reinstall(
+        &fixture.desired,
+        &plan,
+        &journal
+    ));
+}
+
+#[test]
 fn same_module_reinstall_requires_a_newer_canister_version() {
     use crate::fleet_ensure::{model::InstallMode, ops::install_effect_applied};
 
@@ -1428,18 +1663,138 @@ fn same_module_reinstall_requires_a_newer_canister_version() {
 }
 
 #[test]
-fn ledger_withdraw_receipt_is_not_native_funding_completion() {
-    use crate::fleet_ensure::ops::native_funding_applied;
+fn ledger_withdraw_completion_uses_the_reviewed_burn_aware_lower_bound() {
+    use crate::fleet_ensure::ops::{NativeFundingObservation, native_funding_applied};
 
-    assert!(!native_funding_applied(5_000_000_000_000, None));
-    assert!(!native_funding_applied(
-        5_000_000_000_000,
-        Some(4_999_999_999_999),
-    ));
-    assert!(native_funding_applied(
-        5_000_000_000_000,
-        Some(5_000_000_000_000),
-    ));
+    let observation = NativeFundingObservation {
+        amount: 1_000_000_310_113,
+        expected_post_cycles: 2_900_000_000_000,
+        funding_deficit_cycles: 310_113,
+        funding_margin_cycles: 1_000_000_000_000,
+        live_cycles: Some(2_898_749_313_788),
+        pre_cycles: Some(1_899_999_689_887),
+    };
+    assert!(native_funding_applied(observation));
+    assert!(!native_funding_applied(NativeFundingObservation {
+        live_cycles: Some(1_899_999_689_887),
+        ..observation
+    }));
+    assert!(!native_funding_applied(NativeFundingObservation {
+        live_cycles: None,
+        ..observation
+    }));
+    assert!(!native_funding_applied(NativeFundingObservation {
+        expected_post_cycles: 2_900_000_000_001,
+        ..observation
+    }));
+}
+
+#[test]
+fn issued_funding_reconciles_burn_and_replays_without_a_second_withdrawal() {
+    let mut fixture = fixture();
+    let desired_sha256 = "116".repeat(21) + "1";
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan funding reconciliation journey");
+    let funding = workflow::ordered_actions(&planned.plan)
+        .into_iter()
+        .find(|action| matches!(action, EnsureAction::Fund { name, .. } if name == "app"))
+        .expect("reviewed App funding action");
+    let funding_hash = crate::fleet_ensure::ops::action_sha256(funding);
+    let EnsureAction::Fund {
+        expected_post_cycles,
+        funding_margin_cycles,
+        principal,
+        ..
+    } = funding
+    else {
+        unreachable!("selected action is Fund");
+    };
+    assert!(*funding_margin_cycles > 1);
+    fixture.platform.fail_once.insert(funding_hash.clone());
+
+    let first = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect_err("lose the first Ledger response after its exact effect");
+    assert!(matches!(first, workflow::EnsureWorkflowError::Platform(_)));
+    let live = fixture
+        .platform
+        .live
+        .get_mut(principal)
+        .expect("funded App remains controlled");
+    live.cycles = expected_post_cycles - 1;
+
+    let resumed = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("adopt exact duplicate receipt and burn-aware live balance");
+    assert!(resumed.terminal);
+    assert_eq!(fixture.platform.mutations.get(&funding_hash), Some(&1));
+
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read funding journal")
+        .expect("retained funding journal");
+    let effect = journal
+        .effects
+        .iter()
+        .find(|effect| effect.action_sha256 == funding_hash)
+        .expect("retained funding effect");
+    assert_eq!(effect.state, EffectState::Applied);
+    assert_eq!(effect.receipt.as_deref(), Some("withdraw-block"));
+    assert_eq!(effect.post_cycles, Some(expected_post_cycles - 1));
+    let state =
+        crate::fleet_ensure::ops::read_state(&paths, "test-fleet").expect("read funding state");
+    assert_eq!(
+        state.retained_cycles_by_principal.get(principal),
+        Some(&(expected_post_cycles - 1))
+    );
+
+    let mutations = fixture.platform.mutations.clone();
+    let replay_plan = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut fixture.platform,
+    )
+    .expect("plan effect-free funding replay");
+    assert!(workflow::ordered_actions(&replay_plan.plan).is_empty());
+    let replay = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &replay_plan.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("terminal funding replay");
+    assert!(replay.terminal);
+    assert_eq!(fixture.platform.mutations, mutations);
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
 }
 
 #[test]
@@ -1983,18 +2338,17 @@ fn terminal_protocol_inventory_survives_an_effect_free_successor_plan() {
         .controlled_cycles_by_principal
         .insert(component.clone(), 25);
 
-    let second = workflow::plan(
+    platform.terminal_inventory_expected_operation_id = Some(first.plan.operation_id.clone());
+    let second = apply_effect_free_successor(
         &fixture.root,
         &fixture.desired,
-        &source,
-        "test-fleet",
-        1_800_000_000_000_000_100,
         &mut platform,
-    )
-    .expect("compile effect-free successor");
-    assert!(second.plan.protocol_actions.is_empty());
+        &source,
+        1_800_000_000_000_000_100,
+        &first.plan.operation_id,
+    );
     assert_eq!(
-        second.plan.conservation.observed_controlled_cycles,
+        second.conservation.observed_controlled_cycles,
         platform
             .live
             .values()
@@ -2002,15 +2356,14 @@ fn terminal_protocol_inventory_survives_an_effect_free_successor_plan() {
             .sum::<u128>()
             + 25
     );
-    workflow::apply(
+    apply_effect_free_successor(
         &fixture.root,
         &fixture.desired,
-        &source,
-        "test-fleet",
-        &second.plan.plan_sha256,
         &mut platform,
-    )
-    .expect("apply effect-free successor");
+        &source,
+        1_800_000_000_000_000_200,
+        &first.plan.operation_id,
+    );
 
     let current = crate::fleet_ensure::resolve_current_fleet(
         &fixture.root,
@@ -2029,6 +2382,47 @@ fn terminal_protocol_inventory_survives_an_effect_free_successor_plan() {
             && entry.parent_pid.as_deref() == Some(TREASURY)
             && entry.module_hash.as_deref() == Some(module_hash.as_str())
     }));
+}
+
+fn apply_effect_free_successor(
+    root: &Path,
+    desired: &DesiredFleet,
+    platform: &mut MockPlatform,
+    source: &str,
+    planned_at_time: u64,
+    terminal_operation_id: &str,
+) -> FleetEnsurePlan {
+    let report = workflow::plan(
+        root,
+        desired,
+        source,
+        "test-fleet",
+        planned_at_time,
+        platform,
+    )
+    .expect("compile effect-free successor");
+    assert!(report.plan.protocol_actions.is_empty());
+    assert_eq!(
+        report.plan.terminal_inventory_operation_id.as_deref(),
+        Some(terminal_operation_id)
+    );
+    assert_eq!(
+        platform
+            .terminal_inventory_operation_ids
+            .last()
+            .map(String::as_str),
+        Some(terminal_operation_id)
+    );
+    workflow::apply(
+        root,
+        desired,
+        source,
+        "test-fleet",
+        &report.plan.plan_sha256,
+        platform,
+    )
+    .expect("apply effect-free successor");
+    report.plan
 }
 
 #[test]
@@ -2058,11 +2452,20 @@ fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
         &planned.plan.plan_sha256,
         &mut platform,
     )
-    .expect_err("short creation receipt must not be called converged");
-    assert!(matches!(
-        error,
-        workflow::EnsureWorkflowError::ConvergenceDrift
-    ));
+    .expect_err("short creation balance must stop before later effects");
+    assert!(
+        matches!(
+            error,
+            workflow::EnsureWorkflowError::ReplanRequiredAfterCreateBalanceDrift {
+                actual_cycles: 19,
+                configured_fee_cycles: 50,
+                deficit_cycles: 1,
+                requested_cycles: 20,
+                ..
+            }
+        ),
+        "unexpected short-create error: {error:?}"
+    );
     let creation_hash = planned
         .plan
         .canisters
@@ -2072,6 +2475,7 @@ fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
         .map(crate::fleet_ensure::ops::action_sha256)
         .expect("created action identity");
     assert_eq!(platform.mutations.get(&creation_hash), Some(&1));
+    assert_eq!(platform.mutations.values().sum::<u32>(), 1);
 
     let paths = crate::fleet_ensure::ops::EnsurePaths::under(
         &fixture.root,
@@ -2085,6 +2489,8 @@ fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
         journal.completion,
         crate::fleet_ensure::model::FleetEnsureCompletion::ReplanRequired
     );
+    assert_eq!(journal.effects.len(), 1);
+    assert_eq!(journal.effects[0].state, EffectState::Applied);
     assert!(matches!(
         crate::fleet_ensure::read_current_fleet_inventory(
             &fixture.root,
@@ -2144,7 +2550,7 @@ fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
             && canister
                 .actions
                 .iter()
-                .any(|action| matches!(action, EnsureAction::Fund { amount: 1, .. }))
+                .any(|action| matches!(action, EnsureAction::Fund { .. }))
     }));
     let terminal = workflow::apply(
         &fixture.root,
@@ -2823,6 +3229,7 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
         reviewed_desired: None,
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         scope: crate::fleet_ensure::model::FleetEnsurePlanScope::Full,
+        terminal_inventory_operation_id: None,
     };
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
 
@@ -2913,6 +3320,7 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         reviewed_desired: None,
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         scope: crate::fleet_ensure::model::FleetEnsurePlanScope::Full,
+        terminal_inventory_operation_id: None,
     };
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
 
@@ -3334,16 +3742,32 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
             record: &EffectRecord,
             state: &FleetEnsureStateRecord,
         ) -> Result<EffectObservation, Self::Error> {
-            if matches!(action, EnsureAction::Create { .. }) {
+            if let EnsureAction::Create {
+                requested_initial_cycles,
+                ..
+            } = action
+            {
+                let post_cycles = record
+                    .created_principal
+                    .as_deref()
+                    .and_then(|principal| self.live(principal))
+                    .map(|live| live.cycles);
+                let applied = post_cycles == Some(*requested_initial_cycles);
                 return Ok(EffectObservation {
-                    applied: record.created_principal.is_some(),
+                    applied,
+                    post_cycles,
                     progress_identity: format!("created:{:?}", record.created_principal),
-                    retry: EffectRetry::None,
+                    retry: if post_cycles.is_some() && !applied {
+                        EffectRetry::ReplanRequiredAfterCreateBalanceDrift
+                    } else {
+                        EffectRetry::None
+                    },
                 });
             }
             if matches!(action, EnsureAction::Fund { .. }) {
                 return Ok(EffectObservation {
                     applied: record.receipt.is_some(),
+                    post_cycles: None,
                     progress_identity: format!("fund:{:?}", record.receipt),
                     retry: EffectRetry::None,
                 });
@@ -3394,6 +3818,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
             };
             Ok(EffectObservation {
                 applied,
+                post_cycles: None,
                 progress_identity: format!("pocketic:{action:?}:{applied}"),
                 retry: EffectRetry::None,
             })
@@ -3839,6 +4264,182 @@ fn fresh_logical_controller_and_treasury_roles_create_and_replay_without_effect(
     );
 
     fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+#[test]
+fn protocol_planning_selects_the_largest_ordered_prefix_with_cycle_headroom() {
+    let mut fixture = protocol_tranche_fixture(vec![499, 2]);
+
+    let report = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"12".repeat(32),
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("compile the largest affordable protocol prefix");
+
+    assert_eq!(report.plan.protocol_actions.len(), 1);
+    assert_eq!(
+        report.plan.protocol_actions[0].name(),
+        "fleet-component-provisioning-0"
+    );
+    assert_eq!(report.plan.conservation.maximum_execution_burn_cycles, 499);
+    assert_eq!(report.plan.conservation.observed_controlled_cycles, 500);
+    assert_eq!(report.plan.conservation.expected_post_operation_cycles, 1);
+    assert!(fixture.platform.mutations.is_empty());
+
+    let first_action_sha256 = crate::fleet_ensure::ops::action_sha256(
+        report
+            .plan
+            .protocol_actions
+            .first()
+            .expect("first protocol tranche"),
+    );
+    let first = apply_fixture_plan(&mut fixture, &"12".repeat(32), &report.plan)
+        .expect_err("the completed prefix requires one reviewed successor plan");
+    assert!(matches!(
+        first,
+        workflow::EnsureWorkflowError::ConvergenceDrift
+    ));
+    assert_eq!(
+        fixture.platform.mutations.get(&first_action_sha256),
+        Some(&1)
+    );
+
+    let successor = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"12".repeat(32),
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut fixture.platform,
+    )
+    .expect("compile the remaining affordable protocol tranche");
+    assert_eq!(successor.plan.protocol_actions.len(), 1);
+    assert_eq!(
+        successor.plan.protocol_actions[0].name(),
+        "fleet-component-provisioning-1"
+    );
+    assert_eq!(successor.plan.conservation.maximum_execution_burn_cycles, 2);
+    let successor_action_sha256 = crate::fleet_ensure::ops::action_sha256(
+        successor
+            .plan
+            .protocol_actions
+            .first()
+            .expect("successor protocol tranche"),
+    );
+    let terminal = apply_fixture_plan(&mut fixture, &"12".repeat(32), &successor.plan)
+        .expect("apply the terminal protocol tranche");
+    assert!(terminal.terminal);
+    assert_eq!(
+        fixture.platform.mutations.get(&successor_action_sha256),
+        Some(&1)
+    );
+
+    let mutations = fixture.platform.mutations.clone();
+    let replay_plan = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"12".repeat(32),
+        "test-fleet",
+        1_800_000_000_000_000_200,
+        &mut fixture.platform,
+    )
+    .expect("compile effect-free protocol replay");
+    assert!(workflow::ordered_actions(&replay_plan.plan).is_empty());
+    let replay = apply_fixture_plan(&mut fixture, &"12".repeat(32), &replay_plan.plan)
+        .expect("apply effect-free protocol replay");
+    assert!(replay.terminal);
+    assert_eq!(fixture.platform.mutations, mutations);
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+fn apply_fixture_plan(
+    fixture: &mut Fixture,
+    desired_sha256: &str,
+    plan: &FleetEnsurePlan,
+) -> Result<crate::fleet_ensure::model::FleetEnsureReport, workflow::EnsureWorkflowError<MockError>>
+{
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        desired_sha256,
+        "test-fleet",
+        &plan.plan_sha256,
+        &mut fixture.platform,
+    )
+}
+
+#[test]
+fn first_unaffordable_protocol_action_rejects_with_exact_cycle_guidance() {
+    let mut fixture = protocol_tranche_fixture(vec![501, 1]);
+
+    let error = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"13".repeat(32),
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect_err("the first indivisible protocol action cannot fit");
+
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::Policy(
+            crate::fleet_ensure::policy::EnsurePolicyError::InsufficientCycleConservation {
+                action_count: 1,
+                available: 500,
+                required: 501,
+                shortfall: 1,
+            }
+        )
+    ));
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    assert!(
+        crate::fleet_ensure::ops::read_plan(&paths)
+            .expect("read absent rejected plan")
+            .is_none()
+    );
+    assert!(fixture.platform.mutations.is_empty());
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+fn protocol_tranche_fixture(burns: Vec<u128>) -> Fixture {
+    let mut fixture = fixture();
+    fixture
+        .desired
+        .canisters
+        .retain(|canister| canister.name == "treasury");
+    fixture.desired.canisters[0].wasm = None;
+    fixture.desired.protocol = Some(DesiredFleetProtocol {
+        app_config: "canic.toml".to_string(),
+        component_group_placements: Vec::new(),
+        coordinator_candid: "coordinator.did".to_string(),
+        root_candid: "root.did".to_string(),
+        store_candid: "store.did".to_string(),
+    });
+    let current_hash = sha256_hex(b"current-wasm");
+    fixture.platform = MockPlatform::new(
+        fixture.desired.clone(),
+        vec![live(
+            TREASURY,
+            500,
+            Some(&current_hash),
+            true,
+            &[CONTROLLER],
+        )],
+    );
+    fixture.platform.typed_protocol_burns = burns;
+    fixture
 }
 
 fn fixture() -> Fixture {

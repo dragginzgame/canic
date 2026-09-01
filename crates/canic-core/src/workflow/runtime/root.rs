@@ -101,7 +101,13 @@ pub fn init_root_canister(
 /// post_upgrade_root_canister
 ///
 
-pub fn post_upgrade_root_canister_after_memory_init() -> Result<bool, InternalError> {
+pub fn post_upgrade_root_canister_after_memory_init(
+    embedded_release_build_id: Option<&str>,
+) -> Result<bool, InternalError> {
+    let embedded_release_build_id =
+        ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;
+    FleetActivationOps::require_release_build(embedded_release_build_id)
+        .map_err(crate::ops::storage::StorageOpsError::from)?;
     rebuild_root_derived_storage_indexes()?;
     FleetActivationRuntimeOps::set_managed();
     require_no_resumable_refill_for_upgrade()?;

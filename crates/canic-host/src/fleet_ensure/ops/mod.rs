@@ -43,7 +43,9 @@ use thiserror::Error as ThisError;
 
 pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
 #[cfg(test)]
-pub(crate) use platform::{install_effect_applied, native_funding_applied};
+pub(crate) use platform::{
+    NativeFundingObservation, install_effect_applied, native_funding_applied,
+};
 
 pub(crate) const fn root_owned_lifecycle(
     kind: DesiredCanisterKind,
@@ -78,6 +80,11 @@ pub struct EffectOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EffectObservation {
     pub applied: bool,
+    /// Exact live source balance observed while reconciling this effect.
+    ///
+    /// This is populated only when the terminal predicate itself owns a
+    /// stronger observation than the ordinary inventory surface.
+    pub post_cycles: Option<u128>,
     pub progress_identity: String,
     pub retry: EffectRetry,
 }
@@ -86,6 +93,10 @@ pub struct EffectObservation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EffectRetry {
     None,
+    /// The exact created Principal and Ledger receipt are retained, but the
+    /// first live balance differs from the reviewed native target. Close the
+    /// immutable operation before any controller or protocol action.
+    ReplanRequiredAfterCreateBalanceDrift,
     /// The retained intent was synchronously rejected before mutation and its
     /// exact live prerequisite is now management-proved. Close the immutable
     /// operation and require a newly reviewed plan.

@@ -18,24 +18,28 @@ use std::time::Duration;
 
 pub fn post_upgrade_nonroot_canister_before_bootstrap(
     role: CanisterRole,
+    embedded_release_build_id: Option<&str>,
     authority: RoleRuntimeAuthority,
 ) -> bool {
-    post_upgrade_nonroot_before_bootstrap(
-        role,
-        authority,
-        workflow::runtime::post_upgrade_nonroot_canister_after_memory_init,
-    )
+    post_upgrade_nonroot_before_bootstrap(role, authority, move |role| {
+        workflow::runtime::post_upgrade_nonroot_canister_after_memory_init(
+            role,
+            embedded_release_build_id,
+        )
+    })
 }
 
 pub fn post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
     role: CanisterRole,
+    embedded_release_build_id: Option<&str>,
     authority: RoleRuntimeAuthority,
 ) -> bool {
-    post_upgrade_nonroot_before_bootstrap(
-        role,
-        authority,
-        workflow::runtime::post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init,
-    )
+    post_upgrade_nonroot_before_bootstrap(role, authority, move |role| {
+        workflow::runtime::post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init(
+            role,
+            embedded_release_build_id,
+        )
+    })
 }
 
 pub fn post_upgrade_local_nonroot_canister_before_bootstrap(
@@ -63,7 +67,7 @@ pub fn post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap
 fn post_upgrade_nonroot_before_bootstrap(
     role: CanisterRole,
     authority: RoleRuntimeAuthority,
-    restore: fn(CanisterRole) -> Result<bool, crate::InternalError>,
+    restore: impl FnOnce(CanisterRole) -> Result<bool, crate::InternalError>,
 ) -> bool {
     crate::api::timer::TimerApi::initialize_nonroot_runtime_required();
     LifecycleMetricsApi::record_runtime(

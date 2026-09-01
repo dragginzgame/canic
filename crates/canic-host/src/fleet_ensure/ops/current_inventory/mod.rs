@@ -6,9 +6,7 @@
 
 use super::TerminalFleetInventory;
 use super::current_protocol::{
-    CompiledCurrentComponentProvisioning, CurrentProtocolError,
-    compile_current_component_provisioning, query_current_root_authorities, query_registry,
-    resolve_placements,
+    CurrentProtocolError, query_current_root_authorities, query_registry,
 };
 use crate::{
     canister_protocol::query_with_candid,
@@ -36,7 +34,7 @@ use canic_core::{
     dto::{
         canister::CanisterInfo,
         component_provisioning::{
-            FleetSubnetRootProvisioningBatch, RootComponentProvisioningPhase,
+            RootComponentProvisioningPhase, RootComponentProvisioningResult,
             RootComponentProvisioningStatusResponse,
         },
         component_registry::{
@@ -114,6 +112,14 @@ struct ComponentPartitionAuthority<'a> {
     plan_hash: [u8; 32],
 }
 
+struct TerminalRootComponentAuthority<'a> {
+    active_release_set: &'a FleetSubnetRootReleaseSet,
+    fleet_registry: &'a canic_core::dto::fleet_registry::FleetRegistryVersion,
+    operation_id: [u8; 32],
+    registry: &'a FleetRegistry,
+    root: &'a FleetSubnetRootEntry,
+}
+
 /// Query one complete bounded current Fleet tree after protocol convergence.
 pub(super) fn terminal_inventory(
     icp: &IcpCli,
@@ -143,6 +149,9 @@ pub(super) fn terminal_inventory(
         .map_err(|error| inventory_error(error.to_string()))?;
     FleetRegistryOps::validate(&registry.authority, config.component_topology(), &registry)
         .map_err(|error| inventory_error(error.to_string()))?;
+    let registry_version =
+        FleetRegistryOps::version(&registry.authority, config.component_topology(), &registry)
+            .map_err(|error| inventory_error(error.to_string()))?;
     let authorities =
         query_current_root_authorities(icp, desired, state, &root_candid, &store_candid)?;
     validate_root_authority(&registry, &authorities)?;
@@ -158,10 +167,9 @@ pub(super) fn terminal_inventory(
     )?;
     let (entries, controlled_cycles_by_principal) = query_entries(
         icp,
-        desired,
-        state,
         operation_id,
         &registry,
+        &registry_version,
         &config,
         &authorities,
         &protocols,
@@ -289,16 +297,14 @@ fn infrastructure_protocol(
 }
 
 #[expect(
-    clippy::too_many_arguments,
     clippy::too_many_lines,
-    reason = "one terminal walk keeps the exact desired, Registry, release, and bounded output owners explicit"
+    reason = "one terminal walk keeps the exact Registry, release, and bounded output owners explicit"
 )]
 fn query_entries(
     icp: &IcpCli,
-    desired: &DesiredFleet,
-    state: &FleetEnsureStateRecord,
     operation_id: &str,
     registry: &FleetRegistry,
+    registry_version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
     config: &AppConfigSnapshot,
     authorities: &[canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority],
     protocols: &ProtocolCatalog,
@@ -307,17 +313,6 @@ fn query_entries(
         .ok()
         .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
         .ok_or(CurrentProtocolError::InvalidOperationIdentity)?;
-    let configuration = config
-        .model()
-        .compile_component_deployment_configuration()
-        .map_err(|error| inventory_error(error.to_string()))?;
-    let placements = resolve_placements(desired, state, registry)?;
-    let compiled = compile_current_component_provisioning(
-        &configuration,
-        registry,
-        operation_id,
-        &placements,
-    )?;
     let coordinator = registry.authority.binding.coordinator;
     let coordinator_text = coordinator.to_text();
     let mut entries = vec![RegistryEntry {
@@ -366,13 +361,6 @@ fn query_entries(
             module_hash: Some(store_protocol.module_hash.clone()),
             protocol_binding: Some(store_protocol.binding.clone()),
         });
-        let batch = compiled
-            .request
-            .plan
-            .batches
-            .iter()
-            .find(|batch| batch.root.fleet_subnet_root == root.fleet_subnet_root)
-            .ok_or_else(|| inventory_error("terminal Root has no compiled Component batch"))?;
         let status = query_root_component_status(
             icp,
             &protocols.root.candid_path,
@@ -381,10 +369,13 @@ fn query_entries(
         )?;
         let component_ids = append_root_components(
             icp,
-            registry,
-            root,
-            batch,
-            &compiled,
+            &TerminalRootComponentAuthority {
+                active_release_set: &root.active_release_set,
+                fleet_registry: registry_version,
+                operation_id,
+                registry,
+                root,
+            },
             &status,
             protocols,
             &mut seen,
@@ -480,10 +471,7 @@ fn query_root_component_status(
 )]
 fn append_root_components(
     icp: &IcpCli,
-    registry: &FleetRegistry,
-    root: &FleetSubnetRootEntry,
-    batch: &FleetSubnetRootProvisioningBatch,
-    compiled: &CompiledCurrentComponentProvisioning,
+    authority: &TerminalRootComponentAuthority<'_>,
     status: &RootComponentProvisioningStatusResponse,
     protocols: &ProtocolCatalog,
     seen: &mut BTreeSet<Principal>,
@@ -491,88 +479,66 @@ fn append_root_components(
     parents: &mut VecDeque<(Principal, PathBuf, u64)>,
     controlled_cycles_by_principal: &mut BTreeMap<String, u128>,
 ) -> Result<BTreeSet<Principal>, CurrentProtocolError> {
-    let expected_count = batch
-        .placements
-        .iter()
-        .try_fold(0_u32, |total, placement| {
-            total
-                .checked_add(u32::try_from(placement.entries.len()).map_err(|_| {
-                    inventory_error("compiled Component count does not fit the Root protocol")
-                })?)
-                .ok_or_else(|| inventory_error("compiled Component count overflowed"))
-        })?;
-    if status.operation_id != compiled.request.operation_id
-        || status.plan_hash != compiled.plan_hash
-        || status.fleet_registry != compiled.request.plan.fleet_registry
-        || status.configuration_digest != compiled.request.plan.configuration_digest
-        || status.fleet_subnet_root != root.fleet_subnet_root
-        || status.phase != RootComponentProvisioningPhase::RuntimesActive
-        || status.component_count != expected_count
-        || status.reserved_component_count != expected_count
-        || status.claimed_component_count != expected_count
-        || status.installed_component_count != expected_count
-        || status.registry_committed_component_count != expected_count
-        || status.published_component_count != expected_count
-        || status.activated_component_count != expected_count
-        || !status.root_runtime_active
-        || status.activation.is_none()
-        || status.publication.is_none()
-    {
-        return Err(inventory_error(format!(
-            "Root {} Component result is not terminal and exact",
-            root.fleet_subnet_root
-        )));
-    }
     let result = status
         .result
         .as_ref()
-        .ok_or_else(|| inventory_error("terminal Root Component result is missing"))?;
-    if result.placements.len() != batch.placements.len() {
-        return Err(inventory_error(
-            "terminal Root placement result differs from the compiled batch",
-        ));
-    }
+        .ok_or_else(|| terminal_field_missing("result"))?;
+    let expected_count = validate_terminal_root_component_status(authority, status, result)?;
     let mut component_ids = BTreeSet::new();
-    let descendant_bound = maximum_descendant_page_from_batch(batch);
+    let descendant_bound = maximum_descendant_page_from_result(result);
+    let mut placements = BTreeSet::new();
+    let mut component_counts_by_spec = BTreeMap::new();
     for placement in &result.placements {
-        let expected_placement = batch
-            .placements
-            .iter()
-            .find(|expected| {
-                expected.group_placement == placement.group_placement
-                    && expected.component_group == placement.component_group
-            })
-            .ok_or_else(|| inventory_error("Root returned an unknown Component placement"))?;
-        if placement.members.len() != expected_placement.entries.len() {
+        if !placements.insert(placement.group_placement.clone()) {
             return Err(inventory_error(
-                "Root returned an incomplete Component placement",
+                "Root returned a duplicate Component placement",
             ));
         }
+        let mut member_paths = BTreeSet::new();
         for member in &placement.members {
-            let expected = expected_placement
-                .entries
-                .iter()
-                .find(|entry| entry.member_path == member.member_path)
-                .ok_or_else(|| inventory_error("Root returned an unknown Component member"))?;
-            let spec = registry
+            if !member_paths.insert(member.member_path.clone()) {
+                return Err(inventory_error(
+                    "Root returned a duplicate Component member path",
+                ));
+            }
+            let spec = authority
+                .registry
                 .component_specs
                 .iter()
-                .find(|spec| spec.component_spec == expected.component_spec)
+                .find(|spec| spec.component_spec == member.component_spec)
                 .ok_or_else(|| inventory_error("Component member names an unknown Spec"))?;
             let binding = &member.binding;
-            let member_matches_plan = member.component_spec == expected.component_spec
-                && member.purpose == expected.purpose;
-            let authority_matches = binding.authority == registry.authority;
-            let component_spec_matches = binding.component_spec == expected.component_spec;
-            let spec_hash_matches = binding.spec_hash == expected.spec_hash;
+            let admission = authority
+                .root
+                .component_admissions
+                .iter()
+                .find(|admission| admission.component_spec == member.component_spec)
+                .ok_or_else(|| inventory_error("Component member names an unadmitted Spec"))?;
+            let admitted = admission.spec_hash == spec.spec_hash;
+            let spec_count = component_counts_by_spec
+                .entry(member.component_spec.clone())
+                .or_insert(0_u32);
+            *spec_count = spec_count
+                .checked_add(1)
+                .ok_or_else(|| inventory_error("Component Spec inventory count overflowed"))?;
+            if *spec_count > admission.maximum_root_instances {
+                return Err(terminal_field_error(
+                    "component_spec_instance_bound",
+                    format!("at most {}", admission.maximum_root_instances),
+                    spec_count.to_string(),
+                ));
+            }
+            let member_matches_binding = binding.component_spec == member.component_spec;
+            let authority_matches = binding.authority == authority.registry.authority;
+            let spec_hash_matches = binding.spec_hash == spec.spec_hash;
             let role_matches = binding.role == spec.component_role;
             let binding_matches_registry =
-                authority_matches && component_spec_matches && spec_hash_matches && role_matches;
-            let binding_matches_root = binding.placement_subnet == root.placement_subnet
-                && binding.fleet_subnet_root == root.fleet_subnet_root;
+                admitted && authority_matches && spec_hash_matches && role_matches;
+            let binding_matches_root = binding.placement_subnet == authority.root.placement_subnet
+                && binding.fleet_subnet_root == authority.root.fleet_subnet_root;
             let identity_is_new =
                 component_ids.insert(binding.canister_id) && seen.insert(binding.canister_id);
-            if !member_matches_plan
+            if !member_matches_binding
                 || !binding_matches_registry
                 || !binding_matches_root
                 || !identity_is_new
@@ -588,15 +554,15 @@ fn append_root_components(
                 ))
             })?;
             let partition_authority = ComponentPartitionAuthority {
-                active_release_set: &batch.active_release_set,
-                group_placement: &expected_placement.group_placement,
-                operation_id: compiled.request.operation_id,
-                plan_hash: compiled.plan_hash,
+                active_release_set: authority.active_release_set,
+                group_placement: &placement.group_placement,
+                operation_id: status.operation_id,
+                plan_hash: status.plan_hash,
             };
             validate_component_partition(
                 icp,
                 &protocols.root.candid_path,
-                root.fleet_subnet_root,
+                authority.root.fleet_subnet_root,
                 &partition_authority,
                 member,
                 protocol,
@@ -604,7 +570,7 @@ fn append_root_components(
             entries.push(RegistryEntry {
                 pid: binding.canister_id.to_text(),
                 role: Some(binding.role.to_string()),
-                parent_pid: Some(root.fleet_subnet_root.to_text()),
+                parent_pid: Some(authority.root.fleet_subnet_root.to_text()),
                 module_hash: Some(protocol.module_hash.clone()),
                 protocol_binding: Some(protocol.binding.clone()),
             });
@@ -632,6 +598,175 @@ fn append_root_components(
         ));
     }
     Ok(component_ids)
+}
+
+fn validate_terminal_root_component_status(
+    authority: &TerminalRootComponentAuthority<'_>,
+    status: &RootComponentProvisioningStatusResponse,
+    result: &RootComponentProvisioningResult,
+) -> Result<u32, CurrentProtocolError> {
+    let (placement_count, component_count) = terminal_component_counts(result)?;
+    terminal_field_exact(
+        "operation_id",
+        &authority.operation_id,
+        &status.operation_id,
+    )?;
+    terminal_nonzero_hash("plan_hash", status.plan_hash)?;
+    terminal_nonzero_hash(
+        "configuration_digest",
+        *status.configuration_digest.as_bytes(),
+    )?;
+    terminal_nonzero_hash("receipt_content_hash", status.receipt_content_hash)?;
+    terminal_field_exact(
+        "fleet_registry",
+        authority.fleet_registry,
+        &status.fleet_registry,
+    )?;
+    terminal_field_exact(
+        "fleet_subnet_root",
+        &authority.root.fleet_subnet_root,
+        &status.fleet_subnet_root,
+    )?;
+    terminal_field_exact(
+        "phase",
+        &RootComponentProvisioningPhase::RuntimesActive,
+        &status.phase,
+    )?;
+    terminal_field_exact("placement_count", &placement_count, &status.placement_count)?;
+    terminal_field_exact("component_count", &component_count, &status.component_count)?;
+    for (field, observed) in [
+        ("reserved_component_count", status.reserved_component_count),
+        ("claimed_component_count", status.claimed_component_count),
+        (
+            "installed_component_count",
+            status.installed_component_count,
+        ),
+        (
+            "registry_committed_component_count",
+            status.registry_committed_component_count,
+        ),
+        (
+            "published_component_count",
+            status.published_component_count,
+        ),
+        (
+            "activated_component_count",
+            status.activated_component_count,
+        ),
+    ] {
+        terminal_field_exact(field, &component_count, &observed)?;
+    }
+    terminal_field_exact("root_runtime_active", &true, &status.root_runtime_active)?;
+    if placement_count > authority.root.limits.maximum_group_placements {
+        return Err(terminal_field_error(
+            "placement_count_bound",
+            format!("at most {}", authority.root.limits.maximum_group_placements),
+            placement_count.to_string(),
+        ));
+    }
+    if component_count > authority.root.limits.maximum_component_instances {
+        return Err(terminal_field_error(
+            "component_count_bound",
+            format!(
+                "at most {}",
+                authority.root.limits.maximum_component_instances
+            ),
+            component_count.to_string(),
+        ));
+    }
+    let publication = status
+        .publication
+        .as_ref()
+        .ok_or_else(|| terminal_field_missing("publication"))?;
+    terminal_field_exact(
+        "publication.fleet_registry",
+        authority.fleet_registry,
+        &publication.fleet_registry,
+    )?;
+    let activation = status
+        .activation
+        .as_ref()
+        .ok_or_else(|| terminal_field_missing("activation"))?;
+    terminal_field_exact(
+        "activation.component_count",
+        &component_count,
+        &activation.component_count,
+    )?;
+    terminal_nonzero_hash(
+        "activation.initial_inventory_hash",
+        activation.initial_inventory_hash,
+    )?;
+    terminal_nonzero_hash(
+        "activation.fleet_activation_operation_id",
+        activation.fleet_activation_operation_id,
+    )?;
+    Ok(component_count)
+}
+
+fn terminal_component_counts(
+    result: &RootComponentProvisioningResult,
+) -> Result<(u32, u32), CurrentProtocolError> {
+    let placement_count = u32::try_from(result.placements.len())
+        .map_err(|_| inventory_error("terminal Root placement count does not fit u32"))?;
+    let component_count = result
+        .placements
+        .iter()
+        .try_fold(0_u32, |total, placement| {
+            total
+                .checked_add(u32::try_from(placement.members.len()).map_err(|_| {
+                    inventory_error("terminal Root Component count does not fit u32")
+                })?)
+                .ok_or_else(|| inventory_error("terminal Root Component count overflowed"))
+        })?;
+    Ok((placement_count, component_count))
+}
+
+fn terminal_field_exact<T>(
+    field: &'static str,
+    expected: &T,
+    observed: &T,
+) -> Result<(), CurrentProtocolError>
+where
+    T: std::fmt::Debug + PartialEq,
+{
+    if expected == observed {
+        return Ok(());
+    }
+    Err(terminal_field_error(
+        field,
+        format!("{expected:?}"),
+        format!("{observed:?}"),
+    ))
+}
+
+fn terminal_nonzero_hash(
+    field: &'static str,
+    observed: [u8; 32],
+) -> Result<(), CurrentProtocolError> {
+    if observed != [0; 32] {
+        return Ok(());
+    }
+    Err(terminal_field_error(
+        field,
+        "nonzero SHA-256".to_string(),
+        "all zeroes".to_string(),
+    ))
+}
+
+fn terminal_field_missing(field: &'static str) -> CurrentProtocolError {
+    terminal_field_error(field, "present".to_string(), "missing".to_string())
+}
+
+const fn terminal_field_error(
+    field: &'static str,
+    expected: String,
+    observed: String,
+) -> CurrentProtocolError {
+    CurrentProtocolError::TerminalInventoryField {
+        field,
+        expected,
+        observed,
+    }
 }
 
 fn validate_component_partition(
@@ -807,12 +942,12 @@ fn append_pool_assets(
     Ok(())
 }
 
-fn maximum_descendant_page_from_batch(batch: &FleetSubnetRootProvisioningBatch) -> u64 {
-    batch
+fn maximum_descendant_page_from_result(result: &RootComponentProvisioningResult) -> u64 {
+    result
         .placements
         .iter()
-        .flat_map(|placement| placement.entries.iter())
-        .map(|entry| u64::from(entry.limits.maximum_descendants))
+        .flat_map(|placement| placement.members.iter())
+        .map(|member| u64::from(member.limits.maximum_descendants))
         .max()
         .unwrap_or(0)
 }
@@ -940,12 +1075,44 @@ fn validate_root_authority(
         .iter()
         .map(|authority| authority.binding.fleet_subnet_root)
         .collect::<BTreeSet<_>>();
-    if registered != retained || retained.len() != authorities.len() {
+    let every_root_is_exact = registry
+        .fleet_subnet_roots
+        .iter()
+        .filter(|root| root.status != FleetSubnetRootStatus::Removed)
+        .all(|root| {
+            authorities
+                .iter()
+                .find(|authority| authority.binding.fleet_subnet_root == root.fleet_subnet_root)
+                .is_some_and(|authority| root_authority_matches_registry(registry, root, authority))
+        });
+    if registered != retained || retained.len() != authorities.len() || !every_root_is_exact {
         return Err(inventory_error(
             "Root authority differs from terminal Registry",
         ));
     }
     Ok(())
+}
+
+fn root_authority_matches_registry(
+    registry: &FleetRegistry,
+    root: &FleetSubnetRootEntry,
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+) -> bool {
+    let binding = &authority.binding;
+    let registry_binding_matches = binding.authority == registry.authority
+        && binding.placement_subnet == root.placement_subnet
+        && binding.fleet_subnet_root == root.fleet_subnet_root;
+    let topology_matches = binding.component_admissions == root.component_admissions
+        && binding.component_topology_digest == root.component_topology_digest
+        && binding.limits == root.limits
+        && binding.funding == root.funding;
+    let release_matches = authority.initial_release_set == root.active_release_set;
+    let store = &authority.wasm_store_authority;
+    let store_matches_root = store.authority == registry.authority
+        && store.placement_subnet == root.placement_subnet
+        && store.fleet_subnet_root == root.fleet_subnet_root
+        && store.release_build_id == root.active_release_set.release_build_id;
+    registry_binding_matches && topology_matches && release_matches && store_matches_root
 }
 
 fn common_release_set(
@@ -1147,7 +1314,23 @@ fn inventory_error(reason: impl Into<String>) -> CurrentProtocolError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::role_contract::ProtocolProfileDigest;
+    use canic_core::{
+        cdk::types::Cycles,
+        dto::{
+            component_provisioning::{
+                RootComponentActivationEvidence, RootComponentPublicationEvidence,
+            },
+            fleet_registry::FleetRegistryVersion,
+        },
+        ids::{
+            AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
+            ComponentTopologyDigest, CyclesFundingBudget, FleetAdmissionPolicy, FleetBinding,
+            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
+            FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, ReleaseBuildId,
+            ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+        },
+        role_contract::ProtocolProfileDigest,
+    };
 
     fn protocol_entry(module_hash: &str) -> ProtocolEntry {
         ProtocolEntry {
@@ -1210,6 +1393,166 @@ mod tests {
             ComponentLifecycleStatus::Prepared,
             4,
         ));
+    }
+
+    #[test]
+    fn terminal_root_inventory_uses_retained_result_instead_of_successor_configuration_digest() {
+        let (authority, mut status) = empty_terminal_root_status(7);
+        validate_terminal_root_component_status(
+            &authority,
+            &status,
+            status.result.as_ref().expect("terminal result"),
+        )
+        .expect("first retained configuration digest");
+
+        status.configuration_digest = ComponentDeploymentConfigurationDigest::from_bytes([99; 32]);
+        validate_terminal_root_component_status(
+            &authority,
+            &status,
+            status.result.as_ref().expect("terminal result"),
+        )
+        .expect("different successor compiler digest is not reconstructed");
+
+        status.plan_hash = [0; 32];
+        assert!(matches!(
+            validate_terminal_root_component_status(
+                &authority,
+                &status,
+                status.result.as_ref().expect("terminal result"),
+            ),
+            Err(CurrentProtocolError::TerminalInventoryField {
+                field: "plan_hash",
+                ..
+            })
+        ));
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the focused fixture spells out the complete independently retained terminal Root wire"
+    )]
+    fn empty_terminal_root_status(
+        configuration_byte: u8,
+    ) -> (
+        TerminalRootComponentAuthority<'static>,
+        RootComponentProvisioningStatusResponse,
+    ) {
+        let fleet = FleetBinding {
+            fleet: FleetKey {
+                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                fleet_id: FleetId::from_generated_bytes([1; 32]),
+            },
+            app: AppId::from("terminal_inventory_test"),
+        };
+        let coordinator = Principal::from_slice(&[2; 29]);
+        let root_principal = Principal::from_slice(&[3; 29]);
+        let registry_authority = FleetRegistryAuthority {
+            binding: FleetCoordinatorBinding {
+                fleet: fleet.clone(),
+                coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[4; 29])),
+                coordinator,
+            },
+            epoch: 1,
+        };
+        let release_set = FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [5; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([6; 32]),
+        };
+        let root = FleetSubnetRootEntry {
+            placement_subnet: SubnetId::from_principal(Principal::from_slice(&[7; 29])),
+            fleet_subnet_root: root_principal,
+            component_admissions: Vec::new(),
+            component_topology_digest: ComponentTopologyDigest::from_bytes([8; 32]),
+            active_release_set: release_set,
+            limits: FleetSubnetRootLimits {
+                maximum_component_instances: 1,
+                maximum_registry_bytes: 1,
+                maximum_wasm_store_bytes: 1,
+                canister_pool: FleetSubnetCanisterPoolConfig {
+                    minimum_size: 0,
+                    maximum_size: 1,
+                    canister_cycles: Cycles::new(1),
+                },
+                cycles_funding: CyclesFundingBudget {
+                    window_secs: 1,
+                    maximum_cycles: Cycles::new(1),
+                },
+                maximum_group_placements: 1,
+            },
+            funding: crate::test_support::fleet_subnet_root_funding_authority(),
+            status: FleetSubnetRootStatus::Active,
+        };
+        let registry = FleetRegistry {
+            authority: registry_authority.clone(),
+            revision: 1,
+            admission: FleetAdmissionPolicy {
+                schema_version: 1,
+                fleet,
+                generation: 1,
+                fleet_principals: Vec::new(),
+                rules: Vec::new(),
+                policy_digest: [9; 32],
+            },
+            component_specs: Vec::new(),
+            fleet_subnet_roots: vec![root.clone()],
+            services: Vec::new(),
+        };
+        let registry_version = FleetRegistryVersion {
+            authority: registry_authority,
+            revision: 1,
+            content_hash: [10; 32],
+        };
+        let operation_id = [11; 32];
+        let authority = TerminalRootComponentAuthority {
+            active_release_set: Box::leak(Box::new(release_set)),
+            fleet_registry: Box::leak(Box::new(registry_version.clone())),
+            operation_id,
+            registry: Box::leak(Box::new(registry)),
+            root: Box::leak(Box::new(root)),
+        };
+        let status = RootComponentProvisioningStatusResponse {
+            operation_id,
+            plan_hash: [12; 32],
+            fleet_registry: registry_version.clone(),
+            configuration_digest: ComponentDeploymentConfigurationDigest::from_bytes(
+                [configuration_byte; 32],
+            ),
+            fleet_subnet_root: root_principal,
+            phase: RootComponentProvisioningPhase::RuntimesActive,
+            placement_count: 0,
+            component_count: 0,
+            reserved_component_count: 0,
+            claimed_component_count: 0,
+            installed_component_count: 0,
+            registry_committed_component_count: 0,
+            published_component_count: 0,
+            activated_component_count: 0,
+            root_runtime_active: true,
+            result: Some(RootComponentProvisioningResult {
+                placements: Vec::new(),
+            }),
+            publication: Some(RootComponentPublicationEvidence {
+                fleet_registry: registry_version,
+                fleet_directory_content_hash: [13; 32],
+                component_directories: Vec::new(),
+                component_group_directories: Vec::new(),
+            }),
+            activation: Some(RootComponentActivationEvidence {
+                fleet_activation_operation_id: [14; 32],
+                initial_inventory_hash: [15; 32],
+                component_count: 0,
+                root_activated_at_ns: 1,
+            }),
+            accepted_at_ns: 1,
+            provisioned_at_ns: Some(2),
+            published_at_ns: Some(3),
+            activation_started_at_ns: Some(4),
+            runtimes_activated_at_ns: Some(5),
+            receipt_content_hash: [16; 32],
+        };
+        (authority, status)
     }
 
     #[test]

@@ -10,6 +10,7 @@ use crate::{
 };
 
 pub fn post_upgrade_root_canister_before_bootstrap(
+    embedded_release_build_id: Option<&str>,
     runtime_authority: RoleRuntimeAuthority,
     config: ConfigModel,
     config_source: &str,
@@ -80,7 +81,9 @@ pub fn post_upgrade_root_canister_before_bootstrap(
         )
     });
     crate::api::timer::TimerApi::restore_snapshot_suspension(sealed);
-    let active = match workflow::runtime::post_upgrade_root_canister_after_memory_init() {
+    let active = match workflow::runtime::post_upgrade_root_canister_after_memory_init(
+        embedded_release_build_id,
+    ) {
         Ok(active) => active,
         Err(err) => {
             LifecycleMetricsApi::record_runtime(

@@ -70,7 +70,8 @@ impl From<StorageOpsError> for InternalError {
                         codes::STATE_INVALID
                     }
                     fleet_activation::FleetActivationOpsError::NotActive => codes::STATE_INACTIVE,
-                    fleet_activation::FleetActivationOpsError::IdentityMismatch => {
+                    fleet_activation::FleetActivationOpsError::IdentityMismatch
+                    | fleet_activation::FleetActivationOpsError::ReleaseBuildMismatch { .. } => {
                         codes::AUTHORITY_CONFLICT
                     }
                     fleet_activation::FleetActivationOpsError::EvidenceMismatch => {

@@ -894,6 +894,7 @@ impl LifecycleApi {
     /// Delegate root post-upgrade runtime restore to the current core implementation.
     #[must_use]
     pub fn post_upgrade_root_canister_before_bootstrap(
+        embedded_release_build_id: Option<&str>,
         runtime_authority: RoleRuntimeAuthority,
         config: ConfigModel,
         config_source: &str,
@@ -903,6 +904,7 @@ impl LifecycleApi {
         crate::runtime::root_funding::register();
         let active =
             canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
+                embedded_release_build_id,
                 runtime_authority,
                 config,
                 config_source,

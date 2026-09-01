@@ -12,6 +12,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.34` completes exact terminal creation-balance publication for
+  `CANIC-102`, rejects impossible Root bootstrap import capacity before effect,
+  keeps successor verification on the exact active terminal operation until a
+  journal-proved hard-cut infrastructure reinstall retires the old Registry,
+  inventories terminal Components from the Root's retained result instead of
+  reconstructing the predecessor provisioning plan with successor semantics,
+  separates a Create receipt's requested funding target from the first exact
+  live balance and crosses any mismatch into an effect-preserving replan before
+  later actions,
+  reconciles an issued pool withdrawal from exact Root-authorized live balance
+  evidence within its reviewed burn margin without repeating the debit,
+  deterministically tranches protocol work to exact available cycle headroom
+  with actionable insufficiency values,
+  and rejects Fleet-managed cross-release upgrades that could mix newer runtime
+  code with original pinned release-set artifacts.
 - `0.109.33` completes the host-only managed-App qualification package boundary,
   retains generated infrastructure Candid sidecars, reopens `CANIC-102` so
   unavailable Create-cycle observation cannot erase exact journal evidence,

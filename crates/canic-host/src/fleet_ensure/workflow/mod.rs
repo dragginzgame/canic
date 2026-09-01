@@ -89,6 +89,17 @@ where
     )]
     ReplanRequiredAfterRejectedPrerequisite { evidence: String },
 
+    #[error(
+        "created canister {canister} retained one exact Ledger creation receipt, but its first live balance is {actual_cycles} cycles instead of requested target {requested_cycles} (deficit {deficit_cycles}; configured management creation fee {configured_fee_cycles}); no controller or protocol action followed, and the immutable operation is now replan-required"
+    )]
+    ReplanRequiredAfterCreateBalanceDrift {
+        actual_cycles: u128,
+        canister: String,
+        configured_fee_cycles: u128,
+        deficit_cycles: u128,
+        requested_cycles: u128,
+    },
+
     #[error(transparent)]
     Policy(#[from] EnsurePolicyError),
 
@@ -204,14 +215,19 @@ where
         .map_err(EnsureWorkflowError::Platform)?;
     retain_observed_cycles(&mut state, &observation);
     write_state(&paths, &state)?;
-    if state.active_registry.is_some() {
-        let prior = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
-        attach_terminal_inventory_cycles(&prior, &state, platform, &mut observation)?;
+    let terminal_inventory_operation_id = current_terminal_inventory_operation(
+        &state,
+        prior_plan.as_ref(),
+        prior_journal.as_ref(),
+        requested_fleet,
+    )?;
+    if let Some(operation_id) = terminal_inventory_operation_id.as_deref() {
+        attach_terminal_inventory_cycles(operation_id, &state, platform, &mut observation)?;
     }
     let protocol_actions = platform
         .protocol_actions(&operation_id, &state)
         .map_err(EnsureWorkflowError::Platform)?;
-    let plan = compile_plan(
+    let mut plan = compile_plan(
         desired,
         &artifacts,
         &protocol_actions,
@@ -220,6 +236,7 @@ where
         &observation,
         created_at_time,
     )?;
+    bind_terminal_inventory_operation(&mut plan, terminal_inventory_operation_id);
     write_plan(&paths, &plan)?;
     Ok(FleetEnsureReport {
         actual_conservation: None,
@@ -227,6 +244,41 @@ where
         plan,
         terminal: false,
     })
+}
+
+fn current_terminal_inventory_operation<E>(
+    state: &FleetEnsureStateRecord,
+    prior_plan: Option<&FleetEnsurePlan>,
+    prior_journal: Option<&FleetEnsureJournalRecord>,
+    requested_fleet: &str,
+) -> Result<Option<String>, EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    if state.active_registry.is_none() {
+        return Ok(None);
+    }
+    let prior_plan = prior_plan.ok_or(EnsureWorkflowError::PlanMissing)?;
+    let prior_journal = prior_journal.ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    verify_journal(prior_journal, prior_plan, requested_fleet)?;
+    if prior_journal.completion != FleetEnsureCompletion::Converged
+        || prior_plan.scope != FleetEnsurePlanScope::Full
+    {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    }
+    let operation_id = prior_plan
+        .terminal_inventory_operation_id
+        .as_ref()
+        .unwrap_or(&prior_plan.operation_id);
+    if operation_id.is_empty() {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    }
+    Ok(Some(operation_id.clone()))
+}
+
+fn bind_terminal_inventory_operation(plan: &mut FleetEnsurePlan, operation_id: Option<String>) {
+    plan.terminal_inventory_operation_id = operation_id;
+    plan.plan_sha256 = expected_plan_sha256(plan);
 }
 
 fn reconcile_retained_planning_state<'a, E>(
@@ -577,20 +629,41 @@ where
                     journal.stalled_observations = 0;
                     write_journal(&paths, &journal)?;
                 }
+                let retained_funding = journal.effects.get(index).is_some_and(|record| {
+                    retain_applied_funding_cycles(&mut state, action, record)
+                });
+                if retained_funding {
+                    write_state(&paths, &state)?;
+                }
                 break;
             }
 
             let observed = platform
                 .observe_effect(&journal.operation_id, action, record, &state)
                 .map_err(EnsureWorkflowError::Platform)?;
-            let source_cycles = platform
-                .action_cycles(action, &state)
-                .map_err(EnsureWorkflowError::Platform)?;
+            let source_cycles = if observed.post_cycles.is_some() {
+                observed.post_cycles
+            } else {
+                platform
+                    .action_cycles(action, &state)
+                    .map_err(EnsureWorkflowError::Platform)?
+            };
             let destination_cycles = platform
                 .action_destination_cycles(action, &state)
                 .map_err(EnsureWorkflowError::Platform)?;
+            let replan_after_create_balance =
+                observed.retry == EffectRetry::ReplanRequiredAfterCreateBalanceDrift;
             let replan_after_rejection =
                 observed.retry == EffectRetry::ReplanRequiredAfterRejectedPrerequisite;
+            let retained_create_balance_is_exact = !replan_after_create_balance
+                || (journal.effects.len() == index + 1
+                    && journal.effects[..index]
+                        .iter()
+                        .all(|effect| effect.state == EffectState::Applied)
+                    && record.state == EffectState::Issued
+                    && create_identity_is_exact(action.name(), record, &state)
+                    && observed.post_cycles.is_some()
+                    && observed.post_cycles == source_cycles);
             let retained_rejection_is_exact = !replan_after_rejection
                 || (journal.effects.len() == index + 1
                     && journal.effects[..index]
@@ -604,11 +677,50 @@ where
                 .get_mut(index)
                 .ok_or(EnsureWorkflowError::JournalIntegrity)?;
             merge_observed_cycles(record, source_cycles, destination_cycles);
+            if replan_after_create_balance {
+                if !retained_create_balance_is_exact {
+                    return Err(EnsureWorkflowError::JournalIntegrity);
+                }
+                let EnsureAction::Create {
+                    name,
+                    requested_initial_cycles,
+                    ..
+                } = action
+                else {
+                    return Err(EnsureWorkflowError::JournalIntegrity);
+                };
+                let actual_cycles = record
+                    .post_cycles
+                    .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+                record.progress_identity = Some(observed.progress_identity);
+                record.state = EffectState::Applied;
+                retain_created_canister_for_replan(operation_desired, name, record, &mut state)?;
+                journal.completion = FleetEnsureCompletion::ReplanRequired;
+                journal.stalled_observations = 0;
+                write_journal(&paths, &journal)?;
+                write_state(&paths, &state)?;
+                let configured_fee_cycles = operation_desired
+                    .management_creation_fee_cycles
+                    .parse::<Cycles>()
+                    .map(|cycles| cycles.to_u128())
+                    .map_err(|_| EnsureWorkflowError::JournalIntegrity)?;
+                return Err(EnsureWorkflowError::ReplanRequiredAfterCreateBalanceDrift {
+                    actual_cycles,
+                    canister: name.clone(),
+                    configured_fee_cycles,
+                    deficit_cycles: requested_initial_cycles.saturating_sub(actual_cycles),
+                    requested_cycles: *requested_initial_cycles,
+                });
+            }
             if observed.applied {
                 record.progress_identity = Some(observed.progress_identity);
                 record.state = EffectState::Applied;
                 journal.stalled_observations = 0;
+                let retained_funding = retain_applied_funding_cycles(&mut state, action, record);
                 write_journal(&paths, &journal)?;
+                if retained_funding {
+                    write_state(&paths, &state)?;
+                }
                 break;
             }
 
@@ -739,7 +851,18 @@ where
     }
 
     let mut terminal_state = state.clone();
-    publish_terminal_state(operation_desired, &retained_plan, &mut terminal_state);
+    publish_terminal_state(
+        operation_desired,
+        &retained_plan,
+        &journal,
+        &mut terminal_state,
+    )
+    .map_err(|TerminalStatePublicationError::JournalIntegrity| {
+        EnsureWorkflowError::JournalIntegrity
+    })?;
+    if completed_infrastructure_reinstall(operation_desired, &retained_plan, &journal) {
+        terminal_state.active_registry = None;
+    }
     project_current_fleet_inventory(&terminal_state)?;
     let terminal_observation = platform
         .observe(&retained_plan.operation_id, &terminal_state)
@@ -773,8 +896,15 @@ where
             return Err(EnsureWorkflowError::ConvergenceDrift);
         }
     }
+    let terminal_inventory_operation_id =
+        if retained_plan.protocol_actions.is_empty() && terminal_state.active_registry.is_some() {
+            reviewed_terminal_inventory_operation(&retained_plan, &terminal_state)?
+                .ok_or(EnsureWorkflowError::PlanIntegrity)?
+        } else {
+            retained_plan.operation_id.as_str()
+        };
     let terminal_inventory = platform
-        .terminal_inventory(&retained_plan.operation_id, &terminal_state)
+        .terminal_inventory(terminal_inventory_operation_id, &terminal_state)
         .map_err(EnsureWorkflowError::Platform)?;
     let terminal_cycles = terminal_inventory.controlled_cycles_by_principal.clone();
     merge_terminal_inventory(&mut terminal_state, terminal_inventory)?;
@@ -811,6 +941,86 @@ const fn merge_observed_cycles(
     if let Some(cycles) = destination_cycles {
         record.destination_post_cycles = Some(cycles);
     }
+}
+
+fn retain_applied_funding_cycles(
+    state: &mut FleetEnsureStateRecord,
+    action: &EnsureAction,
+    record: &EffectRecord,
+) -> bool {
+    let EnsureAction::Fund { principal, .. } = action else {
+        return false;
+    };
+    if record.state != EffectState::Applied || record.receipt.is_none() {
+        return false;
+    }
+    let Some(cycles) = record.post_cycles else {
+        return false;
+    };
+    let principal = principal.strip_prefix("created:").map_or_else(
+        || Some(principal.as_str()),
+        |name| state.pending_principals.get(name).map(String::as_str),
+    );
+    let Some(principal) = principal else {
+        return false;
+    };
+    if state.retained_cycles_by_principal.get(principal) == Some(&cycles) {
+        return false;
+    }
+    state
+        .retained_cycles_by_principal
+        .insert(principal.to_string(), cycles);
+    true
+}
+
+fn retain_created_canister_for_replan<E>(
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    name: &str,
+    record: &EffectRecord,
+    state: &mut FleetEnsureStateRecord,
+) -> Result<(), EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    let configured = desired
+        .canisters
+        .iter()
+        .find(|canister| {
+            canister.name == name
+                && canister.presence == crate::fleet_ensure::model::DesiredPresence::Present
+        })
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    let principal = record
+        .created_principal
+        .as_deref()
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    let cycles = record
+        .post_cycles
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    if state.pending_principals.get(name).map(String::as_str) != Some(principal) {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    }
+    state.pending_principals.remove(name);
+    state
+        .principals
+        .insert(name.to_string(), principal.to_string());
+    state
+        .retained_cycles_by_principal
+        .insert(principal.to_string(), cycles);
+    state.topology.insert(
+        name.to_string(),
+        crate::fleet_ensure::model::FleetEnsureTopologyRecord {
+            kind: configured.kind,
+            module_hash: None,
+            parent: configured.parent.clone(),
+            protocol_binding: configured.protocol_binding.clone(),
+            role: configured
+                .protocol_binding
+                .as_ref()
+                .map(|binding| binding.role.to_string()),
+        },
+    );
+    Ok(())
 }
 
 fn create_record_is_exact(
@@ -959,8 +1169,10 @@ where
     let mut observation = platform
         .observe(&retained_plan.operation_id, state)
         .map_err(EnsureWorkflowError::Platform)?;
-    if state.active_registry.is_some() {
-        attach_terminal_inventory_cycles(retained_plan, state, platform, &mut observation)?;
+    let terminal_inventory_operation_id =
+        reviewed_terminal_inventory_operation(retained_plan, state)?;
+    if let Some(operation_id) = terminal_inventory_operation_id {
+        attach_terminal_inventory_cycles(operation_id, state, platform, &mut observation)?;
     }
     if observation.operator_cycles < retained_plan.conservation.maximum_operator_debit_cycles {
         return Err(EnsureWorkflowError::InsufficientOperatorCycles {
@@ -972,7 +1184,7 @@ where
     let protocol_actions = platform
         .protocol_actions(&retained_plan.operation_id, state)
         .map_err(EnsureWorkflowError::Platform)?;
-    let current = compile_plan(
+    let mut current = compile_plan(
         desired,
         &artifacts,
         &protocol_actions,
@@ -981,12 +1193,33 @@ where
         &observation,
         retained_plan.planned_at_time,
     )?;
+    bind_terminal_inventory_operation(
+        &mut current,
+        retained_plan.terminal_inventory_operation_id.clone(),
+    );
     if current.plan_sha256 != retained_plan.plan_sha256
         && !compatible_after_bounded_observation(retained_plan, &current, desired, &observation)
     {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     Ok((observation, current.conservation.observed_controlled_cycles))
+}
+
+fn reviewed_terminal_inventory_operation<'a, E>(
+    plan: &'a FleetEnsurePlan,
+    state: &FleetEnsureStateRecord,
+) -> Result<Option<&'a str>, EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    match (
+        state.active_registry.is_some(),
+        plan.terminal_inventory_operation_id.as_deref(),
+    ) {
+        (false, None) => Ok(None),
+        (true, Some(operation_id)) if !operation_id.is_empty() => Ok(Some(operation_id)),
+        _ => Err(EnsureWorkflowError::PlanIntegrity),
+    }
 }
 
 fn complete_root_start_prerequisite<P>(
@@ -1186,7 +1419,7 @@ fn compatible_root_start_prerequisite(
 }
 
 fn attach_terminal_inventory_cycles<P>(
-    plan: &FleetEnsurePlan,
+    operation_id: &str,
     state: &FleetEnsureStateRecord,
     platform: &mut P,
     observation: &mut FleetObservation,
@@ -1195,9 +1428,61 @@ where
     P: EnsurePlatform,
 {
     let inventory = platform
-        .terminal_inventory(&plan.operation_id, state)
+        .terminal_inventory(operation_id, state)
         .map_err(EnsureWorkflowError::Platform)?;
     attach_terminal_cycles(observation, inventory.controlled_cycles_by_principal)
+}
+
+pub(super) fn completed_infrastructure_reinstall(
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+) -> bool {
+    if desired.protocol.is_none() {
+        return false;
+    }
+    let infrastructure = desired.canisters.iter().filter(|canister| {
+        canister.presence == crate::fleet_ensure::model::DesiredPresence::Present
+            && matches!(
+                canister.kind,
+                crate::fleet_ensure::model::DesiredCanisterKind::Coordinator
+                    | crate::fleet_ensure::model::DesiredCanisterKind::Root
+                    | crate::fleet_ensure::model::DesiredCanisterKind::Store
+            )
+    });
+    let mut count = 0_usize;
+    for configured in infrastructure {
+        count += 1;
+        let Some(action) = plan
+            .canisters
+            .iter()
+            .find(|canister| {
+                canister.name == configured.name
+                    && canister.disposition == CanisterDisposition::Reinstall
+            })
+            .and_then(|canister| {
+                canister.actions.iter().find(|action| {
+                    matches!(
+                        action,
+                        EnsureAction::Install {
+                            mode: crate::fleet_ensure::model::InstallMode::Reinstall,
+                            name,
+                            ..
+                        } if name == &configured.name
+                    )
+                })
+            })
+        else {
+            return false;
+        };
+        let action_sha256 = action_sha256(action);
+        if !journal.effects.iter().any(|effect| {
+            effect.action_sha256 == action_sha256 && effect.state == EffectState::Applied
+        }) {
+            return false;
+        }
+    }
+    count > 0
 }
 
 fn compatible_after_bounded_observation(
@@ -1537,11 +1822,53 @@ where
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TerminalStatePublicationError {
+    JournalIntegrity,
+}
+
 fn publish_terminal_state(
     desired: &crate::fleet_ensure::model::DesiredFleet,
     plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
     state: &mut FleetEnsureStateRecord,
-) {
+) -> Result<(), TerminalStatePublicationError> {
+    let actions = ordered_actions(plan);
+    if actions.len() != journal.effects.len() {
+        return Err(TerminalStatePublicationError::JournalIntegrity);
+    }
+    for (action, record) in actions.into_iter().zip(&journal.effects) {
+        if action_sha256(action) != record.action_sha256 || record.state != EffectState::Applied {
+            return Err(TerminalStatePublicationError::JournalIntegrity);
+        }
+        let EnsureAction::Create {
+            name,
+            requested_initial_cycles,
+            ..
+        } = action
+        else {
+            continue;
+        };
+        let Some(created_principal) = record.created_principal.as_deref() else {
+            return Err(TerminalStatePublicationError::JournalIntegrity);
+        };
+        let Some(post_cycles) = record.post_cycles else {
+            return Err(TerminalStatePublicationError::JournalIntegrity);
+        };
+        if post_cycles != *requested_initial_cycles
+            || !create_identity_is_exact(name, record, state)
+            || state
+                .retained_cycles_by_principal
+                .get(created_principal)
+                .is_some_and(|retained| *retained != post_cycles)
+        {
+            return Err(TerminalStatePublicationError::JournalIntegrity);
+        }
+        state
+            .retained_cycles_by_principal
+            .insert(created_principal.to_string(), post_cycles);
+    }
+
     let prior_topology = state.topology.clone();
     for canister in &plan.canisters {
         match canister.disposition {
@@ -1587,6 +1914,7 @@ fn publish_terminal_state(
             )
         })
         .collect();
+    Ok(())
 }
 
 fn projected_module_hash(

@@ -629,6 +629,9 @@ pub struct FleetEnsurePlan {
     pub schema_version: u16,
     #[serde(default, skip_serializing_if = "FleetEnsurePlanScope::is_full")]
     pub scope: FleetEnsurePlanScope,
+    /// Exact terminal operation that owns the currently active Registry observation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_inventory_operation_id: Option<String>,
 }
 
 /// Exact authority scope of one current Fleet Ensure plan.

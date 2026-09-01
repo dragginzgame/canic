@@ -4,13 +4,20 @@
 //! Does not own: storage, clocks, transport, live observation, or effects.
 //! Boundary: workflow supplies exact desired/live inputs and persists the returned immutable plan.
 
-use crate::fleet_ensure::model::{
-    CanisterCyclePolicy, CanisterDisposition, CanisterPlan, CanisterRuntimeStatus,
-    CurrentFleetProtocolAction, CycleConservation, DesiredCanisterKind, DesiredFleet,
-    DesiredFleetArtifacts, DesiredPresence, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION,
-    FleetEnsurePlan, FleetEnsurePlanScope, FleetObservation, InstallMode, LiveCanister,
-    MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS, RetainedRootStartAuthorityRecord,
-    RetainedRootStartBinding, RootManagementObservation, RootOwnedCanisterLifecycle,
+use crate::{
+    component_topology::{
+        RootPoolImportCapacityError, RootPoolImportCapacityInput,
+        validate_root_pool_import_capacity,
+    },
+    fleet_ensure::model::{
+        CanisterCyclePolicy, CanisterDisposition, CanisterPlan, CanisterRuntimeStatus,
+        CurrentFleetProtocolAction, CycleConservation, DesiredCanisterKind, DesiredFleet,
+        DesiredFleetArtifacts, DesiredPresence, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION,
+        FleetEnsurePlan, FleetEnsurePlanScope, FleetObservation, InstallMode, LiveCanister,
+        MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
+        RetainedRootStartAuthorityRecord, RetainedRootStartBinding, RootManagementObservation,
+        RootOwnedCanisterLifecycle,
+    },
 };
 use candid::Principal;
 use canic_core::{cdk::types::Cycles, ids::FleetName};
@@ -24,6 +31,16 @@ use thiserror::Error as ThisError;
 pub enum EnsurePolicyError {
     #[error("cycle arithmetic overflow while compiling {field}")]
     ArithmeticOverflow { field: &'static str },
+
+    #[error(
+        "Fleet cycle-conservation headroom is insufficient: available {available} cycles after reviewed funding, required maximum burn {required}, shortfall {shortfall}, actions {action_count}; no plan or effect was authorized"
+    )]
+    InsufficientCycleConservation {
+        action_count: usize,
+        available: u128,
+        required: u128,
+        shortfall: u128,
+    },
 
     #[error("controlled canister {name} has duplicate name or principal authority")]
     DuplicateAuthority { name: String },
@@ -149,6 +166,9 @@ pub enum EnsurePolicyError {
 
     #[error("retained Root {name} is stopping; wait for terminal Stopped state")]
     RootStopping { name: String },
+
+    #[error(transparent)]
+    PoolImportCapacity(#[from] RootPoolImportCapacityError),
 }
 
 #[derive(Clone, Copy)]
@@ -340,7 +360,6 @@ pub fn compile_plan(
             "protocol.maximum_execution_burn_cycles",
             &step.maximum_execution_burn_cycles,
         )?;
-        accumulator.add_burn(maximum_execution_burn_cycles)?;
         protocol_actions.push(EnsureAction::Protocol {
             candid: step.candid.clone(),
             candid_sha256: identities.candid_sha256.clone(),
@@ -362,7 +381,6 @@ pub fn compile_plan(
         let EnsureAction::FleetProtocol {
             action: current_action,
             candid,
-            maximum_execution_burn_cycles,
             name,
             principal,
             ..
@@ -412,10 +430,6 @@ pub fn compile_plan(
         {
             return Err(EnsurePolicyError::InvalidProtocolStep(name.clone()));
         }
-        if let CurrentFleetProtocolAction::RecoverPoolLedger { request } = current_action.as_ref() {
-            accumulator.add_pool_ledger_recovery(request)?;
-        }
-        accumulator.add_burn(*maximum_execution_burn_cycles)?;
         protocol_actions.push(action.clone());
     }
     if protocol_actions.len() > MAX_FLEET_ENSURE_PROTOCOL_STEPS {
@@ -446,6 +460,28 @@ pub fn compile_plan(
         }
     }
 
+    let observed_estate_cycles = observation
+        .canisters
+        .values()
+        .filter_map(Option::as_ref)
+        .try_fold(0_u128, |total, live| {
+            checked_add(total, live.cycles, "observed controlled cycles")
+        })?;
+    let observed_estate_cycles = observation
+        .additional_controlled_cycles
+        .values()
+        .try_fold(observed_estate_cycles, |total, cycles| {
+            checked_add(total, *cycles, "observed controlled cycles")
+        })?;
+    tranche_protocol_actions(
+        desired,
+        observation,
+        bounds,
+        observed_estate_cycles,
+        &mut accumulator,
+        &mut protocol_actions,
+    )?;
+
     let observation_count = maximum_observation_count(
         desired,
         &accumulator.canisters,
@@ -461,21 +497,8 @@ pub fn compile_plan(
             })?,
     )?;
 
-    let observed_controlled_cycles = observation
-        .canisters
-        .values()
-        .filter_map(Option::as_ref)
-        .try_fold(0_u128, |total, live| {
-            checked_add(total, live.cycles, "observed controlled cycles")
-        })?;
-    let observed_controlled_cycles = observation
-        .additional_controlled_cycles
-        .values()
-        .try_fold(observed_controlled_cycles, |total, cycles| {
-            checked_add(total, *cycles, "observed controlled cycles")
-        })?;
     let observed_controlled_cycles = checked_add(
-        observed_controlled_cycles,
+        observed_estate_cycles,
         accumulator.controlled_ledger_cycles,
         "observed controlled cycles",
     )?;
@@ -488,12 +511,20 @@ pub fn compile_plan(
         // Funding sufficiency is deliberately enforced by apply after a reviewed plan is loaded.
         // The plan remains useful and truthful even when the current account is insufficient.
     }
-    let expected_post_operation_cycles = observed_controlled_cycles
-        .checked_add(maximum_operator_debit_cycles)
-        .and_then(|value| value.checked_sub(accumulator.fees))
-        .and_then(|value| value.checked_sub(accumulator.execution_burn))
-        .ok_or(EnsurePolicyError::ArithmeticOverflow {
-            field: "cycle conservation equation",
+    let available_after_funding = checked_add(
+        observed_controlled_cycles,
+        accumulator.new_funding,
+        "cycle conservation available balance",
+    )?;
+    let expected_post_operation_cycles = available_after_funding
+        .checked_sub(accumulator.execution_burn)
+        .ok_or_else(|| {
+            insufficient_cycle_conservation(
+                &accumulator,
+                protocol_actions.len(),
+                available_after_funding,
+                accumulator.execution_burn,
+            )
         })?;
     let conservation = CycleConservation {
         expected_post_operation_cycles,
@@ -521,6 +552,7 @@ pub fn compile_plan(
         )),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         scope: FleetEnsurePlanScope::Full,
+        terminal_inventory_operation_id: None,
     };
     plan.plan_sha256 = expected_plan_sha256(&plan);
     Ok(plan)
@@ -741,6 +773,7 @@ fn compile_root_start_plan(
         )),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         scope: FleetEnsurePlanScope::RootStartPrerequisite,
+        terminal_inventory_operation_id: None,
     };
     plan.plan_sha256 = expected_plan_sha256(&plan);
     Ok(Some(plan))
@@ -1360,6 +1393,11 @@ fn validate_authority(
     requested_fleet: &str,
 ) -> Result<(), EnsurePolicyError> {
     validate_path_identity(desired, requested_fleet)?;
+    if let Some(bootstrap) = &desired.bootstrap {
+        for root in &bootstrap.roots {
+            validate_bootstrap_root_pool_import_capacity(root)?;
+        }
+    }
     if desired.canisters.len() > MAX_FLEET_ENSURE_CANISTERS {
         return Err(EnsurePolicyError::TooManyCanisters {
             actual: desired.canisters.len(),
@@ -1515,6 +1553,17 @@ fn validate_authority(
             treasury: desired.treasury.clone(),
         });
     }
+    Ok(())
+}
+
+fn validate_bootstrap_root_pool_import_capacity(
+    root: &crate::fleet_ensure::model::DesiredFleetBootstrapRoot,
+) -> Result<(), EnsurePolicyError> {
+    validate_root_pool_import_capacity(&RootPoolImportCapacityInput {
+        import_count: root.canister_pool_imports.len(),
+        maximum_size: root.limits.canister_pool.maximum_size,
+        root: root.root.clone(),
+    })?;
     Ok(())
 }
 
@@ -1748,6 +1797,112 @@ fn cycle_bounds(desired: &DesiredFleet) -> Result<CycleBounds, EnsurePolicyError
             &desired.maximum_update_burn_cycles,
         )?,
     })
+}
+
+fn tranche_protocol_actions(
+    desired: &DesiredFleet,
+    observation: &FleetObservation,
+    bounds: CycleBounds,
+    observed_estate_cycles: u128,
+    accumulator: &mut PlanAccumulator,
+    protocol_actions: &mut Vec<EnsureAction>,
+) -> Result<(), EnsurePolicyError> {
+    let candidates = std::mem::take(protocol_actions);
+    let mut selected = Vec::with_capacity(candidates.len());
+    for action in candidates {
+        let controlled_ledger_cycles = accumulator.controlled_ledger_cycles;
+        let execution_burn = accumulator.execution_burn;
+        let transfers = accumulator.transfers;
+
+        account_protocol_action(accumulator, &action)?;
+        selected.push(action);
+
+        let observation_count = maximum_observation_count(
+            desired,
+            &accumulator.canisters,
+            &selected,
+            observation.additional_controlled_cycles.len(),
+        )?;
+        let observation_burn = bounds
+            .observation_burn
+            .checked_mul(observation_count)
+            .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                field: "observation burn",
+            })?;
+        let required = checked_add(
+            accumulator.execution_burn,
+            observation_burn,
+            "cycle-conservation required burn",
+        )?;
+        let controlled_cycles = checked_add(
+            observed_estate_cycles,
+            accumulator.controlled_ledger_cycles,
+            "cycle-conservation controlled cycles",
+        )?;
+        let available = checked_add(
+            controlled_cycles,
+            accumulator.new_funding,
+            "cycle-conservation available balance",
+        )?;
+        if required > available {
+            let error =
+                insufficient_cycle_conservation(accumulator, selected.len(), available, required);
+            accumulator.controlled_ledger_cycles = controlled_ledger_cycles;
+            accumulator.execution_burn = execution_burn;
+            accumulator.transfers = transfers;
+            selected.pop();
+            if selected.is_empty() {
+                return Err(error);
+            }
+            break;
+        }
+    }
+    *protocol_actions = selected;
+    Ok(())
+}
+
+fn account_protocol_action(
+    accumulator: &mut PlanAccumulator,
+    action: &EnsureAction,
+) -> Result<(), EnsurePolicyError> {
+    match action {
+        EnsureAction::FleetProtocol {
+            action,
+            maximum_execution_burn_cycles,
+            ..
+        } => {
+            if let CurrentFleetProtocolAction::RecoverPoolLedger { request } = action.as_ref() {
+                accumulator.add_pool_ledger_recovery(request)?;
+            }
+            accumulator.add_burn(*maximum_execution_burn_cycles)
+        }
+        EnsureAction::Protocol {
+            maximum_execution_burn_cycles,
+            ..
+        } => accumulator.add_burn(*maximum_execution_burn_cycles),
+        action => Err(EnsurePolicyError::InvalidProtocolStep(
+            action.name().to_string(),
+        )),
+    }
+}
+
+fn insufficient_cycle_conservation(
+    accumulator: &PlanAccumulator,
+    protocol_action_count: usize,
+    available: u128,
+    required: u128,
+) -> EnsurePolicyError {
+    let canister_action_count = accumulator
+        .canisters
+        .iter()
+        .map(|canister| canister.actions.len())
+        .sum::<usize>();
+    EnsurePolicyError::InsufficientCycleConservation {
+        action_count: canister_action_count.saturating_add(protocol_action_count),
+        available,
+        required,
+        shortfall: required.saturating_sub(available),
+    }
 }
 
 fn maximum_observation_count(
@@ -2030,7 +2185,19 @@ fn hash_field(hasher: &mut Sha256, value: &[u8]) {
 
 #[cfg(test)]
 mod tests {
-    use super::terminal_initial_component_observation_count;
+    use super::{
+        EnsurePolicyError, terminal_initial_component_observation_count,
+        validate_bootstrap_root_pool_import_capacity,
+    };
+    use crate::fleet_ensure::model::DesiredFleetBootstrapRoot;
+    use candid::Principal;
+    use canic_core::{
+        cdk::types::Cycles,
+        ids::{
+            ComponentTopologyDigest, CyclesFundingBudget, FleetSubnetCanisterPoolConfig,
+            FleetSubnetRootLimits, SubnetId,
+        },
+    };
 
     #[test]
     fn toko_fresh_fleet_descendant_capacity_does_not_multiply_terminal_proof() {
@@ -2040,5 +2207,45 @@ mod tests {
                 3,
             );
         }
+    }
+
+    #[test]
+    fn apply_policy_rejects_bootstrap_imports_above_the_root_maximum() {
+        let root = DesiredFleetBootstrapRoot {
+            canister_pool_imports: vec![
+                "pool-0".to_string(),
+                "pool-1".to_string(),
+                "pool-2".to_string(),
+            ],
+            component_admissions: Vec::new(),
+            component_topology_digest: ComponentTopologyDigest::from_bytes([1; 32]),
+            funding: crate::test_support::fleet_subnet_root_funding_authority(),
+            limits: FleetSubnetRootLimits {
+                maximum_component_instances: 1,
+                maximum_registry_bytes: 1,
+                maximum_wasm_store_bytes: 1,
+                canister_pool: FleetSubnetCanisterPoolConfig {
+                    minimum_size: 2,
+                    maximum_size: 2,
+                    canister_cycles: Cycles::new(1),
+                },
+                cycles_funding: CyclesFundingBudget {
+                    window_secs: 1,
+                    maximum_cycles: Cycles::new(1),
+                },
+                maximum_group_placements: 1,
+            },
+            placement_subnet: SubnetId::from_principal(Principal::from_slice(&[2])),
+            root: "root-0".to_string(),
+            store: "store-0".to_string(),
+        };
+
+        assert!(matches!(
+            validate_bootstrap_root_pool_import_capacity(&root),
+            Err(EnsurePolicyError::PoolImportCapacity(error))
+                if error.import_count == 3
+                    && error.maximum_size == 2
+                    && error.root == "root-0"
+        ));
     }
 }

@@ -100,6 +100,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap;
             let active = restore_runtime(
                 $canister_role,
+                option_env!("CANIC_RELEASE_BUILD_ID"),
                 authority,
             );
 
@@ -185,6 +186,7 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
             let authority = __canic_compiled_role_runtime_authority();
             let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
                 $crate::api::canister::CanisterRole::WASM_STORE,
+                option_env!("CANIC_RELEASE_BUILD_ID"),
                 authority,
             );
 
@@ -415,6 +417,7 @@ macro_rules! __canic_root_lifecycle_core {
             let (runtime_authority, config, config_source, config_path) = __canic_compiled_config();
 
             let active = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
+                option_env!("CANIC_RELEASE_BUILD_ID"),
                 runtime_authority,
                 config,
                 config_source,

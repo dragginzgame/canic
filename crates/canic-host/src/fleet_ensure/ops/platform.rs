@@ -5,7 +5,7 @@
 //! Boundary: the workflow calls one method only after persisting its exact action identity.
 
 use crate::{
-    canister_protocol::{CanisterProtocolError, query_with_candid},
+    canister_protocol::{CanisterProtocolError, call_with_candid, query_with_candid},
     fleet_ensure::{
         model::{
             CanisterRuntimeStatus, DesiredCanisterKind, DesiredFleet, EffectRecord, EnsureAction,
@@ -31,6 +31,7 @@ use crate::{
 use candid::{CandidType, Nat, Principal};
 use canic_core::{
     cdk::types::Cycles,
+    dto::canister::{CanisterInspectionRequest, CanisterStatusResponse},
     dto::pool::{CanisterPoolAsset, CanisterPoolResponse, CanisterPoolStatusRequest},
     ids::BuildNetwork,
     protocol as canic_protocol,
@@ -197,6 +198,16 @@ enum RootPoolStatusRequest {
 #[derive(CandidType, Deserialize)]
 enum RootPoolStatusResponse {
     Pool(Box<CanisterPoolResponse>),
+}
+
+#[derive(CandidType)]
+enum RootInspectionCommand {
+    InspectCanister(CanisterInspectionRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootInspectionResponse {
+    InspectCanister(CanisterStatusResponse),
 }
 
 #[derive(CandidType)]
@@ -404,6 +415,14 @@ pub enum IcpEnsurePlatformError {
 
     #[error("Cycles Ledger withdraw failed: {0}")]
     LedgerWithdraw(String),
+
+    #[error(
+        "Root-authorized funding inspection for {canister} conflicts with reviewed {field}; no Ledger withdrawal was repeated"
+    )]
+    FundingInspectionAuthorityConflict {
+        canister: String,
+        field: &'static str,
+    },
 
     #[error(
         "canister {canister} retains {actual} cycles above deletion limit {maximum}; left untouched"
@@ -924,6 +943,53 @@ impl IcpEnsurePlatform {
             }
             start_after = next;
         }
+    }
+
+    fn inspect_root_owned_funding_balance(
+        &self,
+        configured: &crate::fleet_ensure::model::DesiredCanister,
+        principal: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<u128, IcpEnsurePlatformError> {
+        let parent = configured.parent.as_deref().ok_or_else(|| {
+            IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                canister: configured.name.clone(),
+                field: "Root parent",
+            }
+        })?;
+        let root = self.current_principal(state, parent).ok_or_else(|| {
+            IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                canister: configured.name.clone(),
+                field: "Root Principal",
+            }
+        })?;
+        if self.required_root_status(&configured.name, root)? != CanisterRuntimeStatus::Running {
+            return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                canister: configured.name.clone(),
+                field: "running Root",
+            });
+        }
+        self.require_operator()?;
+        let target = parse_principal("Root-owned funding target", principal)?;
+        let response: RootInspectionResponse = call_with_candid(
+            &self.icp,
+            &self.root_protocol_candid()?,
+            parse_principal("Fleet Subnet Root", root)?,
+            canic_protocol::CANIC_ROOT_COMMAND,
+            &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                canister_id: target,
+            }),
+        )
+        .map_err(current_protocol::CurrentProtocolError::from)?;
+        let RootInspectionResponse::InspectCanister(response) = response;
+        validate_root_funding_inspection(
+            &configured.name,
+            configured.kind,
+            root,
+            &response.settings.controllers,
+            response.module_hash.as_deref(),
+            &response.cycles,
+        )
     }
 
     fn observed_root_owned_asset(
@@ -1756,25 +1822,87 @@ impl EnsurePlatform for IcpEnsurePlatform {
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectObservation, Self::Error> {
         let mut retry = EffectRetry::None;
+        let mut post_cycles = None;
         let (applied, progress_identity) = match action {
-            EnsureAction::Create { .. } => (
-                record.created_principal.is_some(),
-                format!("created:{:?}", record.created_principal),
-            ),
+            EnsureAction::Create {
+                requested_initial_cycles,
+                ..
+            } => {
+                let live_cycles = if record.created_principal.is_some() && record.receipt.is_some()
+                {
+                    self.status_optional(
+                        record
+                            .created_principal
+                            .as_deref()
+                            .ok_or(IcpEnsurePlatformError::LedgerCreatePending)?,
+                    )?
+                    .map(|live| live.cycles)
+                } else {
+                    None
+                };
+                post_cycles = live_cycles;
+                let applied = live_cycles == Some(*requested_initial_cycles);
+                if live_cycles.is_some() && !applied {
+                    retry = EffectRetry::ReplanRequiredAfterCreateBalanceDrift;
+                }
+                (
+                    applied,
+                    format!(
+                        "created:{:?}:actual:{live_cycles:?}:requested:{requested_initial_cycles}",
+                        record.created_principal,
+                    ),
+                )
+            }
             EnsureAction::Delete { principal, .. } => {
                 let live = self.status_optional(Self::action_principal(state, principal)?)?;
                 (live.is_none(), format!("delete:{live:?}"))
             }
             EnsureAction::Fund {
+                amount,
                 expected_post_cycles,
+                funding_deficit_cycles,
+                funding_margin_cycles,
+                name,
+                principal,
                 ..
             } => {
-                let live_cycles = self.action_cycles(action, state)?;
+                let live_cycles = if record.receipt.is_some() {
+                    let configured = self
+                        .desired
+                        .canisters
+                        .iter()
+                        .find(|configured| configured.name == *name)
+                        .ok_or_else(|| {
+                            current_protocol::CurrentProtocolError::Configuration(format!(
+                                "funding target {name} is absent from desired topology"
+                            ))
+                        })?;
+                    if configured.kind == DesiredCanisterKind::Pool {
+                        Some(self.inspect_root_owned_funding_balance(
+                            configured,
+                            Self::action_principal(state, principal)?,
+                            state,
+                        )?)
+                    } else {
+                        self.action_cycles(action, state)?
+                    }
+                } else {
+                    self.action_cycles(action, state)?
+                };
+                post_cycles = live_cycles;
                 (
-                    native_funding_applied(*expected_post_cycles, live_cycles),
+                    record.receipt.is_some()
+                        && native_funding_applied(NativeFundingObservation {
+                            amount: *amount,
+                            expected_post_cycles: *expected_post_cycles,
+                            funding_deficit_cycles: *funding_deficit_cycles,
+                            funding_margin_cycles: *funding_margin_cycles,
+                            live_cycles,
+                            pre_cycles: record.pre_cycles,
+                        }),
                     format!(
-                        "native-topup:ledger-withdraw:{}:actual:{live_cycles:?}:required:{expected_post_cycles}",
-                        record.receipt.as_deref().unwrap_or("pending")
+                        "native-topup:ledger-withdraw:{}:actual:{live_cycles:?}:expected:{expected_post_cycles}:margin:{funding_margin_cycles}",
+                        record.receipt.as_deref().unwrap_or("pending"),
                     ),
                 )
             }
@@ -1827,6 +1955,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                         }
                         EffectObservation {
                             applied: false,
+                            post_cycles: None,
                             progress_identity: "store-adoption:replan-required:diagnostic:132"
                                 .to_string(),
                             retry: EffectRetry::ReplanRequiredAfterRejectedPrerequisite,
@@ -1840,6 +1969,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     {
                         EffectObservation {
                             applied: false,
+                            post_cycles: None,
                             progress_identity: "store-adoption:protected-status-unavailable"
                                 .to_string(),
                             retry: EffectRetry::None,
@@ -1973,6 +2103,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
         };
         Ok(EffectObservation {
             applied,
+            post_cycles,
             progress_identity,
             retry,
         })
@@ -2345,8 +2476,68 @@ pub fn install_effect_applied(
     }
 }
 
-pub fn native_funding_applied(expected_post_cycles: u128, live_cycles: Option<u128>) -> bool {
-    expected_post_cycles > 0 && live_cycles.is_some_and(|actual| actual >= expected_post_cycles)
+/// Exact retained and live evidence for one Cycles Ledger withdrawal.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NativeFundingObservation {
+    pub amount: u128,
+    pub expected_post_cycles: u128,
+    pub funding_deficit_cycles: u128,
+    pub funding_margin_cycles: u128,
+    pub live_cycles: Option<u128>,
+    pub pre_cycles: Option<u128>,
+}
+
+pub const fn native_funding_applied(observation: NativeFundingObservation) -> bool {
+    let Some(pre_cycles) = observation.pre_cycles else {
+        return false;
+    };
+    let Some(live_cycles) = observation.live_cycles else {
+        return false;
+    };
+    let Some(expected_from_amount) = pre_cycles.checked_add(observation.amount) else {
+        return false;
+    };
+    let Some(minimum_live_cycles) = observation
+        .expected_post_cycles
+        .checked_sub(observation.funding_margin_cycles)
+    else {
+        return false;
+    };
+    let Some(minimum_from_deficit) = pre_cycles.checked_add(observation.funding_deficit_cycles)
+    else {
+        return false;
+    };
+    observation.funding_deficit_cycles > 0
+        && expected_from_amount == observation.expected_post_cycles
+        && minimum_live_cycles == minimum_from_deficit
+        && minimum_live_cycles > pre_cycles
+        && live_cycles >= minimum_live_cycles
+}
+
+fn validate_root_funding_inspection(
+    canister: &str,
+    kind: DesiredCanisterKind,
+    root: &str,
+    controllers: &[Principal],
+    module_hash: Option<&[u8]>,
+    cycles: &Nat,
+) -> Result<u128, IcpEnsurePlatformError> {
+    if controllers.len() != 1 || controllers[0].to_text() != root {
+        return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+            canister: canister.to_string(),
+            field: "Root-only controllers",
+        });
+    }
+    if kind == DesiredCanisterKind::Pool && module_hash.is_some() {
+        return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+            canister: canister.to_string(),
+            field: "module-free pool asset",
+        });
+    }
+    u128::try_from(cycles.0.clone()).map_err(|_| IcpEnsurePlatformError::InvalidStatusCycles {
+        canister: canister.to_string(),
+        value: cycles.to_string(),
+    })
 }
 
 fn created_canister_outcome(
@@ -2924,6 +3115,50 @@ mod tests {
             );
             assert_eq!(outcome.post_cycles, Some(5_000));
             assert_eq!(outcome.receipt.as_deref(), Some(receipt));
+        }
+    }
+
+    #[test]
+    fn root_funding_inspection_requires_exact_controller_and_pool_shape() {
+        let root = Principal::from_slice(&[7; 29]);
+        let root_text = root.to_text();
+        let cycles = Nat::from(2_898_749_313_788_u128);
+        assert_eq!(
+            validate_root_funding_inspection(
+                "pool-0",
+                DesiredCanisterKind::Pool,
+                &root_text,
+                &[root],
+                None,
+                &cycles,
+            )
+            .expect("exact Root-authorized pool inspection"),
+            2_898_749_313_788,
+        );
+
+        let foreign = Principal::from_slice(&[8; 29]);
+        for rejected in [
+            validate_root_funding_inspection(
+                "pool-0",
+                DesiredCanisterKind::Pool,
+                &root_text,
+                &[foreign],
+                None,
+                &cycles,
+            ),
+            validate_root_funding_inspection(
+                "pool-0",
+                DesiredCanisterKind::Pool,
+                &root_text,
+                &[root],
+                Some(&[1]),
+                &cycles,
+            ),
+        ] {
+            assert!(matches!(
+                rejected,
+                Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict { .. })
+            ));
         }
     }
 }
