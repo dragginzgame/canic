@@ -255,4 +255,5 @@ package; the final human-owned 0.109 closeout audit follows that evidence. Do
 not begin 0.110 before the accepted closeout.
 
 
-<!-- canic-release-validation: version=0.109.32 source=641f843ac5bc1ddb823bef6b3c32427a5cca70dc date=2026-08-31 gate=complete -->
+
+<!-- canic-release-validation: version=0.109.33 source=32ab90d4c05dc719d3771c915a861594786afa6f date=2026-08-31 gate=complete -->
