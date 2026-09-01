@@ -291,7 +291,7 @@ fn prepare_scenario(
     };
 
     match scenario.key {
-        "root:canic_command:respond-capability-request-cycles-replay" => {
+        "root:canic_root_command:respond-capability-request-cycles-replay" => {
             execute_root_cycles_scenario(setup, target_pid);
             PreparedScenario {
                 target_pid,
@@ -327,8 +327,8 @@ fn execute_scenario(
                 999
             );
         }
-        "root:canic_command:respond-capability-request-cycles-fresh"
-        | "root:canic_command:respond-capability-request-cycles-replay" => {
+        "root:canic_root_command:respond-capability-request-cycles-fresh"
+        | "root:canic_root_command:respond-capability-request-cycles-replay" => {
             execute_root_cycles_scenario(setup, target_pid);
         }
         "user_hub:create_account:new-principal" => {
@@ -430,7 +430,7 @@ fn upsert_delegation_issuer(
     let registered: Result<RootCommandResponse, Error> = pic
         .update_candid(
             root,
-            protocol::CANIC_COMMAND,
+            protocol::CANIC_ROOT_COMMAND,
             (RootCommand::UpsertIssuerPolicy(
                 RootIssuerPolicyUpsertRequest {
                     issuer_pid,
@@ -463,7 +463,7 @@ fn upsert_delegation_renewal_template(
     let response: Result<RootCommandResponse, Error> = pic
         .update_candid(
             root,
-            protocol::CANIC_COMMAND,
+            protocol::CANIC_ROOT_COMMAND,
             (RootCommand::UpsertIssuerRenewalTemplate(
                 RootIssuerRenewalTemplateUpsertRequest {
                     issuer_pid,
@@ -668,7 +668,7 @@ fn root_capability_response_as(
     let result: Result<Result<RootCommandResponse, Error>, _> = setup.pic.update_candid_as(
         target_pid,
         caller,
-        protocol::CANIC_COMMAND,
+        protocol::CANIC_ROOT_COMMAND,
         (RootCommand::RespondCapability(envelope),),
     );
     let response = result.expect("root capability transport call failed")?;

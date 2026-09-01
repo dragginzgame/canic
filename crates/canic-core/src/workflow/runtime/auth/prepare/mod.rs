@@ -350,7 +350,7 @@ async fn repair_active_delegation_proof_from_root() -> Result<(), InternalError>
     let verifier = AuthOps::auth_proof_verifier_config()?;
     let root_canister_id = verifier.root_canister_id;
     crate::perf!("delegated_token_resolve_root");
-    let call = CallOps::unbounded_wait(root_canister_id, protocol::CANIC_COMMAND)
+    let call = CallOps::unbounded_wait(root_canister_id, protocol::CANIC_ROOT_COMMAND)
         .with_arg(RootCommand::GetOrCreateDelegationProof)?
         .execute()
         .await?;

@@ -4,7 +4,6 @@
 //! Does not own: stable state reads, authority identity, endpoint dispatch, or mutation.
 //! Boundary: workflow supplies validated sealed state and decoded command classification.
 
-use crate::protocol::CANIC_COMMAND;
 use thiserror::Error as ThisError;
 
 /// Failure returned when a sealed authority receives an ordinary update.
@@ -20,8 +19,9 @@ pub enum AuthorityRestoreEndpointPolicyError {
 pub fn require_update_allowed(
     is_sealed: bool,
     endpoint: &'static str,
+    command_endpoint: &'static str,
 ) -> Result<(), AuthorityRestoreEndpointPolicyError> {
-    if !is_sealed || endpoint == CANIC_COMMAND {
+    if !is_sealed || endpoint == command_endpoint {
         return Ok(());
     }
     Err(AuthorityRestoreEndpointPolicyError::Fenced { endpoint })
@@ -41,17 +41,37 @@ pub const fn require_command_variant_allowed(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::{CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND};
 
     #[test]
     fn open_authority_admits_updates() {
-        assert_eq!(require_update_allowed(false, "mutate"), Ok(()));
+        assert_eq!(
+            require_update_allowed(false, "mutate", CANIC_ROOT_COMMAND),
+            Ok(())
+        );
     }
 
     #[test]
     fn sealed_authority_admits_the_dispatcher_then_only_recovery_variants() {
-        assert_eq!(require_update_allowed(true, CANIC_COMMAND), Ok(()));
+        for command_endpoint in [CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND] {
+            assert_eq!(
+                require_update_allowed(true, command_endpoint, command_endpoint),
+                Ok(())
+            );
+            for wrong_endpoint in [CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND]
+                .into_iter()
+                .filter(|endpoint| *endpoint != command_endpoint)
+            {
+                assert_eq!(
+                    require_update_allowed(true, wrong_endpoint, command_endpoint),
+                    Err(AuthorityRestoreEndpointPolicyError::Fenced {
+                        endpoint: wrong_endpoint,
+                    })
+                );
+            }
+        }
         assert_eq!(
-            require_update_allowed(true, "mutate"),
+            require_update_allowed(true, "mutate", CANIC_ROOT_COMMAND),
             Err(AuthorityRestoreEndpointPolicyError::Fenced { endpoint: "mutate" })
         );
         assert_eq!(require_command_variant_allowed(true, true), Ok(()));

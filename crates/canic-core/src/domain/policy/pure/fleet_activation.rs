@@ -6,7 +6,7 @@
 
 use crate::{
     ids::{EndpointCall, EndpointCallKind},
-    protocol::{CANIC_COMMAND, CANIC_STATUS},
+    protocol::{CANIC_COMMAND, CANIC_ROOT_COMMAND, CANIC_STATUS},
 };
 use thiserror::Error as ThisError;
 
@@ -47,7 +47,7 @@ pub fn require_prepared_store_data_endpoint(
 pub fn require_prepared_root_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
-    if is_query(call, CANIC_STATUS) || is_update(call, &[CANIC_COMMAND]) {
+    if is_query(call, CANIC_STATUS) || is_update(call, &[CANIC_ROOT_COMMAND]) {
         return Ok(());
     }
     fenced(call)
@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn prepared_root_admits_only_the_role_owned_entrypoints() {
         for (endpoint, kind) in [
-            (CANIC_COMMAND, EndpointCallKind::Update),
+            (CANIC_ROOT_COMMAND, EndpointCallKind::Update),
             (CANIC_STATUS, EndpointCallKind::Query),
         ] {
             assert_eq!(require_prepared_root_endpoint(call(endpoint, kind)), Ok(()));
@@ -94,7 +94,7 @@ mod tests {
     fn prepared_root_rejects_ordinary_and_wrong_kind_calls() {
         for (endpoint, kind) in [
             ("application_update", EndpointCallKind::Update),
-            (CANIC_COMMAND, EndpointCallKind::Query),
+            (CANIC_ROOT_COMMAND, EndpointCallKind::Query),
             (CANIC_STATUS, EndpointCallKind::Update),
             (CANIC_STATUS, EndpointCallKind::QueryComposite),
         ] {

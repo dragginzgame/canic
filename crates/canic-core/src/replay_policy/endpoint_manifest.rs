@@ -4,16 +4,19 @@
 //! Does not own: endpoint routing, workflow execution, or replay receipt storage.
 //! Boundary: common role methods dispatch to variant manifests; other methods remain direct.
 
-use crate::replay_policy::types::{
-    CostClass, EndpointKind, EndpointReplayPolicy, ReplayCommandKindLabel,
-    ReplayCommandManifestLabel, ReplayCycleReservePolicyLabel, ReplayImplementationStatus,
-    ReplayPolicy, ReplayQuotaPolicyLabel,
+use crate::{
+    protocol::{CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND, CANIC_STATUS},
+    replay_policy::types::{
+        CostClass, EndpointKind, EndpointReplayPolicy, ReplayCommandKindLabel,
+        ReplayCommandManifestLabel, ReplayCycleReservePolicyLabel, ReplayImplementationStatus,
+        ReplayPolicy, ReplayQuotaPolicyLabel,
+    },
 };
 
-/// Canonical replay-policy rows for Canic endpoint methods.
+/// Canonical replay-policy rows for ordinary, Coordinator and Root endpoint methods.
 pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_command_dispatch(
-        "canic_command",
+        CANIC_COMMAND,
         command_kind("role.command.v1"),
         command_manifest("role.command.variant_manifest.v1"),
         ReplayImplementationStatus::Implemented,
@@ -21,13 +24,31 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
         None,
     ),
-    query_read_only("canic_status"),
+    update_command_dispatch(
+        CANIC_COORDINATOR_COMMAND,
+        command_kind("role.command.v1"),
+        command_manifest("role.command.variant_manifest.v1"),
+        ReplayImplementationStatus::Implemented,
+        CostClass::None,
+        None,
+        None,
+    ),
+    update_command_dispatch(
+        CANIC_ROOT_COMMAND,
+        command_kind("role.command.v1"),
+        command_manifest("role.command.variant_manifest.v1"),
+        ReplayImplementationStatus::Implemented,
+        CostClass::None,
+        None,
+        None,
+    ),
+    query_read_only(CANIC_STATUS),
 ];
 
 /// Exact replay-policy rows for the Store role, including its two data lanes.
 pub const STORE_ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_command_dispatch(
-        "canic_command",
+        CANIC_COMMAND,
         command_kind("role.command.v1"),
         command_manifest("role.command.variant_manifest.v1"),
         ReplayImplementationStatus::Implemented,
@@ -35,7 +56,7 @@ pub const STORE_ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
         None,
     ),
-    query_read_only("canic_status"),
+    query_read_only(CANIC_STATUS),
     update_read_only("canic_wasm_store_chunk"),
     update_monotonic_transition(
         "canic_wasm_store_publish_chunk",

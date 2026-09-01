@@ -294,7 +294,7 @@ root-managed renewal timer
 
 issuer lazy repair
   -> issuer canic_command::PrepareDelegatedToken sees missing/stale active proof
-  -> root canic_command::GetOrCreateDelegationProof update
+  -> root canic_root_command::GetOrCreateDelegationProof update
   -> root returns cached proof or singleflight creates one signed batch
   -> issuer verifies and stores active proof
 
@@ -310,7 +310,7 @@ Root issuance steps:
 1. Require local canister is root.
 2. Require root-controller authorization for the MVP policy upsert and batch
    endpoints.
-3. Register each issuer policy through `canic_command::UpsertIssuerPolicy`
+3. Register each issuer policy through `canic_root_command::UpsertIssuerPolicy`
    before preparing root proof material.
 4. Validate each issuer against the root issuer registry.
 5. Load `auth.delegated_tokens` config.

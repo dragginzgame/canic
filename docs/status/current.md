@@ -71,6 +71,12 @@ request; operation, plan/action hashes, state-bound Principal, retained receipt
 and returned requested balance must all match. It adds no inferred value,
 migration, compatibility path, fallback or schema generation.
 
+The open 0.109.33 candidate also hard-cuts the two infrastructure command
+exports to `canic_root_command(RootCommand)` and
+`canic_coordinator_command(CoordinatorCommand)`. Managed application and Wasm
+Store command traffic remains on `canic_command`; Root and Coordinator retain
+no old-name alias, fallback or mixed endpoint contract.
+
 The detailed changelog owns the complete tests and negative cases; this handoff owns no downstream repository or live IC state.
 
 ## Safety State
@@ -215,13 +221,21 @@ For the current B9, B10 and reopened `CANIC-102` slices:
   standalone-local install, public call, same-release upgrade and replay in
   136.27 seconds;
 - warning-denied Clippy passes for `canic` with `testing`, `canic-host` and
-  `canic-testing-internal`; and
+  `canic-testing-internal`;
+- the canonical Fleet Coordinator artifact build resolves its checked-in DID,
+  derives the exact profile and completes the sidecar-only optimized Wasm
+  without runtime Candid extraction; the governed serial runner now preflights
+  this shared artifact once before its scenario loop; and
 - focused reopened `CANIC-102` regressions pass successful and duplicate-with-
   Principal Create journalling, terminal and zero-effect replay; exact retained
   0.109.32 balance recovery; six authority-mismatch rejections; and the existing
   interruption-at-every-effect and logical-controller Create journeys; the
   production response mapper also retains the exact Principal, receipt and
   requested balance for both Ledger response forms;
+- all 41 focused protocol-surface tests pass with distinct Root and Coordinator
+  command exports; the replay-policy, sealed-authority and prepared-Root
+  policy tests pass, and all directly affected packages compile across all
+  targets;
 - no broad workspace or full PocketIC gate was run during coding.
 
 Published-batch validation remains in the detailed changelog and immutable

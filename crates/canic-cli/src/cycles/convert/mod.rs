@@ -78,7 +78,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     if options.dry_run {
         let command = icp.canister_call_arg_output_display_with_candid(
             &root_target.canister_id,
-            canic_core::protocol::CANIC_COMMAND,
+            canic_core::protocol::CANIC_ROOT_COMMAND,
             &request_arg,
             Some("hex"),
             Some(root_binding.candid_path()),
@@ -98,7 +98,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     let output = icp
         .canister_call_arg_output_with_candid(
             &root_target.canister_id,
-            canic_core::protocol::CANIC_COMMAND,
+            canic_core::protocol::CANIC_ROOT_COMMAND,
             &request_arg,
             Some("hex"),
             Some(root_binding.candid_path()),

@@ -515,7 +515,7 @@ pub(super) fn write_report(
     out.push('\n');
 
     out.push_str("## Hub Module Pressure\n\n");
-    out.push_str("- `root::canic_command::RespondCapability` has measured replay/cycles stage deltas, so root capability work no longer has to be treated as an opaque command total.\n");
+    out.push_str("- `root::canic_root_command::RespondCapability` has measured replay/cycles stage deltas, so root capability work no longer has to be treated as an opaque command total.\n");
     out.push_str("- `root::test_provision_chain_key_delegation_proof_for_issuer` measures explicit first-proof provisioning through the maintained root facade.\n");
     out.push_str("- `scale_hub::create_worker` measures the maintained scaling update through observe, plan, creation, and registration.\n");
     out.push_str("- `scale::request_cycles_from_parent` measures the maintained child-to-parent capability round trip.\n");
@@ -588,7 +588,7 @@ pub(super) fn write_report(
     }
     out.push_str("2. Owner boundary: `shared update hotspots`\n");
     out.push_str(&format!(
-        "   Action: compare `root::test_provision_chain_key_delegation_proof_for_issuer`, `root::canic_command::RespondCapability`, and `scale::request_cycles_from_parent` before/after any shared-runtime cleanup, using this report as the `{minor_line}` baseline.\n"
+        "   Action: compare `root::test_provision_chain_key_delegation_proof_for_issuer`, `root::canic_root_command::RespondCapability`, and `scale::request_cycles_from_parent` before/after any shared-runtime cleanup, using this report as the `{minor_line}` baseline.\n"
     ));
     out.push_str("3. Owner boundary: `query measurement`\n");
     out.push_str("   Action: add query rows only through a future authoritative same-call fixture and method version.\n\n");
@@ -672,7 +672,7 @@ fn render_scope(items: BTreeSet<&str>) -> String {
 // Map the current highest-cost labels back to concrete modules/files.
 fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
     match subject_label {
-        "canic_command::RespondCapability" => (
+        "canic_root_command::RespondCapability" => (
             "Root dispatcher plus replay/capability workflow",
             "`crates/canic-core/src/workflow/rpc/request/handler/{mod,replay}.rs`",
         ),

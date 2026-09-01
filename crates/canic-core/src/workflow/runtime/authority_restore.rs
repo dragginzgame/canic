@@ -20,6 +20,7 @@ use crate::{
         runtime::env::EnvOps,
         storage::authority_restore::AuthorityRestoreFenceOps,
     },
+    protocol::{CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND},
     workflow::runtime::timer::{TimerAuthorityWorkflow, TimerError},
 };
 
@@ -86,16 +87,19 @@ impl AuthorityRestoreWorkflow {
 
     /// Apply the durable mutation fence before access evaluation on authority updates.
     pub fn require_endpoint_allowed(call: EndpointCall) -> Result<(), InternalError> {
-        if call.kind != EndpointCallKind::Update || !is_authority_runtime()? {
+        if call.kind != EndpointCallKind::Update {
             return Ok(());
         }
+        let Some(command_endpoint) = authority_command_endpoint()? else {
+            return Ok(());
+        };
         let is_sealed = AuthorityRestoreFenceOps::is_sealed_for(IcOps::canister_self())?;
-        require_policy_update_allowed(is_sealed, call.endpoint.name)
+        require_policy_update_allowed(is_sealed, call.endpoint.name, command_endpoint)
             .map_err(PolicyError::from)
             .map_err(InternalError::from)
     }
 
-    /// Apply the sealed-authority fence after the common command has been decoded.
+    /// Apply the sealed-authority fence after the role command has been decoded.
     pub fn require_command_variant_allowed(recovery_command: bool) -> Result<(), InternalError> {
         if !is_authority_runtime()? {
             return Ok(());
@@ -186,8 +190,12 @@ fn require_authority_runtime() -> Result<(), InternalError> {
 }
 
 fn is_authority_runtime() -> Result<bool, InternalError> {
+    authority_command_endpoint().map(|endpoint| endpoint.is_some())
+}
+
+fn authority_command_endpoint() -> Result<Option<&'static str>, InternalError> {
     if EnvOps::is_fleet_coordinator_runtime() {
-        return Ok(true);
+        return Ok(Some(CANIC_COORDINATOR_COMMAND));
     }
-    EnvOps::canister_role().map(|role| role.is_root())
+    EnvOps::canister_role().map(|role| role.is_root().then_some(CANIC_ROOT_COMMAND))
 }

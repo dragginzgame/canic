@@ -396,7 +396,7 @@ mod tests {
         root: Principal,
         command: RootCommandFragment,
     ) -> Result<RootCommandResponseFragment, Error> {
-        pic.update_candid(root, canic::protocol::CANIC_COMMAND, (command,))
+        pic.update_candid(root, canic::protocol::CANIC_ROOT_COMMAND, (command,))
             .expect("Root command transport")
     }
 
@@ -411,7 +411,7 @@ mod tests {
             .update_candid_as(
                 root,
                 descendant,
-                canic::protocol::CANIC_COMMAND,
+                canic::protocol::CANIC_ROOT_COMMAND,
                 (RootCommandFragment::RespondCapability(request),),
             )
             .expect("request exact descendant funding from Root");
@@ -645,8 +645,12 @@ mod tests {
         coordinator: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        pic.update_candid(coordinator, canic::protocol::CANIC_COMMAND, (command,))
-            .expect("Coordinator command transport")
+        pic.update_candid(
+            coordinator,
+            canic::protocol::CANIC_COORDINATOR_COMMAND,
+            (command,),
+        )
+        .expect("Coordinator command transport")
     }
 
     fn coordinator_status(

@@ -28,7 +28,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
         #[doc(hidden)]
         fn __canic_inspect_fleet_coordinator_update_message() {
             if $crate::__internal::core::ingress::payload::current_method_name()
-                != $crate::__internal::core::protocol::CANIC_COMMAND
+                != $crate::__internal::core::protocol::CANIC_COORDINATOR_COMMAND
             {
                 $crate::__internal::core::ingress::payload::inspect_update_message();
                 return;
@@ -58,7 +58,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             public,
             payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES)
         )]
-        async fn canic_command(
+        async fn canic_coordinator_command(
             command: ::canic::dto::fleet_coordinator::CoordinatorCommand,
         ) -> Result<::canic::dto::fleet_coordinator::CoordinatorCommandResponse, ::canic::Error>
         {

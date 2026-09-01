@@ -162,6 +162,8 @@ fn endpoint_emitters_match_the_current_role_and_separate_blob_surfaces() {
             "canic_blob_storage_status",
             "canic_blob_storage_update_gateway_principals",
             "canic_command",
+            "canic_coordinator_command",
+            "canic_root_command",
             "canic_status",
             "canic_wasm_store_chunk",
             "canic_wasm_store_publish_chunk",
@@ -806,7 +808,7 @@ fn fleet_coordinator_canonical_did_parses() {
     assert_eq!(
         methods,
         vec![
-            canic::protocol::CANIC_COMMAND,
+            canic::protocol::CANIC_COORDINATOR_COMMAND,
             canic::protocol::CANIC_STATUS,
         ],
         "Fleet Coordinator must expose only its role-owned command and status methods"
@@ -1056,6 +1058,11 @@ fn role_status_dispatchers_keep_variant_specific_authority() {
 #[test]
 fn root_and_coordinator_role_ingress_are_command_status_only() {
     assert_eq!(canic::protocol::CANIC_COMMAND, "canic_command");
+    assert_eq!(
+        canic::protocol::CANIC_COORDINATOR_COMMAND,
+        "canic_coordinator_command"
+    );
+    assert_eq!(canic::protocol::CANIC_ROOT_COMMAND, "canic_root_command");
     assert_eq!(canic::protocol::CANIC_STATUS, "canic_status");
 
     let bundles = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs"));
@@ -1076,6 +1083,10 @@ fn root_and_coordinator_role_ingress_are_command_status_only() {
     );
 
     let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
+    assert!(
+        root.contains("async fn canic_root_command(") && !root.contains("async fn canic_command("),
+        "Root must export only its explicitly named command entrypoint"
+    );
     for variant in [
         "AcceptFunding(",
         "ActivateFundingPolicyRotation(",
@@ -1150,9 +1161,11 @@ fn assert_coordinator_ingress_is_command_status_only() {
     let coordinator_endpoints =
         read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
     assert!(
-        coordinator_endpoints.contains("__canic_inspect_fleet_coordinator_update_message")
+        coordinator_endpoints.contains("async fn canic_coordinator_command(")
+            && !coordinator_endpoints.contains("async fn canic_command(")
+            && coordinator_endpoints.contains("__canic_inspect_fleet_coordinator_update_message")
             && coordinator_endpoints.contains("__canic_fleet_coordinator_payload_max_bytes"),
-        "Coordinator ingress must decode the selected command before accepting its exact bound"
+        "Coordinator must export only its explicit command and decode it before accepting its exact bound"
     );
     for variant in [
         "Admission(FleetAdmissionStatusRequest)",
@@ -1182,7 +1195,7 @@ fn assert_coordinator_ingress_is_command_status_only() {
         .filter(|name| name.starts_with("canic_"))
         .collect::<Vec<_>>();
     canic_methods.sort_unstable();
-    assert_eq!(canic_methods, ["canic_command", "canic_status"]);
+    assert_eq!(canic_methods, ["canic_coordinator_command", "canic_status"]);
 }
 
 #[test]
@@ -2011,7 +2024,7 @@ fn root_authority_restore_and_cycle_refill_are_variant_guarded() {
 fn root_and_coordinator_commands_authorize_before_state_gates_or_dispatch() {
     let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
     let root_command = root
-        .split("async fn canic_command(")
+        .split("async fn canic_root_command(")
         .nth(1)
         .and_then(|tail| tail.split("match command {").next())
         .expect("Root command admission");
@@ -2040,7 +2053,7 @@ fn root_and_coordinator_commands_authorize_before_state_gates_or_dispatch() {
     let coordinator =
         read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
     let coordinator_command = coordinator
-        .split("async fn canic_command(")
+        .split("async fn canic_coordinator_command(")
         .nth(1)
         .and_then(|tail| tail.split("FleetCoordinatorApi::command(").next())
         .expect("Coordinator command admission");

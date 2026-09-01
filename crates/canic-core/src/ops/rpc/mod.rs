@@ -164,7 +164,7 @@ impl RpcOps {
 
             let response: RootCommandResponseFragment = Self::call_rpc_result(
                 target_pid,
-                protocol::CANIC_COMMAND,
+                protocol::CANIC_ROOT_COMMAND,
                 RootCommandFragment::RespondCapability(envelope),
             )
             .await?;
