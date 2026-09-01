@@ -101,7 +101,7 @@ fn root_command(
     root: Principal,
     command: RootCommandFragment,
 ) -> Result<RootCommandResponseFragment, Error> {
-    pic.update_candid(root, protocol::CANIC_COMMAND, (command,))
+    pic.update_candid(root, protocol::CANIC_ROOT_COMMAND, (command,))
         .expect("Root command transport")
 }
 

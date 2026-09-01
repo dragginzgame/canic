@@ -22,8 +22,9 @@ fn endpoint_manifest_entries_are_unique() {
 #[test]
 fn emitted_canic_update_endpoints_have_replay_policy_entries() {
     let emitted = emitted_update_endpoint_names();
-    let manifest = STORE_ENDPOINT_REPLAY_POLICY_MANIFEST
+    let manifest = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
+        .chain(STORE_ENDPOINT_REPLAY_POLICY_MANIFEST)
         .filter(|entry| entry.endpoint_kind == EndpointKind::Update)
         .map(|entry| entry.endpoint)
         .collect::<BTreeSet<_>>();

@@ -242,7 +242,7 @@ async fn call_target(
     expected_phase: FleetAdmissionTargetTransitionPhase,
 ) -> Result<FleetAdmissionTargetReceipt, InternalError> {
     let target = target_principal(&projection.target);
-    let call = CallOps::bounded_wait(target, protocol::CANIC_COMMAND)
+    let call = CallOps::bounded_wait(target, protocol::CANIC_ROOT_COMMAND)
         .with_arg(command)?
         .execute()
         .await?;

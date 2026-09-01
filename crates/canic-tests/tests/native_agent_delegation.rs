@@ -1490,7 +1490,7 @@ fn configure_issuer(fixture: &canic_testing_internal::pic::ActiveComponentRegist
     )];
     let policy: Result<RootCommandResponse, Error> = fixture.pic().update_candid_or_panic(
         fixture.root,
-        protocol::CANIC_COMMAND,
+        protocol::CANIC_ROOT_COMMAND,
         (RootCommand::UpsertIssuerPolicy(
             RootIssuerPolicyUpsertRequest {
                 issuer_pid: fixture.issuer.canister_id,
@@ -1511,7 +1511,7 @@ fn configure_issuer(fixture: &canic_testing_internal::pic::ActiveComponentRegist
 
     let template: Result<RootCommandResponse, Error> = fixture.pic().update_candid_or_panic(
         fixture.root,
-        protocol::CANIC_COMMAND,
+        protocol::CANIC_ROOT_COMMAND,
         (RootCommand::UpsertIssuerRenewalTemplate(
             RootIssuerRenewalTemplateUpsertRequest {
                 issuer_pid: fixture.issuer.canister_id,

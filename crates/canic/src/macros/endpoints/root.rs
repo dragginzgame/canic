@@ -145,7 +145,7 @@ macro_rules! canic_emit_root_command_endpoint {
         #[doc(hidden)]
         fn __canic_inspect_root_update_message() {
             if $crate::__internal::core::ingress::payload::current_method_name()
-                != $crate::__internal::core::protocol::CANIC_COMMAND
+                != $crate::__internal::core::protocol::CANIC_ROOT_COMMAND
             {
                 $crate::__internal::core::ingress::payload::inspect_update_message();
                 return;
@@ -172,7 +172,7 @@ macro_rules! canic_emit_root_command_endpoint {
             public,
             payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES)
         )]
-        async fn canic_command(
+        async fn canic_root_command(
             command: RootCommand,
         ) -> Result<RootCommandResponse, ::canic::Error> {
             ::std::boxed::Box::pin(#[expect(
@@ -255,7 +255,9 @@ macro_rules! canic_emit_root_command_endpoint {
                 let context = $crate::__internal::core::access::expr::AccessContext {
                     caller,
                     call: $crate::__internal::core::ids::EndpointCall {
-                        endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
+                        endpoint: $crate::__internal::core::ids::EndpointId::new(
+                            $crate::__internal::core::protocol::CANIC_ROOT_COMMAND,
+                        ),
                         kind: $crate::__internal::core::ids::EndpointCallKind::Update,
                     },
                 };
@@ -271,7 +273,9 @@ macro_rules! canic_emit_root_command_endpoint {
                 let context = $crate::__internal::core::access::expr::AccessContext {
                     caller,
                     call: $crate::__internal::core::ids::EndpointCall {
-                        endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
+                        endpoint: $crate::__internal::core::ids::EndpointId::new(
+                            $crate::__internal::core::protocol::CANIC_ROOT_COMMAND,
+                        ),
                         kind: $crate::__internal::core::ids::EndpointCallKind::Update,
                     },
                 };
@@ -300,7 +304,9 @@ macro_rules! canic_emit_root_command_endpoint {
                 let context = $crate::__internal::core::access::expr::AccessContext {
                     caller,
                     call: $crate::__internal::core::ids::EndpointCall {
-                        endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
+                        endpoint: $crate::__internal::core::ids::EndpointId::new(
+                            $crate::__internal::core::protocol::CANIC_ROOT_COMMAND,
+                        ),
                         kind: $crate::__internal::core::ids::EndpointCallKind::Update,
                     },
                 };

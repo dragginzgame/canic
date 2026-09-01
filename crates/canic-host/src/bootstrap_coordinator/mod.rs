@@ -71,13 +71,11 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_fleet_coordinator_source(context)?;
     require_built_in_fleet_coordinator_contract(&source.manifest_path)?;
-    run_coordinator_cargo_build(context, &source.manifest_path, None, true)?;
-
     let built_wasm_path = canister_build_target_root(&context.workspace_root)
         .join("wasm32-unknown-unknown")
         .join(context.profile.target_dir_name())
         .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
-    let candid = extract_candid_bytes(&built_wasm_path)?;
+    let candid = resolve_fleet_coordinator_candid(context, &source, &built_wasm_path)?;
     let capabilities = canic_core::role_contract::built_in_role_capabilities(
         canic_core::role_contract::BuiltInRoleKind::FleetCoordinator,
     );
@@ -100,23 +98,13 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     let did_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.did"));
 
     let embed_candid = should_embed_candid_metadata(context.build_network);
-    let artifact_candid = if embed_candid {
-        resolve_fleet_coordinator_candid(context, &source, &candid)?
-    } else {
-        candid.clone()
-    };
-    if artifact_candid != candid {
-        return Err(
-            "Fleet Coordinator materialized Candid differs from its compiled profile".into(),
-        );
-    }
     let transforms = finalize_wasm_artifact(&WasmArtifactFinalization {
         profile: context.profile,
         build_network: context.build_network,
         embed_candid,
         validate_sidecar_only: false,
         source_wasm_path: &built_wasm_path,
-        candid: &artifact_candid,
+        candid: &candid,
         wasm_path: &wasm_path,
         did_path: &did_path,
         wasm_gz_path: &wasm_gz_path,
@@ -334,11 +322,16 @@ fn coordinator_cargo_build_command(
 ) -> Command {
     let mut command = cargo_command();
     context.apply_to_command(&mut command);
+    let cargo_subcommand = if force_candid_export {
+        "rustc"
+    } else {
+        "build"
+    };
     command
         .env_remove(canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV)
         .current_dir(&context.workspace_root)
         .args([
-            "build",
+            cargo_subcommand,
             "--locked",
             "--manifest-path",
             &manifest_path.display().to_string(),
@@ -350,6 +343,13 @@ fn coordinator_cargo_build_command(
     command.args(context.profile.cargo_args());
     if force_candid_export {
         command.env(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1");
+        command.args([
+            "--lib",
+            "--",
+            "--cfg",
+            "canic_export_candid",
+            "--check-cfg=cfg(canic_export_candid)",
+        ]);
     }
     command
 }
@@ -370,19 +370,27 @@ fn append_coordinator_profile_config_args(command: &mut Command, profile: Canist
 fn resolve_fleet_coordinator_candid(
     context: &WorkspaceBuildContext,
     source: &BootstrapFleetCoordinatorSource,
-    generated_candid: &[u8],
+    built_wasm_path: &Path,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let selected_wasm_path = canister_build_target_root(&context.workspace_root)
-        .join("wasm32-unknown-unknown")
-        .join(context.profile.target_dir_name())
-        .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
+    if source.canonical_did_path.is_none() {
+        run_coordinator_cargo_build(context, &source.manifest_path, None, true)?;
+        let generated_candid = extract_candid_bytes(built_wasm_path)?;
+        return resolve_infrastructure_candid(
+            FLEET_COORDINATOR_ROLE,
+            None,
+            false,
+            Some(&generated_candid),
+            built_wasm_path,
+            || Ok(()),
+        );
+    }
 
     resolve_infrastructure_candid(
         FLEET_COORDINATOR_ROLE,
         source.canonical_did_path.as_deref(),
         context.refresh_canonical_infrastructure_did,
-        Some(generated_candid),
-        &selected_wasm_path,
-        || Ok(()),
+        None,
+        built_wasm_path,
+        || run_coordinator_cargo_build(context, &source.manifest_path, None, true),
     )
 }

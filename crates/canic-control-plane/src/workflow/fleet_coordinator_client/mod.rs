@@ -105,7 +105,7 @@ pub(super) async fn request_root_funding(
     coordinator: Principal,
     request: FleetRootFundingRequest,
 ) -> Result<FleetRootFundingResponse, InternalError> {
-    let call = CallOps::bounded_wait(coordinator, protocol::CANIC_COMMAND)
+    let call = CallOps::bounded_wait(coordinator, protocol::CANIC_COORDINATOR_COMMAND)
         .with_arg(CoordinatorCommandFragment::RequestRootFunding(request))?
         .execute()
         .await?;
@@ -122,7 +122,7 @@ async fn call(
     coordinator: Principal,
     command: CoordinatorCommandFragment,
 ) -> Result<CoordinatorCommandResponseFragment, InternalError> {
-    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COMMAND)
+    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_COMMAND)
         .with_arg(command)?
         .execute()
         .await?;

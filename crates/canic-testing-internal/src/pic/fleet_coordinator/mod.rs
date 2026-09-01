@@ -62,7 +62,7 @@ mod tests {
         coordinator: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        pic.update_candid(coordinator, protocol::CANIC_COMMAND, (command,))
+        pic.update_candid(coordinator, protocol::CANIC_COORDINATOR_COMMAND, (command,))
             .expect("Coordinator command transport")
     }
 
@@ -72,8 +72,13 @@ mod tests {
         caller: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        pic.update_candid_as(coordinator, caller, protocol::CANIC_COMMAND, (command,))
-            .expect("Coordinator command transport")
+        pic.update_candid_as(
+            coordinator,
+            caller,
+            protocol::CANIC_COORDINATOR_COMMAND,
+            (command,),
+        )
+        .expect("Coordinator command transport")
     }
 
     fn status(

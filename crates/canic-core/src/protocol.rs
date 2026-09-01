@@ -3,6 +3,8 @@
 /// Keep these synchronized with the macro-defined endpoints.
 
 pub const CANIC_COMMAND: &str = "canic_command";
+pub const CANIC_COORDINATOR_COMMAND: &str = "canic_coordinator_command";
+pub const CANIC_ROOT_COMMAND: &str = "canic_root_command";
 pub const CANIC_STATUS: &str = "canic_status";
 
 pub const BLOB_STORAGE_BLOBS_ARE_LIVE: &str = "_immutableObjectStorageBlobsAreLive";

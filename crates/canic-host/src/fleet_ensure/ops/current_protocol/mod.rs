@@ -1226,7 +1226,7 @@ pub(super) fn apply(
                 icp,
                 &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COMMAND,
+                protocol::CANIC_COORDINATOR_COMMAND,
                 &CoordinatorCommand::ActivateRegistry(request.clone()),
             )?;
             let CoordinatorCommandResponse::ActivateRegistry(response) = response else {
@@ -1248,7 +1248,7 @@ pub(super) fn apply(
                 icp,
                 &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COMMAND,
+                protocol::CANIC_COORDINATOR_COMMAND,
                 &CoordinatorCommand::JoinRoot(request.clone()),
             )?;
             let CoordinatorCommandResponse::JoinRoot(response) = response else {
@@ -1264,7 +1264,7 @@ pub(super) fn apply(
                 icp,
                 &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COMMAND,
+                protocol::CANIC_COORDINATOR_COMMAND,
                 &CoordinatorCommand::ProvisionComponents(request.clone()),
             )?;
             operation_receipt(response, request.operation_id)?.to_vec()
@@ -1288,7 +1288,7 @@ pub(super) fn apply(
                 icp,
                 &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COMMAND,
+                protocol::CANIC_ROOT_COMMAND,
                 &RootCommandFragment::PrepareComponentRegistry(request.clone()),
             )?;
             let RootCommandResponseFragment::PrepareComponentRegistry(response) = response else {
@@ -1305,7 +1305,7 @@ pub(super) fn apply(
                 icp,
                 &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COMMAND,
+                protocol::CANIC_ROOT_COMMAND,
                 &RootCommandFragment::RecoverPoolLedger(request.clone()),
             )?;
             let RootCommandResponseFragment::RecoverPoolLedger(receipt) = response else {
@@ -1547,7 +1547,7 @@ fn root_operation_call(
         icp,
         &resolved.candid_path,
         resolved.target,
-        protocol::CANIC_COMMAND,
+        protocol::CANIC_ROOT_COMMAND,
         command,
     )?;
     let RootCommandResponseFragment::OperationAccepted(receipt) = response else {

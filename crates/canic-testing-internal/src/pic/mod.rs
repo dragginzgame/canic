@@ -166,6 +166,7 @@ mod governed_suite {
     #[ignore = "the workspace runner supplies one shared PocketIC server and serial process"]
     fn governed_serial_pocketic_suite() {
         assert_governed_pocketic_order();
+        artifacts::preflight_governed_shared_artifacts();
         let mut cases = fleet_registry::governed_pocketic_cases();
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_pocketic_cases());

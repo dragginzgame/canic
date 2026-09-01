@@ -77,6 +77,12 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
     .clone()
 }
 
+#[cfg(test)]
+pub(super) fn preflight_governed_shared_artifacts() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let _ = build_canonical_fleet_coordinator_wasm(&workspace_root);
+}
+
 fn canonical_fleet_coordinator_cache_spec(
     workspace_root: &Path,
     target_dir: &Path,

@@ -20,7 +20,7 @@ use canic::{
         rpc::RootRequestMetadata,
     },
     ids::{CanisterRole, ComponentBinding},
-    protocol::{CANIC_COMMAND, CANIC_STATUS},
+    protocol::{CANIC_ROOT_COMMAND, CANIC_STATUS},
 };
 use ic_testkit::pic::{CandidCallExt, PocketIc};
 
@@ -229,7 +229,7 @@ fn assert_role_prepare_forbidden(
         .update_candid_as(
             root,
             caller,
-            CANIC_COMMAND,
+            CANIC_ROOT_COMMAND,
             (RootCommand::PrepareRoleAttestation(request),),
         )
         .expect("role attestation rejection transport");
@@ -267,7 +267,7 @@ fn issue_requested_role_attestation(
         .update_candid_as(
             root,
             issuer.canister_id,
-            CANIC_COMMAND,
+            CANIC_ROOT_COMMAND,
             (RootCommand::PrepareRoleAttestation(request),),
         )
         .expect("role attestation prepare transport");

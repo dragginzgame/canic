@@ -29,7 +29,7 @@ Root-owned renewal is the active delegated-auth liveness path for issuers with
 enabled renewal templates:
 
 ```text
-controller             -> root canic_command UpsertIssuerRenewalTemplate update
+controller             -> root canic_root_command UpsertIssuerRenewalTemplate update
 root timer             -> root prepares due issuer entries in a chain-key batch
 root                   -> management canister sign_with_ecdsa
 root                   -> issuer canic_command InstallDelegationProof update
@@ -44,7 +44,7 @@ issuer in `chain_key_batch` mode has no usable active proof, it may request the
 internal root update:
 
 ```text
-issuer                 -> root canic_command GetOrCreateDelegationProof update
+issuer                 -> root canic_root_command GetOrCreateDelegationProof update
 root                   -> management canister sign_with_ecdsa when no reusable batch exists
 root                   -> issuer canic_command InstallDelegationProof update
 ```

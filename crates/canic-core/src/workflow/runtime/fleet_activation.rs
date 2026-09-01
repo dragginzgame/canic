@@ -426,7 +426,7 @@ impl FleetActivationWorkflow {
         Self::require_root_role_variant_allowed(
             prepared_allowed,
             EndpointCall {
-                endpoint: EndpointId::new(protocol::CANIC_COMMAND),
+                endpoint: EndpointId::new(protocol::CANIC_ROOT_COMMAND),
                 kind: EndpointCallKind::Update,
             },
         )

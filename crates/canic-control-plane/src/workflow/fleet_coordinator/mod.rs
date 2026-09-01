@@ -503,7 +503,7 @@ impl FleetCoordinatorWorkflow {
         };
         let call = CallOps::unbounded_wait(
             reservation.request.expected_root.fleet_subnet_root,
-            protocol::CANIC_COMMAND,
+            protocol::CANIC_ROOT_COMMAND,
         )
         .with_arg(RemoteRootCommand::RemoveRoot(RootRemovalRequest {
             reservation,
@@ -703,7 +703,7 @@ async fn call_root_admission(
     command: RemoteRootCommand,
     expected: RootAdmissionResponsePhase,
 ) -> Result<FleetAdmissionRootReceipt, InternalError> {
-    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_COMMAND)
+    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
         .with_arg(command)?
         .execute()
         .await?;
@@ -1159,7 +1159,7 @@ async fn accept_root_component_provisioning(
     let operation_id = call.request.operation_id;
     let plan_hash = call.request.plan_hash;
     let root = call.fleet_subnet_root;
-    let result = CallOps::unbounded_wait(root, protocol::CANIC_COMMAND)
+    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_COMMAND)
         .with_arg(RemoteRootCommand::ProvisionComponents(call.request))?
         .execute()
         .await?;
@@ -1183,7 +1183,7 @@ async fn call_root_funding_acceptance(
     call: FleetRootFundingCallView,
 ) -> Result<FleetRootFundingCallOutcome, InternalError> {
     let granted_cycles = call.request.granted_cycles.to_u128();
-    let result = CallOps::bounded_wait(call.fleet_subnet_root, protocol::CANIC_COMMAND)
+    let result = CallOps::bounded_wait(call.fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
         .with_arg(RemoteRootCommand::AcceptFunding(call.request))?
         .with_cycles(granted_cycles)
         .execute()
@@ -1202,7 +1202,7 @@ async fn call_root_funding_policy_rotation_prepare(
     fleet_subnet_root: Principal,
     request: FleetFundingPolicyRotationRootPrepareRequest,
 ) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
-    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_COMMAND)
+    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
         .with_arg(RemoteRootCommand::PrepareFundingPolicyRotation(request))?
         .execute()
         .await?;
@@ -1217,7 +1217,7 @@ async fn call_root_funding_policy_rotation_activate(
     fleet_subnet_root: Principal,
     request: FleetFundingPolicyRotationRootActivateRequest,
 ) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
-    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_COMMAND)
+    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
         .with_arg(RemoteRootCommand::ActivateFundingPolicyRotation(request))?
         .execute()
         .await?;
@@ -1295,7 +1295,7 @@ async fn advance_root_component_directories(
             fleet_subnet_root,
             request,
         } => {
-            let result = CallOps::unbounded_wait(fleet_subnet_root, protocol::CANIC_COMMAND)
+            let result = CallOps::unbounded_wait(fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
                 .with_arg(RemoteRootCommand::SynchronizeComponentDirectories(request))?
                 .execute()
                 .await?;

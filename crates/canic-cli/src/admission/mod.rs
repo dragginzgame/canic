@@ -320,7 +320,7 @@ fn run_apply(options: AdmissionApplyOptions) -> Result<(), AdmissionCommandError
         &connection.icp,
         &connection.coordinator_binding,
         connection.coordinator,
-        canic_core::protocol::CANIC_COMMAND,
+        canic_core::protocol::CANIC_COORDINATOR_COMMAND,
         &RemoteCoordinatorCommand::MutateAdmission(plan.request.clone()),
     )?;
     let response = match response {

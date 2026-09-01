@@ -40,7 +40,7 @@ fn workspace_resolution_prefers_the_canonical_fleet_coordinator_package() {
 }
 
 #[test]
-fn local_coordinator_build_exports_candid_in_the_selected_leaf_pass() {
+fn coordinator_declaration_pass_exports_candid_only_from_the_selected_leaf() {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut context = WorkspaceBuildContext {
         role: FLEET_COORDINATOR_ROLE.to_string(),
@@ -61,8 +61,14 @@ fn local_coordinator_build_exports_candid_in_the_selected_leaf_pass() {
         .get_args()
         .map(|argument| argument.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
-    assert_eq!(local.first().map(String::as_str), Some("build"));
+    assert_eq!(local.first().map(String::as_str), Some("rustc"));
     assert!(local.contains(&"--locked".to_string()));
+    assert!(
+        local
+            .windows(2)
+            .any(|arguments| arguments == ["--cfg", "canic_export_candid"])
+    );
+    assert!(local.contains(&"--check-cfg=cfg(canic_export_candid)".to_string()));
     assert_eq!(
         local_command.get_envs().find(|(key, _)| {
             *key == std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
