@@ -55,7 +55,7 @@ fn fresh_pool_creation_funding_preserves_toko_shaped_readiness_floor() {
     assert_eq!(
         fresh_pool_creation_funding(1_900_000_000_000)
             .expect("compile Toko-shaped fresh pool funding"),
-        3_000_000_000_000
+        3_900_000_000_000
     );
 }
 
@@ -834,6 +834,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(desired.management_creation_fee_cycles, "0B");
     assert_eq!(desired.material_cycle_threshold, "0.001B");
     assert_eq!(desired.maximum_observation_burn_cycles, "1T");
+    assert_eq!(desired.maximum_update_burn_cycles, "1T");
     for value in [
         &desired.ledger_fee_cycles,
         &desired.management_creation_fee_cycles,
@@ -974,11 +975,11 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(matches!(
         insufficient_error,
         crate::fleet_ensure::policy::EnsurePolicyError::FreshPoolCreationFundingInsufficient {
-            admissible_burn_cycles: 1_100_000_000_000,
+            admissible_burn_cycles: 2_000_000_000_000,
             creation_funding_cycles: 1_900_000_000_000,
             readiness_floor_cycles: 1_900_000_000_000,
-            required_creation_funding_cycles: 3_000_000_000_000,
-            shortfall_cycles: 1_100_000_000_000,
+            required_creation_funding_cycles: 3_900_000_000_000,
+            shortfall_cycles: 2_000_000_000_000,
             ..
         }
     ));
@@ -1084,7 +1085,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             .iter()
             .find(|(_, name, _)| name.as_str() == pool.name.as_str())
             .expect("fresh pool creation is reviewed directly");
-        assert_eq!(pool.initial_cycles, "6.1T");
+        assert_eq!(pool.initial_cycles, "7T");
         assert_eq!(pool.minimum_cycles, "5T");
         assert_eq!(
             pool.initial_cycles
@@ -1095,6 +1096,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     }
     let legacy_pool = fresh_pools.first().expect("first fresh pool");
     let mut legacy_desired = fresh.desired.clone();
+    legacy_desired.maximum_update_burn_cycles = "100B".to_string();
     let legacy_desired_pool = legacy_desired
         .canisters
         .iter_mut()
@@ -4578,7 +4580,6 @@ fn retained_pool_response(
         pending_reset: 0,
         claimed: 0,
         recycling: 0,
-        recovering_ledger: 0,
         handing_off: 0,
         failed: 0,
         completed_handoffs: 0,
@@ -4906,7 +4907,6 @@ fn infrastructure_artifacts(
     [
         CanicInfrastructureRole::FleetCoordinator,
         CanicInfrastructureRole::FleetSubnetRoot,
-        CanicInfrastructureRole::PoolLedgerRecovery,
         CanicInfrastructureRole::WasmStore,
     ]
     .into_iter()

@@ -43,12 +43,6 @@ fn owned_inputs(release_build_id: ReleaseBuildId) -> Vec<OwnedInput> {
             release_build_id,
             2,
         ),
-        OwnedInput::new(
-            CanicInfrastructureRole::PoolLedgerRecovery,
-            "canic-generated-pool-ledger-recovery",
-            release_build_id,
-            4,
-        ),
     ]
 }
 
@@ -152,7 +146,7 @@ fn compiler_derives_one_canonical_entry_per_infrastructure_role() {
     assert_eq!(manifest.digest().expect("manifest digest"), expected_digest);
     assert_eq!(
         canic_core::cdk::utils::hash::hex_bytes(expected_digest),
-        "71f8344eb5e7cd3401c71485376718e5f8c0d2659a592bdc838f507e32b2bb88",
+        "ead80ae4eb586bdb12f42f534570099959aae144508baada3c2c77584e069e93",
     );
 }
 

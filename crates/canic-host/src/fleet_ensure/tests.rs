@@ -35,7 +35,6 @@ use canic_core::{
             FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootStatus,
         },
         fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
-        pool::{PoolLedgerRecoveryArtifact, PoolLedgerRecoveryRequest},
     },
     ids::{
         AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest, ComponentTopologyDigest,
@@ -1630,81 +1629,6 @@ fn conservation_equation_accounts_for_funding_fees_and_burn_separately() {
     assert!(proof.scheduled_transfer_cycles > 0);
     assert!(proof.retained_in_reused_canisters_cycles > 0);
     assert!(proof.maximum_new_funding_cycles > 0);
-}
-
-#[test]
-fn pool_ledger_recovery_counts_controlled_ledger_cycles_and_fee_before_conversion() {
-    let mut baseline = fixture();
-    baseline.desired.protocol = Some(DesiredFleetProtocol {
-        app_config: "canic.toml".to_string(),
-        component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".to_string(),
-        root_candid: "root.did".to_string(),
-        store_candid: "store.did".to_string(),
-    });
-    let root_canister = baseline
-        .desired
-        .canisters
-        .iter_mut()
-        .find(|canister| canister.name == "app")
-        .expect("fixture Root");
-    root_canister.kind = DesiredCanisterKind::Root;
-    root_canister.parent = Some("treasury".to_string());
-    for canister in &mut baseline.desired.canisters {
-        if matches!(
-            canister.kind,
-            DesiredCanisterKind::Coordinator | DesiredCanisterKind::Root
-        ) {
-            canister.wasm = None;
-        }
-    }
-    baseline.platform.desired = baseline.desired.clone();
-    let baseline_plan = workflow::plan(
-        &baseline.root,
-        &baseline.desired,
-        &"74".repeat(32),
-        "test-fleet",
-        1_800_000_000_000_000_000,
-        &mut baseline.platform,
-    )
-    .expect("compile baseline plan")
-    .plan;
-
-    let mut recovery = fixture();
-    recovery.desired = baseline.desired;
-    recovery.platform.desired = recovery.desired.clone();
-    recovery.platform.protocol_action = Some(pool_ledger_recovery_action());
-    let recovery_plan = workflow::plan(
-        &recovery.root,
-        &recovery.desired,
-        &"75".repeat(32),
-        "test-fleet",
-        1_800_000_000_000_000_000,
-        &mut recovery.platform,
-    )
-    .expect("compile pool Ledger recovery plan")
-    .plan;
-
-    assert_eq!(
-        recovery_plan.conservation.observed_controlled_cycles,
-        baseline_plan.conservation.observed_controlled_cycles + 30
-    );
-    assert_eq!(
-        recovery_plan.conservation.scheduled_transfer_cycles,
-        baseline_plan.conservation.scheduled_transfer_cycles + 20
-    );
-    assert_eq!(
-        recovery_plan.conservation.maximum_execution_burn_cycles,
-        baseline_plan.conservation.maximum_execution_burn_cycles + 11
-    );
-    assert_eq!(
-        recovery_plan.conservation.expected_post_operation_cycles,
-        baseline_plan.conservation.expected_post_operation_cycles + 19
-    );
-    assert_eq!(
-        recovery_plan.conservation.maximum_operator_debit_cycles,
-        baseline_plan.conservation.maximum_operator_debit_cycles
-    );
 }
 
 #[test]
@@ -3378,30 +3302,6 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
                 },
             },
         ),
-        fleet_protocol_action(
-            "pool-ledger-recovery",
-            CurrentFleetProtocolAction::RecoverPoolLedger {
-                request: PoolLedgerRecoveryRequest {
-                    artifact: PoolLedgerRecoveryArtifact {
-                        candid_sha256: [19; 32],
-                        payload_hash: [20; 32],
-                        payload_size_bytes: 1,
-                        raw_module_hash: [21; 32],
-                        release_build_id: ReleaseBuildId::from_nonce(
-                            ReleaseBuildNonce::from_random_bytes([22; 32]),
-                        ),
-                    },
-                    canister_id: OLD_APP.parse().expect("fixture pool Principal"),
-                    created_at_time_ns: 1,
-                    cycles_ledger: TREASURY.parse().expect("fixture Ledger Principal"),
-                    ledger_balance: Cycles::new(u128::MAX),
-                    ledger_fee: Cycles::new(1),
-                    maximum_execution_burn_cycles: Cycles::new(1),
-                    operation_id: [23; 32],
-                    withdrawal_amount: Cycles::new(u128::MAX - 1),
-                },
-            },
-        ),
     ];
     let action_hashes = actions
         .iter()
@@ -3437,8 +3337,7 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
     crate::fleet_ensure::ops::write_plan(&paths, &plan).expect("write current plan");
     let encoded = fs::read_to_string(&paths.plan).expect("read current plan JSON");
     assert!(encoded.contains(&format!("\"canister_cycles\": \"{}\"", u128::MAX)));
-    assert!(encoded.contains(&format!("\"ledger_balance\": \"{}\"", u128::MAX)));
-    assert!(encoded.contains(&format!("\"withdrawal_amount\": \"{}\"", u128::MAX - 1)));
+    assert!(encoded.contains(&format!("\"maximum_cycles\": \"{}\"", u128::MAX)));
     let reopened = crate::fleet_ensure::ops::read_plan(&paths)
         .expect("read current plan")
         .expect("retained current plan");
@@ -3835,7 +3734,8 @@ fn tampered_reviewed_plan_fails_before_any_effect() {
     reason = "one governed journey keeps literal-zero planning, lost-Create resume, convergence and second-run proof together"
 )]
 fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
-    use pocket_ic::{CreateCanisterParams, PocketIcBuilder};
+    use ic_testkit::pic::PocketIcBuilder;
+    use ic_testkit::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 
     struct PocketPlatform {
         create_outcomes: BTreeMap<String, EffectOutcome>,
@@ -3844,7 +3744,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         known: BTreeSet<String>,
         mutations: BTreeMap<String, u32>,
         operator_cycles: u128,
-        pic: pocket_ic::PocketIc,
+        pic: PocketIc,
         protocol_ready: BTreeSet<String>,
         reinstall_required: BTreeSet<String>,
     }
@@ -4108,11 +4008,11 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                             None,
                             CreateCanisterParams {
                                 cycles: Some(*requested_initial_cycles),
-                                settings: Some(pocket_ic::CanisterSettings {
+                                settings: Some(CanisterSettings {
                                     controllers: Some(vec![
                                         CONTROLLER.parse().expect("controller Principal"),
                                     ]),
-                                    ..pocket_ic::CanisterSettings::default()
+                                    ..CanisterSettings::default()
                                 }),
                                 ..CreateCanisterParams::default()
                             },
@@ -4823,7 +4723,6 @@ fn current_protocol_variants(plan: &FleetEnsurePlan) -> BTreeSet<&'static str> {
                     "prepare_component_registry"
                 }
                 CurrentFleetProtocolAction::ProvisionComponents { .. } => "provision_components",
-                CurrentFleetProtocolAction::RecoverPoolLedger { .. } => "recover_pool_ledger",
                 CurrentFleetProtocolAction::PublishStoreChunk { .. } => "publish_store_chunk",
                 CurrentFleetProtocolAction::StageStoreManifest { .. } => "stage_store_manifest",
                 CurrentFleetProtocolAction::SynchronizeRegistry { .. } => "synchronize_registry",
@@ -4887,37 +4786,6 @@ fn typed_protocol_action(operation_id: &str) -> EnsureAction {
         maximum_execution_burn_cycles: 1,
         name: "fleet-component-provisioning".to_string(),
         principal: TREASURY.to_string(),
-    }
-}
-
-fn pool_ledger_recovery_action() -> EnsureAction {
-    EnsureAction::FleetProtocol {
-        action: Box::new(CurrentFleetProtocolAction::RecoverPoolLedger {
-            request: PoolLedgerRecoveryRequest {
-                artifact: PoolLedgerRecoveryArtifact {
-                    candid_sha256: [1; 32],
-                    payload_hash: [2; 32],
-                    payload_size_bytes: 3,
-                    raw_module_hash: [4; 32],
-                    release_build_id: ReleaseBuildId::from_nonce(
-                        ReleaseBuildNonce::from_random_bytes([5; 32]),
-                    ),
-                },
-                canister_id: OLD_APP.parse().expect("fixture pool Principal"),
-                created_at_time_ns: 6,
-                cycles_ledger: LEDGER.parse().expect("fixture Cycles Ledger Principal"),
-                ledger_balance: Cycles::new(30),
-                ledger_fee: Cycles::new(10),
-                maximum_execution_burn_cycles: Cycles::new(1),
-                operation_id: [7; 32],
-                withdrawal_amount: Cycles::new(20),
-            },
-        }),
-        candid: "root.did".to_string(),
-        candid_sha256: "8".repeat(64),
-        maximum_execution_burn_cycles: 1,
-        name: "pool-ledger-recovery:app".to_string(),
-        principal: OLD_APP.to_string(),
     }
 }
 

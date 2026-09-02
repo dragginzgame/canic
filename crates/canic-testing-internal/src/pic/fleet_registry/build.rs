@@ -7,7 +7,7 @@ use ic_testkit::artifacts::{
 };
 use ic_testkit::pic::{PocketIc, PocketIcBuilder};
 #[cfg(test)]
-use pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig};
+use ic_testkit::pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -223,6 +223,21 @@ pub(super) fn build_pic() -> PocketIc {
             .with_application_subnet(),
     );
     progress("PocketIC instance ready");
+    pic
+}
+
+// Build one Fleet fixture whose HTTP gateway exposes an exact local root key
+// for production-agent transport qualification.
+#[cfg(test)]
+pub(super) fn build_management_pic() -> PocketIc {
+    progress("starting management-agent PocketIC instance");
+    let pic = start_pocket_ic(
+        PocketIcBuilder::new()
+            .with_nns_subnet()
+            .with_ii_subnet()
+            .with_application_subnet(),
+    );
+    progress("management-agent PocketIC instance ready");
     pic
 }
 

@@ -421,9 +421,6 @@ pub enum CurrentFleetProtocolAction {
         plan_hash: [u8; 32],
         request: canic_core::dto::component_provisioning::FleetComponentProvisioningPrepareRequest,
     },
-    RecoverPoolLedger {
-        request: canic_core::dto::pool::PoolLedgerRecoveryRequest,
-    },
     PublishStoreChunk {
         request: canic_control_plane::dto::template::TemplateChunkInput,
     },
@@ -448,7 +445,6 @@ impl CurrentFleetProtocolAction {
             | Self::AdoptStore { .. }
             | Self::BootstrapStore { .. }
             | Self::PrepareComponentRegistry { .. }
-            | Self::RecoverPoolLedger { .. }
             | Self::SynchronizeRegistry { .. } => DesiredCanisterKind::Root,
             Self::PrepareStoreChunkSet { .. }
             | Self::PublishStoreChunk { .. }
@@ -471,7 +467,6 @@ impl CurrentFleetProtocolAction {
             Self::AdoptStore { request } => Some(request.operation_id),
             Self::BootstrapStore { request, .. } => Some(request.operation_id),
             Self::ProvisionComponents { request, .. } => Some(request.operation_id),
-            Self::RecoverPoolLedger { request } => Some(request.operation_id),
         }
     }
 }

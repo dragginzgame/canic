@@ -25,10 +25,10 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.110.1` at
-`7825bed9f7538c6e217f8aa9eb73dd1beb2d01e6`. Its governed marker records the
+Current development begins from published `v0.110.2` at
+`f9009d5ae7be78d4f9dd746431584368770e8364`. Its governed marker records the
 validated source below; immutable details are in
-[the 0.110 changelog](../changelog/0.110.md). `0.110.2` is the single open
+[the 0.110 changelog](../changelog/0.110.md). `0.110.3` is the single open
 patch draft. Source-development truth comes from Git and the working tree.
 
 ## Maintained 0.109 Contract
@@ -125,29 +125,35 @@ rejected its controller-authenticated, read-only `InspectCanister` command with
 `LIFECYCLE_INACTIVE`.
 
 The `0.110.2` correction admits only `InspectCanister` to the Prepared Root
-command set. `CANIC-121` now has two deliberately separate proofs. The host
-Fleet Ensure proof starts with no canisters, runs the reviewed plan and durable
-journal through real PocketIC management effects, loses the first Create
-response, reconstructs the host adapter, resumes the same operation and proves
-terminal conservation plus immediate zero-effect replay. The control-plane
-proof creates the production Root-plus-installation-controller pool shape,
-observes both sides of controller finalisation through the real Prepared Root
-endpoint, imports/resets the 1.9T-floor assets, provisions one Component and
-finishes with exactly one Workload plus one Ready asset. It no longer invents
-host receipts or claims to be the host apply/restart proof.
+command set. Its host Fleet Ensure proof starts with no canisters, runs the
+reviewed plan and durable journal through real PocketIC management effects,
+loses the first Create response, reconstructs the host adapter, resumes the
+same operation and proves terminal conservation plus immediate zero-effect
+replay. The open `0.110.3` CANIC-121 completion closes the remaining seam in
+the control-plane journey: the concrete `IcpEnsurePlatform` and an isolated
+real ICP CLI identity now finalise both pool controller sets through the
+Prepared Root, lose one successful update response, reconstruct the adapter,
+adopt the exact live result and prove replay does not repeat either effect.
+That production path also proved that the prior 100B update-burn ceiling could
+leave a freshly created pool asset below its 1.9T Ready floor after controller
+finalisation and Root reset. The generated current contract now reviews 1T for
+first observation plus 1T for updates, producing a bounded 3.9T Create. The
+same PocketIC estate then imports/resets both assets, provisions one Component
+and finishes with exactly one Workload plus one Ready asset.
 
-`CANIC-123` writes a deterministic helper seed from the consuming workspace's
-exact lock before the first infrastructure compile. Cargo normalizes that seed
-offline to the generated pool-Ledger recovery helper graph; Canic reports the
-complete set of package identities outside the workspace lock and then proves
-the result stable under `--locked`. The cache-free unit fixture retains an
-older compatible transitive identity without requiring that crate to exist in
-the machine cache, and the governed generated-helper PocketIC proof passes.
+Published `v0.110.2` included `CANIC-123` for the then-supported temporary
+pool-Ledger recovery canister. The open `0.110.3` current contract hard-deletes
+that obsolete feature rather than retaining a generated helper graph: its
+artifact/build role, Store publication, Root command/status/stable state, Fleet
+Ensure action, fixtures and dedicated CI owner are gone together. Canic funds
+pool assets through native canister creation or top-up and does not generate a
+plain Ledger-account transfer to a pool Principal.
 
-Focused host and governed PocketIC evidence now passes. The original correction
-remains in `v0.110.0`; its production-boundary and deterministic-lock follow-up
-is the open `0.110.2` batch rather than a reopening of the accepted 0.109 line.
-No downstream or network effect is part of this source correction.
+Published `v0.110.2` contains the fresh-estate, Prepared-Root and deterministic-
+lock corrections. The open `0.110.3` batch supplies the final concrete-adapter
+CANIC-121 proof and the temporary-helper hard cut rather than reopening the
+accepted 0.109 line. No downstream or live-network effect is part of this
+source correction.
 
 ## B1-B10 State
 
@@ -190,7 +196,7 @@ runtime or repository dependency.
 | Line | Active owner | State |
 | --- | --- | --- |
 | [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.1` published; `0.110.2` corrects the fresh-estate unblock before B1 resumes |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.2` published; `0.110.3` closes the CANIC-121 qualification seam before B1 resumes |
 | [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
@@ -214,13 +220,13 @@ baseline before any runtime contraction. Initial work:
 - keeps the exact downstream canary read-only and separate from Canic source.
 
 No broad workspace or full PocketIC gate is run during coding. The maintainer's
-release flow owns that boundary. The independent `0.110.2` correctness batch
-must land before this measurement work resumes; it does not promote B2.
+release flow owns that boundary. The independent `0.110.3` CANIC-121 proof must
+land before this measurement work resumes; it does not promote B2.
 
 ## Next Authorized Action
 
-Publish the bounded `0.110.2` `CANIC-121` through `CANIC-123` correction, then
-resume B1 from immutable `v0.110.1`: complete the frozen downstream canary,
+Complete and publish the bounded `0.110.3` CANIC-121 production-adapter proof,
+then resume B1 from immutable `v0.110.2`: complete the frozen downstream canary,
 controlled ablations, generated-surface inventory and generic-instantiation
 cohort. Retain the active B1 evidence and do not begin B2 until the maintainer
 accepts the complete B1 baseline.

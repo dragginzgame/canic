@@ -31,7 +31,7 @@ use ic_stable_structures::{
     memory_manager::{MemoryId, MemoryManager},
 };
 use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIcTimeExt};
-use pocket_ic::common::rest::BlobCompression;
+use ic_testkit::pocket_ic::{PocketIc, common::rest::BlobCompression};
 use serde::Serialize;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -1286,7 +1286,7 @@ fn native_agent_subject() -> candid::Principal {
     reason = "the fixture injector names every exact canonical state and authority input"
 )]
 fn inject_application_authorization_state(
-    pic: &pocket_ic::PocketIc,
+    pic: &PocketIc,
     canister_id: candid::Principal,
     issuer: candid::Principal,
     role: CanisterRole,

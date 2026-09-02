@@ -4,8 +4,9 @@
 use super::build::{
     build_five_component_root_wasm, build_five_trillion_component_root_wasm, build_icp_refill_pic,
     build_icp_refill_stub_wasm, build_mainnet_five_component_refill_wasms,
-    build_mainnet_refill_wasms, build_toko_shaped_singleton_root_wasm, build_two_root_pic,
-    five_component_root_canister_config_path, five_trillion_component_root_canister_config_path,
+    build_mainnet_refill_wasms, build_management_pic, build_toko_shaped_singleton_root_wasm,
+    build_two_root_pic, five_component_root_canister_config_path,
+    five_trillion_component_root_canister_config_path,
     toko_shaped_singleton_root_canister_config_path,
 };
 use super::build::{
@@ -29,6 +30,8 @@ mod tests {
     use candid::Nat;
     #[cfg(test)]
     use candid::decode_args;
+    #[cfg(test)]
+    use candid::types::{Function, TypeInner, internal::TypeContainer};
     use candid::{CandidType, Deserialize, decode_one, encode_one};
     #[cfg(test)]
     use canic::dto::authority_restore::{
@@ -41,8 +44,6 @@ mod tests {
     #[cfg(test)]
     use canic::dto::pool::{
         CanisterPoolAssetOrigin, CanisterPoolAssetStatus, PoolCanisterRequest, PoolImportResponse,
-        PoolLedgerRecoveryArtifact, PoolLedgerRecoveryPhase, PoolLedgerRecoveryReceipt,
-        PoolLedgerRecoveryRequest,
     };
     use canic::dto::pool::{
         CanisterPoolResponse, CanisterPoolStatusRequest, PoolMaintenanceResponse,
@@ -151,20 +152,22 @@ mod tests {
     };
     #[cfg(test)]
     use canic_host::fleet_ensure::model::{
-        CurrentFleetProtocolAction, DesiredFleet, FLEET_ENSURE_SCHEMA_VERSION,
-        FleetEnsureStateRecord,
+        CurrentFleetProtocolAction, DesiredFleet, EffectRecord, EffectState, EnsureAction,
+        FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureStateRecord,
     };
     #[cfg(test)]
     use canic_host::fleet_ensure::{
         CompiledCurrentComponentProvisioning, CompiledCurrentProtocolStep,
-        CompiledCurrentStoreSequence, CurrentComponentGroupPlacement, CurrentRegistryStage,
-        append_qualified_pool_ledger_recovery_artifact, compile_current_component_provisioning,
-        compile_current_protocol_sequence, compile_current_registry_sequence,
-        compile_current_registry_sequence_with_status, compile_current_store_sequence_from_union,
+        CurrentComponentGroupPlacement, CurrentRegistryStage, IcpEnsurePlatform,
+        compile_current_component_provisioning, compile_current_protocol_sequence,
+        compile_current_registry_sequence, compile_current_registry_sequence_with_status,
+        compile_current_store_sequence_from_union,
     };
     use canic_host::release_set::AppConfigSnapshot;
     #[cfg(test)]
     use canic_host::release_set::{ApplicationArtifactEntry, ApplicationArtifactUnion};
+    #[cfg(test)]
+    use canic_host::{fleet_ensure::ops::EnsurePlatform, icp::LocalReplicaTarget};
     use flate2::{Compression, write::GzEncoder};
     use std::{
         collections::BTreeMap,
@@ -175,6 +178,8 @@ mod tests {
         sync::OnceLock,
         time::{Duration, Instant},
     };
+    #[cfg(test)]
+    use std::{path::PathBuf, process::Command};
 
     use crate::pic::fleet_registry::fixture::progress_elapsed;
     use crate::pic::{
@@ -201,8 +206,9 @@ mod tests {
         is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
-    use pocket_ic::{
-        CreateCanisterParams, CreateCanisterPlacement, common::rest::RawEffectivePrincipal,
+    use ic_testkit::pocket_ic::{
+        CanisterSettings, CreateCanisterParams, CreateCanisterPlacement,
+        common::rest::RawEffectivePrincipal,
     };
 
     #[cfg(test)]
@@ -239,16 +245,12 @@ mod tests {
         BootstrapStore(RootStoreBootstrapRequest),
         #[cfg(test)]
         ImportPoolCanister(PoolCanisterRequest),
-        #[cfg(test)]
-        InspectCanister(CanisterInspectionRequest),
         MaintainPool,
         #[cfg(test)]
         PrepareAuthoritySnapshot(AuthoritySnapshotRequest),
         PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
         PrepareFleetActivation,
         ProvisionComponent(RootComponentAllocationRequest),
-        #[cfg(test)]
-        RecoverPoolLedger(PoolLedgerRecoveryRequest),
         #[cfg(test)]
         RespondCapability(canic::dto::capability::RootCapabilityEnvelopeV1),
         #[cfg(test)]
@@ -258,22 +260,18 @@ mod tests {
     }
 
     #[derive(CandidType, Debug, Deserialize)]
-    #[expect(
+    #[allow(
         clippy::large_enum_variant,
-        reason = "the decoder mirrors the direct Root command wire"
+        reason = "the direct Root wire decoder changes size across test-only variants"
     )]
     enum RootCommandResponseFragment {
         #[cfg(test)]
         ImportPoolCanister(PoolImportResponse),
-        #[cfg(test)]
-        InspectCanister(CanisterStatusResponse),
         MaintainPool(PoolMaintenanceResponse),
         OperationAccepted(OperationReceipt),
         #[cfg(test)]
         PrepareAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
         PrepareComponentRegistry(RootComponentRegistryStatusResponse),
-        #[cfg(test)]
-        RecoverPoolLedger(PoolLedgerRecoveryReceipt),
         #[cfg(test)]
         ResumeAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
         #[cfg(test)]
@@ -1299,6 +1297,199 @@ mod tests {
         canister_id: Principal,
     }
 
+    #[cfg(test)]
+    fn prepare_isolated_icp(root: &Path) -> (PathBuf, Principal, PathBuf) {
+        let wrapper = root.join("icp-wrapper");
+        let mutation_log = root.join("controller-mutations.log");
+        std::fs::create_dir_all(root).expect("create isolated ICP root");
+        std::fs::write(
+            &wrapper,
+            r#"#!/bin/sh
+set -eu
+wrapper_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export XDG_CONFIG_HOME="$wrapper_root/xdg-config"
+export XDG_DATA_HOME="$wrapper_root/xdg-data"
+export DO_NOT_TRACK=1
+case " $* " in
+  *" canister settings update "*)
+    icp "$@"
+    result=$?
+    if [ "$result" -ne 0 ]; then
+      exit "$result"
+    fi
+    printf '%s\n' "$*" >> "$wrapper_root/controller-mutations.log"
+    if [ ! -e "$wrapper_root/lost-controller-response" ]; then
+      : > "$wrapper_root/lost-controller-response"
+      printf '%s\n' 'simulated lost controller-update response' >&2
+      exit 71
+    fi
+    exit 0
+    ;;
+esac
+exec icp "$@"
+"#,
+        )
+        .expect("write isolated ICP wrapper");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mut permissions = std::fs::metadata(&wrapper)
+                .expect("read isolated ICP wrapper metadata")
+                .permissions();
+            permissions.set_mode(0o700);
+            std::fs::set_permissions(&wrapper, permissions)
+                .expect("make isolated ICP wrapper executable");
+        }
+
+        let seed = root.join("identity-seed.txt");
+        let created = Command::new(&wrapper)
+            .args([
+                "identity",
+                "new",
+                "canic-121",
+                "--storage",
+                "plaintext",
+                "--output-seed",
+            ])
+            .arg(&seed)
+            .output()
+            .expect("create isolated ICP identity");
+        assert!(
+            created.status.success(),
+            "isolated ICP identity creation failed: {}",
+            String::from_utf8_lossy(&created.stderr)
+        );
+        let selected = Command::new(&wrapper)
+            .args(["identity", "default", "canic-121"])
+            .output()
+            .expect("select isolated ICP identity");
+        assert!(
+            selected.status.success(),
+            "isolated ICP identity selection failed: {}",
+            String::from_utf8_lossy(&selected.stderr)
+        );
+        let principal = Command::new(&wrapper)
+            .args(["identity", "principal"])
+            .output()
+            .expect("resolve isolated ICP Principal");
+        assert!(
+            principal.status.success(),
+            "isolated ICP Principal failed: {}",
+            String::from_utf8_lossy(&principal.stderr)
+        );
+        let principal = Principal::from_text(
+            String::from_utf8(principal.stdout)
+                .expect("ICP Principal output UTF-8")
+                .trim(),
+        )
+        .expect("isolated ICP Principal");
+        (wrapper, principal, mutation_log)
+    }
+
+    #[cfg(test)]
+    fn write_fixture_root_inspection_candid(path: &Path) {
+        #[derive(CandidType)]
+        #[expect(dead_code, reason = "the type emits one exact test Candid sidecar")]
+        enum InspectionCommand {
+            InspectCanister(CanisterInspectionRequest),
+        }
+
+        #[derive(CandidType)]
+        #[expect(dead_code, reason = "the type emits one exact test Candid sidecar")]
+        enum InspectionResponse {
+            InspectCanister(CanisterStatusResponse),
+        }
+
+        let mut types = TypeContainer::new();
+        let argument = types.add::<InspectionCommand>();
+        let response = types.add::<Result<InspectionResponse, Error>>();
+        let method = TypeInner::Func(Function {
+            args: vec![argument],
+            modes: Vec::new(),
+            rets: vec![response],
+        })
+        .into();
+        let service = TypeInner::Service(vec![(
+            canic::protocol::CANIC_ROOT_COMMAND.to_string(),
+            method,
+        )])
+        .into();
+        let candid = candid::pretty::candid::compile(&types.env, &Some(service));
+        std::fs::write(path, candid).expect("write fixture Root inspection Candid");
+    }
+
+    #[cfg(test)]
+    fn controller_finalization_desired(
+        operator: Principal,
+        root: Principal,
+        root_controllers: &[Principal],
+        root_subnet: Principal,
+        root_wasm: &Path,
+        root_candid: &Path,
+        pools: &[Principal],
+    ) -> DesiredFleet {
+        let mut canisters = vec![serde_json::json!({
+            "controllers": root_controllers.iter().map(Principal::to_text).collect::<Vec<_>>(),
+            "controller_canisters": [],
+            "drain": null,
+            "initial_cycles": "0",
+            "init_arg": null,
+            "init_candid": null,
+            "kind": "root",
+            "minimum_cycles": "0",
+            "name": "root",
+            "parent": null,
+            "presence": "present",
+            "principal": root.to_text(),
+            "replace": false,
+            "subnet": root_subnet.to_text(),
+            "wasm": root_wasm.display().to_string(),
+        })];
+        canisters.extend(pools.iter().enumerate().map(|(index, pool)| {
+            serde_json::json!({
+                "controllers": [],
+                "controller_canisters": ["root"],
+                "drain": null,
+                "initial_cycles": "0",
+                "init_arg": null,
+                "init_candid": null,
+                "kind": "pool",
+                "minimum_cycles": "0",
+                "name": format!("pool-{index}"),
+                "parent": "root",
+                "presence": "present",
+                "principal": pool.to_text(),
+                "replace": false,
+                "subnet": root_subnet.to_text(),
+                "wasm": null,
+            })
+        }));
+        serde_json::from_value(serde_json::json!({
+            "bootstrap": null,
+            "canisters": canisters,
+            "cycles_ledger": root.to_text(),
+            "environment": "local",
+            "fleet": "canic-121-controller-finalization",
+            "ledger_fee_cycles": "0",
+            "management_creation_fee_cycles": "0",
+            "material_cycle_threshold": "0",
+            "maximum_observation_burn_cycles": "0",
+            "maximum_stalled_observations": 8,
+            "maximum_update_burn_cycles": "0",
+            "operator": operator.to_text(),
+            "protocol": {
+                "app_config": "unused-canic.toml",
+                "component_group_placements": [],
+                "coordinator_candid": "unused-coordinator.did",
+                "root_candid": root_candid.display().to_string(),
+                "store_candid": "unused-store.did",
+            },
+            "schema_version": FLEET_ENSURE_SCHEMA_VERSION,
+            "treasury": "root",
+        }))
+        .expect("decode controller-finalization desired state")
+    }
+
     #[test]
     fn prepared_mainnet_root_automatically_refills_one_exact_pool_asset() {
         assert_mainnet_refill(false, 1);
@@ -1665,11 +1856,7 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one governed journey keeps exact Store publication, Root bootstrap, helper staging, and replay evidence together"
-    )]
-    fn current_store_stages_recovery_helper_after_root_bootstrap_and_replays_zero_effects() {
+    fn current_store_bootstraps_application_catalog_and_replays_zero_effects() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let config_path = five_component_root_canister_config_path(&workspace_root);
@@ -1713,7 +1900,7 @@ mod tests {
         }
         std::fs::create_dir_all(&artifact_root).expect("create artifact-union fixture");
         let union = fixture_application_artifact_union(&artifact_root, &installed);
-        let mut store_sequence = compile_current_store_sequence_from_union(
+        let store_sequence = compile_current_store_sequence_from_union(
             &artifact_root,
             &configuration.component_topology,
             &installed.init_args.authority,
@@ -1721,18 +1908,6 @@ mod tests {
             &union,
         )
         .expect("compile current Store sequence");
-        let helper_manifest = append_fixture_pool_ledger_recovery_artifact(
-            &mut store_sequence,
-            installed.manifest.release_build_id,
-        );
-        assert!(
-            store_sequence
-                .expected_bootstrap
-                .catalog
-                .iter()
-                .all(|entry| entry.role.as_str() != "pool_ledger_recovery"),
-            "the temporary helper must remain outside the application catalog"
-        );
         let wasm_store = installed
             .init_args
             .authority
@@ -1743,33 +1918,13 @@ mod tests {
             .authority
             .wasm_store_authority
             .installation_controller;
-        let bootstrap_position = store_sequence
-            .actions
-            .iter()
-            .position(|action| matches!(action, CurrentFleetProtocolAction::BootstrapStore { .. }))
-            .expect("Root bootstrap protocol step");
-        let helper_position = store_sequence
-            .actions
-            .iter()
-            .position(|action| {
-                matches!(
-                    action,
-                    CurrentFleetProtocolAction::StageStoreManifest { request }
-                        if request.role.as_str() == "pool_ledger_recovery"
-                )
-            })
-            .expect("recovery helper Store protocol step");
-        assert!(
-            bootstrap_position < helper_position,
-            "Root must bootstrap its application catalog before helper staging"
-        );
         let actions = store_sequence
             .actions
             .iter()
             .enumerate()
             .map(|(index, action)| CompiledCurrentProtocolStep {
                 action: action.clone(),
-                name: format!("store-helper-{index}"),
+                name: format!("store-bootstrap-{index}"),
                 target: match action {
                     CurrentFleetProtocolAction::AdoptStore { .. }
                     | CurrentFleetProtocolAction::BootstrapStore { .. } => installed.root_id,
@@ -1784,18 +1939,6 @@ mod tests {
             issue_current_protocol_step(&pic, step, installation_controller);
             await_current_protocol_step(&pic, step, installation_controller);
         }
-        let helper_status = current_store_staging_status(
-            &pic,
-            wasm_store,
-            installation_controller,
-            &helper_manifest.template_id,
-            &helper_manifest.version,
-        );
-        assert_eq!(
-            helper_status.manifest.as_ref(),
-            Some(&current_manifest_response(&helper_manifest)),
-            "the real Store must retain the exact post-bootstrap helper manifest"
-        );
         let nonterminal = actions
             .iter()
             .filter(|step| !current_protocol_step_is_terminal(&pic, step, installation_controller))
@@ -1858,7 +2001,7 @@ mod tests {
         }
         std::fs::create_dir_all(&artifact_root).expect("create artifact-union fixture");
         let union = fixture_application_artifact_union(&artifact_root, &installed);
-        let mut store_sequence = compile_current_store_sequence_from_union(
+        let store_sequence = compile_current_store_sequence_from_union(
             &artifact_root,
             &configuration.component_topology,
             &installed.init_args.authority,
@@ -1866,18 +2009,6 @@ mod tests {
             &union,
         )
         .expect("compile current Store sequence");
-        let helper_manifest = append_fixture_pool_ledger_recovery_artifact(
-            &mut store_sequence,
-            installed.manifest.release_build_id,
-        );
-        assert!(
-            store_sequence
-                .expected_bootstrap
-                .catalog
-                .iter()
-                .all(|entry| entry.role.as_str() != "pool_ledger_recovery"),
-            "the temporary helper must remain outside the application catalog"
-        );
         let fixture = BootstrappedRootFixture {
             root_id: installed.root_id,
             init_args: installed.init_args.clone(),
@@ -1986,29 +2117,6 @@ mod tests {
             actions.is_sorted_by_key(|step| current_protocol_test_stage(&step.action)),
             "current protocol actions must preserve Store -> join -> sync -> activate -> mirror -> Component order"
         );
-        let bootstrap_position = actions
-            .iter()
-            .position(|step| {
-                matches!(
-                    step.action,
-                    CurrentFleetProtocolAction::BootstrapStore { .. }
-                )
-            })
-            .expect("Root bootstrap protocol step");
-        let helper_position = actions
-            .iter()
-            .position(|step| {
-                matches!(
-                    &step.action,
-                    CurrentFleetProtocolAction::StageStoreManifest { request }
-                        if request.role.as_str() == "pool_ledger_recovery"
-                )
-            })
-            .expect("recovery helper Store protocol step");
-        assert!(
-            bootstrap_position < helper_position,
-            "Root must bootstrap its application catalog before helper staging"
-        );
         let mut replayed_component_command = false;
         for step in &actions {
             if let CurrentFleetProtocolAction::ProvisionComponents { request, .. } = &step.action {
@@ -2091,18 +2199,6 @@ mod tests {
             terminal_status.root_batch_count
         );
         assert!(terminal_status.runtimes_activated_at_ns.is_some());
-        let helper_status = current_store_staging_status(
-            &pic,
-            wasm_store,
-            installation_controller,
-            &helper_manifest.template_id,
-            &helper_manifest.version,
-        );
-        assert_eq!(
-            helper_status.manifest.as_ref(),
-            Some(&current_manifest_response(&helper_manifest)),
-            "the real Store must retain the exact post-bootstrap helper manifest"
-        );
         let terminal_pool = root_pool_status(&pic, fixture.root_id);
         assert_eq!(terminal_pool.workload, 5);
         assert!(!terminal_pool.entries.is_empty());
@@ -2150,18 +2246,29 @@ mod tests {
             .compile_component_deployment_configuration()
             .expect("compile singleton Component deployment configuration");
         let root_wasm = build_toko_shaped_singleton_root_wasm();
+        let adapter_root = test_target_dir(&workspace_root, "canic-121-production-adapter")
+            .join(std::process::id().to_string());
+        if adapter_root.exists() {
+            std::fs::remove_dir_all(&adapter_root)
+                .expect("clear prior CANIC-121 production-adapter fixture");
+        }
+        let (icp_wrapper, operator, controller_mutation_log) = prepare_isolated_icp(&adapter_root);
+        let root_wasm_path = adapter_root.join("root.wasm");
+        std::fs::write(&root_wasm_path, &root_wasm).expect("write CANIC-121 fixture Root Wasm");
+        let root_candid_path = adapter_root.join("root.did");
+        write_fixture_root_inspection_candid(&root_candid_path);
         let coordinator_wasm = build_test_coordinator_wasm();
         let store_fixture = build_root_store_fixture_with_config(
             &config_path,
             build_toko_shaped_singleton_component_wasms(),
         );
-        let pic = build_pic();
+        let mut pic = build_management_pic();
 
         let readiness_floor = 1_900_000_000_000_u128;
         let pool_creation_funding =
             canic_host::fleet_ensure::fresh_pool_creation_funding(readiness_floor)
                 .expect("generated fresh-pool creation funding");
-        assert_eq!(pool_creation_funding, 3_000_000_000_000);
+        assert_eq!(pool_creation_funding, 3_900_000_000_000);
         let installation_controller = Principal::from_slice(&[0x46; 29]);
         let requested = [
             ("coordinator", COORDINATOR_INSTALL_CYCLES),
@@ -2189,9 +2296,9 @@ mod tests {
                         cycles: Some(cycles),
                         placement: placement_subnet.map(CreateCanisterPlacement::SubnetId),
                         settings: creation_controllers.clone().map(|controllers| {
-                            pocket_ic::CanisterSettings {
+                            CanisterSettings {
                                 controllers: Some(controllers),
-                                ..pocket_ic::CanisterSettings::default()
+                                ..CanisterSettings::default()
                             }
                         }),
                     },
@@ -2250,43 +2357,137 @@ mod tests {
                 .installation_controller,
             installation_controller
         );
-        let mut controller_mutations = BTreeMap::new();
+        let mut root_controllers = vec![Principal::anonymous(), operator];
+        root_controllers.sort();
+        root_controllers.dedup();
+        pic.set_controllers(root, None, root_controllers.clone())
+            .expect("give the isolated operator exact Root controller authority");
         for pool in pools {
-            let RootCommandResponseFragment::InspectCanister(before) = root_command(
-                &pic,
-                root,
-                RootCommandFragment::InspectCanister(CanisterInspectionRequest {
-                    canister_id: pool,
-                }),
-            )
-            .expect("Prepared Root observes fresh pool before controller finalization") else {
-                panic!("Root returned a differently correlated inspection response");
-            };
-            let mut observed_before = before.settings.controllers;
-            observed_before.sort();
-            let mut expected_before = vec![root, installation_controller];
-            expected_before.sort();
-            assert_eq!(observed_before, expected_before);
-
-            pic.set_controllers(pool, Some(installation_controller), vec![root])
-                .expect("finalize fresh pool controller");
-            controller_mutations.insert(pool, 1_u32);
-
-            // Lose each update response; the same Prepared-Root observation used by
-            // the production host closes exact live Root-only control.
-            let RootCommandResponseFragment::InspectCanister(after) = root_command(
-                &pic,
-                root,
-                RootCommandFragment::InspectCanister(CanisterInspectionRequest {
-                    canister_id: pool,
-                }),
-            )
-            .expect("Prepared Root observes pool after lost controller response") else {
-                panic!("Root returned a differently correlated inspection response");
-            };
-            assert_eq!(after.settings.controllers, vec![root]);
-            assert_eq!(controller_mutations[&pool], 1);
+            pic.set_controllers(pool, Some(installation_controller), vec![root, operator])
+                .expect("prepare exact temporary pool observation controller");
         }
+        let root_subnet = placement_subnet.expect("Root placement Subnet");
+        let desired = controller_finalization_desired(
+            operator,
+            root,
+            &root_controllers,
+            root_subnet,
+            &root_wasm_path,
+            &root_candid_path,
+            &pools,
+        );
+        let state = FleetEnsureStateRecord {
+            active_registry: None,
+            completed_reinstall_action_sha256: BTreeMap::new(),
+            completed_reinstall_operation_id: None,
+            completed_reinstalls: BTreeMap::new(),
+            fleet: desired.fleet.clone(),
+            pending_principals: BTreeMap::new(),
+            principals: BTreeMap::new(),
+            retained_cycles_by_principal: BTreeMap::new(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            topology: BTreeMap::new(),
+        };
+        let live_url = pic.make_live(None);
+        let local_replica = LocalReplicaTarget {
+            root_key: hex_bytes(pic.root_key().expect("PocketIC local root key")),
+            url: live_url.to_string(),
+        };
+        let operation_id = "7b".repeat(32);
+        let mut platform = IcpEnsurePlatform::new(
+            desired.clone(),
+            icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
+            &adapter_root,
+        )
+        .with_local_replica(local_replica.clone());
+        for (index, pool) in pools.into_iter().enumerate() {
+            let action = EnsureAction::SetControllers {
+                controller_canisters: vec!["root".to_string()],
+                controllers: Vec::new(),
+                name: format!("pool-{index}"),
+                principal: pool.to_text(),
+            };
+            let record = EffectRecord {
+                action_sha256: format!("pool-{index}-controller-finalization"),
+                created_principal: None,
+                destination_post_cycles: None,
+                destination_pre_cycles: None,
+                post_cycles: None,
+                pre_cycles: Some(pic.cycle_balance(pool)),
+                pre_canister_version: None,
+                progress_identity: None,
+                receipt: None,
+                state: EffectState::Intent,
+            };
+            let before = platform
+                .observe_effect(&operation_id, &action, &record, &state)
+                .expect(
+                    "production adapter observes temporary pool controllers through Prepared Root",
+                );
+            assert!(!before.applied);
+            let applied = platform.apply(&operation_id, &action, &record, &state);
+            if index == 0 {
+                assert!(
+                    applied.is_err(),
+                    "the first real controller effect must lose its response"
+                );
+                platform = IcpEnsurePlatform::new(
+                    desired.clone(),
+                    icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
+                    &adapter_root,
+                )
+                .with_local_replica(local_replica.clone());
+            } else {
+                applied.expect("second production controller effect");
+            }
+            let after = platform
+                .observe_effect(&operation_id, &action, &record, &state)
+                .expect("fresh-process adapter adopts exact live controller result");
+            assert!(after.applied);
+        }
+        let mut replay_platform = IcpEnsurePlatform::new(
+            desired,
+            icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
+            &adapter_root,
+        )
+        .with_local_replica(local_replica);
+        for (index, pool) in pools.into_iter().enumerate() {
+            let action = EnsureAction::SetControllers {
+                controller_canisters: vec!["root".to_string()],
+                controllers: Vec::new(),
+                name: format!("pool-{index}"),
+                principal: pool.to_text(),
+            };
+            let replay = replay_platform
+                .observe_effect(
+                    &operation_id,
+                    &action,
+                    &EffectRecord {
+                        action_sha256: format!("pool-{index}-controller-finalization"),
+                        created_principal: None,
+                        destination_post_cycles: None,
+                        destination_pre_cycles: None,
+                        post_cycles: None,
+                        pre_cycles: Some(pic.cycle_balance(pool)),
+                        pre_canister_version: None,
+                        progress_identity: None,
+                        receipt: None,
+                        state: EffectState::Applied,
+                    },
+                    &state,
+                )
+                .expect("production adapter terminal replay observation");
+            assert!(replay.applied);
+        }
+        assert_eq!(
+            std::fs::read_to_string(&controller_mutation_log)
+                .expect("read exact controller mutation log")
+                .lines()
+                .count(),
+            2,
+            "lost response and terminal replay must not repeat a controller effect"
+        );
+        pic.stop_live();
 
         // Each Root import/reset is allowed to lose its response; replay observes Maintained.
         reset_prepaid_pool_assets_for_count(&pic, root, 2);
@@ -2325,7 +2526,7 @@ mod tests {
         std::fs::create_dir_all(&artifact_root)
             .expect("create literal zero-estate artifact fixture");
         let union = fixture_application_artifact_union(&artifact_root, &installed);
-        let mut store_sequence = compile_current_store_sequence_from_union(
+        let store_sequence = compile_current_store_sequence_from_union(
             &artifact_root,
             &configuration.component_topology,
             &installed.init_args.authority,
@@ -2333,10 +2534,6 @@ mod tests {
             &union,
         )
         .expect("compile singleton Store sequence");
-        append_fixture_pool_ledger_recovery_artifact(
-            &mut store_sequence,
-            installed.manifest.release_build_id,
-        );
         let fixture = BootstrappedRootFixture {
             root_id: installed.root_id,
             init_args: installed.init_args.clone(),
@@ -2539,44 +2736,6 @@ mod tests {
     }
 
     #[cfg(test)]
-    fn append_fixture_pool_ledger_recovery_artifact(
-        sequence: &mut CompiledCurrentStoreSequence,
-        release_build_id: canic_core::ids::ReleaseBuildId,
-    ) -> TemplateManifestInput {
-        let helper_raw = b"\0asm\x01\0\0\0";
-        let helper_compressed = gzip(helper_raw);
-        let helper_payload_hash: [u8; 32] = wasm_hash(&helper_compressed)
-            .try_into()
-            .expect("recovery helper payload SHA-256");
-        append_qualified_pool_ledger_recovery_artifact(
-            sequence,
-            PoolLedgerRecoveryArtifact {
-                candid_sha256: [0x17; 32],
-                payload_hash: helper_payload_hash,
-                payload_size_bytes: helper_compressed.len() as u64,
-                raw_module_hash: wasm_hash(helper_raw)
-                    .try_into()
-                    .expect("recovery helper raw SHA-256"),
-                release_build_id,
-            },
-            &helper_compressed,
-        )
-        .expect("append qualified pool Ledger recovery helper");
-        sequence
-            .actions
-            .iter()
-            .find_map(|action| match action {
-                CurrentFleetProtocolAction::StageStoreManifest { request }
-                    if request.role.as_str() == "pool_ledger_recovery" =>
-                {
-                    Some(request.clone())
-                }
-                _ => None,
-            })
-            .expect("post-bootstrap recovery helper manifest")
-    }
-
-    #[cfg(test)]
     fn current_protocol_desired(
         configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
         coordinator: Principal,
@@ -2682,13 +2841,12 @@ mod tests {
             | CurrentFleetProtocolAction::StageStoreManifest { .. }
             | CurrentFleetProtocolAction::AdoptStore { .. }
             | CurrentFleetProtocolAction::BootstrapStore { .. } => 0,
-            CurrentFleetProtocolAction::RecoverPoolLedger { .. } => 1,
-            CurrentFleetProtocolAction::JoinRoot { .. } => 2,
-            CurrentFleetProtocolAction::SynchronizeRegistry { .. } => 3,
-            CurrentFleetProtocolAction::ActivateRegistry { .. } => 4,
-            CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => 5,
-            CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => 6,
-            CurrentFleetProtocolAction::ProvisionComponents { .. } => 7,
+            CurrentFleetProtocolAction::JoinRoot { .. } => 1,
+            CurrentFleetProtocolAction::SynchronizeRegistry { .. } => 2,
+            CurrentFleetProtocolAction::ActivateRegistry { .. } => 3,
+            CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => 4,
+            CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => 5,
+            CurrentFleetProtocolAction::ProvisionComponents { .. } => 6,
         }
     }
 
@@ -2788,18 +2946,6 @@ mod tests {
                 assert!(matches!(
                     response,
                     CoordinatorCommandResponse::OperationAccepted(_)
-                ));
-            }
-            CurrentFleetProtocolAction::RecoverPoolLedger { request } => {
-                let response = root_command(
-                    pic,
-                    step.target,
-                    RootCommandFragment::RecoverPoolLedger(request.clone()),
-                )
-                .expect("recover current pool Ledger balance");
-                assert!(matches!(
-                    response,
-                    RootCommandResponseFragment::RecoverPoolLedger(_)
                 ));
             }
             CurrentFleetProtocolAction::PublishStoreChunk { request } => {
@@ -2955,20 +3101,6 @@ mod tests {
                     && observed.phase == FleetComponentProvisioningPhase::RuntimesActivated
                     && observed.published_fleet_registry.is_some()
                     && observed.pending_root_failure.is_none()
-            ),
-            CurrentFleetProtocolAction::RecoverPoolLedger { request } => matches!(
-                root_status(
-                    pic,
-                    step.target,
-                    RootStatusRequestFragment::Operation(OperationStatusRequest {
-                        operation_id: request.operation_id,
-                    }),
-                ),
-                Ok(RootStatusResponseFragment::Operation(
-                    RootOperationStatusResponse::RecoverPoolLedger(observed)
-                )) if observed.request == *request
-                    && observed.phase == PoolLedgerRecoveryPhase::Complete
-                    && observed.receipt.is_some()
             ),
             CurrentFleetProtocolAction::PublishStoreChunk { request } => {
                 let status = current_store_staging_status(
@@ -7653,10 +7785,14 @@ mod tests {
             else {
                 panic!("Root returned a differently correlated pool response");
             };
-            assert!(matches!(
-                response,
-                PoolMaintenanceResponse::ResetReady { .. } | PoolMaintenanceResponse::Maintained
-            ));
+            assert!(
+                matches!(
+                    response,
+                    PoolMaintenanceResponse::ResetReady { .. }
+                        | PoolMaintenanceResponse::Maintained
+                ),
+                "unexpected pool reset response: {response:?}"
+            );
         }
         let status = root_pool_status(pic, root);
         assert_eq!(
@@ -7992,8 +8128,8 @@ mod tests {
                 fresh_five_component_acceptance_seeds_the_root_owned_pool_before_effects,
             ),
             (
-                "post-bootstrap recovery helper Store publication",
-                current_store_stages_recovery_helper_after_root_bootstrap_and_replays_zero_effects,
+                "application Store bootstrap and replay",
+                current_store_bootstraps_application_catalog_and_replays_zero_effects,
             ),
             (
                 "fresh provisioning terminal runtime activation",

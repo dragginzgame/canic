@@ -59,7 +59,6 @@ fn qualified_complete_build_persists_one_exact_canonical_manifest() {
         [
             CanicInfrastructureRole::FleetCoordinator,
             CanicInfrastructureRole::FleetSubnetRoot,
-            CanicInfrastructureRole::PoolLedgerRecovery,
             CanicInfrastructureRole::WasmStore,
         ]
     );
@@ -314,11 +313,6 @@ fn build_outputs(
             "canic-control-plane",
             CanicInfrastructureRole::FleetSubnetRoot,
             2,
-        ),
-        (
-            "canic-generated-pool-ledger-recovery",
-            CanicInfrastructureRole::PoolLedgerRecovery,
-            4,
         ),
     ]
     .into_iter()

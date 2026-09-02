@@ -524,9 +524,9 @@ fn current_desired_state_rejects_component_demand_above_pool_target() {
 #[test]
 #[expect(
     clippy::too_many_lines,
-    reason = "one fixture binds application catalog bootstrap, support-artifact staging, and deterministic replay"
+    reason = "one fixture binds application catalog bootstrap and deterministic replay"
 )]
-fn toko_fresh_fleet_store_bootstraps_before_staging_recovery_helper() {
+fn toko_fresh_fleet_store_bootstrap_is_deterministic() {
     let root = crate::test_support::temp_dir("current-store-sequence");
     let release = crate::release_build::plan_release_build(&root).expect("plan release build");
     let release_build_id = release.record.release_build_id;
@@ -620,32 +620,13 @@ fn toko_fresh_fleet_store_bootstraps_before_staging_recovery_helper() {
         compiled.actions.first(),
         Some(CurrentFleetProtocolAction::PrepareStoreChunkSet { .. })
     ));
-    let bootstrap = compiled
-        .actions
-        .iter()
-        .position(|action| matches!(action, CurrentFleetProtocolAction::BootstrapStore { .. }))
-        .expect("Root bootstrap action");
-    let helper_stage = compiled
-        .actions
-        .iter()
-        .position(|action| {
-            matches!(
-                action,
-                CurrentFleetProtocolAction::StageStoreManifest { request }
-                    if request.role.as_str() == "pool_ledger_recovery"
-            )
-        })
-        .expect("pool Ledger recovery helper stage");
-    assert!(bootstrap < helper_stage);
-    assert_eq!(compiled.expected_bootstrap.catalog.len(), 1);
     assert!(
         compiled
-            .expected_bootstrap
-            .catalog
+            .actions
             .iter()
-            .all(|entry| entry.role.as_str() != "pool_ledger_recovery")
+            .any(|action| matches!(action, CurrentFleetProtocolAction::BootstrapStore { .. }))
     );
-    assert!(compiled.pool_ledger_recovery_artifact.is_some());
+    assert_eq!(compiled.expected_bootstrap.catalog.len(), 1);
     assert_ne!(compiled.bootstrap_request.operation_id, [0; 32]);
 
     fs::remove_dir_all(root).expect("remove test root");
@@ -660,7 +641,6 @@ fn persist_infrastructure_manifest(root: &Path, release_build_id: ReleaseBuildId
     let entries = [
         CanicInfrastructureRole::FleetCoordinator,
         CanicInfrastructureRole::FleetSubnetRoot,
-        CanicInfrastructureRole::PoolLedgerRecovery,
         CanicInfrastructureRole::WasmStore,
     ]
     .into_iter()

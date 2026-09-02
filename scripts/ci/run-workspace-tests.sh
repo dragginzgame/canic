@@ -365,7 +365,6 @@ run_serial_pocketic_test() {
 is_governed_canic_host_pocketic_test() {
     local test_name
     for test_name in \
-        'bootstrap_pool_ledger_recovery::tests::governed_pocketic_generated_pool_ledger_recovery_helper_converts_one_account_exactly_once' \
         'fleet_ensure::tests::governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects'; do
         if [[ "$TARGETED_POCKETIC_TEST" = "$test_name" ]]; then
             return 0

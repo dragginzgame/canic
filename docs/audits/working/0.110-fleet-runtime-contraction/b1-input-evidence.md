@@ -156,26 +156,17 @@ Canic savings forecast. In particular, B1 must not assume that a downstream
 Canic role. No downstream generator or data-access implementation
 recommendation enters 0.110 scope.
 
-## Temporary Pool Ledger Recovery Routing Evidence
+## Deleted Pool Ledger Recovery Routing Evidence
 
-The supplied live-recovery review identifies `pool_ledger_recovery` as a
-temporary Canic helper, not a permanent Fleet role. It is installed briefly on
-an empty pool canister to withdraw cycles held in that canister's own Cycles
-Ledger account, then uninstalled after the Root verifies the withdrawal block,
-zero Ledger balance and resulting native-cycle balance.
+The open `0.110.3` current contract hard-deletes `pool_ledger_recovery`, which
+was an incident-specific helper rather than a Fleet role. B1 must measure the
+immutable predecessor against the current candidate and report the actual
+whole-family marginal delta across artifact build, Store publication, Root
+state/workflow/status/endpoint, DTO/Candid, host planning/apply, tests and CI.
 
-The currently reported compressed helper is roughly 195 KiB. That number is
-only routing evidence for a controlled full-family ablation. It is neither a
-code-section savings forecast nor part of the unrelated reported frontend
-upload. Shared Root, Store, DTO, Candid and host machinery may have a different
-marginal cost.
-
-Deletion remains gated on immutable live evidence that both recoveries have
-terminal Root receipts, both Ledger balances are zero, both helpers are absent,
-both pool assets are terminal with conservation closed, the official Root is
-restored and an immediate terminal Fleet replay has zero effect. Until then,
-the same-operation recovery surface remains required even if the helper is
-already absent from one pool canister.
+The earlier roughly 195 KiB compressed helper report remains routing evidence
+only. It is neither a code-section savings result nor additive with shared
+Root, Store, DTO, Candid or host machinery.
 
 ## Post-v0.109.28 Wasm Routing Evidence
 
@@ -228,10 +219,10 @@ B1 must replace routing evidence with controlled builds for:
 17. a controlled Canic-generated generic cohort with equivalent nominal-type
     instantiations built from `1..=N`, where `N >= 2` is frozen from
     representative Canic demand rather than the downstream cohort; and
-18. the complete temporary pool Ledger recovery family excluded as one paired
-    projection, covering the helper artifact/build role, Store publication,
-    Root state/workflow/status/endpoint, DTO/Candid and host planning/apply
-    surfaces.
+18. the immutable predecessor compared with the current candidate after the
+    complete pool Ledger recovery family was deleted, covering the helper
+    artifact/build role, Store publication, Root state/workflow/status/endpoint,
+    DTO/Candid, host planning/apply, tests and CI.
 
 Each row records code-section, total and compressed bytes, the exact function
 count from the frozen replica-equivalent validator, defined functions,

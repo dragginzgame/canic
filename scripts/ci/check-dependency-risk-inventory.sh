@@ -135,4 +135,4 @@ while IFS=$'\t' read -r advisory_id kind package version _checksum introducers; 
     fi
 done <"$INVENTORY"
 
-echo "dependency risk gate passed: zero vulnerabilities and 4 exact transitive advisories"
+echo "dependency risk gate passed: zero vulnerabilities and 2 exact transitive advisories"

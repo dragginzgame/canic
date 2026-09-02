@@ -4,9 +4,7 @@ use crate::storage::stable::canister_pool::{
     CanisterPoolAssetOriginRecord, CanisterPoolAssetRecord, CanisterPoolAssetStatusRecord,
     CanisterPoolClaimRecord, CanisterPoolCreationFailureRecord, CanisterPoolCreationProgressRecord,
     CanisterPoolCreationRecord, CanisterPoolHandoffReceiptRecord, CanisterPoolHandoffRecord,
-    CanisterPoolLedgerRecoveryArtifactRecord, CanisterPoolLedgerRecoveryAuthorityRecord,
-    CanisterPoolLedgerRecoveryPhaseRecord, CanisterPoolLedgerRecoveryReceiptRecord,
-    CanisterPoolLedgerRecoveryRecord, CanisterPoolRecycleResetRecord, CanisterPoolStore,
+    CanisterPoolRecycleResetRecord, CanisterPoolStore,
 };
 use crate::view::canister_pool::{
     CanisterPoolCreationFailureView, CanisterPoolCreationProgressView, CanisterPoolCreationView,
@@ -20,8 +18,6 @@ use canic_core::{
         CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolClaim,
         CanisterPoolCreation, CanisterPoolCreationFailure, CanisterPoolCreationProgress,
         CanisterPoolHandoff, CanisterPoolRecycleReset, CanisterPoolResponse,
-        PoolLedgerRecoveryArtifact, PoolLedgerRecoveryPhase, PoolLedgerRecoveryReceipt,
-        PoolLedgerRecoveryRequest, PoolLedgerRecoveryStatusResponse,
     },
     ids::{ComponentInstanceId, FleetSubnetCanisterPoolConfig},
 };
@@ -51,16 +47,6 @@ pub enum CanisterPoolResetPreparation {
     Ready,
     Reinspect,
     Reset,
-}
-
-/// Exact durable boundary selected by the pool Ledger recovery workflow.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CanisterPoolLedgerRecoveryTransition {
-    HelperInstallIssued,
-    HelperInstalled,
-    WithdrawalIssued,
-    WithdrawalVerified { block_index: u64 },
-    HelperUninstallIssued { block_index: u64 },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -435,184 +421,6 @@ impl CanisterPoolOps {
         }
     }
 
-    /// Fence one empty pool asset and retain exact authority before any recovery effect.
-    pub fn prepare_ledger_recovery(
-        request: &PoolLedgerRecoveryRequest,
-        initial_native_cycles: Cycles,
-        prepared_at_ns: u64,
-    ) -> Result<PoolLedgerRecoveryStatusResponse, InternalError> {
-        validate_ledger_recovery_request(request)?;
-        let authority = ledger_recovery_authority_from_dto(request);
-        let mut state = CanisterPoolStore::state();
-        if let Some(receipt) = &state.last_ledger_recovery {
-            if receipt.authority == authority {
-                return Ok(ledger_recovery_receipt_status(receipt));
-            }
-            if receipt.authority.operation_id == request.operation_id {
-                return Err(InternalError::conflict());
-            }
-        }
-        if let Some(current) = &state.ledger_recovery {
-            if current.authority == authority {
-                return Ok(ledger_recovery_status(current));
-            }
-            return Err(InternalError::conflict());
-        }
-        if state.creation.is_some() || state.handoff.is_some() {
-            return Err(InternalError::conflict());
-        }
-        let mut asset = required_asset(request.canister_id)?;
-        match asset.status {
-            CanisterPoolAssetStatusRecord::PendingReset
-            | CanisterPoolAssetStatusRecord::Ready
-            | CanisterPoolAssetStatusRecord::Failed(_) => {}
-            CanisterPoolAssetStatusRecord::RecoveringLedger { operation_id }
-                if operation_id == request.operation_id => {}
-            _ => return Err(InternalError::conflict()),
-        }
-        asset.cycles = initial_native_cycles.clone();
-        asset.status = CanisterPoolAssetStatusRecord::RecoveringLedger {
-            operation_id: request.operation_id,
-        };
-        asset.updated_at_ns = prepared_at_ns;
-        CanisterPoolStore::insert(request.canister_id, asset);
-        state.ledger_recovery = Some(CanisterPoolLedgerRecoveryRecord {
-            authority,
-            initial_native_cycles,
-            phase: CanisterPoolLedgerRecoveryPhaseRecord::Prepared,
-            prepared_at_ns,
-        });
-        CanisterPoolStore::set_state(state);
-        Ok(ledger_recovery_status(
-            &CanisterPoolStore::state()
-                .ledger_recovery
-                .expect("recovery was retained above"),
-        ))
-    }
-
-    /// Return current or terminal recovery status for one exact operation identity.
-    pub fn ledger_recovery_status_by_operation(
-        operation_id: [u8; 32],
-    ) -> Option<PoolLedgerRecoveryStatusResponse> {
-        let state = CanisterPoolStore::state();
-        state
-            .ledger_recovery
-            .as_ref()
-            .filter(|current| current.authority.operation_id == operation_id)
-            .map(ledger_recovery_status)
-            .or_else(|| {
-                state
-                    .last_ledger_recovery
-                    .as_ref()
-                    .filter(|receipt| receipt.authority.operation_id == operation_id)
-                    .map(ledger_recovery_receipt_status)
-            })
-    }
-
-    /// Advance one exact durable phase without performing a platform effect.
-    pub fn advance_ledger_recovery(
-        request: &PoolLedgerRecoveryRequest,
-        transition: CanisterPoolLedgerRecoveryTransition,
-    ) -> Result<PoolLedgerRecoveryStatusResponse, InternalError> {
-        let authority = ledger_recovery_authority_from_dto(request);
-        let mut state = CanisterPoolStore::state();
-        let current = state
-            .ledger_recovery
-            .as_mut()
-            .ok_or_else(InternalError::unavailable)?;
-        if current.authority != authority {
-            return Err(InternalError::conflict());
-        }
-        let next = match (current.phase, transition) {
-            (
-                CanisterPoolLedgerRecoveryPhaseRecord::Prepared,
-                CanisterPoolLedgerRecoveryTransition::HelperInstallIssued,
-            ) => CanisterPoolLedgerRecoveryPhaseRecord::HelperInstallIssued,
-            (
-                CanisterPoolLedgerRecoveryPhaseRecord::HelperInstallIssued,
-                CanisterPoolLedgerRecoveryTransition::HelperInstalled,
-            ) => CanisterPoolLedgerRecoveryPhaseRecord::HelperInstalled,
-            (
-                CanisterPoolLedgerRecoveryPhaseRecord::HelperInstalled,
-                CanisterPoolLedgerRecoveryTransition::WithdrawalIssued,
-            ) => CanisterPoolLedgerRecoveryPhaseRecord::WithdrawalIssued,
-            (
-                CanisterPoolLedgerRecoveryPhaseRecord::WithdrawalIssued,
-                CanisterPoolLedgerRecoveryTransition::WithdrawalVerified { block_index },
-            ) => CanisterPoolLedgerRecoveryPhaseRecord::WithdrawalVerified { block_index },
-            (
-                CanisterPoolLedgerRecoveryPhaseRecord::WithdrawalVerified { block_index },
-                CanisterPoolLedgerRecoveryTransition::HelperUninstallIssued {
-                    block_index: requested,
-                },
-            ) if block_index == requested => {
-                CanisterPoolLedgerRecoveryPhaseRecord::HelperUninstallIssued { block_index }
-            }
-            (existing, requested) if transition_matches(existing, requested) => existing,
-            _ => return Err(InternalError::conflict()),
-        };
-        current.phase = next;
-        let response = ledger_recovery_status(current);
-        CanisterPoolStore::set_state(state);
-        Ok(response)
-    }
-
-    /// Commit one recovery only after the helper is absent and both balance sides were proven.
-    ///
-    /// A distinct later recovery may rotate the bounded terminal slot; reusing an operation ID
-    /// with different authority remains a conflict.
-    pub fn complete_ledger_recovery(
-        request: &PoolLedgerRecoveryRequest,
-        final_native_cycles: Cycles,
-        completed_at_ns: u64,
-    ) -> Result<PoolLedgerRecoveryReceipt, InternalError> {
-        let authority = ledger_recovery_authority_from_dto(request);
-        let mut state = CanisterPoolStore::state();
-        if let Some(existing) = &state.last_ledger_recovery {
-            if existing.authority == authority {
-                return Ok(ledger_recovery_receipt_to_dto(existing));
-            }
-            if existing.authority.operation_id == request.operation_id {
-                return Err(InternalError::conflict());
-            }
-        }
-        let current = state
-            .ledger_recovery
-            .take()
-            .ok_or_else(InternalError::unavailable)?;
-        if current.authority != authority {
-            return Err(InternalError::conflict());
-        }
-        let CanisterPoolLedgerRecoveryPhaseRecord::HelperUninstallIssued { block_index } =
-            current.phase
-        else {
-            return Err(InternalError::conflict());
-        };
-        let mut asset = required_asset(request.canister_id)?;
-        if asset.status
-            != (CanisterPoolAssetStatusRecord::RecoveringLedger {
-                operation_id: request.operation_id,
-            })
-        {
-            return Err(InternalError::conflict());
-        }
-        asset.cycles = final_native_cycles.clone();
-        asset.status = CanisterPoolAssetStatusRecord::Ready;
-        asset.updated_at_ns = completed_at_ns;
-        CanisterPoolStore::insert(request.canister_id, asset);
-        let receipt = CanisterPoolLedgerRecoveryReceiptRecord {
-            authority,
-            block_index,
-            completed_at_ns,
-            final_native_cycles,
-            initial_native_cycles: current.initial_native_cycles,
-        };
-        let response = ledger_recovery_receipt_to_dto(&receipt);
-        state.last_ledger_recovery = Some(receipt);
-        CanisterPoolStore::set_state(state);
-        Ok(response)
-    }
-
     pub fn response(
         config: FleetSubnetCanisterPoolConfig,
         start_after: Option<Principal>,
@@ -627,7 +435,6 @@ impl CanisterPoolOps {
         let mut claimed = 0_u32;
         let mut workload = 0_u32;
         let mut recycling = 0_u32;
-        let mut recovering_ledger = 0_u32;
         let mut handing_off = 0_u32;
         let mut failed = 0_u32;
         let all_entries: Vec<CanisterPoolAsset> = data
@@ -644,9 +451,6 @@ impl CanisterPoolOps {
                     CanisterPoolAssetStatusRecord::Claimed(_) => claimed += 1,
                     CanisterPoolAssetStatusRecord::Workload(_) => workload += 1,
                     CanisterPoolAssetStatusRecord::Recycling { .. } => recycling += 1,
-                    CanisterPoolAssetStatusRecord::RecoveringLedger { .. } => {
-                        recovering_ledger += 1;
-                    }
                     CanisterPoolAssetStatusRecord::HandingOff { .. } => handing_off += 1,
                     CanisterPoolAssetStatusRecord::Failed(_) => failed += 1,
                 }
@@ -662,7 +466,6 @@ impl CanisterPoolOps {
                         entry.status,
                         CanisterPoolAssetStatus::PendingReset
                             | CanisterPoolAssetStatus::Ready
-                            | CanisterPoolAssetStatus::RecoveringLedger { .. }
                             | CanisterPoolAssetStatus::HandingOff { .. }
                             | CanisterPoolAssetStatus::Failed { .. }
                     )
@@ -695,7 +498,6 @@ impl CanisterPoolOps {
             pending_reset,
             claimed,
             recycling,
-            recovering_ledger,
             handing_off,
             failed,
             completed_handoffs: CanisterPoolStore::handoff_receipt_count(),
@@ -715,7 +517,7 @@ impl CanisterPoolOps {
         prepared_at_ns: u64,
     ) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
-        if state.ledger_recovery.is_some() || state.handoff.is_some() {
+        if state.handoff.is_some() {
             return Err(InternalError::conflict());
         }
         if let Some(existing) = state.creation {
@@ -1009,12 +811,7 @@ impl CanisterPoolOps {
     #[must_use]
     pub fn has_pending_lifecycle_work() -> bool {
         let state = CanisterPoolStore::state();
-        state.creation.is_some() || state.handoff.is_some() || state.ledger_recovery.is_some()
-    }
-
-    #[must_use]
-    pub fn has_pending_ledger_recovery() -> bool {
-        CanisterPoolStore::state().ledger_recovery.is_some()
+        state.creation.is_some() || state.handoff.is_some()
     }
 
     #[must_use]
@@ -1059,7 +856,7 @@ impl CanisterPoolOps {
             return Err(InternalError::conflict());
         }
         let mut state = CanisterPoolStore::state();
-        if state.creation.is_some() || state.ledger_recovery.is_some() {
+        if state.creation.is_some() {
             return Err(InternalError::unavailable());
         }
         if let Some(existing) = state.handoff {
@@ -1562,170 +1359,6 @@ const fn claim_record(claim: &CanisterPoolClaimKey) -> CanisterPoolClaimRecord {
     }
 }
 
-fn validate_ledger_recovery_request(
-    request: &PoolLedgerRecoveryRequest,
-) -> Result<(), InternalError> {
-    let balance = request.ledger_balance.to_u128();
-    let fee = request.ledger_fee.to_u128();
-    let expected = balance
-        .checked_sub(fee)
-        .filter(|amount| *amount > 0)
-        .ok_or_else(InternalError::invalid_input)?;
-    if request.operation_id == [0; 32]
-        || request.canister_id == Principal::anonymous()
-        || request.cycles_ledger == Principal::anonymous()
-        || request.created_at_time_ns == 0
-        || request.maximum_execution_burn_cycles.to_u128() == 0
-        || request.withdrawal_amount.to_u128() != expected
-        || request.artifact.payload_size_bytes == 0
-        || request.artifact.payload_hash == [0; 32]
-        || request.artifact.raw_module_hash == [0; 32]
-        || request.artifact.candid_sha256 == [0; 32]
-    {
-        return Err(InternalError::invalid_input());
-    }
-    Ok(())
-}
-
-fn ledger_recovery_authority_from_dto(
-    request: &PoolLedgerRecoveryRequest,
-) -> CanisterPoolLedgerRecoveryAuthorityRecord {
-    CanisterPoolLedgerRecoveryAuthorityRecord {
-        artifact: CanisterPoolLedgerRecoveryArtifactRecord {
-            candid_sha256: request.artifact.candid_sha256,
-            payload_hash: request.artifact.payload_hash,
-            payload_size_bytes: request.artifact.payload_size_bytes,
-            raw_module_hash: request.artifact.raw_module_hash,
-            release_build_id: request.artifact.release_build_id,
-        },
-        canister_id: request.canister_id,
-        created_at_time_ns: request.created_at_time_ns,
-        cycles_ledger: request.cycles_ledger,
-        ledger_balance: request.ledger_balance.clone(),
-        ledger_fee: request.ledger_fee.clone(),
-        maximum_execution_burn_cycles: request.maximum_execution_burn_cycles.clone(),
-        operation_id: request.operation_id,
-        withdrawal_amount: request.withdrawal_amount.clone(),
-    }
-}
-
-fn ledger_recovery_request_to_dto(
-    authority: &CanisterPoolLedgerRecoveryAuthorityRecord,
-) -> PoolLedgerRecoveryRequest {
-    PoolLedgerRecoveryRequest {
-        artifact: PoolLedgerRecoveryArtifact {
-            candid_sha256: authority.artifact.candid_sha256,
-            payload_hash: authority.artifact.payload_hash,
-            payload_size_bytes: authority.artifact.payload_size_bytes,
-            raw_module_hash: authority.artifact.raw_module_hash,
-            release_build_id: authority.artifact.release_build_id,
-        },
-        canister_id: authority.canister_id,
-        created_at_time_ns: authority.created_at_time_ns,
-        cycles_ledger: authority.cycles_ledger,
-        ledger_balance: authority.ledger_balance.clone(),
-        ledger_fee: authority.ledger_fee.clone(),
-        maximum_execution_burn_cycles: authority.maximum_execution_burn_cycles.clone(),
-        operation_id: authority.operation_id,
-        withdrawal_amount: authority.withdrawal_amount.clone(),
-    }
-}
-
-fn ledger_recovery_status(
-    current: &CanisterPoolLedgerRecoveryRecord,
-) -> PoolLedgerRecoveryStatusResponse {
-    let (phase, block_index) = match current.phase {
-        CanisterPoolLedgerRecoveryPhaseRecord::Prepared => {
-            (PoolLedgerRecoveryPhase::Prepared, None)
-        }
-        CanisterPoolLedgerRecoveryPhaseRecord::HelperInstallIssued => {
-            (PoolLedgerRecoveryPhase::HelperInstallIssued, None)
-        }
-        CanisterPoolLedgerRecoveryPhaseRecord::HelperInstalled => {
-            (PoolLedgerRecoveryPhase::HelperInstalled, None)
-        }
-        CanisterPoolLedgerRecoveryPhaseRecord::WithdrawalIssued => {
-            (PoolLedgerRecoveryPhase::WithdrawalIssued, None)
-        }
-        CanisterPoolLedgerRecoveryPhaseRecord::WithdrawalVerified { block_index } => (
-            PoolLedgerRecoveryPhase::WithdrawalVerified,
-            Some(block_index),
-        ),
-        CanisterPoolLedgerRecoveryPhaseRecord::HelperUninstallIssued { block_index } => (
-            PoolLedgerRecoveryPhase::HelperUninstallIssued,
-            Some(block_index),
-        ),
-    };
-    PoolLedgerRecoveryStatusResponse {
-        block_index,
-        initial_native_cycles: current.initial_native_cycles.clone(),
-        phase,
-        receipt: None,
-        request: ledger_recovery_request_to_dto(&current.authority),
-    }
-}
-
-fn ledger_recovery_receipt_status(
-    receipt: &CanisterPoolLedgerRecoveryReceiptRecord,
-) -> PoolLedgerRecoveryStatusResponse {
-    PoolLedgerRecoveryStatusResponse {
-        block_index: Some(receipt.block_index),
-        initial_native_cycles: receipt.initial_native_cycles.clone(),
-        phase: PoolLedgerRecoveryPhase::Complete,
-        receipt: Some(ledger_recovery_receipt_to_dto(receipt)),
-        request: ledger_recovery_request_to_dto(&receipt.authority),
-    }
-}
-
-fn ledger_recovery_receipt_to_dto(
-    receipt: &CanisterPoolLedgerRecoveryReceiptRecord,
-) -> PoolLedgerRecoveryReceipt {
-    PoolLedgerRecoveryReceipt {
-        block_index: receipt.block_index,
-        completed_at_ns: receipt.completed_at_ns,
-        final_native_cycles: receipt.final_native_cycles.clone(),
-        operation_id: receipt.authority.operation_id,
-        request: ledger_recovery_request_to_dto(&receipt.authority),
-    }
-}
-
-const fn transition_matches(
-    existing: CanisterPoolLedgerRecoveryPhaseRecord,
-    requested: CanisterPoolLedgerRecoveryTransition,
-) -> bool {
-    match (existing, requested) {
-        (
-            CanisterPoolLedgerRecoveryPhaseRecord::HelperInstallIssued,
-            CanisterPoolLedgerRecoveryTransition::HelperInstallIssued,
-        )
-        | (
-            CanisterPoolLedgerRecoveryPhaseRecord::HelperInstalled,
-            CanisterPoolLedgerRecoveryTransition::HelperInstalled,
-        )
-        | (
-            CanisterPoolLedgerRecoveryPhaseRecord::WithdrawalIssued,
-            CanisterPoolLedgerRecoveryTransition::WithdrawalIssued,
-        ) => true,
-        (
-            CanisterPoolLedgerRecoveryPhaseRecord::WithdrawalVerified {
-                block_index: existing,
-            },
-            CanisterPoolLedgerRecoveryTransition::WithdrawalVerified {
-                block_index: requested,
-            },
-        )
-        | (
-            CanisterPoolLedgerRecoveryPhaseRecord::HelperUninstallIssued {
-                block_index: existing,
-            },
-            CanisterPoolLedgerRecoveryTransition::HelperUninstallIssued {
-                block_index: requested,
-            },
-        ) => existing == requested,
-        _ => false,
-    }
-}
-
 fn count_as_u32(count: usize) -> u32 {
     u32::try_from(count).unwrap_or(u32::MAX)
 }
@@ -1871,9 +1504,6 @@ fn asset_to_dto(canister_id: Principal, asset: CanisterPoolAssetRecord) -> Canis
                     },
                 }
             }
-            CanisterPoolAssetStatusRecord::RecoveringLedger { operation_id } => {
-                CanisterPoolAssetStatus::RecoveringLedger { operation_id }
-            }
             CanisterPoolAssetStatusRecord::HandingOff { recipient } => {
                 CanisterPoolAssetStatus::HandingOff { recipient }
             }
@@ -1893,129 +1523,6 @@ mod tests {
 
     fn principal(byte: u8) -> Principal {
         Principal::from_slice(&[byte; 29])
-    }
-
-    fn ledger_recovery_request(canister_id: Principal) -> PoolLedgerRecoveryRequest {
-        PoolLedgerRecoveryRequest {
-            artifact: PoolLedgerRecoveryArtifact {
-                candid_sha256: [1; 32],
-                payload_hash: [2; 32],
-                payload_size_bytes: 123,
-                raw_module_hash: [3; 32],
-                release_build_id: "44".repeat(32).parse().expect("release build ID"),
-            },
-            canister_id,
-            created_at_time_ns: 9,
-            cycles_ledger: principal(90),
-            ledger_balance: Cycles::new(1_000),
-            ledger_fee: Cycles::new(10),
-            maximum_execution_burn_cycles: Cycles::new(20),
-            operation_id: [5; 32],
-            withdrawal_amount: Cycles::new(990),
-        }
-    }
-
-    #[test]
-    fn ledger_recovery_fences_one_empty_asset_and_replays_only_exact_authority() {
-        CanisterPoolStore::clear();
-        let canister_id = principal(91);
-        imported_ready(canister_id, Cycles::new(2_000), 1);
-        let request = ledger_recovery_request(canister_id);
-
-        let prepared = CanisterPoolOps::prepare_ledger_recovery(&request, Cycles::new(2_000), 2)
-            .expect("prepare exact recovery");
-        assert_eq!(prepared.phase, PoolLedgerRecoveryPhase::Prepared);
-        assert_eq!(CanisterPoolOps::ready_count(), 0);
-        assert!(CanisterPoolOps::has_pending_lifecycle_work());
-        assert!(CanisterPoolOps::has_pending_ledger_recovery());
-        assert_eq!(
-            CanisterPoolOps::response(config(), None, 10).recovering_ledger,
-            1
-        );
-        assert_eq!(
-            CanisterPoolOps::prepare_ledger_recovery(&request, Cycles::new(2_000), 3)
-                .expect("exact prepare replay"),
-            prepared
-        );
-        let mut conflicting = request.clone();
-        conflicting.withdrawal_amount = Cycles::new(989);
-        assert!(
-            CanisterPoolOps::prepare_ledger_recovery(&conflicting, Cycles::new(2_000), 3,).is_err()
-        );
-
-        for transition in [
-            CanisterPoolLedgerRecoveryTransition::HelperInstallIssued,
-            CanisterPoolLedgerRecoveryTransition::HelperInstalled,
-            CanisterPoolLedgerRecoveryTransition::WithdrawalIssued,
-            CanisterPoolLedgerRecoveryTransition::WithdrawalVerified { block_index: 7 },
-            CanisterPoolLedgerRecoveryTransition::HelperUninstallIssued { block_index: 7 },
-        ] {
-            CanisterPoolOps::advance_ledger_recovery(&request, transition)
-                .expect("advance exact recovery");
-            CanisterPoolOps::advance_ledger_recovery(&request, transition)
-                .expect("exact phase replay");
-        }
-        assert!(
-            CanisterPoolOps::advance_ledger_recovery(
-                &request,
-                CanisterPoolLedgerRecoveryTransition::HelperUninstallIssued { block_index: 8 },
-            )
-            .is_err()
-        );
-        let receipt = CanisterPoolOps::complete_ledger_recovery(&request, Cycles::new(2_970), 4)
-            .expect("complete exact recovery");
-        assert_eq!(receipt.block_index, 7);
-        assert_eq!(
-            CanisterPoolOps::complete_ledger_recovery(&request, Cycles::new(2_970), 5)
-                .expect("terminal exact replay"),
-            receipt
-        );
-        assert_eq!(CanisterPoolOps::ready_count(), 1);
-        assert!(!CanisterPoolOps::has_pending_lifecycle_work());
-        assert!(!CanisterPoolOps::has_pending_ledger_recovery());
-        let mut terminal_conflict = request.clone();
-        terminal_conflict.maximum_execution_burn_cycles = Cycles::new(21);
-        assert!(
-            CanisterPoolOps::prepare_ledger_recovery(&terminal_conflict, Cycles::new(2_970), 6,)
-                .is_err()
-        );
-        let retained = CanisterPoolOps::ledger_recovery_status_by_operation(request.operation_id)
-            .expect("first terminal receipt survives conflicting authority");
-        assert_eq!(retained.phase, PoolLedgerRecoveryPhase::Complete);
-        assert_eq!(retained.receipt, Some(receipt));
-        assert_eq!(retained.request, request);
-
-        let second_canister_id = principal(92);
-        imported_ready(second_canister_id, Cycles::new(4_000), 6);
-        let mut second_request = ledger_recovery_request(second_canister_id);
-        second_request.created_at_time_ns = 10;
-        second_request.operation_id = [6; 32];
-
-        CanisterPoolOps::prepare_ledger_recovery(&second_request, Cycles::new(4_000), 7)
-            .expect("prepare distinct second recovery after terminal first receipt");
-        for transition in [
-            CanisterPoolLedgerRecoveryTransition::HelperInstallIssued,
-            CanisterPoolLedgerRecoveryTransition::HelperInstalled,
-            CanisterPoolLedgerRecoveryTransition::WithdrawalIssued,
-            CanisterPoolLedgerRecoveryTransition::WithdrawalVerified { block_index: 8 },
-            CanisterPoolLedgerRecoveryTransition::HelperUninstallIssued { block_index: 8 },
-        ] {
-            CanisterPoolOps::advance_ledger_recovery(&second_request, transition)
-                .expect("advance distinct second recovery");
-        }
-        let second_receipt =
-            CanisterPoolOps::complete_ledger_recovery(&second_request, Cycles::new(4_970), 8)
-                .expect("complete distinct second recovery");
-        assert_eq!(second_receipt.block_index, 8);
-        assert_eq!(
-            CanisterPoolOps::complete_ledger_recovery(&second_request, Cycles::new(4_970), 9,)
-                .expect("replay distinct second terminal receipt"),
-            second_receipt
-        );
-        assert_eq!(CanisterPoolOps::ready_count(), 2);
-        assert!(!CanisterPoolOps::has_pending_lifecycle_work());
-        assert!(!CanisterPoolOps::has_pending_ledger_recovery());
-        CanisterPoolStore::clear();
     }
 
     fn config() -> FleetSubnetCanisterPoolConfig {

@@ -29,7 +29,6 @@ fn exact_projection_normalizes_only_the_absent_recovery_count() {
         pending_reset: 0,
         claimed: 0,
         recycling: 0,
-        recovering_ledger: 0,
         handing_off: 0,
         failed: 0,
         completed_handoffs: 0,

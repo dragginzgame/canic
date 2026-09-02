@@ -27,15 +27,15 @@ Date: 2026-09-02
 - First release: immutable `v0.110.0` at `d29a7cc72` carries the initial
   `CANIC-119` through `CANIC-121` fresh-estate correction and corrected
   canonical-role baseline; it does not claim B1 completion or authorize B2.
-- Latest release: immutable `v0.110.1` at `7825bed9f` reconciles the B1
-  handoff but does not complete B1 or authorize B2.
-- Open patch: `0.110.2` gives `CANIC-121` separate literal-zero-estate Fleet
-  Ensure plan/journal/restart/replay and real Prepared-Root control-plane
-  proofs, permits that controller-authenticated read-only inspection for
-  `CANIC-122`, and projects plus completely verifies the generated recovery
-  helper from the consuming workspace lock before infrastructure compilation
-  for `CANIC-123`. B1 measurement resumes only after this independent unblock
-  batch.
+- Latest release: immutable `v0.110.2` at `f9009d5ae` gives `CANIC-121`
+  separate literal-zero-estate Fleet Ensure and Prepared-Root control-plane
+  proofs, corrects `CANIC-122`, and completely projects the generated recovery
+  helper lock for `CANIC-123`.
+- Open patch: `0.110.3` closes the remaining CANIC-121 boundary by driving the
+  concrete `IcpEnsurePlatform` and real ICP CLI through Prepared-Root pool-
+  controller finalisation, lost-response adoption, fresh-process adapter
+  reconstruction and effect-free terminal replay. The same proof corrects the
+  generated bounded pool update-burn allowance before B1 measurement resumes.
 
 Design: [Fleet runtime contraction](0.110-design.md)
 
@@ -81,13 +81,11 @@ Planning evidence: [B1 Wasm input evidence](../../audits/working/0.110-fleet-run
   endpoint/provider/serializer/timer/recovery/control-plane surface remains;
   reaching the size reserve cannot waive final artifact absence.
 - Endpoint extraction is accepted from optimized artifacts, not source shape.
-- The temporary pool Ledger recovery helper is a conditional B4 deletion, not
-  a permanent role. B1 measures its complete helper/Store/Root/DTO/host family
-  as one paired ablation. B4 may hard-delete it only after immutable evidence
-  proves two terminal pool recoveries, zero Ledger balances, absent helpers,
-  terminal assets with conservation closed, the official Root restored and an
-  immediate terminal Fleet replay with zero effect. Missing evidence retains
-  and retargets this cut without blocking unrelated contraction.
+- The temporary pool Ledger recovery helper is hard-deleted in the open
+  `0.110.3` current contract. B1 records the current/predecessor artifact delta;
+  B4 verifies that no helper/Store/Root/DTO/host/test/CI reachability returned.
+  Current Fleet funding targets native canister balances and retains no helper
+  compatibility path or fallback.
 - Chain-key ECDSA replacement is not authorized. Missing the safe contraction
   gates stops the line for a separate protocol design and threat-model audit.
 - Release-build acceleration is parallel supporting work. It is not a batch
@@ -105,10 +103,10 @@ Planning evidence: [B1 Wasm input evidence](../../audits/working/0.110-fleet-run
 
 | Batch | Outcome | Direct evidence | Status |
 | --- | --- | --- | --- |
-| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, exact Toko canary manifest/capability matrix, replica-validator function count, generated-surface inventory, complete artifact vector, controlled ablations including the full temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active but paused behind the bounded `0.110.2` fresh-estate correction; corrected `v0.109.35` `CANIC-WASM-001/v5` canonical baseline retained, downstream canary and differential evidence still open |
+| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, exact Toko canary manifest/capability matrix, replica-validator function count, generated-surface inventory, complete artifact vector, current/predecessor delta for the deleted temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active but paused behind the bounded `0.110.3` CANIC-121 production-adapter proof; corrected `v0.109.35` `CANIC-WASM-001/v5` canonical baseline retained, downstream canary and differential evidence still open |
 | B2 | Role-selected storage reachability | Lazy TLS, direct generated wiring, storage/lifecycle inventory contraction, data-only reservations, symbol absence and full remeasurement | Blocked on B1 |
 | B3 | Capability-owned activation/auth records and only still-justified codecs | Concrete records, phase cache, bounded codec evidence and full remeasurement | Blocked on B2 decision |
-| B4 | Endpoint, recovery and role-capability pruning | Complete generated-surface inventory, exact Candid/provider reachability, optimized body/function evidence, direct dispatch, gated hard deletion of the temporary pool Ledger recovery family, role pruning and full remeasurement | Mandatory after the B3 decision while known role-inapplicable reachability remains |
+| B4 | Endpoint, recovery and role-capability pruning | Complete generated-surface inventory, exact Candid/provider reachability, optimized body/function evidence, direct dispatch, continued absence of the hard-deleted temporary pool Ledger recovery family, role pruning and full remeasurement | Mandatory after the B3 decision while known role-inapplicable reachability remains |
 | B5 | Binding downstream qualification and closeout | Canonical and exact Toko-canary 5% byte/function reserves, capability matrix, per-role generated-surface absence, total-module limit, instructions, determinism, structured reinstall-only guard, residual-owner handoff where needed and immutable audit | Blocked on final B2-B4 decision |
 
 ## Deferred From 0.110
@@ -123,7 +121,7 @@ Planning evidence: [B1 Wasm input evidence](../../audits/working/0.110-fleet-run
 
 ## Next Authorized Action
 
-Publish the bounded `0.110.2` correctness batch, then complete B1: freeze the
+Complete the bounded `0.110.3` CANIC-121 proof, then complete B1: freeze the
 downstream canary, controlled ablations, generated-surface inventory and
 generic cohort against the immutable predecessor. Do not begin B2 until the
 maintainer accepts the complete B1 evidence.
