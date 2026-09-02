@@ -298,9 +298,9 @@ fn workspace_medic_summarizes_state_audit_status() {
     }
 }
 
-// Ensure CI text output is short and includes only failing checks.
+// Ensure CI text output is short and includes only actionable checks.
 #[test]
-fn renders_medic_ci_report_with_fail_only_rows() {
+fn renders_medic_ci_report_with_actionable_rows_and_consistent_counts() {
     let report = MedicReport::new(
         &MedicOptions::workspace(false, true, None, "icp".to_string()),
         vec![
@@ -332,16 +332,18 @@ fn renders_medic_ci_report_with_fail_only_rows() {
     );
     let rendered = render_medic_ci_text(&report);
 
-    assert!(rendered.starts_with("canic medic\nstatus: fail\nfailures: 1"));
+    assert!(rendered.starts_with(
+        "canic medic\nstatus: fail\nscope: workspace\nstate_audit: not_evaluated\nchecks: 3\nwarnings: 1\nwarning_codes: local_environment_implicit\nfailures: 1\nfailure_codes: role_contract_required_feature_missing"
+    ));
     assert!(
         rendered.contains("fail workspace_config role_contract_required_feature_missing demo.app")
     );
+    assert!(rendered.contains("warn workspace_config local_environment_implicit environment"));
     assert!(rendered.contains("  next: edit runtime [dependencies].canic"));
     assert!(!rendered.contains("icp_cli_ok"));
-    assert!(!rendered.contains("local_environment_implicit"));
 }
 
-// Ensure CI text output remains explicit when no failing checks exist.
+// Ensure CI text output remains internally consistent when only a warning exists.
 #[test]
 fn renders_medic_ci_report_without_failures() {
     let report = MedicReport::new(
@@ -350,7 +352,31 @@ fn renders_medic_ci_report_without_failures() {
     );
     let rendered = render_medic_ci_text(&report);
 
-    assert_eq!(rendered, "canic medic\nstatus: warn\nfailures: none");
+    assert_eq!(
+        rendered,
+        "canic medic\nstatus: warn\nscope: workspace\nstate_audit: not_evaluated\nchecks: 1\nwarnings: 1\nwarning_codes: sample\nfailures: 0\nfailure_codes: none\nwarn environment sample subject\n  detail: detail\n  next: next\n  source: command"
+    );
+}
+
+#[test]
+fn renders_medic_ci_state_audit_result() {
+    let report = MedicReport::new(
+        &MedicOptions::workspace(false, true, None, "icp".to_string()),
+        vec![MedicCheck::pass(
+            MedicCategory::Runtime,
+            "state_audit_pass",
+            "state_manifest",
+            "state audit status pass with 1221 checks",
+            "none",
+            MedicSource::StateManifest,
+        )],
+    );
+    let rendered = render_medic_ci_text(&report);
+
+    assert_eq!(
+        rendered,
+        "canic medic\nstatus: pass\nscope: workspace\nstate_audit: pass\nchecks: 1\nwarnings: 0\nwarning_codes: none\nfailures: 0\nfailure_codes: none"
+    );
 }
 
 // Ensure medic errors keep the designed process-level exit-code contract.
@@ -474,7 +500,7 @@ fn fleet_missing_points_to_current_ensure_plan() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure workspace-only environment warnings do not duplicate Fleet-scoped checks.
+// Ensure workspace-only environment selection is informational and does not duplicate Fleet checks.
 #[test]
 fn workspace_environment_selection_check_is_workspace_only() {
     let workspace = MedicOptions::workspace(false, false, None, "icp".to_string());
@@ -493,7 +519,8 @@ fn workspace_environment_selection_check_is_workspace_only() {
         workspace_environment_selection_check(&workspace).expect("workspace environment check");
 
     assert_eq!(workspace_check.code, "local_environment_implicit");
-    assert_eq!(workspace_check.status, MedicStatus::Warn);
+    assert_eq!(workspace_check.status, MedicStatus::NotEvaluated);
+    assert!(workspace_check.next.contains("canic medic fleet"));
     assert!(workspace_environment_selection_check(&fleet).is_none());
 }
 

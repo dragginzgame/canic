@@ -142,12 +142,12 @@ pub(super) fn workspace_environment_selection_check(options: &MedicOptions) -> O
             MedicSource::IcpConfig,
         )
     } else {
-        MedicCheck::warn(
+        MedicCheck::not_evaluated(
             MedicCategory::WorkspaceConfig,
             "local_environment_implicit",
             "environment",
-            "no environment was selected for workspace checks",
-            "select an explicit environment before Fleet checks",
+            "workspace checks do not require a Fleet environment",
+            "run canic medic fleet <fleet> --ci for live Fleet drift",
             MedicSource::IcpConfig,
         )
     })

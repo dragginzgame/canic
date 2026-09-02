@@ -105,6 +105,20 @@ fn parses_supported_audit_options() {
 
     assert_eq!(options.role.as_deref(), Some("root"));
     assert!(options.json);
+    assert!(!options.ci);
+}
+
+#[test]
+fn parses_ci_audit_output_and_rejects_multiple_output_modes() {
+    let options =
+        StateOptions::parse_audit([OsString::from("--ci")]).expect("parse CI audit options");
+
+    assert!(options.ci);
+    assert!(!options.json);
+    assert!(matches!(
+        StateOptions::parse_audit([OsString::from("--ci"), OsString::from("--json")]),
+        Err(StateCommandError::Usage(_))
+    ));
 }
 
 #[test]
@@ -118,6 +132,7 @@ fn parses_supported_manifest_options() {
 
     assert_eq!(options.role.as_deref(), Some("root"));
     assert!(options.json);
+    assert!(!options.ci);
 }
 
 #[test]
@@ -178,6 +193,35 @@ fn text_renderers_include_stable_fields() {
     assert!(!manifest.contains("reserved_memory"));
     assert!(manifest.contains("cycles_tracker"));
     assert!(manifest.contains("runtime_log"));
+}
+
+#[test]
+fn ci_audit_pass_is_a_bounded_summary() {
+    let report = build_state_audit_report(None);
+    let audit = render_audit_ci_text(&report);
+
+    assert_eq!(
+        audit,
+        format!(
+            "canic state audit\nstatus: pass\nscope: workspace\nchecks: {}\nwarnings: 0\nfailures: 0",
+            report.checks.len()
+        )
+    );
+}
+
+#[test]
+fn ci_audit_emits_only_actionable_warning_and_failure_rows() {
+    let mut report = build_state_audit_report(Some("root"));
+    report.checks[0].status = StateAuditStatus::Warn;
+    report.checks[1].status = StateAuditStatus::Fail;
+    report.status = StateAuditStatus::Fail;
+    let audit = render_audit_ci_text(&report);
+
+    assert!(audit.starts_with("canic state audit\nstatus: fail\nscope: role\nrole: root"));
+    assert!(audit.contains("warnings: 1\nfailures: 1"));
+    assert!(audit.contains(&format!("warn {}", report.checks[0].category.label())));
+    assert!(audit.contains(&format!("fail {}", report.checks[1].category.label())));
+    assert!(!audit.contains("[pass]"));
 }
 
 #[test]
