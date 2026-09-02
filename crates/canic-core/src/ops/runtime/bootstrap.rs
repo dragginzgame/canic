@@ -28,8 +28,10 @@ impl BootstrapPhaseLabel {
     pub const READY: Self = Self("ready");
     pub const NONROOT_INIT_SCHEDULED: Self = Self("nonroot:init:scheduled");
     pub const NONROOT_INIT: Self = Self("nonroot:init");
+    pub const NONROOT_INIT_WAITING_AUTHORITY: Self = Self("nonroot:init:waiting_authority");
     pub const NONROOT_UPGRADE_SCHEDULED: Self = Self("nonroot:upgrade:scheduled");
     pub const NONROOT_UPGRADE: Self = Self("nonroot:upgrade");
+    pub const NONROOT_UPGRADE_WAITING_AUTHORITY: Self = Self("nonroot:upgrade:waiting_authority");
     pub const ROOT_INIT: Self = Self("root:init");
     pub const ROOT_INIT_WAITING_STAGED_RELEASES: Self = Self("root:init:waiting_staged_releases");
     pub const ROOT_INIT_WAITING_COMPONENT_REGISTRY: Self =
@@ -87,6 +89,29 @@ impl BootstrapStatusOps {
             status.phase = phase;
             status.last_error = None;
         });
+    }
+
+    /// Claim the sole process-local initial-bootstrap scheduler.
+    ///
+    /// A later runtime-configuration command may call this after an earlier
+    /// transient failure; concurrent callbacks remain collapsed to one owner.
+    #[must_use]
+    pub fn try_schedule_nonroot_init() -> bool {
+        BOOTSTRAP_STATUS.with_borrow_mut(|status| {
+            if status.ready
+                || matches!(
+                    status.phase,
+                    BootstrapPhaseLabel::NONROOT_INIT_SCHEDULED
+                        | BootstrapPhaseLabel::NONROOT_INIT
+                        | BootstrapPhaseLabel::NONROOT_INIT_WAITING_AUTHORITY
+                )
+            {
+                return false;
+            }
+            status.phase = BootstrapPhaseLabel::NONROOT_INIT_SCHEDULED;
+            status.last_error = None;
+            true
+        })
     }
 
     // Record one terminal bootstrap failure for diagnostics.

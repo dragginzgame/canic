@@ -20,7 +20,7 @@ use canic_core::{
 ///
 /// RootCapabilityCallerPredicate
 ///
-/// Endpoint predicate admitting the root itself or one exact active Component member.
+/// Endpoint predicate admitting the root itself or one exact registered Component member.
 ///
 
 pub struct RootCapabilityCallerPredicate;
@@ -32,7 +32,7 @@ impl AsyncAccessPredicate for RootCapabilityCallerPredicate {
             return crate::workflow::component_auth::require_active_fleet_subnet_root_internal()
                 .map_err(AccessError::Internal);
         }
-        match crate::workflow::component_auth::active_component_member_for_access(
+        match crate::workflow::component_auth::registered_component_member_for_access(
             ctx.transport_caller(),
         ) {
             Ok(_) => Ok(()),
@@ -46,7 +46,7 @@ impl AsyncAccessPredicate for RootCapabilityCallerPredicate {
     }
 
     fn name(&self) -> &'static str {
-        "caller_is_root_or_active_component_member"
+        "caller_is_root_or_registered_component_member"
     }
 }
 

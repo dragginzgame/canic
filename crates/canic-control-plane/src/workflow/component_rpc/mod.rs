@@ -13,7 +13,7 @@ use canic_core::{
         ops::ic::IcOps,
         workflow::rpc::{
             RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
-            RootCapabilityParentAuthority,
+            RootCapabilityMemberLifecycle, RootCapabilityParentAuthority,
         },
     },
     diagnostics::codes,
@@ -43,9 +43,8 @@ fn root_capability_authority(
     caller: candid::Principal,
     request: &Request,
 ) -> Result<RootCapabilityAuthority, Error> {
-    super::component_auth::require_active_fleet_subnet_root()?;
     let root = IcOps::canister_self();
-    let caller = caller_authority(caller, root)?;
+    let caller = caller_authority(caller, root, request)?;
     let authority = RootCapabilityAuthority::new(caller.clone());
 
     match request {
@@ -110,16 +109,44 @@ fn recovered_recycle_target_authority(
 fn caller_authority(
     caller: candid::Principal,
     root: candid::Principal,
+    request: &Request,
 ) -> Result<RootCapabilityCallerAuthority, Error> {
     if caller == root {
+        super::component_auth::require_active_fleet_subnet_root()?;
         return Ok(RootCapabilityCallerAuthority::FleetSubnetRoot { canister_id: root });
     }
-    let active = super::component_registry::active_component_member_authority(caller)
+    let registered = super::component_registry::registered_component_member_authority(caller)
         .map_err(InternalError::from)
         .map_err(Error::from)?;
-    let member =
-        RootCapabilityMemberAuthority::try_from_active_member(active.binding, active.registry)
-            .map_err(Error::from)?;
+    let member = match registered.lifecycle {
+        canic_core::dto::component_registry::ComponentLifecycleStatus::Active => {
+            super::component_auth::require_active_fleet_subnet_root()?;
+            RootCapabilityMemberAuthority::try_from_active_member(
+                registered.binding,
+                registered.registry,
+            )
+        }
+        canic_core::dto::component_registry::ComponentLifecycleStatus::Prepared
+            if matches!(request, Request::AllocatePlacementChild(_)) =>
+        {
+            super::component_auth::require_prepared_fleet_subnet_root()?;
+            RootCapabilityMemberAuthority::try_from_prepared_member(
+                registered.binding,
+                registered.registry,
+            )
+        }
+        _ => Err(InternalError::public(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        )),
+    }
+    .map_err(Error::from)?;
+    if member.lifecycle() == RootCapabilityMemberLifecycle::Prepared
+        && !matches!(request, Request::AllocatePlacementChild(_))
+    {
+        return Err(Error::from_registered(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
+    }
     Ok(RootCapabilityCallerAuthority::ComponentMember(member))
 }
 

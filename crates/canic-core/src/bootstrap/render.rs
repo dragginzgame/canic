@@ -272,11 +272,13 @@ fn render_component_child_funding_policy(policy: &ComponentChildFundingPolicy) -
 fn render_component_spawn_grant(grant: &ComponentSpawnGrant) -> TokenStream {
     let parent_role = render_canister_role(&grant.parent_role);
     let child_role = render_canister_role(&grant.child_role);
+    let initial_instances_per_parent = render_u32_literal(grant.initial_instances_per_parent);
     let maximum_instances_per_parent = render_u32_literal(grant.maximum_instances_per_parent);
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentSpawnGrant {
             parent_role: #parent_role,
             child_role: #child_role,
+            initial_instances_per_parent: #initial_instances_per_parent,
             maximum_instances_per_parent: #maximum_instances_per_parent,
         }
     }

@@ -1886,12 +1886,12 @@ tooling and allocation authority have been removed.
   surface generated from the accepted frontier. Internal-only groups remain
   unqualified until cause-by-cause review.
 - The design's
-  [allocation proposal](../../../design/0.102-compact-diagnostic-codes/allocation-proposal.md)
+  [allocation proposal](../../../design/archive/0.102-compact-diagnostic-codes/allocation-proposal.md)
   records the superseded dense candidate, unpadded `E<decimal>` rendering
   and nine host-only broad classes. Its complete register deterministically
   derives the B2 assets but remains repository-only evidence.
 - The design's
-  [code-allocation ledger](../../../design/0.102-compact-diagnostic-codes/code-allocation-ledger.md)
+  [code-allocation ledger](../../../design/archive/0.102-compact-diagnostic-codes/code-allocation-ledger.md)
   records the released-code no-reuse rule and focused generation contract. The
   candidate ledger has 991 provisional rows and no retired rows.
 - The normative design distinguishes lossless raw decoded identities from

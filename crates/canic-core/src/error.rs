@@ -264,6 +264,7 @@ impl From<ComponentChildAllocationPolicyError> for InternalError {
             }
             ComponentChildAllocationPolicyError::ParentRoleCountOverflow
             | ComponentChildAllocationPolicyError::ParentRoleCapacityExhausted { .. }
+            | ComponentChildAllocationPolicyError::InitialBootstrapUnavailable
             | ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted
             | ComponentChildAllocationPolicyError::ComponentCountOverflow => codes::CAPACITY_LIMIT,
             ComponentChildAllocationPolicyError::InvalidDeploymentLimits => {

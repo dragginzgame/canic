@@ -2159,7 +2159,7 @@ pub(super) fn query_registry(
     Ok(registry)
 }
 
-fn query_operation(
+pub(super) fn query_operation(
     icp: &IcpCli,
     candid: &Path,
     coordinator: Principal,
@@ -2191,7 +2191,7 @@ fn query_operation(
     Ok(Some(status))
 }
 
-fn operation_bytes(operation_id: &str) -> Result<[u8; 32], CurrentProtocolError> {
+pub(super) fn operation_bytes(operation_id: &str) -> Result<[u8; 32], CurrentProtocolError> {
     canic_core::cdk::utils::hash::decode_hex(operation_id)
         .ok()
         .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())

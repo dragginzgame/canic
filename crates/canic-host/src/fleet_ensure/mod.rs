@@ -27,6 +27,8 @@ pub use inventory::{
     CurrentFleetResolution, CurrentFleetTopology, read_current_fleet_inventory,
     resolve_current_fleet,
 };
+#[doc(hidden)]
+pub use json::report_json_value;
 pub use model::{FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureReport};
 #[doc(hidden)]
 pub use ops::current_protocol::{

@@ -378,11 +378,22 @@ impl ComponentRegistryOps {
         let (next_record, active) = active_membership_records(
             &record,
             commitment,
+            &prepared,
             directory_synchronized_at_ns,
             &fleet_directory,
             component_group,
         )?;
-        if active.encoded_bytes > installation.charged_entry_bytes {
+        let top_level_terminal_bytes =
+            RootComponentRegistryStore::allocation_entry_bytes(&next_record)
+                .checked_add(RootComponentRegistryStore::partition_entry_bytes(&active))
+                .and_then(|value| {
+                    value.checked_add(RootComponentRegistryStore::principal_index_entry_bytes(
+                        active.binding.canister_id,
+                        active.binding.component,
+                    ))
+                })
+                .ok_or_else(InternalError::resource_exhausted)?;
+        if top_level_terminal_bytes > installation.charged_entry_bytes {
             return Err(InternalError::invariant());
         }
         if active.encoded_bytes > maximum_component_registry_bytes {

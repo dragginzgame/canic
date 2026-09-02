@@ -129,6 +129,15 @@ fn validate_spawn_grant(
             child_role: grant.child_role.clone(),
         });
     }
+    if grant.initial_instances_per_parent > grant.maximum_instances_per_parent {
+        return Err(ComponentTopologyError::InitialSpawnGrantExceedsMaximum {
+            component_spec: spec.component_spec.clone(),
+            parent_role: grant.parent_role.clone(),
+            child_role: grant.child_role.clone(),
+            initial: grant.initial_instances_per_parent,
+            maximum: grant.maximum_instances_per_parent,
+        });
+    }
     if grant.parent_role != spec.component_role
         && spec
             .children
@@ -486,6 +495,8 @@ pub struct ComponentChildSpec {
 pub struct ComponentSpawnGrant {
     pub parent_role: CanisterRole,
     pub child_role: CanisterRole,
+    /// Exact configured sharding/scaling children created before the parent may become ready.
+    pub initial_instances_per_parent: u32,
     pub maximum_instances_per_parent: u32,
 }
 
@@ -665,6 +676,26 @@ pub enum ComponentTopologyError {
 
     #[error("Component Specs are not in strict canonical order at '{component_spec}'")]
     NonCanonicalComponentSpecOrder { component_spec: ComponentSpecId },
+
+    #[error(
+        "Component Spec '{component_spec}' initial child count overflowed for '{parent_role}' -> '{child_role}'"
+    )]
+    InitialSpawnGrantOverflow {
+        component_spec: ComponentSpecId,
+        parent_role: CanisterRole,
+        child_role: CanisterRole,
+    },
+
+    #[error(
+        "Component Spec '{component_spec}' configures {initial} initial '{child_role}' children for '{parent_role}', exceeding spawn grant maximum {maximum}"
+    )]
+    InitialSpawnGrantExceedsMaximum {
+        component_spec: ComponentSpecId,
+        parent_role: CanisterRole,
+        child_role: CanisterRole,
+        initial: u32,
+        maximum: u32,
+    },
 
     #[error(
         "Component Spec '{component_spec}' children are not in strict canonical order at role '{role}'"
@@ -939,15 +970,21 @@ fn compile_component_spec(
         .spawn_grants
         .iter()
         .flat_map(|(parent_role, grants)| {
-            grants
-                .iter()
-                .map(move |(child_role, grant)| ComponentSpawnGrant {
+            grants.iter().map(move |(child_role, grant)| {
+                Ok(ComponentSpawnGrant {
                     parent_role: parent_role.clone(),
                     child_role: child_role.clone(),
+                    initial_instances_per_parent: configured_initial_instances(
+                        component_spec,
+                        source,
+                        parent_role,
+                        child_role,
+                    )?,
                     maximum_instances_per_parent: grant.maximum_instances_per_parent,
                 })
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, ComponentTopologyError>>()?;
 
     Ok(ComponentSpec {
         component_spec: component_spec.clone(),
@@ -965,6 +1002,36 @@ fn compile_component_spec(
         children,
         spawn_grants,
     })
+}
+
+fn configured_initial_instances(
+    component_spec: &ComponentSpecId,
+    source: &ComponentSpecConfig,
+    parent_role: &CanisterRole,
+    child_role: &CanisterRole,
+) -> Result<u32, ComponentTopologyError> {
+    let parent = source.get_canister(parent_role).ok_or_else(|| {
+        ComponentTopologyError::UnknownSpawnGrantParent {
+            component_spec: component_spec.clone(),
+            parent_role: parent_role.clone(),
+        }
+    })?;
+    let sharding = parent.sharding.into_iter().flat_map(|config| config.pools);
+    let scaling = parent.scaling.into_iter().flat_map(|config| config.pools);
+    sharding
+        .filter(|(_pool, config)| &config.canister_role == child_role)
+        .map(|(_pool, config)| config.policy.initial_shards)
+        .chain(
+            scaling
+                .filter(|(_pool, config)| &config.canister_role == child_role)
+                .map(|(_pool, config)| config.policy.initial_workers),
+        )
+        .try_fold(0_u32, u32::checked_add)
+        .ok_or_else(|| ComponentTopologyError::InitialSpawnGrantOverflow {
+            component_spec: component_spec.clone(),
+            parent_role: parent_role.clone(),
+            child_role: child_role.clone(),
+        })
 }
 
 fn component_spec_hash(
@@ -1025,6 +1092,7 @@ fn encode_compiled_component_spec(encoder: &mut CanonicalEncoder, spec: &Compone
     for grant in &spec.spawn_grants {
         encoder.string(grant.parent_role.as_str());
         encoder.string(grant.child_role.as_str());
+        encoder.u32(grant.initial_instances_per_parent);
         encoder.u32(grant.maximum_instances_per_parent);
     }
 }

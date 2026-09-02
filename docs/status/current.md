@@ -25,10 +25,10 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.110.3` at
-`938c40b73f70123518f62918e49a8846d762d537`. Its governed marker records the
+Current development begins from published `v0.110.4` at
+`baffacab7d5ae4d93ddb9e5fac279bc4c3ddd177`. Its governed marker records the
 validated source below; immutable details are in
-[the 0.110 changelog](../changelog/0.110.md). `0.110.4` is the single open
+[the 0.110 changelog](../changelog/0.110.md). `0.110.5` is the single open
 patch draft. Source-development truth comes from Git and the working tree.
 
 ## Maintained 0.109 Contract
@@ -113,7 +113,7 @@ still progressing, but eight immediate identical status queries exhausted the
 generic unchanged-observation limit before the distributed operation could
 reach its next durable phase.
 
-The open `0.110.4` correction keeps the command/status boundary intact:
+Published `v0.110.4` keeps the command/status boundary intact:
 
 - the command is still issued once, and only exact typed retryable-failure
   evidence may replay its retained operation identity;
@@ -130,6 +130,65 @@ The open `0.110.4` correction keeps the command/status boundary intact:
 Retained current-schema plans and journals require no rewrite. This is a host
 reconciliation correction and does not add runtime capability or alter the
 0.110 contraction design.
+
+## CANIC-124 Managed Component-Tree Qualification
+
+The open `0.110.5` batch adds one public host-only fixture for downstream tests
+that must qualify a managed Hub together with children created through Canic's
+placement workflows. `install_managed_component_group` consumes one validated
+Component Group deployment and exact Wasms for all selected roles; Canic alone
+derives each top-level `Component` and descendant `ComponentChild` authority.
+
+The governed proof covers configured sharding and scaling children, on-demand
+index and scale-out allocation, exact parent and Component Group bindings,
+Fleet-admitted and denied direct child ingress, same-release child upgrade,
+timer restoration and successor projection fencing. The same Root allocation
+journal and fixture settlement path serves sharding, scaling and index; the
+downstream never constructs protected child payloads or directly pins private
+`canic-core`/`ic-testkit` lifecycle machinery.
+
+## CANIC-126-CANIC-127 Convergence Corrections
+
+The open `0.110.5` batch also closes the two production ordering defects exposed
+after the final Fleet protocol action:
+
+- a Root-owned pool asset whose exact balance is not yet available remains a
+  bounded passive observation, not a failed effect. Fleet Ensure re-observes the
+  same operation and topology without issuing a protocol, install, controller,
+  creation or funding command. Exact progress clears the stall count; exhaustion
+  reports the target and last authoritative lifecycle while leaving the operation
+  resumable; and
+- a managed Hub keeps readiness closed while its configured initial children are
+  unavailable. The exact registered Hub may request only its compiled initial-
+  child allocation while both it and the Root are Prepared. One durable Root
+  allocation owns creation, installation, Directory convergence and membership;
+  a detached idempotent driver prevents a Root-to-Hub callback cycle, and the Hub
+  retries only typed transient bootstrap failures within a finite bound.
+
+Root membership activation now requires the target's exact readiness response.
+Runtime activation remains bound to the Directory authority under which it
+occurred even when an initial child legitimately advances the current Directory
+before Root records the activation response. The Root therefore cannot publish
+an Active zero-descendant Hub whose required initial-child bootstrap failed, and
+lost activation responses adopt only the exact already-active runtime receipt.
+
+The governed Prepared-Root journey reaches three top-level Components plus
+configured sharding and scaling children, terminal Component membership and an
+effect-free replay. The public fixture independently covers configured and
+on-demand sharding, scaling and index children, direct admission, same-release
+upgrade, timer restoration and fencing. A downstream live reset remains
+downstream-owned adoption evidence rather than a Canic release effect.
+
+## 0.110.5 Fleet Ensure Operator Corrections
+
+The open patch distinguishes a retained Component-provisioning source Registry
+from its published active successor during terminal inventory validation. Root
+top-level status is bound to the Coordinator's retained source Registry, plan
+hash and configuration digest; Root and Coordinator publication remain bound
+to the active Registry. Fleet Ensure JSON also keeps Store chunk bytes in the
+existing content-addressed object store and reports only their local path,
+SHA-256 and byte size. Text-mode cycle quantities use consistent three-decimal
+`B`, `T` and `Q` units.
 
 ## B1-B10 State
 
@@ -172,7 +231,7 @@ runtime or repository dependency.
 | Line | Active owner | State |
 | --- | --- | --- |
 | [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.3` published; `0.110.4` corrects bounded Component-provisioning observation while B1 remains active |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.4` published; `0.110.5` closes managed Component-tree qualification and its two observed convergence blockers while B1 remains active |
 | [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
@@ -196,17 +255,17 @@ baseline before any runtime contraction. Initial work:
 - keeps the exact downstream canary read-only and separate from Canic source.
 
 No broad workspace or full PocketIC gate is run during coding. The maintainer's
-release flow owns that boundary. Published `v0.110.3` closes the independent
-CANIC-121 proof, so B1 measurement may proceed; B2 remains blocked on accepted
-complete B1 evidence.
+release flow owns that boundary. Published `v0.110.4` closes the independent
+CANIC-121 and CANIC-125 corrections, so B1 measurement may proceed; B2 remains
+blocked on accepted complete B1 evidence.
 
 ## Next Authorized Action
 
-Complete the bounded `0.110.4` CANIC-125 host correction, then continue B1 from
-immutable `v0.110.3`: complete the frozen downstream canary, controlled
-ablations, generated-surface inventory and generic-instantiation cohort. Retain
-the active B1 evidence and do not begin B2 until the maintainer accepts the
-complete B1 baseline.
+Complete the bounded `0.110.5` CANIC-124, CANIC-126 and CANIC-127 corrections,
+then continue B1 from immutable `v0.110.4`: complete the frozen downstream
+canary, controlled ablations, generated-surface inventory and generic-
+instantiation cohort. Retain the active B1 evidence and do not begin B2 until
+the maintainer accepts the complete B1 baseline.
 
 
 <!-- canic-release-validation: version=0.110.4 source=27eb97333a2fb73bedbfde1e566d13ab055b339c date=2026-09-02 gate=complete -->

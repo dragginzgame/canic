@@ -126,7 +126,7 @@ Relevant current owners include:
 - [`crates/canic-host/src/role_contract/package/mod.rs`](../../../../crates/canic-host/src/role_contract/package/mod.rs)
 - [`crates/canic-host/src/canister_build/artifact.rs`](../../../../crates/canic-host/src/canister_build/artifact.rs)
 - [`crates/canic-core/src/dto/abi/v1/payload.rs`](../../../../crates/canic-core/src/dto/abi/v1/payload.rs)
-- [`crates/canic/src/macros/endpoints/nonroot.rs`](../../../../crates/canic/src/macros/endpoints/nonroot.rs)
+- [`crates/canic/src/macros/endpoints/role.rs`](../../../../crates/canic/src/macros/endpoints/role.rs)
 - [`crates/canic-core/src/ops/component_runtime.rs`](../../../../crates/canic-core/src/ops/component_runtime.rs)
 - [`crates/canic-core/src/ops/rpc/request/dispatch.rs`](../../../../crates/canic-core/src/ops/rpc/request/dispatch.rs)
 

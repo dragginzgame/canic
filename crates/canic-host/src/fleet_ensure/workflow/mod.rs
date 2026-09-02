@@ -91,6 +91,15 @@ where
     },
 
     #[error(
+        "Root-owned canister {target} remained {last_lifecycle} for {observations} consecutive passive observations; no command was reissued and the operation remains resumable"
+    )]
+    RootOwnedObservationStalled {
+        target: String,
+        observations: u32,
+        last_lifecycle: String,
+    },
+
+    #[error(
         "selected Cycles Ledger account has {actual} cycles, below reviewed maximum debit {required}"
     )]
     InsufficientOperatorCycles { actual: u128, required: u128 },
@@ -165,6 +174,10 @@ where
 }
 
 /// Build and retain one read-only plan from current desired state plus live observation.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one locked read-only transaction reconciles retained authority, observation and the immutable plan"
+)]
 pub fn plan<P>(
     root: &Path,
     desired: &crate::fleet_ensure::model::DesiredFleet,
@@ -249,18 +262,51 @@ where
     if let Some(operation_id) = terminal_inventory_operation_id.as_deref() {
         attach_terminal_inventory_cycles(operation_id, &state, platform, &mut observation)?;
     }
-    let protocol_actions = platform
+    let mut protocol_actions = platform
         .protocol_actions(&operation_id, &state)
         .map_err(EnsureWorkflowError::Platform)?;
-    let mut plan = compile_plan(
-        desired,
-        &artifacts,
-        &protocol_actions,
-        desired_sha256,
-        requested_fleet,
-        &observation,
-        created_at_time,
-    )?;
+    let mut retained_observations = 0_u32;
+    let mut plan = loop {
+        match compile_plan(
+            desired,
+            &artifacts,
+            &protocol_actions,
+            desired_sha256,
+            requested_fleet,
+            &observation,
+            created_at_time,
+        ) {
+            Ok(plan) => break plan,
+            Err(EnsurePolicyError::PendingRootOwnedBalance { name }) => {
+                retained_observations = retained_observations.saturating_add(1);
+                if retained_observations >= desired.maximum_stalled_observations {
+                    return Err(EnsureWorkflowError::RootOwnedObservationStalled {
+                        last_lifecycle: root_owned_lifecycle_label(&observation, &name).to_string(),
+                        observations: retained_observations,
+                        target: name,
+                    });
+                }
+                platform.pace_root_owned_observation(&name, retained_observations);
+                observation = platform
+                    .observe(&operation_id, &state)
+                    .map_err(EnsureWorkflowError::Platform)?;
+                retain_observed_cycles(&mut state, &observation);
+                write_state(&paths, &state)?;
+                if let Some(operation_id) = terminal_inventory_operation_id.as_deref() {
+                    attach_terminal_inventory_cycles(
+                        operation_id,
+                        &state,
+                        platform,
+                        &mut observation,
+                    )?;
+                }
+                protocol_actions = platform
+                    .protocol_actions(&operation_id, &state)
+                    .map_err(EnsureWorkflowError::Platform)?;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
     bind_terminal_inventory_operation(&mut plan, terminal_inventory_operation_id);
     write_plan(&paths, &plan)?;
     Ok(FleetEnsureReport {
@@ -477,6 +523,15 @@ fn retain_observed_cycles(state: &mut FleetEnsureStateRecord, observation: &Flee
     state
         .retained_cycles_by_principal
         .extend(observation.additional_controlled_cycles.clone());
+}
+
+fn root_owned_lifecycle_label(observation: &FleetObservation, target: &str) -> &'static str {
+    observation
+        .canisters
+        .get(target)
+        .and_then(Option::as_ref)
+        .and_then(|live| live.root_owned_lifecycle)
+        .map_or("unavailable", |lifecycle| lifecycle.label())
 }
 
 /// Apply or resume exactly one reviewed plan until it converges or returns a typed blocker.
@@ -981,23 +1036,57 @@ where
         terminal_state.active_registry = None;
     }
     project_current_fleet_inventory(&terminal_state)?;
-    let terminal_observation = platform
+    let mut terminal_observation = platform
         .observe(&retained_plan.operation_id, &terminal_state)
         .map_err(EnsureWorkflowError::Platform)?;
     if !issued_observation_resume {
         let artifacts = resolve_desired_artifacts(root, operation_desired)?;
-        let protocol_actions = platform
-            .protocol_actions(&retained_plan.operation_id, &terminal_state)
-            .map_err(EnsureWorkflowError::Platform)?;
-        let converged = compile_plan(
-            operation_desired,
-            &artifacts,
-            &protocol_actions,
-            operation_desired_sha256,
-            requested_fleet,
-            &terminal_observation,
-            retained_plan.planned_at_time,
-        )?;
+        let converged = loop {
+            let protocol_actions = platform
+                .protocol_actions(&retained_plan.operation_id, &terminal_state)
+                .map_err(EnsureWorkflowError::Platform)?;
+            match compile_plan(
+                operation_desired,
+                &artifacts,
+                &protocol_actions,
+                operation_desired_sha256,
+                requested_fleet,
+                &terminal_observation,
+                retained_plan.planned_at_time,
+            ) {
+                Ok(plan) => {
+                    if journal.stalled_observations != 0 {
+                        journal.stalled_observations = 0;
+                        write_journal(&paths, &journal)?;
+                    }
+                    break plan;
+                }
+                Err(EnsurePolicyError::PendingRootOwnedBalance { name }) => {
+                    journal.stalled_observations = journal.stalled_observations.saturating_add(1);
+                    retain_observed_cycles(&mut state, &terminal_observation);
+                    write_state(&paths, &state)?;
+                    write_journal(&paths, &journal)?;
+                    if journal.stalled_observations
+                        >= operation_desired.maximum_stalled_observations
+                    {
+                        return Err(EnsureWorkflowError::RootOwnedObservationStalled {
+                            last_lifecycle: root_owned_lifecycle_label(
+                                &terminal_observation,
+                                &name,
+                            )
+                            .to_string(),
+                            observations: journal.stalled_observations,
+                            target: name,
+                        });
+                    }
+                    platform.pace_root_owned_observation(&name, journal.stalled_observations);
+                    terminal_observation = platform
+                        .observe(&retained_plan.operation_id, &terminal_state)
+                        .map_err(EnsureWorkflowError::Platform)?;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        };
         if converged
             .canisters
             .iter()
@@ -1442,25 +1531,53 @@ where
     if let Some(operation_id) = terminal_inventory_operation_id {
         attach_terminal_inventory_cycles(operation_id, state, platform, &mut observation)?;
     }
+    let artifacts = resolve_desired_artifacts(root, desired)?;
+    let mut retained_observations = 0_u32;
+    let mut current = loop {
+        let protocol_actions = platform
+            .protocol_actions(&retained_plan.operation_id, state)
+            .map_err(EnsureWorkflowError::Platform)?;
+        match compile_plan(
+            desired,
+            &artifacts,
+            &protocol_actions,
+            desired_sha256,
+            requested_fleet,
+            &observation,
+            retained_plan.planned_at_time,
+        ) {
+            Ok(plan) => break plan,
+            Err(EnsurePolicyError::PendingRootOwnedBalance { name }) => {
+                retained_observations = retained_observations.saturating_add(1);
+                if retained_observations >= desired.maximum_stalled_observations {
+                    return Err(EnsureWorkflowError::RootOwnedObservationStalled {
+                        last_lifecycle: root_owned_lifecycle_label(&observation, &name).to_string(),
+                        observations: retained_observations,
+                        target: name,
+                    });
+                }
+                platform.pace_root_owned_observation(&name, retained_observations);
+                observation = platform
+                    .observe(&retained_plan.operation_id, state)
+                    .map_err(EnsureWorkflowError::Platform)?;
+                if let Some(operation_id) = terminal_inventory_operation_id {
+                    attach_terminal_inventory_cycles(
+                        operation_id,
+                        state,
+                        platform,
+                        &mut observation,
+                    )?;
+                }
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
     if observation.operator_cycles < retained_plan.conservation.maximum_operator_debit_cycles {
         return Err(EnsureWorkflowError::InsufficientOperatorCycles {
             actual: observation.operator_cycles,
             required: retained_plan.conservation.maximum_operator_debit_cycles,
         });
     }
-    let artifacts = resolve_desired_artifacts(root, desired)?;
-    let protocol_actions = platform
-        .protocol_actions(&retained_plan.operation_id, state)
-        .map_err(EnsureWorkflowError::Platform)?;
-    let mut current = compile_plan(
-        desired,
-        &artifacts,
-        &protocol_actions,
-        desired_sha256,
-        requested_fleet,
-        &observation,
-        retained_plan.planned_at_time,
-    )?;
     bind_terminal_inventory_operation(
         &mut current,
         retained_plan.terminal_inventory_operation_id.clone(),

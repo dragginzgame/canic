@@ -5,6 +5,8 @@ members = [
     "apps/demo/user_hub",
     "apps/demo/user_shard",
     "apps/test/app",
+    "apps/test/index_child",
+    "apps/test/index_hub",
     "apps/test/root",
     "apps/test/scale",
     "apps/test/scale_hub",

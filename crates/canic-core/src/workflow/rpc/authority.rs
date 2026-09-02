@@ -23,6 +23,13 @@ pub enum RootCapabilityCallerAuthority {
     ComponentMember(RootCapabilityMemberAuthority),
 }
 
+/// Lifecycle authority carried for one exact Component capability caller.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RootCapabilityMemberLifecycle {
+    Prepared,
+    Active,
+}
+
 ///
 /// RootCapabilityMemberAuthority
 ///
@@ -36,6 +43,7 @@ pub struct RootCapabilityMemberAuthority {
     role: CanisterRole,
     component: ComponentInstanceId,
     registry: ComponentRegistryHead,
+    lifecycle: RootCapabilityMemberLifecycle,
 }
 
 impl RootCapabilityMemberAuthority {
@@ -50,6 +58,7 @@ impl RootCapabilityMemberAuthority {
                 role: binding.role,
                 component: binding.component,
                 registry,
+                lifecycle: RootCapabilityMemberLifecycle::Active,
             },
             ManagedCanisterBinding::ComponentChild(binding) => Self {
                 canister_id: binding.canister_id,
@@ -57,11 +66,21 @@ impl RootCapabilityMemberAuthority {
                 role: binding.role,
                 component: binding.component.component,
                 registry,
+                lifecycle: RootCapabilityMemberLifecycle::Active,
             },
         };
         if authority.component != authority.registry.component {
             return Err(InternalError::invariant());
         }
+        Ok(authority)
+    }
+
+    pub fn try_from_prepared_member(
+        member: ManagedCanisterBinding,
+        registry: ComponentRegistryHead,
+    ) -> Result<Self, InternalError> {
+        let mut authority = Self::try_from_active_member(member, registry)?;
+        authority.lifecycle = RootCapabilityMemberLifecycle::Prepared;
         Ok(authority)
     }
 
@@ -73,6 +92,11 @@ impl RootCapabilityMemberAuthority {
     #[must_use]
     pub const fn component(&self) -> ComponentInstanceId {
         self.component
+    }
+
+    #[must_use]
+    pub const fn lifecycle(&self) -> RootCapabilityMemberLifecycle {
+        self.lifecycle
     }
 }
 
@@ -191,6 +215,13 @@ impl RootCapabilityAuthority {
         match &self.caller {
             RootCapabilityCallerAuthority::FleetSubnetRoot { .. } => None,
             RootCapabilityCallerAuthority::ComponentMember(member) => Some(&member.registry),
+        }
+    }
+
+    pub(super) const fn caller_member_lifecycle(&self) -> Option<RootCapabilityMemberLifecycle> {
+        match &self.caller {
+            RootCapabilityCallerAuthority::FleetSubnetRoot { .. } => None,
+            RootCapabilityCallerAuthority::ComponentMember(member) => Some(member.lifecycle),
         }
     }
 

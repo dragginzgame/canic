@@ -36,7 +36,7 @@ before any other `wasm-opt` on `PATH`. Explicit
 authoritative. Otherwise Make and Canic artifact builds discover `sccache` and
 keep deterministic Wasm builds non-incremental.
 
-## ICP CLI
+## ICP CLI compatibility
 
 The maintained range is `icp-cli >=1.2.0, <2.0.0`; the maintainer toolchain currently pins `1.4.0`.
 

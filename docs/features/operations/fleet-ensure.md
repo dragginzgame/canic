@@ -281,6 +281,14 @@ progress resets the counter. Silence never authorizes a second command; only
 the exact retained typed retryable-failure result may replay the same operation
 identity.
 
+After protocol completion, a retained Root-owned pool asset may briefly lack an
+exact current balance while the Root finishes publishing its lifecycle result.
+Fleet Ensure treats that state as passive observation under the same finite
+`maximum_stalled_observations` bound. It issues no protocol, installation,
+controller, creation or funding command while waiting. The terminal observation
+retains the exact balance; exhaustion names the target and last Root-owned
+lifecycle and leaves the operation resumable.
+
 Human-authored `canic.toml`, Fleet policy and cycle-valued CLI options require
 quoted exact values with a case-sensitive `B`, `T`, or `Q` suffix. Exact
 decimals such as `1.5T` and `0.1B` are accepted; bare integers, unsuffixed
@@ -346,6 +354,13 @@ canic fleet ensure staging \
   --desired fleets/staging.toml \
   --apply <plan_sha256>
 ```
+
+The `--json` report preserves the complete plan metadata without embedding
+Store publication payloads. Each `publish_store_chunk` request contains a
+workspace-relative `bytes_path` under
+`.canic/fleet-ensure/objects/sha256/`, plus the exact `bytes_sha256` and
+`bytes_size`; the referenced object is the same hash-verified content retained
+for interruption recovery.
 
 Before the first effect, changed desired bytes, artifacts, authority-bearing
 live state, funding sufficiency or the live Cycles Ledger fee stop apply and

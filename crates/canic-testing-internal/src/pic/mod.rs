@@ -183,7 +183,7 @@ mod governed_suite {
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_pocketic_cases());
         let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
-        assert_eq!(names.len(), 34);
+        assert_eq!(names.len(), 35);
         assert_eq!(names[0], "Fleet deployment restore");
         assert_eq!(names[1], "autonomous Root removal");
         assert_eq!(

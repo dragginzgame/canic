@@ -127,6 +127,25 @@ fn provision_authority(member: ManagedCanisterBinding) -> RootCapabilityAuthorit
         .with_provision_parent(parent)
 }
 
+fn prepared_provision_authority(member: ManagedCanisterBinding) -> RootCapabilityAuthority {
+    let component = match &member {
+        ManagedCanisterBinding::Component(binding) => binding.component,
+        ManagedCanisterBinding::ComponentChild(binding) => binding.component.component,
+    };
+    let member = RootCapabilityMemberAuthority::try_from_prepared_member(
+        member,
+        ComponentRegistryHead {
+            component,
+            revision: 1,
+            content_hash: [211; 32],
+        },
+    )
+    .expect("matching prepared member authority");
+    let parent = RootCapabilityParentAuthority::from(member.clone());
+    RootCapabilityAuthority::new(RootCapabilityCallerAuthority::ComponentMember(member))
+        .with_provision_parent(parent)
+}
+
 fn root_capability_member(member: ManagedCanisterBinding) -> RootCapabilityMemberAuthority {
     let component = match &member {
         ManagedCanisterBinding::Component(binding) => binding.component,
@@ -489,6 +508,47 @@ fn authorize_allows_structural_child_provision_for_registered_caller() {
 
     RootResponseWorkflow::authorize(&ctx, &capability, &authority)
         .expect("must authorize child provision");
+}
+
+#[test]
+fn prepared_member_authority_allows_only_initial_placement_allocation() {
+    let root_pid = p(15);
+    let caller = p(16);
+    let authority = prepared_provision_authority(component_member(
+        root_pid,
+        caller,
+        CanisterRole::new("user_hub"),
+        15,
+    ));
+    let ctx = RootContext {
+        caller,
+        self_pid: root_pid,
+        is_root_env: true,
+        subnet_id: root_pid,
+        now: 5,
+    };
+    let initial = RootCapability::AllocatePlacementChild(CreateCanisterRequest {
+        canister_role: CanisterRole::new("user_shard"),
+        parent: CreateCanisterParent::ThisCanister,
+        extra_arg: None,
+        metadata: None,
+    });
+
+    RootResponseWorkflow::authorize(&ctx, &initial, &authority)
+        .expect("prepared member may consume only its compiled initial allocation lane");
+
+    let ordinary = RootCapability::ProvisionCanister(CreateCanisterRequest {
+        canister_role: CanisterRole::new("user_shard"),
+        parent: CreateCanisterParent::ThisCanister,
+        extra_arg: None,
+        metadata: None,
+    });
+    let error = RootResponseWorkflow::authorize(&ctx, &ordinary, &authority)
+        .expect_err("ordinary capability must remain active-member-only");
+    assert_eq!(
+        error.public_error().code(),
+        crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+    );
 }
 
 #[test]

@@ -39,6 +39,19 @@ pub enum RootOwnedCanisterLifecycle {
     Workload,
 }
 
+impl RootOwnedCanisterLifecycle {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Claimed => "claimed",
+            Self::Idle => "idle",
+            Self::Retained => "retained",
+            Self::Store => "store",
+            Self::Workload => "workload",
+        }
+    }
+}
+
 /// Management status relevant to reconciliation.
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

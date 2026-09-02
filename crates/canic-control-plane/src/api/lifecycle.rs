@@ -827,7 +827,7 @@ impl LifecycleApi {
     pub async fn activate_component_runtime(
         request: RootComponentRuntimeActivationRequest,
     ) -> Result<RootComponentRuntimeActivationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::activate_component_runtime(request)
+        Box::pin(crate::workflow::component_registry::activate_component_runtime(request))
             .await
             .map_err(Into::into)
     }
@@ -835,7 +835,7 @@ impl LifecycleApi {
     pub async fn activate_peer_component_runtime(
         request: RootComponentRuntimeActivationRequest,
     ) -> Result<RootComponentRuntimeActivationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::activate_peer_component_runtime(request)
+        Box::pin(crate::workflow::component_registry::activate_peer_component_runtime(request))
             .await
             .map_err(Into::into)
     }

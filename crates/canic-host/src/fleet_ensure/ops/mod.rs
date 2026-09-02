@@ -203,6 +203,18 @@ pub trait EnsurePlatform {
         consecutive_unchanged_observations: u32,
     );
 
+    /// Pace re-observation of one retained Root-owned canister whose protected
+    /// lifecycle has not yet exposed its terminal live balance.
+    ///
+    /// This is observation-only: implementations must not submit a command,
+    /// allocate funding, or mutate the remote estate.
+    fn pace_root_owned_observation(
+        &mut self,
+        _target: &str,
+        _consecutive_retained_observations: u32,
+    ) {
+    }
+
     fn apply(
         &mut self,
         operation_id: &str,

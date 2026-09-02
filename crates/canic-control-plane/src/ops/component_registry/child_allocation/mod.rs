@@ -108,6 +108,10 @@ impl ComponentRegistryOps {
             parent_role: decision.parent_role,
             child_role: decision.child_role,
             child_kind: decision.child_kind,
+            initial_bootstrap: matches!(
+                decision.mode,
+                canic_core::control_plane_support::policy::component_child_allocation::ComponentChildAllocationMode::InitialBootstrap
+            ),
             maximum_instances_per_parent: decision.maximum_instances_per_parent,
             maximum_descendants: decision.maximum_descendants,
             maximum_registry_bytes: decision.maximum_registry_bytes,
@@ -127,15 +131,22 @@ impl ComponentRegistryOps {
         }
         let spec_authority_matches = partition.binding.component_spec == decision.component_spec
             && partition.binding.spec_hash == decision.spec_hash;
-        let partition_is_active = partition.release_set == current.release_set
-            && partition.status == ComponentLifecycleStatus::Active;
+        let partition_lifecycle_matches = partition.release_set == current.release_set
+            && match decision.mode {
+                canic_core::control_plane_support::policy::component_child_allocation::ComponentChildAllocationMode::InitialBootstrap => {
+                    partition.status == ComponentLifecycleStatus::Prepared
+                }
+                canic_core::control_plane_support::policy::component_child_allocation::ComponentChildAllocationMode::Active => {
+                    partition.status == ComponentLifecycleStatus::Active
+                }
+            };
         let expected_registry = ComponentRegistryHead {
             component: decision.component,
             revision: partition.revision,
             content_hash: partition.content_hash,
         };
         if !spec_authority_matches
-            || !partition_is_active
+            || !partition_lifecycle_matches
             || record.reserved_against_registry != expected_registry
         {
             return Err(InternalError::conflict());

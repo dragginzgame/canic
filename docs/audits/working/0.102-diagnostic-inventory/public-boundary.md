@@ -20,7 +20,7 @@ cannot distinguish:
 
 Any final leaf shared by two sites must still satisfy the stricter semantic
 rules in the
-[allocation proposal](../../../design/0.102-compact-diagnostic-codes/allocation-proposal.md).
+[allocation proposal](../../../design/archive/0.102-compact-diagnostic-codes/allocation-proposal.md).
 
 ## Explicit Construction Coverage
 
@@ -160,7 +160,7 @@ and mechanically explicit. B1 still requires:
    internal inventory before assigning numbers; and
 6. proposing the initial permanent current/retired allocation rows and
    language-neutral current registry under
-   [code-allocation ledger](../../../design/0.102-compact-diagnostic-codes/code-allocation-ledger.md).
+   [code-allocation ledger](../../../design/archive/0.102-compact-diagnostic-codes/code-allocation-ledger.md).
 
 The next pass starts with typed conversions and `with_diagnostic_context`
 callers because they already expose the places where prose is substituting for

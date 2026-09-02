@@ -50,6 +50,20 @@ const COMBINED_LIFECYCLE_CONFIG_PATH: &str =
     "canisters/test/canic_icydb_lifecycle_probe/canic.toml";
 static BUILD_ONCE: Once = Once::new();
 static COMBINED_BUILD_ONCE: Once = Once::new();
+#[cfg(test)]
+static MANAGED_COMPONENT_GROUP_BUILD_ONCE: Once = Once::new();
+#[cfg(test)]
+const MANAGED_COMPONENT_GROUP_CONFIG_PATH: &str =
+    "apps/test/test-configs/managed-component-group.toml";
+#[cfg(test)]
+const MANAGED_COMPONENT_GROUP_PACKAGES: [&str; 6] = [
+    "canister_index_child",
+    "canister_index_hub",
+    "canister_scale",
+    "canister_scale_hub",
+    "canister_user_hub",
+    "canister_user_shard",
+];
 const LIFECYCLE_PARTICIPANT_TRAP_ENV: (&str, &str) = ("CANIC_TEST_LIFECYCLE_PARTICIPANT_TRAP", "1");
 const LIFECYCLE_PARTICIPANT_INIT_TRAP_ENV: (&str, &str) =
     ("CANIC_TEST_LIFECYCLE_PARTICIPANT_INIT_TRAP", "1");
@@ -341,6 +355,28 @@ fn build_combined_canister_once(workspace_root: &Path) {
             &target_dir,
             &["canic_icydb_lifecycle_probe"],
             CanicWasmBuildProfile::Fast,
+        );
+    });
+}
+
+// Build the public multi-role fixture Wasms once against their exact shared config.
+#[cfg(test)]
+fn build_managed_component_group_canisters_once(workspace_root: &Path) {
+    MANAGED_COMPONENT_GROUP_BUILD_ONCE.call_once(|| {
+        let target_dir = test_target_dir(workspace_root, "pic-managed-component-group-wasm");
+        let config_path = workspace_root.join(MANAGED_COMPONENT_GROUP_CONFIG_PATH);
+        let config_path = config_path
+            .to_str()
+            .expect("managed Component Group config path is UTF-8");
+        build_internal_test_wasm_canisters_with_env(
+            workspace_root,
+            &target_dir,
+            &MANAGED_COMPONENT_GROUP_PACKAGES,
+            CanicWasmBuildProfile::Fast,
+            &[(
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                config_path,
+            )],
         );
     });
 }
@@ -1139,6 +1175,257 @@ mod tests {
         assert!(after_upgrade.is_ok());
     }
 
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one governed public-fixture journey covers the complete managed child lifecycle"
+    )]
+    fn published_managed_component_group_support_drives_child_lifecycle() {
+        let workspace_root = workspace_root();
+        let target_dir = test_target_dir(&workspace_root, "pic-managed-component-group-wasm");
+        build_managed_component_group_canisters_once(&workspace_root);
+        let admitted = Fake::principal(15);
+        let unlisted = Fake::principal(16);
+        let artifact = |role: &str, package: &str| {
+            canic::testing::ManagedRoleQualificationArtifact::new(
+                role.parse().expect("canonical fixture role"),
+                read_wasm(
+                    &target_dir,
+                    package,
+                    CanicWasmBuildProfile::Fast.target_dir_name(),
+                ),
+            )
+        };
+        let input = canic::testing::ManagedComponentGroupQualificationInput::new(
+            include_str!("../../../../apps/test/test-configs/managed-component-group.toml"),
+            "qualification",
+            super::super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.1,
+            vec![admitted],
+            vec![
+                artifact("index_child", "canister_index_child"),
+                artifact("index_hub", "canister_index_hub"),
+                artifact("scale_hub", "canister_scale_hub"),
+                artifact("scale_replica", "canister_scale"),
+                artifact("user_hub", "canister_user_hub"),
+                artifact("user_shard", "canister_user_shard"),
+            ],
+        );
+        let mut fixture = canic::testing::install_managed_component_group(input)
+            .expect("install through published managed Component Group support");
+
+        assert_eq!(fixture.nodes().len(), 5);
+        let index_hub = fixture
+            .unique_role(&"index_hub".parse().expect("index Hub role"))
+            .expect("one index Hub");
+        let scale_hub = fixture
+            .unique_role(&"scale_hub".parse().expect("scale Hub role"))
+            .expect("one scale Hub");
+        let scale_replica = fixture
+            .unique_role(&"scale_replica".parse().expect("scale replica role"))
+            .expect("one initial scale replica");
+        let user_hub = fixture
+            .unique_role(&"user_hub".parse().expect("user Hub role"))
+            .expect("one user Hub");
+        let user_shard = fixture
+            .unique_role(&"user_shard".parse().expect("user Shard role"))
+            .expect("one initial user Shard");
+
+        for (child, parent) in [(scale_replica, scale_hub), (user_shard, user_hub)] {
+            let binding = fixture.binding(child).expect("installed child binding");
+            let canic::ids::ManagedCanisterBinding::ComponentChild(binding) = binding else {
+                panic!("placement child must retain ComponentChild authority");
+            };
+            assert_eq!(binding.parent_canister_id, parent);
+            assert_eq!(binding.canister_id, child);
+            let runtime = fixture
+                .runtime_status(child)
+                .expect("active child runtime status");
+            assert_eq!(
+                runtime.runtime.phase,
+                canic::dto::component_registry::ComponentRuntimePhase::Active
+            );
+            let group = runtime
+                .runtime
+                .authority
+                .expect("active child Directory authority")
+                .component_group
+                .expect("child inherits Component Group sibling Directory");
+            assert_eq!(group.members.len(), 3);
+            assert!(
+                group
+                    .members
+                    .iter()
+                    .any(|member| member.binding.canister_id == index_hub)
+            );
+            assert!(
+                group
+                    .members
+                    .iter()
+                    .any(|member| member.binding.canister_id == scale_hub)
+            );
+            assert!(
+                group
+                    .members
+                    .iter()
+                    .any(|member| member.binding.canister_id == user_hub)
+            );
+            assert_eq!(
+                fixture
+                    .admission_status(child)
+                    .expect("open child admission")
+                    .phase,
+                FleetAdmissionProjectionPhase::Open
+            );
+        }
+
+        let admitted_probe: Result<Principal, Error> = fixture.pic().query_candid_as_or_panic(
+            user_shard,
+            admitted,
+            "test_fleet_admission_probe",
+            (),
+        );
+        assert_eq!(admitted_probe, Ok(admitted));
+        let denied_probe: Result<Result<Principal, Error>, _> =
+            fixture
+                .pic()
+                .query_candid_as(user_shard, unlisted, "test_fleet_admission_probe", ());
+        let denied = denied_probe
+            .expect("denied child ingress returns its typed Canic result")
+            .expect_err("unlisted caller must not enter a managed child");
+        assert_eq!(
+            denied,
+            Error::from_registered(canic::diagnostics::codes::CONFIGURATION_UNAVAILABLE)
+        );
+
+        let assigned: Result<Principal, Error> = fixture.pic().update_candid_as_or_panic(
+            user_hub,
+            admitted,
+            "create_account",
+            (Fake::principal(17),),
+        );
+        assert_eq!(assigned, Ok(user_shard));
+
+        let indexed: Result<canic::dto::placement::index::PlacementIndexStatusResponse, Error> =
+            fixture.pic().update_candid_as_or_panic(
+                index_hub,
+                admitted,
+                "resolve_item",
+                ("alpha".to_string(),),
+            );
+        let canic::dto::placement::index::PlacementIndexStatusResponse::Bound {
+            instance_pid: indexed,
+            ..
+        } = indexed.expect("index Hub requests one on-demand child")
+        else {
+            panic!("fresh index resolution must bind its created child");
+        };
+        assert_eq!(
+            fixture
+                .settle_requested_children(30)
+                .expect("settle on-demand index child"),
+            1
+        );
+        let indexed_node = fixture
+            .nodes()
+            .into_iter()
+            .find(|node| node.canister_id == indexed)
+            .expect("index-created child enters fixture catalogue");
+        assert_eq!(indexed_node.parent_canister_id, Some(index_hub));
+        assert_eq!(indexed_node.role.as_str(), "index_child");
+        let indexed_probe: Result<Principal, Error> = fixture.pic().query_candid_as_or_panic(
+            indexed,
+            admitted,
+            "test_fleet_admission_probe",
+            (),
+        );
+        assert_eq!(indexed_probe, Ok(admitted));
+
+        let created: Result<Principal, Error> =
+            fixture
+                .pic()
+                .update_candid_as_or_panic(scale_hub, admitted, "create_worker", ());
+        let created = created.expect("scaling Hub requests one on-demand child");
+        assert_eq!(
+            fixture
+                .settle_requested_children(30)
+                .expect("settle on-demand scaling child"),
+            1
+        );
+        let created_node = fixture
+            .nodes()
+            .into_iter()
+            .find(|node| node.canister_id == created)
+            .expect("on-demand child enters fixture catalogue");
+        assert_eq!(created_node.parent_canister_id, Some(scale_hub));
+        assert_eq!(created_node.role.as_str(), "scale_replica");
+
+        let timer_identity = |status: &canic::dto::runtime::CanicRuntimeStatus| {
+            status
+                .timers
+                .iter()
+                .map(|timer| {
+                    (
+                        timer.name.clone(),
+                        timer.owner.clone(),
+                        timer.subsystem.clone(),
+                    )
+                })
+                .collect::<std::collections::BTreeSet<_>>()
+        };
+        let before_upgrade = fixture
+            .diagnostic_status(user_shard)
+            .expect("child timer status before upgrade");
+        assert!(!before_upgrade.timers.is_empty());
+        fixture
+            .upgrade_same_release(user_shard, Duration::from_mins(5))
+            .expect("same-release managed child upgrade");
+        for _ in 0..3 {
+            fixture.pic().advance_time(Duration::from_secs(1));
+            fixture.pic().tick();
+        }
+        let after_upgrade = fixture
+            .diagnostic_status(user_shard)
+            .expect("child timer status after upgrade");
+        assert_eq!(
+            timer_identity(&after_upgrade),
+            timer_identity(&before_upgrade)
+        );
+        assert_eq!(
+            fixture
+                .runtime_status(user_shard)
+                .expect("restored child runtime")
+                .runtime
+                .phase,
+            canic::dto::component_registry::ComponentRuntimePhase::Active
+        );
+
+        fixture
+            .prepare_admission_successor(
+                user_shard,
+                [0xc4; 32],
+                vec![admitted, Fake::principal(18)],
+            )
+            .expect("fence child with exact successor projection");
+        assert_eq!(
+            fixture
+                .admission_status(user_shard)
+                .expect("fenced child admission")
+                .phase,
+            FleetAdmissionProjectionPhase::Fenced
+        );
+        let fenced_probe: Result<Result<Principal, Error>, _> =
+            fixture
+                .pic()
+                .query_candid_as(user_shard, admitted, "test_fleet_admission_probe", ());
+        let fenced = fenced_probe
+            .expect("fenced child ingress returns its typed Canic result")
+            .expect_err("a prepared successor must fence admitted callers");
+        assert_eq!(
+            fenced,
+            Error::from_registered(canic::diagnostics::codes::CONFIGURATION_UNAVAILABLE)
+        );
+    }
+
     fn activate_projection(
         pic: &PocketIc,
         canister: Principal,
@@ -1242,6 +1529,10 @@ mod tests {
             (
                 "published managed-App support",
                 published_managed_app_support_drives_composed_lifecycle,
+            ),
+            (
+                "published managed Component Group support",
+                published_managed_component_group_support_drives_child_lifecycle,
             ),
         ]
     }

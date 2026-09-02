@@ -529,6 +529,7 @@ pub(super) fn validate_child_allocation(
         component: parent_component.component,
         parent_role,
         child_kind: child.kind,
+        initial_bootstrap: allocation.initial_bootstrap,
         maximum_instances_per_parent,
         maximum_descendants: deployment_limits.maximum_descendants,
         maximum_registry_bytes: deployment_limits.maximum_registry_bytes,
@@ -536,8 +537,12 @@ pub(super) fn validate_child_allocation(
         reserved_component: parent_component.component,
     };
     let reservation_is_versioned = allocation.reserved_against_registry.revision > 0;
+    let bootstrap_mode_is_bounded = !allocation.initial_bootstrap
+        || (grant.initial_instances_per_parent > 0
+            && grant.initial_instances_per_parent <= maximum_instances_per_parent);
     if ComponentChildAllocationAuthority::from_allocation(allocation) != expected_authority
         || !reservation_is_versioned
+        || !bootstrap_mode_is_bounded
     {
         return Err(InternalError::invariant());
     }

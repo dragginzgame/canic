@@ -68,6 +68,12 @@ pub async fn bootstrap_init_nonroot_canister() -> Result<(), InternalError> {
 pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): post-upgrade start");
     PlacementAcknowledgementWorkflow::start()?;
+
+    #[cfg(feature = "sharding")]
+    ShardingWorkflow::bootstrap_configured_initial_shards().await?;
+
+    ScalingWorkflow::bootstrap_configured_initial_workers().await?;
+
     RuntimeAuthWorkflow::check_issuer_canister_signature_support().await?;
     log!(
         Topic::Init,

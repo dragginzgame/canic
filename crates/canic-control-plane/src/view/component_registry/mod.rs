@@ -37,6 +37,14 @@ pub struct ActiveComponentMemberView {
     pub registry: ComponentRegistryHead,
 }
 
+/// Exact registered member together with its current owning Registry head and lifecycle.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegisteredComponentMemberView {
+    pub binding: ManagedCanisterBinding,
+    pub registry: ComponentRegistryHead,
+    pub lifecycle: ComponentLifecycleStatus,
+}
+
 /// Exact partition transition and target request for one Fleet Directory refresh.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentDirectoryRefreshPlanView {
@@ -565,6 +573,7 @@ pub struct RootComponentChildAllocationView {
     pub parent_role: CanisterRole,
     pub child_role: CanisterRole,
     pub child_kind: ComponentChildKind,
+    pub initial_bootstrap: bool,
     pub maximum_instances_per_parent: u32,
     pub maximum_descendants: u32,
     pub maximum_registry_bytes: u64,
@@ -1003,6 +1012,10 @@ pub struct RootComponentCommitmentView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentMembershipView {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
     pub registry_encoded_bytes: u64,
     pub directory_synchronized_at_ns: u64,
     pub directory_authority_hash: [u8; 32],

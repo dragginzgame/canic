@@ -684,6 +684,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "canister_index_child"
+version = "0.110.4"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
+name = "canister_index_hub"
+version = "0.110.4"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "canister_minimal"
 version = "0.110.4"
 dependencies = [

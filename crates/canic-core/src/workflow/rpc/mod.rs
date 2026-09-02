@@ -14,7 +14,7 @@ use thiserror::Error as ThisError;
 
 pub use authority::{
     RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
-    RootCapabilityParentAuthority,
+    RootCapabilityMemberLifecycle, RootCapabilityParentAuthority,
 };
 pub use lifecycle::{
     RootCapabilityLifecycleExecutor, RootComponentChildProvisionRequest,

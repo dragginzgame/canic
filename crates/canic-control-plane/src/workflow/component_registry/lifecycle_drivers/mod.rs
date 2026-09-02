@@ -5,6 +5,12 @@
 //! Boundary: observes one retained operation and schedules only its next existing workflow step.
 
 use super::*;
+use std::{cell::RefCell, collections::BTreeSet};
+
+thread_local! {
+    static SCHEDULED_COMPONENT_CHILD_ALLOCATIONS: RefCell<BTreeSet<(ComponentInstanceId, [u8; 32])>> =
+        const { RefCell::new(BTreeSet::new()) };
+}
 
 /// Privately advance one accepted ordinary or peer top-level allocation.
 pub fn schedule_component_allocation(operation_id: [u8; 32]) {
@@ -99,10 +105,10 @@ async fn advance_component_allocation_once(operation_id: [u8; 32]) -> Result<boo
                 return Ok(false);
             }
             if !commitment.runtime_activated {
-                activate_component_runtime_with_plan(
+                Box::pin(activate_component_runtime_with_plan(
                     RootComponentRuntimeActivationRequest { operation_id },
                     plan,
-                )
+                ))
                 .await?;
                 return Ok(false);
             }
@@ -143,6 +149,11 @@ pub(super) fn component_allocation_reconciliation_complete(
 
 /// Privately advance one accepted direct-child allocation for its retained parent authority.
 pub fn schedule_component_child_allocation(component: ComponentInstanceId, operation_id: [u8; 32]) {
+    let inserted = SCHEDULED_COMPONENT_CHILD_ALLOCATIONS
+        .with(|scheduled| scheduled.borrow_mut().insert((component, operation_id)));
+    if !inserted {
+        return;
+    }
     schedule_component_child_allocation_after(component, operation_id, Duration::ZERO);
 }
 
@@ -161,7 +172,11 @@ fn schedule_component_child_allocation_after(
             ))
             .await
             {
-                Ok(true) => {}
+                Ok(true) => {
+                    SCHEDULED_COMPONENT_CHILD_ALLOCATIONS.with(|scheduled| {
+                        scheduled.borrow_mut().remove(&(component, operation_id));
+                    });
+                }
                 Ok(false) => schedule_component_child_allocation_after(
                     component,
                     operation_id,

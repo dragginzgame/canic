@@ -91,7 +91,7 @@ remain in their separately documented reliability classes.
 
 ## Start Here
 
-- [Installing Canic](../../../INSTALLING.md#add-canic-to-canister-crates)
+- [Canister dependencies](../../../INSTALLING.md#canister-dependencies)
 - [Facade crate guide](../../../crates/canic/README.md)
 - [Native timer adoption and lifecycle composition](native-timers.md)
 - [Minimal managed Fleet](../../getting-started/minimal-managed-fleet.md)

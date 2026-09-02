@@ -38,8 +38,9 @@ pub mod policy {
     pub mod component_child_allocation {
         pub use crate::domain::policy::pure::component_child_allocation::{
             ComponentChildAllocationDecision, ComponentChildAllocationInput,
-            ComponentChildAllocationPolicyError, ComponentChildAllocationReadiness,
-            ComponentRegistryVersionEvidence, reserve_component_child,
+            ComponentChildAllocationMode, ComponentChildAllocationPolicyError,
+            ComponentChildAllocationReadiness, ComponentRegistryVersionEvidence,
+            reserve_component_child,
         };
     }
 
@@ -219,8 +220,9 @@ pub mod workflow {
         pub use crate::workflow::rpc::{
             RootCapabilityAuthority, RootCapabilityCallerAuthority,
             RootCapabilityLifecycleExecutor, RootCapabilityMemberAuthority,
-            RootCapabilityParentAuthority, RootComponentChildProvisionRequest,
-            RootComponentChildRecycleOutcome, RootComponentChildRecycleRequest,
+            RootCapabilityMemberLifecycle, RootCapabilityParentAuthority,
+            RootComponentChildProvisionRequest, RootComponentChildRecycleOutcome,
+            RootComponentChildRecycleRequest,
         };
     }
 

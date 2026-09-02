@@ -82,12 +82,14 @@ pub(super) struct MockPlatform {
     mutations: BTreeMap<String, u32>,
     operator_cycles: u128,
     paced_observations: Vec<u32>,
+    paced_root_owned_observations: Vec<(String, u32)>,
     protocol_command_only: bool,
     protocol_action: Option<EnsureAction>,
     protocol_pending_waits: u32,
     protocol_ready: BTreeSet<String>,
     protocol_retry: EffectRetry,
     root_owned_topology_policy: MockRootOwnedTopologyPolicy,
+    root_owned_pending_waits: BTreeMap<String, u32>,
     typed_protocol: bool,
     typed_protocol_burns: Vec<u128>,
     skip_transfer_credit: bool,
@@ -121,12 +123,14 @@ impl MockPlatform {
             mutations: BTreeMap::new(),
             operator_cycles: 100_000,
             paced_observations: Vec::new(),
+            paced_root_owned_observations: Vec::new(),
             protocol_command_only: false,
             protocol_action: None,
             protocol_pending_waits: 0,
             protocol_ready: BTreeSet::new(),
             protocol_retry: EffectRetry::None,
             root_owned_topology_policy: MockRootOwnedTopologyPolicy::Direct,
+            root_owned_pending_waits: BTreeMap::new(),
             typed_protocol: false,
             typed_protocol_burns: Vec::new(),
             skip_transfer_credit: false,
@@ -153,6 +157,11 @@ impl MockPlatform {
 
     pub(super) fn stall_before_mutation(&mut self, action_sha256: String, attempts: u32) {
         self.stall_before_mutation.insert(action_sha256, attempts);
+    }
+
+    fn retain_root_owned_lifecycle_for_observations(&mut self, name: &str, observations: u32) {
+        self.root_owned_pending_waits
+            .insert(name.to_string(), observations);
     }
 
     pub(super) fn mutation_count(&self, action_sha256: &str) -> u32 {
@@ -533,6 +542,33 @@ impl EnsurePlatform for MockPlatform {
         if self.protocol_pending_waits == 0 {
             self.protocol_ready.insert(action.name().to_string());
         }
+    }
+
+    fn pace_root_owned_observation(
+        &mut self,
+        target: &str,
+        consecutive_retained_observations: u32,
+    ) {
+        self.paced_root_owned_observations
+            .push((target.to_string(), consecutive_retained_observations));
+        let Some(remaining) = self.root_owned_pending_waits.get_mut(target) else {
+            return;
+        };
+        *remaining = remaining.saturating_sub(1);
+        if *remaining != 0 {
+            return;
+        }
+        let principal = self
+            .desired
+            .canisters
+            .iter()
+            .find(|canister| canister.name == target)
+            .and_then(|canister| canister.principal.as_ref())
+            .expect("retained Root-owned test target Principal");
+        self.live
+            .get_mut(principal)
+            .expect("retained Root-owned live test target")
+            .root_owned_lifecycle = Some(RootOwnedCanisterLifecycle::Idle);
     }
 
     fn observe(
@@ -4755,6 +4791,118 @@ fn fixture() -> Fixture {
         platform,
         root,
     }
+}
+
+#[test]
+fn retained_root_owned_balance_is_passively_reobserved_without_an_effect() {
+    let mut fixture = fixture();
+    fixture
+        .desired
+        .canisters
+        .retain(|canister| canister.name == "treasury");
+    fixture.platform = MockPlatform::new(
+        fixture.desired.clone(),
+        [live(
+            TREASURY,
+            500,
+            Some(&sha256_hex(b"current-wasm")),
+            true,
+            &[CONTROLLER],
+        )],
+    );
+    fixture
+        .platform
+        .live
+        .get_mut(TREASURY)
+        .expect("treasury live observation")
+        .root_owned_lifecycle = Some(RootOwnedCanisterLifecycle::Idle);
+
+    let desired_sha256 = "92".repeat(32);
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan terminal retained estate");
+    assert!(workflow::ordered_actions(&planned.plan).is_empty());
+
+    fixture
+        .platform
+        .live
+        .get_mut(TREASURY)
+        .expect("treasury live observation")
+        .root_owned_lifecycle = Some(RootOwnedCanisterLifecycle::Retained);
+    fixture
+        .platform
+        .retain_root_owned_lifecycle_for_observations("treasury", 1);
+    let terminal = apply_fixture_plan(&mut fixture, &desired_sha256, &planned.plan)
+        .expect("passively reobserve retained Root-owned lifecycle");
+
+    assert!(terminal.terminal);
+    assert!(fixture.platform.mutations.is_empty());
+    assert_eq!(
+        fixture.platform.paced_root_owned_observations,
+        [("treasury".to_string(), 1)]
+    );
+    let journal = crate::fleet_ensure::ops::read_journal(
+        &crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet"),
+    )
+    .expect("read terminal passive-observation journal")
+    .expect("terminal passive-observation journal");
+    assert_eq!(journal.completion, FleetEnsureCompletion::Converged);
+    assert_eq!(journal.stalled_observations, 0);
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+#[test]
+fn retained_root_owned_balance_stall_is_bounded_and_effect_free() {
+    let mut fixture = fixture();
+    fixture
+        .desired
+        .canisters
+        .retain(|canister| canister.name == "treasury");
+    let mut retained = live(
+        TREASURY,
+        500,
+        Some(&sha256_hex(b"current-wasm")),
+        true,
+        &[CONTROLLER],
+    );
+    retained.root_owned_lifecycle = Some(RootOwnedCanisterLifecycle::Retained);
+    fixture.platform = MockPlatform::new(fixture.desired.clone(), [retained]);
+    fixture
+        .platform
+        .retain_root_owned_lifecycle_for_observations("treasury", 3);
+
+    let error = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"93".repeat(32),
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect_err("retained Root-owned observation must remain bounded");
+
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::RootOwnedObservationStalled {
+            ref target,
+            observations: 2,
+            ref last_lifecycle,
+        } if target == "treasury" && last_lifecycle == "retained"
+    ));
+    assert!(fixture.platform.mutations.is_empty());
+    assert_eq!(
+        fixture.platform.paced_root_owned_observations,
+        [("treasury".to_string(), 1)]
+    );
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
 }
 
 fn desired_canister(

@@ -6,7 +6,8 @@
 
 use super::TerminalFleetInventory;
 use super::current_protocol::{
-    CurrentProtocolError, query_current_root_authorities, query_registry,
+    CurrentProtocolError, operation_bytes, query_current_root_authorities, query_operation,
+    query_registry,
 };
 use crate::{
     canister_protocol::query_with_candid,
@@ -34,6 +35,7 @@ use canic_core::{
     dto::{
         canister::CanisterInfo,
         component_provisioning::{
+            FleetComponentProvisioningPhase, FleetComponentProvisioningStatusResponse,
             RootComponentProvisioningPhase, RootComponentProvisioningResult,
             RootComponentProvisioningStatusResponse,
         },
@@ -41,12 +43,14 @@ use canic_core::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin,
             ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
         },
-        fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
+        fleet_registry::{
+            FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootStatus,
+        },
         page::{Page, PageRequest},
         pool::{CanisterPoolAssetStatus, CanisterPoolResponse, CanisterPoolStatusRequest},
         role::{CycleBalanceStatusResponse, OperationStatusRequest},
     },
-    ids::{CanisterRole, FleetSubnetRootReleaseSet},
+    ids::{CanisterRole, ComponentDeploymentConfigurationDigest, FleetSubnetRootReleaseSet},
     protocol,
     role_contract::{RoleCapabilityKey, RoleContractResolution, derive_protocol_profile_hashes},
 };
@@ -114,10 +118,13 @@ struct ComponentPartitionAuthority<'a> {
 
 struct TerminalRootComponentAuthority<'a> {
     active_release_set: &'a FleetSubnetRootReleaseSet,
-    fleet_registry: &'a canic_core::dto::fleet_registry::FleetRegistryVersion,
+    active_fleet_registry: &'a FleetRegistryVersion,
+    configuration_digest: ComponentDeploymentConfigurationDigest,
     operation_id: [u8; 32],
+    plan_hash: [u8; 32],
     registry: &'a FleetRegistry,
     root: &'a FleetSubnetRootEntry,
+    source_fleet_registry: &'a FleetRegistryVersion,
 }
 
 /// Query one complete bounded current Fleet tree after protocol convergence.
@@ -152,6 +159,19 @@ pub(super) fn terminal_inventory(
     let registry_version =
         FleetRegistryOps::version(&registry.authority, config.component_topology(), &registry)
             .map_err(|error| inventory_error(error.to_string()))?;
+    let operation_id = operation_bytes(operation_id)?;
+    let component_operation = query_operation(
+        icp,
+        &coordinator_candid,
+        coordinator_principal,
+        operation_id,
+    )?
+    .ok_or_else(|| terminal_field_missing("coordinator.operation"))?;
+    validate_terminal_coordinator_component_status(
+        operation_id,
+        &registry_version,
+        &component_operation,
+    )?;
     let authorities =
         query_current_root_authorities(icp, desired, state, &root_candid, &store_candid)?;
     validate_root_authority(&registry, &authorities)?;
@@ -167,9 +187,9 @@ pub(super) fn terminal_inventory(
     )?;
     let (entries, controlled_cycles_by_principal) = query_entries(
         icp,
-        operation_id,
         &registry,
         &registry_version,
+        &component_operation,
         &config,
         &authorities,
         &protocols,
@@ -302,17 +322,14 @@ fn infrastructure_protocol(
 )]
 fn query_entries(
     icp: &IcpCli,
-    operation_id: &str,
     registry: &FleetRegistry,
-    registry_version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+    registry_version: &FleetRegistryVersion,
+    component_operation: &FleetComponentProvisioningStatusResponse,
     config: &AppConfigSnapshot,
     authorities: &[canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority],
     protocols: &ProtocolCatalog,
 ) -> Result<(Vec<RegistryEntry>, BTreeMap<String, u128>), CurrentProtocolError> {
-    let operation_id = canic_core::cdk::utils::hash::decode_hex(operation_id)
-        .ok()
-        .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
-        .ok_or(CurrentProtocolError::InvalidOperationIdentity)?;
+    let operation_id = component_operation.operation_id;
     let coordinator = registry.authority.binding.coordinator;
     let coordinator_text = coordinator.to_text();
     let mut entries = vec![RegistryEntry {
@@ -371,10 +388,13 @@ fn query_entries(
             icp,
             &TerminalRootComponentAuthority {
                 active_release_set: &root.active_release_set,
-                fleet_registry: registry_version,
+                active_fleet_registry: registry_version,
+                configuration_digest: component_operation.configuration_digest,
                 operation_id,
+                plan_hash: component_operation.plan_hash,
                 registry,
                 root,
+                source_fleet_registry: &component_operation.fleet_registry,
             },
             &status,
             protocols,
@@ -611,15 +631,16 @@ fn validate_terminal_root_component_status(
         &authority.operation_id,
         &status.operation_id,
     )?;
-    terminal_nonzero_hash("plan_hash", status.plan_hash)?;
-    terminal_nonzero_hash(
+    terminal_field_exact("plan_hash", &authority.plan_hash, &status.plan_hash)?;
+    terminal_field_exact(
         "configuration_digest",
-        *status.configuration_digest.as_bytes(),
+        &authority.configuration_digest,
+        &status.configuration_digest,
     )?;
     terminal_nonzero_hash("receipt_content_hash", status.receipt_content_hash)?;
     terminal_field_exact(
         "fleet_registry",
-        authority.fleet_registry,
+        authority.source_fleet_registry,
         &status.fleet_registry,
     )?;
     terminal_field_exact(
@@ -680,7 +701,7 @@ fn validate_terminal_root_component_status(
         .ok_or_else(|| terminal_field_missing("publication"))?;
     terminal_field_exact(
         "publication.fleet_registry",
-        authority.fleet_registry,
+        authority.active_fleet_registry,
         &publication.fleet_registry,
     )?;
     let activation = status
@@ -701,6 +722,49 @@ fn validate_terminal_root_component_status(
         activation.fleet_activation_operation_id,
     )?;
     Ok(component_count)
+}
+
+fn validate_terminal_coordinator_component_status(
+    operation_id: [u8; 32],
+    active_fleet_registry: &FleetRegistryVersion,
+    status: &FleetComponentProvisioningStatusResponse,
+) -> Result<(), CurrentProtocolError> {
+    terminal_field_exact(
+        "coordinator.operation_id",
+        &operation_id,
+        &status.operation_id,
+    )?;
+    terminal_nonzero_hash("coordinator.plan_hash", status.plan_hash)?;
+    terminal_nonzero_hash(
+        "coordinator.configuration_digest",
+        *status.configuration_digest.as_bytes(),
+    )?;
+    terminal_field_exact(
+        "coordinator.fleet_registry.authority",
+        &active_fleet_registry.authority,
+        &status.fleet_registry.authority,
+    )?;
+    terminal_field_exact(
+        "coordinator.phase",
+        &FleetComponentProvisioningPhase::RuntimesActivated,
+        &status.phase,
+    )?;
+    if let Some(failure) = status.pending_root_failure {
+        return Err(terminal_field_error(
+            "coordinator.pending_root_failure",
+            "none".to_string(),
+            format!("{failure:?}"),
+        ));
+    }
+    let published = status
+        .published_fleet_registry
+        .as_ref()
+        .ok_or_else(|| terminal_field_missing("coordinator.published_fleet_registry"))?;
+    terminal_field_exact(
+        "coordinator.published_fleet_registry",
+        active_fleet_registry,
+        published,
+    )
 }
 
 fn terminal_component_counts(
@@ -1316,18 +1380,15 @@ mod tests {
     use super::*;
     use canic_core::{
         cdk::types::Cycles,
-        dto::{
-            component_provisioning::{
-                RootComponentActivationEvidence, RootComponentPublicationEvidence,
-            },
-            fleet_registry::FleetRegistryVersion,
+        dto::component_provisioning::{
+            FleetComponentProvisioningOperation, RootComponentActivationEvidence,
+            RootComponentPublicationEvidence,
         },
         ids::{
-            AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
-            ComponentTopologyDigest, CyclesFundingBudget, FleetAdmissionPolicy, FleetBinding,
-            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
-            FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, ReleaseBuildId,
-            ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+            AppId, CanonicalNetworkId, ComponentTopologyDigest, CyclesFundingBudget,
+            FleetAdmissionPolicy, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
+            FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits,
+            ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
         role_contract::ProtocolProfileDigest,
     };
@@ -1396,22 +1457,74 @@ mod tests {
     }
 
     #[test]
-    fn terminal_root_inventory_uses_retained_result_instead_of_successor_configuration_digest() {
-        let (authority, mut status) = empty_terminal_root_status(7);
+    fn terminal_root_inventory_accepts_source_registry_before_active_publication() {
+        let (authority, status) = empty_terminal_root_status();
         validate_terminal_root_component_status(
             &authority,
             &status,
             status.result.as_ref().expect("terminal result"),
         )
-        .expect("first retained configuration digest");
+        .expect("source Registry and active publication are distinct authorities");
+        assert_eq!(authority.source_fleet_registry.revision, 3);
+        assert_eq!(authority.active_fleet_registry.revision, 4);
+    }
 
+    #[test]
+    fn terminal_root_inventory_rejects_wrong_source_registry() {
+        let (authority, mut status) = empty_terminal_root_status();
+        status.fleet_registry = authority.active_fleet_registry.clone();
+
+        assert!(matches!(
+            validate_terminal_root_component_status(
+                &authority,
+                &status,
+                status.result.as_ref().expect("terminal result"),
+            ),
+            Err(CurrentProtocolError::TerminalInventoryField {
+                field: "fleet_registry",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn terminal_root_inventory_rejects_wrong_publication_registry() {
+        let (authority, mut status) = empty_terminal_root_status();
+        status
+            .publication
+            .as_mut()
+            .expect("publication evidence")
+            .fleet_registry = authority.source_fleet_registry.clone();
+
+        assert!(matches!(
+            validate_terminal_root_component_status(
+                &authority,
+                &status,
+                status.result.as_ref().expect("terminal result"),
+            ),
+            Err(CurrentProtocolError::TerminalInventoryField {
+                field: "publication.fleet_registry",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn terminal_root_inventory_requires_coordinator_plan_authority() {
+        let (authority, mut status) = empty_terminal_root_status();
         status.configuration_digest = ComponentDeploymentConfigurationDigest::from_bytes([99; 32]);
-        validate_terminal_root_component_status(
-            &authority,
-            &status,
-            status.result.as_ref().expect("terminal result"),
-        )
-        .expect("different successor compiler digest is not reconstructed");
+
+        assert!(matches!(
+            validate_terminal_root_component_status(
+                &authority,
+                &status,
+                status.result.as_ref().expect("terminal result"),
+            ),
+            Err(CurrentProtocolError::TerminalInventoryField {
+                field: "configuration_digest",
+                ..
+            })
+        ));
 
         status.plan_hash = [0; 32];
         assert!(matches!(
@@ -1427,13 +1540,36 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn terminal_coordinator_inventory_requires_active_published_registry() {
+        let (authority, root_status) = empty_terminal_root_status();
+        let mut status = empty_terminal_coordinator_status(&authority, &root_status);
+        validate_terminal_coordinator_component_status(
+            authority.operation_id,
+            authority.active_fleet_registry,
+            &status,
+        )
+        .expect("Coordinator publishes the active successor Registry");
+
+        status.published_fleet_registry = Some(authority.source_fleet_registry.clone());
+        assert!(matches!(
+            validate_terminal_coordinator_component_status(
+                authority.operation_id,
+                authority.active_fleet_registry,
+                &status,
+            ),
+            Err(CurrentProtocolError::TerminalInventoryField {
+                field: "coordinator.published_fleet_registry",
+                ..
+            })
+        ));
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "the focused fixture spells out the complete independently retained terminal Root wire"
     )]
-    fn empty_terminal_root_status(
-        configuration_byte: u8,
-    ) -> (
+    fn empty_terminal_root_status() -> (
         TerminalRootComponentAuthority<'static>,
         RootComponentProvisioningStatusResponse,
     ) {
@@ -1486,7 +1622,7 @@ mod tests {
         };
         let registry = FleetRegistry {
             authority: registry_authority.clone(),
-            revision: 1,
+            revision: 4,
             admission: FleetAdmissionPolicy {
                 schema_version: 1,
                 fleet,
@@ -1499,26 +1635,34 @@ mod tests {
             fleet_subnet_roots: vec![root.clone()],
             services: Vec::new(),
         };
-        let registry_version = FleetRegistryVersion {
-            authority: registry_authority,
-            revision: 1,
+        let source_fleet_registry = FleetRegistryVersion {
+            authority: registry_authority.clone(),
+            revision: 3,
             content_hash: [10; 32],
         };
+        let active_fleet_registry = FleetRegistryVersion {
+            authority: registry_authority,
+            revision: 4,
+            content_hash: [11; 32],
+        };
         let operation_id = [11; 32];
+        let plan_hash = [12; 32];
+        let configuration_digest = ComponentDeploymentConfigurationDigest::from_bytes([17; 32]);
         let authority = TerminalRootComponentAuthority {
             active_release_set: Box::leak(Box::new(release_set)),
-            fleet_registry: Box::leak(Box::new(registry_version.clone())),
+            active_fleet_registry: Box::leak(Box::new(active_fleet_registry.clone())),
+            configuration_digest,
             operation_id,
+            plan_hash,
             registry: Box::leak(Box::new(registry)),
             root: Box::leak(Box::new(root)),
+            source_fleet_registry: Box::leak(Box::new(source_fleet_registry.clone())),
         };
         let status = RootComponentProvisioningStatusResponse {
             operation_id,
-            plan_hash: [12; 32],
-            fleet_registry: registry_version.clone(),
-            configuration_digest: ComponentDeploymentConfigurationDigest::from_bytes(
-                [configuration_byte; 32],
-            ),
+            plan_hash,
+            fleet_registry: source_fleet_registry,
+            configuration_digest,
             fleet_subnet_root: root_principal,
             phase: RootComponentProvisioningPhase::RuntimesActive,
             placement_count: 0,
@@ -1534,7 +1678,7 @@ mod tests {
                 placements: Vec::new(),
             }),
             publication: Some(RootComponentPublicationEvidence {
-                fleet_registry: registry_version,
+                fleet_registry: active_fleet_registry,
                 fleet_directory_content_hash: [13; 32],
                 component_directories: Vec::new(),
                 component_group_directories: Vec::new(),
@@ -1553,6 +1697,44 @@ mod tests {
             receipt_content_hash: [16; 32],
         };
         (authority, status)
+    }
+
+    fn empty_terminal_coordinator_status(
+        authority: &TerminalRootComponentAuthority<'_>,
+        root_status: &RootComponentProvisioningStatusResponse,
+    ) -> FleetComponentProvisioningStatusResponse {
+        FleetComponentProvisioningStatusResponse {
+            operation_id: authority.operation_id,
+            plan_hash: authority.plan_hash,
+            fleet_registry: authority.source_fleet_registry.clone(),
+            configuration_digest: authority.configuration_digest,
+            operation: FleetComponentProvisioningOperation::FreshInstall,
+            phase: FleetComponentProvisioningPhase::RuntimesActivated,
+            directory_confirmation_root_count: 1,
+            root_batch_count: 1,
+            accepted_root_count: 1,
+            acceptance_in_flight_root: None,
+            provisioned_root_count: 1,
+            current_root: None,
+            provisioning_in_flight_root: None,
+            directory_confirmed_root_count: 1,
+            current_synchronization: None,
+            current_publication: None,
+            publication_in_flight_root: None,
+            runtime_activated_root_count: 1,
+            current_activation: None,
+            activation_in_flight_root: None,
+            pending_root_failure: None,
+            group_placement_count: root_status.placement_count,
+            component_count: root_status.component_count,
+            planned_at_ns: 1,
+            roots_accepted_at_ns: Some(2),
+            components_provisioned_at_ns: Some(3),
+            published_fleet_registry: Some(authority.active_fleet_registry.clone()),
+            service_topology_published_at_ns: Some(4),
+            directories_confirmed_at_ns: Some(5),
+            runtimes_activated_at_ns: Some(6),
+        }
     }
 
     #[test]
