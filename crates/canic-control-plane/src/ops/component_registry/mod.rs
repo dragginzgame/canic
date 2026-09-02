@@ -652,11 +652,15 @@ struct ComponentPartitionLifecycleAuthority {
 }
 
 impl ComponentPartitionLifecycleAuthority {
-    const fn active_reservation(record: &RootComponentChildAllocationRecord) -> Self {
+    const fn from_reservation(record: &RootComponentChildAllocationRecord) -> Self {
         Self {
             component: record.component,
             release_set: record.release_set,
-            status: ComponentLifecycleStatus::Active,
+            status: if record.initial_bootstrap {
+                ComponentLifecycleStatus::Prepared
+            } else {
+                ComponentLifecycleStatus::Active
+            },
         }
     }
 
@@ -1379,7 +1383,11 @@ impl ComponentRegistryOps {
         )))
     }
 
-    /// Resolve the immutable install/runtime operation owned by one active managed binding.
+    /// Resolve the immutable install/runtime operation owned by one committed managed binding.
+    ///
+    /// A prepared parent may already be locally Active while its initial children are
+    /// converging, before the Root can retain the parent's terminal activation receipt.
+    /// Callers must still prove the observed target runtime is Active before using the ID.
     pub(crate) fn managed_runtime_operation_id(
         binding: &ManagedCanisterBinding,
     ) -> Result<[u8; 32], InternalError> {
@@ -1391,7 +1399,7 @@ impl ComponentRegistryOps {
                 if &partition.binding != binding {
                     return Err(InternalError::conflict());
                 }
-                let allocation = committed_component_allocation(&partition)?;
+                let allocation = component_runtime_allocation(&partition)?;
                 return Ok(allocation.operation_id);
             }
             ManagedCanisterBinding::ComponentChild(binding) => {
@@ -1402,7 +1410,12 @@ impl ComponentRegistryOps {
         let Some((registered, status)) = Self::registered_parent(component, canister)? else {
             return Err(InternalError::unavailable());
         };
-        if &registered != binding || status != ComponentLifecycleStatus::Active {
+        if &registered != binding
+            || !matches!(
+                status,
+                ComponentLifecycleStatus::Prepared | ComponentLifecycleStatus::Active
+            )
+        {
             return Err(InternalError::conflict());
         }
         let mut matches = RootComponentRegistryStore::child_allocations(component)
@@ -1422,6 +1435,41 @@ impl ComponentRegistryOps {
         }
         validate_child_allocation_record(&record)?;
         Ok(record.operation_id)
+    }
+
+    /// Prove that every descendant added while the owning partition remained Prepared
+    /// belongs to the compiled initial-bootstrap lane and reached terminal synchronization.
+    pub(crate) fn prepared_initial_descendants_are_terminal(
+        component: ComponentInstanceId,
+    ) -> Result<bool, InternalError> {
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(InternalError::unavailable)?;
+        validate_partition_record(&partition)?;
+        if partition.status != ComponentLifecycleStatus::Prepared
+            || partition.reserved_descendants != 0
+        {
+            return Ok(false);
+        }
+        let allocations = RootComponentRegistryStore::child_allocations(component);
+        if allocations.is_empty() {
+            return Ok(false);
+        }
+        for allocation in &allocations {
+            validate_child_allocation_record(allocation)?;
+            let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
+                &allocation.progress
+            else {
+                return Ok(false);
+            };
+            let Some(membership) = commitment.membership.as_ref() else {
+                return Ok(false);
+            };
+            if !allocation.initial_bootstrap || !membership.directory_synchronized {
+                return Ok(false);
+            }
+            validate_active_child_partition(allocation, commitment, membership, &partition)?;
+        }
+        Ok(u32::try_from(allocations.len()).ok() == Some(partition.committed_descendants))
     }
 }
 
@@ -2137,6 +2185,10 @@ const fn membership_record_to_view(
     membership: RootComponentMembershipRecord,
 ) -> RootComponentMembershipView {
     RootComponentMembershipView {
+        registry: membership.registry,
+        descendant_content_hash: membership.descendant_content_hash,
+        reserved_descendants: membership.reserved_descendants,
+        committed_descendants: membership.committed_descendants,
         registry_encoded_bytes: membership.registry_encoded_bytes,
         directory_synchronized_at_ns: membership.directory_synchronized_at_ns,
         directory_authority_hash: membership.directory_authority_hash,
@@ -2173,6 +2225,7 @@ fn child_allocation_record_to_view(
         parent_role: record.parent_role,
         child_role: record.child_role,
         child_kind: record.child_kind,
+        initial_bootstrap: record.initial_bootstrap,
         maximum_instances_per_parent: record.maximum_instances_per_parent,
         maximum_descendants: record.maximum_descendants,
         maximum_registry_bytes: record.maximum_registry_bytes,
@@ -3020,7 +3073,7 @@ fn validate_child_creation_authority(
     validate_partition_record(partition)?;
     validate_child_allocation_record(record)?;
     let partition_authority = ComponentPartitionLifecycleAuthority::from_partition(partition);
-    let reservation_authority = ComponentPartitionLifecycleAuthority::active_reservation(record);
+    let reservation_authority = ComponentPartitionLifecycleAuthority::from_reservation(record);
     let root_controls_creation = plan.controller == current.root.fleet_subnet_root;
     if partition_authority != reservation_authority
         || !root_controls_creation
@@ -3135,7 +3188,7 @@ fn validate_child_install_authority(
         canister_id: canister,
     };
     let partition_authority = ComponentPartitionLifecycleAuthority::from_partition(partition);
-    let reservation_authority = ComponentPartitionLifecycleAuthority::active_reservation(record);
+    let reservation_authority = ComponentPartitionLifecycleAuthority::from_reservation(record);
     let artifact_source_is_valid = plan.raw_module_hash != [0; 32] && !plan.chunk_hashes.is_empty();
     let observed_authority = ComponentChildInstallReservationAuthority {
         binding: &plan.binding,
@@ -3447,6 +3500,14 @@ fn install_charged_entry_bytes(
             directory_prepared: true,
             runtime_activated: true,
             membership: Some(RootComponentMembershipRecord {
+                registry: ComponentRegistryHead {
+                    component: record.component,
+                    revision: u64::MAX,
+                    content_hash: [u8::MAX; 32],
+                },
+                descendant_content_hash: [u8::MAX; 32],
+                reserved_descendants: u32::MAX,
+                committed_descendants: u32::MAX,
                 registry_encoded_bytes: u64::MAX,
                 directory_synchronized_at_ns: u64::MAX,
                 directory_authority_hash: [u8::MAX; 32],
@@ -3976,9 +4037,14 @@ fn committed_records(
     Err(InternalError::invariant())
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one atomic stable-state projection binds the active partition and retained membership byte accounting"
+)]
 fn active_membership_records(
     record: &RootComponentAllocationRecord,
     commitment: &RootComponentCommitmentRecord,
+    prepared: &ComponentRegistryPartitionRecord,
     directory_synchronized_at_ns: u64,
     fleet_directory: &FleetDirectorySnapshot,
     component_group: Option<&ComponentGroupDirectory>,
@@ -3998,8 +4064,7 @@ fn active_membership_records(
     else {
         return Err(InternalError::invariant());
     };
-    let revision = commitment
-        .registry
+    let revision = prepared
         .revision
         .checked_add(1)
         .ok_or_else(InternalError::resource_exhausted)?;
@@ -4010,15 +4075,15 @@ fn active_membership_records(
         record.release_set,
         ComponentLifecycleStatus::Active,
         revision,
-        empty_component_descendant_content_hash(record.component),
-        0,
+        prepared.descendant_content_hash,
+        prepared.committed_descendants,
     )?;
     let directory_authority_hash = component_directory_authority_hash_with_group(
         &installation.binding,
         revision,
         content_hash,
         directory_synchronized_at_ns,
-        0,
+        prepared.committed_descendants,
         fleet_directory,
         component_group,
     )?;
@@ -4031,10 +4096,10 @@ fn active_membership_records(
         status: ComponentLifecycleStatus::Active,
         revision,
         content_hash,
-        descendant_content_hash: empty_component_descendant_content_hash(record.component),
+        descendant_content_hash: prepared.descendant_content_hash,
         directory_synchronized_at_ns,
-        reserved_descendants: 0,
-        committed_descendants: 0,
+        reserved_descendants: prepared.reserved_descendants,
+        committed_descendants: prepared.committed_descendants,
         encoded_bytes: 0,
     };
     next_record.progress = RootComponentAllocationProgressRecord::Committed {
@@ -4049,6 +4114,14 @@ fn active_membership_records(
             directory_prepared: commitment.directory_prepared,
             runtime_activated: commitment.runtime_activated,
             membership: Some(RootComponentMembershipRecord {
+                registry: ComponentRegistryHead {
+                    component: record.component,
+                    revision,
+                    content_hash,
+                },
+                descendant_content_hash: prepared.descendant_content_hash,
+                reserved_descendants: prepared.reserved_descendants,
+                committed_descendants: prepared.committed_descendants,
                 registry_encoded_bytes: 0,
                 directory_synchronized_at_ns,
                 directory_authority_hash,
@@ -4056,14 +4129,21 @@ fn active_membership_records(
             }),
         },
     };
-    let index_bytes = RootComponentRegistryStore::principal_index_entry_bytes(
-        installation.binding.canister_id,
-        record.component,
-    );
+    let previous_partition_bytes = RootComponentRegistryStore::partition_entry_bytes(prepared);
+    let previous_record_bytes = RootComponentRegistryStore::allocation_entry_bytes(record);
     for _ in 0..8 {
-        let encoded_bytes = RootComponentRegistryStore::allocation_entry_bytes(&next_record)
-            .checked_add(RootComponentRegistryStore::partition_entry_bytes(&active))
-            .and_then(|value| value.checked_add(index_bytes))
+        let encoded_bytes = prepared
+            .encoded_bytes
+            .checked_sub(previous_partition_bytes)
+            .and_then(|value| value.checked_sub(previous_record_bytes))
+            .and_then(|value| {
+                value.checked_add(RootComponentRegistryStore::partition_entry_bytes(&active))
+            })
+            .and_then(|value| {
+                value.checked_add(RootComponentRegistryStore::allocation_entry_bytes(
+                    &next_record,
+                ))
+            })
             .ok_or_else(InternalError::resource_exhausted)?;
         let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
             &mut next_record.progress
@@ -4158,7 +4238,11 @@ fn exact_committed_child_partition(
         protocol_profile_digest: current.protocol_profile_digest,
         provisioning_origin: current.provisioning_origin.clone(),
         release_set: record.release_set,
-        status: ComponentLifecycleStatus::Active,
+        status: if record.initial_bootstrap {
+            ComponentLifecycleStatus::Prepared
+        } else {
+            ComponentLifecycleStatus::Active
+        },
         revision: commitment.registry.revision,
         content_hash: commitment.registry.content_hash,
         descendant_content_hash: commitment.descendant_content_hash,
@@ -4189,7 +4273,7 @@ fn exact_committed_child_partition(
             != Some(&traversal)
         || current.binding != committed.binding
         || current.release_set != committed.release_set
-        || !component_partition_retains_active_membership(current.status)
+        || !component_partition_retains_child_membership(current.status, record.initial_bootstrap)
         || current.revision < committed.revision
         || current.directory_synchronized_at_ns < committed.directory_synchronized_at_ns
         || current.committed_descendants < committed.committed_descendants
@@ -4236,7 +4320,11 @@ fn validate_active_child_partition(
         protocol_profile_digest: current.protocol_profile_digest,
         provisioning_origin: current.provisioning_origin.clone(),
         release_set: current.release_set,
-        status: current.status,
+        status: if record.initial_bootstrap {
+            ComponentLifecycleStatus::Prepared
+        } else {
+            ComponentLifecycleStatus::Active
+        },
         revision: membership.registry.revision,
         content_hash: membership.registry.content_hash,
         descendant_content_hash: membership.descendant_content_hash,
@@ -4262,7 +4350,7 @@ fn validate_active_child_partition(
     );
     let current_identity_is_valid = current.binding == historical.binding
         && current.release_set == historical.release_set
-        && component_partition_retains_active_membership(current.status);
+        && component_partition_retains_child_membership(current.status, record.initial_bootstrap);
     let current_progress_is_valid =
         ComponentPartitionCoverage::new(current, &historical).is_monotonic();
     if !activation_evidence.is_valid()
@@ -4309,7 +4397,15 @@ fn exact_committed_partition(
     }
     validate_partition_snapshot(&prepared)?;
     match &commitment.membership {
-        None if current == prepared => {}
+        None if current.binding == prepared.binding
+            && current.protocol_profile_digest == prepared.protocol_profile_digest
+            && current.provisioning_origin == prepared.provisioning_origin
+            && current.release_set == prepared.release_set
+            && current.status == ComponentLifecycleStatus::Prepared
+            && ComponentPartitionCoverage::new(&current, &prepared).is_monotonic() =>
+        {
+            return Ok(current);
+        }
         Some(membership) => {
             let _active = validate_active_partition(record, commitment, membership, &current)?;
         }
@@ -4336,35 +4432,37 @@ fn validate_active_partition(
     membership: &RootComponentMembershipRecord,
     current: &ComponentRegistryPartitionRecord,
 ) -> Result<ComponentRegistryPartitionRecord, InternalError> {
-    let expected_revision = commitment
-        .registry
-        .revision
-        .checked_add(1)
-        .ok_or_else(InternalError::resource_exhausted)?;
     let historical = ComponentRegistryPartitionRecord {
         binding: current.binding.clone(),
         protocol_profile_digest: current.protocol_profile_digest,
         provisioning_origin: current.provisioning_origin.clone(),
         release_set: current.release_set,
         status: ComponentLifecycleStatus::Active,
-        revision: expected_revision,
-        content_hash: component_partition_content_hash(
-            &current.binding,
-            current.protocol_profile_digest,
-            &current.provisioning_origin,
-            current.release_set,
-            ComponentLifecycleStatus::Active,
-            expected_revision,
-            empty_component_descendant_content_hash(record.component),
-            0,
-        )?,
-        descendant_content_hash: empty_component_descendant_content_hash(record.component),
+        revision: membership.registry.revision,
+        content_hash: membership.registry.content_hash,
+        descendant_content_hash: membership.descendant_content_hash,
         directory_synchronized_at_ns: membership.directory_synchronized_at_ns,
-        reserved_descendants: 0,
-        committed_descendants: 0,
+        reserved_descendants: membership.reserved_descendants,
+        committed_descendants: membership.committed_descendants,
         encoded_bytes: membership.registry_encoded_bytes,
     };
     validate_partition_snapshot(&historical)?;
+    let expected_content_hash = component_partition_content_hash(
+        &historical.binding,
+        historical.protocol_profile_digest,
+        &historical.provisioning_origin,
+        historical.release_set,
+        historical.status,
+        historical.revision,
+        historical.descendant_content_hash,
+        historical.committed_descendants,
+    )?;
+    if membership.registry.component != record.component
+        || membership.registry.revision <= commitment.registry.revision
+        || membership.registry.content_hash != expected_content_hash
+    {
+        return Err(InternalError::invariant());
+    }
     // Later child reservations and commitments may advance charged bytes and
     // the current head without changing this immutable top-level receipt.
     let activation_evidence = ComponentActivationEvidence::new(commitment, membership, current);
@@ -4395,7 +4493,7 @@ fn validate_membership_directory_authority_hash(
                 component_registry_content_hash: partition.content_hash,
                 synchronized_at_ns: partition.directory_synchronized_at_ns,
             },
-            descendant_count: 0,
+            descendant_count: membership.committed_descendants,
         },
         component_group: component_group.cloned(),
     };
@@ -4511,6 +4609,22 @@ const fn component_partition_retains_active_membership(status: ComponentLifecycl
         status,
         ComponentLifecycleStatus::Active | ComponentLifecycleStatus::Draining
     )
+}
+
+const fn component_partition_retains_child_membership(
+    status: ComponentLifecycleStatus,
+    initial_bootstrap: bool,
+) -> bool {
+    if initial_bootstrap {
+        matches!(
+            status,
+            ComponentLifecycleStatus::Prepared
+                | ComponentLifecycleStatus::Active
+                | ComponentLifecycleStatus::Draining
+        )
+    } else {
+        component_partition_retains_active_membership(status)
+    }
 }
 
 const fn require_ordinary_component_lifecycle(
@@ -4830,6 +4944,42 @@ fn committed_component_allocation(
             .as_ref()
             .is_some_and(|membership| membership.directory_synchronized);
     if !commitment.directory_prepared || !membership_is_terminal {
+        return Err(InternalError::invariant());
+    }
+    Ok(allocation)
+}
+
+fn component_runtime_allocation(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<RootComponentAllocationRecord, InternalError> {
+    let mut allocations = RootComponentRegistryStore::allocations()
+        .into_iter()
+        .filter(|allocation| allocation.component == partition.binding.component);
+    let allocation = allocations.next().ok_or_else(InternalError::invariant)?;
+    if allocations.next().is_some()
+        || ComponentAllocationPartitionAuthority::from_committed_allocation(&allocation)
+            != Some(ComponentAllocationPartitionAuthority::from_partition(
+                partition,
+            ))
+    {
+        return Err(InternalError::invariant());
+    }
+    let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &allocation.progress
+    else {
+        return Err(InternalError::invariant());
+    };
+    let lifecycle_is_exact = match partition.status {
+        ComponentLifecycleStatus::Prepared => commitment.membership.is_none(),
+        ComponentLifecycleStatus::Active => {
+            commitment.runtime_activated
+                && commitment
+                    .membership
+                    .as_ref()
+                    .is_some_and(|membership| membership.directory_synchronized)
+        }
+        ComponentLifecycleStatus::Draining | ComponentLifecycleStatus::Removed => false,
+    };
+    if !commitment.directory_prepared || !lifecycle_is_exact {
         return Err(InternalError::invariant());
     }
     Ok(allocation)

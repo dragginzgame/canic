@@ -18,6 +18,14 @@ package = "root"
 kind = "canister"
 package = "app"
 
+[roles.index_child]
+kind = "canister"
+package = "index_child"
+
+[roles.index_hub]
+kind = "canister"
+package = "index_hub"
+
 [roles.user_hub]
 kind = "canister"
 package = "user_hub"
@@ -80,6 +88,20 @@ topup = {}
 
 [component_specs.app.standards]
 icrc21 = true
+
+[component_specs.indexed]
+component_role = "index_hub"
+maximum_instances = 1
+
+[component_specs.indexed.index.pools.items]
+canister_role = "index_child"
+key_name = "item_id"
+
+[component_specs.indexed.children.index_child]
+kind = "instance"
+
+[component_specs.indexed.spawn_grants.index_hub.index_child]
+maximum_instances_per_parent = 4
 
 [component_specs.test]
 component_role = "test"

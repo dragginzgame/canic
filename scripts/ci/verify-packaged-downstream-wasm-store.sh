@@ -271,7 +271,10 @@ EOF
     cat > "$consumer_root/src/lib.rs" <<'EOF'
 use canic::testing::{
     ManagedAppFixture, ManagedAppQualificationError, ManagedAppQualificationInput,
-    StandaloneAppFixture, install_managed_app, install_standalone_app,
+    ManagedComponentGroupFixture, ManagedComponentGroupQualificationError,
+    ManagedComponentGroupQualificationInput, ManagedComponentNode,
+    ManagedRoleQualificationArtifact, StandaloneAppFixture, install_managed_app,
+    install_managed_component_group, install_standalone_app,
 };
 use std::time::Duration;
 
@@ -286,6 +289,15 @@ pub fn compile_standalone_consumer(
 ) -> Result<StandaloneAppFixture, ManagedAppQualificationError> {
     let fixture = install_standalone_app(wasm, 10_000_000_000_000);
     fixture.upgrade_same_release(Duration::from_secs(300))?;
+    Ok(fixture)
+}
+
+pub fn compile_managed_component_group_consumer(
+    input: ManagedComponentGroupQualificationInput<'_>,
+) -> Result<ManagedComponentGroupFixture, ManagedComponentGroupQualificationError> {
+    let fixture = install_managed_component_group(input)?;
+    let _: Vec<ManagedComponentNode> = fixture.nodes();
+    let _: Option<ManagedRoleQualificationArtifact> = None;
     Ok(fixture)
 }
 EOF

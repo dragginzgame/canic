@@ -15,14 +15,12 @@ use canic_core::{
         },
     },
     dto::component_registry::{
-        RootComponentChildAllocationRequest, RootComponentChildCommitRequest,
-        RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
-        RootComponentChildInstallRequest, RootComponentChildMembershipActivationRequest,
-        RootComponentChildRuntimeActivationRequest, RootComponentSubtreeRemovalPhase,
+        RootComponentChildAllocationRequest, RootComponentSubtreeRemovalPhase,
         RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
         RootComponentSubtreeRemovalStatusRequest,
     },
-    ids::{CanisterRole, ComponentChildBinding, ComponentInstanceId, ManagedCanisterBinding},
+    ids::{CanisterRole, ComponentChildBinding, ComponentInstanceId},
+    log::Topic,
 };
 
 use crate::workflow::component_registry;
@@ -91,50 +89,38 @@ async fn provision_component_child(
         child_role: request.child_role,
         application_init_args: request.application_init_args,
     })
-    .await?;
-    component_registry::create_child_allocation(RootComponentChildCreationRequest {
-        operation_id,
+    .await
+    .map_err(|error| child_lifecycle_failure("reserve", error))?;
+
+    if let Some(binding) = component_registry::terminal_child_allocation_binding(
         component,
-    })
-    .await?;
-    Box::pin(component_registry::install_child_allocation(
-        RootComponentChildInstallRequest {
-            operation_id,
-            component,
-        },
-    ))
-    .await?;
-    component_registry::commit_child_allocation(RootComponentChildCommitRequest {
         operation_id,
-        component,
-    })
-    .await?;
-    Box::pin(component_registry::prepare_child_directories(
-        RootComponentChildDirectoryPreparationRequest {
-            operation_id,
-            component,
-        },
-    ))
-    .await?;
-    component_registry::activate_child_runtime(RootComponentChildRuntimeActivationRequest {
-        operation_id,
-        component,
-    })
-    .await?;
-    let active = Box::pin(component_registry::activate_child_membership(
-        RootComponentChildMembershipActivationRequest {
-            operation_id,
-            component,
-        },
-    ))
-    .await?;
-    let ManagedCanisterBinding::ComponentChild(binding) = active.child.binding else {
-        return Err(InternalError::invariant());
-    };
-    if ProvisionedChildIdentity::from_binding(&binding) != expected_identity {
-        return Err(InternalError::invariant());
+        expected_identity.parent_canister_id,
+        &expected_identity.role,
+    )? {
+        if ProvisionedChildIdentity::from_binding(&binding) != expected_identity {
+            return Err(InternalError::invariant());
+        }
+        return Ok(binding.canister_id);
     }
-    Ok(binding.canister_id)
+
+    // The caller is suspended inside this Root request. Directory convergence can
+    // call that same Component and must therefore run after this response unwinds;
+    // otherwise the Component would call back into this Root while authenticating
+    // the Directory command. The durable allocation owns every effect, so an exact
+    // retry only observes the same operation while this detached driver advances it.
+    component_registry::schedule_component_child_allocation(component, operation_id);
+    Err(InternalError::unavailable())
+}
+
+fn child_lifecycle_failure(stage: &'static str, error: InternalError) -> InternalError {
+    canic_core::log!(
+        Topic::Rpc,
+        Error,
+        "Component Child lifecycle failed stage={stage} diagnostic={}",
+        error.code()
+    );
+    error
 }
 
 async fn recycle_component_child(

@@ -156,9 +156,11 @@ canic fleet ensure staging \
   --apply <plan_sha256>
 ```
 
-Use `--json` for the complete stable report. The current desired-state schema
-and retirement drain contract are documented in
-[Fleet ensure](../../docs/features/operations/fleet-ensure.md).
+Use `--json` for the complete stable report. Store publication chunks appear
+as workspace-relative `.canic/fleet-ensure/objects/sha256/<digest>` paths with
+their exact SHA-256 and byte size; raw payload bytes are never expanded into
+the report. The current desired-state schema and retirement drain contract are
+documented in [Fleet ensure](../../docs/features/operations/fleet-ensure.md).
 
 The reconciler writes only current-generation state under:
 

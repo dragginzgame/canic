@@ -14,7 +14,7 @@ use crate::{
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
     },
-    workflow::rpc::{RootCapabilityAuthority, RpcWorkflowError},
+    workflow::rpc::{RootCapabilityAuthority, RootCapabilityMemberLifecycle, RpcWorkflowError},
 };
 
 /// authorize
@@ -38,6 +38,13 @@ pub(super) fn authorize(
     }
 
     let descriptor = capability.descriptor();
+    if authority.caller_member_lifecycle() == Some(RootCapabilityMemberLifecycle::Prepared)
+        && !matches!(capability, RootCapability::AllocatePlacementChild(_))
+    {
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
+    }
     let decision = match capability {
         RootCapability::AcknowledgePlacementReceipt(_) => {
             authorize_placement_receipt_acknowledgement(ctx)

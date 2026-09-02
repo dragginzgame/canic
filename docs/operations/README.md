@@ -26,6 +26,11 @@ hard-cut during 0.92. Current evidence belongs to dated audit reports and the
 active release-line closeout; this directory retains operator contracts and
 validation procedures only.
 
+## Fleet Operations
+
+- [Fleet funding](fleet-funding.md) documents Coordinator funding, direct
+  cycle top-up, and manual Root ICP conversion and recovery.
+
 ## Wasm Diagnostics
 
 - [Wasm capability size report](wasm-capability-size-report.md) documents the

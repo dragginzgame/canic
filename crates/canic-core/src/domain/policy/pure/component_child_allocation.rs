@@ -36,10 +36,20 @@ pub struct ComponentRegistryVersionEvidence {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ComponentChildAllocationReadiness {
     Ready,
+    /// The exact parent and partition are prepared but not active yet; only
+    /// the compiled initial sharding/scaling allowance may be consumed.
+    InitialBootstrap,
     FleetRegistryRootInactive,
     RootRuntimeInactive,
     ComponentRegistryInactive,
     ParentRegistryMemberInactive,
+}
+
+/// Lifecycle lane approved for one exact direct-child reservation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComponentChildAllocationMode {
+    InitialBootstrap,
+    Active,
 }
 
 ///
@@ -86,6 +96,7 @@ pub struct ComponentChildAllocationDecision {
     pub parent_role: CanisterRole,
     pub child_role: CanisterRole,
     pub child_kind: ComponentChildKind,
+    pub mode: ComponentChildAllocationMode,
     pub maximum_instances_per_parent: u32,
     pub maximum_descendants: u32,
     pub maximum_registry_bytes: u64,
@@ -125,6 +136,9 @@ pub enum ComponentChildAllocationPolicyError {
 
     #[error("Component Child allocation requires an Active parent Registry member")]
     ParentRegistryMemberNotActive,
+
+    #[error("Component Child initial bootstrap allowance is absent or exhausted")]
+    InitialBootstrapUnavailable,
 
     #[error("Component Child allocation expected Registry authority is invalid or stale")]
     ComponentRegistryAuthorityMismatch,
@@ -186,7 +200,6 @@ pub fn reserve_component_child(
     if parent_canister_id != input.caller {
         return Err(ComponentChildAllocationPolicyError::ParentCallerMismatch);
     }
-    validate_readiness(input.readiness)?;
     validate_registry_authority(&input)?;
 
     let spec = input
@@ -215,6 +228,14 @@ pub fn reserve_component_child(
         input.child_role,
         grant.maximum_instances_per_parent,
     )?;
+    if grant.initial_instances_per_parent > effective_grant_maximum {
+        return Err(ComponentChildAllocationPolicyError::InvalidDeploymentLimits);
+    }
+    let mode = validate_readiness(
+        input.readiness,
+        input.parent_role_instances,
+        grant.initial_instances_per_parent,
+    )?;
     let limits_are_spec_bounded = input.deployment_limits.maximum_descendants > 0
         && input.deployment_limits.maximum_descendants <= spec.limits.maximum_descendants
         && input.deployment_limits.maximum_registry_bytes > 0
@@ -238,6 +259,7 @@ pub fn reserve_component_child(
         parent_role: parent_role.clone(),
         child_role: child.role.clone(),
         child_kind: child.kind,
+        mode,
         maximum_instances_per_parent: effective_grant_maximum,
         maximum_descendants: input.deployment_limits.maximum_descendants,
         maximum_registry_bytes: input.deployment_limits.maximum_registry_bytes,
@@ -285,9 +307,20 @@ fn parent_identity<'a>(
 
 const fn validate_readiness(
     readiness: ComponentChildAllocationReadiness,
-) -> Result<(), ComponentChildAllocationPolicyError> {
+    parent_role_instances: u32,
+    initial_instances_per_parent: u32,
+) -> Result<ComponentChildAllocationMode, ComponentChildAllocationPolicyError> {
     match readiness {
-        ComponentChildAllocationReadiness::Ready => Ok(()),
+        ComponentChildAllocationReadiness::Ready => Ok(ComponentChildAllocationMode::Active),
+        ComponentChildAllocationReadiness::InitialBootstrap
+            if initial_instances_per_parent > 0
+                && parent_role_instances < initial_instances_per_parent =>
+        {
+            Ok(ComponentChildAllocationMode::InitialBootstrap)
+        }
+        ComponentChildAllocationReadiness::InitialBootstrap => {
+            Err(ComponentChildAllocationPolicyError::InitialBootstrapUnavailable)
+        }
         ComponentChildAllocationReadiness::FleetRegistryRootInactive => {
             Err(ComponentChildAllocationPolicyError::FleetRegistryRootNotActive)
         }
@@ -385,7 +418,7 @@ mod tests {
         maximum_descendants = 20_000
 
         [component_specs.projects.children.project_instance]
-        kind = "instance"
+        kind = "replica"
 
         [component_specs.projects.children.project_ledger]
         kind = "singleton"
@@ -401,6 +434,12 @@ mod tests {
 
         [component_specs.projects.spawn_grants.project_instance.project_machine]
         maximum_instances_per_parent = 4
+
+        [component_specs.projects.scaling.pools.initial_projects]
+        canister_role = "project_instance"
+        policy.initial_workers = 1
+        policy.min_workers = 1
+        policy.max_workers = 10_000
     "#;
 
     #[test]
@@ -420,7 +459,8 @@ mod tests {
                 parent_canister_id: fixture.component.canister_id,
                 parent_role: CanisterRole::new("project_hub"),
                 child_role,
-                child_kind: ComponentChildKind::Instance,
+                child_kind: ComponentChildKind::Replica,
+                mode: ComponentChildAllocationMode::Active,
                 maximum_instances_per_parent: 10_000,
                 maximum_descendants: 20_000,
                 maximum_registry_bytes: 16_777_216,
@@ -462,6 +502,43 @@ mod tests {
                 parent_role: CanisterRole::new("project_hub"),
                 child_role,
             })
+        );
+    }
+
+    #[test]
+    fn prepared_parent_may_consume_only_its_compiled_initial_child_allowance() {
+        let fixture = fixture();
+        let child_role = CanisterRole::new("project_instance");
+        let parent = ManagedCanisterBinding::Component(fixture.component.clone());
+        let mut request = input(&fixture, &parent, &child_role);
+        request.readiness = ComponentChildAllocationReadiness::InitialBootstrap;
+        let decision = reserve_component_child(request).expect("compiled initial child allowance");
+        assert_eq!(
+            decision.mode,
+            ComponentChildAllocationMode::InitialBootstrap
+        );
+
+        let mut exhausted = input(&fixture, &parent, &child_role);
+        exhausted.readiness = ComponentChildAllocationReadiness::InitialBootstrap;
+        exhausted.parent_role_instances = 1;
+        assert_eq!(
+            reserve_component_child(exhausted),
+            Err(ComponentChildAllocationPolicyError::InitialBootstrapUnavailable)
+        );
+
+        let ledger_role = CanisterRole::new("project_ledger");
+        let child_parent = ManagedCanisterBinding::ComponentChild(ComponentChildBinding {
+            component: fixture.component.clone(),
+            parent_canister_id: fixture.component.canister_id,
+            role: CanisterRole::new("project_instance"),
+            canister_id: principal(7),
+        });
+        let mut unconfigured = input(&fixture, &child_parent, &ledger_role);
+        unconfigured.caller = principal(7);
+        unconfigured.readiness = ComponentChildAllocationReadiness::InitialBootstrap;
+        assert_eq!(
+            reserve_component_child(unconfigured),
+            Err(ComponentChildAllocationPolicyError::InitialBootstrapUnavailable)
         );
     }
 

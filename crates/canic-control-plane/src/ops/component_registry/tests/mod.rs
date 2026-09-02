@@ -3402,6 +3402,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         parent_role: binding.role.clone(),
         child_role: CanisterRole::new("project_instance"),
         child_kind: ComponentChildKind::Instance,
+        mode: canic_core::control_plane_support::policy::component_child_allocation::ComponentChildAllocationMode::Active,
         maximum_instances_per_parent: 10_000,
         maximum_descendants: 20_000,
         maximum_registry_bytes: 16_777_216,
@@ -3429,6 +3430,20 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         registry.clone(),
     )
     .expect("retry child reservation");
+    let mut retained_reservation = RootComponentRegistryStore::export()
+        .child_allocations
+        .into_iter()
+        .find(|allocation| allocation.operation_id == [44; 32])
+        .expect("retained child reservation");
+    assert_eq!(
+        ComponentPartitionLifecycleAuthority::from_reservation(&retained_reservation).status,
+        ComponentLifecycleStatus::Active
+    );
+    retained_reservation.initial_bootstrap = true;
+    assert_eq!(
+        ComponentPartitionLifecycleAuthority::from_reservation(&retained_reservation).status,
+        ComponentLifecycleStatus::Prepared
+    );
 
     assert_eq!(reserved, repeated);
     ComponentRegistryOps::reserve_child_allocation(
@@ -4586,6 +4601,7 @@ fn assert_child_reservation_preserves_membership_receipt() {
             parent_role: partition.binding.role.clone(),
             child_role: CanisterRole::new("project_instance"),
             child_kind: ComponentChildKind::Instance,
+            mode: canic_core::control_plane_support::policy::component_child_allocation::ComponentChildAllocationMode::Active,
             maximum_instances_per_parent: 10_000,
             maximum_descendants: 20_000,
             maximum_registry_bytes: 16_777_216,
@@ -5520,6 +5536,10 @@ fn active_component_allocation(
                 directory_prepared: true,
                 runtime_activated: true,
                 membership: Some(RootComponentMembershipRecord {
+                    registry: component_partition_head(partition),
+                    descendant_content_hash: partition.descendant_content_hash,
+                    reserved_descendants: partition.reserved_descendants,
+                    committed_descendants: partition.committed_descendants,
                     registry_encoded_bytes: partition.encoded_bytes,
                     directory_synchronized_at_ns: partition.directory_synchronized_at_ns,
                     directory_authority_hash: [24; 32],
@@ -5556,6 +5576,7 @@ fn child_allocation_decision_for_parent(
         parent_role: parent_role.clone(),
         child_role: CanisterRole::new(child_role),
         child_kind: ComponentChildKind::Instance,
+        mode: canic_core::control_plane_support::policy::component_child_allocation::ComponentChildAllocationMode::Active,
         maximum_instances_per_parent: 10_000,
         maximum_descendants: 20_000,
         maximum_registry_bytes: 16_777_216,

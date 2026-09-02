@@ -5,6 +5,7 @@
 //! control-plane authority.
 
 mod managed_app;
+mod managed_component_group;
 
 pub use ic_testkit::pic::{
     CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc, PocketIcBuilder,
@@ -12,4 +13,9 @@ pub use ic_testkit::pic::{
 pub use managed_app::{
     ManagedAppFixture, ManagedAppQualificationError, ManagedAppQualificationInput,
     StandaloneAppFixture, install_managed_app, install_standalone_app,
+};
+pub use managed_component_group::{
+    ManagedComponentGroupFixture, ManagedComponentGroupQualificationError,
+    ManagedComponentGroupQualificationInput, ManagedComponentNode,
+    ManagedRoleQualificationArtifact, install_managed_component_group,
 };

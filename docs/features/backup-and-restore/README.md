@@ -36,7 +36,6 @@ current local backup contract. Product blob storage is a separate feature.
 
 ## Start Here
 
-- [Installing: backup and restore](../../../INSTALLING.md#backup-and-restore)
 - [CLI backup and restore guide](../../../crates/canic-cli/README.md)
 - [Backup domain crate](../../../crates/canic-backup/README.md)
 - [Recovery and retry runbooks](../../operations/recovery-retry-runbooks.md)

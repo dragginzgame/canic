@@ -1844,6 +1844,16 @@ impl EnsurePlatform for IcpEnsurePlatform {
         ));
     }
 
+    fn pace_root_owned_observation(
+        &mut self,
+        _target: &str,
+        consecutive_retained_observations: u32,
+    ) {
+        thread::sleep(protocol_observation_delay(
+            consecutive_retained_observations,
+        ));
+    }
+
     fn observe_root_management(
         &mut self,
         state: &FleetEnsureStateRecord,

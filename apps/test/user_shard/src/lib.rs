@@ -1,5 +1,6 @@
 #![expect(clippy::unused_async)]
 
+use candid::Principal;
 use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
 use std::cell::RefCell;
 
@@ -18,6 +19,12 @@ async fn hello(token: DelegatedToken) -> Result<(), Error> {
     let _ = token;
 
     Ok(())
+}
+
+/// Prove direct Fleet-admitted ingress for managed child qualification.
+#[canic_query(requires(caller::is_fleet_admitted()))]
+async fn test_fleet_admission_probe() -> Result<Principal, Error> {
+    Ok(ic_cdk::api::msg_caller())
 }
 
 /// Set deterministic fixture state for the disposable backup/restore journey.

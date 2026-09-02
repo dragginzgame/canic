@@ -14,6 +14,7 @@ Supporting implementation evidence does not belong here.
 - `coordinator-workers/`
 - `cross-subnet-data-transport-groundwork/`
 - `declarative-authentication-profiles/`
+- `delulu-canyon-integration-opportunities/`
 - `estate-budget-replenishment/`
 - `fleet-observatory/`
 - `immutable-test-checkout-lease/`

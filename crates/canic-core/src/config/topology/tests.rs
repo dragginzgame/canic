@@ -218,16 +218,19 @@ fn topology_compiles_specs_and_potential_child_roles_in_canonical_order() {
             ComponentSpawnGrant {
                 parent_role: CanisterRole::from("project_hub"),
                 child_role: CanisterRole::from("project_instance"),
+                initial_instances_per_parent: 0,
                 maximum_instances_per_parent: 100,
             },
             ComponentSpawnGrant {
                 parent_role: CanisterRole::from("project_instance"),
                 child_role: CanisterRole::from("project_ledger"),
+                initial_instances_per_parent: 0,
                 maximum_instances_per_parent: 1,
             },
             ComponentSpawnGrant {
                 parent_role: CanisterRole::from("project_instance"),
                 child_role: CanisterRole::from("project_machine"),
+                initial_instances_per_parent: 0,
                 maximum_instances_per_parent: 1,
             },
         ],
@@ -239,6 +242,15 @@ fn topology_compiles_specs_and_potential_child_roles_in_canonical_order() {
                 &CanisterRole::from("project_ledger"),
             )
             .is_some(),
+    );
+    assert_eq!(
+        topology.component_specs[1].spawn_grants,
+        [ComponentSpawnGrant {
+            parent_role: CanisterRole::from("user_hub"),
+            child_role: CanisterRole::from("user_shard"),
+            initial_instances_per_parent: 1,
+            maximum_instances_per_parent: 8,
+        }]
     );
     assert_eq!(
         topology.provisioning_grants,

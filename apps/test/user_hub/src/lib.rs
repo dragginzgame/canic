@@ -31,6 +31,12 @@ async fn plan_create_account(pid: Principal) -> Result<String, Error> {
     Ok(format!("{plan:?}"))
 }
 
+/// Prove direct Fleet-admitted ingress for managed Component Group qualification.
+#[canic_query(requires(caller::is_fleet_admitted()))]
+async fn test_fleet_admission_probe() -> Result<Principal, Error> {
+    Ok(ic_cdk::api::msg_caller())
+}
+
 /// Set deterministic fixture state for the disposable backup/restore journey.
 #[canic_update(public)]
 async fn test_set_recovery_generation(generation: String) -> Result<(), Error> {

@@ -20,7 +20,10 @@ use crate::{
     output, version_text,
 };
 use canic_core::{
-    cdk::{types::Cycles, utils::hash::sha256_hex},
+    cdk::{
+        types::{BC, Cycles, QC, TC},
+        utils::hash::sha256_hex,
+    },
     ids::ReleaseBuildId,
 };
 use canic_host::{
@@ -28,7 +31,7 @@ use canic_host::{
         DesiredFleetLoadError, EnsureWorkflowError, FleetEnsureReport, FleetGenerateError,
         FleetGenerateRequest, FreshEstateSeedRequest, IcpEnsurePlatform, IcpEnsurePlatformError,
         LoadedDesiredFleet, apply, generate_desired_fleet, initialize_fresh_estate_seed,
-        load_desired_fleet, plan, retained_in_progress_plan,
+        load_desired_fleet, plan, report_json_value, retained_in_progress_plan,
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
@@ -466,7 +469,7 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
     println!("observed_canisters: {}", generated.observed_canisters);
     println!(
         "observed_controlled_cycles: {}",
-        generated.observed_controlled_cycles
+        format_cycles(generated.observed_controlled_cycles)
     );
     println!("desired: {}", output.display());
     Ok(())
@@ -519,8 +522,12 @@ fn publish_generated(
 
 fn render_report(report: &FleetEnsureReport, json: bool) -> Result<(), FleetCommandError> {
     if json {
-        return output::write_pretty_json(None, report);
+        return output::write_pretty_json(None, &report_json_value(report)?);
     }
+    output::write_text(None, &render_text_report(report))
+}
+
+fn render_text_report(report: &FleetEnsureReport) -> String {
     let conservation = &report.plan.conservation;
     let mut lines = vec![
         format!("fleet: {}", report.plan.fleet),
@@ -530,35 +537,35 @@ fn render_report(report: &FleetEnsureReport, json: bool) -> Result<(), FleetComm
         format!("terminal: {}", report.terminal),
         format!(
             "observed_controlled_cycles: {}",
-            conservation.observed_controlled_cycles
+            format_cycles(conservation.observed_controlled_cycles)
         ),
         format!(
             "retained_in_reused_canisters_cycles: {}",
-            conservation.retained_in_reused_canisters_cycles
+            format_cycles(conservation.retained_in_reused_canisters_cycles)
         ),
         format!(
             "scheduled_transfer_cycles: {}",
-            conservation.scheduled_transfer_cycles
+            format_cycles(conservation.scheduled_transfer_cycles)
         ),
         format!(
             "maximum_unavoidable_fee_cycles: {}",
-            conservation.maximum_unavoidable_fee_cycles
+            format_cycles(conservation.maximum_unavoidable_fee_cycles)
         ),
         format!(
             "maximum_execution_burn_cycles: {}",
-            conservation.maximum_execution_burn_cycles
+            format_cycles(conservation.maximum_execution_burn_cycles)
         ),
         format!(
             "maximum_new_funding_cycles: {}",
-            conservation.maximum_new_funding_cycles
+            format_cycles(conservation.maximum_new_funding_cycles)
         ),
         format!(
             "maximum_operator_debit_cycles: {}",
-            conservation.maximum_operator_debit_cycles
+            format_cycles(conservation.maximum_operator_debit_cycles)
         ),
         format!(
             "expected_post_operation_cycles: {}",
-            conservation.expected_post_operation_cycles
+            format_cycles(conservation.expected_post_operation_cycles)
         ),
         "canisters:".to_string(),
     ];
@@ -568,7 +575,7 @@ fn render_report(report: &FleetEnsureReport, json: bool) -> Result<(), FleetComm
             canister.name,
             canister.disposition,
             canister.principal.as_deref().unwrap_or("unallocated"),
-            canister.observed_cycles,
+            format_cycles(canister.observed_cycles),
             canister.actions.len()
         )
     }));
@@ -589,33 +596,52 @@ fn render_report(report: &FleetEnsureReport, json: bool) -> Result<(), FleetComm
             Some(format!(
                 "  native_topup {}: cycles_ledger_withdraw={} ledger={} target={} deficit={} margin={} expected_native_post={}",
                 canister.name,
-                amount,
+                format_cycles(*amount),
                 ledger,
                 principal,
-                funding_deficit_cycles,
-                funding_margin_cycles,
-                expected_post_cycles
+                format_cycles(*funding_deficit_cycles),
+                format_cycles(*funding_margin_cycles),
+                format_cycles(*expected_post_cycles)
             ))
         })
     }));
     lines.push(format!(
         "conservation_equation: {} + {} - {} - {} = {}",
-        conservation.observed_controlled_cycles,
-        conservation.maximum_operator_debit_cycles,
-        conservation.maximum_unavoidable_fee_cycles,
-        conservation.maximum_execution_burn_cycles,
-        conservation.expected_post_operation_cycles
+        format_cycles(conservation.observed_controlled_cycles),
+        format_cycles(conservation.maximum_operator_debit_cycles),
+        format_cycles(conservation.maximum_unavoidable_fee_cycles),
+        format_cycles(conservation.maximum_execution_burn_cycles),
+        format_cycles(conservation.expected_post_operation_cycles)
     ));
     if let Some(actual) = &report.actual_conservation {
         lines.push(format!(
             "measured_conservation: {} + {} - {} = {}",
-            actual.observed_starting_cycles,
-            actual.received_new_funding_cycles,
-            actual.measured_execution_burn_cycles,
-            actual.final_controlled_cycles
+            format_cycles(actual.observed_starting_cycles),
+            format_cycles(actual.received_new_funding_cycles),
+            format_cycles(actual.measured_execution_burn_cycles),
+            format_cycles(actual.final_controlled_cycles)
         ));
     }
-    output::write_text(None, &lines.join("\n"))
+    lines.join("\n")
+}
+
+fn format_cycles(cycles: u128) -> String {
+    let (unit, suffix) = if cycles >= QC {
+        (QC, "Q")
+    } else if cycles >= TC {
+        (TC, "T")
+    } else {
+        (BC, "B")
+    };
+    let unit_thousandth = unit / 1_000;
+    let mut whole = cycles / unit;
+    let remainder = cycles % unit;
+    let mut thousandths = (remainder + unit_thousandth / 2) / unit_thousandth;
+    if thousandths == 1_000 {
+        whole += 1;
+        thousandths = 0;
+    }
+    format!("{whole}.{thousandths:03}{suffix}")
 }
 
 fn parse_digest(value: &str) -> Result<String, String> {

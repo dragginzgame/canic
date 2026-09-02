@@ -223,7 +223,7 @@ references. Expanding the Coordinator receipt adapter and three final small
 helpers produces an effective 2,514-site frontier, also fully classified with
 zero open dispositions.
 
-[The code-allocation ledger](../../../design/0.102-compact-diagnostic-codes/code-allocation-ledger.md)
+[The code-allocation ledger](../../../design/archive/0.102-compact-diagnostic-codes/code-allocation-ledger.md)
 freezes the permanent
 repository-only current/retired allocation contract and the contract for a
 generated language-neutral current registry. Because no numeric allocation has

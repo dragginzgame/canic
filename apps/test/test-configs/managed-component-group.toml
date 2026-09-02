@@ -1,0 +1,99 @@
+[app]
+name = "test"
+init_mode = "enabled"
+
+[roles.root]
+kind = "root"
+package = "../root"
+
+[roles.index_child]
+kind = "canister"
+package = "../index_child"
+fleet_admission = true
+
+[roles.index_hub]
+kind = "canister"
+package = "../index_hub"
+fleet_admission = true
+
+[roles.scale_hub]
+kind = "canister"
+package = "../scale_hub"
+fleet_admission = true
+
+[roles.scale_replica]
+kind = "canister"
+package = "../scale"
+fleet_admission = true
+
+[roles.user_hub]
+kind = "canister"
+package = "../user_hub"
+fleet_admission = true
+
+[roles.user_shard]
+kind = "canister"
+package = "../user_shard"
+fleet_admission = true
+
+[component_specs.scaling]
+component_role = "scale_hub"
+maximum_instances = 1
+
+[component_specs.scaling.scaling.pools.scales]
+canister_role = "scale_replica"
+policy.initial_workers = 1
+policy.max_workers = 4
+policy.min_workers = 2
+
+[component_specs.scaling.children.scale_replica]
+kind = "replica"
+
+[component_specs.scaling.spawn_grants.scale_hub.scale_replica]
+maximum_instances_per_parent = 4
+
+[component_specs.indexed]
+component_role = "index_hub"
+maximum_instances = 1
+
+[component_specs.indexed.index.pools.items]
+canister_role = "index_child"
+key_name = "item_id"
+
+[component_specs.indexed.children.index_child]
+kind = "instance"
+
+[component_specs.indexed.spawn_grants.index_hub.index_child]
+maximum_instances_per_parent = 4
+
+[component_specs.users]
+component_role = "user_hub"
+maximum_instances = 1
+
+[component_specs.users.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.initial_shards = 1
+policy.max_shards = 4
+
+[component_specs.users.children.user_shard]
+kind = "shard"
+
+[component_specs.users.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 4
+
+[component_groups.qualification.components.scaling]
+component_spec = "scaling"
+
+[component_groups.qualification.components.indexed]
+component_spec = "indexed"
+
+[component_groups.qualification.components.users]
+component_spec = "users"
+
+[component_group_deployments.qualification]
+component_group = "qualification"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1

@@ -3,11 +3,11 @@
 #[cfg(test)]
 use super::build::{
     build_five_component_root_wasm, build_five_trillion_component_root_wasm, build_icp_refill_pic,
-    build_icp_refill_stub_wasm, build_mainnet_five_component_refill_wasms,
-    build_mainnet_refill_wasms, build_management_pic, build_toko_shaped_singleton_root_wasm,
-    build_two_root_pic, five_component_root_canister_config_path,
-    five_trillion_component_root_canister_config_path,
-    toko_shaped_singleton_root_canister_config_path,
+    build_icp_refill_stub_wasm, build_initial_shard_root_wasm,
+    build_mainnet_five_component_refill_wasms, build_mainnet_refill_wasms, build_management_pic,
+    build_toko_shaped_singleton_root_wasm, build_two_root_pic,
+    five_component_root_canister_config_path, five_trillion_component_root_canister_config_path,
+    initial_shard_root_canister_config_path, toko_shaped_singleton_root_canister_config_path,
 };
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
@@ -52,6 +52,7 @@ mod tests {
     use canic::dto::runtime::{CanicRuntimeStatus, TimerRegistrationStatus};
     #[cfg(test)]
     use canic::dto::{fleet_admission::FleetAdmissionProjectionStatusResponse, page::PageRequest};
+    use canic::ids::ManagedCanisterBinding;
     use canic::{
         CANIC_WASM_CHUNK_BYTES,
         dto::{
@@ -327,12 +328,21 @@ mod tests {
 
     #[derive(CandidType)]
     enum ManagedStatusRequestFragment {
+        #[cfg_attr(
+            not(test),
+            expect(
+                dead_code,
+                reason = "binding status is exercised by the governed test build"
+            )
+        )]
+        Binding,
         Operation(OperationStatusRequest),
     }
 
-    #[derive(CandidType, Deserialize)]
+    #[derive(CandidType, Debug, Deserialize)]
     enum ManagedStatusResponseFragment {
-        Operation(ManagedOperationStatusResponseFragment),
+        Binding(Box<ManagedCanisterBinding>),
+        Operation(Box<ManagedOperationStatusResponseFragment>),
     }
 
     #[cfg(test)]
@@ -342,12 +352,12 @@ mod tests {
     }
 
     #[cfg(test)]
-    #[derive(CandidType, Deserialize)]
+    #[derive(CandidType, Debug, Deserialize)]
     enum ManagedAdmissionStatusResponseFragment {
         Admission(FleetAdmissionProjectionStatusResponse),
     }
 
-    #[derive(CandidType, Deserialize)]
+    #[derive(CandidType, Debug, Deserialize)]
     enum ManagedOperationStatusResponseFragment {
         ConfigureRuntime(ComponentRuntimeOperationStatus),
     }
@@ -438,6 +448,28 @@ mod tests {
     ) -> Result<RootStatusResponseFragment, Error> {
         pic.query_candid(root, canic::protocol::CANIC_STATUS, (request,))
             .expect("Root status transport")
+    }
+
+    #[cfg(test)]
+    fn managed_binding_status(
+        pic: &PocketIc,
+        root: Principal,
+        canister: Principal,
+    ) -> ManagedCanisterBinding {
+        let response: Result<ManagedStatusResponseFragment, Error> = pic
+            .query_candid_as(
+                canister,
+                root,
+                canic::protocol::CANIC_STATUS,
+                (ManagedStatusRequestFragment::Binding,),
+            )
+            .expect("managed binding status transport");
+        let ManagedStatusResponseFragment::Binding(binding) =
+            response.expect("Root reads exact managed binding")
+        else {
+            panic!("managed canister returned a differently correlated status");
+        };
+        *binding
     }
 
     #[cfg(test)]
@@ -1861,6 +1893,313 @@ exec icp "$@"
             .query_candid(cycles_ledger, "request_count", ())
             .expect("query pool creation request count");
         assert_eq!(request_count, 5);
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one production-boundary journey keeps Prepared-Root child bootstrap, terminal activation and replay together"
+    )]
+    fn prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = initial_shard_root_canister_config_path(&workspace_root);
+        let config = AppConfigSnapshot::load(&config_path).expect("load initial-Shard config");
+        let root_wasm = build_initial_shard_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let store_fixture = build_root_store_fixture_with_config(
+            &config_path,
+            build_initial_shard_component_wasms(),
+        );
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
+            &pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
+                canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
+                coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &config_path,
+            create_prepaid_pool_assets,
+        );
+        install_fixture_coordinator_with_config(
+            &pic,
+            coordinator,
+            coordinator_wasm,
+            &fixture,
+            &config_path,
+        );
+        let (joining_version, sync_request) =
+            join_and_synchronize_root(&pic, coordinator, &fixture);
+        let component_registry_request = activate_registry_and_prepare_component_registry(
+            &pic,
+            coordinator,
+            &fixture,
+            joining_version,
+            sync_request,
+        );
+        let CoordinatorStatusResponse::Registry(registry) =
+            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query active Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
+        let operation_id = [0x71; 32];
+        let compiled = fixture_fresh_component_plan(config.model(), &registry, operation_id);
+        let request = compiled.request;
+        let CoordinatorCommandResponse::OperationAccepted(first_receipt) = coordinator_command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::ProvisionComponents(request.clone()),
+        )
+        .expect("begin one-Hub Component provisioning") else {
+            panic!("Coordinator returned a differently correlated provisioning response");
+        };
+        assert_eq!(first_receipt.operation_id, operation_id);
+        let CoordinatorCommandResponse::OperationAccepted(replayed_receipt) = coordinator_command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::ProvisionComponents(request.clone()),
+        )
+        .expect("replay the response-lost provisioning command") else {
+            panic!("Coordinator returned a differently correlated replay response");
+        };
+        assert_eq!(replayed_receipt, first_receipt);
+
+        let mut last_status = None;
+        let terminal = (0..240).find_map(|_| {
+            let status = coordinator_status(
+                &pic,
+                coordinator,
+                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            )
+            .expect("query initial-Shard Component provisioning");
+            let CoordinatorStatusResponse::Operation(
+                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+            ) = status
+            else {
+                panic!("Coordinator returned a differently correlated operation status");
+            };
+            if status.components_provisioned_at_ns.is_some()
+                && status.runtimes_activated_at_ns.is_some()
+                && status.runtime_activated_root_count == status.root_batch_count
+            {
+                Some(status)
+            } else {
+                last_status = Some(status);
+                pic.advance_time(Duration::from_secs(1));
+                pic.tick();
+                None
+            }
+        });
+        let terminal = terminal.unwrap_or_else(|| {
+            let pool = root_pool_status(&pic, fixture.root_id);
+            let workload_callers = pool
+                .entries
+                .iter()
+                .filter(|entry| {
+                    matches!(entry.status, CanisterPoolAssetStatus::Workload { .. })
+                })
+                .map(|entry| entry.canister_id)
+                .collect::<Vec<_>>();
+            let child_operations = pool
+                .entries
+                .iter()
+                .filter_map(|entry| match &entry.status {
+                    CanisterPoolAssetStatus::Workload { claim } => Some(claim.operation_id),
+                    _ => None,
+                })
+                .filter_map(|operation_id| {
+                    workload_callers.iter().find_map(|caller| {
+                        let response: Result<RootStatusResponseFragment, Error> = pic
+                            .query_candid_as(
+                                fixture.root_id,
+                                *caller,
+                                canic::protocol::CANIC_STATUS,
+                                (RootStatusRequestFragment::Operation(OperationStatusRequest {
+                                    operation_id,
+                                }),),
+                            )
+                            .expect("Root child-operation status transport");
+                        match response {
+                            Ok(RootStatusResponseFragment::Operation(
+                                RootOperationStatusResponse::ProvisionChild(status),
+                            )) => Some(format!(
+                                "caller={caller} operation={operation_id:?} phase={:?}",
+                                status.allocation.phase
+                            )),
+                            _ => None,
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+            let workload_readiness = pool
+                .entries
+                .iter()
+                .filter(|entry| {
+                    matches!(entry.status, CanisterPoolAssetStatus::Workload { .. })
+                })
+                .map(|entry| {
+                    let readiness = fetch_role_overview_readiness(&pic, entry.canister_id)
+                        .map_or_else(|error| format!("query-error={error}"), |status| status.to_string());
+                    format!("canister={} {readiness}", entry.canister_id)
+                })
+                .collect::<Vec<_>>();
+            let component_registry_summary = match root_status(
+                &pic,
+                fixture.root_id,
+                RootStatusRequestFragment::ComponentRegistry(component_registry_request.clone()),
+            ) {
+                Ok(RootStatusResponseFragment::ComponentRegistry(status)) => format!(
+                    "committed={} descendants={} created={}",
+                    status.committed_component_instances,
+                    status.managed_descendants,
+                    status.known_created_component_canisters
+                ),
+                Ok(_) => "differently correlated Root status".to_string(),
+                Err(error) => format!("error={error}"),
+            };
+            let root_provisioning_summary = match root_status(
+                &pic,
+                fixture.root_id,
+                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+            ) {
+                Ok(RootStatusResponseFragment::Operation(
+                    RootOperationStatusResponse::ProvisionComponents(status),
+                )) => format!(
+                    "phase={:?} activated={}/{} root_active={} accepted={} published={:?} activation_started={:?} completed={:?} receipt={:?}",
+                    status.phase,
+                    status.activated_component_count,
+                    status.component_count,
+                    status.root_runtime_active,
+                    status.accepted_at_ns,
+                    status.published_at_ns,
+                    status.activation_started_at_ns,
+                    status.runtimes_activated_at_ns,
+                    status.receipt_content_hash
+                ),
+                Ok(_) => "differently correlated Root operation status".to_string(),
+                Err(error) => format!("error={error}"),
+            };
+            report_canister_diagnostics_batch(
+                &pic,
+                [("Root".to_string(), fixture.root_id, Principal::anonymous())],
+                "Prepared-Root initial-Shard bootstrap",
+            );
+            let coordinator_summary = last_status.as_ref().map(|status| {
+                format!(
+                    "phase={:?} activated_roots={}/{} components={} failure={:?}",
+                    status.phase,
+                    status.runtime_activated_root_count,
+                    status.root_batch_count,
+                    status.component_count,
+                    status.pending_root_failure
+                )
+            });
+            panic!(
+                "initial-Shard Component provisioning did not become terminal: coordinator={coordinator_summary:?} root_provisioning={root_provisioning_summary:?} child_operations={child_operations:?} workload_readiness={workload_readiness:?} component_registry={component_registry_summary:?} pool_ready={} pool_workload={} pool_pending_reset={} pool_failed={}",
+                pool.ready,
+                pool.workload,
+                pool.pending_reset,
+                pool.failed
+            );
+        });
+        assert_eq!(terminal.component_count, 3);
+        assert!(terminal.pending_root_failure.is_none());
+
+        let RootStatusResponseFragment::ComponentRegistry(component_registry) = root_status(
+            &pic,
+            fixture.root_id,
+            RootStatusRequestFragment::ComponentRegistry(component_registry_request),
+        )
+        .expect("query terminal initial-Shard Component Registry") else {
+            panic!("Root returned a differently correlated Component Registry status");
+        };
+        assert_eq!(component_registry.committed_component_instances, 3);
+        assert_eq!(component_registry.managed_descendants, 2);
+        assert_eq!(component_registry.known_created_component_canisters, 5);
+
+        let terminal_pool = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(terminal_pool.workload, 5);
+        let workload_principals = terminal_pool
+            .entries
+            .iter()
+            .filter(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
+            .map(|entry| entry.canister_id)
+            .collect::<Vec<_>>();
+        assert_eq!(workload_principals.len(), 5);
+        let bindings = workload_principals
+            .iter()
+            .copied()
+            .map(|canister| {
+                (
+                    canister,
+                    managed_binding_status(&pic, fixture.root_id, canister),
+                )
+            })
+            .collect::<Vec<_>>();
+        let (hub, hub_binding) = bindings
+            .iter()
+            .find(|(_, binding)| {
+                matches!(
+                    binding,
+                    ManagedCanisterBinding::Component(binding)
+                        if binding.role.as_str() == "user_hub"
+                )
+            })
+            .expect("one top-level user Hub binding");
+        let (_, child_binding) = bindings
+            .iter()
+            .find(|(_, binding)| {
+                matches!(
+                    binding,
+                    ManagedCanisterBinding::ComponentChild(binding)
+                        if binding.role.as_str() == "user_shard"
+                )
+            })
+            .expect("one initial user Shard binding");
+        let ManagedCanisterBinding::Component(hub_binding) = hub_binding else {
+            unreachable!("selected top-level binding")
+        };
+        let ManagedCanisterBinding::ComponentChild(child_binding) = child_binding else {
+            unreachable!("selected child binding")
+        };
+        assert_eq!(hub_binding.role.as_str(), "user_hub");
+        assert_eq!(child_binding.role.as_str(), "user_shard");
+        assert_eq!(child_binding.parent_canister_id, *hub);
+        assert_eq!(child_binding.component, *hub_binding);
+        for canister in workload_principals {
+            assert!(matches!(
+                fetch_role_overview_readiness(&pic, canister)
+                    .expect("query managed initial-Shard readiness"),
+                RoleOverviewReadinessObservation::Ready
+            ));
+        }
+
+        let replay_pool = root_pool_status(&pic, fixture.root_id);
+        let CoordinatorCommandResponse::OperationAccepted(terminal_receipt) = coordinator_command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::ProvisionComponents(request),
+        )
+        .expect("replay terminal initial-Shard provisioning") else {
+            panic!("Coordinator returned a differently correlated terminal replay");
+        };
+        assert_eq!(terminal_receipt, first_receipt);
+        assert_eq!(root_pool_status(&pic, fixture.root_id), replay_pool);
     }
 
     #[test]
@@ -6814,9 +7153,14 @@ exec icp "$@"
                     OperationStatusRequest { operation_id },
                 ),),
             )?;
-            let ManagedStatusResponseFragment::Operation(
-                ManagedOperationStatusResponseFragment::ConfigureRuntime(runtime),
-            ) = baseline_application_result(runtime, "query Component runtime")?;
+            let ManagedStatusResponseFragment::Operation(operation) =
+                baseline_application_result(runtime, "query Component runtime")?
+            else {
+                return Err(ActiveComponentRegistryBaselineError::Invariant(
+                    "Component returned a differently correlated runtime status".to_string(),
+                ));
+            };
+            let ManagedOperationStatusResponseFragment::ConfigureRuntime(runtime) = *operation;
             if runtime.runtime.phase != ComponentRuntimePhase::Active {
                 return Err(ActiveComponentRegistryBaselineError::Invariant(format!(
                     "Component {} is not active",
@@ -7982,6 +8326,28 @@ exec icp "$@"
     }
 
     #[cfg(test)]
+    fn build_initial_shard_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
+        static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
+        WASMS.get_or_init(|| {
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let config_path = initial_shard_root_canister_config_path(&workspace_root);
+            build_component_fixture_wasms(
+                &workspace_root,
+                &config_path,
+                "fleet-registry-initial-shard",
+                &[
+                    ("index_child", "canister_index_child"),
+                    ("index_hub", "canister_index_hub"),
+                    ("scale_hub", "canister_scale_hub"),
+                    ("scale_replica", "canister_scale"),
+                    ("user_hub", "canister_user_hub"),
+                    ("user_shard", "canister_user_shard"),
+                ],
+            )
+        })
+    }
+
+    #[cfg(test)]
     fn build_five_trillion_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
         static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
         WASMS.get_or_init(|| {
@@ -8134,6 +8500,10 @@ exec icp "$@"
             (
                 "fresh provisioning automatic pool readiness",
                 fresh_five_component_acceptance_seeds_the_root_owned_pool_before_effects,
+            ),
+            (
+                "Prepared Root initial-Shard bootstrap",
+                prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership,
             ),
             (
                 "application Store bootstrap and replay",

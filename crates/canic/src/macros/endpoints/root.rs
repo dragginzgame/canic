@@ -337,6 +337,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::ResumeFleetActivation(_)
                     | RootCommand::RetryPoolRefill
                     | RootCommand::RetryPoolReset(_)
+                    | RootCommand::RespondCapability(_)
                     | RootCommand::SynchronizeComponentDirectories(_)
                     | RootCommand::SynchronizeRegistry(_)
             );

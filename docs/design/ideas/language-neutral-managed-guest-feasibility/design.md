@@ -140,7 +140,7 @@ The current Canic surface is Rust-specific at each source edge:
   `wasm32-unknown-unknown`.
 - [`CanisterInitPayload`](../../../../crates/canic-core/src/dto/abi/v1/payload.rs)
   exposes Rust-owned authority and deployment records.
-- [non-root endpoint macros](../../../../crates/canic/src/macros/endpoints/nonroot.rs)
+- [role endpoint macros](../../../../crates/canic/src/macros/endpoints/role.rs)
   emit the current prepare, status, synchronize, and activate methods.
 - [non-root lifecycle macros](../../../../crates/canic/src/macros/start.rs) own
   initialization, post-upgrade validation, and deferred application hooks.

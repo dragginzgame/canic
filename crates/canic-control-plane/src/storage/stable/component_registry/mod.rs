@@ -1202,6 +1202,10 @@ pub struct RootComponentCommitmentRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentMembershipRecord {
+    pub registry: ComponentRegistryHead,
+    pub descendant_content_hash: [u8; 32],
+    pub reserved_descendants: u32,
+    pub committed_descendants: u32,
     pub registry_encoded_bytes: u64,
     pub directory_synchronized_at_ns: u64,
     pub directory_authority_hash: [u8; 32],
@@ -1763,6 +1767,7 @@ pub struct RootComponentChildAllocationRecord {
     pub parent_role: CanisterRole,
     pub child_role: CanisterRole,
     pub child_kind: ComponentChildKind,
+    pub initial_bootstrap: bool,
     pub maximum_instances_per_parent: u32,
     pub maximum_descendants: u32,
     pub maximum_registry_bytes: u64,
@@ -1781,6 +1786,7 @@ struct RootComponentChildReservation<'a> {
     parent_role: &'a CanisterRole,
     child_role: &'a CanisterRole,
     child_kind: &'a ComponentChildKind,
+    initial_bootstrap: bool,
     maximum_instances_per_parent: u32,
     maximum_descendants: u32,
     maximum_registry_bytes: u64,
@@ -1799,6 +1805,7 @@ impl<'a> From<&'a RootComponentChildAllocationRecord> for RootComponentChildRese
             parent_role: &record.parent_role,
             child_role: &record.child_role,
             child_kind: &record.child_kind,
+            initial_bootstrap: record.initial_bootstrap,
             maximum_instances_per_parent: record.maximum_instances_per_parent,
             maximum_descendants: record.maximum_descendants,
             maximum_registry_bytes: record.maximum_registry_bytes,

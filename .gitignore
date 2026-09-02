@@ -11,12 +11,14 @@
 # IDEs
 /.idea
 /.code
+/.cursor
 
 # IC
 deps/
 .dfx
 .icp
 *.wasm
+!crates/canic/src/testing/managed_component_group/fixture/sharding_root_stub.wasm
 
 # MS
 # Windows builds of rustc generate these, which store debugging information

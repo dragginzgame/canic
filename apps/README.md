@@ -21,9 +21,12 @@ its configuration-compiled Fleet Subnet Root under its own directory.
     `app = "test"` and `role = "root"`) used to build the root infrastructure
     artifact and runtime endpoint bundle.
   - `app/` – minimal application canister used as a placeholder service.
+  - `index_hub/` + `index_child/` – indexed placement with children allocated
+    on demand by the Hub.
   - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow.
   - `scale_hub/` + `scale/` – scaling pool demo, with the worker role exposed
     as `scale_replica`.
+  - `test/` – standalone test role used by the reference topology.
   - `canic.toml` – shared test topology referenced by each reference canister `build.rs`.
   - `test-configs/` – config fixtures used by local checks.
 - `demo/` – small Component and sharding App for source/build experiments.
@@ -48,10 +51,10 @@ same host artifact builder whose outputs are bound by `canic fleet ensure`.
 - Create/build test canisters manually: `icp deploy -e test`
 
 The desired Fleet reconciler creates or reuses the configured top-level `app`,
-`test`, `user_hub`, and `scale_hub` canisters according to its reviewed plan.
-`user_shard` and `scale_replica` descendants are created only by later
-application/runtime requests. The demo sharding walkthrough is
-`demo_user_hub_plan("alice")`,
+`index_hub`, `scale_hub`, `test`, and `user_hub` canisters according to its
+reviewed plan. `index_child`, `scale_replica`, and `user_shard` descendants are
+created only by later application/runtime requests. The demo sharding
+walkthrough is `demo_user_hub_plan("alice")`,
 `demo_user_hub_assign("alice")`, then
 `demo_user_shard_describe("alice")` on the returned shard.
 

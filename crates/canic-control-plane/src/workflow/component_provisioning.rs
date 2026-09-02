@@ -62,6 +62,7 @@ use canic_core::{
         role::{OperationReceipt, OperationStatusRequest},
     },
     ids::ManagedCanisterBinding,
+    log::Topic,
     protocol,
 };
 use serde::Deserialize;
@@ -183,6 +184,10 @@ fn schedule_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32], delay: Dur
     );
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one private phase dispatcher advances the sole durable Root provisioning operation"
+)]
 async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32]) {
     let Ok(current) =
         RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
@@ -272,7 +277,18 @@ async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 
     match result {
         Ok(status) if status.phase == RootComponentProvisioningPhase::RuntimesActive => {}
         Ok(_) => schedule_provisioning(operation_id, plan_hash, Duration::ZERO),
-        Err(_) => schedule_provisioning(operation_id, plan_hash, Duration::from_secs(1)),
+        Err(error) => {
+            canic_core::log!(
+                Topic::Fleet,
+                Warn,
+                "Root Component provisioning retry: operation_id={operation_id:?} phase={:?} activated_components={}/{} diagnostic={}",
+                current.phase,
+                current.activated_component_count,
+                current.component_count,
+                error.code()
+            );
+            schedule_provisioning(operation_id, plan_hash, Duration::from_secs(1));
+        }
     }
 }
 
@@ -433,9 +449,11 @@ async fn activate_component_step(
     request: &RootComponentActivationRequest,
     member: crate::view::component_provisioning::RootComponentPublicationMemberView,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let provisioning_origin = activation_member_origin(request, &member)?;
+    let provisioning_origin = activation_member_origin(request, &member)
+        .map_err(|error| activation_member_failure("origin", &member, error))?;
     let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
-        .ok_or_else(InternalError::unavailable)?;
+        .ok_or_else(InternalError::unavailable)
+        .map_err(|error| activation_member_failure("allocation", &member, error))?;
     let runtime_active = match &allocation.progress {
         crate::view::component_registry::RootComponentAllocationProgressView::Committed {
             commitment,
@@ -444,15 +462,16 @@ async fn activate_component_step(
         _ => false,
     };
     if !runtime_active {
-        super::component_registry::activate_group_member_runtime(
+        Box::pin(super::component_registry::activate_group_member_runtime(
             RootComponentRuntimeActivationRequest {
                 operation_id: member.member_operation_id,
             },
             &provisioning_origin,
             &member.deployment,
             &member.component_group,
-        )
-        .await?;
+        ))
+        .await
+        .map_err(|error| activation_member_failure("runtime", &member, error))?;
     }
     Box::pin(super::component_registry::activate_group_member_membership(
         RootComponentMembershipActivationRequest {
@@ -462,9 +481,28 @@ async fn activate_component_step(
         &member.deployment,
         &member.component_group,
     ))
-    .await?;
+    .await
+    .map_err(|error| activation_member_failure("membership", &member, error))?;
     RootComponentProvisioningOps::mark_member_activated(request, &member)
+        .map_err(|error| activation_member_failure("commit", &member, error))
         .map(crate::ops::component_provisioning::status_response)
+}
+
+fn activation_member_failure(
+    stage: &'static str,
+    member: &crate::view::component_provisioning::RootComponentPublicationMemberView,
+    error: InternalError,
+) -> InternalError {
+    canic_core::log!(
+        Topic::Fleet,
+        Error,
+        "Root Component activation failed stage={stage} component_index={} canister={} operation_id={:?} diagnostic={}",
+        member.component_index,
+        member.binding.canister_id,
+        member.member_operation_id,
+        error.code()
+    );
+    error
 }
 
 fn activation_member_origin(

@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.5` fixes terminal Fleet inventory validation across source-to-
+  published Registry transitions, passively re-observes delayed Root-owned
+  balances without repeating effects, prevents Component activation before
+  mandatory initial-child bootstrap, makes reports readable and bounded, and
+  adds public managed Component-tree qualification for exact sharding, scaling
+  and index children.
 - `0.110.4` keeps long-running Component provisioning observable without
   duplicate commands by pacing passive status queries, scaling the unchanged-
   progress budget to the reviewed topology and reporting exact durable phase
