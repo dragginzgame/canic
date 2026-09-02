@@ -208,4 +208,5 @@ ablations, generated-surface inventory and generic-instantiation cohort. Retain
 the active B1 evidence and do not begin B2 until the maintainer accepts the
 complete B1 baseline.
 
-<!-- canic-release-validation: version=0.110.3 source=04e8b5cdb86178ee04ef72f5f0c8ab7156f3291e date=2026-09-02 gate=complete -->
+
+<!-- canic-release-validation: version=0.110.4 source=27eb97333a2fb73bedbfde1e566d13ab055b339c date=2026-09-02 gate=complete -->
