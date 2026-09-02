@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## Purpose
 
@@ -25,10 +25,10 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.110.0` at
-`d29a7cc72f801ee4a86d6e47f5e5e138a17f029f`. Its complete gate validated
-source `d288f985e38d33508dd6631ecf247e5d7d2c04a9`; immutable details are in
-[the 0.110 changelog](../changelog/0.110.md). `0.110.1` is the single open
+Current development begins from published `v0.110.1` at
+`7825bed9f7538c6e217f8aa9eb73dd1beb2d01e6`. Its governed marker records the
+validated source below; immutable details are in
+[the 0.110 changelog](../changelog/0.110.md). `0.110.2` is the single open
 patch draft. Source-development truth comes from Git and the working tree.
 
 ## Maintained 0.109 Contract
@@ -90,7 +90,7 @@ Primary owners:
 - `crates/canic-host/src/fleet_ensure/generate/tests.rs` — production-shaped
   fresh and immutable-plan replay evidence.
 
-## CANIC-119-CANIC-121 First 0.110 Release Correction
+## CANIC-119-CANIC-123 First 0.110 Release Corrections
 
 Read-only Toko Miner qualification after the accepted closeout exposed one
 fresh-estate ordering defect in published `v0.109.35`. Five exact Creates and
@@ -116,18 +116,35 @@ requested/floor/burn/required/shortfall fields. Resume rejects the preserved
 1,899,998,056,000-cycle applied result before controller or protocol work and
 reports its exact 1,944,000 readiness shortfall.
 
-`CANIC-121` adds one governed production-shaped PocketIC journey from no
-application canisters. It creates the Coordinator, Root, Store and two pool
-assets exactly once, loses and reconciles every Create and pool-controller
-response, imports/resets the real 1.9T-floor assets, provisions one Component
-with its exact 1.9T grant, and finishes with exactly one Workload plus one Ready
-asset. Exact measured
-controlled-cycle conservation and immediate zero-effect replay pass.
+The first `CANIC-121` journey created the Coordinator, Root, Store and two pool
+assets but bypassed the installed Root's Prepared endpoint and observed
+controllers directly through PocketIC. Read-only downstream qualification of
+published `v0.110.1` therefore exposed `CANIC-122`: production correctly keeps
+the Root `Prepared` at that boundary, while the Root endpoint incorrectly
+rejected its controller-authenticated, read-only `InspectCanister` command with
+`LIFECYCLE_INACTIVE`.
 
-Focused host and governed PocketIC evidence now passes. The complete correction
-is assigned to the first reinstall-only 0.110 release instead of reopening the
-accepted 0.109 line. No downstream or network effect is part of this source
-correction.
+The `0.110.2` correction admits only `InspectCanister` to the Prepared Root
+command set. The corrected `CANIC-121` governed journey creates fresh pool
+assets with the production Root-plus-installation-controller set, observes
+both sides of controller finalisation through the real Prepared Root endpoint,
+loses and reconciles each response, imports/resets the 1.9T-floor assets,
+provisions one Component and finishes with exactly one Workload plus one Ready
+asset. Exact measured controlled-cycle conservation and immediate zero-effect
+replay pass.
+
+`CANIC-123` replaces cache-selected helper locking with a projection seeded by
+the consuming workspace's exact lock. Cargo prunes that seed to the generated
+pool-Ledger recovery helper graph; Canic then rejects any package identity not
+present in the seed and proves the projected lock is stable under `--locked`.
+The focused regression retains an older compatible transitive selection even
+when a newer compatible crate is cached, and the governed generated-helper
+PocketIC proof passes.
+
+Focused host and governed PocketIC evidence now passes. The original correction
+remains in `v0.110.0`; its production-boundary and deterministic-lock follow-up
+is the open `0.110.2` batch rather than a reopening of the accepted 0.109 line.
+No downstream or network effect is part of this source correction.
 
 ## B1-B10 State
 
@@ -170,7 +187,7 @@ runtime or repository dependency.
 | Line | Active owner | State |
 | --- | --- | --- |
 | [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.0` published; B1 remains active in the open `0.110.1` batch |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.1` published; `0.110.2` corrects the fresh-estate unblock before B1 resumes |
 | [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
@@ -194,14 +211,16 @@ baseline before any runtime contraction. Initial work:
 - keeps the exact downstream canary read-only and separate from Canic source.
 
 No broad workspace or full PocketIC gate is run during coding. The maintainer's
-release flow owns that boundary.
+release flow owns that boundary. The independent `0.110.2` correctness batch
+must land before this measurement work resumes; it does not promote B2.
 
 ## Next Authorized Action
 
-Continue the open `0.110.1` B1 evidence batch from immutable `v0.110.0`:
-complete the frozen downstream canary, controlled ablations, generated-surface
-inventory and generic-instantiation cohort. Retain the active B1 evidence and
-do not begin B2 until the maintainer accepts the complete B1 baseline.
+Publish the bounded `0.110.2` `CANIC-121` through `CANIC-123` correction, then
+resume B1 from immutable `v0.110.1`: complete the frozen downstream canary,
+controlled ablations, generated-surface inventory and generic-instantiation
+cohort. Retain the active B1 evidence and do not begin B2 until the maintainer
+accepts the complete B1 baseline.
 
 
 

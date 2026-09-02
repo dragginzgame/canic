@@ -330,6 +330,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::BootstrapStore(_)
                     | RootCommand::HandoffPoolCanister(_)
                     | RootCommand::ImportPoolCanister(_)
+                    | RootCommand::InspectCanister(_)
                     | RootCommand::MaintainPool
                     | RootCommand::PrepareComponentRegistry(_)
                     | RootCommand::PrepareFleetActivation
