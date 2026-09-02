@@ -1,6 +1,6 @@
 //! Minimal published-IcyDB schema for Canic lifecycle composition evidence.
 
-use icydb_model::prelude::*;
+use icydb::model::prelude::*;
 
 /// IcyDB model whose application memory stays above Canic's reserved range.
 #[canister(

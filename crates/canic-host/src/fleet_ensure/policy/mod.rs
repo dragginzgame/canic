@@ -2034,36 +2034,102 @@ fn terminal_protocol_observation_bound(
         else {
             return Ok(bound);
         };
-        request
-            .plan
-            .batches
-            .iter()
-            .try_fold(1_u128, |total, batch| {
-                let root_base =
-                    total
-                        .checked_add(5)
-                        .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                            field: "terminal protocol observation count",
-                        })?;
-                batch
-                    .placements
-                    .iter()
-                    .try_fold(root_base, |subtotal, placement| {
-                        placement.entries.iter().try_fold(subtotal, |sum, entry| {
-                            sum.checked_add(terminal_initial_component_observation_count(
-                                entry.limits.maximum_descendants,
-                            ))
-                            .ok_or(
-                                EnsurePolicyError::ArithmeticOverflow {
-                                    field: "terminal protocol observation count",
-                                },
-                            )
-                        })
-                    })
-            })
+        component_provisioning_observation_bound(&request.plan.batches)
             .map(|current_bound| bound.max(current_bound))
     })?;
     Ok(observed_bound.max(planned_bound))
+}
+
+/// Pure pending-observation policy for one exact reviewed effect.
+pub(super) struct EffectObservationPolicy {
+    pub maximum_stalled_observations: u32,
+    pub paced: bool,
+}
+
+/// Keep ordinary effects on the configured bound while giving the one
+/// long-running protocol operation a topology-derived, globally bounded lane.
+pub(super) fn effect_observation_policy(
+    desired: &DesiredFleet,
+    action: &EnsureAction,
+) -> Result<EffectObservationPolicy, EnsurePolicyError> {
+    let EnsureAction::FleetProtocol {
+        action: current, ..
+    } = action
+    else {
+        return Ok(EffectObservationPolicy {
+            maximum_stalled_observations: desired.maximum_stalled_observations,
+            paced: false,
+        });
+    };
+    let crate::fleet_ensure::model::CurrentFleetProtocolAction::ProvisionComponents {
+        request, ..
+    } = current.as_ref()
+    else {
+        return Ok(EffectObservationPolicy {
+            maximum_stalled_observations: desired.maximum_stalled_observations,
+            paced: false,
+        });
+    };
+    let topology_bound = component_provisioning_observation_bound(&request.plan.batches)?;
+    Ok(EffectObservationPolicy {
+        maximum_stalled_observations: paced_protocol_stall_limit(
+            desired.maximum_stalled_observations,
+            topology_bound,
+        ),
+        paced: true,
+    })
+}
+
+const MAXIMUM_PACED_PROTOCOL_STALL_OBSERVATIONS: u32 = 64;
+
+fn paced_protocol_stall_limit(configured: u32, topology_bound: u128) -> u32 {
+    let topology_bound = u32::try_from(topology_bound)
+        .unwrap_or(MAXIMUM_PACED_PROTOCOL_STALL_OBSERVATIONS)
+        .min(MAXIMUM_PACED_PROTOCOL_STALL_OBSERVATIONS);
+    configured.max(topology_bound)
+}
+
+fn component_provisioning_observation_bound(
+    batches: &[canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch],
+) -> Result<u128, EnsurePolicyError> {
+    let root_count =
+        u128::try_from(batches.len()).map_err(|_| EnsurePolicyError::ArithmeticOverflow {
+            field: "terminal protocol observation count",
+        })?;
+    let component_count = batches.iter().try_fold(0_u128, |total, batch| {
+        batch
+            .placements
+            .iter()
+            .try_fold(total, |subtotal, placement| {
+                u128::try_from(placement.entries.len())
+                    .ok()
+                    .and_then(|count| subtotal.checked_add(count))
+                    .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                        field: "terminal protocol observation count",
+                    })
+            })
+    })?;
+    component_provisioning_observation_bound_from_counts(root_count, component_count)
+}
+
+fn component_provisioning_observation_bound_from_counts(
+    root_count: u128,
+    component_count: u128,
+) -> Result<u128, EnsurePolicyError> {
+    let per_component = terminal_initial_component_observation_count(0);
+    root_count
+        .checked_mul(5)
+        .and_then(|root_observations| {
+            component_count
+                .checked_mul(per_component)
+                .and_then(|component_observations| {
+                    root_observations.checked_add(component_observations)
+                })
+        })
+        .and_then(|total| total.checked_add(1))
+        .ok_or(EnsurePolicyError::ArithmeticOverflow {
+            field: "terminal protocol observation count",
+        })
 }
 
 const fn terminal_initial_component_observation_count(_future_descendant_capacity: u32) -> u128 {
@@ -2205,7 +2271,8 @@ fn hash_field(hasher: &mut Sha256, value: &[u8]) {
 #[cfg(test)]
 mod tests {
     use super::{
-        EnsurePolicyError, terminal_initial_component_observation_count,
+        EnsurePolicyError, component_provisioning_observation_bound_from_counts,
+        paced_protocol_stall_limit, terminal_initial_component_observation_count,
         validate_bootstrap_root_pool_import_capacity,
     };
     use crate::fleet_ensure::model::DesiredFleetBootstrapRoot;
@@ -2226,6 +2293,15 @@ mod tests {
                 3,
             );
         }
+    }
+
+    #[test]
+    fn component_provisioning_stall_floor_scales_and_caps() {
+        let topology_bound = component_provisioning_observation_bound_from_counts(1, 11)
+            .expect("bounded one-Root eleven-Component topology");
+        assert_eq!(paced_protocol_stall_limit(8, topology_bound), 39);
+        assert_eq!(paced_protocol_stall_limit(8, 10_000), 64);
+        assert_eq!(paced_protocol_stall_limit(80, topology_bound), 80);
     }
 
     #[test]

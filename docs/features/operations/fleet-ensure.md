@@ -270,6 +270,17 @@ minimum_cycles = "1T"
 wasm = "artifacts/fleet_coordinator.wasm"
 ```
 
+`maximum_stalled_observations` is the base consecutive-unchanged limit for one
+effect. The long-running typed `ProvisionComponents` action raises that limit,
+when necessary, to its exact topology-derived terminal-observation floor: one
+base observation, five per Root and three per top-level Component. That
+automatic floor is capped at 64; an explicitly reviewed larger configured
+limit is still honored. Only passive status queries are paced, using bounded
+exponential delays from 250 milliseconds to five seconds. Any durable semantic
+progress resets the counter. Silence never authorizes a second command; only
+the exact retained typed retryable-failure result may replay the same operation
+identity.
+
 Human-authored `canic.toml`, Fleet policy and cycle-valued CLI options require
 quoted exact values with a case-sensitive `B`, `T`, or `Q` suffix. Exact
 decimals such as `1.5T` and `0.1B` are accepted; bare integers, unsuffixed

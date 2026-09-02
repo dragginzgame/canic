@@ -783,7 +783,7 @@ fn icydb_dependency_graph_is_confined_to_the_test_fixture() {
         dependency == "icydb" || dependency.starts_with("icydb-")
     });
     let expected_icydb_edges = [
-        ("canic-icydb-lifecycle-schema", "normal", "icydb-model"),
+        ("canic-icydb-lifecycle-schema", "normal", "icydb"),
         ("canic_icydb_lifecycle_probe", "build", "icydb"),
         ("canic_icydb_lifecycle_probe", "normal", "icydb"),
     ]

@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.4` keeps long-running Component provisioning observable without
+  duplicate commands by pacing passive status queries, scaling the unchanged-
+  progress budget to the reviewed topology and reporting exact durable phase
+  evidence; it also aligns the isolated IcyDB lifecycle fixture with the
+  current single-package model surface.
 - `0.110.3` completes the CANIC-121 production-adapter boundary with real ICP
   CLI controller finalisation through a Prepared Root, lost-response adoption
   after adapter reconstruction and effect-free terminal replay, corrects the

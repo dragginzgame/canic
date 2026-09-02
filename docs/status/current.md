@@ -25,10 +25,10 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.110.2` at
-`f9009d5ae7be78d4f9dd746431584368770e8364`. Its governed marker records the
+Current development begins from published `v0.110.3` at
+`938c40b73f70123518f62918e49a8846d762d537`. Its governed marker records the
 validated source below; immutable details are in
-[the 0.110 changelog](../changelog/0.110.md). `0.110.3` is the single open
+[the 0.110 changelog](../changelog/0.110.md). `0.110.4` is the single open
 patch draft. Source-development truth comes from Git and the working tree.
 
 ## Maintained 0.109 Contract
@@ -92,83 +92,44 @@ Primary owners:
 
 ## CANIC-119-CANIC-123 First 0.110 Release Corrections
 
-Read-only Toko Miner qualification after the accepted closeout exposed one
-fresh-estate ordering defect in published `v0.109.35`. Five exact Creates and
-the Coordinator, Store and Root installs were Applied, but the first temporary
-pool-controller finalization could not observe its pre-effect cycles through
-the installed Root. The applied identities remained under
-`pending_principals`, while exact cycles and topology were published only after
-every action, including both finalizations, had completed.
+Published `v0.110.0` through `v0.110.3` close the fresh-estate corrections:
+applied Creates retain exact nonterminal identities, cycles and topology;
+pool readiness includes separately reviewed observation/update burn; and only
+controller-authenticated `InspectCanister` is admitted while a Root is
+Prepared. The concrete `IcpEnsurePlatform` proof crosses lost Create and
+controller-update responses, reconstructs the adapter, finishes one Workload
+plus one Ready pool asset and replays without repeating an effect.
 
-The targeted-complete source correction keeps pending identities nonterminal.
-After a Create is durably journaled Applied, workflow separately retains its
-exact observed cycles and sealed desired topology. Resume reconstructs that
-authority from the unchanged plan, journal and state before later actions. The
-production Root observer accepts a pending Principal only when the pending and
-terminal identity slots do not conflict and the retained child kind/parent
-topology is exact. Issued Creates still cannot cross the boundary.
+Published `v0.110.3` also hard-deletes the obsolete temporary pool-Ledger
+helper, contracts offline Medic/state-audit CI output and aligns the PocketIC
+test stack. Exact sealed Root-module authority remains mandatory. Full
+correction and test details are retained in the 0.110 changelog.
 
-`CANIC-120` additionally separates a pool's configured readiness floor from
-its creation funding. Fresh generation adds the exact 1T observation and 100B
-controller-effect ceilings, so the downstream-shaped 1.9T floor produces a 3T
-Create. Planning rejects an insufficient contract before effects with typed
-requested/floor/burn/required/shortfall fields. Resume rejects the preserved
-1,899,998,056,000-cycle applied result before controller or protocol work and
-reports its exact 1,944,000 readiness shortfall.
+## CANIC-125 Bounded Component-Provisioning Observation
 
-The first `CANIC-121` journey created the Coordinator, Root, Store and two pool
-assets but bypassed the installed Root's Prepared endpoint and observed
-controllers directly through PocketIC. Read-only downstream qualification of
-published `v0.110.1` therefore exposed `CANIC-122`: production correctly keeps
-the Root `Prepared` at that boundary, while the Root endpoint incorrectly
-rejected its controller-authenticated, read-only `InspectCanister` command with
-`LIFECYCLE_INACTIVE`.
+GitHub issue 23 reports a retained Fleet Ensure operation with 65 of 66 effects
+Applied and the final `ProvisionComponents` action Issued. The Coordinator was
+still progressing, but eight immediate identical status queries exhausted the
+generic unchanged-observation limit before the distributed operation could
+reach its next durable phase.
 
-The `0.110.2` correction admits only `InspectCanister` to the Prepared Root
-command set. Its host Fleet Ensure proof starts with no canisters, runs the
-reviewed plan and durable journal through real PocketIC management effects,
-loses the first Create response, reconstructs the host adapter, resumes the
-same operation and proves terminal conservation plus immediate zero-effect
-replay. The open `0.110.3` CANIC-121 completion closes the remaining seam in
-the control-plane journey: the concrete `IcpEnsurePlatform` and an isolated
-real ICP CLI identity now finalise both pool controller sets through the
-Prepared Root, lose one successful update response, reconstruct the adapter,
-adopt the exact live result and prove replay does not repeat either effect.
-That production path also proved that the prior 100B update-burn ceiling could
-leave a freshly created pool asset below its 1.9T Ready floor after controller
-finalisation and Root reset. The generated current contract now reviews 1T for
-first observation plus 1T for updates, producing a bounded 3.9T Create. The
-same PocketIC estate then imports/resets both assets, provisions one Component
-and finishes with exactly one Workload plus one Ready asset.
+The open `0.110.4` correction keeps the command/status boundary intact:
 
-Published `v0.110.2` included `CANIC-123` for the then-supported temporary
-pool-Ledger recovery canister. The open `0.110.3` current contract hard-deletes
-that obsolete feature rather than retaining a generated helper graph: its
-artifact/build role, Store publication, Root command/status/stable state, Fleet
-Ensure action, fixtures and dedicated CI owner are gone together. Canic funds
-pool assets through native canister creation or top-up and does not generate a
-plain Ledger-account transfer to a pool Principal.
+- the command is still issued once, and only exact typed retryable-failure
+  evidence may replay its retained operation identity;
+- passive `ProvisionComponents` status observations use bounded exponential
+  pacing from 250 milliseconds to five seconds;
+- the unchanged-progress limit is raised only for that exact protocol action,
+  using a retained topology-derived floor capped at 64 while honoring an
+  explicitly reviewed larger configured limit;
+- any durable phase, Root-count, Component-count or failure change resets the
+  consecutive-stall budget; and
+- a true stall remains typed, resumable and reports the action plus compact
+  durable progress evidence and its full status digest.
 
-The matching status contraction does not relax a retained Root-start
-operation: an exact sealed predecessor or requested successor module remains
-mandatory, and an unrelated live Root rejects before protected status use.
-
-The open batch also contracts offline diagnostics. `canic state audit --ci`
-omits passing detail, while `canic medic --ci` reports consistent counts and
-codes plus the included state-audit result. Bare workspace Medic no longer
-warns merely because no Fleet environment was selected. Live drift remains an
-explicit post-start `canic medic fleet <fleet> --ci` operation.
-
-The open qualification correction also stops admission targets before the
-activation phase can begin, tolerates valid per-Root phase coalescing, and uses
-bounded typed install-rate retries for same-release upgrade proofs. It changes
-test scheduling only; admission protocol and runtime authority are unchanged.
-
-Published `v0.110.2` contains the fresh-estate, Prepared-Root and deterministic-
-lock corrections. The open `0.110.3` batch supplies the final concrete-adapter
-CANIC-121 proof and the temporary-helper hard cut rather than reopening the
-accepted 0.109 line. No downstream or live-network effect is part of this
-source correction.
+Retained current-schema plans and journals require no rewrite. This is a host
+reconciliation correction and does not add runtime capability or alter the
+0.110 contraction design.
 
 ## B1-B10 State
 
@@ -211,7 +172,7 @@ runtime or repository dependency.
 | Line | Active owner | State |
 | --- | --- | --- |
 | [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.2` published; `0.110.3` closes the CANIC-121 qualification seam before B1 resumes |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.3` published; `0.110.4` corrects bounded Component-provisioning observation while B1 remains active |
 | [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
@@ -235,20 +196,16 @@ baseline before any runtime contraction. Initial work:
 - keeps the exact downstream canary read-only and separate from Canic source.
 
 No broad workspace or full PocketIC gate is run during coding. The maintainer's
-release flow owns that boundary. The independent `0.110.3` CANIC-121 proof must
-land before this measurement work resumes; it does not promote B2.
+release flow owns that boundary. Published `v0.110.3` closes the independent
+CANIC-121 proof, so B1 measurement may proceed; B2 remains blocked on accepted
+complete B1 evidence.
 
 ## Next Authorized Action
 
-Complete and publish the bounded `0.110.3` CANIC-121 production-adapter proof,
-then resume B1 from immutable `v0.110.2`: complete the frozen downstream canary,
-controlled ablations, generated-surface inventory and generic-instantiation
-cohort. Retain the active B1 evidence and do not begin B2 until the maintainer
-accepts the complete B1 baseline.
-
-
-
-
-
+Complete the bounded `0.110.4` CANIC-125 host correction, then continue B1 from
+immutable `v0.110.3`: complete the frozen downstream canary, controlled
+ablations, generated-surface inventory and generic-instantiation cohort. Retain
+the active B1 evidence and do not begin B2 until the maintainer accepts the
+complete B1 baseline.
 
 <!-- canic-release-validation: version=0.110.3 source=04e8b5cdb86178ee04ef72f5f0c8ab7156f3291e date=2026-09-02 gate=complete -->
