@@ -600,14 +600,15 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.7.0"]);
     assert_eq!(locked_package_versions(&lock, "ic-cdk-timers"), ["1.0.0"]);
-    assert_eq!(locked_package_versions(&lock, "icydb"), ["0.252.0"]);
+    assert_eq!(locked_package_versions(&lock, "icydb"), ["0.252.1"]);
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
     assert!(workspace_manifest.contains("ic-timers = \"=0.7.0\""));
-    assert!(workspace_manifest.contains("icydb = { version = \"=0.252.0\""));
-    assert!(workspace_manifest.contains("icydb-model = \"=0.252.0\""));
+    assert!(workspace_manifest.contains("icydb = { version = \"=0.252.1\""));
+    assert!(!workspace_manifest.contains("icydb-model ="));
     assert!(!workspace_manifest.contains("ic-cdk-timers ="));
 
+    let mut direct_icydb_model_consumers = BTreeSet::new();
     let mut timer_consumers = BTreeSet::from(["Cargo.toml".to_string()]);
     let mut raw_provider_consumers = BTreeSet::new();
     for source_root in PRODUCTION_SOURCE_ROOTS {
@@ -628,10 +629,17 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
                 {
                     raw_provider_consumers.insert(path.to_string());
                 }
+                if manifest
+                    .lines()
+                    .any(|line| line.trim_start().starts_with("icydb-model ="))
+                {
+                    direct_icydb_model_consumers.insert(path.to_string());
+                }
             },
         );
     }
 
+    assert!(direct_icydb_model_consumers.is_empty());
     assert_eq!(timer_consumers, expected_timer_manifest_consumers());
     assert!(raw_provider_consumers.is_empty());
 }

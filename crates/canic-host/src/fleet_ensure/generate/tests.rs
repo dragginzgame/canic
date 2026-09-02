@@ -3495,6 +3495,15 @@ impl EnsurePlatform for VersionlessPlanningPlatform {
             .map_err(io::Error::other)
     }
 
+    fn pace_effect_observation(
+        &mut self,
+        action: &EnsureAction,
+        consecutive_unchanged_observations: u32,
+    ) {
+        self.inner
+            .pace_effect_observation(action, consecutive_unchanged_observations);
+    }
+
     fn observe_root_management(
         &mut self,
         state: &FleetEnsureStateRecord,
@@ -3730,6 +3739,13 @@ impl EnsurePlatform for RetainedEnsurePlatform {
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
         self.desired = desired.clone();
         Ok(())
+    }
+
+    fn pace_effect_observation(
+        &mut self,
+        _action: &EnsureAction,
+        _consecutive_unchanged_observations: u32,
+    ) {
     }
 
     fn observe(

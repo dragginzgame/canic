@@ -1005,6 +1005,24 @@ fn component_provisioning_observation(
         failure.failed_at_ns = 0;
     }
     let mut observation = observation(applied, &durable_progress)?;
+    observation.progress_identity = format!(
+        "component-provisioning:phase={:?}:accepted_roots={}/{}:provisioned_roots={}:directory_roots={}/{}:runtime_roots={}/{}:components={}:pending_failure={:?}:sha256={}",
+        status.phase,
+        status.accepted_root_count,
+        status.root_batch_count,
+        status.provisioned_root_count,
+        status.directory_confirmed_root_count,
+        status.directory_confirmation_root_count,
+        status.runtime_activated_root_count,
+        status.root_batch_count,
+        status.component_count,
+        status.pending_root_failure.map(|failure| (
+            failure.fleet_subnet_root,
+            failure.stage,
+            failure.diagnostic_code
+        )),
+        observation.progress_identity,
+    );
     if !applied && status.pending_root_failure.is_some() {
         observation.retry = EffectRetry::ReplayExactIssuedCommand;
     }

@@ -81,8 +81,10 @@ pub(super) struct MockPlatform {
     ledger_fee_cycles: u128,
     mutations: BTreeMap<String, u32>,
     operator_cycles: u128,
+    paced_observations: Vec<u32>,
     protocol_command_only: bool,
     protocol_action: Option<EnsureAction>,
+    protocol_pending_waits: u32,
     protocol_ready: BTreeSet<String>,
     protocol_retry: EffectRetry,
     root_owned_topology_policy: MockRootOwnedTopologyPolicy,
@@ -118,8 +120,10 @@ impl MockPlatform {
             ledger_fee_cycles,
             mutations: BTreeMap::new(),
             operator_cycles: 100_000,
+            paced_observations: Vec::new(),
             protocol_command_only: false,
             protocol_action: None,
+            protocol_pending_waits: 0,
             protocol_ready: BTreeSet::new(),
             protocol_retry: EffectRetry::None,
             root_owned_topology_policy: MockRootOwnedTopologyPolicy::Direct,
@@ -513,6 +517,22 @@ impl EnsurePlatform for MockPlatform {
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
         self.desired = desired.clone();
         Ok(())
+    }
+
+    fn pace_effect_observation(
+        &mut self,
+        action: &EnsureAction,
+        consecutive_unchanged_observations: u32,
+    ) {
+        self.paced_observations
+            .push(consecutive_unchanged_observations);
+        if self.protocol_pending_waits == 0 {
+            return;
+        }
+        self.protocol_pending_waits -= 1;
+        if self.protocol_pending_waits == 0 {
+            self.protocol_ready.insert(action.name().to_string());
+        }
     }
 
     fn observe(
@@ -2757,7 +2777,10 @@ fn consecutive_stalls_are_bounded_and_real_progress_resets_the_budget() {
     .expect_err("second consecutive stall reaches the configured bound");
     assert!(matches!(
         second,
-        workflow::EnsureWorkflowError::Stalled { observations: 2 }
+        workflow::EnsureWorkflowError::Stalled {
+            observations: 2,
+            ..
+        }
     ));
     assert_eq!(platform.mutations.values().sum::<u32>(), 0);
 
@@ -3223,6 +3246,85 @@ fn typed_fleet_protocol_is_issued_once_and_requires_terminal_status() {
     )
     .expect("apply immediate terminal replay");
     assert!(replay.terminal);
+    assert_eq!(platform.mutations.get(&action_hash), Some(&1));
+    assert_eq!(platform.mutations.values().sum::<u32>(), mutation_count);
+}
+
+#[test]
+fn long_running_component_provisioning_is_paced_past_eight_observations_without_reissue() {
+    let mut fixture = fixture();
+    fixture.desired.protocol = Some(DesiredFleetProtocol {
+        app_config: "canic.toml".to_string(),
+        component_group_placements: Vec::new(),
+        coordinator_candid: "coordinator.did".to_string(),
+        root_candid: "root.did".to_string(),
+        store_candid: "store.did".to_string(),
+    });
+    fixture.desired.maximum_stalled_observations = 12;
+    fixture
+        .desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+        .expect("fixture Coordinator")
+        .wasm = None;
+    fixture.platform.desired = fixture.desired.clone();
+    fixture.platform.protocol_command_only = true;
+    fixture.platform.protocol_pending_waits = 10;
+    fixture.platform.typed_protocol = true;
+    let source = "b".repeat(64);
+    let mut platform = fixture.platform;
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut platform,
+    )
+    .expect("compile reviewed long-running protocol plan");
+    let action_hash = planned
+        .plan
+        .protocol_actions
+        .first()
+        .map(crate::fleet_ensure::ops::action_sha256)
+        .expect("typed protocol action");
+
+    let terminal = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut platform,
+    )
+    .expect("paced observations reach terminal protocol status");
+
+    assert!(terminal.terminal);
+    assert_eq!(platform.paced_observations, (1..=10).collect::<Vec<_>>());
+    assert_eq!(platform.mutations.get(&action_hash), Some(&1));
+
+    let mutation_count = platform.mutations.values().sum::<u32>();
+    let successor = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut platform,
+    )
+    .expect("plan immediate terminal replay");
+    let replay = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        &successor.plan.plan_sha256,
+        &mut platform,
+    )
+    .expect("terminal replay is effect-free");
+    assert!(replay.terminal);
+    assert_eq!(platform.paced_observations, (1..=10).collect::<Vec<_>>());
     assert_eq!(platform.mutations.get(&action_hash), Some(&1));
     assert_eq!(platform.mutations.values().sum::<u32>(), mutation_count);
 }
@@ -3797,6 +3899,13 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
             self.desired = desired.clone();
             Ok(())
+        }
+
+        fn pace_effect_observation(
+            &mut self,
+            _action: &EnsureAction,
+            _consecutive_unchanged_observations: u32,
+        ) {
         }
 
         fn observe(

@@ -192,6 +192,17 @@ pub trait EnsurePlatform {
         Ok(None)
     }
 
+    /// Pace the next passive observation of one typed asynchronous effect.
+    ///
+    /// The workflow calls this only after retaining a valid nonterminal
+    /// observation. Production adapters wait without issuing an IC effect;
+    /// deterministic adapters may advance their simulated clock instead.
+    fn pace_effect_observation(
+        &mut self,
+        action: &EnsureAction,
+        consecutive_unchanged_observations: u32,
+    );
+
     fn apply(
         &mut self,
         operation_id: &str,

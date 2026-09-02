@@ -20,8 +20,8 @@ use crate::fleet_ensure::{
     },
     policy::{
         EnsurePolicyError, RootStartPlanInput, compile_plan, compile_root_start_prerequisite_plan,
-        expected_plan_sha256, operation_id, recompile_root_start_prerequisite_plan,
-        validate_path_identity, validate_path_labels,
+        effect_observation_policy, expected_plan_sha256, operation_id,
+        recompile_root_start_prerequisite_plan, validate_path_identity, validate_path_labels,
     },
 };
 use canic_core::cdk::types::Cycles;
@@ -82,9 +82,13 @@ where
     JournalIntegrity,
 
     #[error(
-        "Fleet ensure made no progress for {observations} consecutive observations; operation remains resumable"
+        "Fleet ensure action {action} made no progress for {observations} consecutive observations (last progress: {progress_identity}); operation remains resumable"
     )]
-    Stalled { observations: u32 },
+    Stalled {
+        action: String,
+        observations: u32,
+        progress_identity: String,
+    },
 
     #[error(
         "selected Cycles Ledger account has {actual} cycles, below reviewed maximum debit {required}"
@@ -601,6 +605,7 @@ where
         let mut deferred_controller_observation = false;
         for (index, action) in actions.iter().enumerate() {
             let action_hash = action_sha256(action);
+            let observation_policy = effect_observation_policy(operation_desired, action)?;
             if journal.effects.len() <= index {
                 let pre_cycles = platform
                     .action_cycles(action, &state)
@@ -803,6 +808,7 @@ where
                     ) {
                         return Err(EnsureWorkflowError::JournalIntegrity);
                     }
+                    let progress_identity = observed.progress_identity.clone();
                     if record.progress_identity.as_deref() == Some(&observed.progress_identity) {
                         journal.stalled_observations =
                             journal.stalled_observations.saturating_add(1);
@@ -812,10 +818,12 @@ where
                     }
                     write_journal(&paths, &journal)?;
                     if journal.stalled_observations
-                        >= operation_desired.maximum_stalled_observations
+                        >= observation_policy.maximum_stalled_observations
                     {
                         return Err(EnsureWorkflowError::Stalled {
+                            action: action.name().to_string(),
                             observations: journal.stalled_observations,
+                            progress_identity,
                         });
                     }
                     deferred_controller_observation = true;
@@ -827,14 +835,20 @@ where
                         match platform.apply(&journal.operation_id, action, record, &state) {
                             Ok(outcome) => outcome,
                             Err(source) => {
+                                let progress_identity = record
+                                    .progress_identity
+                                    .clone()
+                                    .unwrap_or_else(|| "effect-call-failed".to_string());
                                 journal.stalled_observations =
                                     journal.stalled_observations.saturating_add(1);
                                 write_journal(&paths, &journal)?;
                                 if journal.stalled_observations
-                                    >= operation_desired.maximum_stalled_observations
+                                    >= observation_policy.maximum_stalled_observations
                                 {
                                     return Err(EnsureWorkflowError::Stalled {
+                                        action: action.name().to_string(),
                                         observations: journal.stalled_observations,
+                                        progress_identity,
                                     });
                                 }
                                 return Err(EnsureWorkflowError::Platform(source));
@@ -903,11 +917,20 @@ where
                     record.progress_identity = Some(observed.progress_identity);
                     journal.stalled_observations = 0;
                 }
+                let progress_identity = record
+                    .progress_identity
+                    .clone()
+                    .ok_or(EnsureWorkflowError::JournalIntegrity)?;
                 write_journal(&paths, &journal)?;
-                if journal.stalled_observations >= operation_desired.maximum_stalled_observations {
+                if journal.stalled_observations >= observation_policy.maximum_stalled_observations {
                     return Err(EnsureWorkflowError::Stalled {
+                        action: action.name().to_string(),
                         observations: journal.stalled_observations,
+                        progress_identity,
                     });
+                }
+                if observation_policy.paced {
+                    platform.pace_effect_observation(action, journal.stalled_observations);
                 }
             }
         }

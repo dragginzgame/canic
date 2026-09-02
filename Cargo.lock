@@ -607,7 +607,7 @@ dependencies = [
 name = "canic-icydb-lifecycle-schema"
 version = "0.110.3"
 dependencies = [
- "icydb-model",
+ "icydb",
 ]
 
 [[package]]
@@ -2679,9 +2679,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.252.0"
+version = "0.252.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc8945164878ea29f8f32a4cace591320946cd35dd58181ee2cd4df081e03aa6"
+checksum = "7fc87e3e646bebb95f52db9e329b8f573fa0ddb92692ca898382281544e599a6"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2697,9 +2697,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.252.0"
+version = "0.252.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1959baaa758b9cfa5647921af15ae1cc15e456537bfac2b075c6937b111bd409"
+checksum = "5d80fa72c903ed21633868ba39de3d23e35adc4dd6d5b11bf3a612f460afe485"
 dependencies = [
  "candid",
  "getrandom 0.4.3",
@@ -2722,18 +2722,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.252.0"
+version = "0.252.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fa7e8bc3ac81f1c23785496511acedb84c7834074990c983bba02f06337d29d"
+checksum = "4333870e446f52dd78bdc6b76c640eef1b057797deac3a732e30ec75cc90de8f"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.252.0"
+version = "0.252.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2716e85b920aa2eecf7ec8ad229244d4fa69a025c04cc23af33fbab6201eee54"
+checksum = "68b5aa3826fdc054d2db6fb3f8ed0b97886a60a708a879defd0153290cb75b6c"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2753,9 +2753,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.252.0"
+version = "0.252.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62b14f793bf257bbf6e00ddb795c4a99a0eebc9cf6c727371a53804f046f61b7"
+checksum = "76a06d323d9c96195eac12e20fd56ab5828d1e8b4185e9e4bbece04e6a2db948"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2770,9 +2770,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.252.0"
+version = "0.252.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff008ad75a7c55e745e3aa0a258843017c24374a62539006c3d2c9f044378ba0"
+checksum = "3bc0660f4d1bfdc41723d7a09092c9ad6659503edc1963b419585980ed8f337f"
 dependencies = [
  "candid",
  "derive_more",

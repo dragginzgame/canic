@@ -42,7 +42,8 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -525,6 +526,18 @@ pub struct IcpEnsurePlatform {
     icp: IcpCli,
     recovery_reinstalls: RefCell<BTreeSet<String>>,
     root: PathBuf,
+}
+
+const INITIAL_PROTOCOL_OBSERVATION_DELAY: Duration = Duration::from_millis(250);
+const MAXIMUM_PROTOCOL_OBSERVATION_DELAY: Duration = Duration::from_secs(5);
+
+fn protocol_observation_delay(consecutive_unchanged_observations: u32) -> Duration {
+    let exponent = consecutive_unchanged_observations.saturating_sub(1).min(5);
+    let multiplier = 1_u32.checked_shl(exponent).unwrap_or(u32::MAX);
+    INITIAL_PROTOCOL_OBSERVATION_DELAY
+        .checked_mul(multiplier)
+        .unwrap_or(MAXIMUM_PROTOCOL_OBSERVATION_DELAY)
+        .min(MAXIMUM_PROTOCOL_OBSERVATION_DELAY)
 }
 
 #[derive(Clone, Copy)]
@@ -1821,6 +1834,16 @@ impl EnsurePlatform for IcpEnsurePlatform {
         Ok(())
     }
 
+    fn pace_effect_observation(
+        &mut self,
+        _action: &EnsureAction,
+        consecutive_unchanged_observations: u32,
+    ) {
+        thread::sleep(protocol_observation_delay(
+            consecutive_unchanged_observations,
+        ));
+    }
+
     fn observe_root_management(
         &mut self,
         state: &FleetEnsureStateRecord,
@@ -3052,6 +3075,16 @@ const fn rejection_code_name(code: RejectionCode) -> &'static str {
 mod tests {
     use super::*;
     use canic_core::dto::pool::CanisterPoolAssetStatus;
+
+    #[test]
+    fn protocol_observation_delay_uses_bounded_exponential_backoff() {
+        assert_eq!(protocol_observation_delay(0), Duration::from_millis(250));
+        assert_eq!(protocol_observation_delay(1), Duration::from_millis(250));
+        assert_eq!(protocol_observation_delay(2), Duration::from_millis(500));
+        assert_eq!(protocol_observation_delay(5), Duration::from_secs(4));
+        assert_eq!(protocol_observation_delay(6), Duration::from_secs(5));
+        assert_eq!(protocol_observation_delay(u32::MAX), Duration::from_secs(5));
+    }
 
     #[cfg(unix)]
     #[test]
