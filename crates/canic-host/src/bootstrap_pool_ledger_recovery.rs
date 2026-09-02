@@ -50,30 +50,10 @@ pub fn build_pool_ledger_recovery_artifact(
     let dependencies = resolved_wrapper_dependencies(&metadata, canic_package)?;
     let wrapper_root = context.icp_root.join(GENERATED_WRAPPER_RELATIVE);
     fs::create_dir_all(wrapper_root.join("src"))?;
-    let mut cargo_toml = format!(
-        "[package]\n\
-name = \"{GENERATED_WRAPPER_PACKAGE_NAME}\"\n\
-version = \"0.0.0\"\n\
-edition = \"2024\"\n\
-publish = false\n\n\
-[workspace]\n\
-resolver = \"2\"\n\n\
-[lib]\n\
-name = \"{GENERATED_WRAPPER_CRATE_NAME}\"\n\
-crate-type = [\"cdylib\", \"rlib\"]\n\n\
-[dependencies]\n\
-ic-cdk = \"={}\"\n\
-candid = {{ version = \"={}\", default-features = false }}\n\
-crypto-common = \"={}\"\n\
-serde = {{ version = \"={}\", default-features = false, features = [\"derive\"] }}\n",
-        dependencies.ic_cdk_version,
-        dependencies.candid_version,
-        dependencies.crypto_common_version,
-        dependencies.serde_version,
-    );
-    render_profile(&mut cargo_toml, "release", RELEASE_PROFILE);
-    render_profile(&mut cargo_toml, "fast", FAST_PROFILE);
-    fs::write(wrapper_root.join("Cargo.toml"), cargo_toml)?;
+    fs::write(
+        wrapper_root.join("Cargo.toml"),
+        render_helper_manifest(&dependencies),
+    )?;
     fs::write(
         wrapper_root.join("src/lib.rs"),
         include_str!("bootstrap_pool_ledger_recovery/canister.rs.txt"),
@@ -117,6 +97,35 @@ serde = {{ version = \"={}\", default-features = false, features = [\"derive\"] 
         &built_wasm_path,
         &candid,
     )
+}
+
+fn render_helper_manifest(
+    dependencies: &crate::bootstrap_store::GeneratedWrapperDependencies,
+) -> String {
+    let mut cargo_toml = format!(
+        "[package]\n\
+name = \"{GENERATED_WRAPPER_PACKAGE_NAME}\"\n\
+version = \"0.0.0\"\n\
+edition = \"2024\"\n\
+publish = false\n\n\
+[workspace]\n\
+resolver = \"2\"\n\n\
+[lib]\n\
+name = \"{GENERATED_WRAPPER_CRATE_NAME}\"\n\
+crate-type = [\"cdylib\", \"rlib\"]\n\n\
+[dependencies]\n\
+ic-cdk = \"={}\"\n\
+candid = {{ version = \"={}\", default-features = false }}\n\
+crypto-common = \"={}\"\n\
+serde = {{ version = \"={}\", default-features = false, features = [\"derive\"] }}\n",
+        dependencies.ic_cdk_version,
+        dependencies.candid_version,
+        dependencies.crypto_common_version,
+        dependencies.serde_version,
+    );
+    render_profile(&mut cargo_toml, "release", RELEASE_PROFILE);
+    render_profile(&mut cargo_toml, "fast", FAST_PROFILE);
+    cargo_toml
 }
 
 fn finalize_pool_ledger_recovery_artifact(
@@ -171,10 +180,15 @@ fn generate_verified_helper_lock(
     wrapper_root: &std::path::Path,
     workspace_lock: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let helper_lock = wrapper_root.join("Cargo.lock");
+    fs::copy(workspace_lock, &helper_lock)?;
+
     let mut command = cargo_command();
     context.apply_to_command(&mut command);
     command.current_dir(&context.workspace_root).args([
-        "generate-lockfile",
+        "metadata",
+        "--format-version",
+        "1",
         "--offline",
         "--manifest-path",
         &wrapper_root.join("Cargo.toml").display().to_string(),
@@ -182,12 +196,33 @@ fn generate_verified_helper_lock(
     let output = command.output()?;
     if !output.status.success() {
         return Err(format!(
-            "Cargo failed to lock the pool Ledger recovery helper: {}",
+            "Cargo failed to project the workspace lock for the pool Ledger recovery helper: {}",
             String::from_utf8_lossy(&output.stderr)
         )
         .into());
     }
-    require_helper_lock_within_workspace(workspace_lock, &wrapper_root.join("Cargo.lock"))
+    require_helper_lock_within_workspace(workspace_lock, &helper_lock)?;
+
+    let mut command = cargo_command();
+    context.apply_to_command(&mut command);
+    command.current_dir(&context.workspace_root).args([
+        "metadata",
+        "--format-version",
+        "1",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        &wrapper_root.join("Cargo.toml").display().to_string(),
+    ]);
+    let output = command.output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "the workspace-locked pool Ledger recovery helper dependency projection is invalid: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    Ok(())
 }
 
 fn require_helper_lock_within_workspace(

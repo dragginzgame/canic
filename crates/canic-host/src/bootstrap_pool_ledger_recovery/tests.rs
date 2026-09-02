@@ -6,6 +6,110 @@ use canic_core::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
 use ic_testkit::pic::PocketIcBuilder;
 use std::path::Path;
 
+#[test]
+fn generated_helper_lock_is_an_exact_workspace_lock_projection() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let metadata = cargo_metadata(&workspace_root, true).expect("read exact workspace graph");
+    let canic_package = resolved_canic_package(&metadata).expect("resolve Canic package");
+    let dependencies = resolved_wrapper_dependencies(&metadata, canic_package)
+        .expect("resolve exact helper dependencies");
+    let root = temp_dir("canic-pool-ledger-recovery-lock");
+    let wrapper_root = root.join("wrapper");
+    fs::create_dir_all(wrapper_root.join("src")).expect("create generated helper fixture");
+    fs::write(
+        wrapper_root.join("Cargo.toml"),
+        render_helper_manifest(&dependencies),
+    )
+    .expect("write generated helper manifest");
+    fs::write(wrapper_root.join("src/lib.rs"), "pub fn helper() {}\n")
+        .expect("write generated helper source");
+    let context = WorkspaceBuildContext {
+        role: POOL_LEDGER_RECOVERY_ROLE.to_string(),
+        profile: CanisterBuildProfile::Fast,
+        environment: "local".to_string(),
+        build_network: BuildNetwork::Local,
+        workspace_root: workspace_root.clone(),
+        icp_root: root.clone(),
+        config_path: workspace_root.join("canic.toml"),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    let workspace_lock = workspace_root.join("Cargo.lock");
+    generate_verified_helper_lock(&context, &wrapper_root, &workspace_lock)
+        .expect("project and validate the workspace-locked helper graph");
+
+    let helper_lock = wrapper_root.join("Cargo.lock");
+    require_helper_lock_within_workspace(&workspace_lock, &helper_lock)
+        .expect("every helper identity belongs to the workspace lock");
+    let helper: toml::Value =
+        toml::from_str(&fs::read_to_string(helper_lock).expect("read generated helper lock"))
+            .expect("decode generated helper lock");
+    assert!(helper["package"].as_array().is_some_and(|packages| {
+        packages.iter().any(|package| {
+            package.get("name").and_then(toml::Value::as_str)
+                == Some(GENERATED_WRAPPER_PACKAGE_NAME)
+        })
+    }));
+    fs::remove_dir_all(root).expect("remove generated helper lock fixture");
+}
+
+#[test]
+fn workspace_projection_preserves_an_older_compatible_transitive_identity() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = temp_dir("canic-pool-ledger-recovery-older-transitive");
+    let wrapper_root = root.join("wrapper");
+    fs::create_dir_all(wrapper_root.join("src")).expect("create older transitive fixture");
+    let workspace_lock = root.join("workspace.lock");
+    fs::write(
+        &workspace_lock,
+        r#"version = 4
+
+[[package]]
+name = "workspace-seed"
+version = "0.0.0"
+dependencies = ["smallvec"]
+
+[[package]]
+name = "smallvec"
+version = "1.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+"#,
+    )
+    .expect("write older workspace lock fixture");
+    fs::write(
+        wrapper_root.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"{GENERATED_WRAPPER_PACKAGE_NAME}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[workspace]\nresolver = \"2\"\n\n[dependencies]\nsmallvec = \"1\"\n"
+        ),
+    )
+    .expect("write generated helper manifest");
+    fs::write(wrapper_root.join("src/lib.rs"), "pub fn helper() {}\n")
+        .expect("write generated helper source");
+    let context = WorkspaceBuildContext {
+        role: POOL_LEDGER_RECOVERY_ROLE.to_string(),
+        profile: CanisterBuildProfile::Fast,
+        environment: "local".to_string(),
+        build_network: BuildNetwork::Local,
+        workspace_root: workspace_root.clone(),
+        icp_root: root.clone(),
+        config_path: workspace_root.join("canic.toml"),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    generate_verified_helper_lock(&context, &wrapper_root, &workspace_lock)
+        .expect("project supplied workspace identities without selecting the newer cached version");
+    let helper_lock = wrapper_root.join("Cargo.lock");
+    let helper = fs::read_to_string(&helper_lock).expect("read projected helper lock");
+    assert!(helper.contains("version = \"1.15.2\""));
+    assert!(!helper.contains("1.16.0"));
+    require_helper_lock_within_workspace(&workspace_lock, &helper_lock)
+        .expect("projected helper remains an exact workspace subset");
+    fs::remove_dir_all(root).expect("remove older transitive fixture");
+}
+
 #[derive(CandidType)]
 struct LedgerInit {
     canister_ids: Vec<Principal>,

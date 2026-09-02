@@ -35,6 +35,8 @@ mod tests {
         AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
     };
     #[cfg(test)]
+    use canic::dto::canister::{CanisterInspectionRequest, CanisterStatusResponse};
+    #[cfg(test)]
     use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest;
     #[cfg(test)]
     use canic::dto::pool::{
@@ -237,6 +239,8 @@ mod tests {
         BootstrapStore(RootStoreBootstrapRequest),
         #[cfg(test)]
         ImportPoolCanister(PoolCanisterRequest),
+        #[cfg(test)]
+        InspectCanister(CanisterInspectionRequest),
         MaintainPool,
         #[cfg(test)]
         PrepareAuthoritySnapshot(AuthoritySnapshotRequest),
@@ -254,16 +258,15 @@ mod tests {
     }
 
     #[derive(CandidType, Debug, Deserialize)]
-    #[cfg_attr(
-        not(test),
-        expect(
-            clippy::large_enum_variant,
-            reason = "the non-test decoder mirrors the direct Root command wire"
-        )
+    #[expect(
+        clippy::large_enum_variant,
+        reason = "the decoder mirrors the direct Root command wire"
     )]
     enum RootCommandResponseFragment {
         #[cfg(test)]
         ImportPoolCanister(PoolImportResponse),
+        #[cfg(test)]
+        InspectCanister(CanisterStatusResponse),
         MaintainPool(PoolMaintenanceResponse),
         OperationAccepted(OperationReceipt),
         #[cfg(test)]
@@ -2159,6 +2162,7 @@ mod tests {
             canic_host::fleet_ensure::fresh_pool_creation_funding(readiness_floor)
                 .expect("generated fresh-pool creation funding");
         assert_eq!(pool_creation_funding, 3_000_000_000_000);
+        let installation_controller = Principal::from_slice(&[0x46; 29]);
         let requested = [
             ("coordinator", COORDINATOR_INSTALL_CYCLES),
             ("root", ROOT_INSTALL_CYCLES),
@@ -2169,13 +2173,27 @@ mod tests {
         let mut creations = BTreeMap::<String, (Principal, String, u32)>::new();
         let mut placement_subnet = None;
         for (name, cycles) in requested {
+            let creation_controllers = name.starts_with("pool-").then(|| {
+                vec![
+                    creations
+                        .get("root")
+                        .expect("fresh Root precedes pool creation")
+                        .0,
+                    installation_controller,
+                ]
+            });
             let create = |pic: &PocketIc, placement_subnet: Option<Principal>| {
                 pic.create_canister_with_params(
                     None,
                     CreateCanisterParams {
                         cycles: Some(cycles),
                         placement: placement_subnet.map(CreateCanisterPlacement::SubnetId),
-                        ..CreateCanisterParams::default()
+                        settings: creation_controllers.clone().map(|controllers| {
+                            pocket_ic::CanisterSettings {
+                                controllers: Some(controllers),
+                                ..pocket_ic::CanisterSettings::default()
+                            }
+                        }),
                     },
                 )
                 .expect("apply exact fresh Create")
@@ -2240,17 +2258,49 @@ mod tests {
             store
         );
 
+        assert_eq!(
+            installed
+                .init_args
+                .authority
+                .wasm_store_authority
+                .installation_controller,
+            installation_controller
+        );
         let mut controller_mutations = BTreeMap::new();
         for pool in pools {
-            pic.set_controllers(pool, None, vec![root])
+            let RootCommandResponseFragment::InspectCanister(before) = root_command(
+                &pic,
+                root,
+                RootCommandFragment::InspectCanister(CanisterInspectionRequest {
+                    canister_id: pool,
+                }),
+            )
+            .expect("Prepared Root observes fresh pool before controller finalization") else {
+                panic!("Root returned a differently correlated inspection response");
+            };
+            let mut observed_before = before.settings.controllers;
+            observed_before.sort();
+            let mut expected_before = vec![root, installation_controller];
+            expected_before.sort();
+            assert_eq!(observed_before, expected_before);
+
+            pic.set_controllers(pool, Some(installation_controller), vec![root])
                 .expect("finalize fresh pool controller");
             controller_mutations.insert(pool, 1_u32);
 
-            // Lose each update response; exact live Root-only control closes the intent.
-            let status = pic
-                .canister_status(pool, Some(root))
-                .expect("observe Root-owned pool after lost controller response");
-            assert_eq!(status.settings.controllers, vec![root]);
+            // Lose each update response; the same Prepared-Root observation used by
+            // the production host closes exact live Root-only control.
+            let RootCommandResponseFragment::InspectCanister(after) = root_command(
+                &pic,
+                root,
+                RootCommandFragment::InspectCanister(CanisterInspectionRequest {
+                    canister_id: pool,
+                }),
+            )
+            .expect("Prepared Root observes pool after lost controller response") else {
+                panic!("Root returned a differently correlated inspection response");
+            };
+            assert_eq!(after.settings.controllers, vec![root]);
             assert_eq!(controller_mutations[&pool], 1);
         }
 
@@ -2336,7 +2386,7 @@ mod tests {
             schema_version: FLEET_ENSURE_SCHEMA_VERSION,
             topology: BTreeMap::new(),
         };
-        let authorities = vec![installed.init_args.authority.clone()];
+        let authorities = vec![installed.init_args.authority];
         let registry_sequence = compile_current_registry_sequence(
             &desired,
             &state,
@@ -2356,11 +2406,6 @@ mod tests {
             operation_id,
         )
         .expect("compile complete zero-estate production protocol");
-        let installation_controller = installed
-            .init_args
-            .authority
-            .wasm_store_authority
-            .installation_controller;
         for step in &actions {
             issue_current_protocol_step(&pic, step, installation_controller);
             if matches!(
