@@ -528,7 +528,6 @@ fn infrastructure_output(
 ) -> Result<CanicInfrastructureArtifactBuildOutput, BuildCommandError> {
     let role = match built.role.as_str() {
         "fleet_coordinator" => CanicInfrastructureRole::FleetCoordinator,
-        "pool_ledger_recovery" => CanicInfrastructureRole::PoolLedgerRecovery,
         "root" => CanicInfrastructureRole::FleetSubnetRoot,
         "wasm_store" => CanicInfrastructureRole::WasmStore,
         role => {
@@ -570,16 +569,10 @@ fn artifact_relative_path(icp_root: &Path, path: &Path) -> Result<String, BuildC
 fn build_builtin_infrastructure(
     context: &WorkspaceBuildContext,
 ) -> Result<Vec<InfrastructureCanisterArtifactBuildOutput>, BuildCommandError> {
-    const BUILT_INS: [(&str, InfrastructureDeploymentScope); 3] = [
+    const BUILT_INS: [(&str, InfrastructureDeploymentScope); 2] = [
         ("fleet_coordinator", InfrastructureDeploymentScope::Fleet),
-        (
-            "pool_ledger_recovery",
-            InfrastructureDeploymentScope::Support,
-        ),
         ("wasm_store", InfrastructureDeploymentScope::FleetSubnet),
     ];
-
-    canic_host::prepare_pool_ledger_recovery_build(context).map_err(BuildCommandError::Build)?;
 
     let mut outputs = Vec::with_capacity(BUILT_INS.len());
     for (index, (role, deployment_scope)) in BUILT_INS.iter().enumerate() {
@@ -662,7 +655,6 @@ impl InfrastructureArtifactTiming {
 enum InfrastructureDeploymentScope {
     Fleet,
     FleetSubnet,
-    Support,
 }
 
 impl InfrastructureDeploymentScope {
@@ -670,7 +662,6 @@ impl InfrastructureDeploymentScope {
         match self {
             Self::Fleet => "1 / Fleet",
             Self::FleetSubnet => "1 / Fleet Subnet",
-            Self::Support => "temporary support",
         }
     }
 }

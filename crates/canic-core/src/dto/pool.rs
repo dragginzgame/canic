@@ -2,7 +2,7 @@
 
 use crate::{
     cdk::types::Cycles,
-    ids::{ComponentInstanceId, FleetSubnetCanisterPoolConfig, ReleaseBuildId},
+    ids::{ComponentInstanceId, FleetSubnetCanisterPoolConfig},
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -49,9 +49,6 @@ pub enum CanisterPoolAssetStatus {
     Recycling {
         claim: CanisterPoolClaim,
         reset: CanisterPoolRecycleReset,
-    },
-    RecoveringLedger {
-        operation_id: [u8; 32],
     },
     HandingOff {
         recipient: Principal,
@@ -135,62 +132,6 @@ pub struct PoolHandoffRequest {
     pub recipient: Principal,
 }
 
-/// Exact release-bound helper artifact used for one empty-asset Ledger recovery.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PoolLedgerRecoveryArtifact {
-    pub candid_sha256: [u8; 32],
-    pub payload_hash: [u8; 32],
-    pub payload_size_bytes: u64,
-    pub raw_module_hash: [u8; 32],
-    pub release_build_id: ReleaseBuildId,
-}
-
-/// Reviewed authority for converting one empty pool asset's Ledger balance to native cycles.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PoolLedgerRecoveryRequest {
-    pub artifact: PoolLedgerRecoveryArtifact,
-    pub canister_id: Principal,
-    pub created_at_time_ns: u64,
-    pub cycles_ledger: Principal,
-    pub ledger_balance: Cycles,
-    pub ledger_fee: Cycles,
-    pub maximum_execution_burn_cycles: Cycles,
-    pub operation_id: [u8; 32],
-    pub withdrawal_amount: Cycles,
-}
-
-/// Durable phase of one Root-owned empty-pool Ledger recovery.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum PoolLedgerRecoveryPhase {
-    Prepared,
-    HelperInstallIssued,
-    HelperInstalled,
-    WithdrawalIssued,
-    WithdrawalVerified,
-    HelperUninstallIssued,
-    Complete,
-}
-
-/// Terminal proof that the Ledger debit became native cycles on the same pool Principal.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PoolLedgerRecoveryReceipt {
-    pub block_index: u64,
-    pub completed_at_ns: u64,
-    pub final_native_cycles: Cycles,
-    pub operation_id: [u8; 32],
-    pub request: PoolLedgerRecoveryRequest,
-}
-
-/// Protected current-or-last result for one exact pool Ledger recovery identity.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PoolLedgerRecoveryStatusResponse {
-    pub block_index: Option<u64>,
-    pub initial_native_cycles: Cycles,
-    pub phase: PoolLedgerRecoveryPhase,
-    pub receipt: Option<PoolLedgerRecoveryReceipt>,
-    pub request: PoolLedgerRecoveryRequest,
-}
-
 /// Exact pool policy and current exclusive root-owned physical inventory.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolResponse {
@@ -205,7 +146,6 @@ pub struct CanisterPoolResponse {
     pub pending_reset: u32,
     pub claimed: u32,
     pub recycling: u32,
-    pub recovering_ledger: u32,
     pub handing_off: u32,
     pub failed: u32,
     pub completed_handoffs: u64,
@@ -230,7 +170,6 @@ pub enum PoolAdminCommand {
         canister_id: Principal,
         recipient: Principal,
     },
-    RecoverLedger(Box<PoolLedgerRecoveryRequest>),
 }
 
 /// Result of one explicit pool maintenance command.
@@ -271,7 +210,6 @@ pub enum PoolAdminResponse {
         canister_id: Principal,
         recipient: Principal,
     },
-    LedgerRecovered(Box<PoolLedgerRecoveryReceipt>),
     ResetFailed {
         canister_id: Principal,
         reason: String,
@@ -367,7 +305,6 @@ mod tests {
             pending_reset: 0,
             claimed: 0,
             recycling: 0,
-            recovering_ledger: 0,
             handing_off: 0,
             failed: 1,
             completed_handoffs: 0,

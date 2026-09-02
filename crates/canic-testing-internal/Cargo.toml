@@ -27,8 +27,5 @@ ic-testkit = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-[dev-dependencies]
-pocket-ic = { workspace = true }
-
 [lints]
 workspace = true

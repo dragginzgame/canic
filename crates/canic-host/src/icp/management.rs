@@ -17,7 +17,7 @@ use serde::{Deserialize, de::DeserializeOwned};
 use thiserror::Error as ThisError;
 
 use super::{
-    model::IcpCli,
+    model::{IcpCli, LOCAL_ICP_TARGET},
     run::{run_json, run_output, run_secret_output},
 };
 
@@ -71,6 +71,12 @@ pub enum IcpManagementCallError {
 }
 
 impl IcpCli {
+    /// Whether this command context is bound directly to one local replica.
+    #[must_use]
+    pub(crate) fn uses_direct_local_replica(&self) -> bool {
+        self.environment.as_deref() == Some(LOCAL_ICP_TARGET) && self.local_replica.is_some()
+    }
+
     /// Perform one typed management-canister update routed through the target
     /// canister's exact effective canister ID.
     pub(crate) fn management_canister_status_candid<I, O>(
@@ -116,6 +122,14 @@ impl IcpCli {
         &self,
         environment: &str,
     ) -> Result<IcpNetworkStatus, IcpManagementCallError> {
+        if environment == LOCAL_ICP_TARGET
+            && let Some(target) = &self.local_replica
+        {
+            return Ok(IcpNetworkStatus {
+                api_url: target.url.clone(),
+                root_key: target.root_key.clone(),
+            });
+        }
         let mut command = self.command();
         command.args(["network", "status", "--environment", environment, "--json"]);
         run_json(&mut command).map_err(Into::into)
@@ -213,6 +227,7 @@ fn call_management_update(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::icp::LocalReplicaTarget;
     use std::cell::RefCell;
 
     struct RecordingAgentBoundary {
@@ -250,5 +265,22 @@ mod tests {
                 method: MANAGEMENT_CANISTER_STATUS.to_string(),
             })
         );
+    }
+
+    #[test]
+    fn explicit_local_replica_owns_management_network_resolution() {
+        let target = LocalReplicaTarget {
+            root_key: "010203".to_string(),
+            url: "http://127.0.0.1:4943/".to_string(),
+        };
+        let icp = IcpCli::new("missing-icp", Some(LOCAL_ICP_TARGET.to_string()))
+            .with_local_replica(Some(target.clone()));
+
+        let status = icp
+            .network_status(LOCAL_ICP_TARGET)
+            .expect("resolve explicit local replica without invoking ICP CLI");
+
+        assert_eq!(status.api_url, target.url);
+        assert_eq!(status.root_key, target.root_key);
     }
 }

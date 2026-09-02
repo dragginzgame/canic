@@ -24,7 +24,7 @@ use crate::{
     },
     icp::{
         IcpCandidCallError, IcpCanisterStatusReport, IcpCli, IcpCommandError, IcpDiagnostic,
-        IcpManagementCallError, run_status,
+        IcpManagementCallError, LocalReplicaTarget, run_status,
     },
     icp_config::resolve_icp_build_network_from_root,
     subnet_catalog::load_mainnet_subnet_catalog,
@@ -55,6 +55,30 @@ struct ManagementCanisterStatusRequest {
 struct ManagementCanisterStatusResponse {
     version: u64,
     module_hash: Option<Vec<u8>>,
+}
+
+#[derive(CandidType, Deserialize)]
+struct ManagementCanisterObservationSettings {
+    controllers: Vec<Principal>,
+}
+
+#[derive(CandidType, Deserialize)]
+enum ManagementCanisterRuntimeStatus {
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "stopping")]
+    Stopping,
+    #[serde(rename = "stopped")]
+    Stopped,
+}
+
+#[derive(CandidType, Deserialize)]
+struct ManagementCanisterObservationResponse {
+    status: ManagementCanisterRuntimeStatus,
+    settings: ManagementCanisterObservationSettings,
+    module_hash: Option<Vec<u8>>,
+    cycles: Nat,
+    version: u64,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -407,6 +431,9 @@ pub enum IcpEnsurePlatformError {
         source: Box<IcpManagementCallError>,
     },
 
+    #[error("typed local management-status observation failed: {0}")]
+    LocalManagementStatus(#[source] Box<IcpManagementCallError>),
+
     #[error(
         "completed reinstall proof for {canister} conflicts with current {field}; no install was authorized"
     )]
@@ -517,6 +544,17 @@ impl IcpEnsurePlatform {
             recovery_reinstalls: RefCell::new(BTreeSet::new()),
             root: root.to_path_buf(),
         }
+    }
+
+    /// Return this adapter bound to one explicit local replica endpoint.
+    ///
+    /// This keeps every ordinary ICP CLI call and effective-ID management
+    /// observation on the same replica when no named ICP project network owns
+    /// the test or operator session.
+    #[must_use]
+    pub fn with_local_replica(mut self, target: LocalReplicaTarget) -> Self {
+        self.icp = self.icp.with_local_replica(Some(target));
+        self
     }
 
     fn require_operator(&self) -> Result<(), IcpEnsurePlatformError> {
@@ -731,6 +769,9 @@ impl IcpEnsurePlatform {
         &self,
         principal: &str,
     ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        if self.icp.uses_direct_local_replica() {
+            return self.direct_local_status_optional(principal);
+        }
         let report = match self.icp.canister_status_report(principal) {
             Ok(report) => report,
             Err(error)
@@ -788,6 +829,67 @@ impl IcpEnsurePlatform {
             controllers,
             cycles,
             module_sha256: report.module_hash.map(|hash| normalize_hash(&hash)),
+            principal: principal.to_string(),
+            reinstall_required: false,
+            root_owned_lifecycle: None,
+            status,
+        }))
+    }
+
+    fn direct_local_status_optional(
+        &self,
+        principal: &str,
+    ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        let canister_id = parse_principal("local canister status target", principal)?;
+        let response = self
+            .icp
+            .management_canister_status_candid::<_, ManagementCanisterObservationResponse>(
+                canister_id,
+                &ManagementCanisterStatusRequest { canister_id },
+            );
+        let response = match response {
+            Ok(response) => response,
+            Err(error)
+                if matches!(
+                    crate::icp::classify_icp_diagnostic(&error.to_string()),
+                    Some(IcpDiagnostic::CanisterNotFound { .. })
+                ) =>
+            {
+                return Ok(None);
+            }
+            Err(error) => {
+                return Err(IcpEnsurePlatformError::LocalManagementStatus(Box::new(
+                    error,
+                )));
+            }
+        };
+        let cycles_text = response.cycles.to_string();
+        let cycles = u128::try_from(response.cycles.0).map_err(|_| {
+            IcpEnsurePlatformError::InvalidStatusCycles {
+                canister: principal.to_string(),
+                value: cycles_text,
+            }
+        })?;
+        let mut controllers = response
+            .settings
+            .controllers
+            .into_iter()
+            .map(|controller| controller.to_text())
+            .collect::<Vec<_>>();
+        controllers.sort();
+        controllers.dedup();
+        let status = match response.status {
+            ManagementCanisterRuntimeStatus::Running => CanisterRuntimeStatus::Running,
+            ManagementCanisterRuntimeStatus::Stopping => CanisterRuntimeStatus::Stopping,
+            ManagementCanisterRuntimeStatus::Stopped => CanisterRuntimeStatus::Stopped,
+        };
+        Ok(Some(LiveCanister {
+            canister_version: Some(response.version),
+            controllers,
+            cycles,
+            module_sha256: response
+                .module_hash
+                .map(|hash| canic_core::cdk::utils::hash::hex_bytes(&hash)),
             principal: principal.to_string(),
             reinstall_required: false,
             root_owned_lifecycle: None,

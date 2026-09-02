@@ -194,7 +194,6 @@ struct CycleBounds {
 
 struct PlanAccumulator {
     canisters: Vec<CanisterPlan>,
-    controlled_ledger_cycles: u128,
     execution_burn: u128,
     fees: u128,
     new_funding: u128,
@@ -206,7 +205,6 @@ impl PlanAccumulator {
     const fn new() -> Self {
         Self {
             canisters: Vec::new(),
-            controlled_ledger_cycles: 0,
             execution_burn: 0,
             fees: 0,
             new_funding: 0,
@@ -228,27 +226,6 @@ impl PlanAccumulator {
     fn add_funding(&mut self, value: u128) -> Result<(), EnsurePolicyError> {
         self.new_funding = checked_add(self.new_funding, value, "new funding")?;
         Ok(())
-    }
-
-    fn add_pool_ledger_recovery(
-        &mut self,
-        request: &canic_core::dto::pool::PoolLedgerRecoveryRequest,
-    ) -> Result<(), EnsurePolicyError> {
-        let balance = request.ledger_balance.to_u128();
-        let fee = request.ledger_fee.to_u128();
-        let withdrawal = request.withdrawal_amount.to_u128();
-        if withdrawal == 0 || withdrawal.checked_add(fee) != Some(balance) {
-            return Err(EnsurePolicyError::InvalidProtocolStep(
-                "pool-ledger-recovery".to_string(),
-            ));
-        }
-        self.controlled_ledger_cycles = checked_add(
-            self.controlled_ledger_cycles,
-            balance,
-            "controlled pool Ledger cycles",
-        )?;
-        self.transfers = checked_add(self.transfers, withdrawal, "scheduled transfer")?;
-        self.add_burn(fee)
     }
 }
 
@@ -509,11 +486,7 @@ pub fn compile_plan(
             })?,
     )?;
 
-    let observed_controlled_cycles = checked_add(
-        observed_estate_cycles,
-        accumulator.controlled_ledger_cycles,
-        "observed controlled cycles",
-    )?;
+    let observed_controlled_cycles = observed_estate_cycles;
     let maximum_operator_debit_cycles = checked_add(
         accumulator.new_funding,
         accumulator.fees,
@@ -1869,7 +1842,6 @@ fn tranche_protocol_actions(
     let candidates = std::mem::take(protocol_actions);
     let mut selected = Vec::with_capacity(candidates.len());
     for action in candidates {
-        let controlled_ledger_cycles = accumulator.controlled_ledger_cycles;
         let execution_burn = accumulator.execution_burn;
         let transfers = accumulator.transfers;
 
@@ -1893,20 +1865,14 @@ fn tranche_protocol_actions(
             observation_burn,
             "cycle-conservation required burn",
         )?;
-        let controlled_cycles = checked_add(
-            observed_estate_cycles,
-            accumulator.controlled_ledger_cycles,
-            "cycle-conservation controlled cycles",
-        )?;
         let available = checked_add(
-            controlled_cycles,
+            observed_estate_cycles,
             accumulator.new_funding,
             "cycle-conservation available balance",
         )?;
         if required > available {
             let error =
                 insufficient_cycle_conservation(accumulator, selected.len(), available, required);
-            accumulator.controlled_ledger_cycles = controlled_ledger_cycles;
             accumulator.execution_burn = execution_burn;
             accumulator.transfers = transfers;
             selected.pop();
@@ -1926,16 +1892,10 @@ fn account_protocol_action(
 ) -> Result<(), EnsurePolicyError> {
     match action {
         EnsureAction::FleetProtocol {
-            action,
             maximum_execution_burn_cycles,
             ..
-        } => {
-            if let CurrentFleetProtocolAction::RecoverPoolLedger { request } = action.as_ref() {
-                accumulator.add_pool_ledger_recovery(request)?;
-            }
-            accumulator.add_burn(*maximum_execution_burn_cycles)
         }
-        EnsureAction::Protocol {
+        | EnsureAction::Protocol {
             maximum_execution_burn_cycles,
             ..
         } => accumulator.add_burn(*maximum_execution_burn_cycles),

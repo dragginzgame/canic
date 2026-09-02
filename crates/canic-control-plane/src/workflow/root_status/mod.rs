@@ -10,7 +10,6 @@ use crate::{
         RootOperationStatusResponse,
     },
     ops::{
-        canister_pool::CanisterPoolOps,
         component_provisioning::{RootComponentProvisioningOps, status_response},
         storage::state::root_wasm_store::RootWasmStoreStateOps,
     },
@@ -44,10 +43,6 @@ impl RootOperationMatch {
 }
 
 /// Resolve an operation identity only through domain owners that already have an exact ID index.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one exact operation index enumerates every Root-owned status authority"
-)]
 pub fn operation_status(
     operation_id: [u8; 32],
     caller: Principal,
@@ -109,12 +104,6 @@ pub fn operation_status(
     if let Some(refill) = IcpRefillStoreOps::find_by_operation_id(operation_id)? {
         matches.push(RootOperationMatch::new(
             RootOperationStatusResponse::RefillCycles(IcpRefillStoreOps::to_response(&refill)),
-            RootOperationObserver::Controller,
-        ));
-    }
-    if let Some(recovery) = CanisterPoolOps::ledger_recovery_status_by_operation(operation_id) {
-        matches.push(RootOperationMatch::new(
-            RootOperationStatusResponse::RecoverPoolLedger(recovery),
             RootOperationObserver::Controller,
         ));
     }

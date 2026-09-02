@@ -149,13 +149,6 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
     ),
     monotonic_publish("PublishReleaseSet", "wasm_store.admin.v1"),
     replay_protected(
-        "RecoverPoolLedger",
-        "canister_pool.recover_ledger.v1",
-        CostClass::ValueTransfer,
-        Some(VALUE_TRANSFER_QUOTA_V1),
-        Some(VALUE_TRANSFER_RESERVE_V1),
-    ),
-    replay_protected(
         "RefillCycles",
         "icp.refill.v1",
         CostClass::ValueTransfer,

@@ -70,7 +70,7 @@ fn decode_pool_response(bytes: &[u8]) -> Result<CanisterPoolResponse, Predecesso
     }
 }
 
-/// Pool response before the recovering-ledger inventory class was introduced.
+/// Pool response retained by the sealed predecessor Root contract.
 #[derive(CandidType, Deserialize)]
 struct PredecessorCanisterPoolResponse {
     config: FleetSubnetCanisterPoolConfig,
@@ -107,7 +107,6 @@ impl From<PredecessorCanisterPoolResponse> for CanisterPoolResponse {
             pending_reset: value.pending_reset,
             claimed: value.claimed,
             recycling: value.recycling,
-            recovering_ledger: 0,
             handing_off: value.handing_off,
             failed: value.failed,
             completed_handoffs: value.completed_handoffs,

@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.3` completes the CANIC-121 production-adapter boundary with real ICP
+  CLI controller finalisation through a Prepared Root, lost-response adoption
+  after adapter reconstruction and effect-free terminal replay, corrects the
+  bounded fresh-pool update-burn allowance exposed by that real path, and
+  centralizes PocketIC 16 dependency ownership through `ic-testkit` 0.9.0 while
+  refreshing the IcyDB lifecycle qualification to 0.252.0. It also hard-cuts
+  the obsolete temporary pool-Ledger recovery canister and its complete
+  build, Store, Root, Fleet Ensure, DTO, stable-state, test and CI surface.
 - `0.110.2` restores zero-estate Fleet Ensure restart/replay and Prepared-Root
   controller finalisation, and makes generated recovery-helper dependencies a
   complete pre-build projection of the consuming workspace lock.

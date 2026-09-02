@@ -10,7 +10,6 @@ use std::{
 use crate::{
     artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
-    bootstrap_pool_ledger_recovery::build_pool_ledger_recovery_artifact,
     bootstrap_store::build_bootstrap_wasm_store_artifact,
     cargo_command,
     release_set::AppConfigSnapshot,
@@ -31,7 +30,7 @@ use super::{
     model::{
         CanisterArtifactBuildOptions, CanisterArtifactBuildOutput, CanisterArtifactBuildSpec,
         CanisterArtifactSource, ConfiguredCanisterArtifactBuildOutput, FLEET_COORDINATOR_ROLE,
-        POOL_LEDGER_RECOVERY_ROLE, WASM_STORE_ROLE, WASM_TARGET,
+        WASM_STORE_ROLE, WASM_TARGET,
     },
 };
 
@@ -54,10 +53,6 @@ pub fn build_workspace_canister_artifact_with_options(
         CanisterArtifactSource::FleetCoordinator => {
             require_default_build_options(options, FLEET_COORDINATOR_ROLE)?;
             return build_bootstrap_fleet_coordinator_artifact(context);
-        }
-        CanisterArtifactSource::PoolLedgerRecovery => {
-            require_default_build_options(options, POOL_LEDGER_RECOVERY_ROLE)?;
-            return build_pool_ledger_recovery_artifact(context);
         }
         CanisterArtifactSource::WasmStore => {
             require_default_build_options(options, WASM_STORE_ROLE)?;

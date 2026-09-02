@@ -89,13 +89,12 @@ ic-query = { version = "0.42.0", default-features = false, features = [
 ] }
 ic-signature-verification = "0.3.0"
 ic-stable-structures = "0.7.2"
-ic-testkit = "0.8.9"
+ic-testkit = "0.9.0"
 ic-timers = "=0.7.0"
 ic0 = "1.1.0"
-icydb = { version = "=0.249.6", default-features = false }
-icydb-model = "=0.249.6"
+icydb = { version = "=0.252.0", default-features = false }
+icydb-model = "=0.252.0"
 k256 = { version = "0.14", default-features = false, features = ["ecdsa"] }
-pocket-ic = "=15.0.0"
 proc-macro2 = "1.0"
 quote = "1.0"
 remain = "0.2"

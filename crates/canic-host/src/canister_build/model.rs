@@ -6,7 +6,6 @@ use canic_core::{
 };
 
 pub(super) const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
-pub(super) const POOL_LEDGER_RECOVERY_ROLE: &str = "pool_ledger_recovery";
 pub(super) const WASM_STORE_ROLE: &str = "wasm_store";
 pub(super) const WASM_TARGET: &str = "wasm32-unknown-unknown";
 
@@ -35,7 +34,6 @@ impl Default for CanisterArtifactBuildOptions {
 pub(super) enum CanisterArtifactSource {
     DeclaredRole,
     FleetCoordinator,
-    PoolLedgerRecovery,
     WasmStore,
 }
 
@@ -44,7 +42,6 @@ impl CanisterArtifactSource {
     pub(super) fn for_role(role: &str) -> Self {
         match role {
             FLEET_COORDINATOR_ROLE => Self::FleetCoordinator,
-            POOL_LEDGER_RECOVERY_ROLE => Self::PoolLedgerRecovery,
             WASM_STORE_ROLE => Self::WasmStore,
             _ => Self::DeclaredRole,
         }

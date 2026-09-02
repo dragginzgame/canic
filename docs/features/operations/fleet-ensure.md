@@ -234,7 +234,7 @@ ledger_fee_cycles = "0.1B" # generated from the live Ledger
 management_creation_fee_cycles = "0B" # retained; fresh uses its seeded exact fee
 material_cycle_threshold = "0.001B"
 maximum_observation_burn_cycles = "1T"
-maximum_update_burn_cycles = "100B"
+maximum_update_burn_cycles = "1T"
 maximum_stalled_observations = 8
 
 [protocol]
@@ -472,25 +472,11 @@ Root-owned or management observation at or above `expected_native_post`.
 Canic exposes no Fleet Ensure action that substitutes a plain Ledger-account
 transfer for native funding.
 
-If an earlier operator accidentally transferred cycles to the default Cycles
-Ledger account of an empty Root-owned pool canister, Fleet Ensure can recover
-that balance without replacing the canister. Planning queries the exact account
-balance and Ledger fee, adds the full balance to observed controlled cycles,
-and reports the net withdrawal as a scheduled transfer. Apply asks the owning
-Root to fence that exact pool row before any effect. Root then installs the
-release-bound temporary recovery helper on the same empty canister, withdraws
-the exact balance less the exact fee to that same Principal, proves the Ledger
-account is zero and the native balance received at least the reviewed amount
-less bounded execution burn, journals the uninstall, removes the helper and
-returns the asset to ready inventory.
-
-Recovery never applies to a claimed or workload canister, a Store, a stopped or
-stopping asset, a foreign or multi-controller canister, a draining Root, or a
-canister with unexpected code.
-An account balance that cannot cover the fee is an actionable blocker. One
-asset per Root enters recovery in a reviewed plan; rerunning ensure reviews the
-next eligible balance. Interruption resumes the same Root operation and Ledger
-timestamp, and a completed replay accepts no second withdrawal.
+Fleet Ensure does not transfer pool funding to a Principal's Cycles Ledger
+account and no longer installs a temporary recovery canister. Pool creation and
+top-up target the native canister balance directly. An externally created
+Ledger-account credit is outside the current Fleet Ensure contract and must not
+be represented as native pool capacity or silently consumed by planning.
 
 ## Retirement Boundary
 

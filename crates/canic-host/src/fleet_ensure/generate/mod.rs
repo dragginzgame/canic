@@ -72,7 +72,7 @@ const MAX_GENERATOR_INPUT_BYTES: usize = 1024 * 1024;
 const MAINNET_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 const GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD: u128 = 1_000_000;
 const GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES: u128 = 1_000_000_000_000;
-const GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES: u128 = 100_000_000_000;
+const GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES: u128 = 1_000_000_000_000;
 
 /// Return the generated fresh-pool funding that preserves one readiness floor
 /// across the bounded first observation and controller-finalization effects.
