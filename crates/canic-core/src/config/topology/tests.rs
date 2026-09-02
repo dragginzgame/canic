@@ -285,7 +285,7 @@ fn canonical_spec_and_topology_hashes_match_frozen_golden_values() {
     );
     assert_eq!(
         topology.digest().expect("topology digest").to_string(),
-        "8d8450ea375f8d0899da6b4eeede3858fe86fea77955d34093c2adf99045015c",
+        "16a46d2fabfadd18b7d045142ba383d0c400b67068d9d78d6e8d4d0d4d6d763e",
     );
 }
 
