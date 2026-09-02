@@ -31,6 +31,7 @@ use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const AUDIT_COMMAND: &str = "audit";
+const CI_ARG: &str = "ci";
 const MANIFEST_COMMAND: &str = "manifest";
 const JSON_ARG: &str = "json";
 const ROLE_ARG: &str = "role";
@@ -47,11 +48,11 @@ a reviewed Fleet plan, or mutate canisters.";
 const AUDIT_HELP_AFTER: &str = "\
 Examples:
   canic state audit
-  canic state audit --role root
-  canic state audit --json
+  canic state audit --ci
+  canic state audit --role root --json
 
 Audits Rust-authored state metadata declarations only. Warnings do not exit
-nonzero; failing checks exit with code 1.";
+nonzero; failing checks exit with code 1. CI output omits passing check detail.";
 
 const MANIFEST_HELP_AFTER: &str = "\
 Examples:
@@ -111,6 +112,7 @@ impl StateCommandError {
 struct StateOptions {
     role: Option<String>,
     json: bool,
+    ci: bool,
 }
 
 impl StateOptions {
@@ -118,20 +120,21 @@ impl StateOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        Self::parse(args, audit_command, audit_usage)
+        Self::parse(args, audit_command, audit_usage, true)
     }
 
     fn parse_manifest<I>(args: I) -> Result<Self, StateCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
-        Self::parse(args, manifest_command, manifest_usage)
+        Self::parse(args, manifest_command, manifest_usage, false)
     }
 
     fn parse<I>(
         args: I,
         command: fn() -> ClapCommand,
         usage: fn() -> String,
+        supports_ci: bool,
     ) -> Result<Self, StateCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -141,6 +144,7 @@ impl StateOptions {
         Ok(Self {
             role: string_option(&matches, ROLE_ARG),
             json: matches.get_flag(JSON_ARG),
+            ci: supports_ci && matches.get_flag(CI_ARG),
         })
     }
 }
@@ -173,6 +177,8 @@ fn run_audit(args: Vec<OsString>) -> Result<(), StateCommandError> {
     let report = build_state_audit_report(&resolution, options.role.as_deref());
     if options.json {
         println!("{}", render_json(&report)?);
+    } else if options.ci {
+        println!("{}", render_audit_ci_text(&report));
     } else {
         println!("{}", render_audit_text(&report));
     }
@@ -249,12 +255,23 @@ fn audit_command() -> ClapCommand {
         .about("Audit declared state metadata")
         .disable_help_flag(true)
         .arg(
+            flag_arg(CI_ARG)
+                .long(CI_ARG)
+                .conflicts_with(JSON_ARG)
+                .help("Print concise CI output"),
+        )
+        .arg(
             crate::cli::clap::value_arg(ROLE_ARG)
                 .long(ROLE_ARG)
                 .value_name("role")
                 .help("Limit the report to one canister role"),
         )
-        .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
+        .arg(
+            flag_arg(JSON_ARG)
+                .long(JSON_ARG)
+                .conflicts_with(CI_ARG)
+                .help("Print JSON output"),
+        )
         .after_help(AUDIT_HELP_AFTER)
 }
 
@@ -318,6 +335,49 @@ fn render_audit_text(report: &StateAuditReport) -> String {
             lines.push(format!("  - {action}"));
         }
     }
+    lines.join("\n")
+}
+
+fn render_audit_ci_text(report: &StateAuditReport) -> String {
+    let warnings = report
+        .checks
+        .iter()
+        .filter(|check| check.status == StateAuditStatus::Warn)
+        .collect::<Vec<_>>();
+    let failures = report
+        .checks
+        .iter()
+        .filter(|check| check.status == StateAuditStatus::Fail)
+        .collect::<Vec<_>>();
+    let mut lines = vec![
+        report.command.to_string(),
+        format!("status: {}", report.status.label()),
+        format!("scope: {}", report.scope.label()),
+    ];
+    if let Some(role) = &report.role {
+        lines.push(format!("role: {role}"));
+    }
+    lines.extend([
+        format!("checks: {}", report.checks.len()),
+        format!("warnings: {}", warnings.len()),
+        format!("failures: {}", failures.len()),
+    ]);
+
+    for check in warnings.into_iter().chain(failures) {
+        lines.push(format!(
+            "{} {} {} {}",
+            check.status.label(),
+            check.category.label(),
+            check.code,
+            check.subject
+        ));
+        lines.push(format!("  detail: {}", check.detail));
+        if let Some(next) = &check.next {
+            lines.push(format!("  next: {next}"));
+        }
+        lines.push(format!("  source: {}", check.source.label()));
+    }
+
     lines.join("\n")
 }
 

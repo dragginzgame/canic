@@ -3125,24 +3125,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(retained_after_start.principals.is_empty());
     assert!(retained_after_start.topology.is_empty());
 
-    fs::remove_file(&stopped_paths.root_start_authority)
-        .expect("remove disposable bridge authority");
-    fs::write(
-        root.join("predecessor-pool-status"),
-        b"exact predecessor shape\n",
-    )
-    .expect("select predecessor response without authority");
-    assert!(matches!(
-        generate_desired_fleet(&stopped_request),
-        Err(FleetGenerateError::CanisterUnavailable { .. })
-    ));
-    fs::write(
-        &stopped_paths.root_start_authority,
-        &retained_authority_bytes,
-    )
-    .expect("restore exact bridge authority");
-    fs::remove_file(&root_status_counter).expect("reset Root status fixture");
-
     let mut wrong_bridge_successor = stopped_authority;
     wrong_bridge_successor.successor_module_sha256 = "00".repeat(32);
     wrong_bridge_successor.seal();

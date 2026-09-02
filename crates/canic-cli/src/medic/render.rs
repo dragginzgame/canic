@@ -46,22 +46,35 @@ pub(super) fn render_medic_text(report: &MedicReport) -> String {
 }
 
 pub(super) fn render_medic_ci_text(report: &MedicReport) -> String {
+    let checks = ordered_checks(&report.checks);
+    let warnings = checks
+        .iter()
+        .copied()
+        .filter(|check| check.status == MedicStatus::Warn)
+        .collect::<Vec<_>>();
+    let failures = checks
+        .iter()
+        .copied()
+        .filter(|check| check.status == MedicStatus::Fail)
+        .collect::<Vec<_>>();
+    let state_audit = checks
+        .iter()
+        .copied()
+        .find(|check| check.source == crate::medic::report::MedicSource::StateManifest)
+        .map_or("not_evaluated", |check| check.status.label());
     let mut lines = vec![
         report.command.clone(),
         format!("status: {}", report.status.label()),
+        format!("scope: {}", report.scope.label()),
+        format!("state_audit: {state_audit}"),
+        format!("checks: {}", report.checks.len()),
+        format!("warnings: {}", warnings.len()),
+        format!("warning_codes: {}", finding_codes(&warnings)),
+        format!("failures: {}", failures.len()),
+        format!("failure_codes: {}", finding_codes(&failures)),
     ];
-    let failures = ordered_checks(&report.checks)
-        .into_iter()
-        .filter(|check| check.status == MedicStatus::Fail)
-        .collect::<Vec<_>>();
 
-    if failures.is_empty() {
-        lines.push("failures: none".to_string());
-        return lines.join("\n");
-    }
-
-    lines.push(format!("failures: {}", failures.len()));
-    for check in failures {
+    for check in warnings.into_iter().chain(failures) {
         lines.push(format!(
             "{} {} {} {}",
             check.status.label(),
@@ -75,6 +88,20 @@ pub(super) fn render_medic_ci_text(report: &MedicReport) -> String {
     }
 
     lines.join("\n")
+}
+
+fn finding_codes(checks: &[&crate::medic::report::MedicCheck]) -> String {
+    if checks.is_empty() {
+        "none".to_string()
+    } else {
+        let mut codes = checks
+            .iter()
+            .map(|check| check.code.as_str())
+            .collect::<Vec<_>>();
+        codes.sort_unstable();
+        codes.dedup();
+        codes.join(",")
+    }
 }
 
 fn push_medic_field(lines: &mut Vec<String>, label: &str, value: &str) {

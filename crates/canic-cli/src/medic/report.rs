@@ -199,6 +199,15 @@ pub(super) enum MedicScope {
     Workspace,
 }
 
+impl MedicScope {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Fleet => "fleet",
+            Self::Workspace => "workspace",
+        }
+    }
+}
+
 ///
 /// MedicStatus
 ///

@@ -13,6 +13,8 @@ validation notes.
   unvalidated installer branches.
 - [Fleet ensure](../features/operations/fleet-ensure.md) documents the sole
   current convergence and interruption-replay workflow.
+- [CI diagnostics](ci-diagnostics.md) distinguishes the one offline workspace
+  Medic command from state-audit detail and live Fleet drift checks.
 - [Recovery and retry runbooks](recovery-retry-runbooks.md) define the current
   same-release replay, ambiguous-result and operator retry safety procedures.
 - [Release package and install validation](release-package-install-validation.md)

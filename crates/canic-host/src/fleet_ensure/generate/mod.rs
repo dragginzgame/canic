@@ -1478,6 +1478,22 @@ fn predecessor_status_roots(
     else {
         return Ok(BTreeSet::new());
     };
+    if let Some(binding) = authority.roots.iter().find(|binding| {
+        observed
+            .get(&binding.principal)
+            .and_then(|canister| canister.module_sha256.as_deref())
+            .is_some_and(|live_module| {
+                live_module != binding.predecessor_module_sha256
+                    && live_module != successor_module_sha256
+            })
+    }) {
+        return Err(FleetGenerateError::CanisterUnavailable {
+            canister: binding.principal.clone(),
+            reason:
+                "live Root module is neither the sealed predecessor nor the requested successor"
+                    .to_string(),
+        });
+    }
     let has_matching_predecessor = authority.roots.iter().any(|binding| {
         observed
             .get(&binding.principal)

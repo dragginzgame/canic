@@ -211,7 +211,7 @@ fn medic_command() -> ClapCommand {
             flag_arg(CI_ARG)
                 .long(CI_ARG)
                 .global(true)
-                .help("Print concise fail-only text output for CI logs"),
+                .help("Print a concise summary and actionable findings for CI logs"),
         )
         .arg(internal_environment_arg().global(true))
         .arg(internal_icp_arg().global(true))

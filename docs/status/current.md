@@ -149,6 +149,16 @@ Ensure action, fixtures and dedicated CI owner are gone together. Canic funds
 pool assets through native canister creation or top-up and does not generate a
 plain Ledger-account transfer to a pool Principal.
 
+The matching status contraction does not relax a retained Root-start
+operation: an exact sealed predecessor or requested successor module remains
+mandatory, and an unrelated live Root rejects before protected status use.
+
+The open batch also contracts offline diagnostics. `canic state audit --ci`
+omits passing detail, while `canic medic --ci` reports consistent counts and
+codes plus the included state-audit result. Bare workspace Medic no longer
+warns merely because no Fleet environment was selected. Live drift remains an
+explicit post-start `canic medic fleet <fleet> --ci` operation.
+
 Published `v0.110.2` contains the fresh-estate, Prepared-Root and deterministic-
 lock corrections. The open `0.110.3` batch supplies the final concrete-adapter
 CANIC-121 proof and the temporary-helper hard cut rather than reopening the
