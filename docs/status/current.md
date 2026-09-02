@@ -228,4 +228,5 @@ accepts the complete B1 baseline.
 
 
 
-<!-- canic-release-validation: version=0.110.1 source=452d2e84ae3888dbc5c8ed3c85cbaecec5b69783 date=2026-09-01 gate=complete -->
+
+<!-- canic-release-validation: version=0.110.2 source=6fc23b9a1d83a37af4c23ae6b3606365e7d2db76 date=2026-09-02 gate=complete -->
