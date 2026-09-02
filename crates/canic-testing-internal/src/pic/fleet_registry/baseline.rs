@@ -749,24 +749,32 @@ mod tests {
                             "preparing",
                         ])
                     );
-                    let expected_root_boundaries = roots
-                        .iter()
-                        .flat_map(|root| {
-                            ["activating", "opening", "perimeter_fenced", "preparing"]
-                                .map(|phase| (*root, phase))
-                        })
-                        .collect::<std::collections::BTreeSet<_>>();
-                    assert_eq!(restarted_roots, expected_root_boundaries);
+                    for root in roots {
+                        for boundary in ["perimeter_fenced", "activating", "opening"] {
+                            assert!(
+                                restarted_roots.contains(&(*root, boundary)),
+                                "Root {root} was not restarted at {boundary}"
+                            );
+                        }
+                    }
+                    for boundary in ["preparing", "perimeter_fenced", "activating", "opening"] {
+                        assert!(
+                            restarted_roots
+                                .iter()
+                                .any(|(_, observed)| *observed == boundary),
+                            "no Root was restarted at {boundary}"
+                        );
+                    }
                     return response.clone();
                 }
             };
             if let Some(boundary) = boundary
                 && restarted.insert(boundary)
             {
-                if boundary == "activating" {
+                if boundary == "perimeter_fenced" {
                     for (root, target) in roots.iter().zip(targets) {
                         pic.stop_canister(*target, Some(*root))
-                            .expect("hold target before Root activation effect");
+                            .expect("hold target before Root activation begins");
                         stopped_targets.insert(*target);
                     }
                 }

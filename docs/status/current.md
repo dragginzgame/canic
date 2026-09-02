@@ -159,6 +159,11 @@ codes plus the included state-audit result. Bare workspace Medic no longer
 warns merely because no Fleet environment was selected. Live drift remains an
 explicit post-start `canic medic fleet <fleet> --ci` operation.
 
+The open qualification correction also stops admission targets before the
+activation phase can begin, tolerates valid per-Root phase coalescing, and uses
+bounded typed install-rate retries for same-release upgrade proofs. It changes
+test scheduling only; admission protocol and runtime authority are unchanged.
+
 Published `v0.110.2` contains the fresh-estate, Prepared-Root and deterministic-
 lock corrections. The open `0.110.3` batch supplies the final concrete-adapter
 CANIC-121 proof and the temporary-helper hard cut rather than reopening the

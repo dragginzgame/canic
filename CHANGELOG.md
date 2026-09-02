@@ -20,7 +20,9 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   hard-cuts the obsolete temporary pool-Ledger helper. It also aligns the
   PocketIC/IcyDB test stack and makes offline Medic/state-audit CI output
   concise, consistent and non-duplicative, while retaining the exact sealed
-  Root-module fence after the pool-status contraction.
+  Root-module fence after the pool-status contraction and hardening PocketIC
+  admission qualification against valid phase coalescing and install-code rate
+  limiting.
 - `0.110.2` restores zero-estate Fleet Ensure restart/replay and Prepared-Root
   controller finalisation, and makes generated recovery-helper dependencies a
   complete pre-build projection of the consuming workspace lock.

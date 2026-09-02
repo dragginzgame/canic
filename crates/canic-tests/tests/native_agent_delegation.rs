@@ -30,7 +30,7 @@ use ic_stable_structures::{
     Cell, VectorMemory,
     memory_manager::{MemoryId, MemoryManager},
 };
-use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIcTimeExt};
+use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIcTimeExt, RetryPolicy};
 use ic_testkit::pocket_ic::{PocketIc, common::rest::BlobCompression};
 use serde::Serialize;
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -41,6 +41,7 @@ const MAX_APPLICATION_REPLAY_RECORDS: usize = 4_096;
 const MAX_APPLICATION_SESSION_CLEANUP_REMOVALS: u64 = 128;
 const MAX_APPLICATION_SESSION_STABLE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_LOCAL_AUTHORIZATION_INSTRUCTIONS: u64 = 1_000_000;
+const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 const ROOT_PROOF_PROVISION_ATTEMPTS: usize = 10;
 
@@ -205,6 +206,21 @@ fn setup_snapshot_resettable_active_component_registry() -> ActiveComponentRegis
     setup_active_component_registry()
 }
 
+fn retry_same_release_upgrade(
+    pic: &PocketIc,
+    canister_id: Principal,
+    wasm: Vec<u8>,
+    sender: Principal,
+) {
+    let args = upgrade_args();
+    let policy = RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
+        .expect("install retry policy");
+    pic.retry_install_code(policy, || {
+        pic.upgrade_canister(canister_id, wasm.clone(), args.clone(), Some(sender))
+    })
+    .expect("same-release upgrade must succeed after bounded rate-limit retries");
+}
+
 #[test]
 fn pem_backed_native_agent_prepares_retrieves_and_presents_delegated_token() {
     let mut fixture = setup_fresh_active_component_registry();
@@ -289,13 +305,7 @@ fn fleet_admission_projection_is_durable_bounded_and_separate_from_application_s
         .pic()
         .set_controllers(target, Some(controller), vec![root])
         .expect("return management authority to the Fleet Root");
-    fixture
-        .pic()
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-    fixture
-        .pic()
-        .upgrade_canister(target, fixture.verifier_wasm(), upgrade_args(), Some(root))
-        .expect("same-release upgrade restores Fleet-admission authority");
+    retry_same_release_upgrade(fixture.pic(), target, fixture.verifier_wasm(), root);
 
     let restored = fleet_admission_status_as(&fixture, target, root).expect("restored Root status");
     assert_eq!(restored.generation, initial.generation);
@@ -393,20 +403,9 @@ fn multi_target_sessions_preserve_controller_separation_and_same_release_recover
         }
     });
 
-    fixture
-        .pic()
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     let component_wasm = fixture.verifier_wasm();
     for target in [fixture.issuer.canister_id, fixture.verifier.canister_id] {
-        fixture
-            .pic()
-            .upgrade_canister(
-                target,
-                component_wasm.clone(),
-                upgrade_args(),
-                Some(fixture.root),
-            )
-            .expect("same-release target upgrade must reconstruct local authorization");
+        retry_same_release_upgrade(fixture.pic(), target, component_wasm.clone(), fixture.root);
     }
     for (target, view) in [
         (fixture.issuer.canister_id, &issuer_view),
@@ -674,13 +673,7 @@ fn maximum_application_session_resource_contract_is_bounded() {
     let stable_bytes_at_maximum = fixture.pic().get_stable_memory(verifier).len();
     assert!(stable_bytes_at_maximum >= stable_bytes_before);
 
-    fixture
-        .pic()
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-    fixture
-        .pic()
-        .upgrade_canister(verifier, verifier_wasm, upgrade_args(), Some(fixture.root))
-        .expect("same-release verifier upgrade must restore maximum session state");
+    retry_same_release_upgrade(fixture.pic(), verifier, verifier_wasm, fixture.root);
 
     let restored = root_application_session_audit(&fixture);
     assert_eq!(
@@ -799,18 +792,12 @@ fn measure_application_authorization_at_state(
         replay_count,
     );
     assert!(auth_state_bytes <= MAX_APPLICATION_SESSION_STABLE_BYTES);
-    fixture
-        .pic()
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-    fixture
-        .pic()
-        .upgrade_canister(
-            verifier,
-            fixture.verifier_wasm(),
-            upgrade_args(),
-            Some(fixture.root),
-        )
-        .expect("same-release verifier upgrade must restore bounded session state");
+    retry_same_release_upgrade(
+        fixture.pic(),
+        verifier,
+        fixture.verifier_wasm(),
+        fixture.root,
+    );
     assert_eq!(
         root_application_session_audit(&fixture).sessions.total,
         session_count as u64
