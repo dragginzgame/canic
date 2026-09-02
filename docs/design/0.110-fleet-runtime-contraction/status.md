@@ -29,11 +29,13 @@ Date: 2026-09-02
   canonical-role baseline; it does not claim B1 completion or authorize B2.
 - Latest release: immutable `v0.110.1` at `7825bed9f` reconciles the B1
   handoff but does not complete B1 or authorize B2.
-- Open patch: `0.110.2` corrects the `CANIC-121` production-boundary fixture,
-  permits controller-authenticated read-only inspection through a Prepared
-  Root for `CANIC-122`, and projects the generated recovery helper from the
-  consuming workspace lock for `CANIC-123`. B1 measurement resumes only after
-  this independent unblock batch.
+- Open patch: `0.110.2` gives `CANIC-121` separate literal-zero-estate Fleet
+  Ensure plan/journal/restart/replay and real Prepared-Root control-plane
+  proofs, permits that controller-authenticated read-only inspection for
+  `CANIC-122`, and projects plus completely verifies the generated recovery
+  helper from the consuming workspace lock before infrastructure compilation
+  for `CANIC-123`. B1 measurement resumes only after this independent unblock
+  batch.
 
 Design: [Fleet runtime contraction](0.110-design.md)
 

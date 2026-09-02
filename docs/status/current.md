@@ -125,21 +125,24 @@ rejected its controller-authenticated, read-only `InspectCanister` command with
 `LIFECYCLE_INACTIVE`.
 
 The `0.110.2` correction admits only `InspectCanister` to the Prepared Root
-command set. The corrected `CANIC-121` governed journey creates fresh pool
-assets with the production Root-plus-installation-controller set, observes
-both sides of controller finalisation through the real Prepared Root endpoint,
-loses and reconciles each response, imports/resets the 1.9T-floor assets,
-provisions one Component and finishes with exactly one Workload plus one Ready
-asset. Exact measured controlled-cycle conservation and immediate zero-effect
-replay pass.
+command set. `CANIC-121` now has two deliberately separate proofs. The host
+Fleet Ensure proof starts with no canisters, runs the reviewed plan and durable
+journal through real PocketIC management effects, loses the first Create
+response, reconstructs the host adapter, resumes the same operation and proves
+terminal conservation plus immediate zero-effect replay. The control-plane
+proof creates the production Root-plus-installation-controller pool shape,
+observes both sides of controller finalisation through the real Prepared Root
+endpoint, imports/resets the 1.9T-floor assets, provisions one Component and
+finishes with exactly one Workload plus one Ready asset. It no longer invents
+host receipts or claims to be the host apply/restart proof.
 
-`CANIC-123` replaces cache-selected helper locking with a projection seeded by
-the consuming workspace's exact lock. Cargo prunes that seed to the generated
-pool-Ledger recovery helper graph; Canic then rejects any package identity not
-present in the seed and proves the projected lock is stable under `--locked`.
-The focused regression retains an older compatible transitive selection even
-when a newer compatible crate is cached, and the governed generated-helper
-PocketIC proof passes.
+`CANIC-123` writes a deterministic helper seed from the consuming workspace's
+exact lock before the first infrastructure compile. Cargo normalizes that seed
+offline to the generated pool-Ledger recovery helper graph; Canic reports the
+complete set of package identities outside the workspace lock and then proves
+the result stable under `--locked`. The cache-free unit fixture retains an
+older compatible transitive identity without requiring that crate to exist in
+the machine cache, and the governed generated-helper PocketIC proof passes.
 
 Focused host and governed PocketIC evidence now passes. The original correction
 remains in `v0.110.0`; its production-boundary and deterministic-lock follow-up

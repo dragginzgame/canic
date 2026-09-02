@@ -579,6 +579,8 @@ fn build_builtin_infrastructure(
         ("wasm_store", InfrastructureDeploymentScope::FleetSubnet),
     ];
 
+    canic_host::prepare_pool_ledger_recovery_build(context).map_err(BuildCommandError::Build)?;
+
     let mut outputs = Vec::with_capacity(BUILT_INS.len());
     for (index, (role, deployment_scope)) in BUILT_INS.iter().enumerate() {
         let activity = TerminalActivity::start(format!(

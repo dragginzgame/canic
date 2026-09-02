@@ -2131,9 +2131,9 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
-        reason = "one governed zero-estate gate keeps host effect replay, real control-plane convergence, conservation and terminal replay together"
+        reason = "one governed control-plane journey keeps Prepared Root inspection, controller finalization, Component convergence, conservation and terminal replay together"
     )]
-    fn literal_zero_estate_reaches_one_workload_and_one_ready_pool_asset() {
+    fn prepared_root_controller_finalization_reaches_one_workload_and_one_ready_pool_asset() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let config_path = toko_shaped_singleton_root_canister_config_path(&workspace_root);
@@ -2170,7 +2170,7 @@ mod tests {
             ("pool-0", pool_creation_funding),
             ("pool-1", pool_creation_funding),
         ];
-        let mut creations = BTreeMap::<String, (Principal, String, u32)>::new();
+        let mut creations = BTreeMap::<String, Principal>::new();
         let mut placement_subnet = None;
         for (name, cycles) in requested {
             let creation_controllers = name.starts_with("pool-").then(|| {
@@ -2178,7 +2178,7 @@ mod tests {
                     creations
                         .get("root")
                         .expect("fresh Root precedes pool creation")
-                        .0,
+                        .to_owned(),
                     installation_controller,
                 ]
             });
@@ -2203,30 +2203,14 @@ mod tests {
                 pic.get_subnet(principal)
                     .expect("fresh Coordinator placement Subnet")
             });
-            let receipt = format!("zero-estate-create:{name}:{principal}");
-            assert!(
-                creations
-                    .insert(name.to_string(), (principal, receipt.clone(), 1))
-                    .is_none()
-            );
-
-            // Lose every Create response, then recover the same retained receipt and Principal.
-            let replayed = creations.get(name).expect("retained Create response");
-            assert_eq!(replayed.0, principal);
-            assert_eq!(replayed.1, receipt);
-            assert_eq!(replayed.2, 1);
+            assert!(creations.insert(name.to_string(), principal).is_none());
         }
         assert_eq!(creations.len(), 5);
-        assert!(
-            creations
-                .values()
-                .all(|(_, receipt, count)| { !receipt.is_empty() && *count == 1 })
-        );
 
-        let coordinator = creations["coordinator"].0;
-        let root = creations["root"].0;
-        let store = creations["store"].0;
-        let pools = [creations["pool-0"].0, creations["pool-1"].0];
+        let coordinator = creations["coordinator"];
+        let root = creations["root"];
+        let store = creations["store"];
+        let pools = [creations["pool-0"], creations["pool-1"]];
         let installed = install_current_root_with_config_and_pool_setup(
             &pic,
             root_wasm,
@@ -8016,8 +8000,8 @@ mod tests {
                 fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog,
             ),
             (
-                "literal zero-estate host/control-plane convergence",
-                literal_zero_estate_reaches_one_workload_and_one_ready_pool_asset,
+                "Prepared Root controller-finalization control-plane convergence",
+                prepared_root_controller_finalization_reaches_one_workload_and_one_ready_pool_asset,
             ),
             (
                 "Coordinator attached-cycle grant",

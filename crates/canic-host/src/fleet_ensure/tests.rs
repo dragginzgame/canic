@@ -11,6 +11,7 @@ use crate::{
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
+            action_sha256,
         },
         workflow,
     },
@@ -3831,14 +3832,17 @@ fn tampered_reviewed_plan_fails_before_any_effect() {
 #[ignore = "the workspace runner supplies one shared PocketIC server and serial execution"]
 #[expect(
     clippy::too_many_lines,
-    reason = "one governed journey keeps the inconsistent estate and second-run proof together"
+    reason = "one governed journey keeps literal-zero planning, lost-Create resume, convergence and second-run proof together"
 )]
 fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
     use pocket_ic::{CreateCanisterParams, PocketIcBuilder};
 
     struct PocketPlatform {
+        create_outcomes: BTreeMap<String, EffectOutcome>,
         desired: DesiredFleet,
+        fail_after_effect: Option<String>,
         known: BTreeSet<String>,
+        mutations: BTreeMap<String, u32>,
         operator_cycles: u128,
         pic: pocket_ic::PocketIc,
         protocol_ready: BTreeSet<String>,
@@ -4089,7 +4093,11 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                     .parse()
                     .expect("PocketIC Principal")
             };
-            match action {
+            let action_hash = action_sha256(action);
+            if let Some(outcome) = self.create_outcomes.get(&action_hash) {
+                return Ok(outcome.clone());
+            }
+            let outcome = match action {
                 EnsureAction::Create {
                     requested_initial_cycles,
                     ..
@@ -4112,11 +4120,14 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                         .map_err(std::io::Error::other)?;
                     self.operator_cycles -= requested_initial_cycles;
                     self.known.insert(id.to_string());
-                    Ok(EffectOutcome {
+                    let outcome = EffectOutcome {
                         created_principal: Some(id.to_string()),
                         post_cycles: Some(*requested_initial_cycles),
                         receipt: Some(format!("pocketic-create-{id}")),
-                    })
+                    };
+                    self.create_outcomes
+                        .insert(action_hash.clone(), outcome.clone());
+                    Ok(outcome)
                 }
                 EnsureAction::Fund {
                     amount,
@@ -4213,7 +4224,15 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                 | EnsureAction::Transfer { .. } => Err(std::io::Error::other(
                     "governed current-state journey does not retire canisters",
                 )),
+            }?;
+            *self.mutations.entry(action_hash.clone()).or_default() += 1;
+            if self.fail_after_effect.as_deref() == Some(&action_hash) {
+                self.fail_after_effect = None;
+                return Err(std::io::Error::other(
+                    "simulated process loss after the exact remote effect",
+                ));
             }
+            Ok(outcome)
         }
     }
 
@@ -4222,72 +4241,30 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
     let wasm = root.join("current.wasm");
     fs::write(&wasm, b"\0asm\x01\0\0\0").expect("write minimal Wasm");
     let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
-    let treasury = pic
-        .create_canister_with_params(
-            None,
-            CreateCanisterParams {
-                cycles: Some(1_000_000_000_000),
-                settings: Some(pocket_ic::CanisterSettings {
-                    controllers: Some(vec![CONTROLLER.parse().expect("controller Principal")]),
-                    ..pocket_ic::CanisterSettings::default()
-                }),
-                ..CreateCanisterParams::default()
-            },
-        )
-        .expect("create treasury");
-    let root_canister = pic
-        .create_canister_with_params(
-            None,
-            CreateCanisterParams {
-                cycles: Some(500_000_000_000),
-                settings: Some(pocket_ic::CanisterSettings {
-                    controllers: Some(vec![CONTROLLER.parse().expect("controller Principal")]),
-                    ..pocket_ic::CanisterSettings::default()
-                }),
-                ..CreateCanisterParams::default()
-            },
-        )
-        .expect("create partial Root");
-    pic.install_canister(
-        root_canister,
-        fs::read(&wasm).expect("read current Root Wasm"),
-        Vec::new(),
-        Some(CONTROLLER.parse().expect("controller Principal")),
-    );
-    pic.stop_canister(
-        root_canister,
-        Some(CONTROLLER.parse().expect("controller Principal")),
-    )
-    .expect("stop partial Root");
-
     let mut canisters = vec![DesiredCanister {
         canic_init: None,
         controller_canisters: Vec::new(),
         controllers: vec![CONTROLLER.to_string()],
         drain: None,
-        initial_cycles: "0".to_string(),
+        initial_cycles: "1000000000000".to_string(),
         init_arg: None,
         init_candid: None,
         kind: DesiredCanisterKind::Auxiliary,
-        minimum_cycles: "0".to_string(),
+        minimum_cycles: "500000000000".to_string(),
         name: "treasury".to_string(),
         parent: None,
         presence: DesiredPresence::Present,
-        principal: Some(treasury.to_string()),
+        principal: None,
         protocol_binding: None,
         replace: false,
         subnet: SUBNET.to_string(),
-        wasm: None,
+        wasm: Some(wasm.display().to_string()),
     }];
-    let mut root_desired =
-        desired_canister("root", Some(&root_canister.to_string()), false, &wasm, None);
-    // This fixture exercises the generic effect/conservation engine with
-    // minimal Wasm while retaining the exact Coordinator -> Root topology
-    // required for a governed same-module Root reset.
+    let mut root_desired = desired_canister("root", None, false, &wasm, None);
     root_desired.kind = DesiredCanisterKind::Root;
     root_desired.parent = Some("coordinator".to_string());
     root_desired.initial_cycles = "1000000000000".to_string();
-    root_desired.minimum_cycles = "1000000000000".to_string();
+    root_desired.minimum_cycles = "500000000000".to_string();
     canisters.push(root_desired);
     for role in [
         "coordinator",
@@ -4343,12 +4320,15 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         treasury: "treasury".to_string(),
     };
     let mut platform = PocketPlatform {
+        create_outcomes: BTreeMap::new(),
         desired: desired.clone(),
-        known: BTreeSet::from([treasury.to_string(), root_canister.to_string()]),
+        fail_after_effect: None,
+        known: BTreeSet::new(),
+        mutations: BTreeMap::new(),
         operator_cycles: 10_000_000_000_000,
         pic,
         protocol_ready: BTreeSet::new(),
-        reinstall_required: BTreeSet::from([root_canister.to_string()]),
+        reinstall_required: BTreeSet::new(),
     };
     let source = "d".repeat(64);
     let planned = workflow::plan(
@@ -4359,18 +4339,68 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         1_800_000_000_000_000_000,
         &mut platform,
     )
-    .expect("plan inconsistent PocketIC estate");
+    .expect("plan literal zero PocketIC estate");
+    let first_create = workflow::ordered_actions(&planned.plan)
+        .into_iter()
+        .find(|action| matches!(action, EnsureAction::Create { .. }))
+        .map(action_sha256)
+        .expect("literal zero-estate plan contains one Create");
+    platform.fail_after_effect = Some(first_create.clone());
+    assert!(matches!(
+        workflow::apply(
+            &root,
+            &desired,
+            &source,
+            "toko-shaped",
+            &planned.plan.plan_sha256,
+            &mut platform,
+        ),
+        Err(workflow::EnsureWorkflowError::Platform(_))
+    ));
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&root, "local", "toko-shaped");
+    let interrupted = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read interrupted zero-estate journal")
+        .expect("interrupted zero-estate journal");
+    assert_eq!(interrupted.completion, FleetEnsureCompletion::InProgress);
+    assert_eq!(platform.mutations.get(&first_create), Some(&1));
+
+    // Reconstruct the host adapter around the same live PocketIC estate. The
+    // reviewed plan, journal and state are reopened from disk; only remote
+    // idempotency evidence crosses this simulated process boundary.
+    let PocketPlatform {
+        create_outcomes,
+        known,
+        mutations,
+        operator_cycles,
+        pic,
+        protocol_ready,
+        reinstall_required,
+        ..
+    } = platform;
+    let mut restarted = PocketPlatform {
+        create_outcomes,
+        desired: desired.clone(),
+        fail_after_effect: None,
+        known,
+        mutations,
+        operator_cycles,
+        pic,
+        protocol_ready,
+        reinstall_required,
+    };
     let applied = workflow::apply(
         &root,
         &desired,
         &source,
         "toko-shaped",
         &planned.plan.plan_sha256,
-        &mut platform,
+        &mut restarted,
     )
-    .expect("converge PocketIC estate");
+    .expect("resume and converge literal zero PocketIC estate");
     assert!(applied.terminal);
     assert!(applied.actual_conservation.is_some());
+    assert_eq!(restarted.mutations.get(&first_create), Some(&1));
+    assert_eq!(restarted.known.len(), desired.canisters.len());
 
     let second = workflow::plan(
         &root,
@@ -4378,7 +4408,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         &source,
         "toko-shaped",
         1_800_000_000_000_000_100,
-        &mut platform,
+        &mut restarted,
     )
     .expect("plan converged PocketIC estate");
     assert!(
@@ -4388,17 +4418,19 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
             .iter()
             .all(|canister| canister.actions.is_empty())
     );
+    let mutations_before_replay = restarted.mutations.clone();
     let replay = workflow::apply(
         &root,
         &desired,
         &source,
         "toko-shaped",
         &second.plan.plan_sha256,
-        &mut platform,
+        &mut restarted,
     )
     .expect("effect-free PocketIC replay");
     assert!(replay.terminal);
     assert_eq!(replay.effects_applied, 0);
+    assert_eq!(restarted.mutations, mutations_before_replay);
 }
 
 struct Fixture {
