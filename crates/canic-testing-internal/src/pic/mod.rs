@@ -189,7 +189,9 @@ mod governed_suite {
         assert_eq!(
             names
                 .iter()
-                .filter(|name| **name == "literal zero-estate host/control-plane convergence")
+                .filter(|name| {
+                    **name == "Prepared Root controller-finalization control-plane convergence"
+                })
                 .count(),
             1
         );

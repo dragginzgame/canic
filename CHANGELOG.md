@@ -13,10 +13,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.2` restores zero-estate pool-controller finalisation through the
-  controller-authenticated Prepared Root inspection path and makes the
-  generated pool-Ledger recovery helper inherit the consuming workspace's
-  exact dependency lock.
+- `0.110.2` restores zero-estate Fleet Ensure restart/replay and Prepared-Root
+  controller finalisation, and makes generated recovery-helper dependencies a
+  complete pre-build projection of the consuming workspace lock.
 - `0.110.1` opens the remaining B1 measurement and attribution batch from
   immutable `v0.110.0` without claiming contraction or B1 completion.
 - `0.110.0` opens the reinstall-only runtime-contraction line on an immutable

@@ -36,12 +36,10 @@ fn generated_helper_lock_is_an_exact_workspace_lock_projection() {
         release_build_id: None,
     };
     let workspace_lock = workspace_root.join("Cargo.lock");
-    generate_verified_helper_lock(&context, &wrapper_root, &workspace_lock)
+    generate_verified_helper_lock(&context, &wrapper_root, &workspace_lock, &dependencies)
         .expect("project and validate the workspace-locked helper graph");
 
     let helper_lock = wrapper_root.join("Cargo.lock");
-    require_helper_lock_within_workspace(&workspace_lock, &helper_lock)
-        .expect("every helper identity belongs to the workspace lock");
     let helper: toml::Value =
         toml::from_str(&fs::read_to_string(helper_lock).expect("read generated helper lock"))
             .expect("decode generated helper lock");
@@ -55,20 +53,31 @@ fn generated_helper_lock_is_an_exact_workspace_lock_projection() {
 }
 
 #[test]
-fn workspace_projection_preserves_an_older_compatible_transitive_identity() {
-    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+fn workspace_seeded_lock_preserves_an_older_compatible_transitive_identity_without_cargo_cache() {
     let root = temp_dir("canic-pool-ledger-recovery-older-transitive");
-    let wrapper_root = root.join("wrapper");
-    fs::create_dir_all(wrapper_root.join("src")).expect("create older transitive fixture");
     let workspace_lock = root.join("workspace.lock");
+    let helper_lock = root.join("helper.lock");
+    fs::create_dir_all(&root).expect("create older transitive fixture");
     fs::write(
         &workspace_lock,
         r#"version = 4
 
 [[package]]
-name = "workspace-seed"
-version = "0.0.0"
-dependencies = ["smallvec"]
+name = "candid"
+version = "0.10.35"
+
+[[package]]
+name = "crypto-common"
+version = "0.1.6"
+
+[[package]]
+name = "ic-cdk"
+version = "0.20.2"
+dependencies = ["smallvec 1.15.2"]
+
+[[package]]
+name = "serde"
+version = "1.0.229"
 
 [[package]]
 name = "smallvec"
@@ -78,36 +87,102 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 "#,
     )
     .expect("write older workspace lock fixture");
-    fs::write(
-        wrapper_root.join("Cargo.toml"),
-        format!(
-            "[package]\nname = \"{GENERATED_WRAPPER_PACKAGE_NAME}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[workspace]\nresolver = \"2\"\n\n[dependencies]\nsmallvec = \"1\"\n"
-        ),
-    )
-    .expect("write generated helper manifest");
-    fs::write(wrapper_root.join("src/lib.rs"), "pub fn helper() {}\n")
-        .expect("write generated helper source");
-    let context = WorkspaceBuildContext {
-        role: POOL_LEDGER_RECOVERY_ROLE.to_string(),
-        profile: CanisterBuildProfile::Fast,
-        environment: "local".to_string(),
-        build_network: BuildNetwork::Local,
-        workspace_root: workspace_root.clone(),
-        icp_root: root.clone(),
-        config_path: workspace_root.join("canic.toml"),
-        local_replica: None,
-        refresh_canonical_infrastructure_did: false,
-        release_build_id: None,
+    let dependencies = crate::bootstrap_store::GeneratedWrapperDependencies {
+        canic_version: "0.110.1".to_string(),
+        candid_version: "0.10.35".to_string(),
+        crypto_common_version: "0.1.6".to_string(),
+        ic_cdk_version: "0.20.2".to_string(),
+        serde_version: "1.0.229".to_string(),
     };
-    generate_verified_helper_lock(&context, &wrapper_root, &workspace_lock)
-        .expect("project supplied workspace identities without selecting the newer cached version");
-    let helper_lock = wrapper_root.join("Cargo.lock");
+    write_workspace_seeded_helper_lock(&workspace_lock, &helper_lock, &dependencies)
+        .expect("write the helper lock without invoking Cargo resolution");
     let helper = fs::read_to_string(&helper_lock).expect("read projected helper lock");
     assert!(helper.contains("version = \"1.15.2\""));
     assert!(!helper.contains("1.16.0"));
-    require_helper_lock_within_workspace(&workspace_lock, &helper_lock)
-        .expect("projected helper remains an exact workspace subset");
+    assert!(helper.contains(GENERATED_WRAPPER_PACKAGE_NAME));
     fs::remove_dir_all(root).expect("remove older transitive fixture");
+}
+
+#[test]
+fn workspace_seeded_lock_reports_every_missing_direct_identity_together() {
+    let root = temp_dir("canic-pool-ledger-recovery-missing-identities");
+    fs::create_dir_all(&root).expect("create missing-identity fixture");
+    let workspace_lock = root.join("workspace.lock");
+    let helper_lock = root.join("helper.lock");
+    fs::write(
+        &workspace_lock,
+        "version = 4\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.229\"\n",
+    )
+    .expect("write incomplete workspace lock fixture");
+    let dependencies = crate::bootstrap_store::GeneratedWrapperDependencies {
+        canic_version: "0.110.1".to_string(),
+        candid_version: "0.10.35".to_string(),
+        crypto_common_version: "0.1.6".to_string(),
+        ic_cdk_version: "0.20.2".to_string(),
+        serde_version: "1.0.229".to_string(),
+    };
+    let error = write_workspace_seeded_helper_lock(&workspace_lock, &helper_lock, &dependencies)
+        .expect_err("every missing direct dependency must reject before Cargo starts");
+    let message = error.to_string();
+    for missing in ["candid 0.10.35", "crypto-common 0.1.6", "ic-cdk 0.20.2"] {
+        assert!(message.contains(missing), "missing report row: {missing}");
+    }
+    assert!(!helper_lock.exists());
+    fs::remove_dir_all(root).expect("remove missing-identity fixture");
+}
+
+#[test]
+fn helper_metadata_reports_every_identity_outside_the_workspace_lock() {
+    let root = temp_dir("canic-pool-ledger-recovery-unlocked-identities");
+    fs::create_dir_all(&root).expect("create unlocked-identity fixture");
+    let workspace_lock = root.join("workspace.lock");
+    fs::write(
+        &workspace_lock,
+        r#"version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.229"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+"#,
+    )
+    .expect("write workspace lock fixture");
+    let helper_metadata = br#"{
+        "packages": [
+            {
+                "name": "canic-generated-pool-ledger-recovery",
+                "version": "0.0.0",
+                "source": null,
+                "manifest_path": "/fixture/Cargo.toml"
+            },
+            {
+                "name": "unexpected-z",
+                "version": "2.0.0",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "manifest_path": "/cache/unexpected-z/Cargo.toml"
+            },
+            {
+                "name": "unexpected-a",
+                "version": "1.0.0",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "manifest_path": "/cache/unexpected-a/Cargo.toml"
+            }
+        ]
+    }"#;
+    let error = require_helper_metadata_within_workspace(&workspace_lock, helper_metadata)
+        .expect_err("every unlocked helper identity must be rejected together");
+    let message = error.to_string();
+    let first = message
+        .find("unexpected-a 1.0.0")
+        .expect("first unexpected identity");
+    let second = message
+        .find("unexpected-z 2.0.0")
+        .expect("second unexpected identity");
+    assert!(
+        first < second,
+        "mismatch report must be complete and stable"
+    );
+    fs::remove_dir_all(root).expect("remove unlocked-identity fixture");
 }
 
 #[derive(CandidType)]

@@ -15,6 +15,8 @@ pub mod binaryen;
 mod bootstrap_candid;
 mod bootstrap_coordinator;
 mod bootstrap_pool_ledger_recovery;
+
+pub use bootstrap_pool_ledger_recovery::prepare_pool_ledger_recovery_build;
 mod bootstrap_store;
 mod build_profile;
 pub mod build_provenance;
