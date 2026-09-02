@@ -13,6 +13,20 @@ canisters:
           commands:
             - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- app release . . apps/test/canic.toml
 
+  - name: index_child
+    build:
+      steps:
+        - type: script
+          commands:
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- index_child release . . apps/test/canic.toml
+
+  - name: index_hub
+    build:
+      steps:
+        - type: script
+          commands:
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- index_hub release . . apps/test/canic.toml
+
   - name: test
     build:
       steps:
@@ -68,6 +82,8 @@ environments:
     canisters:
       - root
       - app
+      - index_child
+      - index_hub
       - test
       - scale_hub
       - scale_replica
@@ -80,4 +96,4 @@ environments:
 
   - name: test
     network: local
-    canisters: [root, app, test, scale_hub, scale_replica, user_hub, user_shard]
+    canisters: [root, app, index_child, index_hub, test, scale_hub, scale_replica, user_hub, user_shard]

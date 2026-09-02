@@ -392,8 +392,12 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
     ScheduleHelper {
         path: "crates/canic-core/src/lifecycle/init/nonroot.rs",
         function: "schedule_init_nonroot_bootstrap",
+        required_fragments: &["Duration::ZERO", "schedule_init_nonroot_bootstrap_after"],
+    },
+    ScheduleHelper {
+        path: "crates/canic-core/src/lifecycle/init/nonroot.rs",
+        function: "schedule_init_nonroot_bootstrap_after",
         required_fragments: &[
-            "Duration::ZERO",
             "TimerApi::defer_lifecycle_required",
             "canic:bootstrap:init_nonroot_canister",
             "bootstrap_init_nonroot_canister().await",
@@ -404,6 +408,13 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
         function: "schedule_post_upgrade_nonroot_bootstrap",
         required_fragments: &[
             "Duration::ZERO",
+            "schedule_post_upgrade_nonroot_bootstrap_after",
+        ],
+    },
+    ScheduleHelper {
+        path: "crates/canic-core/src/lifecycle/upgrade/nonroot.rs",
+        function: "schedule_post_upgrade_nonroot_bootstrap_after",
+        required_fragments: &[
             "TimerApi::defer_lifecycle_required",
             "canic:bootstrap:post_upgrade_nonroot_canister",
             "bootstrap_post_upgrade_nonroot_canister().await",
