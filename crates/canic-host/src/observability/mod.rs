@@ -36,7 +36,7 @@ enum RootCommandFragment {
 
 #[derive(CandidType, Deserialize)]
 enum RootCommandResponseFragment {
-    InspectCanister(CanisterStatusResponse),
+    InspectCanister(Box<CanisterStatusResponse>),
     ObserveCanister(CanisterObservabilityResponse),
 }
 

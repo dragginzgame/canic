@@ -1896,47 +1896,12 @@ mod tests {
             module_hash: Some(vec![0x11; 32]),
             created_at: 1,
         };
-        let allocation = RootComponentChildAllocationResponse {
+        let allocation = committed_descendant_allocation(
+            &partition_authority,
+            &member,
+            &child_info,
             operation_id,
-            component: member.binding.component,
-            parent_canister_id: parent,
-            parent_role: member.binding.role.clone(),
-            child_role: child_info.role.clone(),
-            child_kind:
-                canic_core::control_plane_support::config::schema::ComponentChildKind::Shard,
-            maximum_instances_per_parent: 64,
-            maximum_descendants: 64,
-            maximum_registry_bytes: 1_048_576,
-            reserved_against_registry: ComponentRegistryHead {
-                component: member.binding.component,
-                revision: 2,
-                content_hash: [33; 32],
-            },
-            release_set: *partition_authority.active_release_set,
-            phase: RootComponentAllocationPhase::Committed,
-            creation: Some(
-                canic_core::dto::component_registry::RootComponentCreationEvidence {
-                    wasm_store: Principal::from_slice(&[34; 29]),
-                    payload_hash: [35; 32],
-                    payload_size_bytes: 128,
-                    initial_cycles: Cycles::new(5_000_000_000_000),
-                    controller: root,
-                    canister: Some(child),
-                },
-            ),
-            installation: Some(
-                canic_core::dto::component_registry::RootComponentChildInstallEvidence {
-                    raw_module_hash: [0x11; 32],
-                    chunk_hashes: vec![vec![36; 32]],
-                    binding: canic_core::ids::ComponentChildBinding {
-                        component: member.binding.clone(),
-                        parent_canister_id: parent,
-                        role: child_info.role.clone(),
-                        canister_id: child,
-                    },
-                },
-            ),
-        };
+        );
 
         let authority = TerminalDescendantAuthority {
             child: &child_info,
@@ -1969,7 +1934,7 @@ mod tests {
             BTreeMap::from([(parent, workload.clone()), (child, top_level.clone())]),
             BTreeMap::from([(parent, top_level.clone())]),
             BTreeMap::from([
-                (parent, top_level.clone()),
+                (parent, top_level),
                 (child, workload.clone()),
                 (Principal::from_slice(&[38; 29]), workload.clone()),
             ]),
@@ -2001,6 +1966,56 @@ mod tests {
             maximum_workloads_from_result(&result).expect("bounded workload capacity"),
             expected_maximum
         );
+    }
+
+    fn committed_descendant_allocation(
+        partition_authority: &ComponentPartitionAuthority<'_>,
+        member: &RootProvisionedGroupMember,
+        child: &CanisterInfo,
+        operation_id: [u8; 32],
+    ) -> RootComponentChildAllocationResponse {
+        let root = member.binding.fleet_subnet_root;
+        RootComponentChildAllocationResponse {
+            operation_id,
+            component: member.binding.component,
+            parent_canister_id: member.binding.canister_id,
+            parent_role: member.binding.role.clone(),
+            child_role: child.role.clone(),
+            child_kind:
+                canic_core::control_plane_support::config::schema::ComponentChildKind::Shard,
+            maximum_instances_per_parent: 64,
+            maximum_descendants: 64,
+            maximum_registry_bytes: 1_048_576,
+            reserved_against_registry: ComponentRegistryHead {
+                component: member.binding.component,
+                revision: 2,
+                content_hash: [33; 32],
+            },
+            release_set: *partition_authority.active_release_set,
+            phase: RootComponentAllocationPhase::Committed,
+            creation: Some(
+                canic_core::dto::component_registry::RootComponentCreationEvidence {
+                    wasm_store: Principal::from_slice(&[34; 29]),
+                    payload_hash: [35; 32],
+                    payload_size_bytes: 128,
+                    initial_cycles: Cycles::new(5_000_000_000_000),
+                    controller: root,
+                    canister: Some(child.pid),
+                },
+            ),
+            installation: Some(
+                canic_core::dto::component_registry::RootComponentChildInstallEvidence {
+                    raw_module_hash: [0x11; 32],
+                    chunk_hashes: vec![vec![36; 32]],
+                    binding: canic_core::ids::ComponentChildBinding {
+                        component: member.binding.clone(),
+                        parent_canister_id: member.binding.canister_id,
+                        role: child.role.clone(),
+                        canister_id: child.pid,
+                    },
+                },
+            ),
+        }
     }
 
     #[test]
