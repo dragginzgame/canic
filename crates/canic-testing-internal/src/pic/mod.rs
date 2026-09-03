@@ -190,7 +190,7 @@ mod governed_suite {
             names
                 .iter()
                 .filter(|name| {
-                    **name == "Prepared Root controller-finalization control-plane convergence"
+                    **name == "literal-zero Fleet with initial-child terminal replay"
                 })
                 .count(),
             1
