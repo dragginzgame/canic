@@ -167,6 +167,16 @@ Direct PocketIC test commands outside the governed runner must supply
 `CANIC_POCKET_IC_SERVER_URL`; they fail immediately when it is absent rather
 than spawning an implicit or unobservable child process.
 
+Local governed tests retain content-addressed Wasm and sealed release-artifact
+sets under `target/test-artifacts` and reuse the shared incremental Wasm target.
+Tests must keep plans, journals, identities and PocketIC state invocation-local;
+only immutable build products whose source, configuration, toolchain and output
+set are transactionally verified may cross invocations. Use `make clean-wasm`
+only for deliberate cache/storage maintenance, not as a routine response to a
+test failure. A focused PocketIC regression should run through the governed
+`targeted-pocketic` mode so it receives the pinned shared server and can reuse
+those artifacts.
+
 ## Explicit Cargo Cleanup
 
 Release and push targets retain Cargo artifacts. This lets a following

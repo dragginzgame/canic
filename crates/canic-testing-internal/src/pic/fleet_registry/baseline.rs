@@ -193,6 +193,9 @@ mod tests {
             build_workspace_canister_artifact, build_workspace_configured_canister_artifacts,
         },
         release_build::finalize_release_build_from_manifest,
+        role_contract::{
+            PackageValidationMode, RolePackageValidation, validate_declared_role_package,
+        },
     };
     #[cfg(test)]
     use ciborium::Value;
@@ -207,11 +210,13 @@ mod tests {
         time::{Duration, Instant},
     };
     #[cfg(test)]
-    use std::{path::PathBuf, process::Command};
+    use std::{collections::BTreeSet, path::PathBuf, process::Command};
 
     #[cfg(test)]
     use crate::pic::artifacts::{
         INTERNAL_TEST_RELEASE_BUILD_ID, INTERNAL_TEST_RELEASE_BUILD_NONCE,
+        internal_test_artifact_maintenance_interval, internal_test_artifact_prune_policy,
+        report_artifact_cache_maintenance,
     };
     use crate::pic::fleet_registry::fixture::progress_elapsed;
     use crate::pic::{
@@ -224,6 +229,11 @@ mod tests {
             install_root_args_with_release_set_digest_and_coordinator, managed_test_init_identity,
             prepare_sibling_wasm_store_controllers,
         },
+    };
+    #[cfg(test)]
+    use ic_testkit::artifacts::{
+        ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
+        prepare_artifact_cache, resolve_cargo_build_inputs,
     };
     use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
     #[cfg(test)]
@@ -1527,10 +1537,6 @@ exec icp "$@"
     }
 
     #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one helper builds and seals the complete literal-zero release authority"
-    )]
     fn build_literal_zero_release_artifacts(
         workspace_root: &Path,
         adapter_root: &Path,
@@ -1539,6 +1545,275 @@ exec icp "$@"
         configured_roles: &[String],
     ) -> LiteralZeroReleaseArtifacts {
         let release_build_id = persist_internal_test_release_build_plan(adapter_root);
+        let outputs =
+            literal_zero_release_artifact_outputs(adapter_root, release_build_id, configured_roles);
+        let cache = literal_zero_release_artifact_cache_spec(
+            workspace_root,
+            config_path,
+            configured_roles,
+            &outputs,
+        );
+        let started_at = Instant::now();
+        let outcome = match prepare_artifact_cache(&cache)
+            .expect("prepare literal-zero release artifact cache")
+        {
+            ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
+            ArtifactCachePreparation::Build(transaction) => {
+                build_and_seal_literal_zero_release_artifacts(
+                    workspace_root,
+                    adapter_root,
+                    config_path,
+                    configuration,
+                    configured_roles,
+                    release_build_id,
+                );
+                for (name, path) in &outputs {
+                    transaction
+                        .import_output(name, path)
+                        .unwrap_or_else(|error| {
+                            panic!("import literal-zero release artifact `{name}`: {error}")
+                        });
+                }
+                transaction
+                    .commit()
+                    .expect("commit literal-zero release artifact cache")
+            }
+        };
+        eprintln!(
+            "[pic_fleet_registry] literal-zero release artifacts {outcome} elapsed={:?}",
+            started_at.elapsed()
+        );
+        report_artifact_cache_maintenance(
+            "literal-zero-release-artifacts",
+            outcome.record().maintenance(),
+        );
+
+        load_literal_zero_release_artifacts(adapter_root, release_build_id, configured_roles)
+    }
+
+    #[cfg(test)]
+    fn literal_zero_release_artifact_cache_spec(
+        workspace_root: &Path,
+        config_path: &Path,
+        configured_roles: &[String],
+        outputs: &BTreeMap<String, PathBuf>,
+    ) -> ArtifactCacheSpec {
+        let snapshot = AppConfigSnapshot::load(config_path)
+            .expect("load literal-zero release build config for Cargo inputs");
+        let mut packages = BTreeSet::from([
+            "canic-fleet-coordinator".to_string(),
+            "canic-host".to_string(),
+            "canic-wasm-store".to_string(),
+        ]);
+        for role in configured_roles {
+            let role = CanisterRole::from(role.clone());
+            let RolePackageValidation::Supported(evidence) = validate_declared_role_package(
+                config_path,
+                snapshot.model(),
+                &role,
+                PackageValidationMode::Passive,
+            ) else {
+                panic!("literal-zero role `{role}` must resolve to one supported package");
+            };
+            packages.insert(evidence.role_package_name);
+        }
+        let packages = packages.iter().map(String::as_str).collect::<Vec<_>>();
+        let environment = [
+            ("CARGO_INCREMENTAL", "0"),
+            ("ICP_ENVIRONMENT", "local"),
+            INTERNAL_TEST_RELEASE_BUILD_ID,
+        ];
+        let cargo_build = WasmBuildSpec::new(
+            workspace_root,
+            &literal_zero_canister_build_target(workspace_root),
+            &packages,
+            CanisterBuildProfile::Fast.target_dir_name(),
+        )
+        .with_cargo_profile_args(["--profile", "fast", "--locked"])
+        .with_extra_env(environment);
+        let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
+            .expect("resolve literal-zero release Cargo build inputs");
+        let config_relative = config_path
+            .strip_prefix(workspace_root)
+            .expect("literal-zero config must be workspace-confined")
+            .to_str()
+            .expect("literal-zero config path UTF-8");
+        let mut cache = ArtifactCacheSpec::new(
+            &workspace_root.join("target/test-artifacts/external-artifact-cache"),
+            "literal-zero-release-artifacts",
+            "canic/literal-zero-release-artifacts/v1",
+        )
+        .with_coordination_scope("canic-external-artifact-builds")
+        .with_arguments([
+            "literal-zero-release-build",
+            "fast",
+            "local",
+            config_relative,
+        ])
+        .with_environment(environment)
+        .with_input("build-config", config_path)
+        .with_input("icp-config", &workspace_root.join("icp.yaml"))
+        .with_cargo_build_inputs("literal-zero-release-cargo", &cargo_build, &cargo_inputs)
+        .with_prune_policy_at_most_every(
+            internal_test_artifact_prune_policy(),
+            internal_test_artifact_maintenance_interval(),
+        );
+        for (name, path) in outputs {
+            cache = cache.with_output(name, path);
+        }
+        cache
+    }
+
+    #[cfg(test)]
+    fn literal_zero_canister_build_target(workspace_root: &Path) -> PathBuf {
+        std::env::var_os("CARGO_TARGET_DIR").map_or_else(
+            || workspace_root.join("target/canic-wasm"),
+            |configured| {
+                let configured = PathBuf::from(configured);
+                if configured.is_absolute() {
+                    configured
+                } else {
+                    workspace_root.join(configured)
+                }
+            },
+        )
+    }
+
+    #[cfg(test)]
+    fn literal_zero_adapter_root(workspace_root: &Path) -> PathBuf {
+        std::env::var_os("CANIC_TEST_SCRATCH").map_or_else(
+            || {
+                test_target_dir(workspace_root, "canic-121-production-adapter")
+                    .join(std::process::id().to_string())
+            },
+            |scratch| PathBuf::from(scratch).join("canic-121-production-adapter"),
+        )
+    }
+
+    #[cfg(test)]
+    fn literal_zero_release_artifact_outputs(
+        adapter_root: &Path,
+        release_build_id: ReleaseBuildId,
+        configured_roles: &[String],
+    ) -> BTreeMap<String, PathBuf> {
+        let release_root = literal_zero_release_root(adapter_root, release_build_id);
+        let mut outputs = BTreeMap::from([
+            (
+                "application-manifest".to_string(),
+                release_root.join("application-artifact-union.json"),
+            ),
+            (
+                "current-manifest".to_string(),
+                release_root.join("current-release-set-manifest.json"),
+            ),
+            (
+                "infrastructure-manifest".to_string(),
+                release_root.join("infrastructure-artifact-manifest.json"),
+            ),
+            ("release-plan".to_string(), release_root.join("plan.cbor")),
+        ]);
+        let mut roles = configured_roles.iter().cloned().collect::<BTreeSet<_>>();
+        roles.extend([
+            CanicInfrastructureRole::FleetCoordinator
+                .as_str()
+                .to_string(),
+            CanicInfrastructureRole::WasmStore.as_str().to_string(),
+        ]);
+        for role in roles {
+            for extension in ["did", "wasm", "wasm.gz"] {
+                outputs.insert(
+                    format!("{role}-{extension}"),
+                    literal_zero_role_artifact_path(
+                        adapter_root,
+                        release_build_id,
+                        &role,
+                        extension,
+                    ),
+                );
+            }
+        }
+        outputs
+    }
+
+    #[cfg(test)]
+    fn load_literal_zero_release_artifacts(
+        adapter_root: &Path,
+        release_build_id: ReleaseBuildId,
+        configured_roles: &[String],
+    ) -> LiteralZeroReleaseArtifacts {
+        let artifact_path = |role: &str, extension: &str| {
+            literal_zero_role_artifact_path(adapter_root, release_build_id, role, extension)
+        };
+        let coordinator_role = CanicInfrastructureRole::FleetCoordinator.as_str();
+        let root_role = CanisterRole::ROOT.as_str();
+        let store_role = CanicInfrastructureRole::WasmStore.as_str();
+        let component_wasms = configured_roles
+            .iter()
+            .filter(|role| role.as_str() != root_role)
+            .map(|role| {
+                (
+                    CanisterRole::from(role.clone()),
+                    std::fs::read(artifact_path(role, "wasm"))
+                        .expect("read cached literal-zero Component Wasm"),
+                )
+            })
+            .collect();
+        let coordinator_wasm_path = artifact_path(coordinator_role, "wasm");
+        let root_wasm_path = artifact_path(root_role, "wasm");
+        let store_wasm_path = artifact_path(store_role, "wasm");
+
+        LiteralZeroReleaseArtifacts {
+            component_wasms,
+            coordinator_candid: relative_artifact_path(
+                adapter_root,
+                &artifact_path(coordinator_role, "did"),
+            ),
+            coordinator_wasm: relative_artifact_path(adapter_root, &coordinator_wasm_path),
+            release_build_id,
+            root_candid: relative_artifact_path(adapter_root, &artifact_path(root_role, "did")),
+            root_wasm: relative_artifact_path(adapter_root, &root_wasm_path),
+            root_wasm_bytes: std::fs::read(root_wasm_path)
+                .expect("read cached literal-zero Root Wasm"),
+            store_candid: relative_artifact_path(adapter_root, &artifact_path(store_role, "did")),
+            store_wasm: relative_artifact_path(adapter_root, &store_wasm_path),
+            store_wasm_bytes: std::fs::read(store_wasm_path)
+                .expect("read cached literal-zero Store Wasm"),
+        }
+    }
+
+    #[cfg(test)]
+    fn literal_zero_release_root(adapter_root: &Path, release_build_id: ReleaseBuildId) -> PathBuf {
+        adapter_root
+            .join(".canic/release-builds")
+            .join(release_build_id.to_string())
+    }
+
+    #[cfg(test)]
+    fn literal_zero_role_artifact_path(
+        adapter_root: &Path,
+        release_build_id: ReleaseBuildId,
+        role: &str,
+        extension: &str,
+    ) -> PathBuf {
+        literal_zero_release_root(adapter_root, release_build_id)
+            .join("artifacts")
+            .join(role)
+            .join(format!("{role}.{extension}"))
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one helper builds and seals the complete literal-zero release authority"
+    )]
+    fn build_and_seal_literal_zero_release_artifacts(
+        workspace_root: &Path,
+        adapter_root: &Path,
+        config_path: &Path,
+        configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+        configured_roles: &[String],
+        release_build_id: ReleaseBuildId,
+    ) {
         let context = WorkspaceBuildContext {
             role: "root".to_string(),
             profile: CanisterBuildProfile::Fast,
@@ -1642,29 +1917,6 @@ exec icp "$@"
         .expect("persist literal-zero current release authority");
         finalize_release_build_from_manifest(adapter_root, release_build_id, &current.path)
             .expect("finalize literal-zero current release authority");
-
-        LiteralZeroReleaseArtifacts {
-            component_wasms: components
-                .into_iter()
-                .map(|(role, component)| {
-                    (
-                        role,
-                        std::fs::read(&component.wasm_path)
-                            .expect("read literal-zero Component Wasm"),
-                    )
-                })
-                .collect(),
-            coordinator_candid: relative_artifact_path(adapter_root, &coordinator.did_path),
-            coordinator_wasm: relative_artifact_path(adapter_root, &coordinator.wasm_path),
-            release_build_id,
-            root_candid: relative_artifact_path(adapter_root, &root.did_path),
-            root_wasm: relative_artifact_path(adapter_root, &root.wasm_path),
-            root_wasm_bytes: std::fs::read(&root.wasm_path).expect("read literal-zero Root Wasm"),
-            store_candid: relative_artifact_path(adapter_root, &store.did_path),
-            store_wasm: relative_artifact_path(adapter_root, &store.wasm_path),
-            store_wasm_bytes: std::fs::read(&store.wasm_path)
-                .expect("read literal-zero Store Wasm"),
-        }
     }
 
     #[cfg(test)]
@@ -3001,8 +3253,7 @@ exec icp "$@"
             .keys()
             .map(ToString::to_string)
             .collect::<Vec<_>>();
-        let adapter_root = test_target_dir(&workspace_root, "canic-121-production-adapter")
-            .join(std::process::id().to_string());
+        let adapter_root = literal_zero_adapter_root(&workspace_root);
         if adapter_root.exists() {
             std::fs::remove_dir_all(&adapter_root)
                 .expect("clear prior CANIC-121 production-adapter fixture");

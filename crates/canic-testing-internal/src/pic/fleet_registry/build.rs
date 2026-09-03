@@ -3,7 +3,6 @@
 use ic_testkit::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
     prepare_artifact_cache, read_wasm, resolve_cargo_build_inputs,
-    test_target_dir as artifact_test_target_dir,
 };
 use ic_testkit::pic::{PocketIc, PocketIcBuilder};
 #[cfg(test)]
@@ -17,8 +16,9 @@ use std::{
 
 use super::super::artifacts::{
     CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID,
-    build_internal_test_wasm_canisters_with_env, internal_test_artifact_maintenance_interval,
-    internal_test_artifact_prune_policy, report_artifact_cache_maintenance,
+    build_internal_test_wasm_canisters_with_env, internal_test_artifact_build_target,
+    internal_test_artifact_maintenance_interval, internal_test_artifact_prune_policy,
+    report_artifact_cache_maintenance,
 };
 use super::super::startup::start_pocket_ic;
 use super::fixture::progress;
@@ -509,7 +509,7 @@ fn read_built_wasm(target_dir: &Path, crate_name: &str) -> Vec<u8> {
 
 // Resolve the shared PocketIC wasm target directory.
 fn test_target_dir(workspace_root: &Path) -> PathBuf {
-    artifact_test_target_dir(workspace_root, "pic-wasm")
+    internal_test_artifact_build_target(workspace_root)
 }
 
 // Resolve the canic workspace root from the internal test crate manifest dir.

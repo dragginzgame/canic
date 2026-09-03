@@ -39,7 +39,7 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
     static WASM: OnceLock<Vec<u8>> = OnceLock::new();
     WASM.get_or_init(|| {
         let config_path = workspace_root.join("apps/test/canic.toml");
-        let target_dir = workspace_root.join("target/test-artifacts/fleet-coordinator-artifact");
+        let target_dir = internal_test_artifact_build_target(workspace_root);
         let artifact_path = workspace_root
             .join(".canic/release-builds")
             .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
@@ -77,6 +77,12 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
         })
     })
     .clone()
+}
+
+/// Reusable Cargo target for host-driven test artifact builds.
+#[must_use]
+pub(super) fn internal_test_artifact_build_target(workspace_root: &Path) -> PathBuf {
+    workspace_root.join("target/pic-wasm")
 }
 
 #[cfg(test)]
@@ -519,6 +525,16 @@ mod tests {
     }
 
     #[test]
+    fn host_driven_artifacts_share_the_pocketic_cargo_target() {
+        let workspace_root = Path::new("/workspace");
+
+        assert_eq!(
+            internal_test_artifact_build_target(workspace_root),
+            workspace_root.join("target/pic-wasm")
+        );
+    }
+
+    #[test]
     fn canonical_build_config_is_an_explicit_artifact_input() {
         let workspace_root = Path::new("/workspace");
         let build_env = [
@@ -562,6 +578,10 @@ mod tests {
             (
                 "artifact canonical build config input",
                 canonical_build_config_is_an_explicit_artifact_input,
+            ),
+            (
+                "artifact host-driven shared target",
+                host_driven_artifacts_share_the_pocketic_cargo_target,
             ),
             (
                 "artifact shared target network",
