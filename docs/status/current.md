@@ -282,4 +282,5 @@ instantiation cohort. Retain the active B1 evidence and do not begin B2 until
 the maintainer accepts the complete B1 baseline.
 
 
-<!-- canic-release-validation: version=0.110.4 source=27eb97333a2fb73bedbfde1e566d13ab055b339c date=2026-09-02 gate=complete -->
+
+<!-- canic-release-validation: version=0.110.5 source=03ea1a1f6af91c370d4e56352118faf85a4b5079 date=2026-09-02 gate=complete -->
