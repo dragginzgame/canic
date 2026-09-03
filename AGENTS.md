@@ -184,6 +184,11 @@ policy and ops independently; ops may call model. Policy never calls ops.
   Rust's normal module discovery works.
 
 ## Testing
+- Within an already authorized implementation or release batch, a request to
+  check, inspect or diagnose a failing test also authorizes correcting any
+  confirmed in-scope source or test defect and running its narrow regression.
+  Stop after diagnosis only when the maintainer explicitly requests read-only
+  work or the correction would materially expand the accepted batch.
 - During coding and implementation work, automated agents must run only
   targeted checks for the files, package, and behavior they changed. They must
   not run full workspace, release-matrix, or broad PocketIC suites such as
