@@ -18,11 +18,20 @@ Usage:
   scripts/ci/wasm-ablation-report.sh --list
   scripts/ci/wasm-ablation-report.sh --experiment <id> --source <commit> \
     --product-root <clean-linked-worktree> --output-root <directory>
+  scripts/ci/wasm-ablation-report.sh --smoke --experiment <id> \
+    [--artifact <artifact-id>] --source <commit> \
+    --product-root <clean-linked-worktree> --output-root <directory>
 
 The runner builds each selected artifact twice through canic-host's release
 artifact authority, recreating one fixed Cargo target path before each clean
 repetition. Its repository-owned function counter implements the exact local-
 function quantity limited by the frozen IC replica validator source.
+
+Smoke mode is development-only evidence. It builds the patched condition first
+and then its baseline, selects only the first configured artifact unless an
+exact artifact ID is supplied, performs one repetition and uses the repository
+sccache wrapper when available. Smoke output is never retention-eligible and
+does not make a determinism claim.
 EOF
 }
 
@@ -167,6 +176,8 @@ EXPERIMENT=""
 EXPECTED_SOURCE=""
 PRODUCT_ROOT_INPUT="${WASM_ABLATION_PRODUCT_ROOT:-}"
 OUTPUT_ROOT_INPUT="${WASM_ABLATION_OUTPUT_ROOT:-}"
+RUN_MODE="retained"
+ARTIFACT_OVERRIDE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -193,6 +204,14 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_ROOT_INPUT="${2:-}"
             shift 2
             ;;
+        --smoke)
+            RUN_MODE="smoke"
+            shift
+            ;;
+        --artifact)
+            ARTIFACT_OVERRIDE="${2:-}"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -209,6 +228,13 @@ done
 }
 
 check_manifests
+
+if [[ "$RUN_MODE" == "smoke" && "$ACTION" != "run" ]]; then
+    fail "--smoke is valid only with --experiment"
+fi
+if [[ -n "$ARTIFACT_OVERRIDE" && "$RUN_MODE" != "smoke" ]]; then
+    fail "--artifact is valid only with --smoke"
+fi
 
 if [[ "$ACTION" == "check" ]]; then
     echo "Wasm ablation manifests passed"
@@ -229,6 +255,29 @@ IFS=$'\t' read -r SEQUENCE _ STATE SWITCH_KIND SWITCH_VALUE ARTIFACT_SELECTORS \
     IMMEDIATE_BASELINE INSTRUCTION_EVIDENCE SOURCE_OWNERS <<<"$EXPERIMENT_ROW"
 [[ "$STATE" == "ready" ]] || fail "experiment is not runnable until its one-switch input exists: $EXPERIMENT"
 [[ "$SWITCH_KIND" != "cross_commit" ]] || fail "cross-commit comparison requires its separately frozen compatible pair"
+
+selected_run_artifacts() {
+    local selected_artifacts
+    local selected_override
+
+    selected_artifacts="$(select_artifacts "$ARTIFACT_SELECTORS")"
+    [[ -n "$selected_artifacts" ]] || fail "no artifacts selected for $EXPERIMENT"
+    if [[ "$RUN_MODE" != "smoke" ]]; then
+        printf '%s\n' "$selected_artifacts"
+        return
+    fi
+    if [[ -z "$ARTIFACT_OVERRIDE" ]]; then
+        printf '%s\n' "$selected_artifacts" | awk 'NR == 1 { print; exit }'
+        return
+    fi
+    [[ "$ARTIFACT_OVERRIDE" =~ ^[a-z0-9_]+$ ]] ||
+        fail "invalid smoke artifact ID: $ARTIFACT_OVERRIDE"
+    selected_override="$(printf '%s\n' "$selected_artifacts" |
+        awk -F '\t' -v artifact="$ARTIFACT_OVERRIDE" '$1 == artifact { print; exit }')"
+    [[ -n "$selected_override" ]] ||
+        fail "smoke artifact $ARTIFACT_OVERRIDE is not selected by $EXPERIMENT"
+    printf '%s\n' "$selected_override"
+}
 
 require_command cargo
 require_command cmp
@@ -266,6 +315,9 @@ BASE_SOURCE_TREE="$(git -C "$PRODUCT_ROOT" rev-parse 'HEAD^{tree}')"
 BASE_CARGO_LOCK_SHA256="$(file_hash "$PRODUCT_ROOT/Cargo.lock")"
 
 RUN_STEM="$EXPERIMENT-${SOURCE_COMMIT:0:12}"
+if [[ "$RUN_MODE" == "smoke" ]]; then
+    RUN_STEM="$RUN_STEM-smoke"
+fi
 RUN_ROOT="$OUTPUT_ROOT/$RUN_STEM"
 [[ ! -e "$RUN_ROOT" ]] || fail "output already exists: $RUN_ROOT"
 mkdir -p "$RUN_ROOT/artifacts" "$RUN_ROOT/logs" "$RUN_ROOT/analysis" "$RUN_ROOT/method"
@@ -428,22 +480,44 @@ build_condition() {
     local extension
     local environment_args=()
     local selected_artifacts
+    local artifact_count
+    local artifact_index
+    local build_started
+    local repetitions=(a b)
 
-    selected_artifacts="$(select_artifacts "$ARTIFACT_SELECTORS")"
-    [[ -n "$selected_artifacts" ]] || fail "no artifacts selected for $EXPERIMENT"
+    selected_artifacts="$(selected_run_artifacts)"
+    artifact_count="$(printf '%s\n' "$selected_artifacts" | awk 'NF { count++ } END { print count + 0 }')"
+    if [[ "$RUN_MODE" == "smoke" ]]; then
+        repetitions=(a)
+        if [[ -z "${RUSTC_WRAPPER:-}" && -x "$METHOD_ROOT/scripts/ci/run-sccache.sh" ]] &&
+            command -v sccache >/dev/null 2>&1; then
+            if "$METHOD_ROOT/scripts/ci/run-sccache.sh" "$(command -v rustc)" -vV \
+                >/dev/null 2>&1; then
+                environment_args+=("RUSTC_WRAPPER=$METHOD_ROOT/scripts/ci/run-sccache.sh")
+            else
+                echo "warning: sccache is installed but unusable; running the smoke without it" >&2
+                environment_args+=("RUSTC_WRAPPER=")
+            fi
+        fi
+    fi
     if [[ -n "$environment_name" ]]; then
         [[ "$environment_name" =~ ^[A-Z][A-Z0-9_]*$ ]] || fail "invalid measurement environment name"
         environment_args+=("$environment_name=$environment_value")
     fi
 
-    for repetition in a b; do
+    for repetition in "${repetitions[@]}"; do
         target_dir="$BUILD_TARGET_DIR"
-        rm -rf "$target_dir"
+        if [[ "$RUN_MODE" == "retained" ]]; then
+            rm -rf "$target_dir"
+        fi
         mkdir -p "$target_dir"
+        artifact_index=0
         while IFS=$'\t' read -r artifact_id group config_path canister; do
+            artifact_index=$((artifact_index + 1))
             rm -rf "$PRODUCT_ROOT/.icp"
             log_path="$RUN_ROOT/logs/$condition-$repetition-$artifact_id.log"
-            echo "building $EXPERIMENT $condition-$repetition $artifact_id"
+            build_started="$SECONDS"
+            echo "building $EXPERIMENT $condition-$repetition $artifact_id ($artifact_index/$artifact_count)"
             if ! (
                 cd "$PRODUCT_ROOT"
                 env ICP_ENVIRONMENT=local CARGO_NET_OFFLINE=true CARGO_INCREMENTAL=0 \
@@ -457,8 +531,13 @@ build_condition() {
                 fail "release build failed for $artifact_id"
             fi
             capture_artifact "$condition" "$repetition" "$artifact_id" "$canister" "$log_path"
+            echo "built $EXPERIMENT $condition-$repetition $artifact_id in $((SECONDS - build_started))s"
         done <<<"$selected_artifacts"
     done
+
+    if [[ "$RUN_MODE" == "smoke" ]]; then
+        return
+    fi
 
     while IFS=$'\t' read -r artifact_id group config_path canister; do
         first_dir="$RUN_ROOT/artifacts/$condition-a/$artifact_id"
@@ -496,12 +575,25 @@ case "$SWITCH_KIND" in
         PATCH_SHA256="$(file_hash "$PATCH_PATH")"
         PATCH_EXPECTED_PATHS="$(git -C "$PRODUCT_ROOT" apply --numstat "$PATCH_PATH" | cut -f3 | sort -u)"
         [[ -n "$PATCH_EXPECTED_PATHS" ]] || fail "measurement patch has no paths: $SWITCH_VALUE"
-        build_condition baseline "" ""
-        git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
-        git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
-        PATCH_APPLIED="true"
-        build_condition variant "" ""
-        PATCH_DIFF_SHA256="$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')"
+        if [[ "$RUN_MODE" == "smoke" ]]; then
+            git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
+            git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
+            PATCH_APPLIED="true"
+            PATCH_DIFF_SHA256="$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')"
+            build_condition variant "" ""
+            git -C "$PRODUCT_ROOT" apply --reverse "$PATCH_PATH"
+            PATCH_APPLIED="false"
+            build_condition baseline "" ""
+            git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
+            PATCH_APPLIED="true"
+        else
+            build_condition baseline "" ""
+            git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
+            git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
+            PATCH_APPLIED="true"
+            build_condition variant "" ""
+            PATCH_DIFF_SHA256="$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')"
+        fi
         ;;
     *)
         fail "unsupported runnable switch kind: $SWITCH_KIND"
@@ -525,6 +617,7 @@ fi
         fail "replica function counter source changed during the ablation run"
     printf 'field\tvalue\n'
     printf 'experiment\t%s\n' "$EXPERIMENT"
+    printf 'run_mode\t%s\n' "$RUN_MODE"
     printf 'sequence\t%s\n' "$SEQUENCE"
     printf 'source_commit\t%s\n' "$SOURCE_COMMIT"
     printf 'source_tree\t%s\n' "$BASE_SOURCE_TREE"
@@ -536,6 +629,7 @@ fi
     printf 'switch_diff_sha256\t%s\n' "$PATCH_DIFF_SHA256"
     printf 'immediate_baseline\t%s\n' "$IMMEDIATE_BASELINE"
     printf 'artifact_selectors\t%s\n' "$ARTIFACT_SELECTORS"
+    printf 'measured_artifacts\t%s\n' "$(selected_run_artifacts | cut -f1 | paste -sd, -)"
     printf 'instruction_evidence\t%s\n' "$INSTRUCTION_EVIDENCE"
     printf 'source_owners\t%s\n' "$SOURCE_OWNERS"
     printf 'runner_source_sha256\t%s\n' "$RUNNER_SOURCE_SHA256"
@@ -545,7 +639,13 @@ fi
     printf 'frozen_ic_validator_commit\t%s\n' "$FROZEN_IC_VALIDATOR_COMMIT"
     printf 'ic_replica_max_defined_functions\t%s\n' "$IC_REPLICA_MAX_DEFINED_FUNCTIONS"
     printf 'ic_replica_required_function_reserve\t%s\n' "$IC_REPLICA_REQUIRED_FUNCTION_RESERVE"
-    printf 'retention_eligible\tyes\n'
+    if [[ "$RUN_MODE" == "retained" ]]; then
+        printf 'retention_eligible\tyes\n'
+        printf 'determinism_repetitions\t2\n'
+    else
+        printf 'retention_eligible\tno\n'
+        printf 'determinism_repetitions\t1\n'
+    fi
     printf 'execution_path_sha256\t%s\n' "$(printf '%s' "$PRODUCT_ROOT" | sha256sum | awk '{print $1}')"
     printf 'cargo_version\t%s\n' "$(tool_version cargo)"
     printf 'rustc_version\t%s\n' "$(tool_version rustc)"
@@ -563,4 +663,8 @@ rm -rf "$PRODUCT_ROOT/.icp"
 SOURCE_STATUS_AFTER="$(git -C "$PRODUCT_ROOT" status --porcelain=v1 --untracked-files=all)"
 [[ -z "$SOURCE_STATUS_AFTER" ]] || fail "ablation runner did not restore its clean product worktree"
 
-echo "Wasm ablation report: $RUN_ROOT"
+if [[ "$RUN_MODE" == "smoke" ]]; then
+    echo "Wasm ablation smoke passed (development-only; not retention-eligible): $RUN_ROOT"
+else
+    echo "Wasm ablation report: $RUN_ROOT"
+fi

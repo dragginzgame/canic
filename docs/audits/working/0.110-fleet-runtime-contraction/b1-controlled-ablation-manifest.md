@@ -445,6 +445,25 @@ bash scripts/ci/wasm-ablation-report.sh --check
 bash scripts/ci/test-wasm-ablation-report.sh
 ```
 
+Before spending the full deterministic all-role budget, use the explicitly
+non-retainable development smoke against one representative artifact. Patch
+experiments build the variant first so a compile failure stops before baseline
+measurement; the smoke performs one repetition and uses sccache when its exact
+compiler-wrapper invocation succeeds:
+
+```text
+bash scripts/ci/wasm-ablation-report.sh --smoke \
+  --experiment b1-03-activation-record-codecs \
+  --artifact canonical_app \
+  --source <candidate-commit> \
+  --product-root <clean-linked-worktree> \
+  --output-root <temporary-output-directory>
+```
+
+Smoke output records `retention_eligible=no` and cannot satisfy an immutable
+B1 evidence row. Its purpose is to reject a broken switch quickly and preserve
+the expensive two-repetition, all-selected-artifact run for qualified inputs.
+
 A retained run will use an exact clean linked worktree and external output
 root; the runner owns and compiles the frozen counter:
 

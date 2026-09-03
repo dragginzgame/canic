@@ -30,6 +30,17 @@ if "$SCRATCH/wasm-replica-function-count" "$SCRATCH/mismatched.wasm" >/dev/null 
 fi
 
 bash "$RUNNER" --check >/dev/null
+bash "$RUNNER" --help | rg -q -- '--smoke'
+bash "$RUNNER" --help | rg -q -- '--artifact <artifact-id>'
+
+if bash "$RUNNER" --check --smoke >/dev/null 2>&1; then
+    echo "smoke mode was accepted without an experiment run" >&2
+    exit 1
+fi
+if bash "$RUNNER" --list --artifact canonical_app >/dev/null 2>&1; then
+    echo "artifact narrowing was accepted outside smoke mode" >&2
+    exit 1
+fi
 
 LISTING="$(bash "$RUNNER" --list)"
 [[ "$(printf '%s\n' "$LISTING" | wc -l)" -eq 19 ]]
