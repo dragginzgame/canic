@@ -319,13 +319,6 @@ mod tests {
     }
 
     #[derive(CandidType)]
-    #[cfg_attr(
-        test,
-        expect(
-            clippy::large_enum_variant,
-            reason = "the PocketIC encoder mirrors the direct Root status wire"
-        )
-    )]
     enum RootStatusRequestFragment {
         #[cfg(test)]
         Admission(PageRequest),
