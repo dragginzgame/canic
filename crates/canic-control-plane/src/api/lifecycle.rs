@@ -191,6 +191,39 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    /// Resolve one exact Root Component-provisioning operation without an
+    /// ambiguous lookup across unrelated durable operation owners.
+    pub fn root_component_provisioning_status(
+        operation_id: [u8; 32],
+        caller: candid::Principal,
+        caller_is_controller: bool,
+    ) -> Result<
+        canic_core::dto::component_provisioning::RootComponentProvisioningStatusResponse,
+        canic_core::dto::error::Error,
+    > {
+        crate::workflow::root_status::component_provisioning_status(
+            operation_id,
+            caller,
+            caller_is_controller,
+        )
+        .map_err(Into::into)
+    }
+
+    /// Resolve one exact Root child-allocation operation without an ambiguous
+    /// lookup across unrelated durable operation owners.
+    pub fn root_component_child_provisioning_status(
+        operation_id: [u8; 32],
+        caller: candid::Principal,
+        caller_is_controller: bool,
+    ) -> Result<RootComponentChildAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::root_status::component_child_provisioning_status(
+            operation_id,
+            caller,
+            caller_is_controller,
+        )
+        .map_err(Into::into)
+    }
+
     /// Delegate root init-time runtime seeding to the current core implementation.
     pub fn init_root_canister_before_bootstrap(
         args: FleetSubnetRootInitArgs,

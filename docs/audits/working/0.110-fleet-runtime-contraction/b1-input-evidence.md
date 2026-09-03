@@ -125,12 +125,18 @@ working-tree overlay; optimized-artifact absence remains open. The repository-
 owned capability fixture matrix and compatible predecessor comparison remain
 open. The machine-checked
 [controlled-ablation manifest](b1-controlled-ablation-manifest.md) now freezes
-the required rows and runner. Its global-registration patch has complete
-eleven-role release-build qualification and awaits immutable measurement. The
-inclusive activation-persistence, authorization stable-codec, shared-CBOR-
-helper, watchdog-recovery-dispatch, endpoint-declaration-construction,
-endpoint-reply-serialization and metrics-provider patches remain specified and
-await complete selected-artifact qualification and immutable measurement. The
+the required rows and runner. Its immutable global-registration measurement
+removes 273,554 optimized code-section bytes and 662 replica-limited defined
+functions across the eleven separately deployed artifacts, including 192,340
+code bytes and 166 functions in Fleet Coordinator. This material attribution
+supports B2 role-selected wiring but makes no bootstrap or lifecycle-parity
+claim. The
+inclusive activation-persistence switch has complete eleven-role release-build
+qualification and awaits immutable measurement. The authorization stable-codec,
+shared-CBOR-helper, watchdog-recovery-dispatch, endpoint-declaration-
+construction, endpoint-reply-serialization and metrics-provider patches remain
+specified and await complete selected-artifact qualification and immutable
+measurement. The
 payload-limited raw-
 adapter now has an immutable selected-fixture measurement: it accounts for 967
 optimized code-section bytes and zero defined functions, so its independent

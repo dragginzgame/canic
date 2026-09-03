@@ -2,8 +2,8 @@
 
 Date: 2026-09-03
 State: experiment and artifact manifests plus frozen function counter
-executable; row 11 measured, row 2 qualified, seven source switches specified
-and remaining immutable measurements open
+executable; rows 2 and 11 measured, row 3 qualified, six source switches
+specified and remaining immutable measurements open
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
 Baseline authority: immutable `v0.110.5` at
 `50f40171d6177c3d1e490b1fdb5f6163323b2cd5`
@@ -13,12 +13,23 @@ Baseline authority: immutable `v0.110.5` at
 B1 now has one machine-checked catalog for all eighteen required experiments
 and one artifact roster for the eleven canonical roles plus four Canic-owned
 capability fixtures. The runner can execute the unchanged baseline, the fixed
-`Page<T>` cohort, the measured row 11 payload-adapter switch and the qualified
-row 2 global-storage-registration switch. Rows 3 through 6, row 8, row 10 and
-row 12 have exact audit-only patches against the unchanged `v0.110.5` source,
-but remain non-runnable until their selected build sets are qualified. The
-runner refuses every other experiment until its exact one-switch patch or
-compatible cross-commit input exists.
+`Page<T>` cohort, the measured row 2 global-storage-registration and row 11
+payload-adapter switches, and the qualified row 3 activation-persistence
+switch. Rows 4 through 6, row 8, row 10 and row 12 have exact audit-only
+patches against the unchanged `v0.110.5` source, but remain non-runnable until
+their selected build sets are qualified. The runner refuses every other
+experiment until its exact one-switch patch or compatible cross-commit input
+exists.
+
+The immutable
+[row 2 report](../../reports/2026-09/2026-09-03/wasm-ablation-b1-02.md)
+attributes 273,554 optimized code-section bytes and 662 replica-limited
+defined functions across the eleven separately deployed canonical artifacts to
+global memory declarations, authority ranges and eager TLS registration. Fleet
+Coordinator accounts for 192,340 code bytes and 166 functions of that total.
+The build-only switch makes no storage-bootstrap or lifecycle-parity claim, so
+it advances explicit role-selected registration into B2 evidence but authorizes
+no direct production deletion.
 
 The immutable
 [row 11 report](../../reports/2026-09/2026-09-03/wasm-ablation-b1-11.md)
@@ -56,8 +67,8 @@ exact source owners.
 | Row | Experiment | Primary Canic owner | Current switch state |
 | ---: | --- | --- | --- |
 | 1 | current baseline | canonical configs and four capability fixtures | ready; no source switch |
-| 2 | global stable-storage registration | `memory_macros.rs`, `storage/stable` | ready; all eleven canonical release artifacts qualified |
-| 3 | activation records/codecs | activation model, stable storage and mapper | specified patch; build qualification open |
+| 2 | global stable-storage registration | `memory_macros.rs`, `storage/stable` | measured; material role-wide result, lifecycle parity open |
+| 3 | activation records/codecs | activation model, stable storage and mapper | ready; all eleven canonical release artifacts qualified |
 | 4 | authorization records/codecs | auth model, stable storage, ops and workflow | specified patch; build qualification open |
 | 5 | bounded relevant-CBOR stub | shared CBOR adapter and its reachable callers | specified patch; build qualification open |
 | 6 | unconditional recovery dispatch | timer API/workflow and Root pool watchdog | specified patch; build qualification open |
@@ -137,9 +148,15 @@ expansions. The subsequent complete qualification builds all eleven selected
 canonical roles once through `canic-host`'s authoritative release builder with
 one isolated target, then accepts each Wasm with `wasm-validate`, each gzip with
 `gzip -t` and each Candid file with `didc check`. The exact patch is reversed
-and the disposable `v0.110.5` worktree is clean afterward. Row 2 is therefore
-`ready`; it still makes no lifecycle-parity claim and has no optimized savings
-value until the governed two-pair measurement completes.
+and the disposable `v0.110.5` worktree is clean afterward. The subsequent
+governed two-pair
+[measurement](../../reports/2026-09/2026-09-03/wasm-ablation-b1-02.md)
+passes determinism and artifact validation for every canonical role. It removes
+273,554 code-section bytes and 662 defined functions in artifact-summed
+attribution, including 192,340 code bytes and 166 functions from Fleet
+Coordinator. Row 2 is therefore `measured`; its material result supports B2's
+role-selected storage wiring, but the destructive switch still makes no
+bootstrap, restore or lifecycle-parity claim and is not production code.
 
 Row 3's patch has SHA-256
 `0b26dde775b5babd7bc7347623e6a09ceeca1c4a5f820870ad904ce557e69a12`.
@@ -161,9 +178,13 @@ CARGO_NET_OFFLINE=true cargo check --offline --locked \
   -p canister_root -p canister_app -p canic-wasm-store
 ```
 
-That check covers Root, ordinary non-Root and Store consumers. It does not
-qualify the complete eleven-role selector, prove any activation journey or
-provide an optimized delta, so row 3 also remains `specified`.
+That check covers Root, ordinary non-Root and Store consumers. The subsequent
+complete qualification builds all eleven canonical roles once through the
+authoritative release builder using one isolated target, and accepts every
+Wasm, gzip and Candid artifact. The exact patch is reversed and the disposable
+worktree is clean afterward. Row 3 is therefore `ready`; it still proves no
+activation behavior or persistence parity and has no optimized delta until the
+governed two-pair measurement completes.
 
 Row 4's patch has SHA-256
 `42ed7228ef4fa9c09ffa6c67acde6a7e8dd766bc0c950b0299c0c5e04c434be9`.
@@ -437,10 +458,11 @@ bash scripts/ci/wasm-ablation-report.sh \
 
 ## Next Step
 
-Measure row 2, then qualify rows 3 through 6, row 8, row 10 and row 12 against
-every selected artifact on a clean candidate and measure them through the
-governed runner.
-Row 2 is the direct hypothesis behind B2; rows 3 through 5 provide differently
+Measure qualified row 3, then qualify rows 4 through 6, row 8, row 10 and row
+12 against every selected artifact on a clean candidate and measure them
+through the governed runner. Measured row 2 confirms the direct hypothesis
+behind B2 but does not supply its required lifecycle parity; rows 3 through 5
+provide differently
 scoped and intentionally overlapping persistence/codec attribution needed to
 choose B3 work; row 6 isolates the recovery dispatch rooted by shared watchdog
 registration. None is a behavior-preserving result. Keep B2 blocked until the

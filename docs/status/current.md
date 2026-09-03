@@ -277,9 +277,12 @@ baseline before any runtime contraction. Initial work:
 - retains a machine-checked eighteen-row ablation catalog, fail-closed
   two-build harness and repository-owned function counter frozen to the IC
   replica's local-function quantity for the canonical roles and four owned
-  fixtures, plus an all-role-qualified audit-only global-registration switch,
-  specified inclusive activation-persistence, authorization stable-codec and
-  shared-CBOR-helper switches, an isolated watchdog-recovery dispatch switch
+  fixtures, plus immutable all-role global-registration attribution removing
+  273,554 artifact-summed optimized code bytes and 662 defined functions while
+  leaving bootstrap/lifecycle parity open,
+  an all-role-qualified inclusive activation-persistence switch, specified
+  authorization stable-codec and shared-CBOR-helper switches, an isolated
+  watchdog-recovery dispatch switch
   and an endpoint-
   declaration-construction switch plus bounded endpoint-reply serialization,
   a specified metrics-provider switch and immutable payload-limited raw-
@@ -323,11 +326,28 @@ Component; all other parent drift remains rejected. `canic info subnets` also
 retains the caller's selected ICP executable and environment instead of
 falling back to `local`.
 
+## Architecture Consolidation Audit Update
+
+The commit-bound
+[architecture consolidation audit update](../audits/reports/2026-09/2026-09-03/architecture-consolidation-audit-update.md)
+confirms at `6cad3dcc568e9309f6294d324cc97d0b75c31008` that Canic retains one mutable
+Fleet authority. Its highest-priority remaining duplication is supporting
+machinery: release-validation shadow specification, parallel allocation
+mechanics, fragmented Fleet Ensure test platforms, repeated CLI fan-out,
+controller-set normalization and host path resolution. Narrow role-specific
+Candid fragments remain intentional and should gain conformance evidence rather
+than one complete shared enum.
+
+This review does not expand or interrupt B1. After B1 acceptance, its preferred
+order is validation manifest, Ensure test platform, Component transition kernel,
+CLI/path utilities and controller-set normalization. Store-local GC ownership
+and an await-safe Root validation-context pilot remain deferred inputs.
+
 ## Next Authorized Action
 
-Continue B1 from immutable `v0.110.5`: measure qualified row 2, then qualify
-the specified rows 3 through 6 activation-persistence, authorization stable-
-codec and shared-CBOR-helper patches plus the watchdog-recovery dispatch patch,
+Continue B1 from immutable `v0.110.5`: measure qualified row 3, then qualify
+the specified rows 4 through 6 authorization stable-codec and shared-CBOR-
+helper patches plus the watchdog-recovery dispatch patch,
 row 8 endpoint-
 declaration construction and rows 10 and 12 endpoint-reply serialization and
 metrics-provider attribution, then complete the

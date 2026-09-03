@@ -468,6 +468,16 @@ pub(super) fn initial_shard_root_canister_config_path(workspace_root: &Path) -> 
         .join("managed-component-group.toml")
 }
 
+/// Resolve the minimal one-Hub/one-initial-Shard production-adapter config.
+#[cfg(test)]
+pub(super) fn literal_zero_initial_shard_config_path(workspace_root: &Path) -> PathBuf {
+    workspace_root
+        .join("apps")
+        .join("test")
+        .join("test-configs")
+        .join("literal-zero-initial-shard.toml")
+}
+
 /// Resolve the exact one-Component 5T retained-recovery qualification config.
 #[cfg(test)]
 pub(super) fn five_trillion_component_root_canister_config_path(workspace_root: &Path) -> PathBuf {

@@ -731,12 +731,14 @@ macro_rules! canic_emit_root_status_endpoint {
             Admission(::canic::dto::page::PageRequest),
             AuthorityRestore,
             Children(::canic::dto::page::PageRequest),
+            ComponentChildProvisioning(::canic::dto::role::OperationStatusRequest),
             ComponentDirectoryHead(
                 ::canic::dto::component_registry::ComponentDirectoryHeadRequest,
             ),
             ComponentDirectoryPage(
                 ::canic::dto::component_registry::ComponentDirectoryPageRequest,
             ),
+            ComponentProvisioning(::canic::dto::role::OperationStatusRequest),
             ComponentRegistry(
                 ::canic::dto::component_registry::RootComponentRegistryPreparationRequest,
             ),
@@ -778,11 +780,17 @@ macro_rules! canic_emit_root_status_endpoint {
             Children(
                 ::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>,
             ),
+            ComponentChildProvisioning(
+                ::canic::dto::component_registry::RootComponentChildAllocationResponse,
+            ),
             ComponentDirectoryHead(
                 ::canic::dto::component_registry::ComponentDirectoryHead,
             ),
             ComponentDirectoryPage(
                 ::canic::dto::component_registry::ComponentDirectoryPageResponse,
+            ),
+            ComponentProvisioning(
+                ::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse,
             ),
             ComponentRegistry(
                 ::canic::dto::component_registry::RootComponentRegistryStatusResponse,
@@ -823,8 +831,10 @@ macro_rules! canic_emit_root_status_endpoint {
             let caller = $crate::__internal::cdk::api::msg_caller();
             let prepared_status = matches!(
                 &request,
-                RootStatusRequest::ComponentDirectoryHead(_)
+                RootStatusRequest::ComponentChildProvisioning(_)
+                    | RootStatusRequest::ComponentDirectoryHead(_)
                     | RootStatusRequest::ComponentDirectoryPage(_)
+                    | RootStatusRequest::ComponentProvisioning(_)
                     | RootStatusRequest::ComponentRegistry(_)
                     | RootStatusRequest::ComponentRegistryActivePartition(_)
                     | RootStatusRequest::ComponentRegistryPartition(_)
@@ -843,7 +853,9 @@ macro_rules! canic_emit_root_status_endpoint {
                 | RootStatusRequest::Overview => {}
                 #[cfg(canic_capability_role_attestation_signer)]
                 RootStatusRequest::RoleAttestation(_) => {}
-                RootStatusRequest::Operation(_) => {
+                RootStatusRequest::ComponentChildProvisioning(_)
+                | RootStatusRequest::ComponentProvisioning(_)
+                | RootStatusRequest::Operation(_) => {
                     // The durable operation owner supplies the exact public, peer, or
                     // controller authority used by the dispatch arm below.
                 }
@@ -888,6 +900,14 @@ macro_rules! canic_emit_root_status_endpoint {
                         page,
                     ),
                 )),
+                RootStatusRequest::ComponentChildProvisioning(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_component_child_provisioning_status(
+                        request.operation_id,
+                        caller,
+                        $crate::__internal::cdk::api::is_controller(&caller),
+                    )
+                    .map(RootStatusResponse::ComponentChildProvisioning)
+                }
                 RootStatusRequest::ComponentDirectoryHead(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_head(request)
                         .map(RootStatusResponse::ComponentDirectoryHead)
@@ -895,6 +915,14 @@ macro_rules! canic_emit_root_status_endpoint {
                 RootStatusRequest::ComponentDirectoryPage(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_page(request)
                         .map(RootStatusResponse::ComponentDirectoryPage)
+                }
+                RootStatusRequest::ComponentProvisioning(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_component_provisioning_status(
+                        request.operation_id,
+                        caller,
+                        $crate::__internal::cdk::api::is_controller(&caller),
+                    )
+                    .map(RootStatusResponse::ComponentProvisioning)
                 }
                 RootStatusRequest::ComponentRegistry(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::local_component_registry_status(request)

@@ -226,6 +226,13 @@ pub enum CurrentProtocolError {
         observed: String,
     },
 
+    #[error("terminal Fleet inventory observation {stage} failed: {source}")]
+    TerminalInventoryObservation {
+        stage: &'static str,
+        #[source]
+        source: Box<Self>,
+    },
+
     #[error(transparent)]
     ComponentPoolCapacity(#[from] RootPoolCapacityError),
 

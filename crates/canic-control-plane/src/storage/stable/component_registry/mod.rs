@@ -3605,7 +3605,16 @@ impl RootComponentRegistryStore {
     pub(crate) fn registry_components() -> Vec<ComponentInstanceId> {
         COMPONENT_REGISTRY_ENTRIES.with_borrow(|map| {
             map.iter()
-                .map(|entry| ComponentInstanceId::from_generated_bytes(entry.key().component))
+                .filter_map(|entry| match entry.value() {
+                    ComponentRegistryEntryRecord::Partition(record) => {
+                        Some(record.binding.component)
+                    }
+                    ComponentRegistryEntryRecord::Child(_)
+                    | ComponentRegistryEntryRecord::ChildTraversal(_)
+                    | ComponentRegistryEntryRecord::ChildAllocation(_)
+                    | ComponentRegistryEntryRecord::SubtreeRemoval(_)
+                    | ComponentRegistryEntryRecord::ParentRoleCount(_) => None,
+                })
                 .collect()
         })
     }
