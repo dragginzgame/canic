@@ -7,6 +7,7 @@ use std::{cell::RefCell, collections::BTreeMap};
 #[derive(CandidType, Deserialize)]
 struct InitArgs {
     canister_ids: Vec<Principal>,
+    expected_controllers_by_index: Option<Vec<Vec<Principal>>>,
     expected_root: Principal,
     expected_subnet: Principal,
     initial_balances: Option<Vec<AccountBalance>>,
@@ -103,6 +104,7 @@ enum CreateCanisterError {
 struct State {
     balances: BTreeMap<Principal, u128>,
     canister_ids: Vec<Principal>,
+    expected_controllers_by_index: Option<Vec<Vec<Principal>>>,
     expected_root: Principal,
     expected_subnet: Principal,
     pending_first_index: Option<usize>,
@@ -137,6 +139,12 @@ fn init(args: InitArgs) {
         pending_first_index.is_none_or(|index| index < args.canister_ids.len()),
         "pending lane index must name one configured lane"
     );
+    assert!(
+        args.expected_controllers_by_index
+            .as_ref()
+            .is_none_or(|controllers| controllers.len() == args.canister_ids.len()),
+        "per-lane controller authority must cover every configured lane"
+    );
     let balances = args
         .initial_balances
         .unwrap_or_default()
@@ -154,6 +162,7 @@ fn init(args: InitArgs) {
         *state = Some(State {
             balances,
             canister_ids: args.canister_ids,
+            expected_controllers_by_index: args.expected_controllers_by_index,
             expected_root: args.expected_root,
             expected_subnet: args.expected_subnet,
             pending_first_index,
@@ -281,13 +290,25 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
                 canister_id: Some(state.canister_ids[index]),
             });
         }
-        if !request_has_exact_authority(&args, state.expected_root, state.expected_subnet) {
-            return Err(generic_error("creation authority mismatch"));
-        }
         let index = state.requests.len();
         let Some(&canister_id) = state.canister_ids.get(index) else {
             return Err(generic_error("creation lane capacity exhausted"));
         };
+        let expected_controllers = state.expected_controllers_by_index.as_ref().map_or_else(
+            || vec![state.expected_root],
+            |controllers| controllers[index].clone(),
+        );
+        if !request_has_exact_authority(&args, &expected_controllers, state.expected_subnet) {
+            return Err(generic_error("creation authority mismatch"));
+        }
+        if let Some(available) = state.balances.get_mut(&ic_cdk::api::msg_caller()) {
+            let amount = u128::try_from(args.amount.0.clone())
+                .map_err(|_| generic_error("creation amount exceeds u128"))?;
+            if *available < amount {
+                return Err(generic_error("creation balance is insufficient"));
+            }
+            *available -= amount;
+        }
         state.requests.push(args);
         if state.pending_first_index == Some(index) {
             state.pending_first_index = None;
@@ -315,7 +336,7 @@ fn request_count() -> u64 {
 
 fn request_has_exact_authority(
     request: &CreateCanisterArgs,
-    expected_root: Principal,
+    expected_controllers: &[Principal],
     expected_subnet: Principal,
 ) -> bool {
     if request.from_subaccount.is_some() || request.amount == 0_u8 {
@@ -333,7 +354,7 @@ fn request_has_exact_authority(
     let Some(settings) = &creation.settings else {
         return false;
     };
-    if settings.controllers.as_deref() != Some(&[expected_root]) {
+    if settings.controllers.as_deref() != Some(expected_controllers) {
         return false;
     }
     creation.subnet_selection
@@ -372,6 +393,7 @@ mod tests {
         .expect("encode create-only fixture init");
         let decoded: InitArgs = candid::decode_one(&bytes).expect("decode extended fixture init");
         assert!(decoded.initial_balances.is_none());
+        assert!(decoded.expected_controllers_by_index.is_none());
         assert!(decoded.withdrawal_fee.is_none());
     }
 
@@ -380,13 +402,21 @@ mod tests {
         let root = Principal::from_slice(&[1; 29]);
         let subnet = Principal::from_slice(&[2; 29]);
         let request = exact_request(root, subnet);
-        assert!(request_has_exact_authority(&request, root, subnet));
+        assert!(request_has_exact_authority(&request, &[root], subnet));
 
         let wrong_root = Principal::from_slice(&[3; 29]);
-        assert!(!request_has_exact_authority(&request, wrong_root, subnet));
+        assert!(!request_has_exact_authority(
+            &request,
+            &[wrong_root],
+            subnet
+        ));
 
         let wrong_subnet = Principal::from_slice(&[4; 29]);
-        assert!(!request_has_exact_authority(&request, root, wrong_subnet));
+        assert!(!request_has_exact_authority(
+            &request,
+            &[root],
+            wrong_subnet
+        ));
     }
 
     #[test]
@@ -396,15 +426,15 @@ mod tests {
 
         let mut request = exact_request(root, subnet);
         request.amount = Nat::from(0_u8);
-        assert!(!request_has_exact_authority(&request, root, subnet));
+        assert!(!request_has_exact_authority(&request, &[root], subnet));
 
         let mut request = exact_request(root, subnet);
         request.created_at_time = None;
-        assert!(!request_has_exact_authority(&request, root, subnet));
+        assert!(!request_has_exact_authority(&request, &[root], subnet));
 
         let mut request = exact_request(root, subnet);
         request.creation_args = None;
-        assert!(!request_has_exact_authority(&request, root, subnet));
+        assert!(!request_has_exact_authority(&request, &[root], subnet));
     }
 
     fn exact_request(root: Principal, subnet: Principal) -> CreateCanisterArgs {

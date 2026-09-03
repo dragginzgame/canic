@@ -628,6 +628,7 @@ dependencies = [
  "canic-control-plane",
  "canic-core",
  "canic-host",
+ "ciborium",
  "flate2",
  "ic-testkit",
  "serde",
