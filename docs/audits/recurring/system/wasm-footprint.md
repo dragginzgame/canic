@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-WASM-001`
-- Method version: `5`
+- Method version: `6`
 - Disposition: `revise`
 - Owner: canonical Canic-produced Wasm size and retained-size attribution
 - Kind/profile: `measured` and `trend`
@@ -36,14 +36,14 @@ code-limit, and gzip rules, and copies the result to the ICP-visible artifact
 path. Optimization is complete before any canonical gzip or artifact identity
 is derived.
 
-V5 retains v4's removal of the direct Cargo Wasm build and inferred
+V6 retains v5's removal of the direct Cargo Wasm build and inferred
 "pre-shrink" artifact. It consumes the release transform's governed
 before/after metrics without retaining the pre-optimization module as a second
 artifact. The runner must not recreate it with direct
 `cargo build --target wasm32-unknown-unknown`, copy a target-directory Wasm,
 or bypass the build guard.
 
-V5 also binds each role build to its own captured log and parses the governed
+V6 also binds each role build to its own captured log and parses the governed
 optimizer metric record independently of the builder's path-confined staging
 filename. The metric shape, not a disposable `candidate.wasm` path or the
 later final artifact path, is the authority-bearing contract.
@@ -58,7 +58,7 @@ The authoritative measured classes are therefore:
 - `ic-wasm`/`twiggy` analysis of the canonical release `.wasm`.
 
 No alias, fallback, reconstructed pre-transform path, or duplicate gzip path is
-part of v5.
+part of v6.
 
 ## Fixed Scope
 
@@ -67,16 +67,18 @@ role set returned by:
 
 ```text
 bash scripts/ci/list-config-canisters.sh \
-  --config <product-root>/fleets/test/canic.toml --ci-order
+  --config <product-root>/apps/test/canic.toml --ci-order
 ```
 
 At method admission the ordered roster is:
 
 ```text
 app
+index_hub
 test
 user_hub
 scale_hub
+index_child
 user_shard
 scale_replica
 root
@@ -91,13 +93,15 @@ and Wasm Store infrastructure. Every other role is an application Component.
 There is no dedicated minimal role in this roster. Repeated retained hotspots
 across at least three Components are the shared fan-in signal.
 
-V5 retains v4's corrected nine-role roster and separately built Coordinator
-and Store. V3 results lack optimizer and clean-build evidence, so they are
-non-comparable and cannot baseline v5. V4 results use the same artifact
-authority but are non-comparable because their optimizer-log parser cannot
-consume the current path-confined staged artifact record.
+V6 retains v5's artifact authority and separately built Coordinator and Store,
+and adds the configured indexed Hub and child roles introduced by the managed
+Component-tree qualification surface. V5 results remain valid history but are
+non-comparable because their nine-role roster omits those two current roles.
+V3 results lack optimizer and clean-build evidence. V4 uses the same artifact
+authority but its optimizer-log parser cannot consume the current path-confined
+staged artifact record.
 
-V5 always captures three isolated build runs:
+V6 always captures three isolated build runs:
 
 - two `release` runs, each using a fresh Cargo target and generated artifact
   tree, whose canonical Wasm, gzip, Candid, and optimization metrics must match;
@@ -125,7 +129,7 @@ Optional control:
 
 - `WASM_AUDIT_DATE=YYYY-MM-DD` pins the UTC report date.
 
-There is no skip-build or cache-reuse mode. Every retained v4 run builds fresh
+There is no skip-build or cache-reuse mode. Every retained v6 run builds fresh
 artifacts through the canonical builder with network access disabled. Build
 output may create `.icp/` in the disposable product worktree and an external
 temporary Cargo target. Any tracked product mutation or unexpected untracked
@@ -156,8 +160,8 @@ A predecessor is compatible only when all of these match exactly:
 - execution-path key; and
 - external-tool key.
 
-The first valid v5 run records `N/A` deltas. Later runs compare causally to the
-immediate compatible predecessor and retain the original v5 baseline identity
+The first valid v6 run records `N/A` deltas. Later runs compare causally to the
+immediate compatible predecessor and retain the original v6 baseline identity
 for cumulative release-line comparison. A missing or zero denominator is
 `N/A`, never an invented percentage.
 
@@ -203,7 +207,7 @@ For a complete run, add these disjoint inputs and cap at 10:
 
 | Input | Score |
 | --- | ---: |
-| no compatible v4 predecessor | 2 |
+| no compatible v6 predecessor | 2 |
 | largest/smallest Component release ratio is 1.10-1.2499 | 1 |
 | largest/smallest Component release ratio is at least 1.25 | 2 |
 | root/max-Component release ratio is 2.0-2.9999 | 1 |
@@ -249,8 +253,8 @@ build cause instead of treating display strings as the authority.
 
 ## Method-Change Rule
 
-V1 is preserved as invalid history and v2/v3 as valid superseded history. If
-v4's artifact authority, fixed roster, build-run set, metric derivation,
+V1 is preserved as invalid history and v2-v5 as valid superseded history. If
+v6's artifact authority, fixed roster, build-run set, metric derivation,
 comparison key or score changes, increment
 the method version and apply the post-freeze method-defect protocol. Compare
 only results produced by the corrected method.

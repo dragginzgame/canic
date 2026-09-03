@@ -28,6 +28,7 @@ macro_rules! canic_emit_root_command_endpoint {
             ImportPoolCanister(::canic::dto::pool::PoolCanisterRequest),
             InspectCanister(::canic::dto::canister::CanisterInspectionRequest),
             MaintainPool,
+            ObserveCanister(::canic::dto::observability::FleetCanisterObservabilityRequest),
             OpenFleetAdmission(
                 ::canic::dto::fleet_admission::FleetAdmissionOpenRootRequest,
             ),
@@ -91,6 +92,7 @@ macro_rules! canic_emit_root_command_endpoint {
             ImportPoolCanister(::canic::dto::pool::PoolImportResponse),
             InspectCanister(::canic::dto::canister::CanisterStatusResponse),
             MaintainPool(::canic::dto::pool::PoolMaintenanceResponse),
+            ObserveCanister(::canic::dto::observability::CanisterObservabilityResponse),
             OperationAccepted(::canic::dto::role::OperationReceipt),
             OpenFleetAdmission(::canic::dto::fleet_admission::FleetAdmissionRootReceipt),
             PrepareAuthoritySnapshot(
@@ -194,6 +196,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::ImportPoolCanister(_)
                     | RootCommand::InspectCanister(_)
                     | RootCommand::MaintainPool
+                    | RootCommand::ObserveCanister(_)
                     | RootCommand::PrepareAuthoritySnapshot(_)
                     | RootCommand::PrepareComponentRegistry(_)
                     | RootCommand::PrepareFleetActivation
@@ -477,6 +480,14 @@ macro_rules! canic_emit_root_command_endpoint {
                     };
                     Ok(RootCommandResponse::MaintainPool(response))
                 }
+                RootCommand::ObserveCanister(request) => {
+                    $crate::__internal::core::api::observability::ObservabilityApi::observe_root_controlled_canister(
+                        request.canister_id,
+                        request.request,
+                    )
+                    .await
+                    .map(RootCommandResponse::ObserveCanister)
+                }
                 RootCommand::OpenFleetAdmission(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::open_root_fleet_admission(request)
                         .map(RootCommandResponse::OpenFleetAdmission)
@@ -729,6 +740,9 @@ macro_rules! canic_emit_root_status_endpoint {
             ComponentRegistry(
                 ::canic::dto::component_registry::RootComponentRegistryPreparationRequest,
             ),
+            ComponentRegistryActivePartition(
+                ::canic::dto::component_registry::ComponentRegistryActivePartitionRequest,
+            ),
             ComponentRegistryPartition(
                 ::canic::dto::component_registry::ComponentRegistryPartitionRequest,
             ),
@@ -773,6 +787,9 @@ macro_rules! canic_emit_root_status_endpoint {
             ComponentRegistry(
                 ::canic::dto::component_registry::RootComponentRegistryStatusResponse,
             ),
+            ComponentRegistryActivePartition(
+                ::canic::dto::component_registry::ComponentRegistryActivePartitionResponse,
+            ),
             ComponentRegistryPartition(
                 ::canic::dto::component_registry::ComponentRegistryPartitionResponse,
             ),
@@ -809,6 +826,7 @@ macro_rules! canic_emit_root_status_endpoint {
                 RootStatusRequest::ComponentDirectoryHead(_)
                     | RootStatusRequest::ComponentDirectoryPage(_)
                     | RootStatusRequest::ComponentRegistry(_)
+                    | RootStatusRequest::ComponentRegistryActivePartition(_)
                     | RootStatusRequest::ComponentRegistryPartition(_)
                     | RootStatusRequest::FleetAuthority
                     | RootStatusRequest::Operation(_)
@@ -822,9 +840,6 @@ macro_rules! canic_emit_root_status_endpoint {
             match &request {
                 RootStatusRequest::Children(_)
                 | RootStatusRequest::ComponentDirectoryPage(_)
-                | RootStatusRequest::CycleBalance
-                | RootStatusRequest::CycleHistory(_)
-                | RootStatusRequest::Metrics(_)
                 | RootStatusRequest::Overview => {}
                 #[cfg(canic_capability_role_attestation_signer)]
                 RootStatusRequest::RoleAttestation(_) => {}
@@ -836,8 +851,11 @@ macro_rules! canic_emit_root_status_endpoint {
                 | RootStatusRequest::AuthorityRestore
                 | RootStatusRequest::ComponentDirectoryHead(_)
                 | RootStatusRequest::ComponentRegistry(_)
+                | RootStatusRequest::ComponentRegistryActivePartition(_)
                 | RootStatusRequest::ComponentRegistryPartition(_)
                 | RootStatusRequest::Config
+                | RootStatusRequest::CycleBalance
+                | RootStatusRequest::CycleHistory(_)
                 | RootStatusRequest::FleetAuthority
                 | RootStatusRequest::FleetState
                 | RootStatusRequest::Funding
@@ -845,6 +863,7 @@ macro_rules! canic_emit_root_status_endpoint {
                 | RootStatusRequest::Inventory
                 | RootStatusRequest::IssuerRenewal(_)
                 | RootStatusRequest::Logs(_)
+                | RootStatusRequest::Metrics(_)
                 | RootStatusRequest::Pool(_)
                 | RootStatusRequest::Readiness
                 | RootStatusRequest::Runtime
@@ -880,6 +899,10 @@ macro_rules! canic_emit_root_status_endpoint {
                 RootStatusRequest::ComponentRegistry(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::local_component_registry_status(request)
                         .map(RootStatusResponse::ComponentRegistry)
+                }
+                RootStatusRequest::ComponentRegistryActivePartition(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_registry_active_partition(request)
+                        .map(RootStatusResponse::ComponentRegistryActivePartition)
                 }
                 RootStatusRequest::ComponentRegistryPartition(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_registry_partition(request)

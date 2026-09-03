@@ -13,6 +13,7 @@ pub mod install;
 pub mod intent;
 pub mod log;
 mod nonroot;
+pub mod observability;
 mod root;
 pub mod timer;
 

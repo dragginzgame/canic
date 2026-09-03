@@ -1,0 +1,49 @@
+diff --git a/crates/canic/src/macros/endpoints/role.rs b/crates/canic/src/macros/endpoints/role.rs
+index 46faef2fb..926bffc61 100644
+--- a/crates/canic/src/macros/endpoints/role.rs
++++ b/crates/canic/src/macros/endpoints/role.rs
+@@ -658,35 +658,14 @@ macro_rules! __canic_role_overview {
+ #[macro_export]
+ macro_rules! __canic_role_metrics_status {
+     ($request:expr) => {{
+-        let request = $request;
+-        match request.kind {
+-            #[cfg(canic_metrics_core)]
+-            ::canic::dto::metrics::MetricsKind::Core => Ok(
+-                $crate::__internal::core::api::metrics::MetricsQuery::core(request.page),
+-            ),
+-            #[cfg(canic_metrics_placement)]
+-            ::canic::dto::metrics::MetricsKind::Placement => {
+-                Ok($crate::__internal::core::api::metrics::MetricsQuery::placement(request.page))
+-            }
+-            #[cfg(canic_metrics_platform)]
+-            ::canic::dto::metrics::MetricsKind::Platform => {
+-                Ok($crate::__internal::core::api::metrics::MetricsQuery::platform(request.page))
+-            }
+-            #[cfg(canic_metrics_runtime)]
+-            ::canic::dto::metrics::MetricsKind::Runtime => {
+-                Ok($crate::__internal::core::api::metrics::MetricsQuery::runtime(request.page))
+-            }
+-            #[cfg(canic_metrics_security)]
+-            ::canic::dto::metrics::MetricsKind::Security => {
+-                Ok($crate::__internal::core::api::metrics::MetricsQuery::security(request.page))
+-            }
+-            #[cfg(canic_metrics_storage)]
+-            ::canic::dto::metrics::MetricsKind::Storage => {
+-                Ok($crate::__internal::core::api::metrics::MetricsQuery::storage(request.page))
+-            }
+-            _ => Err(::canic::Error::from_registered(
+-                ::canic::diagnostics::codes::REQUEST_INVALID,
+-            )),
+-        }
++        // Audit ablation: keep the typed status branch while disconnecting
++        // every metric-family snapshot and projection provider.
++        let _ = ::core::hint::black_box($request);
++        Ok::<_, ::canic::Error>(::core::hint::black_box(::canic::dto::page::Page::<
++            ::canic::dto::metrics::MetricEntry,
++        > {
++            entries: ::std::vec::Vec::new(),
++            total: 0,
++        }))
+     }};
+ }

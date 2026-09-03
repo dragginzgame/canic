@@ -30,18 +30,9 @@ use crate::icp_config::{
 };
 
 pub use self::status::local_replica_status_reachable_from_root;
-fn decode_cycle_balance_response(bytes: &[u8]) -> Result<u128, ReplicaQueryError> {
-    let result = Decode!(bytes, Result<RoleStatusResponse, CanicError>)
-        .map_err(ReplicaQueryError::Candid)?;
-    match result.map_err(ReplicaQueryError::Canister)? {
-        RoleStatusResponse::CycleBalance(response) => Ok(response.cycles),
-        RoleStatusResponse::Readiness(_) => Err(unexpected_role_status_response()),
-    }
-}
 
 #[derive(CandidType)]
 enum RoleStatusRequest {
-    CycleBalance,
     Readiness,
 }
 
@@ -119,17 +110,6 @@ pub(crate) fn query_ready(
         RoleStatusResponse::Readiness(response) => Ok(response.status == ReadinessStatus::Ready),
         RoleStatusResponse::CycleBalance(_) => Err(unexpected_role_status_response()),
     }
-}
-
-/// Query role-owned cycle balance directly through the local replica HTTP API.
-pub(crate) fn query_cycle_balance(
-    environment: Option<&str>,
-    canister: &str,
-    icp_root: Option<&Path>,
-) -> Result<u128, ReplicaQueryError> {
-    let arg = Encode!(&RoleStatusRequest::CycleBalance).map_err(ReplicaQueryError::Candid)?;
-    let bytes = local_query(environment, canister, CANIC_STATUS, &arg, icp_root)?;
-    decode_cycle_balance_response(&bytes)
 }
 
 fn unexpected_role_status_response() -> ReplicaQueryError {

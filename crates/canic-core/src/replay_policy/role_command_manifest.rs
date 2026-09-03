@@ -84,6 +84,7 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    query_or_read_only("ObserveCanister"),
     replay_protected(
         "OpenFleetAdmission",
         "fleet_admission.open_root.v1",
@@ -324,6 +325,7 @@ pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         "auth.install_active_delegation_proof.v1",
         "controller maintenance replaces issuer-local active proof metadata",
     ),
+    query_or_read_only("Observe"),
     replay_protected(
         "OpenFleetAdmission",
         "fleet_admission.open_target.v1",

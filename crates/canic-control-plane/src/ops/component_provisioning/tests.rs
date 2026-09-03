@@ -587,6 +587,22 @@ fn assert_terminal_provisioning_corruption_rejects(fixture: &Fixture) {
         })
         .is_err()
     );
+
+    let mut corrupted = exact.clone();
+    let RootComponentProvisioningStateRecordPhase::Provisioned { result, .. } =
+        &mut corrupted.operations[0].state
+    else {
+        panic!("terminal fixture must retain Provisioned state")
+    };
+    result.placements[0].members[0].member_operation_id = [99; 32];
+    RootComponentProvisioningStore::import(corrupted);
+    assert!(
+        RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+            operation_id: fixture.request.operation_id,
+            plan_hash: fixture.request.plan_hash,
+        })
+        .is_err()
+    );
     RootComponentProvisioningStore::import(exact);
 }
 

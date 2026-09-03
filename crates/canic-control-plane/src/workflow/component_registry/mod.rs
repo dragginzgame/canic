@@ -28,7 +28,8 @@ use lifecycle_drivers::{
     prepared_component_draining_boundary,
 };
 pub(super) use lifecycle_drivers::{
-    advance_component_removal_once, advance_existing_subtree_removal, existing_subtree_removal,
+    advance_component_removal_once, advance_existing_subtree_removal,
+    complete_component_child_allocation, existing_subtree_removal,
 };
 pub use lifecycle_drivers::{
     schedule_component_allocation, schedule_component_child_allocation, schedule_component_removal,
@@ -118,10 +119,12 @@ use canic_core::{
             ComponentDirectoryChildEntry, ComponentDirectoryHead, ComponentDirectoryHeadRequest,
             ComponentDirectoryPageCursor, ComponentDirectoryPageRequest,
             ComponentDirectoryPageResponse, ComponentDirectoryProvenance, ComponentLifecycleStatus,
-            ComponentProvisioningOrigin, ComponentRegistryHead, ComponentRegistryPartitionRequest,
-            ComponentRegistryPartitionResponse, ComponentRuntimeActivationEvidence,
-            ComponentRuntimeActivationRequest, ComponentRuntimeDirectChild,
-            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryConvergenceEvidence,
+            ComponentProvisioningOrigin, ComponentRegistryActivePartitionRequest,
+            ComponentRegistryActivePartitionResponse, ComponentRegistryHead,
+            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
+            ComponentRuntimeActivationEvidence, ComponentRuntimeActivationRequest,
+            ComponentRuntimeDirectChild, ComponentRuntimeDirectoryAuthority,
+            ComponentRuntimeDirectoryConvergenceEvidence,
             ComponentRuntimeDirectoryPreparationRequest,
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse, FleetServiceComponentRequester, PeerComponentRequester,
@@ -1213,11 +1216,12 @@ pub(super) fn terminal_child_allocation_binding(
     parent_canister_id: candid::Principal,
     child_role: &CanisterRole,
 ) -> Result<Option<canic_core::ids::ComponentChildBinding>, InternalError> {
-    let allocation = ComponentRegistryOps::child_allocation(component, operation_id)?
-        .ok_or_else(InternalError::unavailable)?;
-    if allocation.parent_canister_id != parent_canister_id || allocation.child_role != *child_role {
-        return Err(InternalError::conflict());
-    }
+    let allocation = retained_child_allocation_for_parent(
+        component,
+        operation_id,
+        parent_canister_id,
+        child_role,
+    )?;
     let RootComponentChildAllocationProgressView::Committed {
         canister,
         commitment,
@@ -1249,6 +1253,36 @@ pub(super) fn terminal_child_allocation_binding(
         return Err(InternalError::invariant());
     }
     Ok(Some(binding))
+}
+
+/// Report whether one exact retained child allocation belongs to initial bootstrap.
+pub(super) fn child_allocation_is_initial_bootstrap(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    parent_canister_id: candid::Principal,
+    child_role: &CanisterRole,
+) -> Result<bool, InternalError> {
+    Ok(retained_child_allocation_for_parent(
+        component,
+        operation_id,
+        parent_canister_id,
+        child_role,
+    )?
+    .initial_bootstrap)
+}
+
+fn retained_child_allocation_for_parent(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    parent_canister_id: candid::Principal,
+    child_role: &CanisterRole,
+) -> Result<RootComponentChildAllocationView, InternalError> {
+    let allocation = ComponentRegistryOps::child_allocation(component, operation_id)?
+        .ok_or_else(InternalError::unavailable)?;
+    if allocation.parent_canister_id != parent_canister_id || allocation.child_role != *child_role {
+        return Err(InternalError::conflict());
+    }
+    Ok(allocation)
 }
 
 /// Resolve one direct-child allocation for its controller or exact registered parent.
@@ -3554,6 +3588,55 @@ pub fn registry_partition(
         &partition,
     )?;
     Ok(partition_response(partition))
+}
+
+/// Read the immutable top-level activation receipt and its validated current partition.
+pub fn active_registry_partition(
+    request: ComponentRegistryActivePartitionRequest,
+) -> Result<ComponentRegistryActivePartitionResponse, InternalError> {
+    let (authority, _root) = root_authority()?;
+    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let topology = ConfigOps::component_topology()?;
+    let allocation_operation_id = RootComponentProvisioningOps::member_operation_id(
+        authority.binding.fleet_subnet_root,
+        request.provisioning_operation_id,
+        request.plan_hash,
+        &request.group_placement,
+        &request.member_path,
+    )?;
+    let prepared = ComponentRegistryOps::prepared_partition(allocation_operation_id)?;
+    let activation = ComponentRegistryOps::active_membership_partition(allocation_operation_id)?;
+    let current = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(InternalError::unavailable)?;
+    if prepared.binding.component != request.component
+        || activation.binding.component != request.component
+    {
+        return Err(InternalError::conflict());
+    }
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &prepared,
+    )?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &activation,
+    )?;
+    validate_partition(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &current,
+    )?;
+    Ok(ComponentRegistryActivePartitionResponse {
+        allocation_operation_id,
+        prepared: partition_response(prepared),
+        activation: partition_response(activation),
+        current: partition_response(current),
+    })
 }
 
 /// Derive one compact Component Directory head from committed Registry authority.

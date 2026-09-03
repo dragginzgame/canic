@@ -4125,6 +4125,7 @@ fn provisioned_group_member(
     identity_byte: u8,
 ) -> RootProvisionedGroupMember {
     RootProvisionedGroupMember {
+        member_operation_id: [identity_byte.wrapping_add(64); 32],
         member_path: entry.member_path.clone(),
         component_spec: entry.component_spec.clone(),
         purpose: entry.purpose.clone(),

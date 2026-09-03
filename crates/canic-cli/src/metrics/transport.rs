@@ -11,16 +11,18 @@ use crate::metrics::{
         MetricsReport,
     },
     options::MetricsOptions,
-    parse::parse_metrics_page,
+    parse::metric_page,
 };
-use crate::support::candid::registry_entry_candid_path;
+use canic_core::dto::observability::{CanisterObservabilityRequest, CanisterObservabilityResponse};
 use canic_host::{
+    CanisterProtocolError,
     fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
-    icp::{IcpCli, IcpCommandError, IcpDiagnostic, IcpJsonResponseError},
+    icp::{IcpCli, IcpDiagnostic},
     icp_config::resolve_current_canic_icp_root,
+    observability::{FleetObservabilityError, observe_fleet_canister},
     registry::RegistryEntry,
 };
-use std::{sync::Arc, thread};
+use std::{path::Path, sync::Arc, thread};
 use thiserror::Error as ThisError;
 
 const METRICS_UNAVAILABLE_HINT: &str =
@@ -33,21 +35,16 @@ const METRICS_WORKER_PANIC: &str = "metrics query worker panicked";
 
 #[derive(Debug, ThisError)]
 enum MetricsQueryError {
-    #[error("protocol binding failed before transport: {0}")]
-    Binding(String),
-
     #[error(transparent)]
-    Icp(#[from] IcpCommandError),
-
-    #[error("invalid canic_status Metrics response: {0}")]
-    Response(#[source] IcpJsonResponseError),
+    Observability(#[from] FleetObservabilityError),
 }
 
 pub(super) fn metrics_report(
     options: &MetricsOptions,
 ) -> Result<MetricsReport, MetricsCommandError> {
-    let registry = load_registry(options)?;
-    let canisters = collect_metrics_reports(options, &registry);
+    let root = resolve_current_canic_icp_root().map_err(MetricsCommandError::IcpRoot)?;
+    let fleet = load_registry(options)?;
+    let canisters = collect_metrics_reports(options, &fleet, &root);
 
     Ok(MetricsReport {
         fleet: options.fleet.clone(),
@@ -57,10 +54,8 @@ pub(super) fn metrics_report(
     })
 }
 
-fn load_registry(options: &MetricsOptions) -> Result<Vec<RegistryEntry>, MetricsCommandError> {
-    let mut registry = resolve_metrics_fleet(options)?.registry.entries;
-    registry.retain(|entry| matches_metrics_filter(options, entry));
-    Ok(registry)
+fn load_registry(options: &MetricsOptions) -> Result<CurrentFleetResolution, MetricsCommandError> {
+    resolve_metrics_fleet(options)
 }
 
 fn matches_metrics_filter(options: &MetricsOptions, entry: &RegistryEntry) -> bool {
@@ -79,17 +74,26 @@ fn matches_metrics_filter(options: &MetricsOptions, entry: &RegistryEntry) -> bo
 
 fn collect_metrics_reports(
     options: &MetricsOptions,
-    registry: &[RegistryEntry],
+    fleet: &CurrentFleetResolution,
+    icp_root: &Path,
 ) -> Vec<MetricsCanisterReport> {
     let query = Arc::new(options.clone());
+    let fleet = Arc::new(fleet.clone());
     let mut handles = Vec::new();
-    for entry in registry {
+    for entry in fleet
+        .registry
+        .entries
+        .iter()
+        .filter(|entry| matches_metrics_filter(options, entry))
+    {
         let entry = entry.clone();
         let worker_entry = entry.clone();
         let query = Arc::clone(&query);
+        let fleet = Arc::clone(&fleet);
+        let icp_root = icp_root.to_path_buf();
         handles.push((
             worker_entry,
-            thread::spawn(move || metrics_canister_report(&query, &entry)),
+            thread::spawn(move || metrics_canister_report(&query, &fleet, &icp_root, &entry)),
         ));
     }
 
@@ -111,9 +115,11 @@ fn collect_metrics_worker_reports(
 
 fn metrics_canister_report(
     options: &MetricsOptions,
+    fleet: &CurrentFleetResolution,
+    icp_root: &Path,
     entry: &RegistryEntry,
 ) -> MetricsCanisterReport {
-    match query_metrics(options, entry) {
+    match query_metrics(options, fleet, icp_root, entry) {
         Ok(mut entries) => {
             if options.nonzero {
                 entries.retain(|entry| !metric_value_is_zero(&entry.value));
@@ -156,8 +162,9 @@ fn metrics_query_error_report(
 ) -> MetricsCanisterReport {
     if matches!(
         error,
-        MetricsQueryError::Icp(error)
-            if matches!(error.diagnostic(), Some(IcpDiagnostic::MethodMissing))
+        MetricsQueryError::Observability(FleetObservabilityError::Protocol(
+            CanisterProtocolError::Invocation { source, .. },
+        )) if matches!(source.diagnostic(), Some(IcpDiagnostic::MethodMissing))
     ) {
         return metrics_failure_report(
             entry,
@@ -204,42 +211,44 @@ const fn metric_value_is_zero(value: &MetricValue) -> bool {
     }
 }
 
-const fn metrics_kind_candid_variant(kind: MetricsKind) -> &'static str {
+const fn metrics_kind_dto(kind: MetricsKind) -> canic_core::dto::metrics::MetricsKind {
     match kind {
-        MetricsKind::Core => "Core",
-        MetricsKind::Placement => "Placement",
-        MetricsKind::Platform => "Platform",
-        MetricsKind::Runtime => "Runtime",
-        MetricsKind::Security => "Security",
-        MetricsKind::Storage => "Storage",
+        MetricsKind::Core => canic_core::dto::metrics::MetricsKind::Core,
+        MetricsKind::Placement => canic_core::dto::metrics::MetricsKind::Placement,
+        MetricsKind::Platform => canic_core::dto::metrics::MetricsKind::Platform,
+        MetricsKind::Runtime => canic_core::dto::metrics::MetricsKind::Runtime,
+        MetricsKind::Security => canic_core::dto::metrics::MetricsKind::Security,
+        MetricsKind::Storage => canic_core::dto::metrics::MetricsKind::Storage,
     }
 }
 
 fn query_metrics(
     options: &MetricsOptions,
+    fleet: &CurrentFleetResolution,
+    icp_root: &Path,
     entry: &RegistryEntry,
 ) -> Result<Vec<MetricEntry>, MetricsQueryError> {
-    let arg = format!(
-        "(variant {{ Metrics = record {{ kind = variant {{ {} }}; page = record {{ offset = 0 : nat64; limit = {} : nat64 }} }} }})",
-        metrics_kind_candid_variant(options.kind),
-        options.limit
-    );
     let mut icp = IcpCli::new(&options.icp, Some(options.environment.clone()));
-    let root = resolve_current_canic_icp_root().ok();
-    let binding = registry_entry_candid_path(root.as_deref(), &options.environment, entry)
-        .map_err(|error| MetricsQueryError::Binding(error.to_string()))?;
-    if let Some(root) = root {
-        icp = icp.with_cwd(root);
-    }
-    let output = icp.canister_query_arg_output_with_candid(
-        &entry.pid,
-        canic_core::protocol::CANIC_STATUS,
-        &arg,
-        Some("json"),
-        Some(binding.candid_path()),
+    icp = icp.with_cwd(icp_root);
+    let request = canic_core::dto::role::MetricsStatusRequest {
+        kind: metrics_kind_dto(options.kind),
+        page: canic_core::dto::page::PageRequest {
+            offset: 0,
+            limit: options.limit,
+        },
+    };
+    let response = observe_fleet_canister(
+        &icp,
+        icp_root,
+        &options.environment,
+        fleet,
+        entry,
+        CanisterObservabilityRequest::Metrics(request),
     )?;
-
-    parse_metrics_page(&output).map_err(MetricsQueryError::Response)
+    let CanisterObservabilityResponse::Metrics(page) = response else {
+        unreachable!("Metrics request returned a different observability response");
+    };
+    Ok(metric_page(page))
 }
 
 fn resolve_metrics_fleet(
@@ -253,6 +262,7 @@ fn resolve_metrics_fleet(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use canic_host::icp::{IcpCommandError, IcpJsonResponseError};
 
     fn registry_entry() -> RegistryEntry {
         RegistryEntry {
@@ -267,10 +277,16 @@ mod tests {
     // Ensure method-missing responses do not stretch the table with raw ICP output.
     #[test]
     fn shortens_metrics_unavailable_errors() {
-        let error = MetricsQueryError::Icp(IcpCommandError::Failed {
-            command: "icp canister call".to_string(),
-            stderr: "Canister has no query method 'canic_status'.".to_string(),
-        });
+        let error = MetricsQueryError::Observability(FleetObservabilityError::Protocol(
+            CanisterProtocolError::Invocation {
+                canister: candid::Principal::management_canister(),
+                method: canic_core::protocol::CANIC_ROOT_COMMAND,
+                source: IcpCommandError::Failed {
+                    command: "icp canister call".to_string(),
+                    stderr: "Canister has no query method 'canic_status'.".to_string(),
+                },
+            },
+        ));
         let report = metrics_query_error_report(&registry_entry(), &error);
 
         assert_eq!(report.status, MetricsCanisterStatus::Unavailable);
@@ -311,11 +327,11 @@ mod tests {
 
     // Ensure transport preserves the Candid metric kind vocabulary.
     #[test]
-    fn maps_metric_kind_to_candid_variant() {
-        assert_eq!(
-            metrics_kind_candid_variant(MetricsKind::Security),
-            "Security"
-        );
+    fn maps_metric_kind_to_observability_dto() {
+        assert!(matches!(
+            metrics_kind_dto(MetricsKind::Security),
+            canic_core::dto::metrics::MetricsKind::Security
+        ));
     }
 
     #[test]
@@ -334,12 +350,26 @@ mod tests {
 
     #[test]
     fn metrics_response_failure_preserves_typed_cause_until_projection() {
-        let error = MetricsQueryError::Response(IcpJsonResponseError::MissingResponseBytes);
-        let source = std::error::Error::source(&error).expect("typed response source");
-
-        assert!(matches!(
-            source.downcast_ref::<IcpJsonResponseError>(),
-            Some(IcpJsonResponseError::MissingResponseBytes)
+        let error = MetricsQueryError::Observability(FleetObservabilityError::Protocol(
+            CanisterProtocolError::Response {
+                canister: candid::Principal::management_canister(),
+                method: canic_core::protocol::CANIC_ROOT_COMMAND,
+                source: IcpJsonResponseError::MissingResponseBytes,
+            },
         ));
+        let mut source = std::error::Error::source(&error);
+        let mut preserved = false;
+        while let Some(cause) = source {
+            if matches!(
+                cause.downcast_ref::<IcpJsonResponseError>(),
+                Some(IcpJsonResponseError::MissingResponseBytes)
+            ) {
+                preserved = true;
+                break;
+            }
+            source = cause.source();
+        }
+
+        assert!(preserved, "typed response cause must remain in the chain");
     }
 }

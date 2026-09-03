@@ -11,7 +11,7 @@ use canic_backup::{
     runner::{BackupRunResponse, BackupRunnerConfig, backup_run_execute_with_executor},
 };
 use canic_host::{
-    fleet_ensure::read_current_fleet_inventory, icp_config::resolve_current_canic_icp_root,
+    fleet_ensure::read_last_converged_fleet_inventory, icp_config::resolve_current_canic_icp_root,
 };
 #[cfg(test)]
 use std::path::Path;
@@ -31,7 +31,8 @@ pub(super) fn backup_create(
     options: &BackupCreateOptions,
 ) -> Result<BackupCreateReport, BackupCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(BackupCommandError::IcpRoot)?;
-    let inventory = read_current_fleet_inventory(&icp_root, &options.environment, &options.fleet)?;
+    let inventory =
+        read_last_converged_fleet_inventory(&icp_root, &options.environment, &options.fleet)?;
     let registry = backup_registry_entries(&inventory.entries);
     let topology_hash = registry_topology_hash(&registry)?;
     let plan_id = backup_plan_id(&options.fleet);

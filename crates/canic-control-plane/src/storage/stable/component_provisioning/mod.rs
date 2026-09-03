@@ -296,6 +296,7 @@ pub struct RootComponentPublicationIntentRecord {
 /// Persisted Component occurrence in one terminal root provisioning result.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootProvisionedGroupMemberRecord {
+    pub member_operation_id: [u8; 32],
     pub member_path: ComponentGroupMemberPath,
     pub component_spec: ComponentSpecId,
     pub purpose: ComponentDeploymentPurpose,

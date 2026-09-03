@@ -89,7 +89,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
             #[cfg(canic_capability_local_application_authorization)]
             ApplicationSessionAudit(::canic::dto::page::PageRequest),
             Binding,
-            #[cfg(canic_capability_sharding)]
+            #[cfg(canic_capability_child_provisioning)]
             Children(::canic::dto::page::PageRequest),
             CycleBalance,
             CycleHistory(::canic::dto::page::PageRequest),
@@ -130,7 +130,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
             #[cfg(canic_capability_local_application_authorization)]
             ApplicationSessionAudit(::canic::dto::auth::ApplicationSessionAuditResponse),
             Binding(::canic::ids::ManagedCanisterBinding),
-            #[cfg(canic_capability_sharding)]
+            #[cfg(canic_capability_child_provisioning)]
             Children(
                 ::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>,
             ),
@@ -192,11 +192,19 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 }
                 CanisterStatusRequest::CycleBalance
                 | CanisterStatusRequest::CycleHistory(_)
-                | CanisterStatusRequest::Metrics(_)
-                | CanisterStatusRequest::Overview => {}
+                | CanisterStatusRequest::Metrics(_) => {
+                    $crate::__internal::core::access::auth::is_controller(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                }
+                CanisterStatusRequest::Overview => {}
                 #[cfg(canic_capability_automatic_topup)]
-                CanisterStatusRequest::CycleTopups(_) => {}
-                #[cfg(canic_capability_sharding)]
+                CanisterStatusRequest::CycleTopups(_) => {
+                    $crate::__internal::core::access::auth::is_controller(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                }
+                #[cfg(canic_capability_child_provisioning)]
                 CanisterStatusRequest::Children(_) => {}
             }
 
@@ -225,7 +233,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::managed_binding()
                         .map(CanisterStatusResponse::Binding)
                 }
-                #[cfg(canic_capability_sharding)]
+                #[cfg(canic_capability_child_provisioning)]
                 CanisterStatusRequest::Children(page) => Ok(CanisterStatusResponse::Children(
                     $crate::__internal::core::api::topology::children::CanisterChildrenApi::page(
                         page,
@@ -312,7 +320,7 @@ macro_rules! __canic_emit_local_status_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum CanisterStatusRequest {
-            #[cfg(canic_capability_sharding)]
+            #[cfg(canic_capability_child_provisioning)]
             Children(::canic::dto::page::PageRequest),
             CycleBalance,
             CycleHistory(::canic::dto::page::PageRequest),
@@ -330,7 +338,7 @@ macro_rules! __canic_emit_local_status_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum CanisterStatusResponse {
-            #[cfg(canic_capability_sharding)]
+            #[cfg(canic_capability_child_provisioning)]
             Children(::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>),
             CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
             CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
@@ -359,15 +367,23 @@ macro_rules! __canic_emit_local_status_endpoint {
                 }
                 CanisterStatusRequest::CycleBalance
                 | CanisterStatusRequest::CycleHistory(_)
-                | CanisterStatusRequest::Metrics(_) => {}
+                | CanisterStatusRequest::Metrics(_) => {
+                    $crate::__internal::core::access::auth::is_controller(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                }
                 #[cfg(canic_capability_automatic_topup)]
-                CanisterStatusRequest::CycleTopups(_) => {}
-                #[cfg(canic_capability_sharding)]
+                CanisterStatusRequest::CycleTopups(_) => {
+                    $crate::__internal::core::access::auth::is_controller(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                }
+                #[cfg(canic_capability_child_provisioning)]
                 CanisterStatusRequest::Children(_) => {}
             }
 
             match request {
-                #[cfg(canic_capability_sharding)]
+                #[cfg(canic_capability_child_provisioning)]
                 CanisterStatusRequest::Children(page) => Ok(CanisterStatusResponse::Children(
                     $crate::__internal::core::api::topology::children::CanisterChildrenApi::page(
                         page,
@@ -449,6 +465,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             InstallDelegationProof(
                 ::canic::dto::auth::InstallActiveDelegationProofRequest,
             ),
+            Observe(::canic::dto::observability::CanisterObservabilityRequest),
             #[cfg(canic_capability_fleet_admission_projection)]
             OpenFleetAdmission(
                 ::canic::dto::fleet_admission::FleetAdmissionOpenTargetRequest,
@@ -479,6 +496,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             InstallDelegationProof(
                 ::canic::dto::auth::InstallActiveDelegationProofResponse,
             ),
+            Observe(::canic::dto::observability::CanisterObservabilityResponse),
             #[cfg(canic_capability_fleet_admission_projection)]
             OpenFleetAdmission(
                 ::canic::dto::fleet_admission::FleetAdmissionTargetReceipt,
@@ -577,6 +595,14 @@ macro_rules! __canic_emit_managed_command_endpoint {
                         request,
                     )
                     .map(CanisterCommandResponse::InstallDelegationProof)
+                }
+                CanisterCommand::Observe(request) => {
+                    let caller = $crate::__internal::cdk::api::msg_caller();
+                    $crate::__internal::core::access::auth::is_controller(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                    $crate::__canic_sensitive_observability_response!(request)
+                        .map(CanisterCommandResponse::Observe)
                 }
                 #[cfg(canic_capability_fleet_admission_projection)]
                 CanisterCommand::OpenFleetAdmission(request) => {
@@ -687,6 +713,49 @@ macro_rules! __canic_role_metrics_status {
             _ => Err(::canic::Error::from_registered(
                 ::canic::diagnostics::codes::REQUEST_INVALID,
             )),
+        }
+    }};
+}
+
+/// Dispatch exact cycle and performance observations after endpoint-owned authorization.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_sensitive_observability_response {
+    ($request:expr) => {{
+        match $request {
+            ::canic::dto::observability::CanisterObservabilityRequest::CycleBalance => Ok(
+                ::canic::dto::observability::CanisterObservabilityResponse::CycleBalance(
+                    ::canic::dto::role::CycleBalanceStatusResponse {
+                        cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
+                    },
+                ),
+            ),
+            ::canic::dto::observability::CanisterObservabilityRequest::CycleHistory(page) => Ok(
+                ::canic::dto::observability::CanisterObservabilityResponse::CycleHistory(
+                    $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
+                ),
+            ),
+            ::canic::dto::observability::CanisterObservabilityRequest::CycleTopups(page) => {
+                #[cfg(canic_capability_automatic_topup)]
+                {
+                    Ok(
+                        ::canic::dto::observability::CanisterObservabilityResponse::CycleTopups(
+                            $crate::__internal::core::api::cycles::CycleTrackerQuery::topups(page),
+                        ),
+                    )
+                }
+                #[cfg(not(canic_capability_automatic_topup))]
+                {
+                    let _ = page;
+                    Err(::canic::Error::from_registered(
+                        ::canic::diagnostics::codes::REQUEST_INVALID,
+                    ))
+                }
+            }
+            ::canic::dto::observability::CanisterObservabilityRequest::Metrics(request) => {
+                $crate::__canic_role_metrics_status!(request)
+                    .map(::canic::dto::observability::CanisterObservabilityResponse::Metrics)
+            }
         }
     }};
 }

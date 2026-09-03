@@ -7,7 +7,7 @@ use super::build::{
     build_mainnet_five_component_refill_wasms, build_mainnet_refill_wasms, build_management_pic,
     build_toko_shaped_singleton_cycles_ledger_wasm, build_two_root_pic,
     five_component_root_canister_config_path, five_trillion_component_root_canister_config_path,
-    initial_shard_root_canister_config_path, toko_shaped_singleton_root_canister_config_path,
+    initial_shard_root_canister_config_path,
 };
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
@@ -37,6 +37,11 @@ mod tests {
     };
     #[cfg(test)]
     use canic::dto::canister::{CanisterInspectionRequest, CanisterStatusResponse};
+    #[cfg(test)]
+    use canic::dto::component_registry::{
+        ComponentLifecycleStatus, ComponentRegistryActivePartitionRequest,
+        ComponentRegistryActivePartitionResponse,
+    };
     #[cfg(test)]
     use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest;
     #[cfg(test)]
@@ -328,6 +333,8 @@ mod tests {
         AuthorityRestore,
         #[cfg(test)]
         ComponentRegistry(RootComponentRegistryPreparationRequest),
+        #[cfg(test)]
+        ComponentRegistryActivePartition(ComponentRegistryActivePartitionRequest),
         FleetAuthority,
         #[cfg(test)]
         Funding,
@@ -350,6 +357,8 @@ mod tests {
         AuthorityRestore(AuthorityRestoreFenceStatusResponse),
         #[cfg(test)]
         ComponentRegistry(RootComponentRegistryStatusResponse),
+        #[cfg(test)]
+        ComponentRegistryActivePartition(ComponentRegistryActivePartitionResponse),
         FleetAuthority(FleetSubnetRootAuthority),
         #[cfg(test)]
         Funding(RootFundingStatusResponse),
@@ -1521,6 +1530,7 @@ exec icp "$@"
         adapter_root: &Path,
         config_path: &Path,
         configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+        configured_roles: &[String],
     ) -> LiteralZeroReleaseArtifacts {
         let release_build_id = persist_internal_test_release_build_plan(adapter_root);
         let context = WorkspaceBuildContext {
@@ -1543,23 +1553,25 @@ exec icp "$@"
             &context.with_role(CanicInfrastructureRole::WasmStore.as_str()),
         )
         .expect("build literal-zero Store artifact");
-        let configured = build_workspace_configured_canister_artifacts(
-            &context,
-            &["root".to_string(), "issuer".to_string()],
-        )
-        .expect("build literal-zero Root and Component artifacts");
+        let configured = build_workspace_configured_canister_artifacts(&context, configured_roles)
+            .expect("build literal-zero Root and Component artifacts");
         let root = configured
             .iter()
             .find(|output| output.role == "root")
             .expect("literal-zero Root artifact")
             .output
             .clone();
-        let component = configured
+        let components = configured
             .iter()
-            .find(|output| output.role == "issuer")
-            .expect("literal-zero Component artifact")
-            .output
-            .clone();
+            .filter(|output| output.role != "root")
+            .map(|output| {
+                (
+                    CanisterRole::from(output.role.clone()),
+                    output.output.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert!(!components.is_empty(), "literal-zero Component artifacts");
 
         let infrastructure = compile_and_persist_canic_infrastructure_artifact_manifest(
             adapter_root,
@@ -1583,29 +1595,36 @@ exec icp "$@"
             ],
         )
         .expect("persist literal-zero infrastructure authority");
-        let component_role = CanisterRole::from("issuer");
-        let application = compile_and_persist_application_artifact_union(
-            adapter_root,
-            &configuration.component_topology,
-            release_build_id,
-            &[ApplicationArtifactBuildTarget {
-                role: component_role.clone(),
+        let application_targets = components
+            .iter()
+            .map(|(role, component)| ApplicationArtifactBuildTarget {
+                role: role.clone(),
                 package: component.package_name.clone(),
                 wasm_relative_path: relative_artifact_path(adapter_root, &component.wasm_path),
                 wasm_gz_relative_path: relative_artifact_path(
                     adapter_root,
                     &component.wasm_gz_path,
                 ),
-            }],
-            &[ApplicationArtifactFileBuildOutput {
-                role: component_role.clone(),
+            })
+            .collect::<Vec<_>>();
+        let application_outputs = components
+            .iter()
+            .map(|(role, component)| ApplicationArtifactFileBuildOutput {
+                role: role.clone(),
                 package: component.package_name.clone(),
                 release_build_id,
                 wasm_path: component.wasm_path.clone(),
                 wasm_gz_path: component.wasm_gz_path.clone(),
                 candid_sha256: component.candid_sha256,
                 protocol_profile_digest: component.protocol_profile_digest,
-            }],
+            })
+            .collect::<Vec<_>>();
+        let application = compile_and_persist_application_artifact_union(
+            adapter_root,
+            &configuration.component_topology,
+            release_build_id,
+            &application_targets,
+            &application_outputs,
         )
         .expect("persist literal-zero application authority");
         let current = compile_and_persist_current_release_set_manifest(
@@ -1619,10 +1638,16 @@ exec icp "$@"
             .expect("finalize literal-zero current release authority");
 
         LiteralZeroReleaseArtifacts {
-            component_wasms: BTreeMap::from([(
-                component_role,
-                std::fs::read(&component.wasm_path).expect("read literal-zero Component Wasm"),
-            )]),
+            component_wasms: components
+                .into_iter()
+                .map(|(role, component)| {
+                    (
+                        role,
+                        std::fs::read(&component.wasm_path)
+                            .expect("read literal-zero Component Wasm"),
+                    )
+                })
+                .collect(),
             coordinator_candid: relative_artifact_path(adapter_root, &coordinator.did_path),
             coordinator_wasm: relative_artifact_path(adapter_root, &coordinator.wasm_path),
             release_build_id,
@@ -1698,7 +1723,9 @@ exec icp "$@"
         coordinator_wasm: &'a Path,
         cycles_ledger: Principal,
         operator: Principal,
+        pool_count: usize,
         pool_creation_funding: u128,
+        pool_minimum_cycles: u128,
         protocol: DesiredFleetProtocol,
         root_wasm: &'a Path,
         store_wasm: &'a Path,
@@ -1708,7 +1735,7 @@ exec icp "$@"
     #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
-        reason = "one constructor keeps the five-canister literal-zero desired estate visible"
+        reason = "one constructor keeps the complete literal-zero desired estate visible"
     )]
     fn literal_zero_fleet_desired(input: LiteralZeroFleetInput<'_>) -> DesiredFleet {
         let LiteralZeroFleetInput {
@@ -1716,13 +1743,15 @@ exec icp "$@"
             coordinator_wasm,
             cycles_ledger,
             operator,
+            pool_count,
             pool_creation_funding,
+            pool_minimum_cycles,
             protocol,
             root_wasm,
             store_wasm,
             subnet,
         } = input;
-        let canisters = [
+        let mut canisters = vec![
             serde_json::json!({
                 "canic_init": { "role": "coordinator" },
                 "controller_canisters": [],
@@ -1777,43 +1806,27 @@ exec icp "$@"
                 "subnet": subnet.to_text(),
                 "wasm": store_wasm.display().to_string(),
             }),
-            serde_json::json!({
-                "canic_init": null,
-                "controller_canisters": ["root"],
-                "controllers": [],
-                "drain": null,
-                "initial_cycles": pool_creation_funding.to_string(),
-                "init_arg": null,
-                "init_candid": null,
-                "kind": "pool",
-                "minimum_cycles": "1900000000000",
-                "name": "pool-0",
-                "parent": "root",
-                "presence": "present",
-                "principal": null,
-                "replace": false,
-                "subnet": subnet.to_text(),
-                "wasm": null,
-            }),
-            serde_json::json!({
-                "canic_init": null,
-                "controller_canisters": ["root"],
-                "controllers": [],
-                "drain": null,
-                "initial_cycles": pool_creation_funding.to_string(),
-                "init_arg": null,
-                "init_candid": null,
-                "kind": "pool",
-                "minimum_cycles": "1900000000000",
-                "name": "pool-1",
-                "parent": "root",
-                "presence": "present",
-                "principal": null,
-                "replace": false,
-                "subnet": subnet.to_text(),
-                "wasm": null,
-            }),
         ];
+        canisters.extend((0..pool_count).map(|index| {
+            serde_json::json!({
+                "canic_init": null,
+                "controller_canisters": ["root"],
+                "controllers": [],
+                "drain": null,
+                "initial_cycles": pool_creation_funding.to_string(),
+                "init_arg": null,
+                "init_candid": null,
+                "kind": "pool",
+                "minimum_cycles": pool_minimum_cycles.to_string(),
+                "name": format!("pool-{index}"),
+                "parent": "root",
+                "presence": "present",
+                "principal": null,
+                "replace": false,
+                "subnet": subnet.to_text(),
+                "wasm": null,
+            })
+        }));
         serde_json::from_value(serde_json::json!({
             "bootstrap": bootstrap,
             "canisters": canisters,
@@ -2512,6 +2525,65 @@ exec icp "$@"
             ));
         }
 
+        let RootStatusResponseFragment::Operation(
+            RootOperationStatusResponse::ProvisionComponents(root_terminal),
+        ) = root_status(
+            &pic,
+            fixture.root_id,
+            RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+        )
+        .expect("query terminal Root provisioning result")
+        else {
+            panic!("Root returned a differently correlated terminal operation");
+        };
+        let result = root_terminal.result.expect("terminal Root result");
+        let placement = result
+            .placements
+            .iter()
+            .find(|placement| {
+                placement
+                    .members
+                    .iter()
+                    .any(|member| member.binding.canister_id == *hub)
+            })
+            .expect("placement containing the initial-Shard Hub");
+        let member = placement
+            .members
+            .iter()
+            .find(|member| member.binding.canister_id == *hub)
+            .expect("initial-Shard Hub terminal member");
+        let RootStatusResponseFragment::ComponentRegistryActivePartition(coverage) = root_status(
+            &pic,
+            fixture.root_id,
+            RootStatusRequestFragment::ComponentRegistryActivePartition(
+                ComponentRegistryActivePartitionRequest {
+                    component: member.binding.component,
+                    provisioning_operation_id: operation_id,
+                    plan_hash: root_terminal.plan_hash,
+                    group_placement: placement.group_placement.clone(),
+                    member_path: member.member_path.clone(),
+                },
+            ),
+        )
+        .expect("query Root-qualified active partition coverage") else {
+            panic!("Root returned a differently correlated partition coverage");
+        };
+        assert_eq!(coverage.allocation_operation_id, member.member_operation_id);
+        assert_eq!(
+            coverage.prepared.head.revision,
+            member.component_registry_revision
+        );
+        assert_eq!(
+            coverage.prepared.head.content_hash,
+            member.component_registry_content_hash
+        );
+        assert_eq!(coverage.prepared.status, ComponentLifecycleStatus::Prepared);
+        assert_eq!(coverage.activation.status, ComponentLifecycleStatus::Active);
+        assert_eq!(coverage.current.status, ComponentLifecycleStatus::Active);
+        assert!(coverage.activation.head.revision > coverage.prepared.head.revision);
+        assert!(coverage.current.head.revision >= coverage.activation.head.revision);
+        assert_eq!(coverage.current.committed_descendants, 1);
+
         let replay_pool = root_pool_status(&pic, fixture.root_id);
         let CoordinatorCommandResponse::OperationAccepted(terminal_receipt) = coordinator_command(
             &pic,
@@ -2899,22 +2971,29 @@ exec icp "$@"
         clippy::too_many_lines,
         reason = "one governed control-plane journey keeps Prepared Root inspection, controller finalization, Component convergence, conservation and terminal replay together"
     )]
-    fn prepared_root_controller_finalization_reaches_one_workload_and_one_ready_pool_asset() {
+    fn literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config_path = toko_shaped_singleton_root_canister_config_path(&workspace_root);
+        let config_path = initial_shard_root_canister_config_path(&workspace_root);
         let config =
-            AppConfigSnapshot::load(&config_path).expect("load singleton Component config");
-        let mut component_specs = config.model().component_specs.values();
-        let component_spec = component_specs
-            .next()
-            .expect("one singleton Component Spec");
-        assert!(component_specs.next().is_none());
-        assert_eq!(component_spec.initial_cycles.to_u128(), 1_900_000_000_000);
+            AppConfigSnapshot::load(&config_path).expect("load initial-child Component config");
+        let readiness_floor = config
+            .model()
+            .component_specs
+            .values()
+            .map(|component| component.initial_cycles.to_u128())
+            .max()
+            .expect("at least one initial-child Component Spec");
         let configuration = config
             .model()
             .compile_component_deployment_configuration()
-            .expect("compile singleton Component deployment configuration");
+            .expect("compile initial-child Component deployment configuration");
+        let configured_roles = config
+            .model()
+            .roles
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
         let adapter_root = test_target_dir(&workspace_root, "canic-121-production-adapter")
             .join(std::process::id().to_string());
         if adapter_root.exists() {
@@ -2928,6 +3007,7 @@ exec icp "$@"
             &adapter_root,
             &config_path,
             &configuration,
+            &configured_roles,
         );
         let root_wasm = release_artifacts.root_wasm_bytes.clone();
         let cycles_ledger_wasm = build_toko_shaped_singleton_cycles_ledger_wasm();
@@ -2944,18 +3024,16 @@ exec icp "$@"
             .first()
             .expect("one application Subnet");
 
-        let readiness_floor = 1_900_000_000_000_u128;
+        let pool_count = 7_usize;
         let pool_creation_funding = readiness_floor
             .checked_add(3_000_000_000_000)
             .expect("literal-zero pool funding fits u128");
-        assert_eq!(pool_creation_funding, 4_900_000_000_000);
-        let requested = [
+        let mut requested = vec![
             ("coordinator", COORDINATOR_INSTALL_CYCLES),
             ("root", ROOT_INSTALL_CYCLES),
             ("store", ROOT_INSTALL_CYCLES),
-            ("pool-0", pool_creation_funding),
-            ("pool-1", pool_creation_funding),
         ];
+        requested.extend((0..pool_count).map(|_| ("pool", pool_creation_funding)));
         let create_result = |cycles, controllers: Vec<Principal>| {
             pic.create_canister_with_params(
                 None,
@@ -2983,13 +3061,16 @@ exec icp "$@"
             })
             .collect::<Vec<_>>();
         let store = create_result(ROOT_INSTALL_CYCLES, root_and_operator.clone());
-        let pools = [
-            create_result(pool_creation_funding, root_and_operator.clone()),
-            create_result(pool_creation_funding, root_and_operator.clone()),
-        ];
+        let pools = (0..pool_count)
+            .map(|_| create_result(pool_creation_funding, root_and_operator.clone()))
+            .collect::<Vec<_>>();
         let placement = BootstrappedRootPlacement {
-            canister_pool_maximum_size: Some(2),
-            canister_pool_minimum_size: Some(2),
+            canister_pool_maximum_size: Some(
+                u32::try_from(pool_count).expect("literal-zero pool count fits u32"),
+            ),
+            canister_pool_minimum_size: Some(
+                u32::try_from(pool_count).expect("literal-zero pool count fits u32"),
+            ),
             canister_pool_cycles: Some(Cycles::new(readiness_floor)),
             coordinator_subnet: Some(subnet),
             existing_root: Some(root),
@@ -3011,7 +3092,7 @@ exec icp "$@"
             store_fixture,
             &placement,
             &config_path,
-            pools.to_vec(),
+            pools.clone(),
         );
         rebind_fixture_release_build_id(
             &mut installed.init_args,
@@ -3042,7 +3123,9 @@ exec icp "$@"
             release_build_id: authority.initial_release_set.release_build_id,
             root_funding: Some(installed.coordinator_root_funding.clone()),
             roots: vec![DesiredFleetBootstrapRoot {
-                canister_pool_imports: vec!["pool-0".to_string(), "pool-1".to_string()],
+                canister_pool_imports: (0..pool_count)
+                    .map(|index| format!("pool-{index}"))
+                    .collect(),
                 component_admissions: authority.binding.component_admissions.clone(),
                 component_topology_digest: authority.binding.component_topology_digest,
                 funding: authority.binding.funding.clone(),
@@ -3079,7 +3162,9 @@ exec icp "$@"
             cycles_ledger: Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
                 .expect("canonical Cycles Ledger Principal"),
             operator,
+            pool_count,
             pool_creation_funding,
+            pool_minimum_cycles: readiness_floor,
             protocol,
             root_wasm: Path::new(&release_artifacts.root_wasm),
             store_wasm: Path::new(&release_artifacts.store_wasm),
@@ -3096,14 +3181,20 @@ exec icp "$@"
             cycles_ledger,
             cycles_ledger_wasm,
             encode_one(CyclesLedgerStubInitArgs {
-                canister_ids: vec![coordinator, root, store, pools[0], pools[1]],
-                expected_controllers_by_index: Some(vec![
-                    vec![operator],
-                    vec![operator],
-                    root_and_operator_wire.clone(),
-                    root_and_operator_wire.clone(),
-                    root_and_operator_wire,
-                ]),
+                canister_ids: [coordinator, root, store]
+                    .into_iter()
+                    .chain(pools.iter().copied())
+                    .collect(),
+                expected_controllers_by_index: Some(
+                    [
+                        vec![operator],
+                        vec![operator],
+                        root_and_operator_wire.clone(),
+                    ]
+                    .into_iter()
+                    .chain((0..pool_count).map(|_| root_and_operator_wire.clone()))
+                    .collect(),
+                ),
                 expected_root: root,
                 expected_subnet: subnet,
                 initial_balances: Some(vec![CyclesLedgerStubAccountBalance {
@@ -3144,7 +3235,7 @@ exec icp "$@"
                 .iter()
                 .filter(|action| matches!(action, EnsureAction::Create { .. }))
                 .count(),
-            5
+            3 + pool_count
         );
         assert_eq!(
             initial_actions
@@ -3158,7 +3249,7 @@ exec icp "$@"
                 .iter()
                 .filter(|action| matches!(action, EnsureAction::SetControllers { .. }))
                 .count(),
-            2
+            pool_count
         );
         assert!(
             initial_actions
@@ -3201,16 +3292,20 @@ exec icp "$@"
                 .expect("read exact controller mutation log")
                 .lines()
                 .count(),
-            2,
+            pool_count,
             "lost response and replay must not repeat a controller effect"
         );
         let request_count: u64 = pic
             .query_candid(cycles_ledger, "request_count", ())
             .expect("query literal-zero creation count");
-        assert_eq!(request_count, 5, "Create replay must not debit twice");
+        assert_eq!(
+            request_count,
+            u64::try_from(3 + pool_count).expect("literal-zero create count fits u64"),
+            "Create replay must not debit twice"
+        );
 
         // Root pool maintenance is an internal same-operation owner, not a host effect.
-        reset_prepaid_pool_assets_for_count_as(&pic, root, operator, 2);
+        reset_prepaid_pool_assets_for_count_as(&pic, root, operator, pool_count);
         let RootCommandResponseFragment::MaintainPool(replayed_reset) =
             root_command_as(&pic, root, operator, RootCommandFragment::MaintainPool)
                 .expect("replay lost pool reset response")
@@ -3257,27 +3352,30 @@ exec icp "$@"
         .expect("apply complete current protocol through production adapter");
         assert!(protocol_terminal.terminal);
 
-        let terminal_pool_statuses = pools.map(|pool| {
-            pic.canister_status(pool, Some(root))
-                .expect("observe terminal pool identity")
-        });
+        let terminal_pool_statuses = pools
+            .iter()
+            .map(|pool| {
+                pic.canister_status(*pool, Some(root))
+                    .expect("observe terminal pool identity")
+            })
+            .collect::<Vec<_>>();
         assert_eq!(
             terminal_pool_statuses
                 .iter()
                 .filter(|status| status.module_hash.is_some())
                 .count(),
-            1,
-            "one exact imported pool identity must become the Component Workload"
+            5,
+            "five exact imported pool identities must become the top-level and initial-child Component Workloads"
         );
         assert_eq!(
             terminal_pool_statuses
                 .iter()
                 .filter(|status| status.module_hash.is_none())
                 .count(),
-            1,
-            "one exact imported pool identity must remain the Ready module-free asset"
+            2,
+            "two exact imported pool identities must remain Ready module-free assets"
         );
-        for status in terminal_pool_statuses {
+        for status in &terminal_pool_statuses {
             assert_eq!(status.settings.controllers, vec![root]);
             assert!(status.cycles >= readiness_floor);
         }
@@ -3286,8 +3384,9 @@ exec icp "$@"
             .into_iter()
             .map(|(_, cycles)| cycles)
             .sum::<u128>();
-        let final_controlled_cycles = [coordinator, root, store, pools[0], pools[1]]
+        let final_controlled_cycles = [coordinator, root, store]
             .into_iter()
+            .chain(pools.iter().copied())
             .map(|canister| pic.cycle_balance(canister))
             .sum::<u128>();
         let measured_execution_burn_cycles = requested_controlled_cycles
@@ -3330,7 +3429,7 @@ exec icp "$@"
                 .expect("reread exact controller mutation log")
                 .lines()
                 .count(),
-            2,
+            pool_count,
             "protocol convergence and terminal replay must not repeat controller effects"
         );
         pic.stop_live();
@@ -8878,8 +8977,8 @@ exec icp "$@"
                 fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog,
             ),
             (
-                "Prepared Root controller-finalization control-plane convergence",
-                prepared_root_controller_finalization_reaches_one_workload_and_one_ready_pool_asset,
+                "literal-zero Fleet with initial-child terminal replay",
+                literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay,
             ),
             (
                 "Coordinator attached-cycle grant",

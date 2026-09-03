@@ -1,25 +1,51 @@
 //! Module: fleet_ensure::inventory
 //!
-//! Responsibility: project terminal current-generation ensure state for operator tooling.
+//! Responsibility: project last-converged and exact-current Ensure state for operator tooling.
 //! Does not own: historical install evidence, live observation, or topology decisions.
-//! Boundary: only a terminal exact current ensure journal may become an operator inventory.
+//! Boundary: backup may consume the last converged topology; other commands bind plan and journal.
 
 use crate::{
     fleet_ensure::{
-        model::{DesiredCanisterKind, FleetEnsureCompletion, FleetEnsurePlan},
+        model::{
+            DesiredCanisterKind, FleetEnsureCompletion, FleetEnsurePlan, FleetEnsurePlanScope,
+        },
         ops::{EnsurePaths, EnsureStateError, read_journal, read_plan, read_state},
     },
+    network::{NetworkIdentityError, resolve_canonical_network_id_from_root},
     registry::RegistryEntry,
 };
-use std::{collections::BTreeMap, path::Path};
+use canic_core::ids::{AppId, CanonicalNetworkId, FleetId, FleetName};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs, io,
+    path::{Path, PathBuf},
+};
 use thiserror::Error as ThisError;
 
-/// Current terminal Fleet inventory shared by backup and read-only operator commands.
+/// Last safely converged Fleet inventory retained for backup.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CurrentFleetInventory {
     pub active_registry: Option<canic_core::dto::fleet_registry::FleetRegistry>,
     pub entries: Vec<RegistryEntry>,
     pub roots: Vec<String>,
+}
+
+/// Environment-bound collection of exact terminal Fleet summaries.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CurrentFleetDiscovery {
+    pub canonical_network_id: CanonicalNetworkId,
+    pub environment: String,
+    pub fleets: Vec<CurrentFleetSummary>,
+}
+
+/// Operator-facing identity projected from one validated terminal Fleet.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CurrentFleetSummary {
+    pub app: AppId,
+    pub canonical_network_id: CanonicalNetworkId,
+    pub coordinator: String,
+    pub fleet: FleetName,
+    pub fleet_id: FleetId,
 }
 
 /// Terminal ensure inventory projected for current operator commands.
@@ -70,6 +96,15 @@ pub enum CurrentFleetInventoryError {
     #[error("current Fleet {fleet} terminal journal and retained plan authority conflict")]
     PlanAuthorityConflict { fleet: String },
 
+    #[error(
+        "current Fleet {fleet} belongs to canonical network {actual}, not selected network {expected}"
+    )]
+    NetworkAuthorityConflict {
+        actual: CanonicalNetworkId,
+        expected: CanonicalNetworkId,
+        fleet: String,
+    },
+
     #[error("current Fleet {fleet} has no unique typed active Registry authority")]
     ProtocolAuthorityMissing { fleet: String },
 
@@ -78,6 +113,22 @@ pub enum CurrentFleetInventoryError {
 
     #[error("current Fleet {fleet} has {root_count} Roots; select one exact Root principal")]
     AmbiguousFleetSubnetRoot { fleet: String, root_count: usize },
+
+    #[error("failed to read current Fleet discovery directory {}: {source}", path.display())]
+    DiscoveryRead {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("current Fleet discovery path is not a safe directory: {}", path.display())]
+    UnsafeDiscoveryPath { path: PathBuf },
+
+    #[error("current Fleet discovery repeats {field} authority {value}")]
+    DuplicateDiscoveryAuthority { field: &'static str, value: String },
+
+    #[error(transparent)]
+    Network(#[from] NetworkIdentityError),
 
     #[error(transparent)]
     State(#[from] EnsureStateError),
@@ -130,31 +181,113 @@ impl CurrentFleetResolution {
     }
 }
 
+/// Discover every exact full-Fleet terminal Ensure result for one environment.
+pub fn discover_current_fleets(
+    root: &Path,
+    environment: &str,
+) -> Result<CurrentFleetDiscovery, CurrentFleetInventoryError> {
+    let canonical_network_id = resolve_canonical_network_id_from_root(root, environment)?;
+    let directory = root.join(".canic").join("fleet-ensure").join(environment);
+    let Some(entries) = read_discovery_directory(&directory)? else {
+        return Ok(CurrentFleetDiscovery {
+            canonical_network_id,
+            environment: environment.to_string(),
+            fleets: Vec::new(),
+        });
+    };
+    let mut coordinators = BTreeSet::new();
+    let mut fleet_ids = BTreeSet::new();
+    let mut fleets = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|source| CurrentFleetInventoryError::DiscoveryRead {
+            path: directory.clone(),
+            source,
+        })?;
+        let path = entry.path();
+        let file_type =
+            entry
+                .file_type()
+                .map_err(|source| CurrentFleetInventoryError::DiscoveryRead {
+                    path: path.clone(),
+                    source,
+                })?;
+        if file_type.is_symlink() {
+            return Err(CurrentFleetInventoryError::UnsafeDiscoveryPath { path });
+        }
+        if !file_type.is_dir() {
+            continue;
+        }
+        let fleet = entry
+            .file_name()
+            .into_string()
+            .ok()
+            .and_then(|name| name.parse::<FleetName>().ok())
+            .ok_or(CurrentFleetInventoryError::UnsafeDiscoveryPath { path })?;
+        let paths = EnsurePaths::under(root, environment, fleet.as_str());
+        let Some(journal) = read_journal(&paths)? else {
+            continue;
+        };
+        if journal.completion != FleetEnsureCompletion::Converged {
+            continue;
+        }
+        let plan = matching_terminal_plan(&paths, environment, fleet.as_str(), &journal)?;
+        if plan.scope == FleetEnsurePlanScope::RootStartPrerequisite {
+            continue;
+        }
+        let current = resolve_current_fleet(root, environment, fleet.as_str())?;
+        let registry = current.initial_active_registry(fleet.as_str())?;
+        let binding = &registry.authority.binding;
+        let actual_network_id = binding.fleet.fleet.canonical_network_id;
+        if actual_network_id != canonical_network_id {
+            return Err(CurrentFleetInventoryError::NetworkAuthorityConflict {
+                actual: actual_network_id,
+                expected: canonical_network_id,
+                fleet: fleet.to_string(),
+            });
+        }
+        if !fleet_ids.insert(binding.fleet.fleet.fleet_id) {
+            return Err(CurrentFleetInventoryError::DuplicateDiscoveryAuthority {
+                field: "Fleet ID",
+                value: binding.fleet.fleet.fleet_id.to_string(),
+            });
+        }
+        let coordinator = binding.coordinator.to_text();
+        if !coordinators.insert(coordinator.clone()) {
+            return Err(CurrentFleetInventoryError::DuplicateDiscoveryAuthority {
+                field: "Coordinator",
+                value: coordinator,
+            });
+        }
+        fleets.push(CurrentFleetSummary {
+            app: binding.fleet.app.clone(),
+            canonical_network_id: actual_network_id,
+            coordinator,
+            fleet,
+            fleet_id: binding.fleet.fleet.fleet_id,
+        });
+    }
+    fleets.sort_by(|left, right| left.fleet.cmp(&right.fleet));
+    Ok(CurrentFleetDiscovery {
+        canonical_network_id,
+        environment: environment.to_string(),
+        fleets,
+    })
+}
+
 /// Resolve current operator targeting exclusively from a terminal ensure journal.
 pub fn resolve_current_fleet(
     root: &Path,
     environment: &str,
     fleet: &str,
 ) -> Result<CurrentFleetResolution, CurrentFleetInventoryError> {
-    let inventory = read_current_fleet_inventory(root, environment, fleet)?;
+    let inventory = read_last_converged_fleet_inventory(root, environment, fleet)?;
     let paths = EnsurePaths::under(root, environment, fleet);
     let journal =
         read_journal(&paths)?.ok_or_else(|| CurrentFleetInventoryError::NotConverged {
             environment: environment.to_string(),
             fleet: fleet.to_string(),
         })?;
-    let plan = read_plan(&paths)?.ok_or_else(|| CurrentFleetInventoryError::MissingPlan {
-        fleet: fleet.to_string(),
-    })?;
-    if plan.plan_sha256 != journal.plan_sha256
-        || plan.environment != environment
-        || plan.fleet != fleet
-        || plan.operation_id != journal.operation_id
-    {
-        return Err(CurrentFleetInventoryError::PlanAuthorityConflict {
-            fleet: fleet.to_string(),
-        });
-    }
+    let plan = matching_terminal_plan(&paths, environment, fleet, &journal)?;
     let coordinator_canister_id = inventory
         .entries
         .iter()
@@ -190,8 +323,59 @@ pub fn resolve_current_fleet(
     })
 }
 
-/// Read one terminal inventory without consulting deleted install plans or recovery state.
-pub fn read_current_fleet_inventory(
+fn matching_terminal_plan(
+    paths: &EnsurePaths,
+    environment: &str,
+    fleet: &str,
+    journal: &crate::fleet_ensure::model::FleetEnsureJournalRecord,
+) -> Result<FleetEnsurePlan, CurrentFleetInventoryError> {
+    let plan = read_plan(paths)?.ok_or_else(|| CurrentFleetInventoryError::MissingPlan {
+        fleet: fleet.to_string(),
+    })?;
+    if plan.plan_sha256 != journal.plan_sha256
+        || plan.environment != environment
+        || plan.fleet != fleet
+        || plan.operation_id != journal.operation_id
+    {
+        return Err(CurrentFleetInventoryError::PlanAuthorityConflict {
+            fleet: fleet.to_string(),
+        });
+    }
+    Ok(plan)
+}
+
+fn read_discovery_directory(
+    path: &Path,
+) -> Result<Option<fs::ReadDir>, CurrentFleetInventoryError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => {
+            return Err(CurrentFleetInventoryError::DiscoveryRead {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(CurrentFleetInventoryError::UnsafeDiscoveryPath {
+            path: path.to_path_buf(),
+        });
+    }
+    fs::read_dir(path)
+        .map(Some)
+        .map_err(|source| CurrentFleetInventoryError::DiscoveryRead {
+            path: path.to_path_buf(),
+            source,
+        })
+}
+
+/// Read the last converged topology even while an unapplied successor plan is retained.
+///
+/// This deliberately does not bind the current plan. Fleet Ensure publishes its nonterminal
+/// journal before effect-owned state changes and publishes validated terminal state before the
+/// converged journal. Current operator targeting must use [`resolve_current_fleet`] instead.
+pub fn read_last_converged_fleet_inventory(
     root: &Path,
     environment: &str,
     fleet: &str,

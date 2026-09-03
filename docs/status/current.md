@@ -25,11 +25,12 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.110.4` at
-`baffacab7d5ae4d93ddb9e5fac279bc4c3ddd177`. Its governed marker records the
-validated source below; immutable details are in
-[the 0.110 changelog](../changelog/0.110.md). `0.110.5` is the single open
-patch draft. Source-development truth comes from Git and the working tree.
+Current development begins from published `v0.110.5` at
+`50f40171d6177c3d1e490b1fdb5f6163323b2cd5`. Its governed marker records the
+validated pre-version source below; immutable details are in
+[the 0.110 changelog](../changelog/0.110.md). Post-release work is retained
+under `Unreleased` until it forms a coherent batch. Source-development truth
+comes from Git and the working tree.
 
 ## Maintained 0.109 Contract
 
@@ -133,7 +134,7 @@ reconciliation correction and does not add runtime capability or alter the
 
 ## CANIC-124 Managed Component-Tree Qualification
 
-The open `0.110.5` batch adds one public host-only fixture for downstream tests
+Published `v0.110.5` adds one public host-only fixture for downstream tests
 that must qualify a managed Hub together with children created through Canic's
 placement workflows. `install_managed_component_group` consumes one validated
 Component Group deployment and exact Wasms for all selected roles; Canic alone
@@ -149,7 +150,7 @@ downstream never constructs protected child payloads or directly pins private
 
 ## CANIC-126-CANIC-127 Convergence Corrections
 
-The open `0.110.5` batch also closes the two production ordering defects exposed
+Published `v0.110.5` also closes the two production ordering defects exposed
 after the final Fleet protocol action:
 
 - a Root-owned pool asset whose exact balance is not yet available remains a
@@ -195,7 +196,7 @@ adoption evidence rather than a Canic release effect.
 
 ## 0.110.5 Fleet Ensure Operator Corrections
 
-The open patch distinguishes a retained Component-provisioning source Registry
+Published `v0.110.5` distinguishes a retained Component-provisioning source Registry
 from its published active successor during terminal inventory validation. Root
 top-level status is bound to the Coordinator's retained source Registry, plan
 hash and configuration digest; Root and Coordinator publication remain bound
@@ -219,8 +220,9 @@ The immutable
 reports `closeout_verdict: pass` on `v0.109.32`; the human maintainer accepted
 it on 2026-08-31. The three control-plane parents remain 6,303, 5,838 and 2,688
 lines. Canonical complexity and change-friction remain 8/10 and 7/10 pressure,
-routed to blocked 0.110 rather than a second 0.109 authority. This active
-handoff remains below the accepted 250-physical-line ceiling.
+routed to blocked 0.110 rather than a second 0.109 authority. The accepted
+audit's handoff snapshot was below its 250-physical-line ceiling; that
+historical measurement is not a size claim about this live handoff.
 
 Published `v0.109.33` completed the host-only `canic::testing` facade, isolated
 packaged consumer and managed plus standalone-local lifecycle proof. Read-only
@@ -245,7 +247,7 @@ runtime or repository dependency.
 | Line | Active owner | State |
 | --- | --- | --- |
 | [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.4` published; `0.110.5` closes managed Component-tree qualification and its two observed convergence blockers while B1 remains active |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.5` published; valid eleven-role v6 baseline retained while B1 fixture and differential evidence remain active |
 | [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
@@ -260,26 +262,102 @@ baseline before any runtime contraction. Initial work:
 
 - freezes `v0.109.35` (`3185dc45b`) as the Canic predecessor;
 - confirms dated IC limits of 10 MiB code section, 100 MiB total module and
-  50,000 declared functions from the authoritative IC documentation;
-- promotes `CANIC-WASM-001/v5` so path-confined staged release artifacts are
+  50,000 replica-limited defined functions from the authoritative IC
+  documentation and source;
+- promotes `CANIC-WASM-001/v6` so path-confined staged release artifacts are
   measured from one role-local build log;
-- retains the corrected deterministic nine-role baseline, whose largest role
-  has 3,776,168 code-section bytes and 40,322 declared functions of absolute
-  headroom; and
-- keeps the exact downstream canary read-only and separate from Canic source.
+- retains the corrected deterministic eleven-role size baseline from immutable
+  `v0.110.5`, whose largest role has 3,826,016 code-section bytes and 40,404
+  replica-limited defined functions of absolute headroom;
+- retains source inventories that separate the immutable generated role
+  surface from the working overlay and classify all 39 Canic state allocations
+  as reconstructable, reset-only or consumer-owned discard/reseed domains;
+- proves that the temporary pool-Ledger recovery family remains absent from
+  current product source while keeping its compatible artifact delta open;
+- retains a machine-checked eighteen-row ablation catalog, fail-closed
+  two-build harness and repository-owned function counter frozen to the IC
+  replica's local-function quantity for the canonical roles and four owned
+  fixtures, plus an all-role-qualified audit-only global-registration switch,
+  specified inclusive activation-persistence, authorization stable-codec and
+  shared-CBOR-helper switches, an isolated watchdog-recovery dispatch switch
+  and an endpoint-
+  declaration-construction switch plus bounded endpoint-reply serialization,
+  a specified metrics-provider switch and immutable payload-limited raw-
+  adapter attribution that retains the safety path after measuring only 967
+  optimized code-section bytes and zero defined functions;
+  and
+- keeps downstream pressure observations non-binding and separate from Canic
+  source and release authority.
 
 No broad workspace or full PocketIC gate is run during coding. The maintainer's
-release flow owns that boundary. Published `v0.110.4` closes the independent
-CANIC-121 and CANIC-125 corrections, so B1 measurement may proceed; B2 remains
-blocked on accepted complete B1 evidence.
+release flow owns that boundary. Published `v0.110.5` closes the independent
+CANIC-124/CANIC-126/CANIC-127 qualification and convergence corrections, so B1
+measurement may proceed; B2 remains blocked on accepted complete B1 evidence.
+
+The current Unreleased overlay also closes an observability exposure discovered
+during downstream review. Exact cycle balance/history/top-up values and raw
+runtime metrics are controller-only on managed, standalone-local, Root and
+Store status surfaces. Fleet `info list`, `info cycles`, `info metrics` and
+terminal conservation retain operator access through existing Root authority:
+native balances use Root management inspection, while managed runtime history
+and metrics use a controller-authenticated Root relay. No human principal is
+added as a managed Component controller, and Toko Miner remains downstream-
+owned.
+
+The Unreleased overlay also corrects the `v0.110.5` Component Child response
+regression. Child allocations requested by an Active parent now complete
+through the existing durable Root driver before returning their canister ID.
+Only initial bootstrap uses detached completion, because the Prepared parent
+cannot yet serve the Directory convergence callback. This is a generic Canic
+lifecycle correction; no downstream application behavior is embedded in
+Canic.
+
+Terminal Fleet inventory in the Unreleased overlay now reconciles every Root
+pool Workload against the complete protected Component tree, including nested
+sharding, scaling and index descendants. Each physical workload must match its
+exact Component ID, allocation operation, Root, parent, role and current
+release module before terminal publication. The authority-derived pool bound
+includes every permitted descendant. A retained Pool row may adopt a different
+logical parent only when the terminal row is an observed, protocol-bound
+Component; all other parent drift remains rejected. `canic info subnets` also
+retains the caller's selected ICP executable and environment instead of
+falling back to `local`.
 
 ## Next Authorized Action
 
-Complete the bounded `0.110.5` CANIC-124, CANIC-126 and CANIC-127 corrections,
-then continue B1 from immutable `v0.110.4`: complete the frozen downstream
-canary, controlled ablations, generated-surface inventory and generic-
-instantiation cohort. Retain the active B1 evidence and do not begin B2 until
-the maintainer accepts the complete B1 baseline.
+Continue B1 from immutable `v0.110.5`: measure qualified row 2, then qualify
+the specified rows 3 through 6 activation-persistence, authorization stable-
+codec and shared-CBOR-helper patches plus the watchdog-recovery dispatch patch,
+row 8 endpoint-
+declaration construction and rows 10 and 12 endpoint-reply serialization and
+metrics-provider attribution, then complete the
+controlled ablations, optimized generated-surface proof, generic-
+instantiation cohort, accepted allowances and required compatible predecessor
+comparisons. Row 3 is an inclusive build-only attribution with no activation-
+parity or isolated-codec claim; row 4 preserves the auth call graph and same-
+execution heap behavior but makes no persistence or authorization-parity
+claim; row 5 covers every reachable shared-helper caller but leaves direct CBOR
+uses unchanged; row 6 leaves timer custody and ordinary maintenance intact but
+makes no watchdog-recovery parity claim; row 8 retains runtime endpoints and
+wire serialization but makes no Candid or profile-metadata parity claim. Row 7
+remains fail-closed until an exact expanded-source/projection counterfactual is
+frozen without bundling the provider ablations. Row 9 remains fail-closed
+because Canic has no derivation-level type-documentation suppression. Row 10
+retains typed request decoding, endpoint execution, exact Candid and exports,
+but makes no reply or wire-parity claim and leaves direct inter-canister
+encoders intact. Row 11 retains inspect-message registration and endpoint
+dispatch but removes the raw predecode/copy/reply adapter, so it makes no
+complete payload-safety or canister-origin-call parity claim; its immutable
+measurement retained the production path. Row 12 retains metric recording and
+the typed status protocol while
+disconnecting read-side snapshot/projection providers, so it makes no metrics-
+behavior parity claim. The source inventories distinguish
+reconstructable state from reset-only and consumer-owned reseed domains, and
+the working-tree audit fixture freezes the generated `Page<T>` cohort at
+`N = 5`. Its immutable optimized deltas and named post-`-Oz` mapping are still
+required. The exact Aug-31 downstream artifact remains hash-bound pressure
+evidence only; its source and application release policy do not gate Canic. Do
+not begin B2 until the maintainer accepts the complete B1 baseline.
 
 
 

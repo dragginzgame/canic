@@ -213,9 +213,12 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                         .await
                         .map_err(::canic::Error::from)?;
                 }
-                StoreStatusRequest::CycleBalance
-                | StoreStatusRequest::CycleHistory(_)
-                | StoreStatusRequest::Overview => {}
+                StoreStatusRequest::CycleBalance | StoreStatusRequest::CycleHistory(_) => {
+                    $crate::__internal::core::access::auth::is_controller(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                }
+                StoreStatusRequest::Overview => {}
             }
 
             match request {

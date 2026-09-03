@@ -228,6 +228,7 @@ struct ProvisionedPlacementAuthority<'a> {
 
 #[derive(Eq, PartialEq)]
 struct ProvisionedResultMemberAuthority<'a> {
+    member_operation_id: [u8; 32],
     member_path: &'a ComponentGroupMemberPath,
     component_spec: &'a ComponentSpecId,
     purpose: &'a ComponentDeploymentPurpose,
@@ -243,6 +244,23 @@ struct ProvisionedResultMemberAuthority<'a> {
 pub struct RootComponentProvisioningOps;
 
 impl RootComponentProvisioningOps {
+    /// Derive the exact idempotent allocation identity for one accepted group member.
+    pub(crate) fn member_operation_id(
+        fleet_subnet_root: Principal,
+        operation_id: [u8; 32],
+        plan_hash: [u8; 32],
+        group_placement: &ComponentGroupPlacementId,
+        member_path: &ComponentGroupMemberPath,
+    ) -> Result<[u8; 32], InternalError> {
+        member_operation_id(
+            fleet_subnet_root,
+            operation_id,
+            plan_hash,
+            group_placement,
+            member_path,
+        )
+    }
+
     /// Resolve one durable provisioning operation without requiring its secondary plan hash.
     pub(crate) fn status_by_operation_id(
         operation_id: [u8; 32],
@@ -1852,7 +1870,13 @@ fn validated_provisioned_state(
         return Err(InternalError::invariant());
     }
     let result = provisioning_result_from_record(&result_record);
-    validate_provisioned_result(&record.batch, component_count, &result)?;
+    validate_provisioned_result(
+        record.operation_id,
+        record.plan_hash,
+        &record.batch,
+        component_count,
+        &result,
+    )?;
     let expected_hash =
         provisioned_receipt_hash(record, &result, accepted_at_ns, provisioned_at_ns)?;
     if receipt_content_hash != expected_hash {
@@ -1960,7 +1984,13 @@ fn validated_published_state(
     receipt_content_hash: [u8; 32],
 ) -> Result<ValidatedProvisioningState, InternalError> {
     let result = provisioning_result_from_record(&result_record);
-    validate_provisioned_result(&record.batch, component_count, &result)?;
+    validate_provisioned_result(
+        record.operation_id,
+        record.plan_hash,
+        &record.batch,
+        component_count,
+        &result,
+    )?;
     if published_at_ns < provisioned_at_ns {
         return Err(InternalError::invariant());
     }
@@ -2358,6 +2388,7 @@ fn provisioned_result_record(
                 &observed.partition,
             )?;
             members.push(RootProvisionedGroupMemberRecord {
+                member_operation_id: observed.member.member_operation_id,
                 member_path: entry.member_path.clone(),
                 component_spec: entry.component_spec.clone(),
                 purpose: entry.purpose.clone(),
@@ -2378,6 +2409,8 @@ fn provisioned_result_record(
     }
     let result = RootComponentProvisioningResultRecord { placements };
     validate_provisioned_result(
+        view.operation_id,
+        view.plan_hash,
         &view.batch,
         view.component_count,
         &provisioning_result_from_record(&result),
@@ -2404,7 +2437,13 @@ fn commit_provisioned_result(
         return Err(InternalError::invalid_input());
     }
     let result_view = provisioning_result_from_record(&result);
-    validate_provisioned_result(&current.batch, current.component_count, &result_view)?;
+    validate_provisioned_result(
+        current.operation_id,
+        current.plan_hash,
+        &current.batch,
+        current.component_count,
+        &result_view,
+    )?;
     let receipt_content_hash = provisioned_receipt_hash(
         &current_record,
         &result_view,
@@ -2441,6 +2480,7 @@ fn provisioning_result_from_record(
                     .members
                     .iter()
                     .map(|member| RootProvisionedGroupMember {
+                        member_operation_id: member.member_operation_id,
                         member_path: member.member_path.clone(),
                         component_spec: member.component_spec.clone(),
                         purpose: member.purpose.clone(),
@@ -2563,6 +2603,8 @@ fn result_member_at(
 }
 
 fn validate_provisioned_result(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
     batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
     result: &RootComponentProvisioningResult,
@@ -2588,7 +2630,14 @@ fn validate_provisioned_result(
             return Err(InternalError::invariant());
         }
         for (entry, member) in planned.entries.iter().zip(&provisioned.members) {
-            validate_provisioned_result_member(batch, entry, member)?;
+            validate_provisioned_result_member(
+                operation_id,
+                plan_hash,
+                batch,
+                &planned.group_placement,
+                entry,
+                member,
+            )?;
             if !components.insert(member.binding.component)
                 || !principals.insert(member.binding.canister_id)
             {
@@ -2606,12 +2655,22 @@ fn validate_provisioned_result(
 }
 
 fn validate_provisioned_result_member(
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
     batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    group_placement: &ComponentGroupPlacementId,
     entry: &canic_core::dto::component_provisioning::ComponentGroupPlanEntry,
     member: &RootProvisionedGroupMember,
 ) -> Result<(), InternalError> {
     let binding = &member.binding;
     let expected = ProvisionedResultMemberAuthority {
+        member_operation_id: member_operation_id(
+            batch.root.fleet_subnet_root,
+            operation_id,
+            plan_hash,
+            group_placement,
+            &entry.member_path,
+        )?,
         member_path: &entry.member_path,
         component_spec: &entry.component_spec,
         purpose: &entry.purpose,
@@ -2623,6 +2682,7 @@ fn validate_provisioned_result_member(
         binding_root: batch.root.fleet_subnet_root,
     };
     let actual = ProvisionedResultMemberAuthority {
+        member_operation_id: member.member_operation_id,
         member_path: &member.member_path,
         component_spec: &member.component_spec,
         purpose: &member.purpose,

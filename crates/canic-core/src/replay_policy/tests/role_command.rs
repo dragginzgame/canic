@@ -75,12 +75,20 @@ fn asynchronous_root_intents_are_replay_protected_by_operation_id() {
 
 #[test]
 fn query_like_root_commands_do_not_acquire_mutation_replay_policy() {
-    for variant in ["InspectCanister", "PreviewCycleRefill"] {
+    for variant in ["InspectCanister", "ObserveCanister", "PreviewCycleRefill"] {
         assert_eq!(
             command_entry(ROOT_COMMAND_REPLAY_POLICY_MANIFEST, variant).replay_policy,
             ReplayPolicy::QueryOrReadOnly
         );
     }
+}
+
+#[test]
+fn managed_observability_does_not_acquire_mutation_replay_policy() {
+    assert_eq!(
+        command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, "Observe").replay_policy,
+        ReplayPolicy::QueryOrReadOnly
+    );
 }
 
 #[test]

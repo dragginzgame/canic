@@ -1,0 +1,13 @@
+{
+  "method_id": "CANIC-WASM-001",
+  "method_version": "6",
+  "method_fingerprint": "726e629bd67983acd2a7e4d42c275c282953b1ffef0e3236435c3c0817ef0d01",
+  "definition_fingerprint": "0c8487a989dadaae03cba0437545a2ea236274607622ff3d74623696c1ebe797",
+  "roster_key": "app,index_hub,test,user_hub,scale_hub,index_child,user_shard,scale_replica,root,fleet_coordinator,wasm_store",
+  "profile_key": "release-clean-a+release-clean-b+debug",
+  "execution_path_key": "18a061f6f71b52c15db9c293a66318610cc94213d7594f47b19220d95eba572f",
+  "tool_key": "a908e075e8c037dea8a74b9d9e81c08046f4b2ec63fd62ca6ed274c31e94f77e",
+  "report": "docs/audits/reports/2026-09/2026-09-03/wasm-footprint-v6.md",
+  "immediate_baseline_report": "N/A",
+  "original_baseline_report": "docs/audits/reports/2026-09/2026-09-03/wasm-footprint-v6.md"
+}

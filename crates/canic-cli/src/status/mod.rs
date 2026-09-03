@@ -16,7 +16,7 @@ use crate::{
 };
 use canic_host::{
     config_discovery::{ConfigDiscoveryError, discover_workspace_canic_config_choices},
-    fleet_catalog::{FleetCatalogEntryV1, FleetCatalogRequest, build_fleet_catalog_report},
+    fleet_ensure::{CurrentFleetSummary, discover_current_fleets},
     icp::IcpCli,
     icp_config::{
         DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port_from_root,
@@ -42,7 +42,7 @@ Examples:
   canic status
 
 Note:
-  Fleet rows come from terminal catalog receipts.
+  Fleet rows come from validated terminal Fleet Ensure state.
   This summary does not query live Coordinator or Fleet Subnet Root state.";
 
 ///
@@ -104,7 +104,7 @@ struct StatusAppRow {
     canisters: String,
 }
 
-/// One independently discovered canonical Fleet catalog row.
+/// One independently discovered terminal Fleet row.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct StatusFleetRow {
@@ -153,14 +153,10 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
     let icp_config = load_icp_config_status(&icp_root, &choices);
     let replica = load_replica_status(options, &icp_root);
     let apps = load_status_apps(&icp_root, &choices);
-    let catalog = build_fleet_catalog_report(&FleetCatalogRequest {
-        workspace_root: icp_root.clone(),
-        environment: options.environment.clone(),
-        generated_at: String::new(),
-    })
-    .map_err(|error| StatusCommandError::Host(Box::new(error)))?;
-    let mut fleets = catalog
-        .entries
+    let discovery = discover_current_fleets(&icp_root, &options.environment)
+        .map_err(|error| StatusCommandError::Host(Box::new(error)))?;
+    let mut fleets = discovery
+        .fleets
         .iter()
         .map(status_fleet_row)
         .collect::<Vec<_>>();
@@ -172,7 +168,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
         replica_port: load_replica_port(&icp_root),
         icp_cli,
         icp_config,
-        canonical_network_id: catalog.canonical_network_id.to_string(),
+        canonical_network_id: discovery.canonical_network_id.to_string(),
         apps,
         fleets,
     })
@@ -252,13 +248,13 @@ fn load_status_apps(workspace_root: &Path, paths: &[std::path::PathBuf]) -> Vec<
     rows
 }
 
-fn status_fleet_row(fleet: &FleetCatalogEntryV1) -> StatusFleetRow {
+fn status_fleet_row(fleet: &CurrentFleetSummary) -> StatusFleetRow {
     StatusFleetRow {
-        fleet: fleet.fleet_name.to_string(),
+        fleet: fleet.fleet.to_string(),
         app: fleet.app.to_string(),
         network: fleet.canonical_network_id.to_string(),
         deployed: "yes".to_string(),
-        coordinator: fleet.coordinator_principal.clone(),
+        coordinator: fleet.coordinator.clone(),
     }
 }
 

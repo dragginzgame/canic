@@ -23,6 +23,10 @@ fi
 tests_pattern='(^|/)(tests/|[^/]*tests\.rs$)'
 test_attr_pattern='^[[:space:]]*#\[(tokio::)?test'
 crate_column_width=24
+total_runtime_loc=0
+total_test_loc=0
+total_test_fns=0
+total_inline_test_fns=0
 printf -v crate_divider "%*s" "${crate_column_width}" ""
 crate_divider="${crate_divider// /-}"
 
@@ -100,4 +104,34 @@ for crate_path in "${crates_dir}"/canic*; do
         "${test_pct}" \
         "${test_fns}" \
         "${inline_test_fns}"
+
+    total_runtime_loc=$((total_runtime_loc + runtime_loc))
+    total_test_loc=$((total_test_loc + test_loc))
+    total_test_fns=$((total_test_fns + test_fns))
+    total_inline_test_fns=$((total_inline_test_fns + inline_test_fns))
 done
+
+total_loc=$((total_runtime_loc + total_test_loc))
+if [[ "${total_loc}" -gt 0 ]]; then
+    total_test_pct=$(awk "BEGIN { printf \"%.1f\", (${total_test_loc}/${total_loc})*100 }")
+else
+    total_test_pct="0.0"
+fi
+
+printf "\n"
+printf "%-*s %12s %12s %10s %9s %10s\n" \
+    "${crate_column_width}" \
+    "${crate_divider}" \
+    "------------" \
+    "------------" \
+    "--------" \
+    "---------" \
+    "----------"
+printf "%-*s %12d %12d %9s%% %9d %10d\n" \
+    "${crate_column_width}" \
+    "TOTAL" \
+    "${total_runtime_loc}" \
+    "${total_test_loc}" \
+    "${total_test_pct}" \
+    "${total_test_fns}" \
+    "${total_inline_test_fns}"

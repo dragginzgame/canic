@@ -10,7 +10,7 @@ use super::current_protocol::{
     query_registry,
 };
 use crate::{
-    canister_protocol::query_with_candid,
+    canister_protocol::{call_with_candid, query_with_candid},
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_ensure::model::{
         DesiredCanisterKind, DesiredFleet, DesiredPresence, FleetEnsureStateRecord,
@@ -33,7 +33,7 @@ use canic_core::{
     cdk::utils::hash::hex_bytes,
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
     dto::{
-        canister::CanisterInfo,
+        canister::{CanisterInfo, CanisterInspectionRequest, CanisterStatusResponse},
         component_provisioning::{
             FleetComponentProvisioningPhase, FleetComponentProvisioningStatusResponse,
             RootComponentProvisioningPhase, RootComponentProvisioningResult,
@@ -41,16 +41,24 @@ use canic_core::{
         },
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin,
-            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
+            ComponentRegistryActivePartitionRequest, ComponentRegistryActivePartitionResponse,
+            ComponentRegistryPartitionResponse, RootComponentAllocationPhase,
+            RootComponentChildAllocationResponse,
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootStatus,
         },
         page::{Page, PageRequest},
-        pool::{CanisterPoolAssetStatus, CanisterPoolResponse, CanisterPoolStatusRequest},
-        role::{CycleBalanceStatusResponse, OperationStatusRequest},
+        pool::{
+            CanisterPoolAssetStatus, CanisterPoolClaim, CanisterPoolResponse,
+            CanisterPoolStatusRequest,
+        },
+        role::OperationStatusRequest,
     },
-    ids::{CanisterRole, ComponentDeploymentConfigurationDigest, FleetSubnetRootReleaseSet},
+    ids::{
+        CanisterRole, ComponentBinding, ComponentDeploymentConfigurationDigest,
+        ComponentInstanceId, FleetSubnetRootReleaseSet,
+    },
     protocol,
     role_contract::{RoleCapabilityKey, RoleContractResolution, derive_protocol_profile_hashes},
 };
@@ -74,25 +82,25 @@ enum ChildrenStatusResponse {
 }
 
 #[derive(CandidType)]
-enum CycleStatusRequest {
-    CycleBalance,
+enum RootInventoryCommand {
+    InspectCanister(CanisterInspectionRequest),
 }
 
 #[derive(CandidType, Deserialize)]
-enum CycleStatusResponse {
-    CycleBalance(CycleBalanceStatusResponse),
+enum RootInventoryCommandResponse {
+    InspectCanister(CanisterStatusResponse),
 }
 
 #[derive(CandidType)]
 enum RootInventoryStatusRequest {
-    ComponentRegistryPartition(ComponentRegistryPartitionRequest),
+    ComponentRegistryActivePartition(ComponentRegistryActivePartitionRequest),
     Operation(OperationStatusRequest),
     Pool(CanisterPoolStatusRequest),
 }
 
 #[derive(CandidType, Deserialize)]
 enum RootInventoryStatusResponse {
-    ComponentRegistryPartition(Box<ComponentRegistryPartitionResponse>),
+    ComponentRegistryActivePartition(Box<ComponentRegistryActivePartitionResponse>),
     Operation(Box<RootOperationStatusResponse>),
     Pool(Box<CanisterPoolResponse>),
 }
@@ -125,6 +133,39 @@ struct TerminalRootComponentAuthority<'a> {
     registry: &'a FleetRegistry,
     root: &'a FleetSubnetRootEntry,
     source_fleet_registry: &'a FleetRegistryVersion,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TerminalWorkloadAuthority {
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    root: Principal,
+}
+
+struct RootComponentSummary {
+    component_bindings: BTreeMap<ComponentInstanceId, ComponentBinding>,
+    component_ids: BTreeSet<Principal>,
+    maximum_workloads: u64,
+    workloads: BTreeMap<Principal, TerminalWorkloadAuthority>,
+}
+
+struct DescendantParent {
+    canister_id: Principal,
+    candid_path: PathBuf,
+    maximum_children: u64,
+    release_set: FleetSubnetRootReleaseSet,
+    role: CanisterRole,
+    root: Principal,
+}
+
+struct TerminalDescendantAuthority<'a> {
+    child: &'a CanisterInfo,
+    component: &'a ComponentBinding,
+    parent_role: &'a CanisterRole,
+    protocol: &'a ProtocolEntry,
+    release_set: &'a FleetSubnetRootReleaseSet,
+    root: Principal,
+    workload: &'a TerminalWorkloadAuthority,
 }
 
 /// Query one complete bounded current Fleet tree after protocol convergence.
@@ -342,6 +383,9 @@ fn query_entries(
     let mut seen = BTreeSet::from([coordinator]);
     let mut controlled_cycles_by_principal = BTreeMap::new();
     let mut parents = VecDeque::new();
+    let mut component_bindings = BTreeMap::new();
+    let mut component_workloads = BTreeMap::new();
+    let mut pool_workloads = BTreeMap::new();
     for root in registry
         .fleet_subnet_roots
         .iter()
@@ -384,7 +428,7 @@ fn query_entries(
             root.fleet_subnet_root,
             operation_id,
         )?;
-        let component_ids = append_root_components(
+        let component_summary = append_root_components(
             icp,
             &TerminalRootComponentAuthority {
                 active_release_set: &root.active_release_set,
@@ -403,22 +447,44 @@ fn query_entries(
             &mut parents,
             &mut controlled_cycles_by_principal,
         )?;
+        for (component, binding) in component_summary.component_bindings {
+            if component_bindings.insert(component, binding).is_some() {
+                return Err(inventory_error(
+                    "terminal Component identity has more than one top-level binding",
+                ));
+            }
+        }
+        for (canister_id, workload) in component_summary.workloads {
+            insert_terminal_workload(
+                &mut component_workloads,
+                canister_id,
+                workload,
+                "terminal Component has more than one Root allocation authority",
+            )?;
+        }
         append_pool_assets(
             icp,
             &protocols.root.candid_path,
             root,
             store,
-            &component_ids,
+            &component_summary.component_ids,
+            component_summary.maximum_workloads,
             &mut seen,
             &mut entries,
             &mut controlled_cycles_by_principal,
+            &mut pool_workloads,
         )?;
     }
     let maximum_entries = maximum_inventory_entries(registry, config.component_topology())?;
     let descendant_bound = maximum_descendant_page(config.component_topology());
-    while let Some((parent, candid_path, bound)) = parents.pop_front() {
-        for child in query_all_children(icp, &candid_path, parent, bound)? {
-            if child.parent_pid != Some(parent) || !seen.insert(child.pid) {
+    while let Some(parent) = parents.pop_front() {
+        for child in query_all_children(
+            icp,
+            &parent.candid_path,
+            parent.canister_id,
+            parent.maximum_children,
+        )? {
+            if child.parent_pid != Some(parent.canister_id) || !seen.insert(child.pid) {
                 return Err(inventory_error(format!(
                     "Canister {} has conflicting current parent authority",
                     child.pid
@@ -432,18 +498,59 @@ fn query_entries(
                 )));
             }
             let protocol = protocol.expect("checked current protocol");
+            let workload = pool_workloads.get(&child.pid).ok_or_else(|| {
+                inventory_error(format!(
+                    "terminal descendant {} has no exact Root pool Workload claim",
+                    child.pid
+                ))
+            })?;
+            terminal_field_exact("descendant.root", &parent.root, &workload.root)?;
+            let component = component_bindings.get(&workload.component).ok_or_else(|| {
+                inventory_error(format!(
+                    "terminal descendant {} names an unknown top-level Component",
+                    child.pid
+                ))
+            })?;
+            let descendant = TerminalDescendantAuthority {
+                child: &child,
+                component,
+                parent_role: &parent.role,
+                protocol,
+                release_set: &parent.release_set,
+                root: parent.root,
+                workload,
+            };
+            validate_terminal_descendant_allocation(icp, &protocols.root.candid_path, &descendant)?;
+            insert_terminal_workload(
+                &mut component_workloads,
+                child.pid,
+                workload.clone(),
+                "terminal Component has more than one Root allocation authority",
+            )?;
             let entry = registry_entry(&child, protocol)?;
             insert_controlled_cycles(
                 &mut controlled_cycles_by_principal,
                 child.pid,
-                query_cycle_balance(icp, &protocol.candid_path, child.pid)?,
+                inspect_root_controlled_cycle_balance(
+                    icp,
+                    &protocols.root.candid_path,
+                    parent.root,
+                    child.pid,
+                )?,
             )?;
             if protocol
                 .binding
                 .capabilities
-                .contains(&RoleCapabilityKey::Sharding)
+                .contains(&RoleCapabilityKey::ChildProvisioning)
             {
-                parents.push_back((child.pid, protocol.candid_path.clone(), descendant_bound));
+                parents.push_back(DescendantParent {
+                    canister_id: child.pid,
+                    candid_path: protocol.candid_path.clone(),
+                    maximum_children: descendant_bound,
+                    release_set: parent.release_set,
+                    role: child.role.clone(),
+                    root: parent.root,
+                });
             }
             entries.push(entry);
             if entries.len() > maximum_entries {
@@ -453,6 +560,7 @@ fn query_entries(
             }
         }
     }
+    validate_complete_workload_coverage(&component_workloads, &pool_workloads)?;
     entries.sort_by(|left, right| {
         left.parent_pid
             .cmp(&right.parent_pid)
@@ -496,16 +604,19 @@ fn append_root_components(
     protocols: &ProtocolCatalog,
     seen: &mut BTreeSet<Principal>,
     entries: &mut Vec<RegistryEntry>,
-    parents: &mut VecDeque<(Principal, PathBuf, u64)>,
+    parents: &mut VecDeque<DescendantParent>,
     controlled_cycles_by_principal: &mut BTreeMap<String, u128>,
-) -> Result<BTreeSet<Principal>, CurrentProtocolError> {
+) -> Result<RootComponentSummary, CurrentProtocolError> {
     let result = status
         .result
         .as_ref()
         .ok_or_else(|| terminal_field_missing("result"))?;
     let expected_count = validate_terminal_root_component_status(authority, status, result)?;
     let mut component_ids = BTreeSet::new();
+    let mut component_bindings = BTreeMap::new();
+    let mut workloads = BTreeMap::new();
     let descendant_bound = maximum_descendant_page_from_result(result);
+    let maximum_workloads = maximum_workloads_from_result(result)?;
     let mut placements = BTreeSet::new();
     let mut component_counts_by_spec = BTreeMap::new();
     for placement in &result.placements {
@@ -558,15 +669,29 @@ fn append_root_components(
                 && binding.fleet_subnet_root == authority.root.fleet_subnet_root;
             let identity_is_new =
                 component_ids.insert(binding.canister_id) && seen.insert(binding.canister_id);
+            let component_identity_is_new = component_bindings
+                .insert(binding.component, binding.clone())
+                .is_none();
             if !member_matches_binding
                 || !binding_matches_registry
                 || !binding_matches_root
                 || !identity_is_new
+                || !component_identity_is_new
             {
                 return Err(inventory_error(
                     "Root Component result conflicts with current Registry authority",
                 ));
             }
+            insert_terminal_workload(
+                &mut workloads,
+                binding.canister_id,
+                TerminalWorkloadAuthority {
+                    component: binding.component,
+                    operation_id: member.member_operation_id,
+                    root: authority.root.fleet_subnet_root,
+                },
+                "Root Component result duplicates one allocation authority",
+            )?;
             let protocol = protocols.child(&binding.role).ok_or_else(|| {
                 inventory_error(format!(
                     "Component role {} has no current protocol authority",
@@ -597,18 +722,26 @@ fn append_root_components(
             insert_controlled_cycles(
                 controlled_cycles_by_principal,
                 binding.canister_id,
-                query_cycle_balance(icp, &protocol.candid_path, binding.canister_id)?,
+                inspect_root_controlled_cycle_balance(
+                    icp,
+                    &protocols.root.candid_path,
+                    authority.root.fleet_subnet_root,
+                    binding.canister_id,
+                )?,
             )?;
             if protocol
                 .binding
                 .capabilities
-                .contains(&RoleCapabilityKey::Sharding)
+                .contains(&RoleCapabilityKey::ChildProvisioning)
             {
-                parents.push_back((
-                    binding.canister_id,
-                    protocol.candid_path.clone(),
-                    descendant_bound,
-                ));
+                parents.push_back(DescendantParent {
+                    canister_id: binding.canister_id,
+                    candid_path: protocol.candid_path.clone(),
+                    maximum_children: descendant_bound,
+                    release_set: *authority.active_release_set,
+                    role: binding.role.clone(),
+                    root: authority.root.fleet_subnet_root,
+                });
             }
         }
     }
@@ -617,7 +750,12 @@ fn append_root_components(
             "Root Component result contains duplicate member identities",
         ));
     }
-    Ok(component_ids)
+    Ok(RootComponentSummary {
+        component_bindings,
+        component_ids,
+        maximum_workloads,
+        workloads,
+    })
 }
 
 fn validate_terminal_root_component_status(
@@ -846,53 +984,290 @@ fn validate_component_partition(
         candid_path,
         root,
         protocol::CANIC_STATUS,
-        &RootInventoryStatusRequest::ComponentRegistryPartition(
-            ComponentRegistryPartitionRequest {
+        &RootInventoryStatusRequest::ComponentRegistryActivePartition(
+            ComponentRegistryActivePartitionRequest {
                 component: member.binding.component,
+                provisioning_operation_id: authority.operation_id,
+                plan_hash: authority.plan_hash,
+                group_placement: (*authority.group_placement).clone(),
+                member_path: member.member_path.clone(),
             },
         ),
     )?;
-    let RootInventoryStatusResponse::ComponentRegistryPartition(partition) = response else {
+    let RootInventoryStatusResponse::ComponentRegistryActivePartition(partition) = response else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };
+    validate_component_partition_response(authority, member, protocol_entry, &partition)
+}
+
+fn validate_component_partition_response(
+    authority: &ComponentPartitionAuthority<'_>,
+    member: &canic_core::dto::component_provisioning::RootProvisionedGroupMember,
+    protocol_entry: &ProtocolEntry,
+    partition: &ComponentRegistryActivePartitionResponse,
+) -> Result<(), CurrentProtocolError> {
     let expected_origin = ComponentProvisioningOrigin::ComponentGroup {
         operation_id: authority.operation_id,
         plan_hash: authority.plan_hash,
         group_placement: (*authority.group_placement).clone(),
         member_path: member.member_path.clone(),
     };
-    if partition.head.component != member.binding.component
-        || !component_partition_head_is_exact_activation(
-            partition.head.revision,
-            partition.status,
-            member.component_registry_revision,
-        )
-        || partition.binding != member.binding
-        || partition.protocol_profile_digest != protocol_entry.binding.protocol_profile_digest
-        || partition.provisioning_origin != expected_origin
-        || partition.release_set != *authority.active_release_set
-    {
-        return Err(inventory_error(
-            "Root Component partition conflicts with its terminal result",
+    terminal_field_exact(
+        "component.allocation_operation_id",
+        &member.member_operation_id,
+        &partition.allocation_operation_id,
+    )?;
+    validate_component_partition_authority(
+        ComponentPartitionFieldNames::PREPARED,
+        &partition.prepared,
+        ComponentLifecycleStatus::Prepared,
+        member,
+        protocol_entry,
+        &expected_origin,
+        authority.active_release_set,
+    )?;
+    terminal_field_exact(
+        "component.prepared.revision",
+        &member.component_registry_revision,
+        &partition.prepared.head.revision,
+    )?;
+    terminal_field_exact(
+        "component.prepared.content_hash",
+        &member.component_registry_content_hash,
+        &partition.prepared.head.content_hash,
+    )?;
+    validate_component_partition_authority(
+        ComponentPartitionFieldNames::ACTIVATION,
+        &partition.activation,
+        ComponentLifecycleStatus::Active,
+        member,
+        protocol_entry,
+        &expected_origin,
+        authority.active_release_set,
+    )?;
+    if partition.activation.head.revision <= partition.prepared.head.revision {
+        return Err(terminal_field_error(
+            "component.activation.revision",
+            format!("greater than {}", partition.prepared.head.revision),
+            partition.activation.head.revision.to_string(),
         ));
+    }
+    terminal_nonzero_hash(
+        "component.activation.content_hash",
+        partition.activation.head.content_hash,
+    )?;
+    validate_component_partition_authority(
+        ComponentPartitionFieldNames::CURRENT,
+        &partition.current,
+        ComponentLifecycleStatus::Active,
+        member,
+        protocol_entry,
+        &expected_origin,
+        authority.active_release_set,
+    )?;
+    if partition.current.head.revision < partition.activation.head.revision {
+        return Err(terminal_field_error(
+            "component.current.revision",
+            format!("at least {}", partition.activation.head.revision),
+            partition.current.head.revision.to_string(),
+        ));
+    }
+    if partition.current.head.revision == partition.activation.head.revision {
+        terminal_field_exact(
+            "component.current.content_hash",
+            &partition.activation.head.content_hash,
+            &partition.current.head.content_hash,
+        )?;
     }
     Ok(())
 }
 
-fn component_partition_head_is_exact_activation(
-    observed_revision: u64,
-    observed_status: ComponentLifecycleStatus,
-    provisioned_revision: u64,
-) -> bool {
-    observed_status == ComponentLifecycleStatus::Active
-        && provisioned_revision
-            .checked_add(1)
-            .is_some_and(|revision| observed_revision == revision)
+#[derive(Clone, Copy)]
+struct ComponentPartitionFieldNames {
+    component: &'static str,
+    binding: &'static str,
+    protocol_profile_digest: &'static str,
+    provisioning_origin: &'static str,
+    release_set: &'static str,
+    status: &'static str,
+}
+
+impl ComponentPartitionFieldNames {
+    const PREPARED: Self = Self {
+        component: "component.prepared.component",
+        binding: "component.prepared.binding",
+        protocol_profile_digest: "component.prepared.protocol_profile_digest",
+        provisioning_origin: "component.prepared.provisioning_origin",
+        release_set: "component.prepared.release_set",
+        status: "component.prepared.status",
+    };
+    const ACTIVATION: Self = Self {
+        component: "component.activation.component",
+        binding: "component.activation.binding",
+        protocol_profile_digest: "component.activation.protocol_profile_digest",
+        provisioning_origin: "component.activation.provisioning_origin",
+        release_set: "component.activation.release_set",
+        status: "component.activation.status",
+    };
+    const CURRENT: Self = Self {
+        component: "component.current.component",
+        binding: "component.current.binding",
+        protocol_profile_digest: "component.current.protocol_profile_digest",
+        provisioning_origin: "component.current.provisioning_origin",
+        release_set: "component.current.release_set",
+        status: "component.current.status",
+    };
+}
+
+fn validate_component_partition_authority(
+    fields: ComponentPartitionFieldNames,
+    partition: &ComponentRegistryPartitionResponse,
+    expected_status: ComponentLifecycleStatus,
+    member: &canic_core::dto::component_provisioning::RootProvisionedGroupMember,
+    protocol_entry: &ProtocolEntry,
+    expected_origin: &ComponentProvisioningOrigin,
+    active_release_set: &FleetSubnetRootReleaseSet,
+) -> Result<(), CurrentProtocolError> {
+    terminal_field_exact(
+        fields.component,
+        &member.binding.component,
+        &partition.head.component,
+    )?;
+    terminal_field_exact(fields.binding, &member.binding, &partition.binding)?;
+    terminal_field_exact(
+        fields.protocol_profile_digest,
+        &protocol_entry.binding.protocol_profile_digest,
+        &partition.protocol_profile_digest,
+    )?;
+    terminal_field_exact(
+        fields.provisioning_origin,
+        expected_origin,
+        &partition.provisioning_origin,
+    )?;
+    terminal_field_exact(
+        fields.release_set,
+        active_release_set,
+        &partition.release_set,
+    )?;
+    terminal_field_exact(fields.status, &expected_status, &partition.status)
+}
+
+fn validate_terminal_descendant_allocation(
+    icp: &IcpCli,
+    root_candid_path: &Path,
+    authority: &TerminalDescendantAuthority<'_>,
+) -> Result<(), CurrentProtocolError> {
+    let response: RootInventoryStatusResponse = query_with_candid(
+        icp,
+        root_candid_path,
+        authority.root,
+        protocol::CANIC_STATUS,
+        &RootInventoryStatusRequest::Operation(OperationStatusRequest {
+            operation_id: authority.workload.operation_id,
+        }),
+    )?;
+    let RootInventoryStatusResponse::Operation(operation) = response else {
+        return Err(CurrentProtocolError::ResponseMismatch);
+    };
+    let RootOperationStatusResponse::ProvisionChild(status) = *operation else {
+        return Err(CurrentProtocolError::ResponseMismatch);
+    };
+    validate_terminal_descendant_allocation_response(authority, &status.allocation)
+}
+
+fn validate_terminal_descendant_allocation_response(
+    authority: &TerminalDescendantAuthority<'_>,
+    allocation: &RootComponentChildAllocationResponse,
+) -> Result<(), CurrentProtocolError> {
+    terminal_field_exact(
+        "descendant.pool_root",
+        &authority.root,
+        &authority.workload.root,
+    )?;
+    terminal_field_exact(
+        "descendant.operation_id",
+        &authority.workload.operation_id,
+        &allocation.operation_id,
+    )?;
+    terminal_field_exact(
+        "descendant.component",
+        &authority.workload.component,
+        &allocation.component,
+    )?;
+    terminal_field_exact(
+        "descendant.parent_canister_id",
+        &authority.child.parent_pid,
+        &Some(allocation.parent_canister_id),
+    )?;
+    terminal_field_exact(
+        "descendant.parent_role",
+        authority.parent_role,
+        &allocation.parent_role,
+    )?;
+    terminal_field_exact(
+        "descendant.child_role",
+        &authority.child.role,
+        &allocation.child_role,
+    )?;
+    terminal_field_exact(
+        "descendant.release_set",
+        authority.release_set,
+        &allocation.release_set,
+    )?;
+    terminal_field_exact(
+        "descendant.phase",
+        &RootComponentAllocationPhase::Committed,
+        &allocation.phase,
+    )?;
+    terminal_field_exact(
+        "descendant.root",
+        &authority.root,
+        &authority.component.fleet_subnet_root,
+    )?;
+    let creation = allocation
+        .creation
+        .as_ref()
+        .ok_or_else(|| terminal_field_missing("descendant.creation"))?;
+    terminal_field_exact(
+        "descendant.creation.canister",
+        &Some(authority.child.pid),
+        &creation.canister,
+    )?;
+    let installation = allocation
+        .installation
+        .as_ref()
+        .ok_or_else(|| terminal_field_missing("descendant.installation"))?;
+    terminal_field_exact(
+        "descendant.binding.component",
+        authority.component,
+        &installation.binding.component,
+    )?;
+    terminal_field_exact(
+        "descendant.binding.parent_canister_id",
+        &authority.child.parent_pid,
+        &Some(installation.binding.parent_canister_id),
+    )?;
+    terminal_field_exact(
+        "descendant.binding.role",
+        &authority.child.role,
+        &installation.binding.role,
+    )?;
+    terminal_field_exact(
+        "descendant.binding.canister_id",
+        &authority.child.pid,
+        &installation.binding.canister_id,
+    )?;
+    terminal_field_exact(
+        "descendant.raw_module_hash",
+        &authority.protocol.module_hash,
+        &hex_bytes(installation.raw_module_hash),
+    )
 }
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "Root pool reconciliation keeps its exact Root, Store, workload, and output owners explicit"
+    clippy::too_many_lines,
+    reason = "Root pool pagination keeps its exact bounded validation and ownership projection visible"
 )]
 fn append_pool_assets(
     icp: &IcpCli,
@@ -900,18 +1275,19 @@ fn append_pool_assets(
     root: &FleetSubnetRootEntry,
     store: Principal,
     component_ids: &BTreeSet<Principal>,
+    maximum_workloads: u64,
     seen: &mut BTreeSet<Principal>,
     entries: &mut Vec<RegistryEntry>,
     controlled_cycles_by_principal: &mut BTreeMap<String, u128>,
+    pool_workloads: &mut BTreeMap<Principal, TerminalWorkloadAuthority>,
 ) -> Result<(), CurrentProtocolError> {
-    let maximum_assets = u64::from(root.limits.maximum_component_instances)
+    let maximum_assets = maximum_workloads
         .checked_add(u64::from(root.limits.canister_pool.maximum_size))
         .and_then(|count| count.checked_add(1))
         .ok_or_else(|| inventory_error("Root pool inventory bound overflowed"))?;
     let mut start_after = None;
     let mut asset_count = 0_u64;
     let mut store_seen = false;
-    let mut workloads = BTreeSet::new();
     loop {
         let response: RootInventoryStatusResponse = query_with_candid(
             icp,
@@ -949,12 +1325,20 @@ fn append_pool_assets(
                     }
                     store_seen = true;
                 }
-                CanisterPoolAssetStatus::Workload { .. }
-                    if component_ids.contains(&asset.canister_id) =>
-                {
-                    if !workloads.insert(asset.canister_id) {
-                        return Err(inventory_error("Root pool duplicates a Component workload"));
+                CanisterPoolAssetStatus::Workload { claim } => {
+                    if seen.contains(&asset.canister_id)
+                        && !component_ids.contains(&asset.canister_id)
+                    {
+                        return Err(inventory_error(
+                            "Root pool Workload conflicts with infrastructure or another Root",
+                        ));
                     }
+                    insert_terminal_workload(
+                        pool_workloads,
+                        asset.canister_id,
+                        workload_authority(root.fleet_subnet_root, &claim),
+                        "Root pool duplicates a Component workload",
+                    )?;
                 }
                 CanisterPoolAssetStatus::Claimed { .. }
                     if component_ids.contains(&asset.canister_id) =>
@@ -963,9 +1347,7 @@ fn append_pool_assets(
                         "terminal Component remains only claimed in the Root pool",
                     ));
                 }
-                CanisterPoolAssetStatus::Store
-                | CanisterPoolAssetStatus::Workload { .. }
-                | CanisterPoolAssetStatus::Claimed { .. } => {
+                CanisterPoolAssetStatus::Store | CanisterPoolAssetStatus::Claimed { .. } => {
                     return Err(inventory_error(
                         "Root pool role ownership conflicts with terminal Component identities",
                     ));
@@ -998,9 +1380,9 @@ fn append_pool_assets(
         }
         start_after = next;
     }
-    if !store_seen || workloads != *component_ids {
+    if !store_seen {
         return Err(inventory_error(
-            "Root pool does not exactly retain its Store and terminal Component workloads",
+            "Root pool does not exactly retain its Store",
         ));
     }
     Ok(())
@@ -1016,20 +1398,72 @@ fn maximum_descendant_page_from_result(result: &RootComponentProvisioningResult)
         .unwrap_or(0)
 }
 
-fn query_cycle_balance(
+fn maximum_workloads_from_result(
+    result: &RootComponentProvisioningResult,
+) -> Result<u64, CurrentProtocolError> {
+    result
+        .placements
+        .iter()
+        .flat_map(|placement| placement.members.iter())
+        .try_fold(0_u64, |total, member| {
+            total
+                .checked_add(u64::from(member.limits.maximum_descendants))
+                .and_then(|value| value.checked_add(1))
+                .ok_or_else(|| inventory_error("Root Component workload bound overflowed"))
+        })
+}
+
+const fn workload_authority(
+    root: Principal,
+    claim: &CanisterPoolClaim,
+) -> TerminalWorkloadAuthority {
+    TerminalWorkloadAuthority {
+        component: claim.component,
+        operation_id: claim.operation_id,
+        root,
+    }
+}
+
+fn insert_terminal_workload(
+    workloads: &mut BTreeMap<Principal, TerminalWorkloadAuthority>,
+    canister_id: Principal,
+    authority: TerminalWorkloadAuthority,
+    duplicate_reason: &'static str,
+) -> Result<(), CurrentProtocolError> {
+    if workloads.insert(canister_id, authority).is_some() {
+        return Err(inventory_error(duplicate_reason));
+    }
+    Ok(())
+}
+
+fn validate_complete_workload_coverage(
+    components: &BTreeMap<Principal, TerminalWorkloadAuthority>,
+    pool: &BTreeMap<Principal, TerminalWorkloadAuthority>,
+) -> Result<(), CurrentProtocolError> {
+    if components != pool {
+        return Err(inventory_error(
+            "Root pool Workload ownership conflicts with terminal Component identities",
+        ));
+    }
+    Ok(())
+}
+
+fn inspect_root_controlled_cycle_balance(
     icp: &IcpCli,
-    candid_path: &Path,
-    canister: Principal,
+    root_candid_path: &Path,
+    root: Principal,
+    canister_id: Principal,
 ) -> Result<u128, CurrentProtocolError> {
-    let response: CycleStatusResponse = query_with_candid(
+    let response: RootInventoryCommandResponse = call_with_candid(
         icp,
-        candid_path,
-        canister,
-        protocol::CANIC_STATUS,
-        &CycleStatusRequest::CycleBalance,
+        root_candid_path,
+        root,
+        protocol::CANIC_ROOT_COMMAND,
+        &RootInventoryCommand::InspectCanister(CanisterInspectionRequest { canister_id }),
     )?;
-    let CycleStatusResponse::CycleBalance(balance) = response;
-    Ok(balance.cycles)
+    let RootInventoryCommandResponse::InspectCanister(status) = response;
+    u128::try_from(status.cycles.0)
+        .map_err(|_| inventory_error("management cycle balance exceeds u128"))
 }
 
 fn insert_controlled_cycles(
@@ -1109,10 +1543,10 @@ fn registry_entry(
     if child
         .module_hash
         .as_ref()
-        .is_some_and(|hash| hash.len() != 32 || hex_bytes(hash) != protocol_entry.module_hash)
+        .is_none_or(|hash| hash.len() != 32 || hex_bytes(hash) != protocol_entry.module_hash)
     {
         return Err(inventory_error(format!(
-            "Canister {} module hash conflicts with current release authority",
+            "Canister {} has no exact observed current-release module hash",
             child.pid
         )));
     }
@@ -1380,12 +1814,16 @@ mod tests {
     use super::*;
     use canic_core::{
         cdk::types::Cycles,
+        dto::component_deployment::{ComponentDeploymentLimits, ComponentDeploymentPurpose},
         dto::component_provisioning::{
             FleetComponentProvisioningOperation, RootComponentActivationEvidence,
-            RootComponentPublicationEvidence,
+            RootComponentPublicationEvidence, RootProvisionedGroupMember,
         },
+        dto::component_registry::ComponentRegistryHead,
         ids::{
-            AppId, CanonicalNetworkId, ComponentTopologyDigest, CyclesFundingBudget,
+            AppId, CanonicalNetworkId, ComponentBinding, ComponentGroupDeploymentId,
+            ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupPlacementId,
+            ComponentInstanceId, ComponentSpecId, ComponentTopologyDigest, CyclesFundingBudget,
             FleetAdmissionPolicy, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
             FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits,
             ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
@@ -1408,7 +1846,7 @@ mod tests {
     }
 
     #[test]
-    fn child_projection_requires_the_exact_current_module_when_observed() {
+    fn child_projection_requires_an_exact_observed_current_module() {
         let parent = Principal::from_slice(&[7; 29]);
         let child = Principal::from_slice(&[8; 29]);
         let expected = "11".repeat(32);
@@ -1420,40 +1858,356 @@ mod tests {
             module_hash: None,
             created_at: 1,
         };
-        let projected = registry_entry(&info, &protocol).expect("project retained Directory row");
-        assert_eq!(projected.module_hash.as_deref(), Some(expected.as_str()));
-        assert_eq!(projected.protocol_binding.as_ref(), Some(&protocol.binding));
+        assert!(matches!(
+            registry_entry(&info, &protocol),
+            Err(CurrentProtocolError::Configuration(reason))
+                if reason.contains("no exact observed current-release module hash")
+        ));
 
         info.module_hash = Some(vec![0x22; 32]);
         assert!(matches!(
             registry_entry(&info, &protocol),
             Err(CurrentProtocolError::Configuration(reason))
-                if reason.contains("module hash conflicts")
+                if reason.contains("no exact observed current-release module hash")
+        ));
+
+        info.module_hash = Some(vec![0x11; 32]);
+        let projected = registry_entry(&info, &protocol).expect("project exact Directory row");
+        assert_eq!(projected.module_hash.as_deref(), Some(expected.as_str()));
+        assert_eq!(projected.protocol_binding.as_ref(), Some(&protocol.binding));
+    }
+
+    #[test]
+    fn root_pool_workloads_cover_top_level_and_descendant_component_canisters() {
+        let (partition_authority, member, protocol, _) = component_partition_fixture();
+        let root = member.binding.fleet_subnet_root;
+        let parent = member.binding.canister_id;
+        let child = Principal::from_slice(&[31; 29]);
+        let operation_id = [32; 32];
+        let workload = TerminalWorkloadAuthority {
+            component: member.binding.component,
+            operation_id,
+            root,
+        };
+        let child_info = CanisterInfo {
+            pid: child,
+            role: protocol.binding.role.clone(),
+            parent_pid: Some(parent),
+            module_hash: Some(vec![0x11; 32]),
+            created_at: 1,
+        };
+        let allocation = RootComponentChildAllocationResponse {
+            operation_id,
+            component: member.binding.component,
+            parent_canister_id: parent,
+            parent_role: member.binding.role.clone(),
+            child_role: child_info.role.clone(),
+            child_kind:
+                canic_core::control_plane_support::config::schema::ComponentChildKind::Shard,
+            maximum_instances_per_parent: 64,
+            maximum_descendants: 64,
+            maximum_registry_bytes: 1_048_576,
+            reserved_against_registry: ComponentRegistryHead {
+                component: member.binding.component,
+                revision: 2,
+                content_hash: [33; 32],
+            },
+            release_set: *partition_authority.active_release_set,
+            phase: RootComponentAllocationPhase::Committed,
+            creation: Some(
+                canic_core::dto::component_registry::RootComponentCreationEvidence {
+                    wasm_store: Principal::from_slice(&[34; 29]),
+                    payload_hash: [35; 32],
+                    payload_size_bytes: 128,
+                    initial_cycles: Cycles::new(5_000_000_000_000),
+                    controller: root,
+                    canister: Some(child),
+                },
+            ),
+            installation: Some(
+                canic_core::dto::component_registry::RootComponentChildInstallEvidence {
+                    raw_module_hash: [0x11; 32],
+                    chunk_hashes: vec![vec![36; 32]],
+                    binding: canic_core::ids::ComponentChildBinding {
+                        component: member.binding.clone(),
+                        parent_canister_id: parent,
+                        role: child_info.role.clone(),
+                        canister_id: child,
+                    },
+                },
+            ),
+        };
+
+        let authority = TerminalDescendantAuthority {
+            child: &child_info,
+            component: &member.binding,
+            parent_role: &member.binding.role,
+            protocol: &protocol,
+            release_set: partition_authority.active_release_set,
+            root,
+            workload: &workload,
+        };
+        validate_terminal_descendant_allocation_response(&authority, &allocation)
+            .expect("exact Root-owned descendant allocation is authoritative");
+
+        let top_level = TerminalWorkloadAuthority {
+            component: member.binding.component,
+            operation_id: member.member_operation_id,
+            root,
+        };
+        let components = BTreeMap::from([(parent, top_level.clone()), (child, workload.clone())]);
+        let pool = components.clone();
+        validate_complete_workload_coverage(&components, &pool)
+            .expect("top-level and descendant Workloads exactly cover the Component tree");
+
+        let foreign = TerminalWorkloadAuthority {
+            component: ComponentInstanceId::from_generated_bytes([37; 32]),
+            ..workload.clone()
+        };
+        for invalid_pool in [
+            BTreeMap::from([(parent, top_level.clone()), (child, foreign)]),
+            BTreeMap::from([(parent, workload.clone()), (child, top_level.clone())]),
+            BTreeMap::from([(parent, top_level.clone())]),
+            BTreeMap::from([
+                (parent, top_level.clone()),
+                (child, workload.clone()),
+                (Principal::from_slice(&[38; 29]), workload.clone()),
+            ]),
+        ] {
+            assert!(validate_complete_workload_coverage(&components, &invalid_pool).is_err());
+        }
+
+        let mut duplicate = BTreeMap::new();
+        insert_terminal_workload(&mut duplicate, child, workload.clone(), "duplicate")
+            .expect("first Workload");
+        assert!(insert_terminal_workload(&mut duplicate, child, workload, "duplicate").is_err());
+
+        let expected_maximum = 1 + u64::from(member.limits.maximum_descendants);
+        let result = RootComponentProvisioningResult {
+            placements: vec![
+                canic_core::dto::component_provisioning::RootProvisionedGroupPlacement {
+                    group_placement: ComponentGroupPlacementId {
+                        deployment: "pool_workload_bound"
+                            .parse::<ComponentGroupDeploymentId>()
+                            .expect("deployment ID"),
+                        ordinal: 0,
+                    },
+                    component_group: "pool_workload_group".parse().expect("Component Group ID"),
+                    members: vec![member],
+                },
+            ],
+        };
+        assert_eq!(
+            maximum_workloads_from_result(&result).expect("bounded workload capacity"),
+            expected_maximum
+        );
+    }
+
+    #[test]
+    fn terminal_component_partition_accepts_descendant_advanced_current_head() {
+        let (authority, member, protocol, partition) = component_partition_fixture();
+
+        validate_component_partition_response(&authority, &member, &protocol, &partition)
+            .expect("Root-qualified activation receipt covers later descendant progress");
+        assert_eq!(partition.prepared.head.revision, 1);
+        assert_eq!(partition.activation.head.revision, 2);
+        assert_eq!(partition.current.head.revision, 4);
+        assert_eq!(partition.current.committed_descendants, 1);
+    }
+
+    #[test]
+    fn terminal_component_partition_rejects_wrong_receipt_and_regressed_current_head() {
+        let (authority, member, protocol, mut partition) = component_partition_fixture();
+        partition.allocation_operation_id = [99; 32];
+        assert!(matches!(
+            validate_component_partition_response(&authority, &member, &protocol, &partition),
+            Err(CurrentProtocolError::TerminalInventoryField {
+                field: "component.allocation_operation_id",
+                ..
+            })
+        ));
+
+        let (_, _, _, mut partition) = component_partition_fixture();
+        partition.current.head.revision = 1;
+        assert!(matches!(
+            validate_component_partition_response(&authority, &member, &protocol, &partition),
+            Err(CurrentProtocolError::TerminalInventoryField {
+                field: "component.current.revision",
+                ..
+            })
+        ));
+
+        let (_, _, _, mut partition) = component_partition_fixture();
+        partition.activation.provisioning_origin =
+            ComponentProvisioningOrigin::FleetAdministrator {
+                caller: Principal::anonymous(),
+            };
+        assert!(matches!(
+            validate_component_partition_response(&authority, &member, &protocol, &partition),
+            Err(CurrentProtocolError::TerminalInventoryField {
+                field: "component.activation.provisioning_origin",
+                ..
+            })
         ));
     }
 
     #[test]
-    fn toko_fresh_fleet_component_partition_accepts_only_exact_activation_successor() {
-        assert!(component_partition_head_is_exact_activation(
-            5,
-            ComponentLifecycleStatus::Active,
-            4,
+    fn terminal_component_partition_rejects_every_changed_authority_dimension() {
+        let (authority, member, protocol, mut partition) = component_partition_fixture();
+        partition.current.binding.canister_id = Principal::anonymous();
+        assert_terminal_component_partition_field(
+            &authority,
+            &member,
+            &protocol,
+            &partition,
+            "component.current.binding",
+        );
+
+        let (mut authority, member, protocol, partition) = component_partition_fixture();
+        authority.operation_id = [91; 32];
+        assert_terminal_component_partition_field(
+            &authority,
+            &member,
+            &protocol,
+            &partition,
+            "component.prepared.provisioning_origin",
+        );
+
+        let (mut authority, member, protocol, partition) = component_partition_fixture();
+        authority.plan_hash = [92; 32];
+        assert_terminal_component_partition_field(
+            &authority,
+            &member,
+            &protocol,
+            &partition,
+            "component.prepared.provisioning_origin",
+        );
+
+        let (authority, member, protocol, mut partition) = component_partition_fixture();
+        partition.activation.release_set.manifest_digest = ReleaseSetDigest::from_bytes([93; 32]);
+        assert_terminal_component_partition_field(
+            &authority,
+            &member,
+            &protocol,
+            &partition,
+            "component.activation.release_set",
+        );
+
+        let (authority, member, protocol, mut partition) = component_partition_fixture();
+        partition.activation.head.content_hash = [0; 32];
+        assert_terminal_component_partition_field(
+            &authority,
+            &member,
+            &protocol,
+            &partition,
+            "component.activation.content_hash",
+        );
+
+        let (authority, member, protocol, mut partition) = component_partition_fixture();
+        partition.current.status = ComponentLifecycleStatus::Prepared;
+        assert_terminal_component_partition_field(
+            &authority,
+            &member,
+            &protocol,
+            &partition,
+            "component.current.status",
+        );
+    }
+
+    fn assert_terminal_component_partition_field(
+        authority: &ComponentPartitionAuthority<'_>,
+        member: &RootProvisionedGroupMember,
+        protocol: &ProtocolEntry,
+        partition: &ComponentRegistryActivePartitionResponse,
+        expected_field: &'static str,
+    ) {
+        assert!(matches!(
+            validate_component_partition_response(authority, member, protocol, partition),
+            Err(CurrentProtocolError::TerminalInventoryField { field, .. })
+                if field == expected_field
         ));
-        assert!(!component_partition_head_is_exact_activation(
-            4,
-            ComponentLifecycleStatus::Active,
-            4,
-        ));
-        assert!(!component_partition_head_is_exact_activation(
-            6,
-            ComponentLifecycleStatus::Active,
-            4,
-        ));
-        assert!(!component_partition_head_is_exact_activation(
-            5,
-            ComponentLifecycleStatus::Prepared,
-            4,
-        ));
+    }
+
+    fn component_partition_fixture() -> (
+        ComponentPartitionAuthority<'static>,
+        RootProvisionedGroupMember,
+        ProtocolEntry,
+        ComponentRegistryActivePartitionResponse,
+    ) {
+        let (terminal, _) = empty_terminal_root_status();
+        let group_placement = Box::leak(Box::new(ComponentGroupPlacementId {
+            deployment: "terminal_group"
+                .parse::<ComponentGroupDeploymentId>()
+                .expect("deployment ID"),
+            ordinal: 0,
+        }));
+        let member_path = ComponentGroupMemberPath::try_from(vec![
+            "hub".parse::<ComponentGroupMemberId>().expect("member ID"),
+        ])
+        .expect("member path");
+        let component_spec = "hub".parse::<ComponentSpecId>().expect("Component Spec ID");
+        let component = ComponentInstanceId::from_generated_bytes([21; 32]);
+        let binding = ComponentBinding {
+            authority: terminal.registry.authority.clone(),
+            component,
+            component_spec: component_spec.clone(),
+            spec_hash: [22; 32],
+            role: CanisterRole::from("managed_component"),
+            placement_subnet: terminal.root.placement_subnet,
+            fleet_subnet_root: terminal.root.fleet_subnet_root,
+            canister_id: Principal::from_slice(&[23; 29]),
+        };
+        let member = RootProvisionedGroupMember {
+            member_operation_id: [24; 32],
+            member_path: member_path.clone(),
+            component_spec,
+            purpose: ComponentDeploymentPurpose::Ordinary,
+            limits: ComponentDeploymentLimits {
+                maximum_descendants: 1,
+                maximum_registry_bytes: 1_024,
+                spawn_grant_reductions: Vec::new(),
+            },
+            binding: binding.clone(),
+            component_registry_revision: 1,
+            component_registry_content_hash: [25; 32],
+        };
+        let protocol = protocol_entry(&"11".repeat(32));
+        let origin = ComponentProvisioningOrigin::ComponentGroup {
+            operation_id: terminal.operation_id,
+            plan_hash: terminal.plan_hash,
+            group_placement: group_placement.clone(),
+            member_path,
+        };
+        let snapshot = |revision, content_hash, status, committed_descendants| {
+            ComponentRegistryPartitionResponse {
+                head: ComponentRegistryHead {
+                    component,
+                    revision,
+                    content_hash,
+                },
+                binding: binding.clone(),
+                protocol_profile_digest: protocol.binding.protocol_profile_digest,
+                provisioning_origin: origin.clone(),
+                release_set: *terminal.active_release_set,
+                status,
+                reserved_descendants: 0,
+                committed_descendants,
+                encoded_bytes: 128 + u64::from(committed_descendants),
+            }
+        };
+        let partition = ComponentRegistryActivePartitionResponse {
+            allocation_operation_id: member.member_operation_id,
+            prepared: snapshot(1, [25; 32], ComponentLifecycleStatus::Prepared, 0),
+            activation: snapshot(2, [26; 32], ComponentLifecycleStatus::Active, 0),
+            current: snapshot(4, [27; 32], ComponentLifecycleStatus::Active, 1),
+        };
+        let authority = ComponentPartitionAuthority {
+            active_release_set: terminal.active_release_set,
+            group_placement,
+            operation_id: terminal.operation_id,
+            plan_hash: terminal.plan_hash,
+        };
+        (authority, member, protocol, partition)
     }
 
     #[test]

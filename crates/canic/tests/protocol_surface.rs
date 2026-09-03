@@ -514,6 +514,62 @@ fn application_session_audit_is_bounded_protected_and_secret_free() {
 }
 
 #[test]
+fn exact_cycle_and_runtime_observability_is_controller_protected() {
+    let root = workspace_root();
+    let role = read_text(&root.join("crates/canic/src/macros/endpoints/role.rs"));
+    let root_surface = read_text(&root.join("crates/canic/src/macros/endpoints/root.rs"));
+    let store = read_text(&root.join("crates/canic/src/macros/endpoints/wasm_store.rs"));
+
+    for status in role.split("async fn canic_status(").skip(1).take(2) {
+        let authorization = status
+            .split("match request {")
+            .next()
+            .expect("role status authorization");
+        assert!(
+            authorization.contains("CanisterStatusRequest::CycleBalance")
+                && authorization.contains("CanisterStatusRequest::CycleHistory(_)")
+                && authorization.contains("CanisterStatusRequest::CycleTopups(_)")
+                && authorization.contains("CanisterStatusRequest::Metrics(_)")
+                && authorization.contains("access::auth::is_controller(caller)"),
+            "every generated role status must protect exact cycles and raw metrics"
+        );
+    }
+
+    let root_authorization = root_surface
+        .split("async fn canic_status(")
+        .nth(1)
+        .and_then(|status| status.split("match request {").next())
+        .expect("Root status authorization");
+    assert!(
+        root_authorization.contains("RootStatusRequest::CycleBalance")
+            && root_authorization.contains("RootStatusRequest::CycleHistory(_)")
+            && root_authorization.contains("RootStatusRequest::Metrics(_)")
+            && root_authorization.contains("access::auth::is_controller(caller)"),
+        "Root exact cycles and raw metrics must be controller-only"
+    );
+
+    let store_authorization = store
+        .split("async fn canic_status(")
+        .nth(1)
+        .and_then(|status| status.split("match request {").next())
+        .expect("Store status authorization");
+    assert!(
+        store_authorization.contains("StoreStatusRequest::CycleBalance")
+            && store_authorization.contains("StoreStatusRequest::CycleHistory(_)")
+            && store_authorization.contains("access::auth::is_controller(caller)"),
+        "Store exact cycles must be controller-only"
+    );
+
+    assert!(
+        role.contains("CanisterCommand::Observe(request)")
+            && role.contains("access::auth::is_controller(caller)")
+            && root_surface.contains("RootCommand::ObserveCanister(_)")
+            && root_surface.contains("ObservabilityApi::observe_root_controlled_canister("),
+        "managed telemetry must retain one controller-authenticated Root relay"
+    );
+}
+
+#[test]
 fn icrc21_dispatcher_uses_the_registered_typed_handler() {
     let method = "protocol_surface_transfer";
     Icrc21Dispatcher::register(method, |request| {
@@ -584,17 +640,17 @@ fn role_capability_surfaces_are_pruned_at_the_destination_macro() {
     );
 
     assert!(
-        role_surface.contains("#[cfg(canic_capability_sharding)]")
+        role_surface.contains("#[cfg(canic_capability_child_provisioning)]")
             && role_surface.contains("CanisterStatusRequest::Children")
             && role_surface.contains("CanisterStatusResponse::Children"),
-        "the managed children status variant must compile only for Sharding profiles"
+        "the managed children status variant must compile only for child-owning profiles"
     );
 
     assert!(
         role_surface
             .matches("#[cfg(canic_capability_child_provisioning)]")
             .count()
-            == 4
+            == 12
             && role_surface.contains("RoleCapabilityKey::ChildProvisioning")
             && role_surface.contains("CanisterCommand::RespondCapability")
             && role_surface.contains("CanisterCommandResponse::RespondCapability"),
@@ -1160,11 +1216,13 @@ fn assert_coordinator_ingress_is_command_status_only() {
     }
     let coordinator_endpoints =
         read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
+    let start = read_text(&workspace_root().join("crates/canic/src/macros/start.rs"));
     assert!(
         coordinator_endpoints.contains("async fn canic_coordinator_command(")
             && !coordinator_endpoints.contains("async fn canic_command(")
             && coordinator_endpoints.contains("__canic_inspect_fleet_coordinator_update_message")
-            && coordinator_endpoints.contains("__canic_fleet_coordinator_payload_max_bytes"),
+            && coordinator_endpoints.contains("__canic_fleet_coordinator_payload_max_bytes")
+            && start.contains("__canic_start_ingress_payload_inspect!(fleet_coordinator)"),
         "Coordinator must export only its explicit command and decode it before accepting its exact bound"
     );
     for variant in [

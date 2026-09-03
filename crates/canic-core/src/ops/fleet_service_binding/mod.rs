@@ -682,6 +682,9 @@ fn validate_result_member(
 }
 
 fn result_member_identity_is_qualified(member: &RootProvisionedGroupMember) -> bool {
+    if member.member_operation_id == [0; 32] {
+        return false;
+    }
     if member.binding.component.as_bytes() == &[0; 32] {
         return false;
     }

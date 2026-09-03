@@ -50,6 +50,7 @@ pub mod log;
 pub mod memory;
 pub mod metadata;
 pub mod metrics;
+pub mod observability;
 pub mod page;
 pub mod placement;
 pub mod pool;

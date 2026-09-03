@@ -1312,12 +1312,21 @@ fn interruption_at_every_effect_converges_once_and_second_run_has_zero_effects()
             &mut platform,
         ) {
             Ok(report) => break report,
-            Err(workflow::EnsureWorkflowError::Platform(MockError)) => {}
+            Err(workflow::EnsureWorkflowError::Platform(MockError)) => {
+                assert!(matches!(
+                    crate::fleet_ensure::read_last_converged_fleet_inventory(
+                        &root,
+                        &fixture.desired.environment,
+                        "test-fleet",
+                    ),
+                    Err(crate::fleet_ensure::CurrentFleetInventoryError::NotConverged { .. })
+                ));
+            }
             Err(error) => panic!("unexpected resume result: {error}"),
         }
     };
     assert!(report.terminal);
-    let inventory = crate::fleet_ensure::read_current_fleet_inventory(
+    let inventory = crate::fleet_ensure::read_last_converged_fleet_inventory(
         &root,
         &fixture.desired.environment,
         "test-fleet",
@@ -2472,6 +2481,10 @@ fn terminal_inventory_rejects_missing_and_duplicate_principals() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one end-to-end successor-plan crash boundary retains the complete authority setup and outcome"
+)]
 fn terminal_protocol_inventory_survives_an_effect_free_successor_plan() {
     let fixture = fixture();
     let mut platform = fixture.platform;
@@ -2520,16 +2533,50 @@ fn terminal_protocol_inventory_survives_an_effect_free_successor_plan() {
         .insert(component.clone(), 25);
 
     platform.terminal_inventory_expected_operation_id = Some(first.plan.operation_id.clone());
-    let second = apply_effect_free_successor(
+    let second = workflow::plan(
         &fixture.root,
         &fixture.desired,
-        &mut platform,
         &source,
+        "test-fleet",
         1_800_000_000_000_000_100,
-        &first.plan.operation_id,
-    );
+        &mut platform,
+    )
+    .expect("compile effect-free successor");
+    assert!(second.plan.protocol_actions.is_empty());
     assert_eq!(
-        second.conservation.observed_controlled_cycles,
+        second.plan.terminal_inventory_operation_id.as_deref(),
+        Some(first.plan.operation_id.as_str())
+    );
+    let backup_inventory = crate::fleet_ensure::read_last_converged_fleet_inventory(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    )
+    .expect("last terminal inventory remains readable after successor planning");
+    assert!(backup_inventory.entries.iter().any(|entry| {
+        entry.pid == component
+            && entry.parent_pid.as_deref() == Some(TREASURY)
+            && entry.module_hash.as_deref() == Some(module_hash.as_str())
+    }));
+    assert!(matches!(
+        crate::fleet_ensure::resolve_current_fleet(
+            &fixture.root,
+            &fixture.desired.environment,
+            "test-fleet",
+        ),
+        Err(crate::fleet_ensure::CurrentFleetInventoryError::PlanAuthorityConflict { .. })
+    ));
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        &second.plan.plan_sha256,
+        &mut platform,
+    )
+    .expect("apply effect-free successor");
+    assert_eq!(
+        second.plan.conservation.observed_controlled_cycles,
         platform
             .live
             .values()
@@ -2673,7 +2720,7 @@ fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
     assert_eq!(journal.effects.len(), 1);
     assert_eq!(journal.effects[0].state, EffectState::Applied);
     assert!(matches!(
-        crate::fleet_ensure::read_current_fleet_inventory(
+        crate::fleet_ensure::read_last_converged_fleet_inventory(
             &fixture.root,
             &fixture.desired.environment,
             &fixture.desired.fleet,

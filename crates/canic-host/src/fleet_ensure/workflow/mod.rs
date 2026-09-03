@@ -252,6 +252,8 @@ where
         .observe(&operation_id, &state)
         .map_err(EnsureWorkflowError::Platform)?;
     retain_observed_cycles(&mut state, &observation);
+    // The prior Converged journal can remain visible until apply. Planning may refresh only
+    // backup-inert observation and prior-operation evidence, never successor topology authority.
     write_state(&paths, &state)?;
     let terminal_inventory_operation_id = current_terminal_inventory_operation(
         &state,
@@ -649,6 +651,7 @@ where
                 schema_version: FLEET_ENSURE_SCHEMA_VERSION,
                 stalled_observations: 0,
             };
+            // Cross the nonterminal boundary before any effect-owned state can be retained.
             write_journal(&paths, &journal)?;
             journal
         }
@@ -1124,6 +1127,7 @@ where
     terminal_state.completed_reinstall_action_sha256.clear();
     terminal_state.completed_reinstall_operation_id = None;
     terminal_state.completed_reinstalls.clear();
+    // Publish the fully validated topology before making its terminal journal visible to backup.
     write_state(&paths, &terminal_state)?;
     journal.completion = FleetEnsureCompletion::Converged;
     journal.stalled_observations = 0;
@@ -2383,35 +2387,18 @@ where
             })
             .transpose()?;
         let existing = state.topology.get(&name);
+        let kind = terminal_inventory_kind(existing, &entry);
         if existing
             .and_then(|topology| topology.parent.as_ref())
             .zip(parent.as_ref())
             .is_some_and(|(expected, actual)| expected != actual)
+            && !verified_pool_to_component_parent_transition(existing, kind, &entry)
         {
             return Err(EnsureWorkflowError::TerminalInventory(format!(
                 "Canister {} conflicts with retained parent authority",
                 entry.pid
             )));
         }
-        let kind = existing.map_or_else(
-            || {
-                if entry.module_hash.is_some() {
-                    crate::fleet_ensure::model::DesiredCanisterKind::Component
-                } else {
-                    crate::fleet_ensure::model::DesiredCanisterKind::Auxiliary
-                }
-            },
-            |topology| {
-                if topology.kind == crate::fleet_ensure::model::DesiredCanisterKind::Pool
-                    && entry.module_hash.is_some()
-                    && entry.protocol_binding.is_some()
-                {
-                    crate::fleet_ensure::model::DesiredCanisterKind::Component
-                } else {
-                    topology.kind
-                }
-            },
-        );
         state.principals.insert(name.clone(), entry.pid);
         state.topology.insert(
             name,
@@ -2426,6 +2413,44 @@ where
     }
     state.active_registry = inventory.active_registry;
     Ok(())
+}
+
+fn terminal_inventory_kind(
+    existing: Option<&crate::fleet_ensure::model::FleetEnsureTopologyRecord>,
+    entry: &crate::registry::RegistryEntry,
+) -> crate::fleet_ensure::model::DesiredCanisterKind {
+    existing.map_or_else(
+        || {
+            if entry.module_hash.is_some() {
+                crate::fleet_ensure::model::DesiredCanisterKind::Component
+            } else {
+                crate::fleet_ensure::model::DesiredCanisterKind::Auxiliary
+            }
+        },
+        |topology| {
+            if topology.kind == crate::fleet_ensure::model::DesiredCanisterKind::Pool
+                && entry.module_hash.is_some()
+                && entry.protocol_binding.is_some()
+            {
+                crate::fleet_ensure::model::DesiredCanisterKind::Component
+            } else {
+                topology.kind
+            }
+        },
+    )
+}
+
+fn verified_pool_to_component_parent_transition(
+    existing: Option<&crate::fleet_ensure::model::FleetEnsureTopologyRecord>,
+    terminal_kind: crate::fleet_ensure::model::DesiredCanisterKind,
+    entry: &crate::registry::RegistryEntry,
+) -> bool {
+    existing.is_some_and(|topology| {
+        topology.kind == crate::fleet_ensure::model::DesiredCanisterKind::Pool
+            && terminal_kind == crate::fleet_ensure::model::DesiredCanisterKind::Component
+            && entry.module_hash.is_some()
+            && entry.protocol_binding.is_some()
+    })
 }
 
 fn applied_count(journal: &FleetEnsureJournalRecord) -> u32 {
@@ -2609,6 +2634,23 @@ pub(super) const fn action_order(action: &EnsureAction) -> u8 {
 mod tests {
     use super::*;
 
+    fn terminal_component_entry(canister: &str, parent: &str) -> crate::registry::RegistryEntry {
+        crate::registry::RegistryEntry {
+            pid: canister.to_string(),
+            role: Some("managed_component".to_string()),
+            parent_pid: Some(parent.to_string()),
+            module_hash: Some("11".repeat(32)),
+            protocol_binding: Some(crate::protocol_binding::RegistryProtocolBinding {
+                release_identity: "0.110.test".to_string(),
+                role: canic_core::ids::CanisterRole::from("managed_component"),
+                capabilities: BTreeSet::new(),
+                candid_sha256: [1; 32],
+                protocol_profile_digest:
+                    canic_core::role_contract::ProtocolProfileDigest::from_bytes([2; 32]),
+            }),
+        }
+    }
+
     fn retained_evidence() -> (FleetEnsureStateRecord, FleetEnsureJournalRecord) {
         let state = FleetEnsureStateRecord {
             active_registry: None,
@@ -2648,6 +2690,92 @@ mod tests {
             stalled_observations: 0,
         };
         (state, journal)
+    }
+
+    #[test]
+    fn terminal_inventory_allows_only_verified_pool_to_component_parent_transition() {
+        let asset = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let old_root = "r7inp-6aaaa-aaaaa-aaabq-cai";
+        let hub = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+        let state = || {
+            let (mut state, _) = retained_evidence();
+            state.principals = BTreeMap::from([
+                ("asset".to_string(), asset.to_string()),
+                ("hub".to_string(), hub.to_string()),
+                ("root".to_string(), old_root.to_string()),
+            ]);
+            state.topology.insert(
+                "asset".to_string(),
+                crate::fleet_ensure::model::FleetEnsureTopologyRecord {
+                    kind: crate::fleet_ensure::model::DesiredCanisterKind::Pool,
+                    module_hash: None,
+                    parent: Some("root".to_string()),
+                    protocol_binding: None,
+                    role: Some("canister_pool_asset".to_string()),
+                },
+            );
+            state
+        };
+
+        let mut promoted = state();
+        merge_terminal_inventory::<std::io::Error>(
+            &mut promoted,
+            crate::fleet_ensure::ops::TerminalFleetInventory {
+                active_registry: None,
+                controlled_cycles_by_principal: BTreeMap::new(),
+                entries: vec![terminal_component_entry(asset, hub)],
+            },
+        )
+        .expect("verified pool workload assumes its terminal Component parent");
+        let promoted = promoted.topology.get("asset").expect("promoted asset");
+        assert_eq!(
+            promoted.kind,
+            crate::fleet_ensure::model::DesiredCanisterKind::Component
+        );
+        assert_eq!(promoted.parent.as_deref(), Some("hub"));
+
+        let mut already_component = state();
+        already_component
+            .topology
+            .get_mut("asset")
+            .expect("retained asset")
+            .kind = crate::fleet_ensure::model::DesiredCanisterKind::Component;
+        assert!(matches!(
+            merge_terminal_inventory::<std::io::Error>(
+                &mut already_component,
+                crate::fleet_ensure::ops::TerminalFleetInventory {
+                    active_registry: None,
+                    controlled_cycles_by_principal: BTreeMap::new(),
+                    entries: vec![terminal_component_entry(asset, hub)],
+                },
+            ),
+            Err(EnsureWorkflowError::TerminalInventory(reason))
+                if reason.contains("retained parent authority")
+        ));
+
+        for incomplete_entry in [
+            crate::registry::RegistryEntry {
+                module_hash: None,
+                ..terminal_component_entry(asset, hub)
+            },
+            crate::registry::RegistryEntry {
+                protocol_binding: None,
+                ..terminal_component_entry(asset, hub)
+            },
+        ] {
+            assert!(matches!(
+                merge_terminal_inventory::<std::io::Error>(
+                    &mut state(),
+                    crate::fleet_ensure::ops::TerminalFleetInventory {
+                        active_registry: None,
+                        controlled_cycles_by_principal: BTreeMap::new(),
+                        entries: vec![incomplete_entry],
+                    },
+                ),
+                Err(EnsureWorkflowError::TerminalInventory(reason))
+                    if reason.contains("retained parent authority")
+            ));
+        }
     }
 
     #[test]

@@ -1,0 +1,64 @@
+diff --git a/crates/canic-macros/src/endpoint/expand/mod.rs b/crates/canic-macros/src/endpoint/expand/mod.rs
+index b99332726..bb3677c19 100644
+--- a/crates/canic-macros/src/endpoint/expand/mod.rs
++++ b/crates/canic-macros/src/endpoint/expand/mod.rs
+@@ -51,13 +51,9 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn)
+     } else {
+         cdk_attr(kind, &args.forwarded)
+     };
+-    let candid_attr = uses_raw_update_adapter.then(|| {
+-        let method_name = args
+-            .export_name
+-            .clone()
+-            .unwrap_or_else(|| syn::LitStr::new(&orig_name.to_string(), orig_name.span()));
+-        quote!(#[::candid::candid_method(update, rename = #method_name)])
+-    });
++    // Audit ablation: the raw adapter remains a Wasm endpoint but contributes
++    // no signature to the declaration-only Candid export pass.
++    let candid_attr = quote!();
+     let payload_registration = payload_registration(kind, &args, &orig_name);
+ 
+     let wrapper_sig = syn::Signature {
+@@ -288,16 +284,16 @@ fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2]) -> TokenStream2 {
+     match kind {
+         EndpointKind::Query => {
+             if forwarded.is_empty() {
+-                quote!(#[::canic::__internal::cdk::query])
++                quote!(#[::canic::__internal::cdk::query(hidden = true)])
+             } else {
+-                quote!(#[::canic::__internal::cdk::query(#(#forwarded),*)])
++                quote!(#[::canic::__internal::cdk::query(hidden = true, #(#forwarded),*)])
+             }
+         }
+         EndpointKind::Update => {
+             if forwarded.is_empty() {
+-                quote!(#[::canic::__internal::cdk::update])
++                quote!(#[::canic::__internal::cdk::update(hidden = true)])
+             } else {
+-                quote!(#[::canic::__internal::cdk::update(#(#forwarded),*)])
++                quote!(#[::canic::__internal::cdk::update(hidden = true, #(#forwarded),*)])
+             }
+         }
+     }
+diff --git a/crates/canic-macros/src/endpoint/expand/tests.rs b/crates/canic-macros/src/endpoint/expand/tests.rs
+index 9f36a78f2..7ed085c98 100644
+--- a/crates/canic-macros/src/endpoint/expand/tests.rs
++++ b/crates/canic-macros/src/endpoint/expand/tests.rs
+@@ -73,7 +73,7 @@ fn explicit_update_payload_limit_uses_raw_predecode_adapter() {
+         .find("decode_args_with_config")
+         .expect("Candid decode after copy");
+ 
+-    assert!(compact.contains("candid_method(update,rename=\"ping\")"));
++    assert!(!compact.contains("candid_method"));
+     assert!(compact.contains("export_name=\"canister_updateping\""));
+     assert!(size < allocation);
+     assert!(allocation < copy);
+@@ -95,7 +95,7 @@ fn composite_query_expansion_forwards_cdk_attr_and_call_kind() {
+     let expanded = expand(EndpointKind::Query, args, func).to_string();
+     let compact = expanded.split_whitespace().collect::<String>();
+ 
+-    assert!(compact.contains("query(composite=true)"));
++    assert!(compact.contains("query(hidden=true,composite=true)"));
+     assert!(compact.contains("::canic::__internal::cdk::query"));
+     assert!(compact.contains("EndpointCallKind::QueryComposite"));
+ }

@@ -1,0 +1,62 @@
+diff --git a/crates/canic-core/src/memory_macros.rs b/crates/canic-core/src/memory_macros.rs
+--- a/crates/canic-core/src/memory_macros.rs
++++ b/crates/canic-core/src/memory_macros.rs
+@@ -10,20 +10,7 @@
+ #[macro_export]
+ macro_rules! __canic_ic_memory_key {
+     ($authority:expr, $stable_key:literal, $label:path, $id:expr) => {{
+-        const _: () = {
+-            #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
+-            fn __canic_register_static_memory_declaration() {
+-                let _ = core::marker::PhantomData::<$label>;
+-                $crate::__reexports::ic_memory::register_static_memory_manager_declaration(
+-                    $id,
+-                    $authority,
+-                    stringify!($label),
+-                    $stable_key,
+-                )
+-                .expect("Canic static memory declaration failed");
+-            }
+-        };
+-
++        let _ = core::marker::PhantomData::<$label>;
+         $crate::memory::runtime::assert_memory_bootstrap_ready(stringify!($label), $id);
+         $crate::__reexports::ic_memory::open_default_memory_manager_memory($stable_key, $id)
+             .expect("Canic failed to open committed stable memory; bootstrap must run first and the stable key/id must match the committed declaration")
+@@ -61,18 +47,6 @@
+ #[macro_export]
+ macro_rules! __canic_ic_memory_range {
+     ($authority:expr, $start:expr, $end:expr, $mode:ident) => {
+-        const _: () = {
+-            #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
+-            fn __canic_register_static_memory_range() {
+-                $crate::__reexports::ic_memory::register_static_memory_manager_range(
+-                    $start,
+-                    $end,
+-                    $authority,
+-                    $crate::__reexports::ic_memory::MemoryManagerRangeMode::$mode,
+-                    None,
+-                )
+-                .expect("Canic static memory range declaration failed");
+-            }
+-        };
++        const _: () = ();
+     };
+ }
+@@ -141,16 +115,5 @@
+         thread_local! {
+             $vis static $name: $ty = $init;
+         }
+-
+-        const _: () = {
+-            fn __canic_touch_tls() {
+-                $name.with(|_| {});
+-            }
+-
+-            #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
+-            fn __canic_register_eager_tls() {
+-                $crate::memory::runtime::defer_tls_initializer(__canic_touch_tls);
+-            }
+-        };
+     };
+ }

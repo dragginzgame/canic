@@ -739,7 +739,7 @@ macro_rules! start_fleet_coordinator {
             );
         }
 
-        $crate::__canic_start_ingress_payload_inspect!();
+        $crate::__canic_start_ingress_payload_inspect!(fleet_coordinator);
         $crate::canic_emit_fleet_coordinator_endpoints!();
     };
 }

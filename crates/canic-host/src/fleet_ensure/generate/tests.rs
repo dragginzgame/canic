@@ -727,7 +727,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                 fleet_root: &fleet_root,
                 operator: &operator,
                 pool: &retained_pool,
-                public_cycle_balance: None,
+                controller_cycle_balance: None,
                 root_module_hash: &root_module_hash,
                 root_runtime_status,
                 root_status_error: None,
@@ -1761,7 +1761,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         fs::read(&recovery_paths.journal).expect("retain applied journal bytes"),
     ];
     assert!(matches!(
-        crate::fleet_ensure::read_current_fleet_inventory(
+        crate::fleet_ensure::read_last_converged_fleet_inventory(
             &root,
             &recovery_desired.environment,
             &recovery_desired.fleet,
@@ -1900,7 +1900,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &pending_reset_pool,
-            public_cycle_balance: None,
+            controller_cycle_balance: None,
             root_module_hash: artifacts
                 .wasm_sha256_by_canister
                 .get("root-0")
@@ -2000,7 +2000,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &retained_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: &predecessor_root_hash,
             root_runtime_status: "running",
             root_status_error: Some(canic_core::diagnostics::codes::STATE_CONFLICT),
@@ -2527,7 +2527,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &retained_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: &predecessor_root_hash,
             root_runtime_status: "running",
             root_status_error: Some(canic_core::diagnostics::codes::STATE_CONFLICT),
@@ -2616,7 +2616,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &retained_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: &stopped_root_hash,
             root_runtime_status: "stopped",
             root_status_error: None,
@@ -2749,7 +2749,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &retained_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: &stopped_root_hash,
             root_runtime_status: "running",
             root_status_error: None,
@@ -2804,7 +2804,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &retained_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: &stopped_root_hash,
             root_runtime_status: "stopped",
             root_status_error: None,
@@ -3037,7 +3037,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &retained_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: &"00".repeat(32),
             root_runtime_status: "stopped",
             root_status_error: None,
@@ -3070,7 +3070,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &retained_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: &stopped_root_hash,
             root_runtime_status: "stopped",
             root_status_error: None,
@@ -3153,7 +3153,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &retained_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: &unrelated_running_module,
             root_runtime_status: "running",
             root_status_error: None,
@@ -3183,7 +3183,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &retained_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: &stopped_root_hash,
             root_runtime_status: "running",
             root_status_error: None,
@@ -3310,7 +3310,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             fleet_root: &fleet_root,
             operator: &operator,
             pool: &pending_pool,
-            public_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
+            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
             root_module_hash: root_hash,
             root_runtime_status: "running",
             root_status_error: None,
@@ -4620,7 +4620,7 @@ struct FakeIcpFixture<'a> {
     fleet_root: &'a str,
     operator: &'a str,
     pool: &'a CanisterPoolResponse,
-    public_cycle_balance: Option<(&'a str, u128)>,
+    controller_cycle_balance: Option<(&'a str, u128)>,
     root_module_hash: &'a str,
     root_runtime_status: &'a str,
     root_status_error: Option<canic_core::diagnostics::RegisteredDiagnosticCode>,
@@ -4657,7 +4657,7 @@ fn write_fake_icp_with_status_projection(
         fleet_root,
         operator,
         pool,
-        public_cycle_balance,
+        controller_cycle_balance,
         root_module_hash,
         root_runtime_status,
         root_status_error,
@@ -4756,7 +4756,8 @@ fn write_fake_icp_with_status_projection(
     })
     .to_string();
     let ledger_response = candid_response_json(&Nat::from(100_000_000_u64));
-    let public_cycle_case = public_cycle_balance.map_or_else(String::new, |(canister, cycles)| {
+    let controller_cycle_case =
+        controller_cycle_balance.map_or_else(String::new, |(canister, cycles)| {
         let response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
             FixtureManagedStatusResponse::CycleBalance(
                 canic_core::dto::role::CycleBalanceStatusResponse { cycles },
@@ -4815,7 +4816,7 @@ if [ "$1" = "canister" ] && [ "$2" = "start" ] && [ "$3" = "{fleet_root}" ]; the
   exit 0
 fi
 if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
-  {public_cycle_case}
+{controller_cycle_case}
   if [ "$4" = "icrc1_fee" ]; then
     printf '%s\n' '{ledger_response}'
     exit 0
