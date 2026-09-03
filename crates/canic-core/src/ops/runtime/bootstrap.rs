@@ -15,6 +15,7 @@ struct BootstrapStatusRecord {
     ready: bool,
     phase: BootstrapPhaseLabel,
     last_error: Option<String>,
+    retryable_init_failure_exhausted: bool,
 }
 
 /// Runtime-owned bootstrap diagnostic phase label.
@@ -60,6 +61,7 @@ thread_local! {
         ready: false,
         phase: BootstrapPhaseLabel::IDLE,
         last_error: None,
+        retryable_init_failure_exhausted: false,
     }) };
 }
 
@@ -88,6 +90,7 @@ impl BootstrapStatusOps {
             status.ready = false;
             status.phase = phase;
             status.last_error = None;
+            status.retryable_init_failure_exhausted = false;
         });
     }
 
@@ -98,30 +101,37 @@ impl BootstrapStatusOps {
     #[must_use]
     pub fn try_schedule_nonroot_init() -> bool {
         BOOTSTRAP_STATUS.with_borrow_mut(|status| {
-            if status.ready
-                || matches!(
-                    status.phase,
-                    BootstrapPhaseLabel::NONROOT_INIT_SCHEDULED
-                        | BootstrapPhaseLabel::NONROOT_INIT
-                        | BootstrapPhaseLabel::NONROOT_INIT_WAITING_AUTHORITY
-                )
-            {
+            let initial_schedule = status.phase == BootstrapPhaseLabel::IDLE;
+            let retry_exhausted = status.phase == BootstrapPhaseLabel::FAILED
+                && status.retryable_init_failure_exhausted;
+            if status.ready || !(initial_schedule || retry_exhausted) {
                 return false;
             }
             status.phase = BootstrapPhaseLabel::NONROOT_INIT_SCHEDULED;
             status.last_error = None;
+            status.retryable_init_failure_exhausted = false;
             true
         })
     }
 
     // Record one terminal bootstrap failure for diagnostics.
     pub fn mark_failed(message: impl Into<String>) {
-        let message = message.into();
+        Self::record_failure(message.into(), false);
+    }
+
+    /// Retain one exhausted transient init failure for an exact later
+    /// runtime-configuration replay to reclaim.
+    pub fn mark_retryable_init_failure_exhausted(message: impl Into<String>) {
+        Self::record_failure(message.into(), true);
+    }
+
+    fn record_failure(message: String, retryable_init_failure_exhausted: bool) {
         BOOTSTRAP_STATUS.with_borrow_mut(|status| {
             let failed_phase = status.phase;
             status.ready = false;
             status.phase = BootstrapPhaseLabel::FAILED;
             status.last_error = Some(message);
+            status.retryable_init_failure_exhausted = retryable_init_failure_exhausted;
             RecentFailureOps::record(RecentFailureInput {
                 occurred_at_ns: IcOps::now_nanos(),
                 subsystem: "runtime_bootstrap".to_string(),
@@ -139,6 +149,7 @@ impl BootstrapStatusOps {
             status.ready = true;
             status.phase = BootstrapPhaseLabel::READY;
             status.last_error = None;
+            status.retryable_init_failure_exhausted = false;
         });
     }
 }
@@ -200,6 +211,61 @@ mod tests {
 
         assert!(status.ready);
         assert_eq!(status.phase, "ready");
+        assert_eq!(status.last_error, None);
+    }
+
+    #[test]
+    fn exhausted_transient_init_failure_is_reclaimed_exactly_once() {
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_INIT);
+        BootstrapStatusOps::mark_retryable_init_failure_exhausted("authority unavailable");
+
+        assert!(BootstrapStatusOps::try_schedule_nonroot_init());
+        assert!(!BootstrapStatusOps::try_schedule_nonroot_init());
+
+        let status = BootstrapStatusOps::snapshot();
+        assert!(!status.ready);
+        assert_eq!(status.phase, "nonroot:init:scheduled");
+        assert_eq!(status.last_error, None);
+    }
+
+    #[test]
+    fn reclaimed_transient_init_can_reach_ready_and_terminal_replay_is_effect_free() {
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_INIT);
+        BootstrapStatusOps::mark_retryable_init_failure_exhausted("Root unavailable");
+        assert!(BootstrapStatusOps::try_schedule_nonroot_init());
+
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_INIT);
+        BootstrapStatusOps::mark_ready();
+
+        let status = BootstrapStatusOps::snapshot();
+        assert!(status.ready);
+        assert_eq!(status.phase, "ready");
+        assert_eq!(status.last_error, None);
+        assert!(!BootstrapStatusOps::try_schedule_nonroot_init());
+    }
+
+    #[test]
+    fn nonretryable_init_failure_remains_terminal_on_runtime_replay() {
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_INIT);
+        BootstrapStatusOps::mark_failed("invalid authority");
+
+        assert!(!BootstrapStatusOps::try_schedule_nonroot_init());
+
+        let status = BootstrapStatusOps::snapshot();
+        assert!(!status.ready);
+        assert_eq!(status.phase, "failed");
+        assert_eq!(status.last_error.as_deref(), Some("invalid authority"));
+    }
+
+    #[test]
+    fn post_upgrade_bootstrap_cannot_be_claimed_by_init_replay() {
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_UPGRADE_WAITING_AUTHORITY);
+
+        assert!(!BootstrapStatusOps::try_schedule_nonroot_init());
+
+        let status = BootstrapStatusOps::snapshot();
+        assert!(!status.ready);
+        assert_eq!(status.phase, "nonroot:upgrade:waiting_authority");
         assert_eq!(status.last_error, None);
     }
 }

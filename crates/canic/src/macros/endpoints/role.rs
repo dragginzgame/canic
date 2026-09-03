@@ -561,8 +561,8 @@ macro_rules! __canic_emit_managed_command_endpoint {
                         __canic_schedule_prepared_activation_init(
                             transition.application_init_args,
                         );
-                        $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
                     }
+                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
                     Ok(CanisterCommandResponse::OperationAccepted(
                         ::canic::dto::role::OperationReceipt { operation_id },
                     ))

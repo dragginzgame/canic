@@ -22,6 +22,7 @@ canic-control-plane = { workspace = true, features = [
 ] }
 canic-core = { workspace = true }
 canic-host = { workspace = true }
+ciborium = { workspace = true }
 flate2 = { workspace = true }
 ic-testkit = { workspace = true }
 serde = { workspace = true }

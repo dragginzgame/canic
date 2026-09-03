@@ -253,6 +253,48 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
 }
 
 #[test]
+fn active_runtime_replay_offers_only_internal_bootstrap_recovery() {
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/role.rs");
+    let source = fs::read_to_string(&macro_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", macro_path.display()));
+    let configure_runtime = source
+        .split("CanisterCommand::ConfigureRuntime(request) =>")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("CanisterCommand::InstallDelegationProof(request)")
+                .next()
+        })
+        .expect("managed ConfigureRuntime command arm");
+    let conditional = configure_runtime
+        .find("if transition.transitioned")
+        .expect("application-init transition guard");
+    let application_init = configure_runtime
+        .find("__canic_schedule_prepared_activation_init")
+        .expect("application install-hook scheduler");
+    let internal_bootstrap = configure_runtime
+        .find("LifecycleApi::schedule_init_nonroot_bootstrap")
+        .expect("internal bootstrap scheduler");
+    let operation_receipt = configure_runtime
+        .find("CanisterCommandResponse::OperationAccepted")
+        .expect("ConfigureRuntime operation receipt");
+
+    assert!(conditional < application_init);
+    assert!(application_init < internal_bootstrap);
+    assert!(internal_bootstrap < operation_receipt);
+    assert_eq!(
+        configure_runtime
+            .matches("LifecycleApi::schedule_init_nonroot_bootstrap")
+            .count(),
+        1,
+        "an exact active replay must offer one internal bootstrap recovery"
+    );
+    assert!(
+        configure_runtime[application_init..internal_bootstrap].contains('}'),
+        "application init must remain transition-only while internal bootstrap recovery is replayable"
+    );
+}
+
+#[test]
 fn standalone_local_emits_only_local_status_and_standards() {
     let workspace = workspace_root();
     let start_path = workspace.join("crates/canic/src/macros/start.rs");

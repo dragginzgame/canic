@@ -132,9 +132,8 @@ fn schedule_init_nonroot_bootstrap_after(attempt: u32, delay: Duration) {
             if let Err(err) = workflow::bootstrap::nonroot::bootstrap_init_nonroot_canister().await
             {
                 let next_attempt = attempt.saturating_add(1);
-                if retryable_nonroot_bootstrap_error(&err)
-                    && next_attempt < MAX_NONROOT_BOOTSTRAP_ATTEMPTS
-                {
+                let retryable = retryable_nonroot_bootstrap_error(&err);
+                if retryable && next_attempt < MAX_NONROOT_BOOTSTRAP_ATTEMPTS {
                     BootstrapStatusOps::set_phase(
                         BootstrapPhaseLabel::NONROOT_INIT_WAITING_AUTHORITY,
                     );
@@ -154,7 +153,12 @@ fn schedule_init_nonroot_bootstrap_after(attempt: u32, delay: Duration) {
                     LifecycleMetricRole::Nonroot,
                     LifecycleMetricOutcome::Failed,
                 );
-                BootstrapStatusOps::mark_failed(format!("non-root bootstrap failed (init): {err}"));
+                let failure = format!("non-root bootstrap failed (init): {err}");
+                if retryable {
+                    BootstrapStatusOps::mark_retryable_init_failure_exhausted(failure);
+                } else {
+                    BootstrapStatusOps::mark_failed(failure);
+                }
                 log!(
                     Topic::Init,
                     Error,

@@ -185,9 +185,9 @@ pub(super) fn build_five_trillion_component_root_wasm() -> Vec<u8> {
     read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE)
 }
 
-/// Build the exact local Toko-shaped singleton Root with a 1.9T Component grant.
+/// Build the deterministic Cycles Ledger boundary used by the literal-zero journey.
 #[cfg(test)]
-pub(super) fn build_toko_shaped_singleton_root_wasm() -> Vec<u8> {
+pub(super) fn build_toko_shaped_singleton_cycles_ledger_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
     let _serial_guard = CANISTER_BUILD_SERIAL
         .lock()
@@ -202,12 +202,12 @@ pub(super) fn build_toko_shaped_singleton_root_wasm() -> Vec<u8> {
         build_internal_test_wasm_canisters_with_env(
             &workspace_root,
             &target_dir,
-            &[ROOT_CANISTER_PACKAGE],
+            &[CYCLES_LEDGER_STUB_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[canonical_config_env],
         );
     });
-    read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE)
+    read_built_wasm(&target_dir, CYCLES_LEDGER_STUB_PACKAGE)
 }
 
 /// Build the exact ICP Ledger/CMC boundary stub without rebuilding a production Root.

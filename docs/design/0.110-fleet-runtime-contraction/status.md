@@ -35,7 +35,13 @@ Date: 2026-09-02
   Component-tree qualification fixture, bounded CANIC-126 Root-owned balance
   re-observation and CANIC-127 Prepared-Root initial-child convergence. The
   fixture derives exact `ComponentChild` authority for configured and on-demand
-  sharding, scaling and index children; these corrections do not promote B2.
+  sharding, scaling and index children. An exact active runtime-configuration
+  replay can also reclaim an exhausted transient non-Root init bootstrap without
+  rerunning application init or reopening a non-retryable failure. These
+  corrections do not promote B2. One governed literal-zero-estate proof drives
+  the current plan, durable journal, concrete production adapter, lost-response
+  recovery and real Coordinator/Root/Store protocol through terminal cycle
+  conservation and immediate zero-effect replay.
 
 Design: [Fleet runtime contraction](0.110-design.md)
 
@@ -121,7 +127,8 @@ Planning evidence: [B1 Wasm input evidence](../../audits/working/0.110-fleet-run
 
 ## Next Authorized Action
 
-Complete the bounded `0.110.5` CANIC-124/CANIC-126/CANIC-127 correction while
-continuing B1: freeze the downstream canary, controlled ablations, generated-
-surface inventory and generic cohort against the immutable predecessor. Do not
-begin B2 until the maintainer accepts the complete B1 evidence.
+Complete the bounded `0.110.5` CANIC-124/CANIC-126/CANIC-127 and exhausted-
+bootstrap recovery corrections while continuing B1: freeze the downstream
+canary, controlled ablations, generated-surface inventory and generic cohort
+against the immutable predecessor. Do not begin B2 until the maintainer accepts
+the complete B1 evidence.

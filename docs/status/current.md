@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-02
+Last updated: 2026-09-03
 
 ## Purpose
 
@@ -163,7 +163,10 @@ after the final Fleet protocol action:
   child allocation while both it and the Root are Prepared. One durable Root
   allocation owns creation, installation, Directory convergence and membership;
   a detached idempotent driver prevents a Root-to-Hub callback cycle, and the Hub
-  retries only typed transient bootstrap failures within a finite bound.
+  retries only typed transient bootstrap failures within a finite bound. If that
+  bound is exhausted, an exact Root-authenticated runtime-configuration replay
+  may reclaim the transient init failure without rerunning application init;
+  non-retryable failures and active retry owners remain unchanged.
 
 Root membership activation now requires the target's exact readiness response.
 Runtime activation remains bound to the Directory authority under which it
@@ -174,10 +177,15 @@ lost activation responses adopt only the exact already-active runtime receipt.
 
 The governed Prepared-Root journey reaches three top-level Components plus
 configured sharding and scaling children, terminal Component membership and an
-effect-free replay. The public fixture independently covers configured and
-on-demand sharding, scaling and index children, direct admission, same-release
-upgrade, timer restoration and fencing. A downstream live reset remains
-downstream-owned adoption evidence rather than a Canic release effect.
+effect-free replay. A second governed literal-zero-estate journey now drives the
+real Fleet Ensure plan and journal through the concrete `IcpEnsurePlatform`, an
+actual lost controller response, fresh-process adapter reconstruction and the
+real Coordinator/Root/Store protocol. It reaches one Workload plus one Ready
+pool asset, proves cycle conservation and immediately replans and applies with
+zero effects. The public fixture independently covers configured and on-demand
+sharding, scaling and index children, direct admission, same-release upgrade,
+timer restoration and fencing. A downstream live reset remains downstream-owned
+adoption evidence rather than a Canic release effect.
 
 ## 0.110.5 Fleet Ensure Operator Corrections
 
