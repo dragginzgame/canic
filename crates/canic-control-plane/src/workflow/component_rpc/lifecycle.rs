@@ -104,13 +104,35 @@ async fn provision_component_child(
         return Ok(binding.canister_id);
     }
 
-    // The caller is suspended inside this Root request. Directory convergence can
-    // call that same Component and must therefore run after this response unwinds;
-    // otherwise the Component would call back into this Root while authenticating
-    // the Directory command. The durable allocation owns every effect, so an exact
-    // retry only observes the same operation while this detached driver advances it.
-    component_registry::schedule_component_child_allocation(component, operation_id);
-    Err(InternalError::unavailable())
+    if component_registry::child_allocation_is_initial_bootstrap(
+        component,
+        operation_id,
+        expected_identity.parent_canister_id,
+        &expected_identity.role,
+    )? {
+        // A bootstrap parent cannot serve Directory convergence until its own
+        // activation finishes, so this one path must unwind and resume detached.
+        component_registry::schedule_component_child_allocation(component, operation_id);
+        return Err(InternalError::unavailable());
+    }
+
+    Box::pin(component_registry::complete_component_child_allocation(
+        component,
+        operation_id,
+    ))
+    .await
+    .map_err(|error| child_lifecycle_failure("complete", error))?;
+    let binding = component_registry::terminal_child_allocation_binding(
+        component,
+        operation_id,
+        expected_identity.parent_canister_id,
+        &expected_identity.role,
+    )?
+    .ok_or_else(InternalError::invariant)?;
+    if ProvisionedChildIdentity::from_binding(&binding) != expected_identity {
+        return Err(InternalError::invariant());
+    }
+    Ok(binding.canister_id)
 }
 
 fn child_lifecycle_failure(stage: &'static str, error: InternalError) -> InternalError {

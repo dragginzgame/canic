@@ -336,6 +336,7 @@ fn provisioned_receipts(
                                     next_component.checked_add(1).expect("test identity");
                                 let spec = topology.get(&entry.component_spec).expect("known Spec");
                                 RootProvisionedGroupMember {
+                                    member_operation_id: [identity_byte.wrapping_add(64); 32],
                                     member_path: entry.member_path.clone(),
                                     component_spec: entry.component_spec.clone(),
                                     purpose: entry.purpose.clone(),
@@ -546,8 +547,8 @@ fn compiles_complete_mode_compatible_initial_services_in_canonical_order() {
     assert_eq!(
         receipts[0].receipt_content_hash,
         [
-            10, 56, 42, 78, 85, 213, 66, 0, 25, 222, 104, 110, 41, 181, 65, 209, 100, 175, 123,
-            117, 243, 188, 156, 231, 53, 136, 183, 57, 144, 250, 142, 184,
+            4, 161, 153, 188, 148, 72, 239, 70, 22, 241, 216, 173, 9, 203, 89, 112, 98, 50, 145,
+            174, 76, 237, 236, 159, 38, 111, 10, 255, 76, 0, 136, 213,
         ]
     );
     let services = compile_initial(&config, &registry, &plan, [10; 32], &receipts)

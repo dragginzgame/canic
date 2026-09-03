@@ -1428,7 +1428,7 @@ impl IcpEnsurePlatform {
             );
         };
         let cycles = self
-            .public_cycle_balance(principal)
+            .controller_cycle_balance(principal)
             .or_else(|| state.retained_cycles_by_principal.get(principal).copied())
             .ok_or_else(|| {
                 current_protocol::CurrentProtocolError::Configuration(format!(
@@ -1579,7 +1579,7 @@ impl IcpEnsurePlatform {
         Ok(true)
     }
 
-    fn public_cycle_balance(&self, principal: &str) -> Option<u128> {
+    fn controller_cycle_balance(&self, principal: &str) -> Option<u128> {
         let response: Result<ManagedCanisterStatusResponse, canic_core::dto::error::Error> = self
             .icp
             .canister_query_candid(

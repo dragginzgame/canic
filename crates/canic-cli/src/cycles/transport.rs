@@ -13,19 +13,19 @@ use crate::{
             CyclesTopupSummary,
         },
         options::CyclesOptions,
-        parse::{parse_cycle_tracker_page, parse_topup_event_page},
+        parse::{cycle_tracker_page, topup_event_page},
     },
-    support::{
-        candid::registry_entry_candid_path,
-        registry_tree::{RegistryRow, visible_rows},
-    },
+    support::registry_tree::{RegistryRow, visible_rows},
+};
+use canic_core::dto::{
+    observability::{CanisterObservabilityRequest, CanisterObservabilityResponse},
+    page::PageRequest,
 };
 use canic_host::{
-    cycle_balance::{CycleBalanceQueryError, query_cycle_balance},
     fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
-    icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
+    icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    protocol_binding::ResolvedProtocolBinding,
+    observability::{FleetObservabilityError, observe_fleet_canister},
     registry::RegistryEntry,
 };
 use std::{
@@ -37,45 +37,31 @@ use std::{
 use thiserror::Error as ThisError;
 
 const TOPUP_EVENTS_LIMIT: u64 = 1_000;
-const ICP_JSON_OUTPUT: &str = "json";
 const CYCLES_WORKER_PANIC: &str = "cycles query worker panicked";
-const CYCLE_HISTORY_SELECTOR: &str = "canic_status::CycleHistory";
-const CYCLE_TOPUPS_SELECTOR: &str = "canic_status::CycleTopups";
-
 ///
 /// CycleQueryTarget
 ///
 
 struct CycleQueryTarget {
     icp: IcpCli,
-    canister_id: String,
+    entry: RegistryEntry,
     environment: String,
-    icp_root: Option<PathBuf>,
-    binding: ResolvedProtocolBinding,
+    icp_root: PathBuf,
+    fleet: Arc<CurrentFleetResolution>,
 }
 
 #[derive(Debug, ThisError)]
 enum CycleObservationError {
     #[error(transparent)]
-    Balance(#[from] CycleBalanceQueryError),
-
-    #[error(transparent)]
-    Icp(#[from] IcpCommandError),
-
-    #[error("invalid {method} response: {source}")]
-    Response {
-        method: &'static str,
-        #[source]
-        source: IcpJsonResponseError,
-    },
+    Observability(#[from] FleetObservabilityError),
 }
 
 pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, CyclesCommandError> {
-    let registry = load_registry(options)?;
+    let fleet = Arc::new(load_registry(options)?);
     let generated_at_secs = current_unix_seconds();
     let requested_since_secs = generated_at_secs.saturating_sub(options.since_seconds);
     let canisters =
-        collect_cycle_tracker_reports(options, &registry, requested_since_secs, generated_at_secs)?;
+        collect_cycle_tracker_reports(options, fleet, requested_since_secs, generated_at_secs)?;
 
     Ok(CyclesReport {
         fleet: options.fleet.clone(),
@@ -86,31 +72,33 @@ pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, Cyc
     })
 }
 
-fn load_registry(options: &CyclesOptions) -> Result<Vec<RegistryEntry>, CyclesCommandError> {
-    Ok(resolve_cycles_fleet(options)?.registry.entries)
+fn load_registry(options: &CyclesOptions) -> Result<CurrentFleetResolution, CyclesCommandError> {
+    resolve_cycles_fleet(options)
 }
 
 fn collect_cycle_tracker_reports(
     options: &CyclesOptions,
-    registry: &[RegistryEntry],
+    fleet: Arc<CurrentFleetResolution>,
     requested_since_secs: u64,
     generated_at_secs: u64,
 ) -> Result<Vec<CyclesCanisterReport>, CyclesCommandError> {
     let query = Arc::new(options.clone());
     let mut handles = Vec::new();
-    let rows = visible_rows(registry, options.subtree.as_deref())?;
+    let rows = visible_rows(&fleet.registry.entries, options.subtree.as_deref())?;
     for row in rows {
         let RegistryRow { entry, tree_prefix } = row;
         let entry = entry.clone();
         let worker_entry = entry.clone();
         let worker_tree_prefix = tree_prefix.clone();
         let query = Arc::clone(&query);
+        let fleet = Arc::clone(&fleet);
         handles.push((
             worker_entry,
             worker_tree_prefix,
             thread::spawn(move || {
                 cycle_tracker_report(
                     &query,
+                    fleet,
                     &entry,
                     tree_prefix,
                     requested_since_secs,
@@ -149,12 +137,13 @@ fn collect_cycle_worker_reports(
 
 fn cycle_tracker_report(
     options: &CyclesOptions,
+    fleet: Arc<CurrentFleetResolution>,
     entry: &RegistryEntry,
     tree_prefix: String,
     requested_since_secs: u64,
     generated_at_secs: u64,
 ) -> CyclesCanisterReport {
-    let target = match cycle_query_target(options, entry) {
+    let target = match cycle_query_target(options, fleet, entry) {
         Ok(target) => target,
         Err(error) => {
             return cycles_error_report(
@@ -347,14 +336,18 @@ pub(super) fn summarize_cycle_tracker(
 }
 
 fn query_live_cycle_balance(target: &CycleQueryTarget) -> Result<u128, CycleObservationError> {
-    query_cycle_balance(
+    let response = observe_fleet_canister(
         &target.icp,
-        &target.canister_id,
+        &target.icp_root,
         &target.environment,
-        target.icp_root.as_deref(),
-        &target.binding,
-    )
-    .map_err(Into::into)
+        &target.fleet,
+        &target.entry,
+        CanisterObservabilityRequest::CycleBalance,
+    )?;
+    let CanisterObservabilityResponse::CycleBalance(response) = response else {
+        unreachable!("CycleBalance request returned a different observability response");
+    };
+    Ok(response.cycles)
 }
 
 fn query_topup_events(
@@ -405,19 +398,18 @@ fn query_topup_event_page(
     offset: u64,
     limit: u64,
 ) -> Result<crate::cycles::model::CycleTopupEventPage, CycleObservationError> {
-    let arg = status_page_request_arg("CycleTopups", offset, limit);
-    let output = target.icp.canister_query_arg_output_with_candid(
-        &target.canister_id,
-        canic_core::protocol::CANIC_STATUS,
-        &arg,
-        Some(ICP_JSON_OUTPUT),
-        Some(target.binding.candid_path()),
+    let response = observe_fleet_canister(
+        &target.icp,
+        &target.icp_root,
+        &target.environment,
+        &target.fleet,
+        &target.entry,
+        CanisterObservabilityRequest::CycleTopups(PageRequest { offset, limit }),
     )?;
-
-    parse_topup_event_page(&output).map_err(|source| CycleObservationError::Response {
-        method: CYCLE_TOPUPS_SELECTOR,
-        source,
-    })
+    let CanisterObservabilityResponse::CycleTopups(page) = response else {
+        unreachable!("CycleTopups request returned a different observability response");
+    };
+    Ok(topup_event_page(page))
 }
 
 fn query_cycle_tracker(
@@ -437,33 +429,32 @@ fn query_cycle_tracker_page(
     offset: u64,
     limit: u64,
 ) -> Result<CycleTrackerPage, CycleObservationError> {
-    let arg = status_page_request_arg("CycleHistory", offset, limit);
-    let output = target.icp.canister_query_arg_output_with_candid(
-        &target.canister_id,
-        canic_core::protocol::CANIC_STATUS,
-        &arg,
-        Some(ICP_JSON_OUTPUT),
-        Some(target.binding.candid_path()),
+    let response = observe_fleet_canister(
+        &target.icp,
+        &target.icp_root,
+        &target.environment,
+        &target.fleet,
+        &target.entry,
+        CanisterObservabilityRequest::CycleHistory(PageRequest { offset, limit }),
     )?;
-
-    parse_cycle_tracker_page(&output).map_err(|source| CycleObservationError::Response {
-        method: CYCLE_HISTORY_SELECTOR,
-        source,
-    })
+    let CanisterObservabilityResponse::CycleHistory(page) = response else {
+        unreachable!("CycleHistory request returned a different observability response");
+    };
+    Ok(cycle_tracker_page(page))
 }
 
 fn cycle_query_target(
     options: &CyclesOptions,
+    fleet: Arc<CurrentFleetResolution>,
     entry: &RegistryEntry,
-) -> Result<CycleQueryTarget, canic_host::protocol_binding::ProtocolBindingError> {
-    let root = resolve_current_canic_icp_root().ok();
-    let binding = registry_entry_candid_path(root.as_deref(), &options.environment, entry)?;
+) -> Result<CycleQueryTarget, canic_host::icp_config::IcpConfigError> {
+    let root = resolve_current_canic_icp_root()?;
     Ok(CycleQueryTarget {
-        icp: cycles_icp(options, root.as_deref()),
-        canister_id: entry.pid.clone(),
+        icp: cycles_icp(options, Some(&root)),
+        entry: entry.clone(),
         environment: options.environment.clone(),
         icp_root: root,
-        binding,
+        fleet,
     })
 }
 
@@ -473,12 +464,6 @@ fn cycles_icp(options: &CyclesOptions, root: Option<&Path>) -> IcpCli {
         return icp.with_cwd(root);
     }
     icp
-}
-
-fn status_page_request_arg(selector: &str, offset: u64, limit: u64) -> String {
-    format!(
-        "(variant {{ {selector} = record {{ offset = {offset} : nat64; limit = {limit} : nat64 }} }})"
-    )
 }
 
 fn signed_delta(latest: u128, baseline: u128) -> i128 {
@@ -542,6 +527,7 @@ fn resolve_cycles_fleet(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use canic_host::{CanisterProtocolError, icp::IcpJsonResponseError};
 
     #[test]
     fn panicked_cycles_worker_becomes_an_explicit_canister_error() {
@@ -584,15 +570,26 @@ mod tests {
 
     #[test]
     fn cycle_response_failure_preserves_typed_cause_until_projection() {
-        let error = CycleObservationError::Response {
-            method: CYCLE_HISTORY_SELECTOR,
-            source: IcpJsonResponseError::MissingResponseBytes,
-        };
-        let source = std::error::Error::source(&error).expect("typed response source");
-
-        assert!(matches!(
-            source.downcast_ref::<IcpJsonResponseError>(),
-            Some(IcpJsonResponseError::MissingResponseBytes)
+        let error = CycleObservationError::Observability(FleetObservabilityError::Protocol(
+            CanisterProtocolError::Response {
+                canister: candid::Principal::management_canister(),
+                method: canic_core::protocol::CANIC_ROOT_COMMAND,
+                source: IcpJsonResponseError::MissingResponseBytes,
+            },
         ));
+        let mut source = std::error::Error::source(&error);
+        let mut preserved = false;
+        while let Some(cause) = source {
+            if matches!(
+                cause.downcast_ref::<IcpJsonResponseError>(),
+                Some(IcpJsonResponseError::MissingResponseBytes)
+            ) {
+                preserved = true;
+                break;
+            }
+            source = cause.source();
+        }
+
+        assert!(preserved, "typed response cause must remain in the chain");
     }
 }

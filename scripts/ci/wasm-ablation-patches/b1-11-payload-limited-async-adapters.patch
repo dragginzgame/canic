@@ -1,0 +1,61 @@
+diff --git a/crates/canic-macros/src/endpoint/expand/mod.rs b/crates/canic-macros/src/endpoint/expand/mod.rs
+index b99332726..469f2a838 100644
+--- a/crates/canic-macros/src/endpoint/expand/mod.rs
++++ b/crates/canic-macros/src/endpoint/expand/mod.rs
+@@ -32,8 +32,9 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn)
+     }
+ 
+     let wrapper_async = impl_async || access_plan.requires_async();
+-    let uses_raw_update_adapter =
+-        matches!(kind, EndpointKind::Update) && args.payload_max_bytes.is_some();
++    // Audit ablation: retain limit registration and endpoint execution while
++    // omitting the generated raw predecode adapter.
++    let uses_raw_update_adapter = false;
+ 
+     let impl_name = format_ident!("__canic_impl_{}", orig_name);
+     func.sig.ident = impl_name.clone();
+diff --git a/crates/canic-macros/src/endpoint/expand/tests.rs b/crates/canic-macros/src/endpoint/expand/tests.rs
+index 9f36a78f2..f17830bee 100644
+--- a/crates/canic-macros/src/endpoint/expand/tests.rs
++++ b/crates/canic-macros/src/endpoint/expand/tests.rs
+@@ -49,7 +49,7 @@ fn default_update_expansion_uses_runtime_fallback_without_registration() {
+ }
+ 
+ #[test]
+-fn explicit_update_payload_limit_uses_raw_predecode_adapter() {
++fn explicit_update_payload_limit_omits_raw_predecode_adapter() {
+     let mut args = make_args(Vec::new());
+     args.payload_max_bytes = Some(quote!(16 * 1024));
+     let func: ItemFn = syn::parse_quote!(
+@@ -60,25 +60,12 @@ fn explicit_update_payload_limit_uses_raw_predecode_adapter() {
+ 
+     let expanded = expand(EndpointKind::Update, args, func).to_string();
+     let compact = expanded.split_whitespace().collect::<String>();
+-    let size = compact
+-        .find("msg_arg_data_size")
+-        .expect("scalar size check");
+-    let allocation = compact
+-        .find("vec![0_u8;__canic_payload_len]")
+-        .expect("bounded allocation");
+-    let copy = compact
+-        .find("msg_arg_data_copy")
+-        .expect("argument copy after size check");
+-    let decode = compact
+-        .find("decode_args_with_config")
+-        .expect("Candid decode after copy");
+-
+-    assert!(compact.contains("candid_method(update,rename=\"ping\")"));
+-    assert!(compact.contains("export_name=\"canister_updateping\""));
+-    assert!(size < allocation);
+-    assert!(allocation < copy);
+-    assert!(copy < decode);
+-    assert!(!compact.contains("::canic::__internal::cdk::update"));
++    assert!(compact.contains("register_update_limit"));
++    assert!(compact.contains("::canic::__internal::cdk::update"));
++    assert!(!compact.contains("msg_arg_data_size"));
++    assert!(!compact.contains("msg_arg_data_copy"));
++    assert!(!compact.contains("decode_args_with_config"));
++    assert!(!compact.contains("export_name=\"canister_updateping\""));
+ }
+ 
+ #[test]

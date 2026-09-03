@@ -804,6 +804,37 @@ pub struct ComponentRegistryPartitionResponse {
 }
 
 ///
+/// ComponentRegistryActivePartitionRequest
+///
+/// Exact top-level allocation authority whose immutable activation partition and current head are
+/// required for terminal Fleet inventory.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRegistryActivePartitionRequest {
+    pub component: ComponentInstanceId,
+    pub provisioning_operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub group_placement: ComponentGroupPlacementId,
+    pub member_path: ComponentGroupMemberPath,
+}
+
+///
+/// ComponentRegistryActivePartitionResponse
+///
+/// Root-qualified immutable top-level activation receipt plus the validated current partition.
+/// Later descendant work may advance `current` without changing `activation`.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentRegistryActivePartitionResponse {
+    pub allocation_operation_id: [u8; 32],
+    pub prepared: ComponentRegistryPartitionResponse,
+    pub activation: ComponentRegistryPartitionResponse,
+    pub current: ComponentRegistryPartitionResponse,
+}
+
+///
 /// ComponentDirectoryProvenance
 ///
 /// Exact Component Registry authority from which one Component Directory is derived.

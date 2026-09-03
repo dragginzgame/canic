@@ -2,14 +2,15 @@ use super::{ListCommandError, options::ListOptions, render::ReadyStatus, state_e
 use crate::cli::defaults::local_environment;
 use crate::support::candid::registry_entry_candid_path;
 use crate::support::registry_tree::visible_entries;
+use canic_core::dto::observability::{CanisterObservabilityRequest, CanisterObservabilityResponse};
 use canic_host::{
     canic_metadata::query_canic_metadata_version,
     canister_ready::{query_canister_ready, query_local_canister_ready},
-    cycle_balance::query_cycle_balance,
     fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
     format::{cycles_tc, wasm_size_label},
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
+    observability::observe_fleet_canister,
     registry::RegistryEntry,
     release_set::artifact_root_path,
     replica_query,
@@ -28,15 +29,13 @@ const OBSERVATION_ERROR: &str = "error";
 
 pub(super) fn load_registry_entries(
     options: &ListOptions,
-) -> Result<Vec<RegistryEntry>, ListCommandError> {
-    let registry = match options.source {
-        ListSource::FleetInventory => resolve_list_fleet(options)?.registry.entries,
+) -> Result<CurrentFleetResolution, ListCommandError> {
+    match options.source {
+        ListSource::FleetInventory => resolve_list_fleet(options),
         ListSource::Config => {
             unreachable!("config source does not use registry entries")
         }
-    };
-
-    Ok(registry)
+    }
 }
 
 pub(super) fn list_ready_statuses(
@@ -62,18 +61,20 @@ pub(super) fn list_ready_statuses(
 
 pub(super) fn list_cycle_balances(
     options: &ListOptions,
-    registry: &[RegistryEntry],
+    fleet: &CurrentFleetResolution,
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, String>, ListCommandError> {
     let icp = options.icp.clone();
     let environment = options.environment.clone();
     let icp_root = resolve_live_icp_root()?;
+    let fleet = fleet.clone();
+    let registry = fleet.registry.entries.clone();
     collect_visible_entry_values(
-        registry,
+        &registry,
         canister,
         OBSERVATION_ERROR.to_string(),
         move |entry| {
-            cycle_balance_label_endpoint(&icp, environment.clone(), Some(&icp_root), &entry)
+            cycle_balance_label_endpoint(&icp, environment.clone(), &icp_root, &fleet, &entry)
         },
     )
 }
@@ -217,16 +218,23 @@ where
 fn cycle_balance_label_endpoint(
     icp: &str,
     environment: Option<String>,
-    icp_root: Option<&Path>,
+    icp_root: &Path,
+    fleet: &CurrentFleetResolution,
     entry: &RegistryEntry,
 ) -> String {
     let environment = environment.unwrap_or_else(local_environment);
-    let Ok(binding) = registry_entry_candid_path(icp_root, &environment, entry) else {
+    let icp = live_icp(icp, Some(environment.clone()), Some(icp_root));
+    let Ok(CanisterObservabilityResponse::CycleBalance(response)) = observe_fleet_canister(
+        &icp,
+        icp_root,
+        &environment,
+        fleet,
+        entry,
+        CanisterObservabilityRequest::CycleBalance,
+    ) else {
         return OBSERVATION_ERROR.to_string();
     };
-    let icp = live_icp(icp, Some(environment.clone()), icp_root);
-    query_cycle_balance(&icp, &entry.pid, &environment, icp_root, &binding)
-        .map_or_else(|_| OBSERVATION_ERROR.to_string(), cycles_tc)
+    cycles_tc(response.cycles)
 }
 
 fn canic_version_label_endpoint(

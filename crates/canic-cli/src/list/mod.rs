@@ -82,13 +82,14 @@ where
 }
 
 fn run_list_options(options: ListOptions) -> Result<(), ListCommandError> {
-    let registry = load_registry_entries(&options)?;
+    let fleet = load_registry_entries(&options)?;
+    let registry = &fleet.registry.entries;
     let anchor = options.subtree.clone();
     let readiness = list_ready_statuses(&options, &registry, anchor.as_deref())?;
     let canic_versions = list_canic_versions(&options, &registry, anchor.as_deref())?;
     let module_hashes = list_module_hashes(&registry, anchor.as_deref())?;
     let wasm_sizes = resolve_wasm_sizes(&options, &registry)?;
-    let cycles = list_cycle_balances(&options, &registry, anchor.as_deref())?;
+    let cycles = list_cycle_balances(&options, &fleet, anchor.as_deref())?;
     let missing_roles = missing_config_roles(&options, &registry);
     let title = list_title(&options);
     let columns = RegistryColumnData {

@@ -1,0 +1,20 @@
+schema: CANIC-WASM-ABLATION-001/v1
+experiment: b1-11-payload-limited-async-adapters
+result: pass
+validity: valid
+source_commit: 50f40171d6177c3d1e490b1fdb5f6163323b2cd5
+source_tree: 5a66988735c707b188d9d1fe03a3ed3b4ff7a273
+switch_sha256: 5807cfe5496f8b4ca4cf965475ad19777221311afd6f378ad3f2c51741bd4abd
+runner_sha256: 7ef5b737498a5a16571a26b3532b64b518cf1fcf4ff90275d9ef5f73e8ba1973
+raw_wasm_retained: false
+files:
+  c3f0d15648dd5896631c859d2b52b69effed55d6bb1bb4e5e430ea9f67fe8a28: docs/audits/reports/2026-09/2026-09-03/wasm-ablation-b1-11.md
+  c08ccd4579831761c62edee88ffe520fe43466b6e4f586708f5ee446301de5cb: docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-ablation-b1-11/artifact-metrics.tsv
+  288929ac928045b59f980a64bbd0d2a612281704d51c5a2a9fae546f41be6fd2: docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-ablation-b1-11/determinism.tsv
+  f49c3f37512acfc7986226516faed0e069bb21db3f188c9c0b0a4118334886ca: docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-ablation-b1-11/run-metadata.tsv
+artifact_hashes:
+  baseline_wasm: fd4c7a5ccac6b08555f9b7b1a3046bf374d4c6875de4cab6e9473e65bc10cac4
+  baseline_gzip: 47160e13e7a93d892c7139537411d3afa460cb41c26940f22a5c50fee5c65348
+  variant_wasm: 297bf5b0a9d35fb40556d061b8dc9fe0145c3ae85a63e20bb641fe5b0766f008
+  variant_gzip: 94c28e28b8f584cf8dc0a19d28efccb068e982e6bba182eb06eb102d1a25aef9
+  candid: fb5a55c930325f32d26ae91a49a6e47ebd3db4ea79290d07a21bb54d7ff6d0a9

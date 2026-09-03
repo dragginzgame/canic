@@ -8,8 +8,8 @@ exact retained plan digest.
 > Development status: canister/code/controller/cycle convergence and the typed
 > Store, Registry, Root-mirror, local Component Registry and Component action
 > graph are implemented. A fresh-estate governed PocketIC journey traverses the
-> complete graph through catalog publication and immediately recompiles with no
-> update effect. Authority-bearing operator commands now consume the same
+> complete graph through terminal Ensure publication and immediately recompiles
+> with no update effect. Authority-bearing operator commands now consume the same
 > terminal inventory and exact protocol bindings. That inventory is rebuilt
 > from terminal protected control-plane evidence, including protocol-created
 > Components, pool assets and bounded descendants. Focused implementation

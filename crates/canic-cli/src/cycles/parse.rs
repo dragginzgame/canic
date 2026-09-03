@@ -8,29 +8,38 @@ use crate::cycles::model::{
     CycleTopupEventPage, CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage,
     CycleTrackerSample,
 };
+#[cfg(test)]
 use candid::{CandidType, Deserialize};
 use canic_core::dto::{
     cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
     page::Page,
 };
+#[cfg(test)]
 use canic_host::icp::{IcpJsonResponseError, decode_json_result_response};
 
+#[cfg(test)]
 #[derive(CandidType, Deserialize)]
 pub(super) enum CycleHistoryStatusResponse {
     CycleHistory(Page<CycleTrackerEntry>),
 }
 
+#[cfg(test)]
 #[derive(CandidType, Deserialize)]
 pub(super) enum CycleTopupsStatusResponse {
     CycleTopups(Page<CycleTopupEvent>),
 }
 
+#[cfg(test)]
 pub(super) fn parse_cycle_tracker_page(
     output: &str,
 ) -> Result<CycleTrackerPage, IcpJsonResponseError> {
     let response = decode_json_result_response::<CycleHistoryStatusResponse>(output)?;
     let CycleHistoryStatusResponse::CycleHistory(page) = response;
-    Ok(CycleTrackerPage {
+    Ok(cycle_tracker_page(page))
+}
+
+pub(super) fn cycle_tracker_page(page: Page<CycleTrackerEntry>) -> CycleTrackerPage {
+    CycleTrackerPage {
         entries: page
             .entries
             .into_iter()
@@ -40,15 +49,20 @@ pub(super) fn parse_cycle_tracker_page(
             })
             .collect(),
         total: page.total,
-    })
+    }
 }
 
+#[cfg(test)]
 pub(super) fn parse_topup_event_page(
     output: &str,
 ) -> Result<CycleTopupEventPage, IcpJsonResponseError> {
     let response = decode_json_result_response::<CycleTopupsStatusResponse>(output)?;
     let CycleTopupsStatusResponse::CycleTopups(page) = response;
-    Ok(CycleTopupEventPage {
+    Ok(topup_event_page(page))
+}
+
+pub(super) fn topup_event_page(page: Page<CycleTopupEvent>) -> CycleTopupEventPage {
+    CycleTopupEventPage {
         entries: page
             .entries
             .into_iter()
@@ -59,7 +73,7 @@ pub(super) fn parse_topup_event_page(
             })
             .collect(),
         total: page.total,
-    })
+    }
 }
 
 const fn topup_status(status: CycleTopupEventStatus) -> CycleTopupStatus {

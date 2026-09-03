@@ -1,0 +1,3 @@
+experiment	condition	artifact_id	wasm	gzip	candid	metrics	result
+b1-11-payload-limited-async-adapters	baseline	payload_limit_probe	PASS	PASS	PASS	PASS	PASS
+b1-11-payload-limited-async-adapters	variant	payload_limit_probe	PASS	PASS	PASS	PASS	PASS

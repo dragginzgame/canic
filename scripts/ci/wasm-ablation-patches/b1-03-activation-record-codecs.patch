@@ -1,0 +1,308 @@
+diff --git a/crates/canic-core/src/model/mod.rs b/crates/canic-core/src/model/mod.rs
+index 8730743e7..d5e03bbd7 100644
+--- a/crates/canic-core/src/model/mod.rs
++++ b/crates/canic-core/src/model/mod.rs
+@@ -9,6 +9,10 @@ pub mod auth;
+ pub mod blob_storage;
+ pub mod cycles_funding;
+ pub mod env;
++#[expect(
++    dead_code,
++    reason = "the B1 activation-persistence ablation intentionally disconnects these validators"
++)]
+ pub mod fleet_activation;
+ pub mod fleet_admission_authority;
+ pub mod fleet_admission_policy;
+diff --git a/crates/canic-core/src/ops/storage/fleet_activation_ablation/mod.rs b/crates/canic-core/src/ops/storage/fleet_activation_ablation/mod.rs
+new file mode 100644
+index 000000000..8987a1e14
+--- /dev/null
++++ b/crates/canic-core/src/ops/storage/fleet_activation_ablation/mod.rs
+@@ -0,0 +1,241 @@
++//! Module: ops::storage::fleet_activation_ablation
++//!
++//! Responsibility: retain activation call signatures while the B1 audit excludes
++//! the activation persistence, record, mapper, and codec family.
++//! Does not own: production behavior or a supported Canic configuration.
++//! Boundary: opaque fail-closed results retain dependent caller control flow for attribution.
++
++use crate::{
++    config::ComponentTopology,
++    dto::{
++        component_deployment::ProtectedComponentDeployment,
++        component_registry::{
++            ComponentRuntimeActivationRequest, ComponentRuntimeDirectoryPreparationRequest,
++            ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimeStatusResponse,
++        },
++        fleet_activation::{
++            FleetActivationIdentity, FleetActivationRequest, FleetActivationStatusResponse,
++            FleetCascadeManifestEntry, FleetCredentialGenerationRef,
++            FleetCredentialGenerationRequest, FleetCredentialManifest,
++        },
++        fleet_subnet_root::{
++            FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
++        },
++    },
++    ids::{
++        AppId, FleetBinding, FleetSubnetRootFundingAuthority, FleetSubnetWasmStoreAuthority,
++        ManagedCanisterBinding, ReleaseBuildId,
++    },
++    model::fleet_activation::PrepareFleetActivationError,
++    view::fleet_activation::{
++        ComponentRuntimeActivationTransition, FleetActivationTransition,
++        FleetActivationWasmStoreAuthorityView,
++    },
++};
++use thiserror::Error as ThisError;
++
++macro_rules! unavailable {
++    () => {
++        core::hint::black_box(Err(FleetActivationOpsError::NotInitialized))
++    };
++}
++
++/// Activation error surface retained so unrelated callers remain type-checkable.
++#[derive(Debug, Eq, PartialEq, ThisError)]
++pub enum FleetActivationOpsError {
++    #[error(transparent)]
++    Admission(#[from] PrepareFleetActivationError),
++
++    #[error("failed to encode protected Fleet activation record: {0}")]
++    Encode(String),
++
++    #[error("protected Fleet activation record exceeds {maximum} bytes: observed {observed} bytes")]
++    RecordTooLarge { maximum: usize, observed: usize },
++
++    #[error("protected Fleet activation record is already initialized")]
++    AlreadyInitialized,
++
++    #[error("protected Fleet activation record is not initialized")]
++    NotInitialized,
++
++    #[error("protected Fleet activation record is invalid: {reason}")]
++    InvalidRecord { reason: String },
++
++    #[error("protected Fleet activation is not Active")]
++    NotActive,
++
++    #[error("Fleet activation identity does not match the protected operation")]
++    IdentityMismatch,
++
++    #[error(
++        "embedded release-build identity {embedded} does not match retained Fleet activation identity {retained}"
++    )]
++    ReleaseBuildMismatch {
++        retained: ReleaseBuildId,
++        embedded: ReleaseBuildId,
++    },
++
++    #[error("Fleet activation evidence does not match protected state")]
++    EvidenceMismatch,
++
++    #[error("Fleet activation transition is invalid: {reason}")]
++    InvalidTransition { reason: String },
++}
++
++/// Audit-only fail-closed replacement for the activation storage operation family.
++pub struct FleetActivationOps;
++
++/// Type-checking token for callers that stage an activation snapshot.
++pub struct PreparedFleetActivationSnapshot;
++
++/// Exact managed-runtime identity retained at the caller boundary.
++#[expect(
++    dead_code,
++    reason = "the B1 activation-persistence ablation retains caller construction only"
++)]
++pub struct PreparedComponentRuntime {
++    pub binding: ManagedCanisterBinding,
++    pub deployment: ProtectedComponentDeployment,
++}
++
++impl FleetActivationOps {
++    pub(crate) fn initialize_root_prepared(
++        _input: FleetSubnetRootInitArgs,
++        _embedded_release_build_id: ReleaseBuildId,
++        _configured_app: &AppId,
++        _component_topology: &ComponentTopology,
++        _root_canister: candid::Principal,
++    ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn initialize_wasm_store_prepared(
++        _input: FleetSubnetWasmStoreInitArgs,
++        _embedded_release_build_id: ReleaseBuildId,
++        _wasm_store_canister: candid::Principal,
++    ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn initialize_nonroot_prepared(
++        _fleet: FleetBinding,
++        _install_id: [u8; 32],
++        _release_build_id: ReleaseBuildId,
++        _embedded_release_build_id: ReleaseBuildId,
++        _component_runtime: Option<PreparedComponentRuntime>,
++        _application_init_args: Option<Vec<u8>>,
++    ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn status(
++        _is_root: bool,
++    ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn require_release_build(
++        _embedded: ReleaseBuildId,
++    ) -> Result<(), FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn fleet_binding() -> Result<FleetBinding, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn component_runtime_status()
++    -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn component_deployment()
++    -> Result<ProtectedComponentDeployment, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn prepare_component_runtime_directory(
++        _request: ComponentRuntimeDirectoryPreparationRequest,
++        _authority_hash: [u8; 32],
++        _direct_children_hash: [u8; 32],
++    ) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn synchronize_component_runtime_directory(
++        _request: ComponentRuntimeDirectorySynchronizationRequest,
++        _authority_hash: [u8; 32],
++        _direct_children_hash: [u8; 32],
++    ) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn activate_component_runtime(
++        _request: ComponentRuntimeActivationRequest,
++        _activated_at_ns: u64,
++    ) -> Result<ComponentRuntimeActivationTransition, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn root_authority() -> Result<FleetSubnetRootAuthority, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn root_wasm_store_activation_authority()
++    -> Result<FleetActivationWasmStoreAuthorityView, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn replace_root_funding_authority(
++        _expected: &FleetSubnetRootFundingAuthority,
++        _next: FleetSubnetRootFundingAuthority,
++    ) -> Result<FleetSubnetRootAuthority, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn wasm_store_authority()
++    -> Result<FleetSubnetWasmStoreAuthority, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn require_active(_is_root: bool) -> Result<(), FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn prepare_root(
++        _cascade_manifest: Vec<FleetCascadeManifestEntry>,
++        _cascade_manifest_hash: [u8; 32],
++        _credential: FleetCredentialGenerationRef,
++        _credential_manifest: FleetCredentialManifest,
++    ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn prepare_applied_state_snapshot(
++        _hash: [u8; 32],
++    ) -> Result<PreparedFleetActivationSnapshot, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn prepare_applied_topology_snapshot(
++        _hash: [u8; 32],
++    ) -> Result<PreparedFleetActivationSnapshot, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn commit_prepared_snapshot(_prepared: PreparedFleetActivationSnapshot) {}
++
++    pub(crate) fn prepare_credential_generation(
++        _request: FleetCredentialGenerationRequest,
++    ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
++        unavailable!()
++    }
++
++    pub(crate) fn activate(
++        _request: FleetActivationRequest,
++        _is_root: bool,
++        _activated_at_ns: u64,
++    ) -> Result<FleetActivationTransition, FleetActivationOpsError> {
++        unavailable!()
++    }
++}
+diff --git a/crates/canic-core/src/ops/storage/mod.rs b/crates/canic-core/src/ops/storage/mod.rs
+index ffb6ea965..3874892f5 100644
+--- a/crates/canic-core/src/ops/storage/mod.rs
++++ b/crates/canic-core/src/ops/storage/mod.rs
+@@ -10,7 +10,8 @@ pub mod authority_restore;
+ mod canister;
+ pub mod children;
+ pub mod cycles;
+-pub mod fleet_activation;
++pub(crate) mod fleet_activation_ablation;
++pub(crate) use fleet_activation_ablation as fleet_activation;
+ pub mod fleet_admission_projection;
+ pub mod icp_refill;
+ pub mod intent;
+diff --git a/crates/canic-core/src/state_contract.rs b/crates/canic-core/src/state_contract.rs
+index ba9a425ce..8a8a6d1d5 100644
+--- a/crates/canic-core/src/state_contract.rs
++++ b/crates/canic-core/src/state_contract.rs
+@@ -439,13 +439,11 @@ fn replay_receipt_domains() -> Vec<StateDomainManifest> {
+ }
+ 
+ fn fleet_activation_domains() -> Vec<StateDomainManifest> {
+-    use crate::storage::stable::fleet_activation::{FleetActivationData, FleetActivationRecord};
+-
+     vec![state_domain(
+         "fleet_activation",
+         FLEET_ACTIVATION_ID,
+-        FleetActivationRecord::STATE_CONTRACT_NAME,
+-        FleetActivationData::STATE_CONTRACT_NAME,
++        "FleetActivationRecord",
++        "FleetActivationData",
+         55,
+         "fleet_activation_identity_and_phase_are_protected",
+     )]
+diff --git a/crates/canic-core/src/storage/stable/mod.rs b/crates/canic-core/src/storage/stable/mod.rs
+index cc467886f..164e2001e 100644
+--- a/crates/canic-core/src/storage/stable/mod.rs
++++ b/crates/canic-core/src/storage/stable/mod.rs
+@@ -5,7 +5,6 @@ pub mod blob_storage;
+ pub mod children;
+ pub mod cycles;
+ pub mod env;
+-pub mod fleet_activation;
+ pub mod fleet_admission_projection;
+ pub mod icp_refill;
+ pub mod intent;

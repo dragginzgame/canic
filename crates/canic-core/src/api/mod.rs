@@ -22,6 +22,7 @@ pub mod intent;
 pub mod lifecycle;
 pub mod memory;
 pub mod metadata;
+pub mod observability;
 pub mod placement;
 pub mod ready;
 pub mod role;

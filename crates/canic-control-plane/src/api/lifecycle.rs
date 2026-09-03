@@ -28,7 +28,8 @@ use canic_core::{
     dto::{
         component_registry::{
             ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentDirectoryPageRequest,
-            ComponentDirectoryPageResponse, ComponentRegistryPartitionRequest,
+            ComponentDirectoryPageResponse, ComponentRegistryActivePartitionRequest,
+            ComponentRegistryActivePartitionResponse, ComponentRegistryPartitionRequest,
             ComponentRegistryPartitionResponse, RootComponentAllocationRequest,
             RootComponentAllocationResponse, RootComponentAllocationStatusRequest,
             RootComponentChildAllocationRequest, RootComponentChildAllocationResponse,
@@ -860,6 +861,12 @@ impl LifecycleApi {
         request: ComponentRegistryPartitionRequest,
     ) -> Result<ComponentRegistryPartitionResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::registry_partition(request).map_err(Into::into)
+    }
+
+    pub fn component_registry_active_partition(
+        request: ComponentRegistryActivePartitionRequest,
+    ) -> Result<ComponentRegistryActivePartitionResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::active_registry_partition(request).map_err(Into::into)
     }
 
     pub fn component_directory_head(

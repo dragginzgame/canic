@@ -1,0 +1,200 @@
+diff --git a/crates/canic-macros/src/endpoint/expand/mod.rs b/crates/canic-macros/src/endpoint/expand/mod.rs
+index b99332726..78caf3058 100644
+--- a/crates/canic-macros/src/endpoint/expand/mod.rs
++++ b/crates/canic-macros/src/endpoint/expand/mod.rs
+@@ -36,6 +36,11 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn)
+         matches!(kind, EndpointKind::Update) && args.payload_max_bytes.is_some();
+ 
+     let impl_name = format_ident!("__canic_impl_{}", orig_name);
++    let response_encoder_name = format_ident!("__canic_encode_{}", orig_name);
++    let response_encoder_path = syn::LitStr::new(
++        &response_encoder_name.to_string(),
++        proc_macro2::Span::call_site(),
++    );
+     func.sig.ident = impl_name.clone();
+ 
+     if requires_decoded_auth_argument(&args.requires)
+@@ -49,15 +54,11 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn)
+     let cdk_attr = if uses_raw_update_adapter {
+         quote!()
+     } else {
+-        cdk_attr(kind, &args.forwarded)
++        cdk_attr(kind, &args.forwarded, &response_encoder_path)
+     };
+-    let candid_attr = uses_raw_update_adapter.then(|| {
+-        let method_name = args
+-            .export_name
+-            .clone()
+-            .unwrap_or_else(|| syn::LitStr::new(&orig_name.to_string(), orig_name.span()));
+-        quote!(#[::candid::candid_method(update, rename = #method_name)])
+-    });
++    let candid_attr = candid_attr(kind, args.query_mode, &args, &orig_name);
++    let response_encoder =
++        (!uses_raw_update_adapter).then(|| response_encoder(&orig_sig, &response_encoder_name));
+     let payload_registration = payload_registration(kind, &args, &orig_name);
+ 
+     let wrapper_sig = syn::Signature {
+@@ -125,6 +126,7 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn)
+         #[expect(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
+         #func
+ 
++        #response_encoder
+         #raw_update_adapter
+     }
+ }
+@@ -284,25 +286,79 @@ fn extract_args(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {
+     Ok(out)
+ }
+ 
+-fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2]) -> TokenStream2 {
++fn candid_attr(
++    kind: EndpointKind,
++    query_mode: QueryMode,
++    args: &ValidatedArgs,
++    name: &syn::Ident,
++) -> TokenStream2 {
++    let method_name = args
++        .export_name
++        .clone()
++        .unwrap_or_else(|| syn::LitStr::new(&name.to_string(), name.span()));
++    match (kind, query_mode) {
++        (EndpointKind::Query, QueryMode::Composite) => {
++            quote!(#[::candid::candid_method(composite_query, rename = #method_name)])
++        }
++        (EndpointKind::Query, QueryMode::Plain) => {
++            quote!(#[::candid::candid_method(query, rename = #method_name)])
++        }
++        (EndpointKind::Update, _) => {
++            quote!(#[::candid::candid_method(update, rename = #method_name)])
++        }
++    }
++}
++
++fn cdk_attr(
++    kind: EndpointKind,
++    forwarded: &[TokenStream2],
++    response_encoder_path: &syn::LitStr,
++) -> TokenStream2 {
+     match kind {
+         EndpointKind::Query => {
+             if forwarded.is_empty() {
+-                quote!(#[::canic::__internal::cdk::query])
++                quote!(#[::canic::__internal::cdk::query(
++                    hidden = true,
++                    encode_with = #response_encoder_path,
++                )])
+             } else {
+-                quote!(#[::canic::__internal::cdk::query(#(#forwarded),*)])
++                quote!(#[::canic::__internal::cdk::query(
++                    hidden = true,
++                    encode_with = #response_encoder_path,
++                    #(#forwarded),*
++                )])
+             }
+         }
+         EndpointKind::Update => {
+             if forwarded.is_empty() {
+-                quote!(#[::canic::__internal::cdk::update])
++                quote!(#[::canic::__internal::cdk::update(
++                    hidden = true,
++                    encode_with = #response_encoder_path,
++                )])
+             } else {
+-                quote!(#[::canic::__internal::cdk::update(#(#forwarded),*)])
++                quote!(#[::canic::__internal::cdk::update(
++                    hidden = true,
++                    encode_with = #response_encoder_path,
++                    #(#forwarded),*
++                )])
+             }
+         }
+     }
+ }
+ 
++fn response_encoder(signature: &Signature, name: &syn::Ident) -> TokenStream2 {
++    let input = match &signature.output {
++        syn::ReturnType::Default => quote!(),
++        syn::ReturnType::Type(_, ty) => quote!(_: #ty),
++    };
++    quote! {
++        #[inline(never)]
++        fn #name(#input) -> ::std::vec::Vec<u8> {
++            ::std::hint::black_box(::std::vec![0_u8])
++        }
++    }
++}
++
+ fn raw_update_adapter(
+     signature: &Signature,
+     name: &syn::Ident,
+@@ -347,17 +403,6 @@ fn raw_update_adapter(
+     } else {
+         quote!(#name(#(#names),*))
+     };
+-    let encode = match &signature.output {
+-        syn::ReturnType::Default => {
+-            quote!(::candid::utils::encode_one(()))
+-        }
+-        syn::ReturnType::Type(_, ty) => match &**ty {
+-            syn::Type::Tuple(tuple) if tuple.elems.len() > 1 => {
+-                quote!(::candid::utils::encode_args(__canic_result))
+-            }
+-            _ => quote!(::candid::utils::encode_one(__canic_result)),
+-        },
+-    };
+     let execute = quote! {
+         let __canic_payload_len =
+             ::canic::__internal::cdk::raw::msg_arg_data_size();
+@@ -374,11 +419,8 @@ fn raw_update_adapter(
+         );
+         #decode
+         let __canic_result = #invoke;
+-        let __canic_reply = #encode.unwrap_or_else(|error| {
+-            ::canic::__internal::cdk::trap(format!(
+-                "failed to encode update response: {error}"
+-            ))
+-        });
++        let _ = __canic_result;
++        let __canic_reply = ::std::hint::black_box(::std::vec![0_u8]);
+         ::canic::__internal::cdk::api::msg_reply(__canic_reply);
+     };
+     let body = if wrapper_async {
+diff --git a/crates/canic-macros/src/endpoint/expand/tests.rs b/crates/canic-macros/src/endpoint/expand/tests.rs
+index 9f36a78f2..8b136d72e 100644
+--- a/crates/canic-macros/src/endpoint/expand/tests.rs
++++ b/crates/canic-macros/src/endpoint/expand/tests.rs
+@@ -43,9 +43,13 @@ fn default_update_expansion_uses_runtime_fallback_without_registration() {
+     );
+ 
+     let expanded = expand(EndpointKind::Update, args, func).to_string();
++    let compact = expanded.split_whitespace().collect::<String>();
+ 
+     assert!(!expanded.contains("register_update_limit"));
+     assert!(!expanded.contains("__canic_ctor_payload_limit_ping"));
++    assert!(compact.contains("candid_method(update,rename=\"ping\")"));
++    assert!(compact.contains("update(hidden=true,encode_with=\"__canic_encode_ping\","));
++    assert!(compact.contains("fn__canic_encode_ping"));
+ }
+ 
+ #[test]
+@@ -78,6 +82,8 @@ fn explicit_update_payload_limit_uses_raw_predecode_adapter() {
+     assert!(size < allocation);
+     assert!(allocation < copy);
+     assert!(copy < decode);
++    assert!(!compact.contains("encode_one"));
++    assert!(!compact.contains("encode_args"));
+     assert!(!compact.contains("::canic::__internal::cdk::update"));
+ }
+ 
+@@ -95,7 +101,10 @@ fn composite_query_expansion_forwards_cdk_attr_and_call_kind() {
+     let expanded = expand(EndpointKind::Query, args, func).to_string();
+     let compact = expanded.split_whitespace().collect::<String>();
+ 
+-    assert!(compact.contains("query(composite=true)"));
++    assert!(
++        compact.contains("query(hidden=true,encode_with=\"__canic_encode_ping\",composite=true)")
++    );
++    assert!(compact.contains("candid_method(composite_query,rename=\"ping\")"));
+     assert!(compact.contains("::canic::__internal::cdk::query"));
+     assert!(compact.contains("EndpointCallKind::QueryComposite"));
+ }

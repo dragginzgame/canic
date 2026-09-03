@@ -23,9 +23,9 @@ pub use generate::{
     initialize_fresh_estate_seed,
 };
 pub use inventory::{
-    CurrentFleetInventory, CurrentFleetInventoryError, CurrentFleetRegistry,
-    CurrentFleetResolution, CurrentFleetTopology, read_current_fleet_inventory,
-    resolve_current_fleet,
+    CurrentFleetDiscovery, CurrentFleetInventory, CurrentFleetInventoryError, CurrentFleetRegistry,
+    CurrentFleetResolution, CurrentFleetSummary, CurrentFleetTopology, discover_current_fleets,
+    read_last_converged_fleet_inventory, resolve_current_fleet,
 };
 #[doc(hidden)]
 pub use json::report_json_value;

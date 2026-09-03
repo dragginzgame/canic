@@ -1,7 +1,7 @@
 //! Module: ids::fleet
 //!
 //! Responsibility: identify one installed Fleet independently of its display name.
-//! Does not own: Fleet ID generation, host catalog publication, or activation state.
+//! Does not own: Fleet ID generation, host terminal discovery, or activation state.
 //! Boundary: IDs use canonical lowercase hexadecimal text; names are validated labels.
 
 use super::{AppId, CanonicalNetworkId};

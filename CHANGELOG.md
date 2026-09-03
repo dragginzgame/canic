@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.6` repairs active child creation and terminal Fleet status, backup and
+  descendant authority, protects exact observability behind controller-bound
+  relays, and advances immutable B1 attribution without removing safety-
+  critical distributed validation.
 - `0.110.5` fixes terminal Fleet inventory validation across source-to-
   published Registry transitions, passively re-observes delayed Root-owned
   balances without repeating effects, prevents Component activation before

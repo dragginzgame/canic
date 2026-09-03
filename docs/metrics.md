@@ -1,7 +1,16 @@
 # Canic Metrics Reference
 
-`canic_status::Metrics { kind, page }` returns a paginated `Page<MetricEntry>`.
-Rows are sorted by `labels`, then `principal`, before pagination.
+`canic_status::Metrics { kind, page }` is controller-only and returns a
+paginated `Page<MetricEntry>`. Rows are sorted by `labels`, then `principal`,
+before pagination. This guard is intentional: runtime rows include exact
+instruction totals, timer delays, cycle-funding values, and principal-scoped
+activity that should not be available to anonymous probes.
+
+For a managed Fleet, use `canic info metrics`. Human operators do not become
+controllers of every Component; the CLI authenticates to the Fleet Subnet
+Root, which relays the bounded observation to the Root-controlled target. A
+direct `canic_status::Metrics` query remains appropriate for a canister's own
+controller.
 
 Each row has:
 
@@ -175,8 +184,8 @@ project the refill record allocation.
 
 The runtime still records detailed internal counters for management-canister
 calls and coarse system operations. Those tables
-are intentionally not exposed as separate public `MetricsKind` values because
-they overlap the public operator tiers:
+are intentionally not exposed as separate `MetricsKind` values because they
+overlap the protected operator tiers:
 
 - Management-call progress is visible through `platform_call` and higher-level
   `canister_ops` rows.

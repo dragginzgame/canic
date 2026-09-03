@@ -3,12 +3,12 @@
 set -euo pipefail
 
 METHOD_ID="CANIC-WASM-001"
-METHOD_VERSION="5"
+METHOD_VERSION="6"
 METHOD_TAG="$METHOD_ID/v$METHOD_VERSION"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
-AUDIT_STEM="wasm-footprint-v5"
+AUDIT_STEM="wasm-footprint-v6"
 PROFILE_KEY="release-clean-a+release-clean-b+debug"
-EXPECTED_ROSTER_KEY="app,test,user_hub,scale_hub,user_shard,scale_replica,root,fleet_coordinator,wasm_store"
+EXPECTED_ROSTER_KEY="app,index_hub,test,user_hub,scale_hub,index_child,user_shard,scale_replica,root,fleet_coordinator,wasm_store"
 
 METHOD_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PRODUCT_ROOT_INPUT="${WASM_AUDIT_PRODUCT_ROOT:-}"
@@ -309,6 +309,7 @@ if [[ "$ROSTER_KEY" != "$EXPECTED_ROSTER_KEY" ]]; then
     echo "frozen Wasm audit roster drifted: expected $EXPECTED_ROSTER_KEY; found $ROSTER_KEY" >&2
     exit 2
 fi
+ROLE_COUNT="${#CANISTERS[@]}"
 
 METHOD_FINGERPRINT="$(root_independent_composite)"
 DEFINITION_FINGERPRINT="$(file_hash "$METHOD_ROOT/$DEFINITION_PATH")"
@@ -378,7 +379,7 @@ while IFS= read -r candidate_method_path; do
     fi
 done < <(
     find "$METHOD_ROOT/docs/audits/reports" -type f \
-        -path '*/artifacts/wasm-footprint-v5*/method.json' -print 2>/dev/null | sort -r
+        -path '*/artifacts/wasm-footprint-v6*/method.json' -print 2>/dev/null | sort -r
 )
 
 build_profile release release-clean-a "$RUN_TMP/target-release"
@@ -577,7 +578,7 @@ RISK_SCORE=0
 declare -a RISK_DRIVERS=()
 if [[ "$BASELINE_REPORT" == "N/A" ]]; then
     RISK_SCORE=$((RISK_SCORE + 2))
-    RISK_DRIVERS+=("no compatible v5 predecessor: +2")
+    RISK_DRIVERS+=("no compatible v6 predecessor: +2")
 fi
 if awk -v value="$component_spread_ratio" 'BEGIN { exit !(value >= 1.25) }'; then
     RISK_SCORE=$((RISK_SCORE + 2))
@@ -616,7 +617,7 @@ else
     RUN_RESULT="pass"
 fi
 if [[ "$BASELINE_REPORT" == "N/A" ]]; then
-    COMPARABILITY="first-v5-baseline"
+    COMPARABILITY="first-v6-baseline"
     ORIGINAL_BASELINE_REPORT="$REPORT_RELATIVE"
 else
     COMPARABILITY="comparable to immediate compatible predecessor"
@@ -721,7 +722,7 @@ EOF
 COMPLETED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 mkdir -p "$DAY_DIR"
 cat >"$REPORT_PATH" <<EOF
-# Wasm Footprint Audit v5 - $RUN_DATE
+# Wasm Footprint Audit v6 - $RUN_DATE
 
 ## Verdict
 
@@ -730,19 +731,19 @@ cat >"$REPORT_PATH" <<EOF
 - Comparability: \`$COMPARABILITY\`.
 - Authoritative risk score: \`$RISK_SCORE/10\`.
 
-V5 completed two isolated clean release builds and one debug build for every frozen configured role
+V6 completed two isolated clean release builds and one debug build for every frozen configured role
 plus Fleet Coordinator and Wasm Store through Canic's authoritative host
 artifact builder. It did not invoke direct Cargo
 Wasm compilation, infer a target-directory artifact, or retain a competing
 pre-optimization Wasm. The governed release transform supplies its own exact
-before/after measurements. Historical v4 evidence remains valid but is not
-comparable with v5.
+before/after measurements. Historical v5 evidence remains valid but is not
+comparable with v6 because it predates the indexed Hub and child roles.
 
 ## Scope And Identity
 
 - Definition: \`$DEFINITION_PATH\`.
 - Compared predecessor: \`$BASELINE_REPORT\`.
-- Original v5 baseline: \`$ORIGINAL_BASELINE_REPORT\`.
+- Original v6 baseline: \`$ORIGINAL_BASELINE_REPORT\`.
 - Release anchor: \`$RELEASE_ANCHOR\`.
 - Source commit: \`$PRODUCT_COMMIT\`.
 - Source tree: \`$SOURCE_TREE_HASH\`.
@@ -878,10 +879,10 @@ nor duplicated here.
 
 ## Findings
 
-- Method revision: v5 qualifies path-confined role-local optimizer records and
-  two-clean-build determinism across the full roster; valid v4 history cannot
-  baseline v5.
-- New product findings: none. The first v5 measurement is a baseline, and no
+- Method revision: v6 retains path-confined role-local optimizer records and
+  two-clean-build determinism while adding the configured indexed Hub and
+  child roles; valid v5 history cannot baseline v6.
+- New product findings: none. The first v6 measurement is a baseline, and no
   comparable regression exists to attribute.
 
 ## Required Checklist
@@ -889,27 +890,27 @@ nor duplicated here.
 | Requirement | Result | Evidence |
 | --- | --- | --- |
 | clean isolated product snapshot | PASS | linked worktree clean before; tracked-clean after |
-| canonical release artifacts | PASS | complete nine-role roster built through host \`build_artifact\` |
+| canonical release artifacts | PASS | complete $ROLE_COUNT-role roster built through host \`build_artifact\` |
 | deterministic clean release builds | PASS | exact Wasm, gzip, Candid, and transform metrics match across isolated targets |
-| canonical debug artifacts | PASS | same nine roles and authority |
+| canonical debug artifacts | PASS | same $ROLE_COUNT roles and authority |
 | governed Binaryen optimization | PASS | pinned tool plus before/after raw, gzip, code, data, and function metrics for every role |
 | Candid/export/feature parity | PASS | release transform rejects before replacing an artifact if any governed invariant changes |
 | builder gzip integrity | PASS | every gzip decodes to its paired canonical Wasm |
 | machine-readable sizes | PASS | \`size-metrics.tsv\` |
-| \`ic-wasm info\` | PASS | nine release artifacts parsed |
+| \`ic-wasm info\` | PASS | $ROLE_COUNT release artifacts parsed |
 | \`twiggy top\` and retained \`top\` | PASS | compact hotspot columns retained |
 | \`twiggy dominators\` | PASS | bounded role excerpts retained |
 | \`twiggy monos\` | PASS | bounded role excerpts retained |
 | compatible predecessor selection | PASS | exact method/roster/profile/path/tool keys; \`$BASELINE_REPORT\` |
-| direct Cargo/pre-optimization fallback absent | PASS | v5 invokes only the host artifact authority |
+| direct Cargo/pre-optimization fallback absent | PASS | v6 invokes only the host artifact authority |
 | source mutation | PASS | no tracked mutation or unexpected untracked path |
 
 ## Verification Readout
 
 | Command/check | Result | Notes |
 | --- | --- | --- |
-| \`cargo run --offline --locked -p canic-host --example build_artifact -- <role> release ...\` | PASS | nine ordered roles, repeated from isolated clean targets |
-| same authoritative command with \`debug\` | PASS | nine ordered roles |
+| \`cargo run --offline --locked -p canic-host --example build_artifact -- <role> release ...\` | PASS | $ROLE_COUNT ordered roles, repeated from isolated clean targets |
+| same authoritative command with \`debug\` | PASS | $ROLE_COUNT ordered roles |
 | \`gzip -t\` plus decoded SHA-256 equality | PASS | release and debug artifacts |
 | \`cmp\` plus SHA-256 identity | PASS | two clean canonical release builds, all roles |
 | \`ic-wasm <release.wasm> info\` | PASS | all roles |

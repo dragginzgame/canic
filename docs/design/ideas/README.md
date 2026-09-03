@@ -15,6 +15,7 @@ Supporting implementation evidence does not belong here.
 - `cross-subnet-data-transport-groundwork/`
 - `declarative-authentication-profiles/`
 - `delulu-canyon-integration-opportunities/`
+- `demand-driven-canister-pool-maintenance/`
 - `estate-budget-replenishment/`
 - `fleet-observatory/`
 - `immutable-test-checkout-lease/`

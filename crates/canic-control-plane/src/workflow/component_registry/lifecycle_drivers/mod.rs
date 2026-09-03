@@ -12,6 +12,8 @@ thread_local! {
         const { RefCell::new(BTreeSet::new()) };
 }
 
+const MAX_COMPONENT_CHILD_ALLOCATION_PHASES_PER_INVOCATION: usize = 16;
+
 /// Privately advance one accepted ordinary or peer top-level allocation.
 pub fn schedule_component_allocation(operation_id: [u8; 32]) {
     schedule_component_allocation_after(operation_id, Duration::ZERO);
@@ -277,6 +279,25 @@ async fn advance_component_child_allocation_once(
             Ok(true)
         }
     }
+}
+
+/// Complete one retained active-parent child allocation within its requesting call.
+pub(in crate::workflow) async fn complete_component_child_allocation(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+) -> Result<(), InternalError> {
+    for _ in 0..MAX_COMPONENT_CHILD_ALLOCATION_PHASES_PER_INVOCATION {
+        if Box::pin(advance_component_child_allocation_once(
+            component,
+            operation_id,
+        ))
+        .await?
+        {
+            return Ok(());
+        }
+    }
+
+    Err(InternalError::unavailable())
 }
 
 /// Privately advance one accepted top-level Component removal.

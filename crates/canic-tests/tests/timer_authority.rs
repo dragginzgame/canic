@@ -7,7 +7,7 @@ use canic::{
     dto::{
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
-        role::MetricsStatusRequest,
+        role::{CycleBalanceStatusResponse, MetricsStatusRequest},
         runtime::{
             CanicRuntimeStatus, RuntimeCheckStatus, TimerProcessCondition, TimerRegistrationStatus,
             TimerSchedulingMode,
@@ -25,14 +25,47 @@ const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 
 #[derive(CandidType)]
 enum RoleStatusRequest {
+    CycleBalance,
     Metrics(MetricsStatusRequest),
     Runtime,
 }
 
 #[derive(CandidType, Deserialize)]
 enum RoleStatusResponse {
+    CycleBalance(CycleBalanceStatusResponse),
     Metrics(Page<MetricEntry>),
     Runtime(Box<CanicRuntimeStatus>),
+}
+
+#[test]
+fn exact_cycles_and_runtime_metrics_reject_non_controller() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister_id = fixture.install_runtime_probe_canister();
+
+    for request in [
+        RoleStatusRequest::CycleBalance,
+        RoleStatusRequest::Metrics(MetricsStatusRequest {
+            kind: MetricsKind::Runtime,
+            page: PageRequest {
+                limit: 1,
+                offset: 0,
+            },
+        }),
+    ] {
+        let response: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
+            canister_id,
+            fixture.root,
+            protocol::CANIC_STATUS,
+            (request,),
+        );
+        let Err(error) = response else {
+            panic!("non-controller observability must be rejected");
+        };
+        assert_eq!(
+            error.code(),
+            canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+        );
+    }
 }
 
 #[test]

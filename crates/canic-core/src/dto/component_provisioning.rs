@@ -375,6 +375,7 @@ pub struct RootComponentActivationEvidence {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RootProvisionedGroupMember {
+    pub member_operation_id: [u8; 32],
     pub member_path: ComponentGroupMemberPath,
     pub component_spec: ComponentSpecId,
     pub purpose: ComponentDeploymentPurpose,
