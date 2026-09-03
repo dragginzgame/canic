@@ -524,6 +524,8 @@ pub enum IcpEnsurePlatformError {
 pub struct IcpEnsurePlatform {
     desired: DesiredFleet,
     icp: IcpCli,
+    initial_observation_delay: Duration,
+    maximum_observation_delay: Duration,
     recovery_reinstalls: RefCell<BTreeSet<String>>,
     root: PathBuf,
 }
@@ -531,13 +533,18 @@ pub struct IcpEnsurePlatform {
 const INITIAL_PROTOCOL_OBSERVATION_DELAY: Duration = Duration::from_millis(250);
 const MAXIMUM_PROTOCOL_OBSERVATION_DELAY: Duration = Duration::from_secs(5);
 
-fn protocol_observation_delay(consecutive_unchanged_observations: u32) -> Duration {
+fn protocol_observation_delay(
+    consecutive_unchanged_observations: u32,
+    initial_observation_delay: Duration,
+    maximum_observation_delay: Duration,
+) -> Duration {
     let exponent = consecutive_unchanged_observations.saturating_sub(1).min(5);
     let multiplier = 1_u32.checked_shl(exponent).unwrap_or(u32::MAX);
-    INITIAL_PROTOCOL_OBSERVATION_DELAY
+    initial_observation_delay
         .checked_mul(multiplier)
         .unwrap_or(MAXIMUM_PROTOCOL_OBSERVATION_DELAY)
         .min(MAXIMUM_PROTOCOL_OBSERVATION_DELAY)
+        .min(maximum_observation_delay)
 }
 
 #[derive(Clone, Copy)]
@@ -554,6 +561,8 @@ impl IcpEnsurePlatform {
         Self {
             desired,
             icp,
+            initial_observation_delay: INITIAL_PROTOCOL_OBSERVATION_DELAY,
+            maximum_observation_delay: MAXIMUM_PROTOCOL_OBSERVATION_DELAY,
             recovery_reinstalls: RefCell::new(BTreeSet::new()),
             root: root.to_path_buf(),
         }
@@ -567,6 +576,19 @@ impl IcpEnsurePlatform {
     #[must_use]
     pub fn with_local_replica(mut self, target: LocalReplicaTarget) -> Self {
         self.icp = self.icp.with_local_replica(Some(target));
+        self
+    }
+
+    /// Select passive observation pacing without changing retry or stall bounds.
+    ///
+    /// Production callers retain the default five-second cap. Deterministic
+    /// test replicas may select shorter fixed delays while retaining every
+    /// production observation and terminal predicate.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_observation_delay_bounds(mut self, initial: Duration, maximum: Duration) -> Self {
+        self.initial_observation_delay = initial.min(maximum);
+        self.maximum_observation_delay = maximum;
         self
     }
 
@@ -1841,6 +1863,8 @@ impl EnsurePlatform for IcpEnsurePlatform {
     ) {
         thread::sleep(protocol_observation_delay(
             consecutive_unchanged_observations,
+            self.initial_observation_delay,
+            self.maximum_observation_delay,
         ));
     }
 
@@ -1851,6 +1875,8 @@ impl EnsurePlatform for IcpEnsurePlatform {
     ) {
         thread::sleep(protocol_observation_delay(
             consecutive_retained_observations,
+            self.initial_observation_delay,
+            self.maximum_observation_delay,
         ));
     }
 
@@ -3088,12 +3114,39 @@ mod tests {
 
     #[test]
     fn protocol_observation_delay_uses_bounded_exponential_backoff() {
-        assert_eq!(protocol_observation_delay(0), Duration::from_millis(250));
-        assert_eq!(protocol_observation_delay(1), Duration::from_millis(250));
-        assert_eq!(protocol_observation_delay(2), Duration::from_millis(500));
-        assert_eq!(protocol_observation_delay(5), Duration::from_secs(4));
-        assert_eq!(protocol_observation_delay(6), Duration::from_secs(5));
-        assert_eq!(protocol_observation_delay(u32::MAX), Duration::from_secs(5));
+        let production_cap = MAXIMUM_PROTOCOL_OBSERVATION_DELAY;
+        assert_eq!(
+            protocol_observation_delay(0, INITIAL_PROTOCOL_OBSERVATION_DELAY, production_cap),
+            Duration::from_millis(250)
+        );
+        assert_eq!(
+            protocol_observation_delay(1, INITIAL_PROTOCOL_OBSERVATION_DELAY, production_cap),
+            Duration::from_millis(250)
+        );
+        assert_eq!(
+            protocol_observation_delay(2, INITIAL_PROTOCOL_OBSERVATION_DELAY, production_cap),
+            Duration::from_millis(500)
+        );
+        assert_eq!(
+            protocol_observation_delay(5, INITIAL_PROTOCOL_OBSERVATION_DELAY, production_cap),
+            Duration::from_secs(4)
+        );
+        assert_eq!(
+            protocol_observation_delay(6, INITIAL_PROTOCOL_OBSERVATION_DELAY, production_cap),
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            protocol_observation_delay(
+                u32::MAX,
+                INITIAL_PROTOCOL_OBSERVATION_DELAY,
+                production_cap
+            ),
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            protocol_observation_delay(u32::MAX, Duration::from_secs(1), Duration::from_secs(1)),
+            Duration::from_secs(1)
+        );
     }
 
     #[cfg(unix)]

@@ -1,0 +1,43 @@
+[app]
+name = "test"
+init_mode = "enabled"
+
+[roles.root]
+kind = "root"
+package = "../root"
+
+[roles.user_hub]
+kind = "canister"
+package = "../user_hub"
+fleet_admission = true
+
+[roles.user_shard]
+kind = "canister"
+package = "../user_shard"
+fleet_admission = true
+
+[component_specs.users]
+component_role = "user_hub"
+maximum_instances = 1
+
+[component_specs.users.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.initial_shards = 1
+policy.max_shards = 2
+
+[component_specs.users.children.user_shard]
+kind = "shard"
+
+[component_specs.users.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 2
+
+[component_groups.qualification.components.users]
+component_spec = "users"
+
+[component_group_deployments.qualification]
+component_group = "qualification"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1

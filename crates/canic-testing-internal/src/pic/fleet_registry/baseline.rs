@@ -7,7 +7,7 @@ use super::build::{
     build_mainnet_five_component_refill_wasms, build_mainnet_refill_wasms, build_management_pic,
     build_toko_shaped_singleton_cycles_ledger_wasm, build_two_root_pic,
     five_component_root_canister_config_path, five_trillion_component_root_canister_config_path,
-    initial_shard_root_canister_config_path,
+    initial_shard_root_canister_config_path, literal_zero_initial_shard_config_path,
 };
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
@@ -259,6 +259,8 @@ mod tests {
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
     const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
     #[cfg(test)]
+    const LITERAL_ZERO_OBSERVATION_DELAY: Duration = Duration::from_millis(25);
+    #[cfg(test)]
     const ROOT_REMOVAL_MAX_SIMULATED_SECONDS: usize = 512;
     #[cfg(test)]
     const ROOT_REMOVAL_TICKS_PER_SECOND: usize = 4;
@@ -270,6 +272,17 @@ mod tests {
     const QUALIFICATION_RESERVE_CYCLES: u128 = 10_000_000_000_000;
     #[cfg(test)]
     const QUALIFICATION_WORKLOAD_PACKAGE: &str = "payload_limit_probe";
+
+    #[cfg(test)]
+    struct TestDirectoryCleanup(PathBuf);
+
+    #[cfg(test)]
+    impl Drop for TestDirectoryCleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[derive(CandidType)]
     enum RootCommandFragment {
         #[cfg(test)]
@@ -2965,9 +2978,10 @@ exec icp "$@"
         reason = "one governed control-plane journey keeps Prepared Root inspection, controller finalization, Component convergence, conservation and terminal replay together"
     )]
     fn literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay() {
+        let journey_started_at = Instant::now();
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config_path = initial_shard_root_canister_config_path(&workspace_root);
+        let config_path = literal_zero_initial_shard_config_path(&workspace_root);
         let config =
             AppConfigSnapshot::load(&config_path).expect("load initial-child Component config");
         let readiness_floor = config
@@ -2995,6 +3009,7 @@ exec icp "$@"
         }
         std::fs::create_dir_all(&adapter_root)
             .expect("create CANIC-121 production-adapter fixture");
+        let _adapter_root_cleanup = TestDirectoryCleanup(adapter_root.clone());
         let release_artifacts = build_literal_zero_release_artifacts(
             &workspace_root,
             &adapter_root,
@@ -3017,7 +3032,7 @@ exec icp "$@"
             .first()
             .expect("one application Subnet");
 
-        let pool_count = 7_usize;
+        let pool_count = 3_usize;
         let pool_creation_funding = readiness_floor
             .checked_add(3_000_000_000_000)
             .expect("literal-zero pool funding fits u128");
@@ -3212,7 +3227,13 @@ exec icp "$@"
             icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
             &adapter_root,
         )
-        .with_local_replica(local_replica.clone());
+        .with_local_replica(local_replica.clone())
+        .with_observation_delay_bounds(
+            LITERAL_ZERO_OBSERVATION_DELAY,
+            LITERAL_ZERO_OBSERVATION_DELAY,
+        );
+        let infrastructure_started_at = Instant::now();
+        super::super::fixture::progress("planning literal-zero infrastructure");
         let planned = fleet_ensure_workflow::plan(
             &adapter_root,
             &desired,
@@ -3267,7 +3288,11 @@ exec icp "$@"
             icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
             &adapter_root,
         )
-        .with_local_replica(local_replica.clone());
+        .with_local_replica(local_replica.clone())
+        .with_observation_delay_bounds(
+            LITERAL_ZERO_OBSERVATION_DELAY,
+            LITERAL_ZERO_OBSERVATION_DELAY,
+        );
         let resumed = fleet_ensure_workflow::apply(
             &adapter_root,
             &desired,
@@ -3296,6 +3321,10 @@ exec icp "$@"
             u64::try_from(3 + pool_count).expect("literal-zero create count fits u64"),
             "Create replay must not debit twice"
         );
+        progress_elapsed(
+            "literal-zero infrastructure replay complete",
+            infrastructure_started_at,
+        );
 
         // Root pool maintenance is an internal same-operation owner, not a host effect.
         reset_prepaid_pool_assets_for_count_as(&pic, root, operator, pool_count);
@@ -3314,7 +3343,13 @@ exec icp "$@"
             icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
             &adapter_root,
         )
-        .with_local_replica(local_replica.clone());
+        .with_local_replica(local_replica.clone())
+        .with_observation_delay_bounds(
+            LITERAL_ZERO_OBSERVATION_DELAY,
+            LITERAL_ZERO_OBSERVATION_DELAY,
+        );
+        let protocol_started_at = Instant::now();
+        super::super::fixture::progress("converging literal-zero control plane");
         let protocol_plan = fleet_ensure_workflow::plan(
             &adapter_root,
             &desired,
@@ -3344,6 +3379,7 @@ exec icp "$@"
         )
         .expect("apply complete current protocol through production adapter");
         assert!(protocol_terminal.terminal);
+        progress_elapsed("literal-zero control plane converged", protocol_started_at);
 
         let terminal_pool_statuses = pools
             .iter()
@@ -3357,16 +3393,16 @@ exec icp "$@"
                 .iter()
                 .filter(|status| status.module_hash.is_some())
                 .count(),
-            5,
-            "five exact imported pool identities must become the top-level and initial-child Component Workloads"
+            2,
+            "two exact imported pool identities must become the top-level and initial-child Component Workloads"
         );
         assert_eq!(
             terminal_pool_statuses
                 .iter()
                 .filter(|status| status.module_hash.is_none())
                 .count(),
-            2,
-            "two exact imported pool identities must remain Ready module-free assets"
+            1,
+            "one exact imported pool identity must remain a Ready module-free asset"
         );
         for status in &terminal_pool_statuses {
             assert_eq!(status.settings.controllers, vec![root]);
@@ -3395,7 +3431,13 @@ exec icp "$@"
             icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
             &adapter_root,
         )
-        .with_local_replica(local_replica);
+        .with_local_replica(local_replica)
+        .with_observation_delay_bounds(
+            LITERAL_ZERO_OBSERVATION_DELAY,
+            LITERAL_ZERO_OBSERVATION_DELAY,
+        );
+        let replay_started_at = Instant::now();
+        super::super::fixture::progress("proving literal-zero terminal replay");
         let replay_plan = fleet_ensure_workflow::plan(
             &adapter_root,
             &desired,
@@ -3425,9 +3467,14 @@ exec icp "$@"
             pool_count,
             "protocol convergence and terminal replay must not repeat controller effects"
         );
+        progress_elapsed("literal-zero terminal replay complete", replay_started_at);
         pic.stop_live();
         std::fs::remove_dir_all(adapter_root)
             .expect("remove literal-zero production-adapter fixture");
+        progress_elapsed(
+            "literal-zero production-adapter journey complete",
+            journey_started_at,
+        );
     }
 
     #[cfg(test)]

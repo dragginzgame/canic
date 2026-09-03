@@ -3430,6 +3430,17 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         registry.clone(),
     )
     .expect("retry child reservation");
+    assert_eq!(
+        RootComponentRegistryStore::registry_components(),
+        vec![component],
+        "one logical Component must be enumerated once regardless of its retained child rows"
+    );
+    assert_eq!(
+        ComponentRegistryOps::child_allocation_by_operation([44; 32])
+            .expect("lookup child by exact operation")
+            .expect("retained child allocation"),
+        repeated
+    );
     let mut retained_reservation = RootComponentRegistryStore::export()
         .child_allocations
         .into_iter()

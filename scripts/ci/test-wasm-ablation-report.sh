@@ -35,7 +35,7 @@ LISTING="$(bash "$RUNNER" --list)"
 [[ "$(printf '%s\n' "$LISTING" | wc -l)" -eq 19 ]]
 printf '%s\n' "$LISTING" | rg -q $'^01\tb1-01-current-baseline\tready\tnone\t'
 printf '%s\n' "$LISTING" | rg -q $'^02\tb1-02-global-storage-registration\tready\tpatch\tcanonical$'
-printf '%s\n' "$LISTING" | rg -q $'^03\tb1-03-activation-record-codecs\tspecified\tpatch\tcanonical$'
+printf '%s\n' "$LISTING" | rg -q $'^03\tb1-03-activation-record-codecs\tready\tpatch\tcanonical$'
 printf '%s\n' "$LISTING" | rg -q $'^04\tb1-04-authorization-record-codecs\tspecified\tpatch\tcanonical,runtime_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^05\tb1-05-relevant-cbor-stub\tspecified\tpatch\tcanonical,runtime_probe,blob_storage_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^06\tb1-06-unconditional-recovery-dispatch\tspecified\tpatch\tcanonical,runtime_probe$'
@@ -53,7 +53,6 @@ if printf '%s\n' "$LISTING" | rg -qi 'toko'; then
 fi
 
 for experiment in \
-    b1-03-activation-record-codecs \
     b1-04-authorization-record-codecs \
     b1-05-relevant-cbor-stub \
     b1-06-unconditional-recovery-dispatch \
