@@ -175,6 +175,12 @@ before Root records the activation response. The Root therefore cannot publish
 an Active zero-descendant Hub whose required initial-child bootstrap failed, and
 lost activation responses adopt only the exact already-active runtime receipt.
 
+Component retirement keeps the committed runtime operation resolvable during
+the exact validated `Draining` interval before a quiescence intent exists. This
+allows the Root to converge the final member Directory while the Component is
+still runnable; quiescence intent, a stopped receipt and removal all close that
+runtime-operation path again.
+
 The governed Prepared-Root journey reaches three top-level Components plus
 configured sharding and scaling children, terminal Component membership and an
 effect-free replay. A second governed literal-zero-estate journey now drives the

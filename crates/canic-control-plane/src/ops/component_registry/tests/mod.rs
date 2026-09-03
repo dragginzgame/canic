@@ -4821,6 +4821,58 @@ fn active_single_component_registry_data(
     data
 }
 
+#[test]
+fn prequiescence_draining_component_retains_committed_runtime_operation() {
+    RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    let root = root_binding();
+    let release_set = FleetSubnetRootReleaseSet {
+        release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([8; 32])),
+        manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
+    };
+    let component = ComponentInstanceId::from_generated_bytes([97; 32]);
+    let canister = candid::Principal::from_slice(&[98; 29]);
+    RootComponentRegistryStore::import(active_single_component_registry_data(
+        &root,
+        release_set,
+        component,
+        canister,
+    ));
+    let active = ComponentRegistryOps::partition(component)
+        .expect("active partition read")
+        .expect("active partition");
+    let binding = ManagedCanisterBinding::Component(active.binding.clone());
+    assert_eq!(
+        ComponentRegistryOps::managed_runtime_operation_id(&binding)
+            .expect("active runtime operation"),
+        [12; 32]
+    );
+
+    let draining = ComponentRegistryOps::begin_component_draining(
+        component,
+        [99; 32],
+        ComponentRegistryHead {
+            component,
+            revision: active.revision,
+            content_hash: active.content_hash,
+        },
+        100,
+        16_777_216,
+        fleet_directory(&root),
+    )
+    .expect("begin Component draining");
+    assert!(draining.quiescence.is_none());
+    assert_eq!(
+        ComponentRegistryOps::managed_runtime_operation_id(&binding)
+            .expect("pre-quiescence draining runtime operation"),
+        [12; 32]
+    );
+
+    let (quiescent, _, _) = import_empty_quiescent_component();
+    let quiescent_binding = ManagedCanisterBinding::Component(quiescent.binding);
+    assert!(ComponentRegistryOps::managed_runtime_operation_id(&quiescent_binding).is_err());
+    RootComponentRegistryStore::import(RootComponentRegistryData::default());
+}
+
 fn import_empty_quiescent_component() -> (
     ComponentRegistryPartitionView,
     RootComponentDrainingView,

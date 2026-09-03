@@ -4968,21 +4968,36 @@ fn component_runtime_allocation(
     else {
         return Err(InternalError::invariant());
     };
+    let committed_runtime_is_terminal = commitment.runtime_activated
+        && commitment
+            .membership
+            .as_ref()
+            .is_some_and(|membership| membership.directory_synchronized);
     let lifecycle_is_exact = match partition.status {
         ComponentLifecycleStatus::Prepared => commitment.membership.is_none(),
-        ComponentLifecycleStatus::Active => {
-            commitment.runtime_activated
-                && commitment
-                    .membership
-                    .as_ref()
-                    .is_some_and(|membership| membership.directory_synchronized)
+        ComponentLifecycleStatus::Active => committed_runtime_is_terminal,
+        ComponentLifecycleStatus::Draining => {
+            committed_runtime_is_terminal
+                && component_is_awaiting_prequiescence_directory_convergence(partition)?
         }
-        ComponentLifecycleStatus::Draining | ComponentLifecycleStatus::Removed => false,
+        ComponentLifecycleStatus::Removed => false,
     };
     if !commitment.directory_prepared || !lifecycle_is_exact {
         return Err(InternalError::invariant());
     }
     Ok(allocation)
+}
+
+fn component_is_awaiting_prequiescence_directory_convergence(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<bool, InternalError> {
+    let Some(draining) =
+        RootComponentRegistryStore::component_draining(partition.binding.component)
+    else {
+        return Ok(false);
+    };
+    validate_component_draining_record(partition, &draining)?;
+    Ok(draining.quiescence.is_none())
 }
 
 fn removed_component_allocation(
