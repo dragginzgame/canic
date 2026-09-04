@@ -7,23 +7,17 @@ source "$ROOT/scripts/ci/doc-guard-lib.sh"
 
 GUARD_LABEL="current document semantics"
 STATUS="$ROOT/docs/status/current.md"
-STATUS_ARCHIVE="$ROOT/docs/status/archive/2026-08-12-precompact.md"
 AGENTS="$ROOT/AGENTS.md"
 CI_GOVERNANCE="$ROOT/docs/governance/ci-deployment.md"
 ARCHITECTURE="$ROOT/docs/contracts/ARCHITECTURE.md"
 HYGIENE="$ROOT/docs/governance/code-hygiene/README.md"
 AUTH_DESIGN="$ROOT/docs/architecture/authentication.md"
 AUTH_CONTRACT="$ROOT/docs/contracts/AUTH_DELEGATED_SIGNATURES.md"
-TIMER_DESIGN="$ROOT/docs/design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md"
-TIMER_STATUS="$ROOT/docs/design/archive/0.104-ic-timers-consumer-hard-cut/status.md"
-TIMER_EVIDENCE="$ROOT/docs/audits/working/0.104-timer-ownership/README.md"
-TIMER_CHANGELOG="$ROOT/docs/changelog/0.104.md"
 TIMER_GUIDE="$ROOT/docs/features/runtime/native-timers.md"
 ADMISSION_DESIGN="$ROOT/docs/design/0.109-fleet-wide-ingress-admission/0.109-design.md"
 ADMISSION_STATUS="$ROOT/docs/design/0.109-fleet-wide-ingress-admission/status.md"
 CONTRACTION_DESIGN="$ROOT/docs/design/0.110-fleet-runtime-contraction/0.110-design.md"
 CONTRACTION_STATUS="$ROOT/docs/design/0.110-fleet-runtime-contraction/status.md"
-COMPLEXITY_AUDIT="$ROOT/docs/audits/release-lines/0.109-post-implementation-complexity-audit.md"
 
 operator_docs=(
     "$ROOT/INSTALLING.md"
@@ -37,23 +31,17 @@ operator_docs=(
 
 require_files "$GUARD_LABEL" \
     "$STATUS" \
-    "$STATUS_ARCHIVE" \
     "$AGENTS" \
     "$CI_GOVERNANCE" \
     "$ARCHITECTURE" \
     "$HYGIENE" \
     "$AUTH_DESIGN" \
     "$AUTH_CONTRACT" \
-    "$TIMER_DESIGN" \
-    "$TIMER_STATUS" \
-    "$TIMER_EVIDENCE" \
-    "$TIMER_CHANGELOG" \
     "$TIMER_GUIDE" \
     "$ADMISSION_DESIGN" \
     "$ADMISSION_STATUS" \
     "$CONTRACTION_DESIGN" \
     "$CONTRACTION_STATUS" \
-    "$COMPLEXITY_AUDIT" \
     "${operator_docs[@]}"
 
 for design_entry in "$ROOT"/docs/design/*; do
