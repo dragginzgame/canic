@@ -1579,9 +1579,22 @@ exec icp "$@"
                     .expect("commit literal-zero release artifact cache")
             }
         };
-        eprintln!(
-            "[pic_fleet_registry] literal-zero release artifacts {outcome} elapsed={:?}",
-            started_at.elapsed()
+        crate::pic::progress::timed(
+            "FLEET",
+            if outcome.is_reused() {
+                crate::pic::progress::ProgressStatus::Cache
+            } else {
+                crate::pic::progress::ProgressStatus::Done
+            },
+            &format!(
+                "literal-zero release artifacts ({})",
+                outcome.record().artifacts().len()
+            ),
+            started_at.elapsed(),
+        );
+        crate::pic::progress::detail(
+            "FLEET",
+            &format!("literal-zero release artifact cache: {outcome}"),
         );
         report_artifact_cache_maintenance(
             "literal-zero-release-artifacts",
@@ -7573,7 +7586,13 @@ exec icp "$@"
             .acquire()
             .expect("acquire active Component Registry baseline");
         let metadata = baseline.metadata().clone();
-        eprintln!("[pic_fleet_registry] active baseline {outcome}");
+        crate::pic::progress::timed(
+            "FLEET",
+            crate::pic::progress::ProgressStatus::Ready,
+            &format!("active baseline (slot {})", outcome.slot()),
+            outcome.timings().total(),
+        );
+        crate::pic::progress::detail("FLEET", &format!("active baseline: {outcome}"));
 
         ActiveComponentRegistryFixture {
             runtime: ActiveComponentRegistryRuntime::Pooled(baseline),

@@ -326,7 +326,8 @@ fn verify_role_attestation(
 
 fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principal) {
     let denial_labels = ["access", "issuer_guard_is_root", "auth", "caller_is_root"];
-    let before_denial = metric_count_for_labels(pic, issuer, MetricsKind::Security, &denial_labels);
+    let before_denial =
+        metric_count_for_labels(pic, root, issuer, MetricsKind::Security, &denial_labels);
     let denied: Result<(), Error> = pic
         .update_candid_as(issuer, Principal::anonymous(), "issuer_guard_is_root", ())
         .expect("issuer root-guard denial transport");
@@ -335,22 +336,22 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
         canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
     assert_eq!(
-        metric_count_for_labels(pic, issuer, MetricsKind::Security, &denial_labels),
+        metric_count_for_labels(pic, root, issuer, MetricsKind::Security, &denial_labels),
         before_denial.saturating_add(1)
     );
 
     let success_labels = ["perf", "endpoint", "update", "issuer_guard_is_root"];
     let before_success =
-        metric_count_for_labels(pic, issuer, MetricsKind::Runtime, &success_labels);
+        metric_count_for_labels(pic, root, issuer, MetricsKind::Runtime, &success_labels);
     let allowed: Result<(), Error> = pic
         .update_candid_as(issuer, root, "issuer_guard_is_root", ())
         .expect("issuer root-guard success transport");
     allowed.expect("Fleet Subnet Root caller must satisfy issuer root guard");
     assert_eq!(
-        metric_count_for_labels(pic, issuer, MetricsKind::Runtime, &success_labels),
+        metric_count_for_labels(pic, root, issuer, MetricsKind::Runtime, &success_labels),
         before_success.saturating_add(1)
     );
-    let row = query_metric_entries(pic, issuer, MetricsKind::Runtime)
+    let row = query_metric_entries(pic, root, issuer, MetricsKind::Runtime)
         .into_iter()
         .find(|entry| labels_match(entry, &success_labels))
         .expect("issuer root-guard endpoint perf metric");
@@ -360,11 +361,12 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
 
 fn metric_count_for_labels(
     pic: &PocketIc,
+    caller: Principal,
     canister: Principal,
     kind: MetricsKind,
     labels: &[&str],
 ) -> u64 {
-    query_metric_entries(pic, canister, kind)
+    query_metric_entries(pic, caller, canister, kind)
         .into_iter()
         .find_map(|entry| {
             labels_match(&entry, labels).then_some(match entry.value {
@@ -377,12 +379,14 @@ fn metric_count_for_labels(
 
 fn query_metric_entries(
     pic: &PocketIc,
+    caller: Principal,
     canister: Principal,
     kind: MetricsKind,
 ) -> Vec<MetricEntry> {
     let response: Result<RootStatusResponse, Error> = pic
-        .query_candid(
+        .query_candid_as(
             canister,
+            caller,
             CANIC_STATUS,
             (RootStatusRequest::Metrics(MetricsStatusRequest {
                 kind,
@@ -392,8 +396,10 @@ fn query_metric_entries(
                 },
             }),),
         )
-        .expect("metrics query transport");
-    let RootStatusResponse::Metrics(page) = response.expect("metrics query") else {
+        .expect("controller-authenticated metrics query transport");
+    let RootStatusResponse::Metrics(page) =
+        response.expect("controller-authenticated metrics query")
+    else {
         panic!("canic_status returned a non-Metrics response")
     };
     page.entries

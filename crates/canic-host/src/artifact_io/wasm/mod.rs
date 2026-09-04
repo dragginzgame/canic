@@ -141,10 +141,10 @@ pub fn enforce_wasm_code_section_limit(
         }
         BuildNetwork::Local if code_section_bytes > CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES => {
             eprintln!(
-                "Wasm code section for {}: {} bytes; local builds do not enforce the current IC mainnet limit of {} bytes",
-                wasm_path.display(),
-                code_section_bytes,
-                CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES,
+                "[WASM] WARN   {}  code={}  limit={}  local build only",
+                compact_wasm_artifact_name(wasm_path),
+                format_byte_count(code_section_bytes),
+                format_byte_count(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES),
             );
         }
         BuildNetwork::Local => {
@@ -156,21 +156,45 @@ pub fn enforce_wasm_code_section_limit(
 }
 
 fn report_current_ic_mainnet_limit_distance(wasm_path: &Path, code_section_bytes: usize) {
-    if code_section_bytes >= IC_WASM_CODE_SECTION_WARNING_BYTES {
-        eprintln!(
-            "warning: Wasm code section for {} is {} bytes; {} bytes remain before the current IC mainnet limit",
-            wasm_path.display(),
-            code_section_bytes,
-            CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES - code_section_bytes
-        );
+    let status = if code_section_bytes >= IC_WASM_CODE_SECTION_WARNING_BYTES {
+        "WARN"
     } else {
-        eprintln!(
-            "Wasm code section for {}: {} bytes; {} bytes remain before the current IC mainnet limit",
-            wasm_path.display(),
-            code_section_bytes,
-            CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES - code_section_bytes
-        );
+        "SIZE"
+    };
+    eprintln!(
+        "[WASM] {status:<6} {}  code={}  headroom={}",
+        compact_wasm_artifact_name(wasm_path),
+        format_byte_count(code_section_bytes),
+        format_byte_count(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES - code_section_bytes),
+    );
+}
+
+fn compact_wasm_artifact_name(wasm_path: &Path) -> String {
+    let file_name = wasm_path.file_name().map_or_else(
+        || "artifact.wasm".to_owned(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    let Some(staging_directory) = wasm_path.parent() else {
+        return file_name;
+    };
+    let is_staged_artifact = staging_directory
+        .file_name()
+        .is_some_and(|name| name.to_string_lossy().starts_with(".canic-artifact-stage-"));
+    if !is_staged_artifact {
+        return file_name;
     }
+    match staging_directory.parent().and_then(Path::file_name) {
+        Some(role) => format!("{}/{file_name}", role.to_string_lossy()),
+        None => file_name,
+    }
+}
+
+fn format_byte_count(bytes: usize) -> String {
+    const MEBIBYTE: usize = 1024 * 1024;
+    let rounded_fraction = ((bytes % MEBIBYTE) * 100 + MEBIBYTE / 2) / MEBIBYTE;
+    let whole = bytes / MEBIBYTE + rounded_fraction / 100;
+    let fraction = rounded_fraction % 100;
+    format!("{whole}.{fraction:02} MiB ({bytes} B)")
 }
 
 pub(super) fn wasm_artifact_metrics(
@@ -472,5 +496,14 @@ mod tests {
                 limit: CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES,
             })
         );
+    }
+
+    #[test]
+    fn staged_wasm_diagnostics_hide_disposable_paths_but_retain_the_role() {
+        let path =
+            Path::new("/tmp/operator/artifacts/root/.canic-artifact-stage-19197-2/candidate.wasm");
+
+        assert_eq!(compact_wasm_artifact_name(path), "root/candidate.wasm");
+        assert_eq!(format_byte_count(8_713_911), "8.31 MiB (8713911 B)");
     }
 }

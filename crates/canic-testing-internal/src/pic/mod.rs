@@ -24,6 +24,7 @@ mod delegation;
 mod fleet_coordinator;
 mod fleet_registry;
 mod lifecycle;
+mod progress;
 mod root;
 mod startup;
 
@@ -118,22 +119,41 @@ fn run_governed_test_cases(cases: Vec<GovernedTestCase>) {
     let mut timings = Vec::new();
     for (name, test) in cases {
         let started_at = Instant::now();
-        eprintln!("[canic-testing-internal] START {name}");
+        progress::event("SUITE", progress::ProgressStatus::Run, name);
         let failed = std::panic::catch_unwind(AssertUnwindSafe(test)).is_err();
         let elapsed = started_at.elapsed().as_secs_f64();
         timings.push((name, elapsed));
         if failed {
-            eprintln!("[canic-testing-internal] FAIL {name} elapsed={elapsed:.3}s");
+            progress::timed(
+                "SUITE",
+                progress::ProgressStatus::Fail,
+                name,
+                started_at.elapsed(),
+            );
             failures.push(name);
         } else {
-            eprintln!("[canic-testing-internal] PASS {name} elapsed={elapsed:.3}s");
+            progress::timed(
+                "SUITE",
+                progress::ProgressStatus::Pass,
+                name,
+                started_at.elapsed(),
+            );
         }
     }
 
     timings.sort_by(|left, right| right.1.total_cmp(&left.1));
-    eprintln!("[canic-testing-internal] slowest governed cases:");
+    progress::event(
+        "SUITE",
+        progress::ProgressStatus::Info,
+        "slowest governed cases",
+    );
     for (name, elapsed) in timings.into_iter().take(10) {
-        eprintln!("[canic-testing-internal] SLOW {name} elapsed={elapsed:.3}s");
+        progress::timed(
+            "SUITE",
+            progress::ProgressStatus::Slow,
+            name,
+            std::time::Duration::from_secs_f64(elapsed),
+        );
     }
 
     assert!(

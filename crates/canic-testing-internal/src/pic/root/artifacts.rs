@@ -24,9 +24,13 @@ use std::{
     path::PathBuf,
 };
 
-use crate::pic::artifacts::{
-    INTERNAL_TEST_RELEASE_BUILD_ID, internal_test_artifact_maintenance_interval,
-    internal_test_artifact_prune_policy, report_artifact_cache_maintenance, run_icp_all_with_env,
+use crate::pic::{
+    artifacts::{
+        INTERNAL_TEST_RELEASE_BUILD_ID, internal_test_artifact_maintenance_interval,
+        internal_test_artifact_prune_policy, report_artifact_cache_maintenance,
+        run_icp_all_with_env,
+    },
+    progress as test_progress,
 };
 
 use super::{RootBaselineSpec, progress, progress_elapsed};
@@ -79,7 +83,7 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
         },
         started_at,
     );
-    eprintln!("[root_setup] artifact cache {outcome}");
+    test_progress::detail("ROOT", &format!("artifact cache: {outcome}"));
     report_artifact_cache_maintenance("root-artifacts", outcome.record().maintenance());
 }
 

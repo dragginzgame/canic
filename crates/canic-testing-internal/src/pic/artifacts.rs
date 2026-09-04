@@ -4,9 +4,9 @@ use ic_testkit::artifacts::{
     ArtifactCachePrunePolicy, ArtifactCacheSpec, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
     SharedIncrementalTargetPrunePolicy, WasmBuildBatchConfig, WasmBuildBatchProgressEvent,
-    WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildProgressPhase, WasmBuildSpec,
-    build_wasm_canisters_cached_batch_with_config_and_progress, prepare_artifact_cache,
-    resolve_cargo_build_inputs,
+    WasmBuildBatchReport, WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildProgressPhase,
+    WasmBuildSpec, build_wasm_canisters_cached_batch_with_config_and_progress,
+    prepare_artifact_cache, resolve_cargo_build_inputs,
 };
 use std::{
     fs,
@@ -15,6 +15,8 @@ use std::{
     sync::OnceLock,
     time::Duration,
 };
+
+use super::progress::{self, ProgressStatus};
 
 const INTERNAL_TEST_WASM_CACHE_MAX_AGE: Duration = Duration::from_hours(168);
 const INTERNAL_TEST_WASM_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
@@ -64,7 +66,17 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
                     .expect("commit canonical Fleet Coordinator artifact cache")
             }
         };
-        eprintln!("[canic-test-wasm:fleet_coordinator] canonical artifact {outcome}");
+        progress::timed(
+            "WASM",
+            if outcome.is_reused() {
+                ProgressStatus::Cache
+            } else {
+                ProgressStatus::Done
+            },
+            "Fleet Coordinator artifact",
+            outcome.record().timings().total(),
+        );
+        progress::detail("WASM", &format!("Fleet Coordinator cache: {outcome}"));
         report_artifact_cache_maintenance(
             "canonical-fleet-coordinator",
             outcome.record().maintenance(),
@@ -304,16 +316,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         report_wasm_build_progress,
     )
     .unwrap_or_else(|error| panic!("internal test Wasm batch contract failed: {error}"));
-    for entry in batch.outcomes() {
-        let package = entry.label();
-        let outcome = entry.outcome();
-        eprintln!(
-            "[canic-test-wasm:{package}] {outcome}; exact-cache={}",
-            outcome.record().exact_cache_path().display()
-        );
-        report_artifact_cache_maintenance("canic-test-wasm", outcome.record().maintenance());
-    }
-    eprintln!("[canic-test-wasm] {batch}");
+    report_wasm_batch(&batch);
     let failures = batch
         .failures()
         .map(|failure| {
@@ -332,6 +335,46 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         "internal test Wasm builds failed:\n{}",
         failures.join("\n")
     );
+}
+
+fn report_wasm_batch(batch: &WasmBuildBatchReport) {
+    for entry in batch.outcomes() {
+        let package = entry.label();
+        let outcome = entry.outcome();
+        progress::timed(
+            "WASM",
+            if outcome.is_reused() {
+                ProgressStatus::Cache
+            } else {
+                ProgressStatus::Done
+            },
+            package,
+            entry.entry_elapsed(),
+        );
+        progress::detail(
+            "WASM",
+            &format!(
+                "{package}: {outcome}; exact-cache={}",
+                outcome.record().exact_cache_path().display()
+            ),
+        );
+        report_artifact_cache_maintenance("canic-test-wasm", outcome.record().maintenance());
+    }
+    let metrics = batch.metrics();
+    if metrics.specifications() > 1 {
+        progress::timed(
+            "WASM",
+            ProgressStatus::Done,
+            &format!(
+                "batch: {} built, {} cached, {} failed",
+                metrics.built(),
+                metrics.reused(),
+                metrics.failed()
+            ),
+            batch.total(),
+        );
+    }
+    progress::detail("WASM", &format!("batch detail: {batch}"));
 }
 
 fn canonical_build_config_inputs(
@@ -399,9 +442,10 @@ fn report_wasm_build_progress(event: WasmBuildBatchProgressEvent) {
             label,
             total,
         } => {
-            eprintln!(
-                "[canic-test-wasm:{label}] acquiring independent build {}/{total}",
-                index + 1
+            progress::event(
+                "WASM",
+                ProgressStatus::Run,
+                &format!("{label} ({}/{total})", index + 1),
             );
         }
         WasmBuildBatchProgressEvent::BuildProgress {
@@ -413,14 +457,24 @@ fn report_wasm_build_progress(event: WasmBuildBatchProgressEvent) {
                 },
             ..
         } => {
-            eprintln!("[canic-test-wasm:{label}] Cargo still running after {elapsed:?}");
+            if progress::verbose() || elapsed.as_secs().is_multiple_of(60) {
+                progress::timed(
+                    "WASM",
+                    ProgressStatus::Wait,
+                    &format!("{label}: Cargo build"),
+                    elapsed,
+                );
+            }
         }
         WasmBuildBatchProgressEvent::BuildProgress {
             label,
             event: WasmBuildProgressEvent::SharedTargetMaintenanceFinished { outcome },
             ..
         } => {
-            eprintln!("[canic-test-wasm:{label}] shared target {outcome}");
+            progress::detail("WASM", &format!("{label}: shared target {outcome}"));
+        }
+        WasmBuildBatchProgressEvent::BuildFailed { label, .. } => {
+            progress::event("WASM", ProgressStatus::Fail, &label);
         }
         _ => {}
     }
@@ -437,29 +491,37 @@ pub(super) fn report_artifact_cache_maintenance(
                 .is_some_and(|report| report.entries_removed() > 0) =>
         {
             let report = maintenance.prune_report().expect("checked prune report");
-            eprintln!(
-                "[{label}] pruned {} cache entr{} ({} bytes); retained {} entr{} ({} bytes)",
-                report.entries_removed(),
-                if report.entries_removed() == 1 {
-                    "y"
-                } else {
-                    "ies"
-                },
-                report.bytes_removed(),
-                report.entries_retained(),
-                if report.entries_retained() == 1 {
-                    "y"
-                } else {
-                    "ies"
-                },
-                report.bytes_retained(),
+            progress::event(
+                "CACHE",
+                ProgressStatus::Info,
+                &format!(
+                    "{label}: pruned {} entr{} ({} bytes); retained {} entr{} ({} bytes)",
+                    report.entries_removed(),
+                    if report.entries_removed() == 1 {
+                        "y"
+                    } else {
+                        "ies"
+                    },
+                    report.bytes_removed(),
+                    report.entries_retained(),
+                    if report.entries_retained() == 1 {
+                        "y"
+                    } else {
+                        "ies"
+                    },
+                    report.bytes_retained(),
+                ),
             );
         }
-        Some(maintenance) if maintenance.failure_message().is_some() => eprintln!(
-            "[{label}] warning: cache maintenance failed: {}",
-            maintenance
-                .failure_message()
-                .expect("checked failure message")
+        Some(maintenance) if maintenance.failure_message().is_some() => progress::event(
+            "CACHE",
+            ProgressStatus::Warn,
+            &format!(
+                "{label}: maintenance failed: {}",
+                maintenance
+                    .failure_message()
+                    .expect("checked failure message")
+            ),
         ),
         Some(_) | None => {}
     }
