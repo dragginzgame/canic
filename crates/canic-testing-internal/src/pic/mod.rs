@@ -158,7 +158,7 @@ mod governed_suite {
         let mut cases = artifacts::governed_fast_cases();
         cases.extend(lifecycle::governed_fast_cases());
         cases.extend(root::governed_fast_cases());
-        assert_eq!(cases.len(), 6);
+        assert_unique_governed_case_names(&cases);
         run_governed_test_cases(cases);
     }
 
@@ -174,7 +174,7 @@ mod governed_suite {
     }
 
     #[test]
-    fn governed_pocketic_inventory_is_exact() {
+    fn governed_pocketic_inventory_has_required_order_and_unique_names() {
         assert_governed_pocketic_order();
     }
 
@@ -183,9 +183,9 @@ mod governed_suite {
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_pocketic_cases());
         let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
-        assert_eq!(names.len(), 36);
-        assert_eq!(names[0], "Fleet deployment restore");
-        assert_eq!(names[1], "autonomous Root removal");
+        assert_unique_governed_case_names(&cases);
+        assert_eq!(names.first().copied(), Some("Fleet deployment restore"));
+        assert_eq!(names.get(1).copied(), Some("autonomous Root removal"));
         assert_eq!(
             names
                 .iter()
@@ -195,9 +195,18 @@ mod governed_suite {
                 .count(),
             1
         );
+    }
+
+    fn assert_unique_governed_case_names(cases: &[GovernedTestCase]) {
+        let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        assert!(
+            !names.is_empty(),
+            "governed test inventory must not be empty"
+        );
         assert_eq!(
             names.iter().copied().collect::<BTreeSet<_>>().len(),
-            names.len()
+            names.len(),
+            "governed test case names must be unique"
         );
     }
 }

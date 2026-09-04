@@ -14,6 +14,7 @@ ICP_MODEL="$ROOT/crates/canic-host/src/icp/model.rs"
 DEV_INSTALL="$ROOT/scripts/dev/install_dev.sh"
 GIT_HOOK_INSTALLER="$ROOT/scripts/dev/install-git-hooks.sh"
 PRE_COMMIT_HOOK="$ROOT/.githooks/pre-commit"
+PRE_COMMIT_HOOK_TEST="$ROOT/scripts/ci/test-pre-commit-hook.sh"
 ICP_UPDATE="$ROOT/scripts/dev/update-icp-cli-pin.sh"
 BINARYEN_UPDATE_CHECK="$ROOT/scripts/dev/check-binaryen-update.sh"
 BINARYEN_UPDATE_CHECK_TEST="$ROOT/scripts/ci/test-binaryen-update-check.sh"
@@ -62,7 +63,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$BINARYEN_UPDATE_CHECK" "$BINARYEN_UPDATE_CHECK_TEST" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$RELEASE_VALIDATION_LANE" "$RELEASE_VALIDATION_LANE_TEST" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$FLEET_ENSURE_TESTS" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$PRE_COMMIT_HOOK_TEST" "$ICP_UPDATE" "$BINARYEN_UPDATE_CHECK" "$BINARYEN_UPDATE_CHECK_TEST" "$INSTALLING" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$FAST_PATCH_GATE" "$RELEASE_CADENCE" "$VERSION_READER" "$RELEASE_VALIDATION_LANE" "$RELEASE_VALIDATION_LANE_TEST" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$FLEET_ENSURE_TESTS" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -353,26 +354,12 @@ rg -F 'cargo test --locked --no-fail-fast "${cargo_args[@]}"' "$WORKSPACE_TEST_R
     fail "workspace test execution does not freeze Cargo.lock"
 
 [ -x "$PRE_COMMIT_HOOK" ] || fail "formatting pre-commit hook is not executable"
-hook_file_count="$(find "$ROOT/.githooks" -maxdepth 1 -type f | wc -l)"
-[ "$hook_file_count" -eq 1 ] || fail "repository must own exactly one Git hook"
-rg -F 'make fmt' "$PRE_COMMIT_HOOK" >/dev/null ||
-    fail "pre-commit hook does not run the complete formatter"
-rg -F 'git diff --cached --name-only -z --diff-filter=ACMR' "$PRE_COMMIT_HOOK" >/dev/null ||
-    fail "pre-commit hook does not reject partially staged formatting inputs"
-rg -F 'git diff --binary --no-ext-diff' "$PRE_COMMIT_HOOK" >/dev/null ||
-    fail "pre-commit hook does not snapshot tracked working-tree content"
-rg -F 'unstaged_before["$path"]=1' "$PRE_COMMIT_HOOK" >/dev/null ||
-    fail "pre-commit hook does not classify pre-existing unstaged content"
-rg -F 'git add --pathspec-from-file="$stage_after_format" --pathspec-file-nul' "$PRE_COMMIT_HOOK" >/dev/null ||
-    fail "pre-commit hook does not refresh the formatted staged snapshot"
-rg -F 'cmp -s "$before" "$after"' "$PRE_COMMIT_HOOK" >/dev/null ||
-    fail "pre-commit hook does not preserve pre-existing unstaged content"
-git_add_count="$(rg -c 'git[[:space:]]+add' "$PRE_COMMIT_HOOK" || true)"
-[ "${git_add_count:-0}" -eq 1 ] || fail "pre-commit hook must own exactly one bounded index refresh"
 if rg -n 'make[[:space:]]+(fmt-check|validate|test|clippy|build)|cargo[[:space:]]+(test|clippy|build)|git[[:space:]]+(commit|push)' \
     "$PRE_COMMIT_HOOK" >/dev/null; then
     fail "pre-commit hook exceeds its formatting-only boundary"
 fi
+bash "$PRE_COMMIT_HOOK_TEST" >/dev/null ||
+    fail "pre-commit hook behavior tests failed"
 rg -F 'core.hooksPath .githooks' "$GIT_HOOK_INSTALLER" >/dev/null ||
     fail "Git hook installer does not configure the repository hook path"
 rg -F 'scripts/dev/install-git-hooks.sh' "$DEV_INSTALL" >/dev/null ||

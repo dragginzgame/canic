@@ -218,6 +218,12 @@ policy and ops independently; ops may call model. Policy never calls ops.
   `fast` release-validation marker. It never runs PocketIC. Do not describe a
   fast-lane result as complete workspace validation.
 - Unit tests live next to code; integration tests live in `tests/`.
+- Test registries and runners must derive their membership from registered
+  cases and validate meaningful properties such as non-emptiness, unique
+  identities, required cases and execution dependencies. Do not hard-code an
+  aggregate test count merely to detect additions. Exact counts remain valid
+  only when the number is itself an external protocol, capacity or accepted
+  design contract.
 - Canister creation/install/upgrade/inter-canister tests must use PocketIC.
 - Do not add production `cfg(test)` behavior to fake IC management.
 - Assert typed errors or observable state, not error strings.
