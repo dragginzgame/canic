@@ -814,7 +814,7 @@ fn wasm_store_status_surface_is_profile_exact() {
     );
     assert!(
         did.contains(&format!(
-            "{} : (StoreStatusRequest) -> (Result_1) query;",
+            "{} : (StoreStatusRequest) -> (Result_3) query;",
             canic::protocol::CANIC_WASM_STORE_STATUS
         )),
         "canonical Store DID must expose its role-owned status query"

@@ -201,10 +201,10 @@ type OperationReceipt = record { operation_id : blob };
 type OperationStatusRequest = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec CycleTrackerEntry };
 type PageRequest = record { offset : nat64; limit : nat64 };
-type Result = variant { Ok : StoreCommandResponse; Err : Error };
-type Result_1 = variant { Ok : StoreStatusResponse; Err : Error };
-type Result_2 = variant { Ok : TemplateChunkResponse; Err : Error };
-type Result_3 = variant { Ok; Err : Error };
+type Result = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result_1 = variant { Ok : StoreCommandResponse; Err : Error };
+type Result_2 = variant { Ok; Err : Error };
+type Result_3 = variant { Ok : StoreStatusResponse; Err : Error };
 // Closed compiled capability identity exposed by the immutable role overview.
 type RoleCapability = variant {
   Sharding;
@@ -417,9 +417,9 @@ type WasmStoreTemplateStatusResponse = record {
   versions : nat16;
 };
 service : (FleetSubnetWasmStoreInitArgs) -> {
-  canic_wasm_store_command : (StoreCommand) -> (Result);
-  canic_wasm_store_status : (StoreStatusRequest) -> (Result_1) query;
-  canic_wasm_store_chunk : (TemplateChunkRequest) -> (Result_2);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_3);
+  canic_wasm_store_chunk : (TemplateChunkRequest) -> (Result);
+  canic_wasm_store_command : (StoreCommand) -> (Result_1);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_2);
+  canic_wasm_store_status : (StoreStatusRequest) -> (Result_3) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }
