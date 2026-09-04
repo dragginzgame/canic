@@ -158,7 +158,7 @@ mod governed_suite {
         let mut cases = artifacts::governed_fast_cases();
         cases.extend(lifecycle::governed_fast_cases());
         cases.extend(root::governed_fast_cases());
-        assert_eq!(cases.len(), 5);
+        assert_eq!(cases.len(), 6);
         run_governed_test_cases(cases);
     }
 
