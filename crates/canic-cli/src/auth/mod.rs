@@ -22,7 +22,7 @@ use crate::{
     support::candid::registry_entry_candid_path,
     version_text,
 };
-use canic_core::protocol::CANIC_STATUS;
+use canic_core::protocol::{CANIC_ROOT_STATUS, CANIC_STATUS};
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
     fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
@@ -314,11 +314,11 @@ fn renewal_status_result_with_runtime(
     options: &RenewalStatusOptions,
 ) -> Result<AuthRenewalStatusResult, AuthCommandError> {
     let issuer_pid = parse_issuer_principal(&options.issuer)?;
-    let target = runtime.resolve_root_target(&options.common, &options.fleet, CANIC_STATUS)?;
+    let target = runtime.resolve_root_target(&options.common, &options.fleet, CANIC_ROOT_STATUS)?;
     let output = runtime.query_output(
         &options.common,
         &target,
-        CANIC_STATUS,
+        CANIC_ROOT_STATUS,
         Some(&root_issuer_renewal_status_arg(&issuer_pid)),
         Some("json"),
     )?;

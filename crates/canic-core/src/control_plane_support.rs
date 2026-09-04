@@ -9,7 +9,8 @@ pub mod config {
 
     pub use crate::config::{
         ComponentDeploymentConfiguration, ComponentDeploymentPurpose, ComponentGroupDeploymentSpec,
-        ComponentGroupPlacementPolicy, ComponentProvisioningGrant, ComponentTopology, ConfigModel,
+        ComponentGroupPlacementPolicy, ComponentLimits, ComponentProvisioningGrant,
+        ComponentSpawnGrant, ComponentSpec, ComponentTopology, ConfigModel,
         FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose,
         FleetServicePlacementPolicy, FleetServiceTopology,
     };

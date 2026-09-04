@@ -8,12 +8,15 @@ trap 'rm -rf "$FIXTURE"' EXIT
 mkdir -p "$FIXTURE/scripts/ci" "$FIXTURE/failure-logs"
 cp "$ROOT/scripts/ci/run-validation-targets.sh" "$FIXTURE/scripts/ci/"
 printf '%s\n' \
-    '.PHONY: pass mutate-runner fail-one fail-two fail-after-caught-panic' \
+    '.PHONY: pass mutate-runner fail-coded fail-one fail-two fail-after-caught-panic' \
     'pass:' \
     $'\t@echo pass-marker' \
     'mutate-runner:' \
     $'\t@printf "for broken do\\n" > scripts/ci/run-validation-targets.sh' \
     $'\t@echo mutation-marker' \
+    'fail-coded:' \
+    $'\t@echo "[CANIC-TEST:E001] [SUITE] FAIL stable-failure-event"' \
+    $'\t@exit 6' \
     'fail-one:' \
     $'\t@echo "error: first-live-error-marker"' \
     $'\t@echo first-failure-marker' \
@@ -40,7 +43,7 @@ CANIC_VALIDATION_FAILURE_LOG_DIR="$FIXTURE/failure-logs" \
     CANIC_VALIDATION_RUNNER_DEPTH=0 \
     CANIC_VALIDATION_RUNNER_SNAPSHOT_PATH='' \
     bash "$FIXTURE/scripts/ci/run-validation-targets.sh" \
-    pass mutate-runner fail-one fail-two fail-after-caught-panic \
+    pass mutate-runner fail-coded fail-one fail-two fail-after-caught-panic \
     >"$FIXTURE/output.log" 2>&1 || status=$?
 
 [[ "$status" -eq 1 ]] || {
@@ -50,6 +53,7 @@ CANIC_VALIDATION_FAILURE_LOG_DIR="$FIXTURE/failure-logs" \
 for expected in \
     'pass-marker' \
     'mutation-marker' \
+    '[ERR:fail-coded] [CANIC-TEST:E001] [SUITE] FAIL stable-failure-event' \
     'first-failure-marker' \
     'second-failure-marker' \
     "thread 'caught-test' panicked at fake.rs:1:1:" \
@@ -63,10 +67,10 @@ for expected in \
     '[ERR:fail-two] second-failure-marker' \
     '[ERR:fail-after-caught-panic] Target failed' \
     '[ERR:summary] Latest highlighted errors:' \
-    '[ERR:summary] VALIDATION FAILED: fail-one fail-two fail-after-caught-panic' \
+    '[ERR:summary] VALIDATION FAILED: fail-coded fail-one fail-two fail-after-caught-panic' \
     'PASS' \
     'FAIL' \
-    'VALIDATION FAILED: fail-one fail-two fail-after-caught-panic'; do
+    'VALIDATION FAILED: fail-coded fail-one fail-two fail-after-caught-panic'; do
     rg -F "$expected" "$FIXTURE/output.log" >/dev/null || {
         echo "validation target runner test failed: missing output: $expected" >&2
         exit 1
@@ -98,6 +102,7 @@ fi
     exit 1
 }
 for expected in \
+    '[ERR:fail-coded] [CANIC-TEST:E001] [SUITE] FAIL stable-failure-event' \
     '[ERR:fail-one] first-failure-marker' \
     '[ERR:fail-two] second-failure-marker' \
     '[ERR:fail-after-caught-panic] test actual-test ... FAILED'; do

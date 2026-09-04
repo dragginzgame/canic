@@ -5,7 +5,10 @@
 //! Boundary: focused assertions over the maintained endpoint manifest.
 
 use super::*;
-use crate::protocol::{CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND, CANIC_STATUS};
+use crate::protocol::{
+    CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_COORDINATOR_STATUS, CANIC_ROOT_COMMAND,
+    CANIC_ROOT_STATUS, CANIC_STATUS, CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
+};
 
 #[test]
 fn common_role_command_dispatch_is_variant_manifest_owned() {
@@ -43,6 +46,31 @@ fn common_role_command_dispatch_is_variant_manifest_owned() {
         .expect("common role status entry");
     assert_eq!(status.endpoint_kind, EndpointKind::Query);
     assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+
+    for endpoint in [CANIC_COORDINATOR_STATUS, CANIC_ROOT_STATUS] {
+        let status = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == endpoint)
+            .expect("infrastructure role status entry");
+        assert_eq!(status.endpoint_kind, EndpointKind::Query);
+        assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    }
+
+    let store_command = STORE_ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == CANIC_WASM_STORE_COMMAND)
+        .expect("Store command entry");
+    assert_eq!(store_command.endpoint_kind, EndpointKind::Update);
+    assert!(matches!(
+        store_command.replay_policy,
+        ReplayPolicy::CommandDispatch { .. }
+    ));
+    let store_status = STORE_ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == CANIC_WASM_STORE_STATUS)
+        .expect("Store status entry");
+    assert_eq!(store_status.endpoint_kind, EndpointKind::Query);
+    assert_eq!(store_status.replay_policy, ReplayPolicy::QueryOrReadOnly);
 }
 
 #[test]

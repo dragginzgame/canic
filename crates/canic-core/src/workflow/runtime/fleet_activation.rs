@@ -392,7 +392,8 @@ impl FleetActivationWorkflow {
         if EnvOps::is_fleet_coordinator_runtime() {
             return Ok(());
         }
-        let is_root = EnvOps::canister_role()?.is_root();
+        let role = EnvOps::canister_role()?;
+        let is_root = role.is_root();
         if !is_root && FleetActivationRuntimeOps::is_standalone_local() {
             return Ok(());
         }
@@ -400,7 +401,8 @@ impl FleetActivationWorkflow {
             .map_err(StorageOpsError::from)
             .map_err(InternalError::from)?;
 
-        require_endpoint_for_phase(is_root, status.phase, call).map_err(InternalError::from)
+        require_endpoint_for_phase(is_root, role.is_wasm_store(), status.phase, call)
+            .map_err(InternalError::from)
     }
 
     /// Enforce the activation phase for a compile-selected Store data-lane endpoint.
@@ -439,7 +441,7 @@ impl FleetActivationWorkflow {
         Self::require_root_role_variant_allowed(
             prepared_allowed,
             EndpointCall {
-                endpoint: EndpointId::new(protocol::CANIC_STATUS),
+                endpoint: EndpointId::new(protocol::CANIC_ROOT_STATUS),
                 kind: EndpointCallKind::Query,
             },
         )
@@ -581,7 +583,7 @@ async fn submit_store_fleet_command(
     operation_id: [u8; 32],
 ) -> Result<FleetActivationStatusResponse, InternalError> {
     let response: StoreCommandResponseFragment =
-        RpcOps::call_rpc_result(pid, protocol::CANIC_COMMAND, command).await?;
+        RpcOps::call_rpc_result(pid, protocol::CANIC_WASM_STORE_COMMAND, command).await?;
     let StoreCommandResponseFragment::OperationAccepted(receipt) = response;
     if receipt.operation_id != operation_id {
         return Err(InternalError::conflict());
@@ -595,7 +597,7 @@ async fn query_store_fleet_activation_status(
 ) -> Result<FleetActivationStatusResponse, InternalError> {
     let response: StoreStatusResponseFragment = RpcOps::call_rpc_result(
         pid,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_WASM_STORE_STATUS,
         StoreStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
     )
     .await?;
@@ -690,6 +692,7 @@ fn require_root_activation_wasm_store(
 
 fn require_endpoint_for_phase(
     is_root: bool,
+    is_wasm_store: bool,
     phase: FleetActivationPhase,
     call: EndpointCall,
 ) -> Result<(), PolicyError> {
@@ -698,7 +701,7 @@ fn require_endpoint_for_phase(
             require_prepared_root_endpoint(call).map_err(PolicyError::from)
         }
         FleetActivationPhase::Prepared => {
-            require_prepared_nonroot_endpoint(call).map_err(PolicyError::from)
+            require_prepared_nonroot_endpoint(call, is_wasm_store).map_err(PolicyError::from)
         }
         FleetActivationPhase::Active => Ok(()),
     }
@@ -741,13 +744,15 @@ mod tests {
     fn active_admits_ordinary_handlers_but_prepared_delegates_to_exact_policy() {
         let ordinary = call("application_update", EndpointCallKind::Update);
 
-        assert!(require_endpoint_for_phase(true, FleetActivationPhase::Active, ordinary).is_ok());
+        assert!(
+            require_endpoint_for_phase(true, false, FleetActivationPhase::Active, ordinary).is_ok()
+        );
         assert!(matches!(
-            require_endpoint_for_phase(true, FleetActivationPhase::Prepared, ordinary),
+            require_endpoint_for_phase(true, false, FleetActivationPhase::Prepared, ordinary),
             Err(PolicyError::FleetActivationPolicy(_))
         ));
         assert!(matches!(
-            require_endpoint_for_phase(false, FleetActivationPhase::Prepared, ordinary),
+            require_endpoint_for_phase(false, false, FleetActivationPhase::Prepared, ordinary),
             Err(PolicyError::FleetActivationPolicy(_))
         ));
     }

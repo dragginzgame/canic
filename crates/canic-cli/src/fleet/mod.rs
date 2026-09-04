@@ -529,6 +529,8 @@ fn render_report(report: &FleetEnsureReport, json: bool) -> Result<(), FleetComm
 
 fn render_text_report(report: &FleetEnsureReport) -> String {
     let conservation = &report.plan.conservation;
+    let (maximum_estate_funding_cycles, maximum_estate_creation_fee_cycles) =
+        estate_funding_totals(conservation);
     let mut lines = vec![
         format!("fleet: {}", report.plan.fleet),
         format!("operation_id: {}", report.plan.operation_id),
@@ -564,11 +566,49 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
             format_cycles(conservation.maximum_operator_debit_cycles)
         ),
         format!(
+            "maximum_estate_funding_cycles: {}",
+            format_cycles(maximum_estate_funding_cycles)
+        ),
+        format!(
+            "maximum_estate_creation_fee_cycles: {}",
+            format_cycles(maximum_estate_creation_fee_cycles)
+        ),
+        format!(
             "expected_post_operation_cycles: {}",
             format_cycles(conservation.expected_post_operation_cycles)
         ),
-        "canisters:".to_string(),
+        "estate_funding_domains:".to_string(),
     ];
+    append_estate_funding_domains(&mut lines, conservation);
+    append_canister_summaries(&mut lines, report);
+    lines.push(format!(
+        "conservation_equation: {} + {} - {} - {} - {} = {}",
+        format_cycles(conservation.observed_controlled_cycles),
+        format_cycles(conservation.maximum_operator_debit_cycles),
+        format_cycles(conservation.maximum_unavoidable_fee_cycles),
+        format_cycles(maximum_estate_creation_fee_cycles),
+        format_cycles(conservation.maximum_execution_burn_cycles),
+        format_cycles(conservation.expected_post_operation_cycles)
+    ));
+    if let Some(actual) = &report.actual_conservation {
+        lines.push(format!(
+            "measured_estate_funding_cycles: {}",
+            format_cycles(actual.estate_funding_cycles)
+        ));
+        lines.push(format!(
+            "measured_conservation: {} + {} - {} - {} = {}",
+            format_cycles(actual.observed_starting_cycles),
+            format_cycles(actual.received_new_funding_cycles),
+            format_cycles(actual.exact_estate_creation_fee_cycles),
+            format_cycles(actual.measured_execution_burn_cycles),
+            format_cycles(actual.final_controlled_cycles)
+        ));
+    }
+    lines.join("\n")
+}
+
+fn append_canister_summaries(lines: &mut Vec<String>, report: &FleetEnsureReport) {
+    lines.push("canisters:".to_string());
     lines.extend(report.plan.canisters.iter().map(|canister| {
         format!(
             "  {}: disposition={:?} principal={} observed_cycles={} effects={}",
@@ -605,24 +645,92 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
             ))
         })
     }));
-    lines.push(format!(
-        "conservation_equation: {} + {} - {} - {} = {}",
-        format_cycles(conservation.observed_controlled_cycles),
-        format_cycles(conservation.maximum_operator_debit_cycles),
-        format_cycles(conservation.maximum_unavoidable_fee_cycles),
-        format_cycles(conservation.maximum_execution_burn_cycles),
-        format_cycles(conservation.expected_post_operation_cycles)
-    ));
-    if let Some(actual) = &report.actual_conservation {
-        lines.push(format!(
-            "measured_conservation: {} + {} - {} = {}",
-            format_cycles(actual.observed_starting_cycles),
-            format_cycles(actual.received_new_funding_cycles),
-            format_cycles(actual.measured_execution_burn_cycles),
-            format_cycles(actual.final_controlled_cycles)
-        ));
-    }
-    lines.join("\n")
+    lines.extend(report.plan.canisters.iter().flat_map(|canister| {
+        canister.actions.iter().filter_map(|action| {
+            let canic_host::fleet_ensure::model::EnsureAction::FundEstate {
+                amount,
+                expected_post_cycles,
+                ledger,
+                ledger_fee_cycles,
+                principal,
+                ..
+            } = action
+            else {
+                return None;
+            };
+            Some(format!(
+                "  estate_funding {}: cycles_ledger_transfer={} ledger={} account={} fee={} expected_ledger_post={}",
+                canister.name,
+                format_cycles(*amount),
+                ledger,
+                principal,
+                format_cycles(*ledger_fee_cycles),
+                format_cycles(*expected_post_cycles)
+            ))
+        })
+    }));
+}
+
+fn estate_funding_totals(
+    conservation: &canic_host::fleet_ensure::model::CycleConservation,
+) -> (u128, u128) {
+    conservation
+        .estate_funding_domains
+        .iter()
+        .fold((0_u128, 0_u128), |(funding, fees), domain| {
+            (
+                funding
+                    .checked_add(domain.maximum_funding_cycles)
+                    .expect("verified plan bounds estate funding"),
+                fees.checked_add(domain.maximum_creation_fee_cycles)
+                    .expect("verified plan bounds estate creation fees"),
+            )
+        })
+}
+
+fn append_estate_funding_domains(
+    lines: &mut Vec<String>,
+    conservation: &canic_host::fleet_ensure::model::CycleConservation,
+) {
+    lines.extend(conservation.estate_funding_domains.iter().map(|domain| {
+        format!(
+            "  {}: root_principal={} ledger={} balance={} workloads={}/{} pool={}/{} ready={} pending={} pending_detail={} available_slots={} creations={} creation_amount={} readiness_floor={} management_creation_fee={} execution_margin={} ledger_fee={} maximum_debit={} funding={} shortfall={}",
+            domain.root,
+            domain.root_principal.as_deref().unwrap_or("unallocated"),
+            domain.cycles_ledger,
+            domain.available_cycles.map_or_else(|| "unobserved".to_string(), |cycles| cycles.to_string()),
+            domain.allocated_workloads,
+            domain.planned_initial_workloads,
+            domain.occupied_pool_assets,
+            domain.pool_maximum_size,
+            domain.eligible_ready_pool_assets,
+            domain.pending_creation_count,
+            domain.pending_creation.as_ref().map_or_else(
+                || "none".to_string(),
+                |pending| format!(
+                    "operation:{} diagnostic:{:?} attempts:{} available:{:?} required:{:?} shortfall:{:?} last_attempt:{:?} retry_at:{:?}",
+                    pending.operation_id,
+                    pending.diagnostic,
+                    pending.attempt_count,
+                    pending.available_cycles,
+                    pending.required_cycles,
+                    pending.shortfall_cycles,
+                    pending.last_attempt_at_ns,
+                    pending.retry_at_ns,
+                ),
+            ),
+            domain.available_pool_slots,
+            domain.required_creation_count,
+            domain.creation_amount_cycles,
+            domain.readiness_floor_cycles,
+            domain.management_creation_fee_cycles,
+            domain.creation_execution_margin_cycles,
+            domain.ledger_fee_cycles,
+            domain.maximum_creation_debit_cycles,
+            domain.maximum_funding_cycles,
+            domain.shortfall_cycles,
+        )
+    }));
 }
 
 fn format_cycles(cycles: u128) -> String {

@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.7` orders quick source and lint failures before expensive lanes,
+  makes every infrastructure command/status entrypoint role-owned so one
+  method name never carries incompatible Candid contracts,
+  hardens terminal Component authority and capability-aware cycle reporting,
+  accounts for each Root-owned Cycles Ledger balance as a separately reviewed
+  Fleet Ensure funding domain, gives its exact shortfall a replay-safe
+  plan-owned Ledger transfer, and proves actual autonomous-creation receipts,
+  fees and first observed balances before terminal conservation,
+  replaces observability/source-text assertions with typed PocketIC evidence,
+  collapses the duplicate elliptic-curve dependency family, enforces typed
+  crypto-feature closure, and gives test failures and Wasm optimizer
+  measurements stable structured records. Artifact builds now hard-cut
+  optional tool handling, preflight and reuse one pinned absolute Wasm
+  toolchain. Packaged qualification also covers enabling the public testing
+  facade from an existing current `thiserror` lock without a downstream
+  override. Its immutable
+  activation- and authorization-persistence ablations record material repeated
+  role footprint
+  without treating the fail-closed measurement switch as production behavior;
+  Fleet plan persistence tests now assert decoded JSON fields instead of
+  serializer formatting. Full retained pools fail before funding and leave
+  existing Failed assets untouched for a separately reviewed repair.
 - `0.110.6` repairs active child creation and terminal Fleet status, backup and
   descendant authority, protects exact observability behind controller-bound
   relays, gives terminal Component inventory an unambiguous typed Root status

@@ -21,14 +21,15 @@ Git hooks, format before checking, or invoke unrelated invariant, feature,
 lint, build, or test targets. `make validate` is the explicit composition
 boundary for the complete local workflow.
 
-`make validate` has three sequential barriers. The first runs every independent
-formatting, repository-invariant, dependency, secret, shell and feature check,
-then reports their complete failure set. Workspace checking and Clippy start
-only when that barrier passes. The complete test graph starts only when both
-compile/lint targets pass, so a deterministic compiler or warning failure never
-leaves PocketIC running. Targets within each barrier remain sequential so
-independent Cargo processes do not contend for the same build graph. Complete
-failed-target logs are retained under
+`make validate` has four sequential barriers. The first runs every independent
+formatting, repository-invariant, dependency, secret and shell check, then
+reports their complete failure set. Workspace checking and Clippy start only
+when that barrier passes. The control-plane feature matrix starts only after
+compile and warning-denied Clippy pass; the complete test graph starts only
+after that feature matrix passes. A deterministic compiler or warning failure
+therefore never starts the feature matrix or leaves PocketIC running. Targets
+within each barrier remain sequential so independent Cargo processes do not
+contend for the same build graph. Complete failed-target logs are retained under
 `target/validation-failures/`; the terminal summary repeats bounded failure
 detail and the exact failed target list.
 
@@ -145,9 +146,11 @@ its integration-suite group and once at
 invocation cleanup; it retains Cargo freshness between the ordered suites.
 CI may run the ordinary and PocketIC lanes in separate jobs; it must not
 parallelize the PocketIC suites themselves without replacing this measured
-policy. Cheap source/governance preflight and security jobs gate every compile
-and test lane so a deterministic repository-policy failure does not leave an
-expensive PocketIC job running.
+policy. Cheap source/governance preflight and security jobs gate the Rust checks
+job. That job runs formatting and warning-denied Clippy before the control-plane
+feature matrix. Ordinary tests, PocketIC tests and the release-profile build all
+depend on the completed checks job, so no expensive lane starts while a quick
+compiler or lint failure is still discoverable.
 
 The governed PocketIC runner resolves one repository-pinned server binary,
 verifies its exact checksum even when `POCKET_IC_BIN` was supplied by the

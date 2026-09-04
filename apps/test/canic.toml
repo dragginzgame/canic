@@ -111,6 +111,9 @@ topup = {}
 [component_specs.test.standards]
 icrc21 = true
 
+[component_specs.test.auth]
+delegated_token_verifier = true
+
 # --- User Hub ---
 [component_specs.users]
 component_role = "user_hub"

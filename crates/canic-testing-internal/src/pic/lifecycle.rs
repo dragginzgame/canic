@@ -46,9 +46,11 @@ use super::{
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const CANISTERS: [&str; 3] = ["canister_test", "intent_authority", "runtime_probe"];
 const LIFECYCLE_CANISTER_CONFIG_PATH: &str = "apps/test/test-configs/root-sharding.toml";
+const AUTOMATIC_TOPUP_CONFIG_PATH: &str = "apps/test/canic.toml";
 const COMBINED_LIFECYCLE_CONFIG_PATH: &str =
     "canisters/test/canic_icydb_lifecycle_probe/canic.toml";
 static BUILD_ONCE: Once = Once::new();
+static AUTOMATIC_TOPUP_BUILD_ONCE: Once = Once::new();
 static COMBINED_BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
 static MANAGED_COMPONENT_GROUP_BUILD_ONCE: Once = Once::new();
@@ -179,6 +181,25 @@ impl LifecycleBoundaryFixture {
             encode_one(None::<Vec<u8>>).expect("encode standalone-local init"),
             None,
         );
+        canister_id
+    }
+
+    /// Install one managed canister whose compiled status protocol includes automatic top-ups.
+    #[must_use]
+    pub fn install_automatic_topup_canister(&self) -> Principal {
+        let workspace_root = workspace_root();
+        let target_dir = test_target_dir(&workspace_root, "pic-runtime-automatic-topup-wasm");
+        build_automatic_topup_canister_once(&workspace_root);
+        let wasm = read_wasm(
+            &target_dir,
+            "canister_test",
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        );
+        let canister_id = self.pic.create_canister();
+        self.pic.add_cycles(canister_id, INSTALL_CYCLES);
+        let payload = init_payload_for_config(canister_id, self.root, AUTOMATIC_TOPUP_CONFIG_PATH);
+        self.pic
+            .install_canister(canister_id, wasm, encode_init_args(payload), None);
         canister_id
     }
 
@@ -346,6 +367,27 @@ fn build_canisters_once(workspace_root: &Path) {
     });
 }
 
+// Build one capability-accurate automatic-topup fixture in an isolated Wasm target.
+fn build_automatic_topup_canister_once(workspace_root: &Path) {
+    AUTOMATIC_TOPUP_BUILD_ONCE.call_once(|| {
+        let target_dir = test_target_dir(workspace_root, "pic-runtime-automatic-topup-wasm");
+        let config_path = workspace_root.join(AUTOMATIC_TOPUP_CONFIG_PATH);
+        let config_path = config_path
+            .to_str()
+            .expect("automatic-topup config path is UTF-8");
+        build_internal_test_wasm_canisters_with_env(
+            workspace_root,
+            &target_dir,
+            &["canister_test"],
+            CanicWasmBuildProfile::Fast,
+            &[(
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                config_path,
+            )],
+        );
+    });
+}
+
 // Build the combined framework lifecycle probe once into its dedicated test target dir.
 fn build_combined_canister_once(workspace_root: &Path) {
     COMBINED_BUILD_ONCE.call_once(|| {
@@ -437,6 +479,7 @@ fn init_payload_for_config(
                 minimum_size: 1,
                 maximum_size: 1,
                 canister_cycles: Cycles::new(1),
+                creation_execution_margin: Cycles::new(1),
             },
             cycles_funding: CyclesFundingBudget {
                 window_secs: 3_600,

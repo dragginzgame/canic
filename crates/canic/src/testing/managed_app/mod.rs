@@ -644,6 +644,7 @@ const fn test_root_limits(maximum_component_instances: u32) -> FleetSubnetRootLi
     FleetSubnetRootLimits {
         canister_pool: FleetSubnetCanisterPoolConfig {
             canister_cycles: Cycles::new(1),
+            creation_execution_margin: Cycles::new(1),
             maximum_size: maximum_component_instances,
             minimum_size: 1,
         },

@@ -935,6 +935,7 @@ pub(super) fn validate_component_provisioning_record(
         ));
     }
     validate_component_provisioning_root_failure(record)?;
+    validate_component_provisioning_estate_funding_pause(record)?;
     validate_component_provisioning_root_acceptance_state(record)?;
     validate_component_provisioning_root_provision_state(
         &current.component_deployment_configuration,
@@ -945,6 +946,65 @@ pub(super) fn validate_component_provisioning_record(
     validate_component_directory_confirmation_state(current, record)?;
     validate_component_runtime_activation_state(record)?;
     component_provisioning_plan_counts(&record.plan)?;
+    Ok(())
+}
+
+fn validate_component_provisioning_estate_funding_pause(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<(), InternalError> {
+    let Some(funding) = record.estate_funding_required.as_ref() else {
+        return Ok(());
+    };
+    let FleetComponentProvisioningStateRecord::ProvisioningRoots {
+        provisions,
+        current,
+        in_flight: None,
+        ..
+    } = &record.state
+    else {
+        return Err(receipt_invariant(
+            "Fleet Component estate funding pause is outside Root provisioning",
+        ));
+    };
+    let root_index = u32::try_from(provisions.len())
+        .map_err(|_| receipt_invariant("estate funding Root index does not fit u32"))?;
+    let expected_root = if let Some(current) = current.as_ref() {
+        current.response.fleet_subnet_root
+    } else {
+        root_batch(record, root_index)?.root.fleet_subnet_root
+    };
+    let required = funding
+        .creation_amount
+        .to_u128()
+        .checked_add(funding.ledger_fee.to_u128())
+        .ok_or_else(InternalError::resource_exhausted)?;
+    let creation_amount = funding
+        .readiness_floor
+        .to_u128()
+        .checked_add(funding.execution_margin.to_u128())
+        .and_then(|amount| amount.checked_add(funding.management_creation_fee.to_u128()))
+        .ok_or_else(InternalError::resource_exhausted)?;
+    let authority_is_exact = funding.root == expected_root
+        && funding.operation_id != [0; 32]
+        && funding.readiness_floor.to_u128() > 0
+        && funding.execution_margin.to_u128() > 0;
+    let arithmetic_is_exact = funding.creation_amount.to_u128() == creation_amount
+        && funding.required.to_u128() == required
+        && funding.available < funding.required
+        && funding.shortfall.to_u128() == required.saturating_sub(funding.available.to_u128());
+    let timing_is_exact = funding.retry_at_ns > 0
+        && funding
+            .last_attempt_at_ns
+            .is_none_or(|attempted_at_ns| attempted_at_ns > 0);
+    if !authority_is_exact
+        || !arithmetic_is_exact
+        || !timing_is_exact
+        || record.last_root_failure.is_some()
+    {
+        return Err(receipt_invariant(
+            "Fleet Component estate funding pause is not exactly bound",
+        ));
+    }
     Ok(())
 }
 

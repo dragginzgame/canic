@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use crate::{
-    artifact_io::IC_WASM_TOOL,
     binaryen::{WASM_OPT_TOOL, current_binaryen_authority},
     evidence_envelope::file_input_fingerprint,
+    ic_wasm::IC_WASM_TOOL,
 };
 
 use crate::canister_build::{ArtifactTransformKind, ArtifactTransformOutcome};
@@ -68,9 +68,6 @@ pub(super) fn artifact_transform_provenance(
                 tool_sha256: transform.tool_sha256.clone(),
                 outcome: match transform.outcome {
                     ArtifactTransformOutcome::Applied => ArtifactTransformOutcomeV1::Applied,
-                    ArtifactTransformOutcome::ToolUnavailable => {
-                        ArtifactTransformOutcomeV1::ToolUnavailable
-                    }
                     ArtifactTransformOutcome::NotRequested => {
                         ArtifactTransformOutcomeV1::NotRequested
                     }
@@ -111,9 +108,7 @@ fn validate_transform_output(
         {
             return Err("applied artifact transform must record a tool version".into());
         }
-        ArtifactTransformOutcome::ToolUnavailable | ArtifactTransformOutcome::NotRequested
-            if transform.tool_version.is_some() =>
-        {
+        ArtifactTransformOutcome::NotRequested if transform.tool_version.is_some() => {
             return Err("unapplied artifact transform must not record a tool version".into());
         }
         _ => {}

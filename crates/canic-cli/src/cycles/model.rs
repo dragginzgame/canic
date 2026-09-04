@@ -49,17 +49,21 @@ pub(super) struct CyclesCanisterReport {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum CyclesCanisterStatus {
+    BalanceOnly,
     Empty,
     Error,
     Ok,
+    Unavailable,
 }
 
 impl CyclesCanisterStatus {
     pub(super) const fn label(self) -> &'static str {
         match self {
+            Self::BalanceOnly => "balance_only",
             Self::Empty => "empty",
             Self::Error => "error",
             Self::Ok => "ok",
+            Self::Unavailable => "unavailable",
         }
     }
 }

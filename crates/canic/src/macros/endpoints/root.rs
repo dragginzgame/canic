@@ -447,10 +447,26 @@ macro_rules! canic_emit_root_command_endpoint {
                         }
                         ::canic::dto::pool::PoolAdminResponse::RefillWaitingForCycles {
                             available,
+                            attempt_count,
                             creation_amount,
+                            execution_margin,
+                            last_attempt_at_ns,
+                            ledger_fee,
+                            readiness_floor,
+                            required,
+                            retry_at_ns,
+                            shortfall,
                         } => ::canic::dto::pool::PoolMaintenanceResponse::RefillWaitingForCycles {
                             available,
+                            attempt_count,
                             creation_amount,
+                            execution_margin,
+                            last_attempt_at_ns,
+                            ledger_fee,
+                            readiness_floor,
+                            required,
+                            retry_at_ns,
+                            shortfall,
                         },
                         ::canic::dto::pool::PoolAdminResponse::RefillPending {
                             operation_id,
@@ -825,7 +841,7 @@ macro_rules! canic_emit_root_status_endpoint {
         }
 
         #[$crate::canic_query(public)]
-        async fn canic_status(
+        async fn canic_root_status(
             request: RootStatusRequest,
         ) -> Result<RootStatusResponse, ::canic::Error> {
             let caller = $crate::__internal::cdk::api::msg_caller();

@@ -116,7 +116,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
         }
 
         #[$crate::canic_query(public)]
-        async fn canic_status(
+        async fn canic_coordinator_status(
             request: ::canic::dto::fleet_coordinator::CoordinatorStatusRequest,
         ) -> Result<::canic::dto::fleet_coordinator::CoordinatorStatusResponse, ::canic::Error>
         {

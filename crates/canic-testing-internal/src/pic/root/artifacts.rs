@@ -338,7 +338,7 @@ fn stage_manifest(
         .update_candid_as(
             store,
             installation_controller,
-            protocol::CANIC_COMMAND,
+            protocol::CANIC_WASM_STORE_COMMAND,
             (StoreCommand::StageManifest(manifest),),
         )
         .expect("Store manifest transport");
@@ -359,7 +359,7 @@ fn prepare_chunk_set(
         .update_candid_as(
             store,
             installation_controller,
-            protocol::CANIC_COMMAND,
+            protocol::CANIC_WASM_STORE_COMMAND,
             (StoreCommand::PrepareChunkSet(prepare),),
         )
         .expect("Store prepare transport");

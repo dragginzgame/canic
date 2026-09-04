@@ -21,7 +21,7 @@ use canic::{
     },
     ids::cap,
     prelude::*,
-    protocol::CANIC_COMMAND,
+    protocol::CANIC_ROOT_COMMAND,
 };
 
 const VERIFY_APPLICATION_SCOPE: canic::access::auth::ApplicationScopeRef<'static> =
@@ -204,7 +204,7 @@ async fn forward_peer_allocation(
     request: RootPeerComponentAllocationRequest,
 ) -> Result<OperationReceipt, Error> {
     let response: Result<RootCommandResponse, Error> =
-        Call::bounded_wait(fleet_subnet_root, CANIC_COMMAND)
+        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_COMMAND)
             .with_arg(RootCommand::ProvisionPeer(request))?
             .execute_candid()
             .await?;

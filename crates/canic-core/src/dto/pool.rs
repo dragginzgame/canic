@@ -31,6 +31,20 @@ pub enum CanisterPoolAssetOrigin {
     Recycled,
 }
 
+/// Exact Cycles Ledger receipt retained for one autonomously created pool asset.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterPoolCreationReceipt {
+    pub block_index: u64,
+    pub operation_id: [u8; 32],
+    pub cycles_ledger: Principal,
+    pub ledger_amount: Cycles,
+    pub ledger_fee: Cycles,
+    pub readiness_floor: Cycles,
+    pub creation_execution_margin: Cycles,
+    pub management_creation_fee: Cycles,
+    pub first_observed_cycles: Option<Cycles>,
+}
+
 /// Current durable state of one root-owned physical Canister.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolAssetStatus {
@@ -62,6 +76,7 @@ pub enum CanisterPoolAssetStatus {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolAsset {
     pub canister_id: Principal,
+    pub creation_receipt: Option<CanisterPoolCreationReceipt>,
     pub cycles: Cycles,
     pub origin: CanisterPoolAssetOrigin,
     pub status: CanisterPoolAssetStatus,
@@ -86,7 +101,7 @@ pub enum CanisterPoolCreationFailure {
 }
 
 /// Durable controller-visible progress of one autonomous refill.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolCreationProgress {
     Intent {
         uncertain_result: bool,
@@ -94,6 +109,15 @@ pub enum CanisterPoolCreationProgress {
     Created {
         block_index: u64,
         canister_id: Principal,
+    },
+    WaitingForFunding {
+        available: Cycles,
+        attempt_count: u32,
+        last_attempt_at_ns: Option<u64>,
+        observed_at_ns: u64,
+        required: Cycles,
+        retry_at_ns: u64,
+        shortfall: Cycles,
     },
     Blocked {
         failure: CanisterPoolCreationFailure,
@@ -103,12 +127,18 @@ pub enum CanisterPoolCreationProgress {
 /// Exact Cycles Ledger request retained until its principal is in inventory.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolCreation {
+    pub attempt_count: u32,
     pub operation_id: [u8; 32],
     pub cycles_ledger: Principal,
     pub placement_subnet: Principal,
     pub root: Principal,
     pub ledger_amount: Cycles,
+    pub ledger_fee: Cycles,
+    pub readiness_floor: Cycles,
+    pub creation_execution_margin: Cycles,
+    pub management_creation_fee: Cycles,
     pub created_at_time_ns: u64,
+    pub last_attempt_at_ns: Option<u64>,
     pub progress: CanisterPoolCreationProgress,
 }
 
@@ -184,7 +214,15 @@ pub enum PoolAdminResponse {
     },
     RefillWaitingForCycles {
         available: Cycles,
+        attempt_count: u32,
         creation_amount: Cycles,
+        execution_margin: Cycles,
+        last_attempt_at_ns: Option<u64>,
+        ledger_fee: Cycles,
+        readiness_floor: Cycles,
+        required: Cycles,
+        retry_at_ns: u64,
+        shortfall: Cycles,
     },
     RefillPending {
         operation_id: [u8; 32],
@@ -228,7 +266,15 @@ pub enum PoolMaintenanceResponse {
     },
     RefillWaitingForCycles {
         available: Cycles,
+        attempt_count: u32,
         creation_amount: Cycles,
+        execution_margin: Cycles,
+        last_attempt_at_ns: Option<u64>,
+        ledger_fee: Cycles,
+        readiness_floor: Cycles,
+        required: Cycles,
+        retry_at_ns: u64,
+        shortfall: Cycles,
     },
     RefillPending {
         operation_id: [u8; 32],
@@ -294,6 +340,7 @@ mod tests {
                 minimum_size: 3,
                 maximum_size: 10,
                 canister_cycles: Cycles::new(5_000_000_000_000),
+                creation_execution_margin: Cycles::new(1_000_000_000_000),
             },
             tracked: 1,
             store: 0,
@@ -309,12 +356,18 @@ mod tests {
             failed: 1,
             completed_handoffs: 0,
             pending_creation: Some(CanisterPoolCreation {
+                attempt_count: 1,
                 operation_id: [8; 32],
                 cycles_ledger: Principal::from_slice(&[6; 29]),
                 placement_subnet: Principal::from_slice(&[5; 29]),
                 root: Principal::from_slice(&[4; 29]),
-                ledger_amount: Cycles::new(5_500_000_000_000),
+                ledger_amount: Cycles::new(6_500_000_000_000),
+                ledger_fee: Cycles::new(100_000_000),
+                readiness_floor: Cycles::new(5_000_000_000_000),
+                creation_execution_margin: Cycles::new(1_000_000_000_000),
+                management_creation_fee: Cycles::new(500_000_000_000),
                 created_at_time_ns: 12,
+                last_attempt_at_ns: Some(13),
                 progress: CanisterPoolCreationProgress::Blocked {
                     failure: CanisterPoolCreationFailure::LedgerCreationFailed,
                 },
@@ -322,6 +375,7 @@ mod tests {
             pending_handoff: None,
             entries: vec![CanisterPoolAsset {
                 canister_id,
+                creation_receipt: None,
                 cycles: Cycles::new(4_000_000_000_000),
                 origin: CanisterPoolAssetOrigin::Recycled,
                 status: CanisterPoolAssetStatus::Failed {

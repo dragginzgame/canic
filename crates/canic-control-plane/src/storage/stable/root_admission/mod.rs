@@ -274,6 +274,7 @@ mod tests {
                     minimum_size: u32::MAX,
                     maximum_size: u32::MAX,
                     canister_cycles: Cycles::new(u128::MAX),
+                    creation_execution_margin: Cycles::new(1),
                 },
                 cycles_funding: CyclesFundingBudget {
                     window_secs: u64::MAX,

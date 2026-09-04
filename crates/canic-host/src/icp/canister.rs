@@ -301,7 +301,7 @@ mod binary_args_tests {
         let icp = IcpCli::new("icp", Some("local".to_string()));
         let command = icp.canister_binary_args_command(
             "root",
-            "canic_status",
+            "canic_root_status",
             Path::new("/state/args.bin"),
             Some("json"),
             None,
@@ -310,7 +310,7 @@ mod binary_args_tests {
 
         assert_eq!(
             command_display(&command),
-            "icp canister call root canic_status --args-file /state/args.bin --args-format bin --query --json -e local"
+            "icp canister call root canic_root_status --args-file /state/args.bin --args-format bin --query --json -e local"
         );
     }
 }

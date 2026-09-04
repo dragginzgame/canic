@@ -29,7 +29,7 @@ FAILURE_RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 RUNNER_DEPTH="${CANIC_VALIDATION_RUNNER_DEPTH:-0}"
 export CANIC_VALIDATION_RUNNER_DEPTH="$((RUNNER_DEPTH + 1))"
 MAX_FAILURE_DETAIL_LINES=160
-FAILURE_PATTERN='---- .* stdout ----|^test .* \.\.\. FAILED$|failures:|test result: FAILED|error(\[[A-Z0-9]+\])?:|target failed|make(\[[0-9]+\])?: \*\*\*'
+FAILURE_PATTERN='^\[CANIC-TEST:E001\]|---- .* stdout ----|^test .* \.\.\. FAILED$|failures:|test result: FAILED|error(\[[A-Z0-9]+\])?:|target failed|make(\[[0-9]+\])?: \*\*\*'
 
 # The validation pipeline makes child stderr non-interactive. Preserve readable
 # test-progress colors when the outer runner is attached to a real terminal.
@@ -70,7 +70,7 @@ is_live_failure_line() {
     local line="$1"
 
     case "$line" in
-        *"error:"* | *"error["* | *"rustc-LLVM ERROR"* | \
+        "[CANIC-TEST:E001] "* | *"error:"* | *"error["* | *"rustc-LLVM ERROR"* | \
             *"test result: FAILED"* | test\ *" ... FAILED" | *"fatal:"* | \
             *"FAILED:"* | *"Target failed:"* | *"No such file or directory"* | \
             *"❌"* | *"🚨"* | \

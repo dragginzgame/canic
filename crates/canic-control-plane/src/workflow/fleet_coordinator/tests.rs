@@ -64,7 +64,7 @@ use canic_core::{
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningPhase,
             RootComponentProvisioningResult, RootComponentProvisioningStatusResponse,
             RootComponentPublicationEvidence, RootComponentPublicationRequest,
-            RootProvisionedGroupMember, RootProvisionedGroupPlacement,
+            RootEstateFundingRequired, RootProvisionedGroupMember, RootProvisionedGroupPlacement,
         },
         fleet_admission::{
             FleetAdmissionMutationAction, FleetAdmissionMutationOutcome,
@@ -3485,6 +3485,91 @@ fn coordinator_advances_each_accepted_root_and_freezes_terminal_receipts() {
 }
 
 #[test]
+fn coordinator_retains_typed_estate_funding_pause_without_advancing_root_progress() {
+    let (config, plan_hash) = prepare_two_root_acceptance_plan();
+    accept_every_planned_root(&config, plan_hash);
+    let status = component_provisioning_status(&config, plan_hash);
+    let request = root_provision_advance_request(&status);
+    let call = expect_root_provision_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_provisioning_root_for_test(&config, &request, 120)
+            .expect("persist Root provisioning intent"),
+        false,
+    );
+    let durable_intent = FleetCoordinatorRegistryStore::export();
+    let mut response = durable_intent
+        .current
+        .as_ref()
+        .and_then(|current| current.component_provisioning.as_ref())
+        .map(|record| provisioning_acceptances(&record.state)[0].response.clone())
+        .expect("accepted Root response");
+    response.estate_funding_required = Some(RootEstateFundingRequired {
+        available: Cycles::new(900),
+        attempt_count: 0,
+        creation_amount: Cycles::new(1_000),
+        cycles_ledger: principal(220),
+        execution_margin: Cycles::new(100),
+        last_attempt_at_ns: None,
+        ledger_fee: Cycles::new(10),
+        management_creation_fee: Cycles::new(500),
+        operation_id: [33; 32],
+        readiness_floor: Cycles::new(400),
+        required: Cycles::new(1_010),
+        retry_at_ns: 180,
+        root: call.fleet_subnet_root,
+        shortfall: Cycles::new(110),
+    });
+
+    let paused = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_estate_funding_pause(&request, response.clone(), 122)
+        .expect("retain typed funding pause");
+    assert_eq!(paused.current_root, status.current_root);
+    assert_eq!(
+        paused.estate_funding_required,
+        response.estate_funding_required
+    );
+    assert_eq!(paused.pending_root_failure, None);
+    assert_eq!(paused.provisioning_in_flight_root, None);
+
+    let retained_pause = FleetCoordinatorRegistryStore::export();
+    let mut wrong_root = response;
+    wrong_root
+        .estate_funding_required
+        .as_mut()
+        .expect("funding pause")
+        .root = principal(221);
+    let retry = root_provision_advance_request(&paused);
+    let _call = expect_root_provision_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_provisioning_root_for_test(&config, &retry, 123)
+            .expect("resume exact Root intent"),
+        false,
+    );
+    let durable_retry = FleetCoordinatorRegistryStore::export();
+    assert!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            record_component_provisioning_estate_funding_pause(&retry, wrong_root, 124)
+            .is_err()
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_retry);
+
+    FleetCoordinatorRegistryStore::import(retained_pause);
+    let retry = root_provision_advance_request(&paused);
+    let call = expect_root_provision_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_provisioning_root_for_test(&config, &retry, 125)
+            .expect("resume after funding"),
+        false,
+    );
+    let progressed = next_root_provision_response(&config, &call, 126);
+    let resumed = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_for_test(&config, &retry, progressed, 127)
+        .expect("record progress after funding");
+    assert_eq!(resumed.estate_funding_required, None);
+    assert_ne!(resumed.current_root, paused.current_root);
+}
+
+#[test]
 fn coordinator_accepts_a_root_that_finishes_before_its_first_observation() {
     let (config, plan_hash) = prepare_two_root_acceptance_plan();
     accept_every_planned_root(&config, plan_hash);
@@ -3957,6 +4042,7 @@ fn accepted_root_response(
         fleet_registry: request.fleet_registry.clone(),
         configuration_digest: request.configuration_digest,
         fleet_subnet_root: request.batch.root.fleet_subnet_root,
+        estate_funding_required: None,
         phase: RootComponentProvisioningPhase::Accepted,
         placement_count,
         component_count,
@@ -4222,6 +4308,7 @@ fn provisioned_root_response(
         fleet_registry: record.plan.fleet_registry.clone(),
         configuration_digest: record.plan.configuration_digest,
         fleet_subnet_root: batch.root.fleet_subnet_root,
+        estate_funding_required: None,
         phase: RootComponentProvisioningPhase::Provisioned,
         placement_count,
         component_count,
@@ -5886,6 +5973,7 @@ fn joining_entry(
                 minimum_size: 1,
                 maximum_size: 10,
                 canister_cycles: Cycles::new(5_000_000_000_000),
+                creation_execution_margin: Cycles::new(1_000_000_000_000),
             },
             cycles_funding: CyclesFundingBudget {
                 window_secs: 3_600,

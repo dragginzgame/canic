@@ -280,7 +280,7 @@ index ba9a425ce..8a8a6d1d5 100644
 +++ b/crates/canic-core/src/state_contract.rs
 @@ -439,13 +439,11 @@ fn replay_receipt_domains() -> Vec<StateDomainManifest> {
  }
- 
+
  fn fleet_activation_domains() -> Vec<StateDomainManifest> {
 -    use crate::storage::stable::fleet_activation::{FleetActivationData, FleetActivationRecord};
 -

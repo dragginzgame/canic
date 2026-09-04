@@ -754,6 +754,55 @@ role_attestation_cache = true
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
+// Ensure workspace medic reports cryptographic implementations enabled for a role
+// whose current contract does not use them.
+#[test]
+fn workspace_config_quality_checks_reject_surplus_crypto_features() {
+    let root = temp_dir("canic-cli-medic-workspace-surplus-crypto-features");
+    let config = write_medic_config(
+        &root,
+        r#"
+[app]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+"#,
+    );
+    write_medic_package_with_canic_features(&root, "root", "demo", "root", &["control-plane"]);
+    write_medic_package_with_canic_features(
+        &root,
+        "app",
+        "demo",
+        "app",
+        &["auth-delegated-token-verify"],
+    );
+
+    let checks = workspace_config_quality_checks(&root, &[config]);
+
+    let surplus = checks
+        .iter()
+        .filter(|check| {
+            check.subject == "demo.app" && check.code == "role_contract_surplus_crypto_feature"
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(surplus.len(), 1);
+    assert!(surplus.iter().all(|check| {
+        check.status == MedicStatus::Fail
+            && check.detail.contains("without a role capability")
+            && check
+                .next
+                .contains("remove the unused Canic cryptographic feature")
+    }));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure workspace medic rejects role features inherited from workspace dependencies.
 #[test]
 fn workspace_config_quality_checks_reject_workspace_canic_features() {

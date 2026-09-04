@@ -110,7 +110,7 @@ fn root_status(
     root: Principal,
     request: RootStatusRequestFragment,
 ) -> Result<RootStatusResponseFragment, Error> {
-    pic.query_candid(root, protocol::CANIC_STATUS, (request,))
+    pic.query_candid(root, protocol::CANIC_ROOT_STATUS, (request,))
         .expect("Root status transport")
 }
 
@@ -200,7 +200,7 @@ pub trait CanicPicExt {
         config_path: &Path,
     ) -> Result<Principal, Error>;
 
-    /// Wait until one Canic canister reports `canic_status(Readiness)`.
+    /// Wait until one Root reports `canic_root_status(Readiness)`.
     fn wait_for_ready(
         &self,
         canister_id: Principal,
@@ -209,7 +209,7 @@ pub trait CanicPicExt {
         context: &str,
     );
 
-    /// Wait until all provided Canic canisters report `canic_status(Readiness)`.
+    /// Wait until all provided Roots report `canic_root_status(Readiness)`.
     fn wait_for_all_ready<I>(&self, targets: I, tick_limit: usize, context: &str)
     where
         I: IntoIterator<Item = (Principal, Principal)>;
@@ -491,7 +491,7 @@ pub(super) fn activate_managed_fleet(
     let store_response: Result<StoreStatusResponseFragment, Error> = pic
         .query_candid(
             store.principal,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_WASM_STORE_STATUS,
             (StoreStatusRequestFragment::Operation(
                 OperationStatusRequest {
                     operation_id: managed_test_store_install_id(),
@@ -514,7 +514,7 @@ pub(super) fn activate_managed_fleet(
     activated
 }
 
-/// Wait until one Canic canister reports `canic_status(Readiness)`.
+/// Wait until one Root reports `canic_root_status(Readiness)`.
 ///
 /// # Panics
 ///
@@ -526,7 +526,7 @@ pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usiz
             pic.query_candid_as::<Result<RootStatusResponseFragment, Error>, _>(
                 canister_id,
                 Principal::anonymous(),
-                protocol::CANIC_STATUS,
+                protocol::CANIC_ROOT_STATUS,
                 (RootStatusRequestFragment::Readiness,),
             ),
             Ok(Ok(RootStatusResponseFragment::Readiness(
@@ -620,7 +620,7 @@ pub fn install_standalone_canister_on_pic(
 fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
     match pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
         canister_id,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_ROOT_STATUS,
         (RootStatusRequestFragment::Readiness,),
     ) {
         Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {
@@ -792,6 +792,7 @@ fn managed_test_root_init_args(
                         minimum_size: 1,
                         maximum_size: 10,
                         canister_cycles: Cycles::new(5_000_000_000_000),
+                        creation_execution_margin: Cycles::new(1_000_000_000_000),
                     },
                     cycles_funding: CyclesFundingBudget {
                         window_secs: 3_600,

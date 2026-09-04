@@ -32,7 +32,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 $crate::__internal::core::ingress::payload::inspect_update_message();
                 return;
             }
-            if method != $crate::__internal::core::protocol::CANIC_COMMAND {
+            if method != $crate::__internal::core::protocol::CANIC_WASM_STORE_COMMAND {
                 $crate::__internal::core::ingress::payload::inspect_update_message();
                 return;
             }
@@ -59,7 +59,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             public,
             payload(max_bytes = ::canic::__internal::core::protocol::CASCADE_SNAPSHOT_MAX_BYTES)
         )]
-        async fn canic_command(
+        async fn canic_wasm_store_command(
             command: ::canic::dto::template::StoreCommand,
         ) -> Result<::canic::dto::template::StoreCommandResponse, ::canic::Error> {
             use ::canic::dto::template::{StoreCommand, StoreCommandResponse};
@@ -93,7 +93,9 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 let context = $crate::__internal::core::access::expr::AccessContext {
                     caller,
                     call: $crate::__internal::core::ids::EndpointCall {
-                        endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
+                            endpoint: $crate::__internal::core::ids::EndpointId::new(
+                                $crate::__internal::core::protocol::CANIC_WASM_STORE_COMMAND,
+                            ),
                         kind: $crate::__internal::core::ids::EndpointCallKind::Update,
                     },
                 };
@@ -180,7 +182,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         }
 
         #[$crate::canic_query(public)]
-        async fn canic_status(
+        async fn canic_wasm_store_status(
             request: ::canic::dto::template::StoreStatusRequest,
         ) -> Result<::canic::dto::template::StoreStatusResponse, ::canic::Error> {
             use ::canic::dto::template::{StoreStatusRequest, StoreStatusResponse};
@@ -199,7 +201,9 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                     let context = $crate::__internal::core::access::expr::AccessContext {
                         caller,
                         call: $crate::__internal::core::ids::EndpointCall {
-                            endpoint: $crate::__internal::core::ids::EndpointId::new("canic_status"),
+                            endpoint: $crate::__internal::core::ids::EndpointId::new(
+                                $crate::__internal::core::protocol::CANIC_WASM_STORE_STATUS,
+                            ),
                             kind: $crate::__internal::core::ids::EndpointCallKind::Query,
                         },
                     };

@@ -1,6 +1,6 @@
 # Canic Metrics Reference
 
-`canic_status::Metrics { kind, page }` is controller-only and returns a
+The role-owned status selector `Metrics { kind, page }` is controller-only and returns a
 paginated `Page<MetricEntry>`. Rows are sorted by `labels`, then `principal`,
 before pagination. This guard is intentional: runtime rows include exact
 instruction totals, timer delays, cycle-funding values, and principal-scoped
@@ -9,8 +9,8 @@ activity that should not be available to anonymous probes.
 For a managed Fleet, use `canic info metrics`. Human operators do not become
 controllers of every Component; the CLI authenticates to the Fleet Subnet
 Root, which relays the bounded observation to the Root-controlled target. A
-direct `canic_status::Metrics` query remains appropriate for a canister's own
-controller.
+direct status query remains appropriate for a canister's own controller.
+Managed Components use `canic_status`; a Root uses `canic_root_status`.
 
 Each row has:
 
@@ -44,8 +44,9 @@ async fn audit_env_probe() -> Result<QueryPerfSample<EnvSnapshotResponse>, Error
 
 `QueryPerfSample::local_instructions` is the local call-context instruction
 counter observed before the query response is returned. Use this for explicit
-audit/probe endpoints; use `canic_status::Metrics(MetricsKind::Runtime, ...)` for
-persisted update and timer rows.
+audit/probe endpoints; use the role-owned
+`Metrics(MetricsKind::Runtime, ...)` status selector for persisted update and
+timer rows.
 
 Audit reports should treat a zero `local_instructions` value as unobservable
 rather than as a successful zero-cost query measurement.

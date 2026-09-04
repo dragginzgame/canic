@@ -438,6 +438,7 @@ clear_pocketic_build_targets() {
         "target/canic-wasm"
         "target/pic-wasm"
         "target/pic-runtime-wasm"
+        "target/pic-runtime-automatic-topup-wasm"
         "target/pic-wasm-no-test-material"
         "target/fleet-coordinator"
         "target/fleet-registry-sync"

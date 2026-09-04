@@ -11,28 +11,34 @@ canic build <app> <role> --profile release \
   --provenance artifacts/<role>-provenance.json
 ```
 
-The role must belong to the selected App configuration. The builder records
-the exact package, profile, input fingerprint, canonical Wasm digest and
-deterministic gzip digest. Release builds run the checksum-bound Binaryen 132
-`wasm-opt -Oz` transform after shrink and optional public-Candid embedding but
-before the code-limit check, gzip, artifact hashes, release-set manifests,
-Wasm Store publication, and module-hash authority. The optimized bytes are the
-only release artifact; there is no unoptimized fallback or parallel artifact.
-Debug and fast builds record that optimization was not requested.
+The role must belong to the selected App configuration. Before Cargo starts,
+the builder resolves one exact `ic-wasm 0.11.1` executable for every profile
+and one checksum-bound Binaryen 132 executable for release. Every artifact in
+that invocation reuses those absolute paths. The builder records the exact
+package, profile, input fingerprint, canonical Wasm digest and deterministic
+gzip digest. Release builds run `wasm-opt -Oz` after shrink and optional
+public-Candid embedding but before the code-limit check, gzip, artifact hashes,
+release-set manifests, Wasm Store publication, and module-hash authority. The
+optimized bytes are the only release artifact; there is no unoptimized fallback
+or parallel artifact. Debug and fast builds record that optimization was not
+requested. A missing transform tool is a build failure, not a provenance
+outcome.
 
-Install the governed optimizer from any published Canic CLI without a source
+Install both governed Wasm tools from any published Canic CLI without a source
 checkout:
 
 ```bash
 canic toolchain install
 ```
 
-The command verifies both the official archive and the extracted executable,
-installs `wasm-opt` under `~/.local/bin`, and prints its absolute path. A
-release build resolves the first `wasm-opt` on `PATH` and admits it only when
-both its exact Binaryen identity and platform-specific executable SHA-256
-match Canic's pins. Failure names that selected path and the repair command;
-it never searches past a rejected executable or emits unoptimized bytes.
+The command verifies both official archives, verifies the extracted tool
+identities, installs `ic-wasm` and `wasm-opt` under `~/.local/bin`, and prints
+both absolute paths. Builds prefer those canonical installed paths and fall
+back to PATH only when a canonical executable is absent. `ic-wasm` must report
+the exact pinned version. Binaryen must match both its exact version identity
+and platform-specific executable SHA-256. Failure names the selected or missing
+canonical path and the repair command. An executable found and rejected at an
+authoritative path is never skipped in favor of another candidate.
 
 Before replacing the staged input, the release transform derives the required
 Wasm feature flags from the module under Canic's admitted IC feature contract

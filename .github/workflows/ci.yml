@@ -151,7 +151,7 @@ jobs:
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks failure"
 
   tests-ordinary:
-    needs: [preflight, security]
+    needs: [checks]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -188,7 +188,7 @@ jobs:
         run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary-test failure"
 
   tests-pocketic:
-    needs: [preflight, security]
+    needs: [checks]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -264,7 +264,7 @@ jobs:
         run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC-test failure"
 
   release-build:
-    needs: [preflight, security]
+    needs: [checks]
     if: >-
       ${{ success() && github.event_name == 'push' && github.ref ==
       'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release ') }}

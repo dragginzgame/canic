@@ -20,8 +20,10 @@ Supporting implementation evidence does not belong here.
 - `fleet-observatory/`
 - `immutable-test-checkout-lease/`
 - `language-neutral-managed-guest-feasibility/`
+- `long-running-multi-subnet-local-fleet/`
 - `optional-encrypted-canister-snapshot-archives/`
 - `operator-funding-conversion-authority/`
+- `operator-top-level-component-lifecycle/`
 - `product-frontend-delivery-handoff/`
 - `standalone-blob-service-extraction/`
 

@@ -30,7 +30,7 @@ pub fn resolve_role_contract(input: RoleContractInput<'_>) -> RoleContractResolu
         };
     }
 
-    let (role, built_in, capabilities) = match input.source {
+    let (role, built_in, capabilities, requirements) = match input.source {
         RoleContractSource::Declared { config, role } => {
             let capabilities = match derive_role_capabilities(config, role) {
                 Ok(capabilities) => capabilities,
@@ -40,19 +40,23 @@ pub fn resolve_role_contract(input: RoleContractInput<'_>) -> RoleContractResolu
                     };
                 }
             };
-            (role.clone(), None, capabilities)
+            let requirements = requirements_for_declared_role(config, role, &capabilities);
+            (role.clone(), None, capabilities, requirements)
         }
-        RoleContractSource::BuiltIn(kind) => (
-            built_in_role(kind),
-            Some(kind),
-            built_in_role_capabilities(kind),
-        ),
+        RoleContractSource::BuiltIn(kind) => {
+            let capabilities = built_in_role_capabilities(kind);
+            let requirements = requirements_for_capabilities(&capabilities);
+            (built_in_role(kind), Some(kind), capabilities, requirements)
+        }
     };
 
+    let mut selected_features = input.declared_features.clone();
+    if input.default_features_enabled {
+        selected_features.extend(default_features());
+    }
     let effective_features =
         resolve_effective_features(input.declared_features, input.default_features_enabled);
-    let requirements = requirements_for_capabilities(&capabilities);
-    let missing = requirements
+    let mut errors = requirements
         .iter()
         .filter(|requirement| !effective_features.contains(&requirement.feature))
         .map(|requirement| RoleContractFinding::RequiredFeatureMissing {
@@ -60,8 +64,19 @@ pub fn resolve_role_contract(input: RoleContractInput<'_>) -> RoleContractResolu
             feature: requirement.feature,
         })
         .collect::<Vec<_>>();
-    if !missing.is_empty() {
-        return RoleContractResolution::Rejected { errors: missing };
+    let required_direct_features = requirements
+        .iter()
+        .map(|requirement| requirement.feature)
+        .collect::<BTreeSet<_>>();
+    let required_effective_features = resolve_effective_features(required_direct_features, false);
+    errors.extend(
+        selected_features
+            .difference(&required_effective_features)
+            .filter(|feature| feature.is_auth_crypto())
+            .map(|feature| RoleContractFinding::SurplusCryptoFeature { feature: *feature }),
+    );
+    if !errors.is_empty() {
+        return RoleContractResolution::Rejected { errors };
     }
 
     let selections = collect_allocation_selections(&capabilities, &effective_features, built_in);
@@ -94,7 +109,7 @@ pub fn required_features_for_role(
     role: &CanisterRole,
 ) -> Result<Vec<RoleFeatureRequirement>, RoleContractFinding> {
     derive_role_capabilities(config, role)
-        .map(|capabilities| requirements_for_capabilities(&capabilities))
+        .map(|capabilities| requirements_for_declared_role(config, role, &capabilities))
 }
 
 #[must_use]
@@ -224,6 +239,39 @@ fn requirements_for_capabilities(
         }
     }
     requirements.into_values().collect()
+}
+
+fn requirements_for_declared_role(
+    config: &ConfigModel,
+    role: &CanisterRole,
+    capabilities: &BTreeSet<RoleCapabilityKey>,
+) -> Vec<RoleFeatureRequirement> {
+    let mut requirements = requirements_for_capabilities(capabilities)
+        .into_iter()
+        .map(|requirement| (requirement.feature, requirement))
+        .collect::<BTreeMap<_, _>>();
+    if role == &CanisterRole::ROOT && has_delegated_token_issuer(config) {
+        requirements.insert(
+            CanicFeatureKey::AuthChainKeyRootSign,
+            RoleFeatureRequirement {
+                capability: RoleCapabilityKey::Root,
+                config_key: "auth.delegated_tokens",
+                feature: CanicFeatureKey::AuthChainKeyRootSign,
+                reason: "the Root signs chain-key delegation batches for configured delegated-token issuers",
+            },
+        );
+    }
+    requirements.into_values().collect()
+}
+
+fn has_delegated_token_issuer(config: &ConfigModel) -> bool {
+    config.component_specs.values().any(|component_spec| {
+        component_spec.auth.delegated_token_issuer
+            || component_spec
+                .children
+                .values()
+                .any(|child| child.auth.delegated_token_issuer)
+    })
 }
 
 fn collect_allocation_selections(

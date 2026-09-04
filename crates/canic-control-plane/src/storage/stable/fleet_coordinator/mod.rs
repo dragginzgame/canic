@@ -29,6 +29,7 @@ use canic_core::{
             RootComponentDirectorySynchronizationRequest,
             RootComponentDirectorySynchronizationResponse, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
+            RootEstateFundingRequired,
         },
         fleet_funding::{
             FleetFundingPolicyRotationPlan, FleetFundingPolicyRotationPlanHeader,
@@ -303,6 +304,7 @@ pub struct FleetComponentProvisioningRecord {
     pub plan: FleetComponentProvisioningPlan,
     pub state: FleetComponentProvisioningStateRecord,
     pub last_root_failure: Option<FleetComponentProvisioningRootFailure>,
+    pub estate_funding_required: Option<RootEstateFundingRequired>,
 }
 
 ///

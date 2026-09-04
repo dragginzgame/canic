@@ -265,7 +265,7 @@ rust-version = "1.91.0"
 publish = false
 
 [dependencies]
-canic = { path = "$package_root/canic-$VERSION", default-features = false, features = ["testing"] }
+thiserror = "=2.0.20"
 EOF
 
     cat > "$consumer_root/src/lib.rs" <<'EOF'
@@ -301,6 +301,37 @@ pub fn compile_managed_component_group_consumer(
     Ok(fixture)
 }
 EOF
+}
+
+enable_and_resolve_packaged_testing_consumer() {
+    local consumer_root="$1"
+    local package_root="$2"
+    local target_dir="$3-testing"
+    local manifest="$consumer_root/Cargo.toml"
+
+    grep -Fq 'thiserror = "=2.0.20"' "$manifest" || {
+        echo "expected testing consumer to begin from the retained current 2.x lock graph" >&2
+        exit 1
+    }
+    sed -i \
+        "s|thiserror = \"=2.0.20\"|canic = { path = \"$package_root/canic-$VERSION\", default-features = false, features = [\"testing\"] }|" \
+        "$manifest"
+    if grep -Eq '^thiserror[[:space:]]*=' "$manifest"; then
+        echo "packaged testing consumer must not override a transitive dependency" >&2
+        exit 1
+    fi
+
+    mkdir -p "$PROOF_HOME" "$target_dir" "$PROOF_TMPDIR"
+    (
+        cd "$consumer_root"
+        HOME="$PROOF_HOME" \
+            CARGO_HOME="$HOST_CARGO_HOME" \
+            CARGO_TARGET_DIR="$target_dir" \
+            RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
+            RUSTUP_HOME="$HOST_RUSTUP_HOME" \
+            TMPDIR="$PROOF_TMPDIR" \
+            cargo +1.91.0 check --offline >/dev/null
+    )
 }
 
 run_packaged_testing_consumer() {
@@ -514,6 +545,10 @@ main() {
     prepare_lockfile "$GENERATED_TOOL_ROOT"
     prepare_lockfile "$GENERATED_DOWNSTREAM_ROOT" wasm32-unknown-unknown
     prepare_lockfile "$GENERATED_TESTING_ROOT"
+    enable_and_resolve_packaged_testing_consumer \
+        "$GENERATED_TESTING_ROOT" \
+        "$GENERATED_PACKAGE_ROOT" \
+        "$GENERATED_TARGET_DIR"
     run_packaged_canister_probe "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR"
     run_packaged_testing_consumer "$GENERATED_TESTING_ROOT" "$GENERATED_TARGET_DIR"
     run_probe "$GENERATED_TOOL_ROOT" "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR"

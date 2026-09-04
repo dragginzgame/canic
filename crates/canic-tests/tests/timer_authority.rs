@@ -5,6 +5,7 @@ use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
     dto::{
+        cycles::{CycleTopupEvent, CycleTrackerEntry},
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
         role::{CycleBalanceStatusResponse, MetricsStatusRequest},
@@ -23,9 +24,11 @@ const READY_TICK_LIMIT: usize = 120;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 
-#[derive(CandidType)]
+#[derive(CandidType, Clone)]
 enum RoleStatusRequest {
     CycleBalance,
+    CycleHistory(PageRequest),
+    CycleTopups(PageRequest),
     Metrics(MetricsStatusRequest),
     Runtime,
 }
@@ -33,39 +36,80 @@ enum RoleStatusRequest {
 #[derive(CandidType, Deserialize)]
 enum RoleStatusResponse {
     CycleBalance(CycleBalanceStatusResponse),
+    CycleHistory(Page<CycleTrackerEntry>),
+    CycleTopups(Page<CycleTopupEvent>),
     Metrics(Page<MetricEntry>),
     Runtime(Box<CanicRuntimeStatus>),
 }
 
 #[test]
-fn exact_cycles_and_runtime_metrics_reject_non_controller() {
+fn exact_cycles_and_runtime_metrics_require_controller() {
     let fixture = install_lifecycle_boundary_fixture();
-    let canister_id = fixture.install_runtime_probe_canister();
+    let standalone = fixture.install_runtime_probe_canister();
+    let managed = fixture.install_canic_canister();
+    let automatic_topup = fixture.install_automatic_topup_canister();
 
-    for request in [
+    for (canister_id, supports_topups) in [
+        (standalone, false),
+        (managed, false),
+        (automatic_topup, true),
+    ] {
+        for request in sensitive_observability_requests(supports_topups) {
+            let denied: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
+                canister_id,
+                fixture.root,
+                protocol::CANIC_STATUS,
+                (request.clone(),),
+            );
+            assert!(matches!(
+                denied,
+                Err(error)
+                    if error.code()
+                        == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+            ));
+
+            let accepted: Result<RoleStatusResponse, Error> = fixture
+                .pic
+                .query_candid(canister_id, protocol::CANIC_STATUS, (request.clone(),))
+                .expect("controller observability transport");
+            let accepted = accepted.expect("controller observability application result");
+            assert!(matches!(
+                (&request, accepted),
+                (
+                    RoleStatusRequest::CycleBalance,
+                    RoleStatusResponse::CycleBalance(_)
+                ) | (
+                    RoleStatusRequest::CycleHistory(_),
+                    RoleStatusResponse::CycleHistory(_)
+                ) | (
+                    RoleStatusRequest::CycleTopups(_),
+                    RoleStatusResponse::CycleTopups(_)
+                ) | (
+                    RoleStatusRequest::Metrics(_),
+                    RoleStatusResponse::Metrics(_)
+                )
+            ));
+        }
+    }
+}
+
+fn sensitive_observability_requests(supports_topups: bool) -> Vec<RoleStatusRequest> {
+    let page = PageRequest {
+        limit: 1,
+        offset: 0,
+    };
+    let mut requests = vec![
         RoleStatusRequest::CycleBalance,
+        RoleStatusRequest::CycleHistory(page),
         RoleStatusRequest::Metrics(MetricsStatusRequest {
             kind: MetricsKind::Runtime,
-            page: PageRequest {
-                limit: 1,
-                offset: 0,
-            },
+            page,
         }),
-    ] {
-        let response: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
-            canister_id,
-            fixture.root,
-            protocol::CANIC_STATUS,
-            (request,),
-        );
-        let Err(error) = response else {
-            panic!("non-controller observability must be rejected");
-        };
-        assert_eq!(
-            error.code(),
-            canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
-        );
+    ];
+    if supports_topups {
+        requests.push(RoleStatusRequest::CycleTopups(page));
     }
+    requests
 }
 
 #[test]

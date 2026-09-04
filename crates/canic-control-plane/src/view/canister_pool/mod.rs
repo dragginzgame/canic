@@ -27,6 +27,11 @@ pub enum CanisterPoolCreationProgressView {
         block_index: u64,
         canister_id: Principal,
     },
+    WaitingForFunding {
+        available_cycles: u128,
+        observed_at_ns: u64,
+        retry_at_ns: u64,
+    },
     Blocked {
         failure: CanisterPoolCreationFailureView,
     },
@@ -35,12 +40,18 @@ pub enum CanisterPoolCreationProgressView {
 /// Read-only authority for one Cycles Ledger pool-refill operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CanisterPoolCreationView {
+    pub attempt_count: u32,
     pub operation_id: [u8; 32],
     pub cycles_ledger: Principal,
     pub placement_subnet: Principal,
     pub root: Principal,
     pub ledger_amount: Cycles,
+    pub ledger_fee: Cycles,
+    pub readiness_floor: Cycles,
+    pub creation_execution_margin: Cycles,
+    pub management_creation_fee: Cycles,
     pub created_at_time_ns: u64,
+    pub last_attempt_at_ns: Option<u64>,
     pub cost_guard_settlement: Option<ReplayCostGuardSettlement>,
     pub progress: CanisterPoolCreationProgressView,
 }

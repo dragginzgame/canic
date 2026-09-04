@@ -196,6 +196,7 @@ fn limits(maximum_group_placements: u32) -> FleetSubnetRootLimits {
             minimum_size: 1,
             maximum_size: 10,
             canister_cycles: Cycles::new(5_000_000_000_000),
+            creation_execution_margin: Cycles::new(1_000_000_000_000),
         },
         cycles_funding: CyclesFundingBudget {
             window_secs: 3_600,
@@ -625,6 +626,7 @@ fn assert_root_batch_candid_contracts(
         fleet_registry: request.fleet_registry.clone(),
         configuration_digest: request.configuration_digest,
         fleet_subnet_root: request.batch.root.fleet_subnet_root,
+        estate_funding_required: None,
         phase: RootComponentProvisioningPhase::Accepted,
         placement_count,
         component_count,

@@ -8,7 +8,7 @@
 #[cfg(test)]
 mod tests;
 
-use crate::ops::component_registry::ComponentRegistryOps;
+use crate::ops::{canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps};
 use crate::{
     storage::stable::component_provisioning::{
         RootComponentProvisioningClaimCursorRecord, RootComponentProvisioningCommitError,
@@ -3444,6 +3444,7 @@ pub fn status_response(
         fleet_registry: view.fleet_registry,
         configuration_digest: view.configuration_digest,
         fleet_subnet_root: view.batch.root.fleet_subnet_root,
+        estate_funding_required: CanisterPoolOps::estate_funding_required(),
         phase: view.phase,
         placement_count: view.placement_count,
         component_count: view.component_count,

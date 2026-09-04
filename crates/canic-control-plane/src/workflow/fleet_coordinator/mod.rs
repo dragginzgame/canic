@@ -884,7 +884,7 @@ async fn query_root_removal(
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<RootRemovalOperationStatus, InternalError> {
-    let result = CallOps::unbounded_wait(root, protocol::CANIC_STATUS)
+    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_STATUS)
         .with_arg(RemoteRootStatusRequest::Operation(OperationStatusRequest {
             operation_id,
         }))?
@@ -924,7 +924,11 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
     let request = component_provisioning_advance_request(&status);
     match FleetCoordinatorWorkflow::advance_component_provisioning(&request).await {
         Ok(status) if status.phase == FleetComponentProvisioningPhase::RuntimesActivated => {}
-        Ok(_) => schedule_component_provisioning(operation_id, plan_hash, Duration::ZERO),
+        Ok(status) => schedule_component_provisioning(
+            operation_id,
+            plan_hash,
+            component_provisioning_retry_delay(&status, IcOps::now_nanos()),
+        ),
         Err(error) => {
             let diagnostic_code = error.public_error().code().raw();
             if let Err(retention_error) =
@@ -955,6 +959,18 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
             schedule_component_provisioning(operation_id, plan_hash, Duration::from_secs(1));
         }
     }
+}
+
+fn component_provisioning_retry_delay(
+    status: &FleetComponentProvisioningStatusResponse,
+    now_ns: u64,
+) -> Duration {
+    status
+        .estate_funding_required
+        .as_ref()
+        .map_or(Duration::ZERO, |funding| {
+            Duration::from_nanos(funding.retry_at_ns.saturating_sub(now_ns))
+        })
 }
 
 const fn component_provisioning_advance_request(
@@ -1135,6 +1151,13 @@ async fn advance_component_root_provisioning(
         }
     };
     let response = advance_root_component_provisioning(call).await?;
+    if response.estate_funding_required.is_some() {
+        return FleetCoordinatorOps::record_component_provisioning_estate_funding_pause(
+            request,
+            response,
+            IcOps::now_nanos(),
+        );
+    }
     FleetCoordinatorOps::record_component_provisioning_root(request, response, IcOps::now_nanos())
 }
 
@@ -1244,7 +1267,7 @@ async fn query_root_component_provisioning(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let result = CallOps::unbounded_wait(root, protocol::CANIC_STATUS)
+    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_STATUS)
         .with_arg(RemoteRootStatusRequest::Operation(OperationStatusRequest {
             operation_id,
         }))?

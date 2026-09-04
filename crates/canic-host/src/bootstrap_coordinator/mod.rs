@@ -15,6 +15,7 @@ use crate::{
         registry_package_version_suffix, render_profile, require_package_manifest_identity,
         resolved_canic_package, resolved_wrapper_dependencies,
     },
+    build_toolchain::BuildToolchain,
     canister_build::{
         CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext,
         cache::{canister_build_target_root, configure_canister_cargo_command},
@@ -68,6 +69,7 @@ struct BootstrapFleetCoordinatorSource {
 /// Build the dedicated Fleet Coordinator wrapper selected from the exact Canic dependency graph.
 pub fn build_bootstrap_fleet_coordinator_artifact(
     context: &WorkspaceBuildContext,
+    toolchain: &BuildToolchain,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_fleet_coordinator_source(context)?;
     require_built_in_fleet_coordinator_contract(&source.manifest_path)?;
@@ -98,17 +100,20 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     let did_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.did"));
 
     let embed_candid = should_embed_candid_metadata(context.build_network);
-    let transforms = finalize_wasm_artifact(&WasmArtifactFinalization {
-        profile: context.profile,
-        build_network: context.build_network,
-        embed_candid,
-        validate_sidecar_only: false,
-        source_wasm_path: &built_wasm_path,
-        candid: &candid,
-        wasm_path: &wasm_path,
-        did_path: &did_path,
-        wasm_gz_path: &wasm_gz_path,
-    })?;
+    let transforms = finalize_wasm_artifact(
+        &WasmArtifactFinalization {
+            profile: context.profile,
+            build_network: context.build_network,
+            embed_candid,
+            validate_sidecar_only: false,
+            source_wasm_path: &built_wasm_path,
+            candid: &candid,
+            wasm_path: &wasm_path,
+            did_path: &did_path,
+            wasm_gz_path: &wasm_gz_path,
+        },
+        toolchain,
+    )?;
 
     Ok(CanisterArtifactBuildOutput {
         package_name: source.package_name,

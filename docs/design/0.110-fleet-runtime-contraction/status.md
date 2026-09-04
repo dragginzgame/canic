@@ -1,6 +1,6 @@
 # Canic 0.110 Implementation Status
 
-Date: 2026-09-03
+Date: 2026-09-04
 
 ## Status
 
@@ -28,10 +28,13 @@ Date: 2026-09-03
 - First release: immutable `v0.110.0` at `d29a7cc72` carries the initial
   `CANIC-119` through `CANIC-121` fresh-estate correction and corrected
   canonical-role baseline; it does not claim B1 completion or authorize B2.
-- Latest release: immutable `v0.110.5` at `50f40171d` adds the public host-only
-  CANIC-124 managed Component-tree qualification fixture, bounded CANIC-126
-  Root-owned balance re-observation and CANIC-127 Prepared-Root initial-child
-  convergence. The
+- Latest release: immutable `v0.110.6` at `f1fd3c59f` repairs active child
+  response completion, terminal Fleet discovery, backup and descendant
+  authority, and controller-protects exact observability while preserving
+  operator access through Root relays. The earlier public host-only CANIC-124
+  managed Component-tree qualification fixture, bounded CANIC-126 Root-owned
+  balance re-observation and CANIC-127 Prepared-Root initial-child convergence
+  remain current. The
   fixture derives exact `ComponentChild` authority for configured and on-demand
   sharding, scaling and index children. An exact active runtime-configuration
   replay can also reclaim an exhausted transient non-Root init bootstrap without
@@ -40,18 +43,40 @@ Date: 2026-09-03
   the current plan, durable journal, concrete production adapter, lost-response
   recovery and real Coordinator/Root/Store protocol through terminal cycle
   conservation and immediate zero-effect replay.
-- Unreleased correction: an Active Component parent now receives its newly
+- Published `v0.110.6` correction: an Active Component parent receives its newly
   provisioned child ID from the original capability call, while Prepared
   initial bootstrap alone retains detached completion. The managed Component
   Group PocketIC journey proves both branches. This correction does not change
   the immutable `v0.110.5` B1 baseline; candidate measurements include the
   corrected working overlay.
-- Unreleased terminal-inventory correction: Root pool Workloads are matched to
+- Published `v0.110.6` terminal-inventory correction: Root pool Workloads are matched to
   the complete protected top-level and descendant Component tree by exact
   Component and allocation-operation authority. Only an observed,
   protocol-bound Pool-to-Component promotion may change logical parent, and
   `info subnets` retains the selected ICP executable and environment. This
   operator correction does not promote B2 or expand runtime capability.
+- Current Unreleased hardening: terminal Components additionally require exact
+  running state, Root-only controllers and current management/Directory module
+  identity; cycle reporting is capability-aware; Fleet Ensure treats every
+  Root Cycles Ledger account as a separately observed and reviewed funding
+  domain, pausing without a protocol effect when its exact creation forecast is
+  underfunded, executing only a reviewed plan-owned Ledger transfer and
+  reconciling exact creation receipts and fees at terminal;
+  observability authority is
+  proven through exact diagnostic codes and response variants across fresh and
+  restored PocketIC fixtures; and B1 consumes typed transform metrics from a
+  method-owned harness that compiles against the immutable product worktree
+  instead of optimizer log prose. Its separate offline-resolved lock and every
+  runnable patch hash are machine-bound. A retained all-role row-3 measurement
+  against immutable `v0.110.5` attributes 3,001,136 optimized code bytes and
+  2,025 defined functions to the inclusive activation-persistence family while
+  preserving every role's Candid hash. It proves no activation parity and does
+  not promote B2. Role-contract validation also rejects auth-crypto features
+  without matching role authority, target-Wasm dependency closure rejects
+  duplicate crypto package generations, and capability reports expose retained
+  cryptography symbols separately. Aligning the existing chain-key
+  implementation with the IC client stack's `k256 0.13.4` dependency is a
+  non-protocol contraction; chain-key replacement remains unauthorized.
 
 Design: [Fleet runtime contraction](0.110-design.md)
 
@@ -137,7 +162,7 @@ Current canonical-role evidence:
 
 | Batch | Outcome | Direct evidence | Status |
 | --- | --- | --- | --- |
-| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, repository-owned capability fixture matrix, replica-validator-equivalent local-function count, generated-surface inventory, complete artifact vector, current/predecessor delta for the deleted temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active from immutable `v0.110.5`; valid `CANIC-WASM-001/v6` size/determinism evidence, generated-surface/destruction traces, pool-Ledger source absence, the machine-checked eighteen-row ablation harness and repository-owned frozen function counter, immutable all-role row 2 attribution supporting role-selected storage wiring without lifecycle parity, all-role build qualification for row 3, specified audit-only rows 4 through 6, row 8, row 10 and row 12, immutable row 11 payload-adapter attribution retaining the safety path, the `Page<T>`/`N = 5` generic fixture and hash-bound downstream routing observation are retained, while counter-backed immutable role/fixture measurements, complete selected-artifact build qualification for the remaining specified rows, remaining source-ablation patches and measurements, optimized-artifact absence, generic measurements/post-`-Oz` mapping, accepted allowances and compatible predecessor artifact evidence remain open |
+| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, repository-owned capability fixture matrix, replica-validator-equivalent local-function count, generated-surface inventory, complete artifact vector, current/predecessor delta for the deleted temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active from immutable `v0.110.5`; valid `CANIC-WASM-001/v6` size/determinism evidence, generated-surface/destruction traces, pool-Ledger source absence, the machine-checked eighteen-row ablation harness and repository-owned frozen function counter, immutable all-role row 2 attribution supporting role-selected storage wiring without lifecycle parity, immutable all-role row 3 inclusive activation-persistence attribution supporting role-selected separation without activation parity, immutable canonical-plus-runtime-fixture row 4 authorization-persistence attribution without persistence or authorization parity, selected-artifact qualification for row 5, specified audit-only rows 6, 8, 10 and 12, immutable row 11 payload-adapter attribution retaining the safety path, the `Page<T>`/`N = 5` generic fixture and hash-bound downstream routing observation are retained, while counter-backed immutable role/fixture measurements, complete selected-artifact build qualification for the remaining specified rows, remaining source-ablation patches and measurements, optimized-artifact absence, generic measurements/post-`-Oz` mapping, accepted allowances and compatible predecessor artifact evidence remain open |
 | B2 | Role-selected storage reachability | Lazy TLS, direct generated wiring, storage/lifecycle inventory contraction, data-only reservations, symbol absence and full remeasurement | Blocked on B1 |
 | B3 | Capability-owned activation/auth records and only still-justified codecs | Concrete records, phase cache, bounded codec evidence and full remeasurement | Blocked on B2 decision |
 | B4 | Endpoint, recovery and role-capability pruning | Complete generated-surface inventory, exact Candid/provider reachability, optimized body/function evidence, direct dispatch, continued absence of the hard-deleted temporary pool Ledger recovery family, role pruning and full remeasurement | Mandatory after the B3 decision while known role-inapplicable reachability remains |
@@ -155,10 +180,9 @@ Current canonical-role evidence:
 
 ## Next Authorized Action
 
-Continue B1 from immutable `v0.110.5`: measure qualified row 3, then qualify
-the specified rows 4 through 6 authorization
-stable-codec, shared-CBOR and watchdog-recovery-dispatch patches plus row 8
-endpoint-declaration construction and rows 10 and 12 endpoint-reply
+Continue B1 from immutable `v0.110.5`: measure qualified row 5, then qualify the
+specified row 6 watchdog-recovery-dispatch patch plus
+row 8 endpoint-declaration construction and rows 10 and 12 endpoint-reply
 serialization and metrics-provider attribution. Then
 complete the remaining controlled ablations,
 optimized generated-

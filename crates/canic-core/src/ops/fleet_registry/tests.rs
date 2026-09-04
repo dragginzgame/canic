@@ -111,6 +111,7 @@ fn limits() -> FleetSubnetRootLimits {
             minimum_size: 1,
             maximum_size: 10,
             canister_cycles: crate::cdk::types::Cycles::new(5_000_000_000_000),
+            creation_execution_margin: crate::cdk::types::Cycles::new(1_000_000_000_000),
         },
         cycles_funding: CyclesFundingBudget {
             window_secs: 3_600,

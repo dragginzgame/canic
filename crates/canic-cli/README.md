@@ -57,9 +57,10 @@ Downstream workspaces should use the same `canic-cli` version as their `canic`
 crate graph. The supported ICP CLI range is documented in the root
 `INSTALLING.md`.
 
-Release builds require Canic's checksum-authoritative Binaryen optimizer. The
-published installer downloads, verifies, and prints its absolute executable
-path without requiring a Canic source checkout:
+Canic artifact builds require the pinned `ic-wasm`; release builds additionally
+require the checksum-authoritative Binaryen optimizer. The published installer
+downloads, verifies, and prints both absolute executable paths without
+requiring a Canic source checkout:
 
 ```bash
 canic toolchain install

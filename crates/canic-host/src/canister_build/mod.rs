@@ -7,8 +7,9 @@ mod process;
 
 pub use crate::build_profile::CanisterBuildProfile;
 pub use artifact::{
-    build_workspace_canister_artifact, build_workspace_canister_artifact_with_options,
-    build_workspace_configured_canister_artifacts, copy_icp_wasm_output,
+    CanisterArtifactBuilder, build_workspace_canister_artifact,
+    build_workspace_canister_artifact_with_options, build_workspace_configured_canister_artifacts,
+    copy_icp_wasm_output,
 };
 pub(crate) use candid::extract_candid_bytes;
 pub use context::{

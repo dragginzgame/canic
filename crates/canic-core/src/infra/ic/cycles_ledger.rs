@@ -13,6 +13,13 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error as ThisError;
 
+/// Exact ICRC-1 account used for Root-owned estate funding.
+#[derive(CandidType)]
+pub struct CyclesLedgerAccount {
+    pub owner: Principal,
+    pub subaccount: Option<[u8; 32]>,
+}
+
 /// Exact Cycles Ledger canister-creation request.
 #[derive(CandidType)]
 pub struct CyclesLedgerCreateCanisterArgs {
@@ -159,6 +166,27 @@ impl CyclesLedgerInfra {
                     subnet_selection: Some(CyclesLedgerSubnetSelection::Subnet { subnet }),
                 }),
             })?
+            .execute()
+            .await?
+            .candid()
+    }
+
+    /// Observe the exact Root-owned funding account before a paid creation effect.
+    pub async fn balance_of(root: Principal) -> Result<Nat, IcInfraError> {
+        Call::unbounded_wait(*CYCLES_LEDGER_CANISTER, "icrc1_balance_of")
+            .with_arg(CyclesLedgerAccount {
+                owner: root,
+                subaccount: None,
+            })?
+            .execute()
+            .await?
+            .candid()
+    }
+
+    /// Observe the current Ledger fee charged in addition to a create-canister amount.
+    pub async fn fee() -> Result<Nat, IcInfraError> {
+        Call::unbounded_wait(*CYCLES_LEDGER_CANISTER, "icrc1_fee")
+            .with_arg(())?
             .execute()
             .await?
             .candid()

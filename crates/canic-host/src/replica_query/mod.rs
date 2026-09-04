@@ -15,13 +15,8 @@ use std::path::Path;
 
 use candid::{CandidType, Decode, Deserialize, Encode};
 use canic_core::{
-    dto::{
-        error::Error as CanicError,
-        role::CycleBalanceStatusResponse,
-        runtime::{CanicReadinessStatus, ReadinessStatus},
-    },
+    dto::{error::Error as CanicError, role::RoleOverviewResponse},
     ids::BuildNetwork,
-    protocol::CANIC_STATUS,
 };
 use thiserror::Error as ThisError;
 
@@ -33,13 +28,12 @@ pub use self::status::local_replica_status_reachable_from_root;
 
 #[derive(CandidType)]
 enum RoleStatusRequest {
-    Readiness,
+    Overview,
 }
 
 #[derive(CandidType, Deserialize)]
 enum RoleStatusResponse {
-    CycleBalance(CycleBalanceStatusResponse),
-    Readiness(CanicReadinessStatus),
+    Overview(RoleOverviewResponse),
 }
 
 ///
@@ -100,18 +94,13 @@ pub fn uses_local_replica_transport(
 pub(crate) fn query_ready(
     environment: Option<&str>,
     canister: &str,
+    endpoint: &str,
     icp_root: Option<&Path>,
 ) -> Result<bool, ReplicaQueryError> {
-    let arg = Encode!(&RoleStatusRequest::Readiness).map_err(ReplicaQueryError::Candid)?;
-    let bytes = local_query(environment, canister, CANIC_STATUS, &arg, icp_root)?;
+    let arg = Encode!(&RoleStatusRequest::Overview).map_err(ReplicaQueryError::Candid)?;
+    let bytes = local_query(environment, canister, endpoint, &arg, icp_root)?;
     let result = Decode!(&bytes, Result<RoleStatusResponse, CanicError>)
         .map_err(ReplicaQueryError::Candid)?;
-    match result.map_err(ReplicaQueryError::Canister)? {
-        RoleStatusResponse::Readiness(response) => Ok(response.status == ReadinessStatus::Ready),
-        RoleStatusResponse::CycleBalance(_) => Err(unexpected_role_status_response()),
-    }
-}
-
-fn unexpected_role_status_response() -> ReplicaQueryError {
-    ReplicaQueryError::Query("role returned a differently correlated status response".to_string())
+    let RoleStatusResponse::Overview(response) = result.map_err(ReplicaQueryError::Canister)?;
+    Ok(response.bootstrap.ready)
 }

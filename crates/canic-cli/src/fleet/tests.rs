@@ -2,7 +2,7 @@ use super::*;
 use crate::test_support::temp_dir;
 use canic_host::fleet_ensure::model::{
     ActualCycleConservation, CanisterDisposition, CanisterPlan, CycleConservation, EnsureAction,
-    FleetEnsurePlan, FleetEnsurePlanScope,
+    EstateFundingDomainPlan, FleetEnsurePlan, FleetEnsurePlanScope,
 };
 use std::collections::BTreeMap;
 
@@ -162,6 +162,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
                     status: CanisterRuntimeStatus::Running,
                 }),
             )]),
+            estate_funding_domains: BTreeMap::new(),
             ledger_fee_cycles: 0,
             operator_cycles: 0,
             protocol_ready: BTreeMap::new(),
@@ -175,9 +176,11 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         &paths,
         &FleetEnsureJournalRecord {
             completion: FleetEnsureCompletion::InProgress,
+            estate_funding_required: None,
             effects: Vec::new(),
             fleet: "retained".to_string(),
             initial_controlled_cycles: 20,
+            initial_estate_funding_cycles_by_root: BTreeMap::new(),
             initial_operator_cycles: 0,
             operation_id: plan.operation_id.clone(),
             plan_sha256: plan.plan_sha256.clone(),
@@ -248,11 +251,11 @@ fn generate_replace_requires_canonical_digest() {
     assert!(matches!(error, FleetCommandError::Usage(_)));
 }
 
-#[test]
-fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
-    let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
-    let report = FleetEnsureReport {
+fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
+    FleetEnsureReport {
         actual_conservation: Some(ActualCycleConservation {
+            estate_funding_cycles: 10_000_000_000_000,
+            exact_estate_creation_fee_cycles: 500_000_000_000,
             exact_unavoidable_fee_cycles: 3_500_700_000_000,
             final_controlled_cycles: 1_001_498_000_000_000,
             measured_execution_burn_cycles: 2_000_000_000,
@@ -279,7 +282,32 @@ fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
                 principal: Some(principal.to_string()),
             }],
             conservation: CycleConservation {
-                expected_post_operation_cycles: 93_600_000_000_000,
+                estate_funding_domains: vec![EstateFundingDomainPlan {
+                    allocated_workloads: 0,
+                    available_cycles: Some(4_000_000_000_000),
+                    available_pool_slots: 2,
+                    creation_amount_cycles: 6_500_000_000_000,
+                    creation_execution_margin_cycles: 1_000_000_000_000,
+                    readiness_floor_cycles: 5_000_000_000_000,
+                    cycles_ledger: "estate-ledger".to_string(),
+                    eligible_ready_pool_assets: 0,
+                    initial_pool_assets: Vec::new(),
+                    ledger_fee_cycles: 100_000_000,
+                    management_creation_fee_cycles: 500_000_000_000,
+                    maximum_creation_debit_cycles: 13_000_200_000_000,
+                    maximum_creation_fee_cycles: 1_000_200_000_000,
+                    maximum_funding_cycles: 9_000_200_000_000,
+                    occupied_pool_assets: 0,
+                    pending_creation_count: 0,
+                    pending_creation: None,
+                    planned_initial_workloads: 2,
+                    pool_maximum_size: 2,
+                    required_creation_count: 2,
+                    root: "root-0".to_string(),
+                    root_principal: Some(principal.to_string()),
+                    shortfall_cycles: 9_000_200_000_000,
+                }],
+                expected_post_operation_cycles: 101_600_000_000_000,
                 maximum_execution_burn_cycles: 82_000_000_000_000,
                 maximum_new_funding_cycles: 175_600_000_000_000,
                 maximum_operator_debit_cycles: 179_100_700_000_000,
@@ -302,8 +330,13 @@ fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
             terminal_inventory_operation_id: None,
         },
         terminal: false,
-    };
+    }
+}
 
+#[test]
+fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
+    let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+    let report = cycle_quantity_report(principal);
     assert_eq!(
         render_text_report(&report),
         format!(
@@ -319,12 +352,17 @@ fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
              \nmaximum_execution_burn_cycles: 82.000T\
              \nmaximum_new_funding_cycles: 175.600T\
              \nmaximum_operator_debit_cycles: 179.101T\
-             \nexpected_post_operation_cycles: 93.600T\
+             \nmaximum_estate_funding_cycles: 9.000T\
+             \nmaximum_estate_creation_fee_cycles: 1.000T\
+             \nexpected_post_operation_cycles: 101.600T\
+             \nestate_funding_domains:\
+             \n  root-0: root_principal={principal} ledger=estate-ledger balance=4000000000000 workloads=0/2 pool=0/2 ready=0 pending=0 pending_detail=none available_slots=2 creations=2 creation_amount=6500000000000 readiness_floor=5000000000000 management_creation_fee=500000000000 execution_margin=1000000000000 ledger_fee=100000000 maximum_debit=13000200000000 funding=9000200000000 shortfall=9000200000000\
              \ncanisters:\
              \n  app: disposition=Reuse principal={principal} observed_cycles=1.250B effects=1\
              \n  native_topup app: cycles_ledger_withdraw=1.000Q ledger=ledger target={principal} deficit=2.000B margin=0.500B expected_native_post=1.002T\
-             \nconservation_equation: 0.000B + 179.101T - 3.501T - 82.000T = 93.600T\
-             \nmeasured_conservation: 1.000Q + 1.500T - 2.000B = 1.001Q"
+             \nconservation_equation: 0.000B + 179.101T - 3.501T - 1.000T - 82.000T = 101.600T\
+             \nmeasured_estate_funding_cycles: 10.000T\
+             \nmeasured_conservation: 1.000Q + 1.500T - 500.000B - 2.000B = 1.001Q"
         )
     );
 }

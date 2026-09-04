@@ -12,7 +12,7 @@ FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/canic-wasm-capability-size-test.XXXXXX")"
 trap 'rm -rf "$FIXTURE"' EXIT
 
 jq -n '{
-  artifact: {file_name: "diagnostic.wasm", sha256: "fixture", bytes: 400},
+  artifact: {file_name: "diagnostic.wasm", sha256: "fixture", bytes: 425},
   context: {
     role: "project_instance",
     build_profile: "debug",
@@ -25,6 +25,7 @@ jq -n '{
   tool: "twiggy fixture",
   items: [
     {name: "canic_core::ops::auth::verify", shallow_size: 100},
+    {name: "k256::ecdsa::verify", shallow_size: 25},
     {name: "canic_metrics_core::encode", shallow_size: 80},
     {name: "canic_control_plane::child::create", shallow_size: 70},
     {name: "canic_core::workflow::status", shallow_size: 50},
@@ -40,9 +41,10 @@ jq -e '
   .schema == "canic.wasm_capability_size.v1"
   and .analysis.artifact_bytes_match == true
   and .analysis.symbol_attribution == "partial"
-  and .analysis.named_code_bytes == 340
+  and .analysis.named_code_bytes == 365
   and .analysis.unattributed_code_bytes == 30
   and ([.categories[] | {key: .category, value: .shallow_bytes}] | from_entries) == {
+    cryptography: 25,
     authentication_and_admission: 100,
     metrics: 80,
     child_provisioning: 70,

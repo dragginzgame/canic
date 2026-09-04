@@ -137,7 +137,8 @@ impl BootstrapStatusOps {
                 subsystem: "runtime_bootstrap".to_string(),
                 code: "bootstrap_failed".to_string(),
                 severity: FailureSeverity::Error,
-                summary: "bootstrap failed; inspect canic_status(Overview) for details".to_string(),
+                summary: "bootstrap failed; inspect the role-owned Overview status for details"
+                    .to_string(),
                 correlation_id: Some(failed_phase.as_str().to_string()),
             });
         });
@@ -195,7 +196,7 @@ mod tests {
         );
         assert_eq!(
             failures[0].summary,
-            "bootstrap failed; inspect canic_status(Overview) for details"
+            "bootstrap failed; inspect the role-owned Overview status for details"
         );
         assert!(!failures[0].summary.contains("nope"));
 

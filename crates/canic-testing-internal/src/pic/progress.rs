@@ -1,4 +1,8 @@
-//! Compact, terminal-aware progress rendering for long internal test journeys.
+//! Module: pic::progress
+//!
+//! Responsibility: render compact, terminal-aware progress for long internal test journeys.
+//! Does not own: test selection, failure policy, or outer validation-runner decoration.
+//! Boundary: failed events retain one stable machine identifier across human rendering.
 
 use std::{
     env,
@@ -12,6 +16,7 @@ const DIM: &str = "\u{1b}[2m";
 const GREEN: &str = "\u{1b}[32m";
 const RED: &str = "\u{1b}[31m";
 const YELLOW: &str = "\u{1b}[33m";
+const FAILURE_EVENT_CODE: &str = "CANIC-TEST:E001";
 const DESCRIPTION_WIDTH: usize = 50;
 const SCOPE_WIDTH: usize = 12;
 const STATUS_WIDTH: usize = 6;
@@ -63,6 +68,13 @@ impl ProgressStatus {
             Self::Info => DIM,
         }
     }
+
+    const fn event_code(self) -> Option<&'static str> {
+        match self {
+            Self::Fail => Some(FAILURE_EVENT_CODE),
+            _ => None,
+        }
+    }
 }
 
 pub(super) fn event(scope: &str, status: ProgressStatus, description: &str) {
@@ -109,6 +121,9 @@ fn render_line(
     elapsed: Option<Duration>,
     color: bool,
 ) -> String {
+    let event_code = status
+        .event_code()
+        .map_or_else(String::new, |code| format!("[{code}] "));
     let scope = format!("[{}]", scope.to_ascii_uppercase().replace('_', "-"));
     let scope = format!("{scope:<SCOPE_WIDTH$}");
     let status_text = format!("{:<STATUS_WIDTH$}", status.label());
@@ -116,10 +131,10 @@ fn render_line(
     let status = paint(status.color(), &status_text, color);
     match elapsed {
         Some(elapsed) => format!(
-            "{scope} {status} {description:<DESCRIPTION_WIDTH$} {:>8}",
+            "{event_code}{scope} {status} {description:<DESCRIPTION_WIDTH$} {:>8}",
             format_duration(elapsed)
         ),
-        None => format!("{scope} {status} {description}"),
+        None => format!("{event_code}{scope} {status} {description}"),
     }
 }
 
@@ -189,6 +204,7 @@ mod tests {
     fn ansi_progress_preserves_the_plain_text_fields() {
         let rendered = render_line("suite", ProgressStatus::Fail, "terminal replay", None, true);
 
+        assert!(rendered.starts_with("[CANIC-TEST:E001] "));
         assert!(rendered.contains("\u{1b}[1;36m[SUITE]"));
         assert!(rendered.contains("\u{1b}[31mFAIL"));
         assert!(rendered.ends_with("terminal replay"));

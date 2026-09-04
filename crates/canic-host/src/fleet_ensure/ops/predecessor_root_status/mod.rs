@@ -53,7 +53,7 @@ pub fn query_pool(
     let bytes = canister_protocol::query_response_bytes(
         icp,
         root,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_ROOT_STATUS,
         &PredecessorRootStatusRequest::Pool(CanisterPoolStatusRequest { start_after, limit }),
     )?;
     decode_pool_response(&bytes)

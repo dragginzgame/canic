@@ -79,6 +79,7 @@ pub(super) fn component_provisioning_status_response(
             .and_then(|progress| progress.in_flight)
             .map(|intent| intent.fleet_subnet_root),
         pending_root_failure: pending_component_provisioning_root_failure(record),
+        estate_funding_required: record.estate_funding_required.clone(),
         group_placement_count: counts.group_placements,
         component_count: counts.components,
         planned_at_ns: acceptance.planned_at_ns,
@@ -216,6 +217,7 @@ pub(super) fn component_scale_out_receipt_response(
         current_activation: None,
         activation_in_flight_root: None,
         pending_root_failure: None,
+        estate_funding_required: None,
         group_placement_count,
         component_count: receipt.component_count,
         planned_at_ns: receipt.planned_at_ns,

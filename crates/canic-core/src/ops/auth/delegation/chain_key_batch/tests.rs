@@ -43,7 +43,7 @@ fn signing_policy() -> ChainKeySigningPolicy {
         derivation_path: vec![b"canic".to_vec(), b"delegation".to_vec()],
         public_key: signing_key()
             .verifying_key()
-            .to_sec1_point(true)
+            .to_encoded_point(true)
             .as_bytes()
             .to_vec(),
         key_version: 4,

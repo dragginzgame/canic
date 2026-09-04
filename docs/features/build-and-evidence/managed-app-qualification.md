@@ -10,7 +10,7 @@ feature selection unchanged:
 
 ```toml
 [dev-dependencies]
-canic = { version = "=0.110.5", features = ["testing"] }
+canic = { version = "=0.110.7", features = ["testing"] }
 ```
 
 The minimal fixture is:
@@ -39,6 +39,14 @@ same-release recovery. `install_standalone_app` covers the corresponding
 standalone-local build and its exact same-release upgrade. The module
 re-exports the required PocketIC call traits, so the downstream test does not
 pin or reconstruct `canic-core` or `ic-testkit` internals.
+
+Enable the `testing` feature through the normal Cargo feature resolver, then
+commit the resulting downstream lockfile. The public facade currently inherits
+PocketIC's exact `thiserror` selection; Cargo may therefore lower a previously
+unconstrained `thiserror 2.x` lock entry when the feature is enabled. That
+ordinary lock refresh is supported and is qualified from a packaged consumer;
+downstreams must not add a direct transitive-version override or hand-edit the
+lockfile.
 
 The input requires one exact Component Group deployment and one Component Spec.
 An absent or repeated occurrence, invalid release-build identity, empty

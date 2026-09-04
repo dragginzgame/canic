@@ -282,7 +282,7 @@ impl CascadeOps {
     ) -> Result<(), InternalError> {
         let response: StoreCommandResponseFragment = RpcOps::call_rpc_result(
             pid,
-            protocol::CANIC_COMMAND,
+            protocol::CANIC_WASM_STORE_COMMAND,
             StoreCommandFragment::SynchronizeState(snapshot),
         )
         .await?;
@@ -298,7 +298,7 @@ impl CascadeOps {
     ) -> Result<(), InternalError> {
         let response: StoreCommandResponseFragment = RpcOps::call_rpc_result(
             pid,
-            protocol::CANIC_COMMAND,
+            protocol::CANIC_WASM_STORE_COMMAND,
             StoreCommandFragment::SynchronizeTopology(snapshot),
         )
         .await?;

@@ -11,10 +11,7 @@ use crate::{
     replica_query::{self, ReplicaQueryError},
 };
 use candid::{CandidType, Deserialize};
-use canic_core::{
-    dto::runtime::{CanicReadinessStatus, ReadinessStatus},
-    protocol::CANIC_STATUS,
-};
+use canic_core::{dto::role::RoleOverviewResponse, protocol::status_endpoint_for_role};
 use std::path::Path;
 use thiserror::Error as ThisError;
 
@@ -22,7 +19,7 @@ const ICP_JSON_OUTPUT: &str = "json";
 
 #[derive(CandidType, Deserialize)]
 enum RoleStatusResponse {
-    Readiness(CanicReadinessStatus),
+    Overview(RoleOverviewResponse),
 }
 
 ///
@@ -53,7 +50,8 @@ pub fn query_canister_ready(
     binding: &ResolvedProtocolBinding,
 ) -> Result<bool, CanisterReadyQueryError> {
     if replica_query::uses_local_replica_transport(Some(environment), icp_root)? {
-        return query_local_canister_ready(environment, canister_id, icp_root).map_err(Into::into);
+        return query_local_canister_ready(environment, canister_id, icp_root, binding)
+            .map_err(Into::into);
     }
 
     query_canister_ready_with_icp(icp, canister_id, binding)
@@ -64,8 +62,14 @@ pub fn query_local_canister_ready(
     environment: &str,
     canister_id: &str,
     icp_root: Option<&Path>,
+    binding: &ResolvedProtocolBinding,
 ) -> Result<bool, ReplicaQueryError> {
-    replica_query::query_ready(Some(environment), canister_id, icp_root)
+    replica_query::query_ready(
+        Some(environment),
+        canister_id,
+        status_endpoint_for_role(&binding.binding().role),
+        icp_root,
+    )
 }
 
 fn query_canister_ready_with_icp(
@@ -75,12 +79,12 @@ fn query_canister_ready_with_icp(
 ) -> Result<bool, CanisterReadyQueryError> {
     let output = icp.canister_query_arg_output_with_candid(
         canister_id,
-        CANIC_STATUS,
-        "(variant { Readiness })",
+        status_endpoint_for_role(&binding.binding().role),
+        "(variant { Overview })",
         Some(ICP_JSON_OUTPUT),
         Some(&binding.candid_path),
     )?;
     let response = decode_json_result_response::<RoleStatusResponse>(&output)?;
-    let RoleStatusResponse::Readiness(response) = response;
-    Ok(response.status == ReadinessStatus::Ready)
+    let RoleStatusResponse::Overview(response) = response;
+    Ok(response.bootstrap.ready)
 }

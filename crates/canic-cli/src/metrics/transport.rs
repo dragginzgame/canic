@@ -26,7 +26,7 @@ use std::{path::Path, sync::Arc, thread};
 use thiserror::Error as ThisError;
 
 const METRICS_UNAVAILABLE_HINT: &str =
-    "canic_status Metrics unavailable; check deployed Wasm and metrics profile";
+    "role-owned Metrics status unavailable; check deployed Wasm and metrics profile";
 const METRICS_EMPTY_HINT: &str =
     "no metrics rows; check whether this tier is enabled by the deployed role profile";
 const METRICS_NONZERO_EMPTY_HINT: &str =

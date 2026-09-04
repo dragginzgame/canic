@@ -1,8 +1,8 @@
 # B1 Controlled-Ablation Manifest
 
-Date: 2026-09-03
+Date: 2026-09-04
 State: experiment and artifact manifests plus frozen function counter
-executable; rows 2 and 11 measured, row 3 qualified, six source switches
+executable; rows 2, 3, 4 and 11 measured, row 5 qualified, four source switches
 specified and remaining immutable measurements open
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
 Baseline authority: immutable `v0.110.5` at
@@ -10,13 +10,15 @@ Baseline authority: immutable `v0.110.5` at
 
 ## Verdict
 
-B1 now has one machine-checked catalog for all eighteen required experiments
+B1 now has one machine-checked catalog for all eighteen required experiments,
+including the exact SHA-256 of every runnable or specified patch,
 and one artifact roster for the eleven canonical roles plus four Canic-owned
 capability fixtures. The runner can execute the unchanged baseline, the fixed
 `Page<T>` cohort, the measured row 2 global-storage-registration and row 11
-payload-adapter switches, and the qualified row 3 activation-persistence
-switch. Rows 4 through 6, row 8, row 10 and row 12 have exact audit-only
-patches against the unchanged `v0.110.5` source, but remain non-runnable until
+payload-adapter switches, the measured row 3 activation-persistence and row 4
+authorization-persistence switches, and the qualified row 5 shared-CBOR switch.
+Rows 6, 8, 10 and 12 have exact audit-only patches against the unchanged
+`v0.110.5` source, but remain non-runnable until
 their selected build sets are qualified. The runner refuses every other
 experiment until its exact one-switch patch or compatible cross-commit input
 exists.
@@ -30,6 +32,16 @@ Coordinator accounts for 192,340 code bytes and 166 functions of that total.
 The build-only switch makes no storage-bootstrap or lifecycle-parity claim, so
 it advances explicit role-selected registration into B2 evidence but authorizes
 no direct production deletion.
+
+The immutable
+[row 3 report](../../reports/2026-09/2026-09-04/wasm-ablation-b1-03.md)
+attributes 3,001,136 optimized code-section bytes and 2,025 replica-limited
+defined functions across the eleven separately deployed artifacts to the
+inclusive activation record, stable codec, mapper and storage-operation
+family. Every role retains its exact Candid hash. This is material repeated
+pressure for role-selected activation persistence and B3 separation, but the
+fail-closed switch proves no activation, restore or recovery parity and cannot
+distinguish the included subfamilies from one another.
 
 The immutable
 [row 11 report](../../reports/2026-09/2026-09-03/wasm-ablation-b1-11.md)
@@ -61,16 +73,17 @@ downstream observation remains non-binding pressure evidence only.
 ## Experiment Catalog
 
 The executable source is `scripts/ci/wasm-ablation-experiments.tsv`. Every row
-names its immediate baseline, artifact selectors, instruction disposition and
-exact source owners.
+names its switch identity, immediate baseline, artifact selectors, instruction
+disposition and exact source owners. A runnable or specified patch must match
+the row's exact SHA-256 before the runner accepts the catalog.
 
 | Row | Experiment | Primary Canic owner | Current switch state |
 | ---: | --- | --- | --- |
 | 1 | current baseline | canonical configs and four capability fixtures | ready; no source switch |
 | 2 | global stable-storage registration | `memory_macros.rs`, `storage/stable` | measured; material role-wide result, lifecycle parity open |
-| 3 | activation records/codecs | activation model, stable storage and mapper | ready; all eleven canonical release artifacts qualified |
-| 4 | authorization records/codecs | auth model, stable storage, ops and workflow | specified patch; build qualification open |
-| 5 | bounded relevant-CBOR stub | shared CBOR adapter and its reachable callers | specified patch; build qualification open |
+| 3 | activation records/codecs | activation model, stable storage and mapper | measured; material inclusive all-role result, activation parity open |
+| 4 | authorization records/codecs | auth model, stable storage, ops and workflow | measured; material canonical-plus-runtime-fixture result, persistence and authorization parity open |
+| 5 | bounded relevant-CBOR stub | shared CBOR adapter and its reachable callers | ready; canonical roles plus runtime and blob fixtures qualified |
 | 6 | unconditional recovery dispatch | timer API/workflow and Root pool watchdog | specified patch; build qualification open |
 | 7 | current versus exact role/capability expansion | build, start and endpoint macros | planned patch |
 | 8 | endpoint Candid type construction | endpoint procedural expansion | specified patch; build qualification open |
@@ -116,13 +129,18 @@ Source ablations are retained as patches under
 linked worktree. They are not compiled into ordinary Canic builds. The runner:
 
 1. binds one exact source commit and clean linked-worktree path;
-2. builds each selected artifact twice through `canic-host`'s release artifact
-   authority with offline Cargo and disabled incremental compilation, removing
-   and recreating the same fixed absolute target path before each repetition;
-3. applies at most one named patch after capturing the unchanged pair;
-4. requires deterministic Wasm, gzip, Candid and complete metric vectors;
-5. reverses the exact patch and rejects unexpected source mutation; and
-6. writes evidence outside the product worktree so generated artifacts cannot
+2. compiles a method-owned reporting harness outside the product worktree
+   against that exact worktree's `canic-host` and `canic-core`, resolves and
+   retains its separate lock offline, then requires that lock unchanged;
+3. builds each selected artifact twice through `canic-host`'s release artifact
+   authority with offline Cargo, disabled incremental compilation and no
+   ambient compiler wrapper, removing and recreating the same fixed absolute
+   target path before each repetition;
+4. applies at most one named, hash-matched patch after capturing the unchanged
+   pair;
+5. requires deterministic Wasm, gzip, Candid and complete metric vectors;
+6. reverses the exact patch and rejects unexpected source mutation; and
+7. writes evidence outside the product worktree so generated artifacts cannot
    become product inputs.
 
 The generic cohort is the only environment-matrix row. The build script
@@ -130,8 +148,7 @@ accepts exactly widths `1..=5`; all five widths retain the same endpoint,
 variant and wire surface. The pool-Ledger row is not a one-source ablation and
 therefore remains a separately frozen compatible-predecessor comparison.
 
-Row 2's patch has SHA-256
-`9b66e1d344c4f73df993e50fba243dbf6f601fe876ead62b155868649cce7c13`.
+Row 2's exact patch identity is bound by the executable experiment manifest.
 It removes the static memory-declaration constructors, authority-range
 constructors and eager TLS-touch registrations from `memory_macros.rs`. The
 zero-sized marker-type reference moves into the ordinary store-open expansion,
@@ -158,8 +175,7 @@ Coordinator. Row 2 is therefore `measured`; its material result supports B2's
 role-selected storage wiring, but the destructive switch still makes no
 bootstrap, restore or lifecycle-parity claim and is not production code.
 
-Row 3's patch has SHA-256
-`0b26dde775b5babd7bc7347623e6a09ceeca1c4a5f820870ad904ce557e69a12`.
+Row 3's exact patch identity is bound by the executable experiment manifest.
 It disconnects the combined activation stable record, CBOR codec, mapper and
 storage-operation implementation while retaining the existing DTO/view-facing
 call signatures, error surface and state-manifest projection. The replacement
@@ -181,13 +197,17 @@ CARGO_NET_OFFLINE=true cargo check --offline --locked \
 That check covers Root, ordinary non-Root and Store consumers. The subsequent
 complete qualification builds all eleven canonical roles once through the
 authoritative release builder using one isolated target, and accepts every
-Wasm, gzip and Candid artifact. The exact patch is reversed and the disposable
-worktree is clean afterward. Row 3 is therefore `ready`; it still proves no
-activation behavior or persistence parity and has no optimized delta until the
-governed two-pair measurement completes.
+Wasm, gzip and Candid artifact. The governed two-pair
+[measurement](../../reports/2026-09/2026-09-04/wasm-ablation-b1-03.md)
+then passes exact artifact and full-vector determinism for all eleven roles. It
+removes 3,001,136 artifact-summed optimized code bytes and 2,025 defined
+functions while preserving every Candid hash. The exact patch is reversed and
+the disposable worktree is clean afterward. Row 3 is therefore `measured`;
+its inclusive fail-closed switch still proves no activation behavior,
+persistence, restore or recovery parity and cannot isolate its record, codec,
+mapper and operation subfamilies.
 
-Row 4's patch has SHA-256
-`42ed7228ef4fa9c09ffa6c67acde6a7e8dd766bc0c950b0299c0c5e04c434be9`.
+Row 4's exact patch identity is bound by the executable experiment manifest.
 It replaces only the authorization stable cell with an audit-local heap cell
 that retains the same `get`/`set` operation shape. The authorization model,
 records, mappers, storage-ops API, crypto operations, workflows and callers stay
@@ -208,12 +228,22 @@ CARGO_NET_OFFLINE=true cargo check --offline --locked \
 ```
 
 Those packages cover Root signing/issuance, delegated-token verification and
-the runtime probe's verifier combination. They do not qualify the complete
-canonical plus runtime-probe selector, run an auth journey or provide an
-optimized delta, so row 4 remains `specified`.
+the runtime probe's verifier combination. The subsequent non-retainable
+qualification builds all eleven canonical roles plus `runtime_probe` once
+through the authoritative release builder, consumes typed transform records,
+validates every Wasm, gzip and Candid artifact, and restores the exact clean
+worktree and product lock. It makes no determinism, auth-journey, persistence
+or optimized-delta claim. The governed two-pair
+[measurement](../../reports/2026-09/2026-09-04/wasm-ablation-b1-04.md)
+then passes exact artifact and full-vector determinism for all twelve selected
+artifacts. Across the eleven canonical roles it removes 1,628,872 artifact-
+summed optimized code bytes and 897 defined functions while preserving every
+Candid hash; `runtime_probe` independently loses 148,935 code bytes and 88
+functions. Row 4 is therefore `measured`, but the build-only heap substitution
+still proves no stable persistence, restore, interruption-recovery or
+authorization behavior parity.
 
-Row 5's patch has SHA-256
-`2e61881a6d9441162345360fca58db1ffe511823e096c368b11d57040214a343`.
+Row 5's exact patch identity is bound by the executable experiment manifest.
 It retains the shared helper's generic signatures and serde trait bounds while
 replacing CBOR serialization with an opaque one-byte result and deserialization
 with an opaque typed failure. The fixed encoder output is bounded for every
@@ -235,11 +265,15 @@ CARGO_NET_OFFLINE=true cargo check --offline --locked \
 ```
 
 Those packages cover the control-plane-heavy Root, combined runtime auth and
-opt-in blob-storage billing shapes. They do not qualify every selected artifact
-or provide an optimized delta, so row 5 remains `specified`.
+opt-in blob-storage billing shapes. The subsequent non-retainable qualification
+builds all eleven canonical roles plus `runtime_probe` and
+`blob_storage_probe` once through the authoritative release builder. Every
+typed transform record and final Wasm, gzip, Candid and independent function
+count validates, and the exact product source and lock are restored. The run
+provides no baseline, determinism, codec/persistence parity or optimized delta.
+Row 5 is therefore `ready` for governed two-pair measurement.
 
-Row 6's patch has SHA-256
-`59a746714aa62050db91f4c9323a1129ec49746e5bb5010bec1c39ef80f9b417`.
+Row 6's exact patch identity is bound by the executable experiment manifest.
 It keeps the shared timer runtime, identities, claims, registrations, inventory,
 suspension and ordinary Root pool maintenance intact. Only watchdog takeover
 dispatch is replaced: core auth-renewal, placement-acknowledgement and automatic-
@@ -263,8 +297,7 @@ not qualify the complete canonical plus runtime-probe selector, run watchdog
 ownership/recovery journeys or provide an optimized delta, so row 6 remains
 `specified`.
 
-Row 8's patch has SHA-256
-`9d24a7fdeb6b35901b9ea1da6097356871acdc520667980d3fea2a2d0e16ac8a`.
+Row 8's exact patch identity is bound by the executable experiment manifest.
 It marks ordinary IC CDK query/update expansions as Candid-hidden and omits the
 manual Candid annotation used only by the raw payload-limited update adapter.
 The endpoint implementations, Wasm exports, access checks, payload registration
@@ -294,8 +327,7 @@ single fixture proves the declaration and runtime-export separation, but it
 does not qualify the complete canonical plus three-fixture selector or provide
 an immutable optimized before/after delta, so row 8 remains `specified`.
 
-Row 10's patch has SHA-256
-`0bacf5c226709024bdd18ac51163ecc6c0612bde133a712ff853af0826797a13`.
+Row 10's exact patch identity is bound by the executable experiment manifest.
 For ordinary endpoints it makes the IC CDK runtime wrapper Candid-hidden, gives
 that wrapper a generated fixed opaque reply encoder and separately registers
 the original typed function signature for the declaration pass. The raw
@@ -328,8 +360,8 @@ runner's two-build determinism, complete selected-artifact matrix or immutable
 delta requirements, so row 10 remains `specified` and no savings value is
 retained.
 
-Row 11's patch has SHA-256
-`5807cfe5496f8b4ca4cf965475ad19777221311afd6f378ad3f2c51741bd4abd`.
+Row 11's exact patch identity is bound by the executable experiment manifest
+and remains byte-identical to the switch retained by its immutable report.
 It retains the endpoint signature and body, payload-limit registration,
 inspect-message registry lookup, ordinary dispatch and Candid declaration, but
 routes explicitly limited updates through the ordinary IC CDK adapter instead
@@ -367,8 +399,7 @@ conditions. Removing the adapter changes final Wasm by -1,055 bytes, gzip by
 functions by zero. Inspect-message does not cover canister-origin calls, so the
 small footprint is accepted and the raw adapter remains production behavior.
 
-Row 12's patch has SHA-256
-`03fa9ecaf96e7edc2506a34859a65dafbe02b3f064322044bfa6919e508a0c9e`.
+Row 12's exact patch identity is bound by the executable experiment manifest.
 It retains each role's Metrics request and response variants, endpoint
 authorization and dispatch, typed request consumption, response-page shape and
 all metric recording sites. The role-facing metrics helper returns an opaque
@@ -402,7 +433,8 @@ For every selected artifact and condition, the runner records:
 - the repository-owned replica-limited local/defined-function count;
 - table minimum, element entries, Wasm exports and `ic-wasm` exported methods;
 - Candid bytes, service methods and artifact hashes; and
-- the complete governed optimizer before/after vector.
+- the complete governed optimizer before/after vector from a schema-versioned
+  record with typed transform and outcome values.
 
 `wasm-validate` and `didc check` must also accept every artifact. The runner
 compiles `scripts/ci/wasm-replica-function-count.rs` into invocation-local
@@ -416,10 +448,13 @@ source hash, executable hash, identity and frozen IC commit enter every run.
 The `ic-wasm` total remains attribution only and cannot substitute for the
 binding quantity.
 
-Each run also retains private copies of the runner and counter source under its
-method directory, records both hashes and rejects either repository source
-changing during the long build. The executable is compiled from the retained
-counter copy, not from a mutable pathname.
+Each run also retains private copies of the runner, structured build-harness
+source, resolved build-harness lock and counter source under its method
+directory. It records their hashes and rejects the repository sources or the
+resolved harness lock changing during the long build. The harness and counter
+are compiled from the retained copies, not mutable repository pathnames. The
+historical product helper remains unchanged, and its product lock is checked
+independently before and after measurement.
 
 The current counter source SHA-256 is
 `bcab127a0a188a1f013eb70c09e595b023fecd6ff55cddaa9a2eb1e40abb6e01`.
@@ -464,6 +499,20 @@ Smoke output records `retention_eligible=no` and cannot satisfy an immutable
 B1 evidence row. Its purpose is to reject a broken switch quickly and preserve
 the expensive two-repetition, all-selected-artifact run for qualified inputs.
 
+A `specified` patch becomes `ready` only after the non-retainable qualification
+lane builds and validates every selected artifact once:
+
+```text
+bash scripts/ci/wasm-ablation-report.sh --qualify \
+  --experiment <specified-experiment> \
+  --source <candidate-commit> \
+  --product-root <clean-linked-worktree> \
+  --output-root <temporary-output-directory>
+```
+
+Qualification records `retention_eligible=no`, emits no baseline or
+determinism rows and cannot satisfy the immutable measurement requirement.
+
 A retained run will use an exact clean linked worktree and external output
 root; the runner owns and compiles the frozen counter:
 
@@ -477,12 +526,13 @@ bash scripts/ci/wasm-ablation-report.sh \
 
 ## Next Step
 
-Measure qualified row 3, then qualify rows 4 through 6, row 8, row 10 and row
-12 against every selected artifact on a clean candidate and measure them
+Measure qualified row 5, then qualify row 6, row 8, row 10 and row 12
+against every selected artifact on a clean candidate and measure them
 through the governed runner. Measured row 2 confirms the direct hypothesis
-behind B2 but does not supply its required lifecycle parity; rows 3 through 5
-provide differently
-scoped and intentionally overlapping persistence/codec attribution needed to
-choose B3 work; row 6 isolates the recovery dispatch rooted by shared watchdog
-registration. None is a behavior-preserving result. Keep B2 blocked until the
-full immutable B1 ledger, generic mapping and allowances are accepted.
+behind B2 but does not supply its required lifecycle parity; measured row 3
+provides inclusive activation-persistence pressure while measured row 4 and
+qualified row 5 provide differently scoped and intentionally overlapping
+persistence/codec attribution needed to choose B3 work; row 6 isolates the
+recovery dispatch rooted by shared
+watchdog registration. None is a behavior-preserving result. Keep B2 blocked
+until the full immutable B1 ledger, generic mapping and allowances are accepted.

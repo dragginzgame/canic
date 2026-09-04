@@ -74,6 +74,11 @@ pub enum CanisterPoolCreationProgressRecord {
         block_index: u64,
         canister_id: Principal,
     },
+    WaitingForFunding {
+        available_cycles: u128,
+        observed_at_ns: u64,
+        retry_at_ns: u64,
+    },
     Blocked {
         failure: CanisterPoolCreationFailureRecord,
     },
@@ -82,13 +87,19 @@ pub enum CanisterPoolCreationProgressRecord {
 /// Exact authority frozen before one autonomous Cycles Ledger creation effect.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolCreationRecord {
+    pub attempt_count: u32,
     pub operation_id: [u8; 32],
     pub cycles_ledger: Principal,
     pub placement_subnet: Principal,
     pub root: Principal,
     pub ledger_amount: Cycles,
+    pub ledger_fee: Cycles,
+    pub readiness_floor: Cycles,
+    pub creation_execution_margin: Cycles,
+    pub management_creation_fee: Cycles,
     pub created_at_time_ns: u64,
     pub prepared_at_ns: u64,
+    pub last_attempt_at_ns: Option<u64>,
     pub cost_guard_settlement: Option<ReplayCostGuardSettlement>,
     pub progress: CanisterPoolCreationProgressRecord,
 }
@@ -160,6 +171,20 @@ pub enum CanisterPoolAssetOriginRecord {
     Recycled,
 }
 
+/// Exact durable Cycles Ledger receipt for one autonomously created pool asset.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterPoolCreationReceiptRecord {
+    pub block_index: u64,
+    pub operation_id: [u8; 32],
+    pub cycles_ledger: Principal,
+    pub ledger_amount: Cycles,
+    pub ledger_fee: Cycles,
+    pub readiness_floor: Cycles,
+    pub creation_execution_margin: Cycles,
+    pub management_creation_fee: Cycles,
+    pub first_observed_cycles: Option<Cycles>,
+}
+
 /// Durable lifecycle state for one physical Canister asset.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CanisterPoolAssetStatusRecord {
@@ -184,6 +209,7 @@ pub enum CanisterPoolAssetStatusRecord {
 /// Complete persisted row for one physical Canister asset.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolAssetRecord {
+    pub creation_receipt: Option<CanisterPoolCreationReceiptRecord>,
     pub cycles: Cycles,
     pub origin: CanisterPoolAssetOriginRecord,
     pub status: CanisterPoolAssetStatusRecord,
@@ -306,17 +332,17 @@ mod tests {
         assert_eq!(
             asset_measurements,
             vec![
-                ("store", 268),
-                ("store_deletion_pending", 364),
-                ("pending_reset", 275),
-                ("ready", 268),
-                ("claimed", 427),
-                ("workload", 428),
-                ("recycling_pending", 450),
-                ("recycling_ready", 448),
-                ("recycling_failed_empty", 451),
-                ("handing_off", 316),
-                ("failed_empty", 271),
+                ("store", 653),
+                ("store_deletion_pending", 749),
+                ("pending_reset", 660),
+                ("ready", 653),
+                ("claimed", 812),
+                ("workload", 813),
+                ("recycling_pending", 835),
+                ("recycling_ready", 833),
+                ("recycling_failed_empty", 836),
+                ("handing_off", 701),
+                ("failed_empty", 656),
             ]
         );
     }
@@ -358,9 +384,9 @@ mod tests {
             state_measurements,
             [
                 ("default", 73),
-                ("intent", 604),
-                ("created", 651),
-                ("blocked", 624),
+                ("intent", 801),
+                ("created", 848),
+                ("blocked", 821),
             ]
         );
         assert!(state_measurements.iter().all(|(_, bytes)| *bytes <= 4_096));
@@ -414,8 +440,8 @@ mod tests {
         .to_bytes()
         .len();
 
-        assert_eq!((failed_empty, failed_1_kib), (271, 1_297));
-        assert_eq!((recycling_empty, recycling_1_kib), (451, 1_477));
+        assert_eq!((failed_empty, failed_1_kib), (656, 1_682));
+        assert_eq!((recycling_empty, recycling_1_kib), (836, 1_862));
         assert!(matches!(CanisterPoolAssetRecord::BOUND, Bound::Unbounded));
     }
 
@@ -490,6 +516,17 @@ mod tests {
 
     fn maximum_asset(status: CanisterPoolAssetStatusRecord) -> CanisterPoolAssetRecord {
         CanisterPoolAssetRecord {
+            creation_receipt: Some(CanisterPoolCreationReceiptRecord {
+                block_index: u64::MAX,
+                operation_id: [u8::MAX; 32],
+                cycles_ledger: maximum_principal(),
+                ledger_amount: Cycles::new(u128::MAX),
+                ledger_fee: Cycles::new(u128::MAX),
+                readiness_floor: Cycles::new(u128::MAX),
+                creation_execution_margin: Cycles::new(u128::MAX),
+                management_creation_fee: Cycles::new(u128::MAX),
+                first_observed_cycles: Some(Cycles::new(u128::MAX)),
+            }),
             cycles: Cycles::new(u128::MAX),
             origin: CanisterPoolAssetOriginRecord::Recycled,
             status,
@@ -504,13 +541,19 @@ mod tests {
             next_creation_sequence: u64::MAX,
             last_creation_timestamp_ns: u64::MAX,
             creation: Some(CanisterPoolCreationRecord {
+                attempt_count: u32::MAX,
                 operation_id: [u8::MAX; 32],
                 cycles_ledger: maximum_principal(),
                 placement_subnet: maximum_principal(),
                 root: maximum_principal(),
                 ledger_amount: Cycles::new(u128::MAX),
+                ledger_fee: Cycles::new(u128::MAX),
+                readiness_floor: Cycles::new(u128::MAX),
+                creation_execution_margin: Cycles::new(u128::MAX),
+                management_creation_fee: Cycles::new(u128::MAX),
                 created_at_time_ns: u64::MAX,
                 prepared_at_ns: u64::MAX,
+                last_attempt_at_ns: Some(u64::MAX),
                 cost_guard_settlement: Some(ReplayCostGuardSettlement {
                     quota_intent_id: IntentId(u64::MAX),
                     reservation_intent_id: IntentId(u64::MAX),

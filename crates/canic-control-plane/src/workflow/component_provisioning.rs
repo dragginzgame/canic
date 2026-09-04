@@ -300,7 +300,7 @@ async fn query_coordinator_provisioning(
     canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
     InternalError,
 > {
-    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_STATUS)
+    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_STATUS)
         .with_arg(RemoteCoordinatorStatusRequest::Operation(
             OperationStatusRequest { operation_id },
         ))?
@@ -350,6 +350,9 @@ pub async fn advance(
     {
         advance_member_reservation(&authority, root, request, &current)?
     } else if current.claim_cursor.claimed_component_count < current.component_count {
+        if !ensure_remaining_claim_capacity(&authority, &current).await? {
+            return Ok(crate::ops::component_provisioning::status_response(current));
+        }
         advance_member_claim(&authority, root, request, &current).await?
     } else if current.install_cursor.installed_component_count < current.component_count {
         Box::pin(advance_member_install(&authority, root, request, &current)).await?
@@ -1325,12 +1328,29 @@ async fn require_ready_pool_capacity(
     if CanisterPoolOps::ready_assets_cover(cycle_demands) {
         return Ok(());
     }
-    if CanisterPoolOps::standby_capacity_is_exhausted(pool) {
+    if CanisterPoolOps::estate_funding_required().is_some() {
+        return Ok(());
+    }
+    if CanisterPoolOps::asset_capacity_is_exhausted(pool) {
         return Err(InternalError::public(
             canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
         ));
     }
     Err(InternalError::unavailable())
+}
+
+async fn ensure_remaining_claim_capacity(
+    authority: &FleetSubnetRootAuthority,
+    current: &RootComponentProvisioningView,
+) -> Result<bool, InternalError> {
+    let config = ConfigOps::get()?;
+    let demands =
+        ComponentProvisioningPlanOps::root_batch_initial_cycle_demands(&config, &current.batch)?;
+    let claimed = usize::try_from(current.claim_cursor.claimed_component_count)
+        .map_err(|_error| InternalError::resource_exhausted())?;
+    let remaining = demands.get(claimed..).ok_or_else(InternalError::conflict)?;
+    require_ready_pool_capacity(&authority.binding.limits.canister_pool, remaining).await?;
+    Ok(CanisterPoolOps::ready_assets_cover(remaining))
 }
 
 fn require_next_claim_capacity(
@@ -1353,7 +1373,10 @@ fn require_next_claim_capacity(
     if CanisterPoolOps::has_ready_asset_for(required_cycles) {
         return Ok(());
     }
-    if CanisterPoolOps::standby_capacity_is_exhausted(&authority.binding.limits.canister_pool) {
+    if CanisterPoolOps::estate_funding_required().is_some() {
+        return Ok(());
+    }
+    if CanisterPoolOps::asset_capacity_is_exhausted(&authority.binding.limits.canister_pool) {
         return Err(InternalError::public(
             canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
         ));

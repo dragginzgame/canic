@@ -18,6 +18,8 @@ def is_canic_owned($name):
 def category($name; $kind):
   if $kind != "named_code" then
     $kind
+  elif ($name | test("k256|ecdsa|secp256|canister[_-]?sig|signature_verification|verify_bls|bls12|sha2|sha256"; "i")) then
+    "cryptography"
   elif (is_canic_owned($name) | not) then
     "application_and_upstream"
   elif ($name | test("canic_metrics|::metrics::|metrics_(core|runtime|security)"; "i")) then
@@ -63,6 +65,7 @@ def category_record($items; $name; $artifact_bytes):
 | ([$classified[] | select(.item_kind == "unattributed_code") | .shallow_size] | add // 0) as $unattributed_code_bytes
 | ($named_code_bytes + $unattributed_code_bytes) as $code_bytes
 | [
+    "cryptography",
     "authentication_and_admission",
     "metrics",
     "child_provisioning",
@@ -77,7 +80,7 @@ def category_record($items; $name; $artifact_bytes):
     context: $input.context,
     analysis: {
       method: "twiggy_shallow_symbol_attribution",
-      classification_revision: 1,
+      classification_revision: 2,
       tool: $input.tool,
       measured_bytes: $measured_bytes,
       artifact_bytes_match: ($measured_bytes == $input.artifact.bytes),
@@ -95,7 +98,8 @@ def category_record($items; $name; $artifact_bytes):
          end),
       limitations: [
         "Categories are disjoint shallow-byte ownership estimates from symbol names.",
-        "application_and_upstream combines application code, dependencies, and shared generic instantiations.",
+        "cryptography is identified from retained symbol names and may include Canic, application, or upstream ownership.",
+        "application_and_upstream combines remaining application code, dependencies, and shared generic instantiations.",
         "Stripped code[N] items remain unattributed instead of being assigned heuristically.",
         "Compare reports only when the build profile, toolchain, role capabilities, metrics tiers, and classification revision match."
       ]

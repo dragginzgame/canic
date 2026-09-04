@@ -4,6 +4,7 @@ set -euo pipefail
 
 METHOD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNNER_SOURCE="$METHOD_ROOT/scripts/ci/wasm-ablation-report.sh"
+BUILD_HARNESS_SOURCE="$METHOD_ROOT/scripts/ci/wasm-ablation-build-artifact.rs"
 EXPERIMENTS="$METHOD_ROOT/scripts/ci/wasm-ablation-experiments.tsv"
 ARTIFACTS="$METHOD_ROOT/scripts/ci/wasm-ablation-artifacts.tsv"
 FUNCTION_COUNTER_SOURCE="$METHOD_ROOT/scripts/ci/wasm-replica-function-count.rs"
@@ -21,6 +22,9 @@ Usage:
   scripts/ci/wasm-ablation-report.sh --smoke --experiment <id> \
     [--artifact <artifact-id>] --source <commit> \
     --product-root <clean-linked-worktree> --output-root <directory>
+  scripts/ci/wasm-ablation-report.sh --qualify --experiment <id> \
+    --source <commit> --product-root <clean-linked-worktree> \
+    --output-root <directory>
 
 The runner builds each selected artifact twice through canic-host's release
 artifact authority, recreating one fixed Cargo target path before each clean
@@ -32,6 +36,11 @@ and then its baseline, selects only the first configured artifact unless an
 exact artifact ID is supplied, performs one repetition and uses the repository
 sccache wrapper when available. Smoke output is never retention-eligible and
 does not make a determinism claim.
+
+Qualification mode is also development-only. It accepts one `specified` patch,
+builds its variant once across every selected artifact and validates the exact
+artifacts and structured metrics. It emits no baseline or determinism claim and
+is never retention-eligible.
 EOF
 }
 
@@ -73,6 +82,7 @@ check_manifests() {
     local state
     local switch_kind
     local switch_value
+    local switch_sha256
     local selectors
     local immediate_baseline
     local instruction_evidence
@@ -85,7 +95,7 @@ check_manifests() {
     local selector
     local experiment_ids
 
-    expected_experiment_header=$'sequence\texperiment\tstate\tswitch_kind\tswitch_value\tartifact_selectors\timmediate_baseline\tinstruction_evidence\tsource_owners'
+    expected_experiment_header=$'sequence\texperiment\tstate\tswitch_kind\tswitch_value\tswitch_sha256\tartifact_selectors\timmediate_baseline\tinstruction_evidence\tsource_owners'
     expected_artifact_header=$'artifact_id\tgroup\tconfig_path\tcanister'
     [[ "$(head -n 1 "$EXPERIMENTS")" == "$expected_experiment_header" ]] ||
         fail "unexpected experiment manifest header"
@@ -96,7 +106,7 @@ check_manifests() {
         NR == 1 { next }
         {
             expected = sprintf("%02d", NR - 1)
-            if ($1 != expected || seen[$2]++ || NF != 9) exit 1
+            if ($1 != expected || seen[$2]++ || NF != 10) exit 1
         }
         END { if (NR != 19) exit 1 }
     ' "$EXPERIMENTS" || fail "experiment manifest must contain ordered unique rows 01 through 18"
@@ -119,8 +129,8 @@ check_manifests() {
         [[ -f "$METHOD_ROOT/$config_path" ]] || fail "missing artifact config: $config_path"
     done <"$ARTIFACTS"
 
-    while IFS=$'\t' read -r sequence experiment state switch_kind switch_value selectors \
-        immediate_baseline instruction_evidence source_owners; do
+    while IFS=$'\t' read -r sequence experiment state switch_kind switch_value switch_sha256 \
+        selectors immediate_baseline instruction_evidence source_owners; do
         [[ "$sequence" == "sequence" ]] && continue
         [[ "$experiment" =~ ^b1-[0-9][0-9]-[a-z0-9-]+$ ]] ||
             fail "invalid experiment id: $experiment"
@@ -154,10 +164,16 @@ check_manifests() {
         if [[ ( "$state" == "ready" || "$state" == "specified" ) && "$switch_kind" == "patch" ]]; then
             [[ -f "$METHOD_ROOT/$switch_value" ]] ||
                 fail "$state patch experiment lacks its switch: $switch_value"
+            [[ "$switch_sha256" =~ ^[0-9a-f]{64}$ ]] ||
+                fail "$state patch experiment lacks an exact SHA-256: $experiment"
+            [[ "$(file_hash "$METHOD_ROOT/$switch_value")" == "$switch_sha256" ]] ||
+                fail "$state patch experiment SHA-256 does not match: $experiment"
             if [[ "$state" == "specified" ]]; then
                 git -C "$METHOD_ROOT" apply --check "$METHOD_ROOT/$switch_value" ||
                     fail "specified patch no longer applies to the current source: $switch_value"
             fi
+        elif [[ "$switch_sha256" != "-" ]]; then
+            fail "non-runnable or non-patch experiment has a switch SHA-256: $experiment"
         fi
         if [[ "$switch_kind" == "env_matrix" ]]; then
             [[ "$switch_value" == "CANIC_GENERIC_COHORT_WIDTH=1..5" ]] ||
@@ -169,6 +185,7 @@ check_manifests() {
         fail "consumer-specific source or artifact entered the Canic ablation manifests"
     fi
     [[ -f "$FUNCTION_COUNTER_SOURCE" ]] || fail "missing replica function counter source"
+    [[ -f "$BUILD_HARNESS_SOURCE" ]] || fail "missing structured artifact build harness source"
 }
 
 ACTION=""
@@ -204,8 +221,9 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_ROOT_INPUT="${2:-}"
             shift 2
             ;;
-        --smoke)
-            RUN_MODE="smoke"
+        --smoke|--qualify)
+            [[ "$RUN_MODE" == "retained" ]] || fail "choose at most one development run mode"
+            RUN_MODE="${1#--}"
             shift
             ;;
         --artifact)
@@ -229,8 +247,8 @@ done
 
 check_manifests
 
-if [[ "$RUN_MODE" == "smoke" && "$ACTION" != "run" ]]; then
-    fail "--smoke is valid only with --experiment"
+if [[ "$RUN_MODE" != "retained" && "$ACTION" != "run" ]]; then
+    fail "--$RUN_MODE is valid only with --experiment"
 fi
 if [[ -n "$ARTIFACT_OVERRIDE" && "$RUN_MODE" != "smoke" ]]; then
     fail "--artifact is valid only with --smoke"
@@ -242,7 +260,7 @@ if [[ "$ACTION" == "check" ]]; then
 fi
 
 if [[ "$ACTION" == "list" ]]; then
-    awk -F '\t' 'BEGIN { OFS="\t" } NR == 1 { print $1,$2,$3,$4,$6; next } { print $1,$2,$3,$4,$6 }' "$EXPERIMENTS"
+    awk -F '\t' 'BEGIN { OFS="\t" } NR == 1 { print $1,$2,$3,$4,$7; next } { print $1,$2,$3,$4,$7 }' "$EXPERIMENTS"
     exit 0
 fi
 
@@ -251,9 +269,15 @@ fi
 
 EXPERIMENT_ROW="$(awk -F '\t' -v experiment="$EXPERIMENT" 'NR > 1 && $2 == experiment { print; exit }' "$EXPERIMENTS")"
 [[ -n "$EXPERIMENT_ROW" ]] || fail "unknown experiment: $EXPERIMENT"
-IFS=$'\t' read -r SEQUENCE _ STATE SWITCH_KIND SWITCH_VALUE ARTIFACT_SELECTORS \
-    IMMEDIATE_BASELINE INSTRUCTION_EVIDENCE SOURCE_OWNERS <<<"$EXPERIMENT_ROW"
-[[ "$STATE" == "ready" ]] || fail "experiment is not runnable until its one-switch input exists: $EXPERIMENT"
+IFS=$'\t' read -r SEQUENCE _ STATE SWITCH_KIND SWITCH_VALUE SWITCH_SHA256 \
+    ARTIFACT_SELECTORS IMMEDIATE_BASELINE INSTRUCTION_EVIDENCE SOURCE_OWNERS <<<"$EXPERIMENT_ROW"
+if [[ "$RUN_MODE" == "qualify" ]]; then
+    [[ "$STATE" == "specified" && "$SWITCH_KIND" == "patch" ]] ||
+        fail "qualification requires one specified patch experiment: $EXPERIMENT"
+else
+    [[ "$STATE" == "ready" ]] ||
+        fail "experiment is not runnable until its one-switch input exists: $EXPERIMENT"
+fi
 [[ "$SWITCH_KIND" != "cross_commit" ]] || fail "cross-commit comparison requires its separately frozen compatible pair"
 
 selected_run_artifacts() {
@@ -285,6 +309,7 @@ require_command didc
 require_command git
 require_command gzip
 require_command ic-wasm
+require_command jq
 require_command rg
 require_command rustc
 require_command sha256sum
@@ -315,8 +340,8 @@ BASE_SOURCE_TREE="$(git -C "$PRODUCT_ROOT" rev-parse 'HEAD^{tree}')"
 BASE_CARGO_LOCK_SHA256="$(file_hash "$PRODUCT_ROOT/Cargo.lock")"
 
 RUN_STEM="$EXPERIMENT-${SOURCE_COMMIT:0:12}"
-if [[ "$RUN_MODE" == "smoke" ]]; then
-    RUN_STEM="$RUN_STEM-smoke"
+if [[ "$RUN_MODE" != "retained" ]]; then
+    RUN_STEM="$RUN_STEM-$RUN_MODE"
 fi
 RUN_ROOT="$OUTPUT_ROOT/$RUN_STEM"
 [[ ! -e "$RUN_ROOT" ]] || fail "output already exists: $RUN_ROOT"
@@ -324,11 +349,16 @@ mkdir -p "$RUN_ROOT/artifacts" "$RUN_ROOT/logs" "$RUN_ROOT/analysis" "$RUN_ROOT/
 cp "$EXPERIMENTS" "$RUN_ROOT/experiments.tsv"
 cp "$ARTIFACTS" "$RUN_ROOT/artifacts.tsv"
 cp "$RUNNER_SOURCE" "$RUN_ROOT/method/wasm-ablation-report.sh"
+cp "$BUILD_HARNESS_SOURCE" "$RUN_ROOT/method/wasm-ablation-build-artifact.rs"
 cp "$FUNCTION_COUNTER_SOURCE" "$RUN_ROOT/method/wasm-replica-function-count.rs"
 RUNNER_SOURCE_SHA256="$(file_hash "$RUN_ROOT/method/wasm-ablation-report.sh")"
+BUILD_HARNESS_SOURCE_SHA256="$(file_hash "$RUN_ROOT/method/wasm-ablation-build-artifact.rs")"
 
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/canic-wasm-ablation.XXXXXX")"
 BUILD_TARGET_DIR="$SCRATCH/cargo-target"
+BUILD_HARNESS_ROOT="$SCRATCH/build-harness"
+BUILD_HARNESS_MANIFEST="$BUILD_HARNESS_ROOT/Cargo.toml"
+BUILD_HARNESS_PRODUCT="$SCRATCH/product"
 PATCH_APPLIED="false"
 PATCH_PATH=""
 cleanup() {
@@ -340,6 +370,51 @@ cleanup() {
     rm -rf "$SCRATCH"
 }
 trap cleanup EXIT
+
+mkdir -p "$BUILD_HARNESS_ROOT/src"
+ln -s "$PRODUCT_ROOT" "$BUILD_HARNESS_PRODUCT"
+cp "$RUN_ROOT/method/wasm-ablation-build-artifact.rs" "$BUILD_HARNESS_ROOT/src/main.rs"
+cp "$PRODUCT_ROOT/Cargo.lock" "$BUILD_HARNESS_ROOT/Cargo.lock"
+cat >"$BUILD_HARNESS_MANIFEST" <<'EOF'
+[package]
+name = "canic-wasm-ablation-build-artifact"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+canic-core = { path = "../product/crates/canic-core" }
+canic-host = { path = "../product/crates/canic-host" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = "symbols"
+debug = false
+panic = "abort"
+overflow-checks = false
+incremental = false
+
+[profile.fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = false
+
+[workspace]
+EOF
+
+# The method harness is a separate Cargo root, so seed its dependency graph from
+# the immutable product lock and resolve that graph once without network access.
+# All measured builds below then require this retained harness lock exactly.
+CARGO_NET_OFFLINE=true cargo metadata --offline --format-version 1 \
+    --manifest-path "$BUILD_HARNESS_MANIFEST" >/dev/null
+BUILD_HARNESS_CARGO_LOCK="$RUN_ROOT/method/wasm-ablation-build-artifact.Cargo.lock"
+cp "$BUILD_HARNESS_ROOT/Cargo.lock" "$BUILD_HARNESS_CARGO_LOCK"
+BUILD_HARNESS_CARGO_LOCK_SHA256="$(file_hash "$BUILD_HARNESS_CARGO_LOCK")"
 
 FUNCTION_COUNTER_INPUT="$SCRATCH/wasm-replica-function-count.rs"
 FUNCTION_COUNTER="$SCRATCH/wasm-replica-function-count"
@@ -364,15 +439,14 @@ capture_artifact() {
     local repetition="$2"
     local artifact_id="$3"
     local canister="$4"
-    local log_path="$5"
+    local transform_metrics_path="$5"
     local artifact_root="$PRODUCT_ROOT/.icp/local/canisters/$canister"
     local wasm_path="$artifact_root/$canister.wasm"
     local gzip_path="$artifact_root/$canister.wasm.gz"
     local candid_path="$artifact_root/$canister.did"
     local output_dir="$RUN_ROOT/artifacts/$condition-$repetition/$artifact_id"
     local analysis_prefix="$RUN_ROOT/analysis/$condition-$repetition-$artifact_id"
-    local optimizer_line
-    local optimizer_pattern
+    local optimizer_metrics
     local ic_wasm_functions
     local replica_limited_defined_functions
     local ic_wasm_exported_methods
@@ -393,20 +467,47 @@ capture_artifact() {
     ic-wasm "$wasm_path" info >"$analysis_prefix.ic-wasm-info.txt"
     wasm-objdump -x "$wasm_path" >"$analysis_prefix.objdump.txt"
 
-    optimizer_line="$(rg 'release Wasm optimization for .*\.wasm:' "$log_path" | tail -n 1 || true)"
-    optimizer_pattern='raw ([0-9]+) -> ([0-9]+), gzip ([0-9]+) -> ([0-9]+), code section ([0-9]+) -> ([0-9]+), data section ([0-9]+) -> ([0-9]+), functions ([0-9]+) -> ([0-9]+)$'
-    [[ "$optimizer_line" =~ $optimizer_pattern ]] ||
-        fail "unable to parse optimizer metrics for $artifact_id"
-    local before_raw="${BASH_REMATCH[1]}"
-    local after_raw="${BASH_REMATCH[2]}"
-    local before_gzip="${BASH_REMATCH[3]}"
-    local after_gzip="${BASH_REMATCH[4]}"
-    local before_code="${BASH_REMATCH[5]}"
-    local after_code="${BASH_REMATCH[6]}"
-    local before_data="${BASH_REMATCH[7]}"
-    local after_data="${BASH_REMATCH[8]}"
-    local before_functions="${BASH_REMATCH[9]}"
-    local after_functions="${BASH_REMATCH[10]}"
+    optimizer_metrics="$(jq -er --arg role "$canister" '
+        if .schema_version != 1 or .role != $role
+        then error("unexpected transform metrics identity")
+        else
+            [.transforms[] |
+                select(.transform == "optimize" and .outcome == "applied")] as $records |
+            if ($records | length) != 1 or $records[0].metrics == null
+            then error("expected one applied optimizer metrics record")
+            else
+                $records[0].metrics |
+                [
+                    .before.raw_bytes,
+                    .after.raw_bytes,
+                    .before.gzip_bytes,
+                    .after.gzip_bytes,
+                    .before.code_section_bytes,
+                    .after.code_section_bytes,
+                    .before.data_section_bytes,
+                    .after.data_section_bytes,
+                    .before.defined_functions,
+                    .after.defined_functions
+                ] as $values |
+                if all($values[]; type == "number")
+                then $values | @tsv
+                else error("optimizer metrics must be numeric")
+                end
+            end
+        end
+    ' "$transform_metrics_path")" || fail "invalid optimizer metrics for $artifact_id"
+    local before_raw
+    local after_raw
+    local before_gzip
+    local after_gzip
+    local before_code
+    local after_code
+    local before_data
+    local after_data
+    local before_functions
+    local after_functions
+    IFS=$'\t' read -r before_raw after_raw before_gzip after_gzip before_code after_code \
+        before_data after_data before_functions after_functions <<<"$optimizer_metrics"
     [[ "$after_raw" == "$(stat -c%s "$wasm_path")" &&
         "$after_gzip" == "$(stat -c%s "$gzip_path")" ]] ||
         fail "optimizer and canonical artifact sizes disagree for $artifact_id"
@@ -473,12 +574,13 @@ build_condition() {
     local canister
     local target_dir
     local log_path
+    local transform_metrics_path
     local first_dir
     local second_dir
     local first_metrics
     local second_metrics
     local extension
-    local environment_args=()
+    local environment_args=("RUSTC_WRAPPER=")
     local selected_artifacts
     local artifact_count
     local artifact_index
@@ -487,16 +589,15 @@ build_condition() {
 
     selected_artifacts="$(selected_run_artifacts)"
     artifact_count="$(printf '%s\n' "$selected_artifacts" | awk 'NF { count++ } END { print count + 0 }')"
-    if [[ "$RUN_MODE" == "smoke" ]]; then
+    if [[ "$RUN_MODE" != "retained" ]]; then
         repetitions=(a)
-        if [[ -z "${RUSTC_WRAPPER:-}" && -x "$METHOD_ROOT/scripts/ci/run-sccache.sh" ]] &&
+        if [[ -x "$METHOD_ROOT/scripts/ci/run-sccache.sh" ]] &&
             command -v sccache >/dev/null 2>&1; then
             if "$METHOD_ROOT/scripts/ci/run-sccache.sh" "$(command -v rustc)" -vV \
                 >/dev/null 2>&1; then
-                environment_args+=("RUSTC_WRAPPER=$METHOD_ROOT/scripts/ci/run-sccache.sh")
+                environment_args=("RUSTC_WRAPPER=$METHOD_ROOT/scripts/ci/run-sccache.sh")
             else
-                echo "warning: sccache is installed but unusable; running the smoke without it" >&2
-                environment_args+=("RUSTC_WRAPPER=")
+                echo "warning: sccache is installed but unusable; running the development build without it" >&2
             fi
         fi
     fi
@@ -516,6 +617,7 @@ build_condition() {
             artifact_index=$((artifact_index + 1))
             rm -rf "$PRODUCT_ROOT/.icp"
             log_path="$RUN_ROOT/logs/$condition-$repetition-$artifact_id.log"
+            transform_metrics_path="$RUN_ROOT/analysis/$condition-$repetition-$artifact_id.transform-metrics.json"
             build_started="$SECONDS"
             echo "building $EXPERIMENT $condition-$repetition $artifact_id ($artifact_index/$artifact_count)"
             if ! (
@@ -523,19 +625,20 @@ build_condition() {
                 env ICP_ENVIRONMENT=local CARGO_NET_OFFLINE=true CARGO_INCREMENTAL=0 \
                     CARGO_TARGET_DIR="$target_dir" "${environment_args[@]}" \
                     cargo run --offline --locked -q --profile fast \
-                        -p canic-host --example build_artifact -- \
+                        --manifest-path "$BUILD_HARNESS_MANIFEST" -- \
                         "$canister" release "$PRODUCT_ROOT" "$PRODUCT_ROOT" \
-                        "$PRODUCT_ROOT/$config_path"
+                        "$PRODUCT_ROOT/$config_path" "$transform_metrics_path"
             ) >"$log_path" 2>&1; then
                 tail -n 80 "$log_path" >&2
                 fail "release build failed for $artifact_id"
             fi
-            capture_artifact "$condition" "$repetition" "$artifact_id" "$canister" "$log_path"
+            capture_artifact "$condition" "$repetition" "$artifact_id" "$canister" \
+                "$transform_metrics_path"
             echo "built $EXPERIMENT $condition-$repetition $artifact_id in $((SECONDS - build_started))s"
         done <<<"$selected_artifacts"
     done
 
-    if [[ "$RUN_MODE" == "smoke" ]]; then
+    if [[ "$RUN_MODE" != "retained" ]]; then
         return
     fi
 
@@ -573,6 +676,8 @@ case "$SWITCH_KIND" in
         PATCH_PATH="$METHOD_ROOT/$SWITCH_VALUE"
         [[ -f "$PATCH_PATH" ]] || fail "missing measurement patch: $SWITCH_VALUE"
         PATCH_SHA256="$(file_hash "$PATCH_PATH")"
+        [[ "$PATCH_SHA256" == "$SWITCH_SHA256" ]] ||
+            fail "measurement patch SHA-256 does not match its experiment record"
         PATCH_EXPECTED_PATHS="$(git -C "$PRODUCT_ROOT" apply --numstat "$PATCH_PATH" | cut -f3 | sort -u)"
         [[ -n "$PATCH_EXPECTED_PATHS" ]] || fail "measurement patch has no paths: $SWITCH_VALUE"
         if [[ "$RUN_MODE" == "smoke" ]]; then
@@ -586,6 +691,12 @@ case "$SWITCH_KIND" in
             build_condition baseline "" ""
             git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
             PATCH_APPLIED="true"
+        elif [[ "$RUN_MODE" == "qualify" ]]; then
+            git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
+            git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
+            PATCH_APPLIED="true"
+            PATCH_DIFF_SHA256="$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')"
+            build_condition variant "" ""
         else
             build_condition baseline "" ""
             git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
@@ -613,6 +724,10 @@ fi
 {
     [[ "$(file_hash "$RUNNER_SOURCE")" == "$RUNNER_SOURCE_SHA256" ]] ||
         fail "Wasm ablation runner source changed during the ablation run"
+    [[ "$(file_hash "$BUILD_HARNESS_SOURCE")" == "$BUILD_HARNESS_SOURCE_SHA256" ]] ||
+        fail "structured artifact build harness source changed during the ablation run"
+    [[ "$(file_hash "$BUILD_HARNESS_ROOT/Cargo.lock")" == "$BUILD_HARNESS_CARGO_LOCK_SHA256" ]] ||
+        fail "structured artifact build harness lock changed during the ablation run"
     [[ "$(file_hash "$FUNCTION_COUNTER_SOURCE")" == "$FUNCTION_COUNTER_SOURCE_SHA256" ]] ||
         fail "replica function counter source changed during the ablation run"
     printf 'field\tvalue\n'
@@ -633,6 +748,8 @@ fi
     printf 'instruction_evidence\t%s\n' "$INSTRUCTION_EVIDENCE"
     printf 'source_owners\t%s\n' "$SOURCE_OWNERS"
     printf 'runner_source_sha256\t%s\n' "$RUNNER_SOURCE_SHA256"
+    printf 'build_harness_source_sha256\t%s\n' "$BUILD_HARNESS_SOURCE_SHA256"
+    printf 'build_harness_cargo_lock_sha256\t%s\n' "$BUILD_HARNESS_CARGO_LOCK_SHA256"
     printf 'replica_function_counter_identity\t%s\n' "$FUNCTION_COUNTER_IDENTITY"
     printf 'replica_function_counter_source_sha256\t%s\n' "$FUNCTION_COUNTER_SOURCE_SHA256"
     printf 'replica_function_counter_executable_sha256\t%s\n' "$FUNCTION_COUNTER_EXECUTABLE_SHA256"
@@ -642,9 +759,11 @@ fi
     if [[ "$RUN_MODE" == "retained" ]]; then
         printf 'retention_eligible\tyes\n'
         printf 'determinism_repetitions\t2\n'
+        printf 'determinism_claim\tpass\n'
     else
         printf 'retention_eligible\tno\n'
         printf 'determinism_repetitions\t1\n'
+        printf 'determinism_claim\tnot_claimed\n'
     fi
     printf 'execution_path_sha256\t%s\n' "$(printf '%s' "$PRODUCT_ROOT" | sha256sum | awk '{print $1}')"
     printf 'cargo_version\t%s\n' "$(tool_version cargo)"

@@ -747,6 +747,7 @@ mod tests {
             minimum_size: 1,
             maximum_size: 10,
             canister_cycles: Cycles::new(5_000_000_000_000),
+            creation_execution_margin: Cycles::new(1_000_000_000_000),
         };
         assert!(require_ready_target(&config, 5).is_ok());
         assert!(require_ready_target(&config, 11).is_err());

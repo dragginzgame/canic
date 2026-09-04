@@ -66,7 +66,7 @@ pub(super) fn load_report(
         &icp,
         &coordinator_binding,
         coordinator,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_COORDINATOR_STATUS,
         &CoordinatorStatusRequestFragment::Registry,
     )?
     else {
@@ -76,7 +76,7 @@ pub(super) fn load_report(
         &icp,
         &coordinator_binding,
         coordinator,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_COORDINATOR_STATUS,
         &CoordinatorStatusRequestFragment::RegistryManifest,
     )?
     else {
@@ -86,7 +86,7 @@ pub(super) fn load_report(
         &icp,
         &coordinator_binding,
         coordinator,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_COORDINATOR_STATUS,
         &CoordinatorStatusRequestFragment::RegistryVersion,
     )?
     else {
@@ -125,7 +125,7 @@ fn query_root_summaries(
                 icp,
                 &binding,
                 root,
-                protocol::CANIC_STATUS,
+                protocol::CANIC_ROOT_STATUS,
                 &RootStatusRequestFragment::Inventory,
             )?;
             match response {

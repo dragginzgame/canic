@@ -156,6 +156,10 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
             "capability {capability:?} requires Canic feature `{}`",
             feature.cargo_name()
         ),
+        RoleContractFinding::SurplusCryptoFeature { feature } => format!(
+            "Canic cryptographic feature `{}` is enabled without a role capability that uses it",
+            feature.cargo_name()
+        ),
         RoleContractFinding::RoleUnknown { role } => {
             format!("role {role} is not declared")
         }

@@ -50,7 +50,7 @@ pub fn query_canic_metadata_version(
 ) -> Result<String, CanicMetadataQueryError> {
     let output = icp.canister_query_arg_output_with_candid(
         canister_id,
-        protocol::CANIC_STATUS,
+        protocol::status_endpoint_for_role(&binding.binding().role),
         "(variant { Overview })",
         Some(ICP_JSON_OUTPUT),
         Some(binding.candid_path.as_path()),

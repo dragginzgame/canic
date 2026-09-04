@@ -72,6 +72,8 @@ const MAX_GENERATOR_INPUT_BYTES: usize = 1024 * 1024;
 const MAINNET_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 const GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD: u128 = 1_000_000;
 const GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES: u128 = 1_000_000_000_000;
+const GENERATED_POOL_CREATION_EXECUTION_MARGIN_CYCLES: u128 =
+    GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES;
 const GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES: u128 = 1_000_000_000_000;
 
 /// Return the generated fresh-pool funding that preserves one readiness floor
@@ -191,8 +193,51 @@ pub enum FleetGenerateError {
     #[error("release authority is invalid: {0}")]
     Release(String),
 
-    #[error("artifact Candid sidecar is missing or changed: {0}")]
-    Candid(String),
+    #[error(
+        "release build {release_build_id} targets {actual}, but environment {environment} requires {expected}"
+    )]
+    ReleaseBuildNetworkMismatch {
+        release_build_id: ReleaseBuildId,
+        actual: BuildNetwork,
+        environment: String,
+        expected: BuildNetwork,
+    },
+
+    #[error("Fleet admission must not contain the anonymous Principal")]
+    FleetAdmissionAnonymous,
+
+    #[error("duplicate Fleet admission Principal {principal}")]
+    FleetAdmissionDuplicate { principal: Principal },
+
+    #[error("artifact Candid sidecar is missing: {}", path.display())]
+    CandidMissing { path: PathBuf },
+
+    #[error("artifact Candid sidecar is not a regular no-follow file: {}", path.display())]
+    CandidNotRegular { path: PathBuf },
+
+    #[error("failed to read artifact Candid sidecar {}: {source}", path.display())]
+    CandidRead {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[cfg(not(unix))]
+    #[error(
+        "artifact Candid sidecar cannot be read without following links on this platform: {}",
+        path.display()
+    )]
+    CandidUnsupportedPlatform { path: PathBuf },
+
+    #[error(
+        "artifact Candid sidecar digest differs from release authority at {}: expected {expected:?}, observed {observed:?}",
+        path.display()
+    )]
+    CandidDigestMismatch {
+        path: PathBuf,
+        expected: [u8; 32],
+        observed: [u8; 32],
+    },
 
     #[error(transparent)]
     ComponentPoolCapacity(#[from] RootPoolCapacityError),
@@ -205,7 +250,7 @@ pub enum FleetGenerateError {
 }
 
 /// Exact management evidence for the reviewed same-Root Start prerequisite.
-#[derive(Debug, ThisError)]
+#[derive(Debug, Eq, PartialEq, ThisError)]
 #[error(
     "retained Root {root} is stopped after exact management verification \
      (Subnet {subnet}, controller {controller}, module SHA-256 {module_sha256}); \
@@ -1725,7 +1770,7 @@ fn observe_root_owned_pool_assets(
             icp,
             request.root_candid,
             root_principal,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_ROOT_STATUS,
             &RootEstateStatusRequest::FleetAuthority,
         )
         .map_err(|error| FleetGenerateError::CanisterUnavailable {
@@ -1805,7 +1850,7 @@ fn observe_root_owned_pool_assets(
                     icp,
                     request.root_candid,
                     root_principal,
-                    protocol::CANIC_STATUS,
+                    protocol::CANIC_ROOT_STATUS,
                     &status_request,
                 )
                 .map_err(|error| FleetGenerateError::CanisterUnavailable {
@@ -2089,9 +2134,12 @@ fn require_release_build_network(
     if actual == expected {
         return Ok(());
     }
-    Err(FleetGenerateError::Release(format!(
-        "release build {release_build_id} targets {actual}, but environment {environment} requires {expected}",
-    )))
+    Err(FleetGenerateError::ReleaseBuildNetworkMismatch {
+        release_build_id,
+        actual,
+        environment: environment.to_string(),
+        expected,
+    })
 }
 
 #[expect(
@@ -2181,6 +2229,7 @@ fn root_limits(source: &RootSource) -> FleetSubnetRootLimits {
             minimum_size: source.canister_pool.minimum_size,
             maximum_size: source.canister_pool.maximum_size,
             canister_cycles: source.canister_pool.canister_cycles.clone(),
+            creation_execution_margin: Cycles::new(GENERATED_POOL_CREATION_EXECUTION_MARGIN_CYCLES),
         },
         cycles_funding: CyclesFundingBudget {
             window_secs: source.limits.cycles_funding.window_secs,
@@ -2209,37 +2258,29 @@ fn candid_sidecar(
     let bytes = match read_optional_regular_bytes(&path) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
-            return Err(FleetGenerateError::Candid(format!(
-                "{} is missing",
-                path.display()
-            )));
+            return Err(FleetGenerateError::CandidMissing { path });
         }
         Err(RegularFileReadError::NotRegular) => {
-            return Err(FleetGenerateError::Candid(format!(
-                "{} is not a regular no-follow file",
-                path.display()
-            )));
+            return Err(FleetGenerateError::CandidNotRegular { path });
         }
         Err(RegularFileReadError::Io(error)) => {
-            return Err(FleetGenerateError::Candid(format!(
-                "{}: {error}",
-                path.display()
-            )));
+            return Err(FleetGenerateError::CandidRead {
+                path,
+                source: error,
+            });
         }
         #[cfg(not(unix))]
         Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(FleetGenerateError::Candid(format!(
-                "{} cannot be read without following links on this platform",
-                path.display()
-            )));
+            return Err(FleetGenerateError::CandidUnsupportedPlatform { path });
         }
     };
     let actual: [u8; 32] = Sha256::digest(bytes).into();
     if actual != artifact.candid_sha256 {
-        return Err(FleetGenerateError::Candid(format!(
-            "{} digest differs from release authority",
-            path.display()
-        )));
+        return Err(FleetGenerateError::CandidDigestMismatch {
+            path,
+            expected: artifact.candid_sha256,
+            observed: actual,
+        });
     }
     relative_path(root, &path)
 }
@@ -2347,9 +2388,7 @@ fn compile_source_admission_policy(
         .iter()
         .any(|principal| principal == &Principal::anonymous())
     {
-        return Err(FleetGenerateError::Authority(
-            "Fleet admission must not contain the anonymous Principal".to_string(),
-        ));
+        return Err(FleetGenerateError::FleetAdmissionAnonymous);
     }
     principals.sort_unstable();
     if let Some(duplicate) = principals
@@ -2357,10 +2396,9 @@ fn compile_source_admission_policy(
         .find(|items| items[0] == items[1])
         .map(|items| items[0])
     {
-        return Err(FleetGenerateError::Authority(format!(
-            "duplicate Fleet admission Principal {}",
-            duplicate.to_text()
-        )));
+        return Err(FleetGenerateError::FleetAdmissionDuplicate {
+            principal: duplicate,
+        });
     }
     compile_fleet_admission_policy_template(principals, Vec::new())
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))

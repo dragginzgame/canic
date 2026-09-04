@@ -68,11 +68,124 @@ pub enum CanisterRuntimeStatus {
 pub struct FleetObservation {
     pub additional_controlled_cycles: BTreeMap<String, u128>,
     pub canisters: BTreeMap<String, Option<LiveCanister>>,
+    pub estate_funding_domains: BTreeMap<String, EstateFundingDomainObservation>,
     #[serde(with = "u128_text")]
     pub ledger_fee_cycles: u128,
     #[serde(with = "u128_text")]
     pub operator_cycles: u128,
     pub protocol_ready: BTreeMap<String, bool>,
+}
+
+/// Exact read-only observation of one Root-owned Cycles Ledger account.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EstateFundingDomainObservation {
+    #[serde(with = "option_u128_text")]
+    pub balance_cycles: Option<u128>,
+    pub cycles_ledger: String,
+    pub pool: Option<EstatePoolInventoryObservation>,
+    pub root_principal: Option<String>,
+}
+
+/// Complete protected Root-pool observation used for capacity and conservation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EstatePoolInventoryObservation {
+    pub assets: Vec<EstatePoolAssetObservation>,
+    pub maximum_size: u32,
+    pub minimum_size: u32,
+    pub pending_creation: Option<EstatePoolPendingCreationObservation>,
+    #[serde(with = "u128_text")]
+    pub readiness_floor_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub creation_execution_margin_cycles: u128,
+}
+
+/// One non-Store physical asset retained by a Root pool.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EstatePoolAssetObservation {
+    pub creation_receipt: Option<EstatePoolCreationReceiptObservation>,
+    #[serde(with = "u128_text")]
+    pub cycles: u128,
+    pub lifecycle: EstatePoolAssetLifecycle,
+    pub origin: EstatePoolAssetOrigin,
+    pub principal: String,
+}
+
+/// Exact autonomous-creation receipt exposed by the protected Root inventory.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EstatePoolCreationReceiptObservation {
+    pub block_index: u64,
+    pub operation_id: String,
+    pub cycles_ledger: String,
+    #[serde(with = "u128_text")]
+    pub ledger_amount_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub ledger_fee_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub readiness_floor_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub creation_execution_margin_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub management_creation_fee_cycles: u128,
+    #[serde(with = "option_u128_text")]
+    pub first_observed_cycles: Option<u128>,
+}
+
+/// Protected provenance of one Root-owned pool asset.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EstatePoolAssetOrigin {
+    InfrastructureStore,
+    Created,
+    Imported,
+    Recycled,
+}
+
+/// Capacity-relevant lifecycle of one Root-owned pool asset.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EstatePoolAssetLifecycle {
+    Claimed,
+    Failed,
+    HandingOff,
+    PendingReset,
+    Ready,
+    Recycling,
+    Workload,
+}
+
+/// Exact in-flight creation occupying one slot in the Root pool.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EstatePoolPendingCreationObservation {
+    pub attempt_count: u32,
+    #[serde(with = "option_u128_text")]
+    pub available_cycles: Option<u128>,
+    #[serde(with = "u128_text")]
+    pub creation_amount_cycles: u128,
+    pub created_principal: Option<String>,
+    pub diagnostic: Option<EstatePoolCreationDiagnostic>,
+    pub last_attempt_at_ns: Option<u64>,
+    pub operation_id: String,
+    #[serde(with = "option_u128_text")]
+    pub required_cycles: Option<u128>,
+    pub retry_at_ns: Option<u64>,
+    #[serde(with = "option_u128_text")]
+    pub shortfall_cycles: Option<u128>,
+    pub uncertain_result: bool,
+}
+
+/// Typed reason retained by an autonomous pool creation that cannot advance.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EstatePoolCreationDiagnostic {
+    FundingRequired,
+    LedgerCreationFailed,
+    LedgerRejected,
+    UnresolvedAfterLedgerWindow,
 }
 
 /// Maintained disposition of one configured canister.
@@ -311,6 +424,18 @@ pub enum EnsureAction {
         name: String,
         principal: String,
     },
+    FundEstate {
+        #[serde(with = "u128_text")]
+        amount: u128,
+        created_at_time: u64,
+        #[serde(with = "u128_text")]
+        expected_post_cycles: u128,
+        ledger: String,
+        #[serde(with = "u128_text")]
+        ledger_fee_cycles: u128,
+        name: String,
+        principal: String,
+    },
     Install {
         canic_init: Option<DesiredCanisterInit>,
         init_arg: Option<String>,
@@ -384,6 +509,7 @@ impl EnsureAction {
             | Self::Delete { name, .. }
             | Self::FleetProtocol { name, .. }
             | Self::Fund { name, .. }
+            | Self::FundEstate { name, .. }
             | Self::Install { name, .. }
             | Self::Protocol { name, .. }
             | Self::SetControllers { name, .. }
@@ -521,6 +647,7 @@ pub enum CanisterDisposition {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CycleConservation {
+    pub estate_funding_domains: Vec<EstateFundingDomainPlan>,
     #[serde(with = "u128_text")]
     pub expected_post_operation_cycles: u128,
     #[serde(with = "u128_text")]
@@ -539,9 +666,86 @@ pub struct CycleConservation {
     pub scheduled_transfer_cycles: u128,
 }
 
+/// Reviewed autonomous-creation exposure for one Root-owned Cycles Ledger account.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EstateFundingDomainPlan {
+    pub allocated_workloads: u32,
+    #[serde(with = "option_u128_text")]
+    pub available_cycles: Option<u128>,
+    pub available_pool_slots: u32,
+    #[serde(with = "u128_text")]
+    pub creation_amount_cycles: u128,
+    pub cycles_ledger: String,
+    #[serde(with = "u128_text")]
+    pub creation_execution_margin_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub readiness_floor_cycles: u128,
+    pub eligible_ready_pool_assets: u32,
+    pub initial_pool_assets: Vec<String>,
+    #[serde(with = "u128_text")]
+    pub ledger_fee_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub management_creation_fee_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub maximum_creation_debit_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub maximum_creation_fee_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub maximum_funding_cycles: u128,
+    pub occupied_pool_assets: u32,
+    pub pending_creation_count: u32,
+    pub pending_creation: Option<EstatePoolPendingCreationObservation>,
+    pub pool_maximum_size: u32,
+    pub planned_initial_workloads: u32,
+    pub required_creation_count: u32,
+    pub root: String,
+    pub root_principal: Option<String>,
+    #[serde(with = "u128_text")]
+    pub shortfall_cycles: u128,
+}
+
+/// Durable no-effect pause for one underfunded Root-owned creation domain.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EstateFundingRequiredRecord {
+    pub attempt_count: Option<u32>,
+    #[serde(with = "u128_text")]
+    pub available_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub creation_amount_cycles: u128,
+    pub cycles_ledger: String,
+    #[serde(with = "u128_text")]
+    pub creation_execution_margin_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub readiness_floor_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub ledger_fee_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub management_creation_fee_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub maximum_creation_debit_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub maximum_creation_fee_cycles: u128,
+    pub operation_id: String,
+    pub pending_creation_operation_id: Option<String>,
+    pub plan_sha256: String,
+    pub required_creation_count: u32,
+    pub root: String,
+    pub root_principal: String,
+    pub last_attempt_at_ns: Option<u64>,
+    pub retry_at_ns: Option<u64>,
+    #[serde(with = "u128_text")]
+    pub shortfall_cycles: u128,
+}
+
 /// Terminal measured conservation result from the exact applied operation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ActualCycleConservation {
+    #[serde(with = "u128_text")]
+    pub estate_funding_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub exact_estate_creation_fee_cycles: u128,
     #[serde(with = "u128_text")]
     pub exact_unavoidable_fee_cycles: u128,
     #[serde(with = "u128_text")]
@@ -903,10 +1107,13 @@ pub struct FleetEnsureTopologyRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetEnsureJournalRecord {
     pub completion: FleetEnsureCompletion,
+    pub estate_funding_required: Option<EstateFundingRequiredRecord>,
     pub effects: Vec<EffectRecord>,
     pub fleet: String,
     #[serde(with = "u128_text")]
     pub initial_controlled_cycles: u128,
+    #[serde(with = "u128_text_map")]
+    pub initial_estate_funding_cycles_by_root: BTreeMap<String, u128>,
     #[serde(with = "u128_text")]
     pub initial_operator_cycles: u128,
     pub operation_id: String,
@@ -970,5 +1177,37 @@ mod option_u128_text {
         Option::<String>::deserialize(deserializer)?
             .map(|value| value.parse().map_err(serde::de::Error::custom))
             .transpose()
+    }
+}
+
+mod u128_text_map {
+    use std::collections::BTreeMap;
+
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(values: &BTreeMap<String, u128>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        values
+            .iter()
+            .map(|(key, value)| (key, value.to_string()))
+            .collect::<BTreeMap<_, _>>()
+            .serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<BTreeMap<String, u128>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        BTreeMap::<String, String>::deserialize(deserializer)?
+            .into_iter()
+            .map(|(key, value)| {
+                value
+                    .parse()
+                    .map(|value| (key, value))
+                    .map_err(serde::de::Error::custom)
+            })
+            .collect()
     }
 }

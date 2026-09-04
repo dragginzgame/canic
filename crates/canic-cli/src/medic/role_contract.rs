@@ -269,6 +269,9 @@ fn check_role_package_contract(
         | RoleContractFinding::AllocationDescriptorMissing { .. } => {
             "repair the Canic state descriptor registry and rerun canic medic"
         }
+        RoleContractFinding::SurplusCryptoFeature { .. } => {
+            "remove the unused Canic cryptographic feature from the role package manifest"
+        }
         _ => {
             "use one direct, unconditional, non-optional normal Canic dependency with no package feature forwarding"
         }

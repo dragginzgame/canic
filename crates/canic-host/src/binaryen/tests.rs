@@ -105,6 +105,47 @@ fn admitted_executable_records_exact_path_version_and_digest() {
     fs::remove_dir_all(root).expect("remove test root");
 }
 
+#[cfg(unix)]
+#[test]
+fn canonical_install_precedes_a_path_optimizer() {
+    const CHILD_ENV: &str = "CANIC_TEST_BINARYEN_CANONICAL_PRECEDENCE_CHILD";
+
+    if std::env::var_os(CHILD_ENV).is_some() {
+        let resolved = resolve_executable(OsStr::new(WASM_OPT_TOOL))
+            .expect("resolve canonical installed optimizer");
+        assert!(resolved.ends_with(".local/bin/wasm-opt"));
+        return;
+    }
+
+    let root = temp_root("canonical-precedence");
+    let canonical = root.join(".local/bin/wasm-opt");
+    let path_directory = root.join("path-bin");
+    let path_optimizer = path_directory.join(WASM_OPT_TOOL);
+    fs::create_dir_all(canonical.parent().expect("canonical parent"))
+        .expect("create canonical bin");
+    fs::create_dir_all(&path_directory).expect("create PATH bin");
+    write_executable(&canonical, "#!/bin/sh\nexit 0\n");
+    write_executable(&path_optimizer, "#!/bin/sh\nexit 0\n");
+
+    let output = std::process::Command::new(std::env::current_exe().expect("current test binary"))
+        .args([
+            "--exact",
+            "binaryen::tests::canonical_install_precedes_a_path_optimizer",
+        ])
+        .env("HOME", &root)
+        .env("PATH", &path_directory)
+        .env(CHILD_ENV, "1")
+        .output()
+        .expect("run isolated precedence test");
+
+    assert!(
+        output.status.success(),
+        "isolated precedence test failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::remove_dir_all(root).expect("remove test root");
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn staged_installer_closes_its_writer_before_executable_admission() {
@@ -141,4 +182,11 @@ fn temp_root(label: &str) -> PathBuf {
         "canic-binaryen-{label}-{}-{nanos}",
         std::process::id()
     ))
+}
+
+#[cfg(unix)]
+fn write_executable(path: &Path, contents: &str) {
+    fs::write(path, contents).expect("write fake executable");
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+        .expect("make fake executable executable");
 }

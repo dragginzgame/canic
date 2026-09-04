@@ -3,7 +3,7 @@ index 44f1d73be..9af18c932 100644
 --- a/crates/canic-control-plane/src/workflow/canister_pool/mod.rs
 +++ b/crates/canic-control-plane/src/workflow/canister_pool/mod.rs
 @@ -268,12 +268,7 @@ async fn run_maintenance_timer() -> TimerRunResult {
- 
+
  /// Dispatch one watchdog-owned takeover without awaiting fallible work.
  pub fn dispatch_async_job_recovery() -> bool {
 -    let attempt = match claim_maintenance() {
@@ -14,12 +14,12 @@ index 44f1d73be..9af18c932 100644
 -    true
 +    core::hint::black_box(false)
  }
- 
+
  fn run_recovery_watchdog() -> WatchdogRunResult {
 @@ -378,6 +373,10 @@ fn cancel_maintenance_timer() -> Result<(), AuthorityTimerError> {
          .map_err(|_| AuthorityTimerError::CustodyBusy)?
  }
- 
+
 +#[expect(
 +    dead_code,
 +    reason = "the B1 recovery-dispatch ablation disconnects watchdog takeover"
@@ -33,7 +33,7 @@ index 9bd283238..06d03c639 100644
 +++ b/crates/canic-core/src/workflow/placement/acknowledgement.rs
 @@ -85,6 +85,10 @@ impl PlacementAcknowledgementWorkflow {
      }
- 
+
      /// Recover one expired acknowledgement attempt from the durable receipt index.
 +    #[expect(
 +        dead_code,
@@ -47,7 +47,7 @@ index 572ba6860..41034b057 100644
 --- a/crates/canic-core/src/workflow/runtime/async_job/mod.rs
 +++ b/crates/canic-core/src/workflow/runtime/async_job/mod.rs
 @@ -26,6 +26,10 @@ impl AsyncJobWorkflow {
- 
+
      /// Return whether one owner has an expired business-attempt lease to recover.
      #[must_use]
 +    #[expect(
@@ -59,7 +59,7 @@ index 572ba6860..41034b057 100644
      }
 @@ -47,6 +51,10 @@ impl AsyncJobWorkflow {
      }
- 
+
      /// Claim only an expired attempt for owner-specific watchdog recovery.
 +    #[expect(
 +        dead_code,
@@ -70,7 +70,7 @@ index 572ba6860..41034b057 100644
              return None;
 @@ -59,6 +67,10 @@ impl AsyncJobWorkflow {
      }
- 
+
      /// Clear an expired attempt after its authoritative domain proves no work remains.
 +    #[expect(
 +        dead_code,
@@ -85,7 +85,7 @@ index 5107834f8..5abe81f55 100644
 +++ b/crates/canic-core/src/workflow/runtime/auth/mod.rs
 @@ -95,6 +95,10 @@ impl RuntimeAuthWorkflow {
      }
- 
+
      /// Recover one expired root issuer-renewal attempt from authoritative auth demand.
 +    #[expect(
 +        dead_code,
@@ -101,7 +101,7 @@ index 51d7308b7..5e244909a 100644
 @@ -70,6 +70,10 @@ impl RootIssuerRenewalWorkflow {
          Ok(())
      }
- 
+
 +    #[expect(
 +        dead_code,
 +        reason = "the B1 recovery-dispatch ablation disconnects watchdog takeover"
@@ -115,7 +115,7 @@ index 8fd686b48..ab3a75d3c 100644
 +++ b/crates/canic-core/src/workflow/runtime/cycles/mod.rs
 @@ -111,6 +111,10 @@ impl CycleWorkflow {
      }
- 
+
      /// Recover one expired automatic-top-up attempt from current capability demand.
 +    #[expect(
 +        dead_code,
@@ -130,7 +130,7 @@ index 3a0668c3b..06ccd6486 100644
 +++ b/crates/canic-core/src/workflow/runtime/timer/mod.rs
 @@ -220,24 +220,13 @@ impl TimerAuthorityWorkflow {
      }
- 
+
      /// Recover expired core-owned business attempts for the one role-native watchdog.
 -    pub(crate) fn recover_expired_async_jobs(now_ns: u64) -> u64 {
 -        let mut recovered = 0u64;
@@ -144,7 +144,7 @@ index 3a0668c3b..06ccd6486 100644
 +    pub(crate) fn recover_expired_async_jobs(_now_ns: u64) -> u64 {
 +        core::hint::black_box(0)
      }
- 
+
      /// Recover the base set plus automatic top-up for a capability-bearing non-root.
 -    pub(crate) fn recover_expired_async_jobs_with_automatic_topup(now_ns: u64) -> u64 {
 -        let recovered = Self::recover_expired_async_jobs(now_ns);
@@ -155,5 +155,5 @@ index 3a0668c3b..06ccd6486 100644
 +    pub(crate) fn recover_expired_async_jobs_with_automatic_topup(_now_ns: u64) -> u64 {
 +        core::hint::black_box(0)
      }
- 
+
      /// Return the shared canonical timer inventory in deterministic identity order.

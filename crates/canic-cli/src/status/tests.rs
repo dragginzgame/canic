@@ -317,6 +317,7 @@ fn retain_terminal_fleet(root: &Path, environment: &str, fleet_name: &str) {
         &FleetEnsurePlan {
             canisters: Vec::new(),
             conservation: CycleConservation {
+                estate_funding_domains: Vec::new(),
                 expected_post_operation_cycles: 0,
                 maximum_execution_burn_cycles: 0,
                 maximum_new_funding_cycles: 0,
@@ -345,9 +346,11 @@ fn retain_terminal_fleet(root: &Path, environment: &str, fleet_name: &str) {
         &paths,
         &FleetEnsureJournalRecord {
             completion: FleetEnsureCompletion::Converged,
+            estate_funding_required: None,
             effects: Vec::new(),
             fleet: fleet_name.to_string(),
             initial_controlled_cycles: 0,
+            initial_estate_funding_cycles_by_root: BTreeMap::new(),
             initial_operator_cycles: 0,
             operation_id,
             plan_sha256,

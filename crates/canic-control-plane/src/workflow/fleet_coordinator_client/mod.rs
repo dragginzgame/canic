@@ -51,7 +51,7 @@ enum CoordinatorOperationStatusFragment {
 }
 
 pub(super) async fn registry(coordinator: Principal) -> Result<FleetRegistry, InternalError> {
-    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_STATUS)
+    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_STATUS)
         .with_arg(CoordinatorStatusRequestFragment::Registry)?
         .execute()
         .await?;
@@ -66,7 +66,7 @@ pub(super) async fn root_removal_status(
     coordinator: Principal,
     operation_id: [u8; 32],
 ) -> Result<CoordinatorRootRemovalOperationStatus, InternalError> {
-    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_STATUS)
+    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_STATUS)
         .with_arg(CoordinatorStatusRequestFragment::Operation(
             OperationStatusRequest { operation_id },
         ))?

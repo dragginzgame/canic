@@ -158,7 +158,12 @@ rg -F "$cargo_get_install" <<<"$preflight_job" >/dev/null ||
     fail "CI preflight does not install the pinned cargo-get helper"
 rg -F 'cargo get --version' <<<"$preflight_job" >/dev/null ||
     fail "CI preflight does not verify the cargo-get helper"
+checks_job="$(sed -n '/^  checks:/,/^  tests-ordinary:/p' "$CI")"
+rg -F 'needs: [preflight, security]' <<<"$checks_job" >/dev/null ||
+    fail "CI checks must wait for both cheap preflight and security jobs"
 ordinary_job="$(sed -n '/^  tests-ordinary:/,/^  tests-pocketic:/p' "$CI")"
+rg -F 'needs: [checks]' <<<"$ordinary_job" >/dev/null ||
+    fail "CI ordinary tests must wait for the complete Rust checks job"
 rg -F 'fetch-depth: 0' <<<"$ordinary_job" >/dev/null ||
     fail "CI ordinary tests cannot read immutable Git baselines from a shallow checkout"
 rg -F "$cargo_get_install" <<<"$ordinary_job" >/dev/null ||
@@ -173,11 +178,16 @@ rg -F 'rg --version' <<<"$ordinary_job" >/dev/null ||
 rg -F 'rg --pcre2-version' <<<"$ordinary_job" >/dev/null ||
     fail "CI ordinary tests do not verify ripgrep PCRE2 support"
 pocketic_job="$(sed -n '/^  tests-pocketic:/,/^  release-build:/p' "$CI")"
+rg -F 'needs: [checks]' <<<"$pocketic_job" >/dev/null ||
+    fail "CI PocketIC tests must wait for the complete Rust checks job"
 rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2' \
     <<<"$pocketic_job" >/dev/null ||
     fail "CI PocketIC tests do not install the feature-qualified ripgrep test helper"
 rg -F 'rg --version' <<<"$pocketic_job" >/dev/null ||
     fail "CI PocketIC tests do not verify the ripgrep test helper"
+release_build_job="$(sed -n '/^  release-build:/,$p' "$CI")"
+rg -F 'needs: [checks]' <<<"$release_build_job" >/dev/null ||
+    fail "CI release builds must wait for the complete Rust checks job"
 validate_recipe="$(sed -n '/^validate:/,/^$/p' "$MAKEFILE")"
 rg -F 'VALIDATION_RUNNER := bash scripts/ci/run-validation-targets.sh' "$MAKEFILE" >/dev/null ||
     fail "Make does not use the canonical failure-collecting validation runner"
@@ -210,15 +220,29 @@ for security_target in \
         fail "make ci-security omits $security_target"
 done
 ci_checks_recipe="$(sed -n '/^ci-checks:/,/^$/p' "$MAKEFILE")"
-[[ "$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$ci_checks_recipe")" -eq 1 ]] ||
-    fail "make ci-checks must use one failure-collecting runner"
-for checks_target in \
-    control-plane-feature-gate \
-    fmt-check \
-    clippy; do
-    rg -w "$checks_target" <<<"$ci_checks_recipe" >/dev/null ||
-        fail "make ci-checks omits $checks_target"
+[[ "$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$ci_checks_recipe")" -eq 2 ]] ||
+    fail "make ci-checks must keep compile/lint and feature checks in two ordered barriers"
+ci_checks_compile="$(awk '
+    /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
+    block == 1 { print }
+    block > 1 { exit }
+' <<<"$ci_checks_recipe")"
+ci_checks_features="$(awk '
+    /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
+    block == 2 { print }
+' <<<"$ci_checks_recipe")"
+for checks_target in fmt-check clippy; do
+    rg -w "$checks_target" <<<"$ci_checks_compile" >/dev/null ||
+        fail "make ci-checks compile/lint barrier omits $checks_target"
 done
+rg -w 'control-plane-feature-gate' <<<"$ci_checks_features" >/dev/null ||
+    fail "make ci-checks feature barrier omits control-plane-feature-gate"
+if rg -w 'control-plane-feature-gate' <<<"$ci_checks_compile" >/dev/null; then
+    fail "make ci-checks must not start the feature matrix before Clippy passes"
+fi
+if rg -w 'fmt-check|clippy' <<<"$ci_checks_features" >/dev/null; then
+    fail "make ci-checks feature barrier must not repeat compile/lint work"
+fi
 lint_workflows_recipe="$(sed -n '/^lint-workflows:/,/^$/p' "$MAKEFILE")"
 shellcheck_recipe="$(sed -n '/^shellcheck:/,/^$/p' "$MAKEFILE")"
 gitleaks_recipe="$(sed -n '/^gitleaks-scan:/,/^$/p' "$MAKEFILE")"
@@ -230,8 +254,8 @@ rg -F 'GITLEAKS_BIN="$(GITLEAKS_BIN)" bash scripts/ci/run-secret-scan.sh' \
     <<<"$gitleaks_recipe" >/dev/null ||
     fail "make gitleaks-scan does not use CI's pinned Gitleaks binary"
 validation_runner_count="$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$validate_recipe")"
-[[ "$validation_runner_count" -eq 3 ]] ||
-    fail "make validate must retain exactly three sequential validation barriers"
+[[ "$validation_runner_count" -eq 4 ]] ||
+    fail "make validate must retain exactly four sequential validation barriers"
 validation_preflight="$(awk '
     /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
     block == 1 { print }
@@ -242,9 +266,13 @@ validation_compile="$(awk '
     block == 2 { print }
     block > 2 { exit }
 ' <<<"$validate_recipe")"
-validation_tests="$(awk '
+validation_features="$(awk '
     /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
     block == 3 { print }
+' <<<"$validate_recipe")"
+validation_tests="$(awk '
+    /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
+    block == 4 { print }
 ' <<<"$validate_recipe")"
 preflight_validate_targets=(
     fmt-check
@@ -252,7 +280,6 @@ preflight_validate_targets=(
     dependency-risk-gate
     gitleaks-scan
     shellcheck
-    control-plane-feature-gate
 )
 compile_validate_targets=(
     check
@@ -269,6 +296,11 @@ for validate_target in "${compile_validate_targets[@]}"; do
     rg -w "$validate_target" <<<"$validation_compile" >/dev/null ||
         fail "make validate compile/lint barrier omits required target $validate_target"
 done
+rg -w 'control-plane-feature-gate' <<<"$validation_features" >/dev/null ||
+    fail "make validate feature barrier omits control-plane-feature-gate"
+if rg -w 'control-plane-feature-gate' <<<"$validation_preflight$validation_compile" >/dev/null; then
+    fail "make validate must not start the feature matrix before Clippy passes"
+fi
 for validate_target in "${test_validate_targets[@]}"; do
     rg -w "$validate_target" <<<"$validation_tests" >/dev/null ||
         fail "make validate test barrier omits required target $validate_target"

@@ -695,12 +695,24 @@ fn build_only_canic_path_does_not_enter_the_runtime_graph() {
 
 #[test]
 fn internal_pocketic_packages_are_validated_before_the_marker_is_granted() {
+    const CANONICAL_ROLE_PACKAGES: [&str; 9] = [
+        "canister_app",
+        "canister_index_child",
+        "canister_index_hub",
+        "canister_root",
+        "canister_scale",
+        "canister_scale_hub",
+        "canister_test",
+        "canister_user_hub",
+        "canister_user_shard",
+    ];
+
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let lockfile = workspace.join("Cargo.lock");
     let lockfile_before = fs::read(&lockfile).expect("read workspace lockfile");
 
-    validate_internal_test_wasm_packages(&workspace, &["sharding_root_stub", "canister_user_hub"])
-        .expect("internal PocketIC package validation");
+    validate_internal_test_wasm_packages(&workspace, &CANONICAL_ROLE_PACKAGES)
+        .expect("canonical internal PocketIC package validation");
 
     assert_eq!(
         fs::read(lockfile).expect("reread workspace lockfile"),

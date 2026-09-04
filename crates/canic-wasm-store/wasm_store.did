@@ -417,8 +417,8 @@ type WasmStoreTemplateStatusResponse = record {
   versions : nat16;
 };
 service : (FleetSubnetWasmStoreInitArgs) -> {
-  canic_command : (StoreCommand) -> (Result);
-  canic_status : (StoreStatusRequest) -> (Result_1) query;
+  canic_wasm_store_command : (StoreCommand) -> (Result);
+  canic_wasm_store_status : (StoreStatusRequest) -> (Result_1) query;
   canic_wasm_store_chunk : (TemplateChunkRequest) -> (Result_2);
   canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_3);
   icrc10_supported_standards : () -> (vec record { text; text }) query;

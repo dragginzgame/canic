@@ -4,7 +4,7 @@ index d07e7f839..554e30853 100644
 +++ b/crates/canic-core/src/cdk/serialize.rs
 @@ -23,22 +23,19 @@ pub enum SerializeError {
  }
- 
+
  /// Serialize one value to CBOR bytes.
 -pub fn serialize<T>(value: &T) -> Result<Vec<u8>, SerializeError>
 +pub fn serialize<T>(_value: &T) -> Result<Vec<u8>, SerializeError>
@@ -17,7 +17,7 @@ index d07e7f839..554e30853 100644
 -    Ok(bytes)
 +    core::hint::black_box(Ok(vec![0]))
  }
- 
+
  /// Deserialize one value from CBOR bytes.
 -pub fn deserialize<T>(bytes: &[u8]) -> Result<T, SerializeError>
 +pub fn deserialize<T>(_bytes: &[u8]) -> Result<T, SerializeError>
@@ -27,5 +27,5 @@ index d07e7f839..554e30853 100644
 -    ciborium::de::from_reader(bytes).map_err(|err| SerializeError::Deserialize(err.to_string()))
 +    core::hint::black_box(Err(SerializeError::Deserialize(String::new())))
  }
- 
+
  #[cfg(test)]
