@@ -1253,5 +1253,5 @@ type SetStateResponse = record {
 };
 service : (FleetCoordinatorInitArgs) -> {
   canic_coordinator_command : (CoordinatorCommand) -> (Result);
-  canic_status : (CoordinatorStatusRequest) -> (Result_1) query;
+  canic_coordinator_status : (CoordinatorStatusRequest) -> (Result_1) query;
 }

@@ -56,7 +56,7 @@ placement.minimum_distinct_roots = 2
 fn toko_fresh_fleet_registry_prepare_classifies_typed_unavailable_status() {
     let error = CanisterProtocolError::Response {
         canister: Principal::anonymous(),
-        method: protocol::CANIC_STATUS,
+        method: protocol::CANIC_ROOT_STATUS,
         source: crate::icp::IcpJsonResponseError::Rejected(
             canic_core::dto::error::Error::from_registered(
                 canic_core::diagnostics::codes::STATE_UNAVAILABLE,
@@ -228,12 +228,13 @@ fn toko_fresh_fleet_generated_store_controllers_resolve_exact_principals() {
     )
     .expect("resolve generated Store controller names");
 
-    desired
+    let missing_store = desired
         .canisters
         .iter_mut()
         .find(|canister| canister.kind == DesiredCanisterKind::Store)
-        .expect("Store")
-        .controller_canisters = vec!["missing-root".to_string()];
+        .expect("Store");
+    let missing_store_name = missing_store.name.clone();
+    missing_store.controller_canisters = vec!["missing-root".to_string()];
     assert!(matches!(
         compile_current_registry_sequence(
             &desired,
@@ -242,8 +243,10 @@ fn toko_fresh_fleet_generated_store_controllers_resolve_exact_principals() {
             &genesis,
             &root_authorities(&active),
         ),
-        Err(CurrentProtocolError::RegistrySequenceConflict(reason))
-            if reason.contains("has no exact Principal")
+        Err(CurrentProtocolError::RegistryStoreControllerPrincipalMissing {
+            store,
+            controller,
+        }) if store == missing_store_name && controller == "missing-root"
     ));
 }
 
@@ -342,6 +345,7 @@ fn provisioned_registry_requires_its_exact_component_operation_receipt() {
             current_activation: None,
             activation_in_flight_root: None,
             pending_root_failure: None,
+            estate_funding_required: None,
             group_placement_count: 2,
             component_count: 2,
             planned_at_ns: 1,
@@ -428,6 +432,30 @@ fn assert_retry_timestamp_is_not_durable_progress(
             .expect("repeated failure identity")
             .progress_identity,
     );
+
+    let funding = canic_core::dto::component_provisioning::RootEstateFundingRequired {
+        available: Cycles::new(900),
+        attempt_count: 1,
+        creation_amount: Cycles::new(1_000),
+        cycles_ledger: principal(90),
+        execution_margin: Cycles::new(100),
+        last_attempt_at_ns: Some(10),
+        ledger_fee: Cycles::new(10),
+        management_creation_fee: Cycles::new(500),
+        operation_id: [91; 32],
+        readiness_floor: Cycles::new(400),
+        required: Cycles::new(1_010),
+        retry_at_ns: 20,
+        root: principal(10),
+        shortfall: Cycles::new(110),
+    };
+    let mut funding_pause = status.clone();
+    funding_pause.phase = FleetComponentProvisioningPhase::ProvisioningRoots;
+    funding_pause.estate_funding_required = Some(funding.clone());
+    let observation = component_provisioning_observation(false, &funding_pause)
+        .expect("typed funding pause observation");
+    assert_eq!(observation.estate_funding_required, Some(funding));
+    assert_eq!(observation.retry, EffectRetry::None);
 }
 
 #[test]
@@ -930,6 +958,7 @@ fn limits() -> FleetSubnetRootLimits {
             minimum_size: 1,
             maximum_size: 2,
             canister_cycles: Cycles::new(5_000_000_000_000),
+            creation_execution_margin: Cycles::new(1_000_000_000_000),
         },
         cycles_funding: CyclesFundingBudget {
             window_secs: 3_600,

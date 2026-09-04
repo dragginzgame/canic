@@ -321,7 +321,7 @@ fn query_registry(
             icp,
             binding,
             coordinator,
-            canic_core::protocol::CANIC_STATUS,
+            canic_core::protocol::CANIC_COORDINATOR_STATUS,
             &RemoteCoordinatorStatusRequest::Registry,
         )?;
     match response {
@@ -340,7 +340,7 @@ fn query_coordinator(
 ) -> Result<RemoteCoordinatorFundingStatus, CyclesCommandError> {
     let output = icp.canister_query_arg_output_with_candid(
         &coordinator.to_text(),
-        canic_core::protocol::CANIC_STATUS,
+        canic_core::protocol::CANIC_COORDINATOR_STATUS,
         "(variant { Funding })",
         Some("hex"),
         Some(binding.candid_path()),
@@ -364,7 +364,7 @@ fn query_root(
 ) -> Result<RemoteRootFundingStatus, CyclesCommandError> {
     let output = icp.canister_query_arg_output_with_candid(
         &root.to_text(),
-        canic_core::protocol::CANIC_STATUS,
+        canic_core::protocol::CANIC_ROOT_STATUS,
         "(variant { Funding })",
         Some("hex"),
         Some(binding.candid_path()),

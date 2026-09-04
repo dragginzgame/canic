@@ -33,7 +33,7 @@ controller             -> root canic_root_command UpsertIssuerRenewalTemplate up
 root timer             -> root prepares due issuer entries in a chain-key batch
 root                   -> management canister sign_with_ecdsa
 root                   -> issuer canic_command InstallDelegationProof update
-operator/medic         -> root canic_status IssuerRenewal query
+operator/medic         -> root canic_root_status IssuerRenewal query
 operator/medic         -> issuer canic_status ActiveDelegationProof query
 caller/session         -> issuer canic_command PrepareDelegatedToken update
 caller/session         -> issuer canic_status DelegatedToken query

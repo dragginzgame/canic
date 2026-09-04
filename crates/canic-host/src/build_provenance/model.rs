@@ -177,7 +177,6 @@ pub enum ArtifactTransformKindV1 {
 #[serde(rename_all = "snake_case")]
 pub enum ArtifactTransformOutcomeV1 {
     Applied,
-    ToolUnavailable,
     NotRequested,
 }
 

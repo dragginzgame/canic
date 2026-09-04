@@ -2,7 +2,7 @@
 //!
 //! Responsibility: inspect one current Fleet canister's runtime-observed Canic status.
 //! Does not own: ensure planning, runtime endpoint DTOs, or broad topology fanout.
-//! Boundary: resolves one terminal ensure target, selects `canic_status::Runtime`, and renders a report.
+//! Boundary: resolves one terminal ensure target, selects its role-owned Runtime status, and renders a report.
 
 use crate::{
     cli::{
@@ -15,12 +15,14 @@ use crate::{
     version_text,
 };
 use candid::{CandidType, Deserialize, Principal, types::principal::PrincipalError};
+#[cfg(test)]
+use canic_core::protocol::CANIC_ROOT_STATUS;
 use canic_core::{
     dto::runtime::{
         CanicRuntimeStatus, RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeFeatureStatus,
         RuntimeStatus,
     },
-    protocol::CANIC_STATUS,
+    protocol::status_endpoint_for_role,
 };
 use canic_host::{
     fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
@@ -41,7 +43,7 @@ Examples:
   canic inspect canister aaaaa-aa
   canic inspect fleet demo-local --role root
 
-Inspect is read-only. It queries the guarded canic_status Runtime selector for
+Inspect is read-only. It queries the guarded role-owned Runtime selector for
 one explicit target and does not fan out across Fleet roles. Use
 the Fleet form only after one current `fleet ensure` operation converges.";
 
@@ -65,7 +67,7 @@ pub enum InspectCommandError {
     #[error("icp command failed: {0}")]
     Icp(#[from] IcpCommandError),
 
-    #[error("invalid canic_status Runtime response: {0}")]
+    #[error("invalid role-owned Runtime status response: {0}")]
     InvalidResponse(#[source] IcpJsonResponseError),
 
     #[error(
@@ -334,9 +336,10 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
     if let Some(root) = &target.icp_root {
         icp = icp.with_cwd(root);
     }
+    let endpoint = status_endpoint_for_role(&target.protocol_binding.binding().role);
     let output = icp.canister_query_arg_output_with_candid(
         &target.canister_id,
-        CANIC_STATUS,
+        endpoint,
         "(variant { Runtime })",
         Some("json"),
         Some(target.protocol_binding.candid_path()),
@@ -354,7 +357,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
             environment: target.environment.clone(),
             source: target.source,
         },
-        endpoint: CANIC_STATUS,
+        endpoint,
         status,
         runtime_status,
     })
@@ -714,7 +717,7 @@ mod tests {
     fn usage_binds_fleet_inspection_to_terminal_current_ensure() {
         let text = usage();
 
-        assert!(text.contains("guarded canic_status Runtime selector"));
+        assert!(text.contains("guarded role-owned Runtime selector"));
         assert!(text.contains("current `fleet ensure` operation converges"));
         assert!(!text.contains("canic deploy inspect"));
     }
@@ -803,7 +806,7 @@ mod tests {
 
         assert!(rendered.contains("source: cli_arg"));
         assert!(rendered.contains("source: runtime_observed"));
-        assert!(rendered.contains("endpoint: canic_status"));
+        assert!(rendered.contains("endpoint: canic_root_status"));
         assert!(rendered.contains("response_format: candid"));
         assert!(rendered.contains("status: ok"));
         assert!(rendered.contains("runtime_status: ok"));
@@ -838,7 +841,7 @@ mod tests {
         assert_eq!(value["schema_version"], INSPECT_SCHEMA_VERSION);
         assert_eq!(value["command"], "canic inspect canister");
         assert_eq!(value["target_resolution"]["source"], "cli_arg");
-        assert_eq!(value["endpoint"], CANIC_STATUS);
+        assert_eq!(value["endpoint"], CANIC_ROOT_STATUS);
         assert_eq!(value["status"], "ok");
         assert_eq!(value["runtime_status"]["source"], "runtime_observed");
         assert_eq!(value["runtime_status"]["status"]["status"], "ok");
@@ -921,7 +924,7 @@ mod tests {
                 environment: "local".to_string(),
                 source: InspectSource::CliArg,
             },
-            endpoint: CANIC_STATUS,
+            endpoint: CANIC_ROOT_STATUS,
             status: RuntimeStatus::Ok,
             runtime_status: RuntimeStatusPayload {
                 source: RUNTIME_OBSERVED_SOURCE,

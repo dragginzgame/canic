@@ -108,7 +108,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     let status_output = icp
         .canister_query_arg_output_with_candid(
             &root_target.canister_id,
-            canic_core::protocol::CANIC_STATUS,
+            canic_core::protocol::CANIC_ROOT_STATUS,
             &root_refill_status_arg(operation_id),
             Some("hex"),
             Some(root_binding.candid_path()),

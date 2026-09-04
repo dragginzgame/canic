@@ -153,7 +153,7 @@ pub fn setup_root_topology(
     unreachable!("setup_root must return or panic")
 }
 
-// Wait until root reports `canic_status(Readiness)`.
+// Wait until root reports `canic_root_status(Readiness)`.
 pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &PocketIc, root_id: Principal) {
     pic.wait_for_ready(
         root_id,
@@ -163,7 +163,7 @@ pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &PocketIc, ro
     );
 }
 
-// Wait until every child canister reports `canic_status(Readiness)`.
+// Wait until every child canister reports its role-owned readiness status.
 pub(super) fn wait_for_children_ready(
     spec: &RootBaselineSpec<'_>,
     pic: &PocketIc,
@@ -220,7 +220,7 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
         let page: Result<RootStatusResponse, Error> = pic
             .query_candid(
                 root_id,
-                protocol::CANIC_STATUS,
+                protocol::CANIC_ROOT_STATUS,
                 (RootStatusRequest::Children(PageRequest {
                     limit: PAGE_LIMIT,
                     offset,
@@ -248,7 +248,7 @@ fn fetch_managed_store_pids(pic: &PocketIc, root_id: Principal) -> Vec<Principal
     let overview: Result<RootStatusResponse, canic::Error> = pic
         .query_candid(
             root_id,
-            canic::protocol::CANIC_STATUS,
+            canic::protocol::CANIC_ROOT_STATUS,
             (RootStatusRequest::StoreOverview,),
         )
         .expect("query wasm_store overview transport");

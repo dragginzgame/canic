@@ -9,8 +9,6 @@
 mod tests;
 
 use crate::output_with_executable_busy_retry;
-use canic_core::cdk::utils::hash::hex_bytes;
-use sha2::{Digest, Sha256};
 use std::{
     env,
     ffi::OsStr,
@@ -20,6 +18,9 @@ use std::{
     process::Command,
     sync::atomic::{AtomicU64, Ordering},
 };
+
+use canic_core::cdk::utils::hash::hex_bytes;
+use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 #[cfg(unix)]
@@ -168,7 +169,7 @@ pub enum BinaryenToolError {
     ArchiveExtraction { status: String, stderr: String },
 
     #[error(
-        "selected Binaryen executable {path} has SHA-256 {actual}; required {expected}; run `{BINARYEN_REPAIR_COMMAND}` and place its directory before the selected executable on PATH"
+        "selected Binaryen executable {path} has SHA-256 {actual}; required {expected}; run `{BINARYEN_REPAIR_COMMAND}`"
     )]
     ExecutableHashMismatch {
         path: PathBuf,
@@ -188,12 +189,27 @@ pub enum BinaryenToolError {
     MissingHome,
 
     #[error(
-        "release Wasm optimization requires Binaryen {BINARYEN_VERSION}; `{WASM_OPT_TOOL}` was not found on PATH; run `{BINARYEN_REPAIR_COMMAND}` and place its directory on PATH"
+        "release Wasm optimization requires Binaryen {BINARYEN_VERSION}; `{WASM_OPT_TOOL}` was not found on PATH or at {canonical_path}; run `{BINARYEN_REPAIR_COMMAND}`"
     )]
-    MissingOptimizer,
+    MissingOptimizer { canonical_path: PathBuf },
+
+    #[error(
+        "release Wasm optimization requires Binaryen {BINARYEN_VERSION}; `{WASM_OPT_TOOL}` was not found on PATH and HOME is unavailable; run `{BINARYEN_REPAIR_COMMAND}` with HOME set to the intended account home"
+    )]
+    MissingOptimizerWithoutHome,
+
+    #[error(
+        "release Wasm optimization requires Binaryen {BINARYEN_VERSION}; `{WASM_OPT_TOOL}` was not found on PATH or at {canonical_path}; HOME resolves to `/`, so confirm that root-level install location is intentional before running `{BINARYEN_REPAIR_COMMAND}`"
+    )]
+    MissingOptimizerWithRootHome { canonical_path: PathBuf },
 
     #[error("installed Binaryen candidate is not executable: {path}")]
     NotExecutable { path: PathBuf },
+
+    #[error(
+        "requested Binaryen executable {path} is missing or not executable; release Wasm optimization requires Binaryen {BINARYEN_VERSION}; run `{BINARYEN_REPAIR_COMMAND}`"
+    )]
+    RequestedExecutableMissing { path: PathBuf },
 
     #[error("temporary Binaryen installation directory allocation was exhausted under {root}")]
     TempDirectoryExhausted { root: PathBuf },
@@ -205,7 +221,7 @@ pub enum BinaryenToolError {
     },
 
     #[error(
-        "selected Binaryen executable {path} reports `{actual}`; required `{expected}`; run `{BINARYEN_REPAIR_COMMAND}` and place its directory before the selected executable on PATH"
+        "selected Binaryen executable {path} reports `{actual}`; required `{expected}`; run `{BINARYEN_REPAIR_COMMAND}`"
     )]
     VersionMismatch {
         path: PathBuf,
@@ -237,7 +253,7 @@ fn binaryen_authority_for(
         .ok_or(BinaryenToolError::UnsupportedPlatform { os, arch })
 }
 
-/// Resolve and admit the exact optimizer selected by the caller's current PATH.
+/// Resolve and admit the governed install path, falling back to the first optimizer on PATH.
 pub fn resolve_required_binaryen() -> Result<BinaryenExecutable, BinaryenToolError> {
     let authority = current_binaryen_authority()?;
     let path = resolve_executable(OsStr::new(WASM_OPT_TOOL))?;
@@ -246,8 +262,7 @@ pub fn resolve_required_binaryen() -> Result<BinaryenExecutable, BinaryenToolErr
 
 /// Install the official current-platform optimizer under `~/.local/bin`.
 ///
-/// The returned absolute path is suitable for deriving the PATH prefix used by
-/// a governed downstream release build.
+/// Canic invokes the returned admitted absolute path directly.
 pub fn install_required_binaryen() -> Result<BinaryenExecutable, BinaryenToolError> {
     let authority = current_binaryen_authority()?;
     let install_path = default_binaryen_install_path()?;
@@ -277,21 +292,35 @@ fn resolve_executable(command: &OsStr) -> Result<PathBuf, BinaryenToolError> {
     if requested.components().count() > 1 {
         return canonical_executable(requested);
     }
-    let Some(path) = env::var_os("PATH") else {
-        return Err(BinaryenToolError::MissingOptimizer);
-    };
-    for directory in env::split_paths(&path) {
-        let candidate = directory.join(requested);
-        if is_executable(&candidate) {
-            return canonical_executable(&candidate);
+    match default_binaryen_install_path() {
+        Ok(path) if is_executable(&path) => return canonical_executable(&path),
+        Ok(_) | Err(BinaryenToolError::MissingHome) => {}
+        Err(error) => return Err(error),
+    }
+    if let Some(path) = env::var_os("PATH") {
+        for directory in env::split_paths(&path) {
+            let candidate = directory.join(requested);
+            if is_executable(&candidate) {
+                return canonical_executable(&candidate);
+            }
         }
     }
-    Err(BinaryenToolError::MissingOptimizer)
+    match default_binaryen_install_path() {
+        Ok(path) if is_executable(&path) => canonical_executable(&path),
+        Ok(canonical_path) if home_is_root() => {
+            Err(BinaryenToolError::MissingOptimizerWithRootHome { canonical_path })
+        }
+        Ok(canonical_path) => Err(BinaryenToolError::MissingOptimizer { canonical_path }),
+        Err(BinaryenToolError::MissingHome) => Err(BinaryenToolError::MissingOptimizerWithoutHome),
+        Err(error) => Err(error),
+    }
 }
 
 fn canonical_executable(path: &Path) -> Result<PathBuf, BinaryenToolError> {
     if !is_executable(path) {
-        return Err(BinaryenToolError::MissingOptimizer);
+        return Err(BinaryenToolError::RequestedExecutableMissing {
+            path: path.to_path_buf(),
+        });
     }
     fs::canonicalize(path).map_err(|source| BinaryenToolError::Io {
         operation: "resolve Binaryen executable",
@@ -535,6 +564,10 @@ fn sha256_file(path: &Path) -> Result<String, BinaryenToolError> {
         hasher.update(&buffer[..read]);
     }
     Ok(hex_bytes(hasher.finalize()))
+}
+
+fn home_is_root() -> bool {
+    env::var_os("HOME").is_some_and(|home| Path::new(&home) == Path::new("/"))
 }
 
 #[cfg(test)]

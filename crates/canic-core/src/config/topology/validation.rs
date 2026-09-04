@@ -225,6 +225,11 @@ fn validate_root_limits(limits: &FleetSubnetRootLimits) -> Result<(), ComponentT
             field: "canister_pool.canister_cycles",
         });
     }
+    if limits.canister_pool.creation_execution_margin.to_u128() == 0 {
+        return Err(ComponentTopologyError::NonPositiveRootLimit {
+            field: "canister_pool.creation_execution_margin",
+        });
+    }
     if limits.canister_pool.maximum_size < limits.canister_pool.minimum_size {
         return Err(ComponentTopologyError::InvalidRootCanisterPoolRange {
             minimum_size: limits.canister_pool.minimum_size,

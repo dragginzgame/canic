@@ -1806,6 +1806,7 @@ mod tests {
                         minimum_size: 1,
                         maximum_size: 10,
                         canister_cycles: Cycles::new(500_000),
+                        creation_execution_margin: Cycles::new(100_000),
                     },
                     cycles_funding: CyclesFundingBudget {
                         window_secs: 60,

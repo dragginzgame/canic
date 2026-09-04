@@ -155,8 +155,12 @@ fn release_build_network_must_match_the_selected_environment() {
             "staging",
             BuildNetwork::Ic,
         ),
-        Err(FleetGenerateError::Release(reason))
-            if reason.contains("targets local") && reason.contains("requires ic")
+        Err(FleetGenerateError::ReleaseBuildNetworkMismatch {
+            release_build_id: observed_release,
+            actual: BuildNetwork::Local,
+            environment,
+            expected: BuildNetwork::Ic,
+        }) if observed_release == release_build_id && environment == "staging"
     ));
 }
 
@@ -488,13 +492,15 @@ fn human_admission_principals_compile_to_one_canonical_set() {
     }
 
     let duplicate = authored[0].clone();
+    let duplicate_principal = Principal::from_text(&duplicate).expect("duplicate Principal");
     assert!(matches!(
-        compile_source_admission_policy(&[duplicate.clone(), duplicate.clone()]),
-        Err(FleetGenerateError::Authority(reason)) if reason.contains(&duplicate)
+        compile_source_admission_policy(&[duplicate.clone(), duplicate]),
+        Err(FleetGenerateError::FleetAdmissionDuplicate { principal })
+            if principal == duplicate_principal
     ));
     assert!(matches!(
         compile_source_admission_policy(&[Principal::anonymous().to_text()]),
-        Err(FleetGenerateError::Authority(reason)) if reason.contains("anonymous")
+        Err(FleetGenerateError::FleetAdmissionAnonymous)
     ));
 }
 
@@ -623,6 +629,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         "fixture must distinguish display-text and typed Principal order"
     );
     let mut source = multi_component_source(&operator, &coordinator_subnet, &placement);
+    source.fleet_subnet_roots[0].canister_pool.maximum_size = 5;
     source.admission.principals.clone_from(&authored_admission);
     let seed = EstateSeed {
         schema_version: 1,
@@ -670,6 +677,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     fs::create_dir_all(source_path.parent().expect("deployment parent"))
         .expect("create deployment parent");
     let source_document = multi_component_source_toml(&operator, &coordinator_subnet, &placement)
+        .replace("maximum_size = 2", "maximum_size = 5")
         .replacen(
             &format!("principals = [\"{operator}\"]"),
             &format!(
@@ -756,11 +764,12 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let Err(stopped) = generate_desired_fleet(&request) else {
         panic!("a stopped retained Root requires a separately reviewed same-ID Start");
     };
-    let stopped_message = stopped.to_string();
+    let FleetGenerateError::StoppedRootStartRequired(stopped_details) = &stopped else {
+        panic!("unexpected stopped-Root result: {stopped:?}");
+    };
     assert!(matches!(
-        stopped,
-        FleetGenerateError::StoppedRootStartRequired(details)
-        if matches!(details.as_ref(), StoppedRootStartPrerequisite {
+        stopped_details.as_ref(),
+        StoppedRootStartPrerequisite {
             controller,
             fleet,
             module_sha256,
@@ -771,12 +780,16 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             && fleet == "retained-multi-component"
             && module_sha256 == &root_module_hash
             && stopped_root == &fleet_root
-            && subnet == &placement)
+            && subnet == &placement
     ));
     let Err(repeated) = generate_desired_fleet(&request) else {
         panic!("the same stopped Root prerequisite must remain deterministic");
     };
-    assert_eq!(repeated.to_string(), stopped_message);
+    assert!(matches!(
+        repeated,
+        FleetGenerateError::StoppedRootStartRequired(repeated_details)
+            if repeated_details.as_ref() == stopped_details.as_ref()
+    ));
     assert!(
         !root.join("root-status-count").exists(),
         "the no-effect generator must not query a stopped Root"
@@ -868,7 +881,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     })
     .expect("replay durable fresh estate seed");
     assert_eq!(repeated_id, fresh_id);
-    let fresh = generate_desired_fleet(&FleetGenerateRequest {
+    let mut fresh = generate_desired_fleet(&FleetGenerateRequest {
         app_config: &app_config,
         environment: "local",
         fleet: "fresh-multi-component",
@@ -921,6 +934,13 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             .iter()
             .all(|canister| canister.principal.is_none())
     );
+    fresh
+        .desired
+        .protocol
+        .as_mut()
+        .expect("fresh typed protocol")
+        .component_group_placements
+        .clear();
     let fresh_store = fresh
         .desired
         .canisters
@@ -965,6 +985,23 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                 .iter()
                 .map(|canister| (canister.name.clone(), None))
                 .collect(),
+            estate_funding_domains: insufficient_fresh
+                .bootstrap
+                .as_ref()
+                .into_iter()
+                .flat_map(|bootstrap| &bootstrap.roots)
+                .map(|root| {
+                    (
+                        root.root.clone(),
+                        crate::fleet_ensure::model::EstateFundingDomainObservation {
+                            balance_cycles: None,
+                            cycles_ledger: insufficient_fresh.cycles_ledger.clone(),
+                            pool: None,
+                            root_principal: None,
+                        },
+                    )
+                })
+                .collect(),
             ledger_fee_cycles: 100_000_000,
             operator_cycles: u128::MAX,
             protocol_ready: BTreeMap::new(),
@@ -996,6 +1033,24 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                 .canisters
                 .iter()
                 .map(|canister| (canister.name.clone(), None))
+                .collect(),
+            estate_funding_domains: fresh
+                .desired
+                .bootstrap
+                .as_ref()
+                .into_iter()
+                .flat_map(|bootstrap| &bootstrap.roots)
+                .map(|root| {
+                    (
+                        root.root.clone(),
+                        crate::fleet_ensure::model::EstateFundingDomainObservation {
+                            balance_cycles: None,
+                            cycles_ledger: fresh.desired.cycles_ledger.clone(),
+                            pool: None,
+                            root_principal: None,
+                        },
+                    )
+                })
                 .collect(),
             ledger_fee_cycles: 100_000_000,
             operator_cycles: u128::MAX,
@@ -1202,9 +1257,21 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &fresh_apply_paths,
         &FleetEnsureJournalRecord {
             completion: FleetEnsureCompletion::InProgress,
+            estate_funding_required: None,
             effects: Vec::new(),
             fleet: fresh.desired.fleet.clone(),
             initial_controlled_cycles: 0,
+            initial_estate_funding_cycles_by_root: fresh_plan
+                .conservation
+                .estate_funding_domains
+                .iter()
+                .map(|domain| {
+                    (
+                        domain.root.clone(),
+                        domain.available_cycles.unwrap_or_default(),
+                    )
+                })
+                .collect(),
             initial_operator_cycles: u128::MAX,
             operation_id: fresh_plan.operation_id.clone(),
             plan_sha256: fresh_plan.plan_sha256.clone(),
@@ -1229,7 +1296,10 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         fresh.desired.clone(),
         Vec::<LiveCanister>::new(),
     );
+    let fresh_root_principal = principal_text(90);
+    fresh_apply_platform.set_created_principal("root-0", fresh_root_principal.clone());
     fresh_apply_platform.set_operator_cycles(u128::MAX);
+    fresh_apply_platform.set_estate_funding_balance(0);
     fresh_apply_platform.require_root_owned_topology();
     fresh_apply_platform.stall_before_mutation(fresh_finalizations[0].clone(), 1);
     fresh_apply_platform.fail_once(fresh_finalizations[0].clone());
@@ -1347,7 +1417,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         assert!(
             fresh_apply_platform
                 .live_controllers(&pool.name)
-                .is_some_and(|controllers| controllers == ["created-root-0"])
+                .is_some_and(|controllers| controllers == [fresh_root_principal.as_str()])
         );
     }
     let fresh_terminal_state =
@@ -1419,7 +1489,9 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         fresh.desired.clone(),
         Vec::<LiveCanister>::new(),
     );
+    retained_platform.set_created_principal("root-0", fresh_root_principal);
     retained_platform.set_operator_cycles(u128::MAX);
+    retained_platform.set_estate_funding_balance(0);
     for pool in &fresh_pools {
         retained_platform.defer_created_until_root_install(&pool.name, "root-0");
     }
@@ -1441,9 +1513,21 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &retained_paths,
         &FleetEnsureJournalRecord {
             completion: FleetEnsureCompletion::InProgress,
+            estate_funding_required: None,
             effects: Vec::new(),
             fleet: fresh.desired.fleet.clone(),
             initial_controlled_cycles: 0,
+            initial_estate_funding_cycles_by_root: retained_root_only_plan
+                .conservation
+                .estate_funding_domains
+                .iter()
+                .map(|domain| {
+                    (
+                        domain.root.clone(),
+                        domain.available_cycles.unwrap_or_default(),
+                    )
+                })
+                .collect(),
             initial_operator_cycles: retained_platform.operator_cycles(),
             operation_id: retained_root_only_plan.operation_id.clone(),
             plan_sha256: retained_root_only_plan.plan_sha256.clone(),
@@ -1877,6 +1961,14 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     crate::fleet_ensure::ops::write_plan(&recovery_paths, &overwritten_successor)
         .expect("retain rejected successor plan without changing the applied journal");
     let mut pending_reset_pool = retained_pool.clone();
+    pending_reset_pool.config = recovery_desired
+        .bootstrap
+        .as_ref()
+        .and_then(|bootstrap| bootstrap.roots.first())
+        .expect("current Root pool authority")
+        .limits
+        .canister_pool
+        .clone();
     for asset in pending_reset_pool
         .entries
         .iter_mut()
@@ -1888,6 +1980,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     pending_reset_pool.workload = 0;
     pending_reset_pool.ready = 0;
     pending_reset_pool.pending_reset = 2;
+    pending_reset_pool.pooled = 2;
     let versionless_icp = write_versionless_root_owned_fake_icp(
         &root,
         FakeIcpFixture {
@@ -2106,7 +2199,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .collect::<BTreeSet<_>>();
     assert_eq!(
         retained_assets,
-        BTreeSet::from([4_800_000_000_000, 5_000_000_000_000])
+        BTreeSet::from([4_900_000_000_000, 5_000_000_000_000])
     );
 
     let production_paths = EnsurePaths::under(
@@ -2213,6 +2306,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &production_paths,
         &FleetEnsureJournalRecord {
             completion: FleetEnsureCompletion::InProgress,
+            estate_funding_required: None,
             effects: vec![
                 EffectRecord {
                     action_sha256: action_sha256(coordinator_install),
@@ -2243,6 +2337,17 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             initial_controlled_cycles: retained_rejected_plan
                 .conservation
                 .observed_controlled_cycles,
+            initial_estate_funding_cycles_by_root: retained_rejected_plan
+                .conservation
+                .estate_funding_domains
+                .iter()
+                .map(|domain| {
+                    (
+                        domain.root.clone(),
+                        domain.available_cycles.unwrap_or_default(),
+                    )
+                })
+                .collect(),
             initial_operator_cycles: 500_000_000_000_000,
             operation_id: retained_rejected_plan.operation_id.clone(),
             plan_sha256: retained_rejected_plan.plan_sha256.clone(),
@@ -2252,6 +2357,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     )
     .expect("write retained rejected journal bytes");
     fs::write(root.join("root-status-count"), b"1\n").expect("select retained typed E132 status");
+    fs::write(root.join("root-protocol-error"), b"1\n")
+        .expect("select retained typed E132 response");
     let replan_error = workflow::apply(
         &root,
         &production_recovery_desired,
@@ -2334,6 +2441,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
 
     fs::write(root.join("root-status-count"), b"1\n")
         .expect("retain typed predecessor Root status for fresh planning");
+    fs::remove_file(root.join("root-protocol-error"))
+        .expect("clear retained typed E132 response for replanning");
     let fresh_replan = workflow::plan(
         &root,
         &production_recovery_desired,
@@ -2538,6 +2647,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     );
     fs::write(root.join("root-status-count"), b"1\n")
         .expect("select wrong-controller typed E132 status");
+    fs::write(root.join("root-protocol-error"), b"1\n")
+        .expect("select wrong-controller typed E132 response");
     let mut wrong_controller_platform = IcpEnsurePlatform::new(
         production_recovery_desired.clone(),
         icp.to_str().expect("fake ICP path"),
@@ -2771,7 +2882,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let Err(later_error) = generate_desired_fleet(&later_request) else {
         panic!("a later successor cannot retarget the sealed predecessor authority");
     };
-    let later_message = later_error.to_string();
     assert!(
         matches!(
         &later_error,
@@ -2784,8 +2894,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         ),
         "unexpected later-successor result: {later_error:?}"
     );
-    assert!(later_message.contains("canic fleet ensure retained-stopped-root"));
-    assert!(later_message.contains("terminally converge the retained desired successor"));
     assert_eq!(
         fs::read(&stopped_paths.root_start_authority)
             .expect("read unchanged sealed Root-start authority"),
@@ -3299,6 +3407,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .expect("idle retained pool asset");
     pending.status = CanisterPoolAssetStatus::PendingReset;
     pending.cycles = Cycles::new(0);
+    pending_pool.ready = 0;
+    pending_pool.pending_reset = 1;
     let mut pending_desired = recovery_desired.clone();
     pending_desired.fleet = "retained-multi-component-pending-reset".to_string();
     write_fake_icp(
@@ -3465,6 +3575,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
 
 struct RetainedEnsurePlatform {
     desired: DesiredFleet,
+    estate_funding_balance_cycles: u128,
     ledger_fee_cycles: u128,
     live: BTreeMap<String, LiveCanister>,
     mutations: u32,
@@ -3619,6 +3730,7 @@ impl RetainedEnsurePlatform {
             .collect();
         Self {
             desired: desired.clone(),
+            estate_funding_balance_cycles: 1_000_000_000_000_000,
             ledger_fee_cycles: desired
                 .ledger_fee_cycles
                 .parse::<Cycles>()
@@ -3636,6 +3748,7 @@ impl RetainedEnsurePlatform {
     fn fresh_process(&self) -> Self {
         Self {
             desired: self.desired.clone(),
+            estate_funding_balance_cycles: self.estate_funding_balance_cycles,
             ledger_fee_cycles: self.ledger_fee_cycles,
             live: self.live.clone(),
             mutations: 0,
@@ -3775,6 +3888,79 @@ impl EnsurePlatform for RetainedEnsurePlatform {
                     )
                 })
                 .collect(),
+            estate_funding_domains: self
+                .desired
+                .bootstrap
+                .as_ref()
+                .into_iter()
+                .flat_map(|bootstrap| &bootstrap.roots)
+                .map(|root| {
+                    let assets = self
+                        .desired
+                        .canisters
+                        .iter()
+                        .filter(|canister| {
+                            canister.kind == DesiredCanisterKind::Pool
+                                && canister.parent.as_deref() == Some(&root.root)
+                        })
+                        .filter_map(|canister| {
+                            let principal = canister.principal.as_ref()?;
+                            let live = self.live.get(principal)?;
+                            let lifecycle = match live.root_owned_lifecycle? {
+                                RootOwnedCanisterLifecycle::Claimed => {
+                                    crate::fleet_ensure::model::EstatePoolAssetLifecycle::Claimed
+                                }
+                                RootOwnedCanisterLifecycle::Idle => {
+                                    crate::fleet_ensure::model::EstatePoolAssetLifecycle::Ready
+                                }
+                                RootOwnedCanisterLifecycle::Workload => {
+                                    crate::fleet_ensure::model::EstatePoolAssetLifecycle::Workload
+                                }
+                                RootOwnedCanisterLifecycle::Retained
+                                | RootOwnedCanisterLifecycle::Store => return None,
+                            };
+                            Some(crate::fleet_ensure::model::EstatePoolAssetObservation {
+                                creation_receipt: None,
+                                cycles: live.cycles,
+                                lifecycle,
+                                origin: crate::fleet_ensure::model::EstatePoolAssetOrigin::Imported,
+                                principal: principal.clone(),
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    (
+                        root.root.clone(),
+                        crate::fleet_ensure::model::EstateFundingDomainObservation {
+                            balance_cycles: Some(self.estate_funding_balance_cycles),
+                            cycles_ledger: self.desired.cycles_ledger.clone(),
+                            pool: Some(
+                                crate::fleet_ensure::model::EstatePoolInventoryObservation {
+                                    assets,
+                                    maximum_size: root.limits.canister_pool.maximum_size,
+                                    minimum_size: root.limits.canister_pool.minimum_size,
+                                    pending_creation: None,
+                                    readiness_floor_cycles: root
+                                        .limits
+                                        .canister_pool
+                                        .canister_cycles
+                                        .to_u128(),
+                                    creation_execution_margin_cycles: root
+                                        .limits
+                                        .canister_pool
+                                        .creation_execution_margin
+                                        .to_u128(),
+                                },
+                            ),
+                            root_principal: self
+                                .desired
+                                .canisters
+                                .iter()
+                                .find(|canister| canister.name == root.root)
+                                .and_then(|canister| canister.principal.clone()),
+                        },
+                    )
+                })
+                .collect(),
             ledger_fee_cycles: self.ledger_fee_cycles,
             operator_cycles: 1_000_000_000_000_000,
             protocol_ready: BTreeMap::new(),
@@ -3839,6 +4025,7 @@ impl EnsurePlatform for RetainedEnsurePlatform {
         };
         Ok(EffectObservation {
             applied,
+            estate_funding_required: None,
             post_cycles: None,
             progress_identity: format!("retained:{}:{applied}", action.name()),
             retry: EffectRetry::None,
@@ -4586,6 +4773,7 @@ fn retained_pool_response(
         entries: vec![
             CanisterPoolAsset {
                 canister_id: parse_principal("Store", store).expect("Store"),
+                creation_receipt: None,
                 cycles: Cycles::new(10_000_000_000_000),
                 origin: CanisterPoolAssetOrigin::InfrastructureStore,
                 status: CanisterPoolAssetStatus::Store,
@@ -4594,6 +4782,7 @@ fn retained_pool_response(
             },
             CanisterPoolAsset {
                 canister_id: parse_principal("workload", workload).expect("workload"),
+                creation_receipt: None,
                 cycles: Cycles::new(4_900_000_000_000),
                 origin: CanisterPoolAssetOrigin::Imported,
                 status: CanisterPoolAssetStatus::Workload { claim },
@@ -4602,6 +4791,7 @@ fn retained_pool_response(
             },
             CanisterPoolAsset {
                 canister_id: parse_principal("idle pool", idle).expect("idle pool"),
+                creation_receipt: None,
                 cycles: Cycles::new(5_000_000_000_000),
                 origin: CanisterPoolAssetOrigin::Imported,
                 status: CanisterPoolAssetStatus::Ready,
@@ -4667,6 +4857,7 @@ fn write_fake_icp_with_status_projection(
     } = fixture;
     let executable = root.join("fake-icp");
     let counter = root.join("root-status-count");
+    let root_protocol_error = root.join("root-protocol-error");
     let predecessor_pool_status = root.join("predecessor-pool-status");
     let root_started = root.join("root-started");
     let root_start_count = root.join("root-start-count");
@@ -4676,6 +4867,9 @@ fn write_fake_icp_with_status_projection(
     }
     if root_start_count.exists() {
         fs::remove_file(&root_start_count).expect("reset fake Root start count");
+    }
+    if root_protocol_error.exists() {
+        fs::remove_file(&root_protocol_error).expect("reset fake Root protocol error");
     }
     if predecessor_pool_status.exists() {
         fs::remove_file(&predecessor_pool_status).expect("reset predecessor pool response");
@@ -4737,18 +4931,21 @@ fn write_fake_icp_with_status_projection(
     let authority_response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
         RootEstateStatusResponse::FleetAuthority(Box::new(authority.clone())),
     ));
-    let pool_response = root_status_error.map_or_else(
-        || {
-            candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
-                RootEstateStatusResponse::Pool(Box::new(pool.clone())),
-            ))
-        },
-        |code| {
-            candid_response_json(&Err::<RootEstateStatusResponse, _>(
-                canic_core::dto::error::Error::from_registered(code),
-            ))
-        },
-    );
+    let pool_response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
+        RootEstateStatusResponse::Pool(Box::new(pool.clone())),
+    ));
+    let root_error_case = root_status_error.map_or_else(String::new, |code| {
+        let response = candid_response_json(&Err::<RootEstateStatusResponse, _>(
+            canic_core::dto::error::Error::from_registered(code),
+        ));
+        format!(
+            r#"if [ -f "{}" ] && [ "$count" -ge 4 ]; then
+      printf '%s\n' '{response}'
+      exit 0
+    fi"#,
+            root_protocol_error.display(),
+        )
+    });
     let predecessor_pool_response = serde_json::json!({
         "response_bytes": hex_bytes(
             crate::fleet_ensure::ops::predecessor_root_status::encode_pool_response_fixture(pool)
@@ -4756,6 +4953,7 @@ fn write_fake_icp_with_status_projection(
     })
     .to_string();
     let ledger_response = candid_response_json(&Nat::from(100_000_000_u64));
+    let ledger_balance_response = candid_response_json(&Nat::from(1_000_000_000_000_000_u64));
     let controller_cycle_case =
         controller_cycle_balance.map_or_else(String::new, |(canister, cycles)| {
         let response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
@@ -4821,7 +5019,11 @@ if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
     printf '%s\n' '{ledger_response}'
     exit 0
   fi
-  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_status" ]; then
+  if [ "$4" = "icrc1_balance_of" ]; then
+    printf '%s\n' '{ledger_balance_response}'
+    exit 0
+  fi
+  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_root_status" ]; then
     count=0
     if [ -f "{counter}" ]; then
       count=$(sed -n '1p' "{counter}")
@@ -4832,6 +5034,8 @@ if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
     elif [ -f "{predecessor_pool_status}" ]; then
       printf '%s\n' '{predecessor_pool_response}'
     else
+      {root_error_case}
+      printf '%s\n' "$((count + 1))" > "{counter}"
       printf '%s\n' '{pool_response}'
     fi
     exit 0
@@ -4974,12 +5178,20 @@ fn candid_sidecar_uses_the_manifest_bound_wasm_basename() {
     fs::rename(&sidecar, sidecar.with_file_name("renamed.did")).expect("rename sidecar");
     assert!(matches!(
         candid_sidecar(&root, root_artifact),
-        Err(FleetGenerateError::Candid(reason)) if reason.contains("is missing")
+        Err(FleetGenerateError::CandidMissing { path }) if path == sidecar
     ));
-    fs::write(&sidecar, b"service : { changed : () -> (); };").expect("write changed sidecar");
+    let changed = b"service : { changed : () -> (); };";
+    let changed_digest: [u8; 32] = Sha256::digest(changed).into();
+    fs::write(&sidecar, changed).expect("write changed sidecar");
     assert!(matches!(
         candid_sidecar(&root, root_artifact),
-        Err(FleetGenerateError::Candid(reason)) if reason.contains("digest differs")
+        Err(FleetGenerateError::CandidDigestMismatch {
+            path,
+            expected,
+            observed,
+        }) if path == sidecar
+            && expected == root_artifact.candid_sha256
+            && observed == changed_digest
     ));
 
     fs::remove_dir_all(root).expect("remove fixture root");
@@ -5004,7 +5216,7 @@ fn candid_sidecar_rejects_a_symbolic_link() {
 
     assert!(matches!(
         candid_sidecar(&root, root_artifact),
-        Err(FleetGenerateError::Candid(reason)) if reason.contains("not a regular no-follow file")
+        Err(FleetGenerateError::CandidNotRegular { path }) if path == sidecar
     ));
 
     fs::remove_dir_all(root).expect("remove fixture root");

@@ -4,10 +4,10 @@ use crate::{
             CanisterDisposition, CanisterRuntimeStatus, CurrentFleetProtocolAction,
             CycleConservation, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
             DesiredFleet, DesiredFleetProtocol, DesiredPresence, DesiredProtocolStep,
-            DrainAuthority, EffectRecord, EffectState, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION,
-            FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
-            FleetEnsureStateRecord, FleetObservation, LiveCanister, RootOwnedCanisterLifecycle,
-            create_balance_is_terminal,
+            DrainAuthority, EffectRecord, EffectState, EnsureAction,
+            EstateFundingDomainObservation, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion,
+            FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord, FleetObservation,
+            LiveCanister, RootOwnedCanisterLifecycle, create_balance_is_terminal,
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
@@ -59,6 +59,35 @@ const SUBNET: &str = "rwlgt-iiaaa-aaaaa-aaaaa-cai";
 const CONTROLLER: &str = "rdmx6-jaaaa-aaaaa-aaadq-cai";
 const LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 
+fn json_field_values<'a>(value: &'a serde_json::Value, field: &str) -> Vec<&'a serde_json::Value> {
+    fn collect<'a>(
+        value: &'a serde_json::Value,
+        field: &str,
+        values: &mut Vec<&'a serde_json::Value>,
+    ) {
+        match value {
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    collect(item, field, values);
+                }
+            }
+            serde_json::Value::Object(fields) => {
+                for (name, value) in fields {
+                    if name == field {
+                        values.push(value);
+                    }
+                    collect(value, field, values);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut values = Vec::new();
+    collect(value, field, &mut values);
+    values
+}
+
 #[derive(Debug, ThisError)]
 #[error("simulated lost response")]
 pub(super) struct MockError;
@@ -71,10 +100,12 @@ enum MockRootOwnedTopologyPolicy {
 
 pub(super) struct MockPlatform {
     completed: BTreeMap<String, EffectOutcome>,
+    created_principals: BTreeMap<String, String>,
     duplicate_create_responses: BTreeMap<String, u32>,
     create_shortfalls: BTreeMap<String, u128>,
     desired: DesiredFleet,
     deferred_created_canisters: BTreeMap<String, String>,
+    estate_funding_balance_cycles: Option<u128>,
     fail_once: BTreeSet<String>,
     failed: BTreeSet<String>,
     live: BTreeMap<String, LiveCanister>,
@@ -109,10 +140,12 @@ impl MockPlatform {
             .expect("fixture ledger fee");
         Self {
             completed: BTreeMap::new(),
+            created_principals: BTreeMap::new(),
             duplicate_create_responses: BTreeMap::new(),
             create_shortfalls: BTreeMap::new(),
             desired,
             deferred_created_canisters: BTreeMap::new(),
+            estate_funding_balance_cycles: None,
             fail_once: BTreeSet::new(),
             failed: BTreeSet::new(),
             live: live
@@ -151,6 +184,10 @@ impl MockPlatform {
         self.fail_once.insert(action_sha256);
     }
 
+    pub(super) fn set_created_principal(&mut self, name: &str, principal: String) {
+        self.created_principals.insert(name.to_string(), principal);
+    }
+
     pub(super) fn require_root_owned_topology(&mut self) {
         self.root_owned_topology_policy = MockRootOwnedTopologyPolicy::Exact;
     }
@@ -182,13 +219,22 @@ impl MockPlatform {
         self.operator_cycles = cycles;
     }
 
+    pub(super) fn set_estate_funding_balance(&mut self, cycles: u128) {
+        self.estate_funding_balance_cycles = Some(cycles);
+    }
+
     pub(super) const fn operator_cycles(&self) -> u128 {
         self.operator_cycles
     }
 
     pub(super) fn live_controllers(&self, name: &str) -> Option<&[String]> {
+        let principal = self
+            .created_principals
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| format!("created-{name}"));
         self.live
-            .get(&format!("created-{name}"))
+            .get(&principal)
             .map(|live| live.controllers.as_slice())
     }
 
@@ -236,6 +282,7 @@ impl MockPlatform {
             EnsureAction::Delete { principal, .. }
             | EnsureAction::FleetProtocol { principal, .. }
             | EnsureAction::Fund { principal, .. }
+            | EnsureAction::FundEstate { principal, .. }
             | EnsureAction::Install { principal, .. }
             | EnsureAction::Protocol { principal, .. }
             | EnsureAction::SetControllers { principal, .. }
@@ -307,6 +354,7 @@ impl MockPlatform {
         {
             return Some(EffectObservation {
                 applied: false,
+                estate_funding_required: None,
                 post_cycles: None,
                 progress_identity: format!("created:{name}:controller-observation-deferred"),
                 retry: EffectRetry::DeferUntilControllerObservation,
@@ -330,6 +378,7 @@ impl MockPlatform {
         );
         Some(EffectObservation {
             applied,
+            estate_funding_required: None,
             post_cycles,
             progress_identity: format!("created:{:?}", record.created_principal),
             retry: if post_cycles.is_some() && !applied {
@@ -338,6 +387,131 @@ impl MockPlatform {
                 EffectRetry::None
             },
         })
+    }
+
+    fn estate_funding_observation(
+        &self,
+        action: &EnsureAction,
+        record: &EffectRecord,
+    ) -> Option<EffectObservation> {
+        let EnsureAction::FundEstate {
+            amount,
+            expected_post_cycles,
+            ledger_fee_cycles,
+            ..
+        } = action
+        else {
+            return None;
+        };
+        let destination_after = self.estate_funding_balance_cycles.unwrap_or_default();
+        Some(EffectObservation {
+            applied: record.receipt.is_some()
+                && crate::fleet_ensure::ops::estate_funding_applied(
+                    crate::fleet_ensure::ops::EstateFundingObservation {
+                        amount: *amount,
+                        destination_after,
+                        destination_before: record.destination_pre_cycles,
+                        expected_destination_after: *expected_post_cycles,
+                        ledger_fee_cycles: *ledger_fee_cycles,
+                        source_after: self.operator_cycles,
+                        source_before: record.pre_cycles,
+                    },
+                ),
+            estate_funding_required: None,
+            post_cycles: Some(self.operator_cycles),
+            progress_identity: format!("estate-funding:{:?}:{destination_after}", record.receipt),
+            retry: EffectRetry::None,
+        })
+    }
+
+    fn effect_is_applied(
+        &self,
+        action: &EnsureAction,
+        record: &EffectRecord,
+        state: &FleetEnsureStateRecord,
+    ) -> bool {
+        let principal = Self::principal(state, action);
+        match action {
+            EnsureAction::Delete { .. } => {
+                principal.is_none_or(|value| !self.live.contains_key(value))
+            }
+            EnsureAction::Install {
+                mode, wasm_sha256, ..
+            } => principal
+                .and_then(|value| self.live.get(value))
+                .is_some_and(|live| {
+                    crate::fleet_ensure::ops::install_effect_applied(
+                        *mode,
+                        wasm_sha256,
+                        live.module_sha256.as_deref(),
+                        record.pre_canister_version,
+                        live.canister_version,
+                    )
+                }),
+            EnsureAction::FleetProtocol { name, .. } | EnsureAction::Protocol { name, .. } => {
+                self.protocol_ready.contains(name)
+            }
+            EnsureAction::SetControllers {
+                controller_canisters,
+                controllers,
+                ..
+            } => {
+                let controllers = self.controllers(state, controllers, controller_canisters);
+                principal
+                    .and_then(|value| self.live.get(value))
+                    .is_some_and(|live| live.controllers == controllers)
+            }
+            EnsureAction::Start { .. } => principal
+                .and_then(|value| self.live.get(value))
+                .is_some_and(|live| live.status == CanisterRuntimeStatus::Running),
+            EnsureAction::Stop { .. } => principal
+                .and_then(|value| self.live.get(value))
+                .is_some_and(|live| live.status == CanisterRuntimeStatus::Stopped),
+            EnsureAction::Transfer {
+                amount,
+                maximum_execution_burn_cycles,
+                destination,
+                ..
+            } => {
+                let destination = self.canister_principal(state, destination);
+                let source = principal
+                    .and_then(|value| self.live.get(value))
+                    .map(|live| live.cycles)
+                    .expect("transfer source");
+                let destination = self
+                    .live
+                    .get(destination)
+                    .map(|live| live.cycles)
+                    .expect("transfer destination");
+                let source_debit = record.pre_cycles.expect("source pre") - source;
+                let destination_credit =
+                    destination - record.destination_pre_cycles.expect("destination pre");
+                source_debit >= *amount
+                    && source_debit <= amount + maximum_execution_burn_cycles
+                    && destination_credit == *amount
+            }
+            EnsureAction::Create { .. }
+            | EnsureAction::Fund { .. }
+            | EnsureAction::FundEstate { .. } => false,
+        }
+    }
+
+    fn effect_retry(&self, action: &EnsureAction, applied: bool) -> EffectRetry {
+        if !applied
+            && self.protocol_retry == EffectRetry::ReplayExactIssuedCommand
+            && matches!(
+                action,
+                EnsureAction::FleetProtocol { action, .. }
+                    if matches!(
+                        action.as_ref(),
+                        CurrentFleetProtocolAction::ProvisionComponents { .. }
+                    )
+            )
+        {
+            EffectRetry::ReplayExactIssuedCommand
+        } else {
+            EffectRetry::None
+        }
     }
 
     #[expect(
@@ -367,7 +541,11 @@ impl MockPlatform {
                     .map(|cycles| cycles.to_u128())
                     .expect("ledger fee");
                 self.operator_cycles -= requested_initial_cycles + creation_fee + ledger_fee;
-                let principal = format!("created-{name}");
+                let principal = self
+                    .created_principals
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| format!("created-{name}"));
                 let retained_cycles = requested_initial_cycles
                     .checked_sub(self.create_shortfalls.get(name).copied().unwrap_or(0))
                     .expect("fixture creation shortfall is bounded");
@@ -415,6 +593,24 @@ impl MockPlatform {
                     created_principal: None,
                     post_cycles: Some(live.cycles),
                     receipt: Some("withdraw-block".to_string()),
+                }
+            }
+            EnsureAction::FundEstate {
+                amount,
+                ledger_fee_cycles,
+                ..
+            } => {
+                self.operator_cycles -= amount + ledger_fee_cycles;
+                self.estate_funding_balance_cycles = Some(
+                    self.estate_funding_balance_cycles
+                        .unwrap_or_default()
+                        .checked_add(*amount)
+                        .expect("estate funding balance"),
+                );
+                EffectOutcome {
+                    created_principal: None,
+                    post_cycles: None,
+                    receipt: Some("estate-transfer-block".to_string()),
                 }
             }
             EnsureAction::Install {
@@ -593,9 +789,35 @@ impl EnsurePlatform for MockPlatform {
                 )
             })
             .collect();
+        let estate_funding_domains =
+            self.estate_funding_balance_cycles
+                .map_or_else(BTreeMap::new, |balance_cycles| {
+                    self.desired
+                        .bootstrap
+                        .as_ref()
+                        .into_iter()
+                        .flat_map(|bootstrap| &bootstrap.roots)
+                        .map(|root| {
+                            (
+                                root.root.clone(),
+                                EstateFundingDomainObservation {
+                                    balance_cycles: Some(balance_cycles),
+                                    cycles_ledger: self.desired.cycles_ledger.clone(),
+                                    pool: None,
+                                    root_principal: state
+                                        .pending_principals
+                                        .get(&root.root)
+                                        .or_else(|| state.principals.get(&root.root))
+                                        .cloned(),
+                                },
+                            )
+                        })
+                        .collect()
+                });
         Ok(FleetObservation {
             additional_controlled_cycles: BTreeMap::new(),
             canisters,
+            estate_funding_domains,
             ledger_fee_cycles: self.ledger_fee_cycles,
             operator_cycles: self.operator_cycles,
             protocol_ready: self
@@ -678,6 +900,7 @@ impl EnsurePlatform for MockPlatform {
         if matches!(action, EnsureAction::Fund { .. }) {
             return Ok(EffectObservation {
                 applied: record.receipt.is_some(),
+                estate_funding_required: None,
                 post_cycles: Self::principal(state, action)
                     .and_then(|principal| self.live.get(principal))
                     .map(|live| live.cycles),
@@ -685,86 +908,16 @@ impl EnsurePlatform for MockPlatform {
                 retry: EffectRetry::None,
             });
         }
-        let principal = Self::principal(state, action);
-        let applied = match action {
-            EnsureAction::Delete { .. } => {
-                principal.is_none_or(|value| !self.live.contains_key(value))
-            }
-            EnsureAction::Install {
-                mode, wasm_sha256, ..
-            } => principal
-                .and_then(|value| self.live.get(value))
-                .is_some_and(|live| {
-                    crate::fleet_ensure::ops::install_effect_applied(
-                        *mode,
-                        wasm_sha256,
-                        live.module_sha256.as_deref(),
-                        record.pre_canister_version,
-                        live.canister_version,
-                    )
-                }),
-            EnsureAction::FleetProtocol { name, .. } | EnsureAction::Protocol { name, .. } => {
-                self.protocol_ready.contains(name)
-            }
-            EnsureAction::SetControllers {
-                controller_canisters,
-                controllers,
-                ..
-            } => {
-                let controllers = self.controllers(state, controllers, controller_canisters);
-                principal
-                    .and_then(|value| self.live.get(value))
-                    .is_some_and(|live| live.controllers == controllers)
-            }
-            EnsureAction::Start { .. } => principal
-                .and_then(|value| self.live.get(value))
-                .is_some_and(|live| live.status == CanisterRuntimeStatus::Running),
-            EnsureAction::Stop { .. } => principal
-                .and_then(|value| self.live.get(value))
-                .is_some_and(|live| live.status == CanisterRuntimeStatus::Stopped),
-            EnsureAction::Transfer {
-                amount,
-                maximum_execution_burn_cycles,
-                destination,
-                ..
-            } => {
-                let destination = self.canister_principal(state, destination);
-                let source = principal
-                    .and_then(|value| self.live.get(value))
-                    .map(|live| live.cycles)
-                    .expect("transfer source");
-                let destination = self
-                    .live
-                    .get(destination)
-                    .map(|live| live.cycles)
-                    .expect("transfer destination");
-                let source_debit = record.pre_cycles.expect("source pre") - source;
-                let destination_credit =
-                    destination - record.destination_pre_cycles.expect("destination pre");
-                source_debit >= *amount
-                    && source_debit <= amount + maximum_execution_burn_cycles
-                    && destination_credit == *amount
-            }
-            EnsureAction::Create { .. } | EnsureAction::Fund { .. } => false,
-        };
+        if let Some(observation) = self.estate_funding_observation(action, record) {
+            return Ok(observation);
+        }
+        let applied = self.effect_is_applied(action, record, state);
         Ok(EffectObservation {
             applied,
+            estate_funding_required: None,
             post_cycles: None,
             progress_identity: format!("mock:{action:?}:{applied}"),
-            retry: if !applied
-                && self.protocol_retry == EffectRetry::ReplayExactIssuedCommand
-                && matches!(
-                    action,
-                    EnsureAction::FleetProtocol { action, .. }
-                        if matches!(
-                            action.as_ref(),
-                            CurrentFleetProtocolAction::ProvisionComponents { .. }
-                        )
-                ) {
-                EffectRetry::ReplayExactIssuedCommand
-            } else {
-                EffectRetry::None
-            },
+            retry: self.effect_retry(action, applied),
         })
     }
 
@@ -776,6 +929,9 @@ impl EnsurePlatform for MockPlatform {
         if !self.root_owned_action_authority_is_exact(action, state) {
             return Err(MockError);
         }
+        if matches!(action, EnsureAction::FundEstate { .. }) {
+            return Ok(Some(self.operator_cycles));
+        }
         Ok(Self::principal(state, action)
             .and_then(|principal| self.live.get(principal))
             .map(|live| live.cycles))
@@ -786,6 +942,9 @@ impl EnsurePlatform for MockPlatform {
         action: &EnsureAction,
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error> {
+        if matches!(action, EnsureAction::FundEstate { .. }) {
+            return Ok(self.estate_funding_balance_cycles);
+        }
         let EnsureAction::Transfer { destination, .. } = action else {
             return Ok(None);
         };
@@ -1483,9 +1642,11 @@ fn retryable_provisioning_failure_replays_only_the_exact_retained_issued_command
         &paths,
         &FleetEnsureJournalRecord {
             completion: FleetEnsureCompletion::InProgress,
+            estate_funding_required: None,
             effects,
             fleet: "test-fleet".to_string(),
             initial_controlled_cycles: retained.conservation.observed_controlled_cycles,
+            initial_estate_funding_cycles_by_root: BTreeMap::new(),
             initial_operator_cycles: fixture.platform.operator_cycles,
             operation_id: retained.operation_id.clone(),
             plan_sha256: retained.plan_sha256.clone(),
@@ -1802,9 +1963,11 @@ fn active_registry_is_retired_only_after_every_infrastructure_reinstall_is_appli
     plan.protocol_actions.clear();
     let mut journal = FleetEnsureJournalRecord {
         completion: FleetEnsureCompletion::InProgress,
+        estate_funding_required: None,
         effects,
         fleet: plan.fleet.clone(),
         initial_controlled_cycles: 3,
+        initial_estate_funding_cycles_by_root: BTreeMap::new(),
         initial_operator_cycles: 0,
         operation_id: plan.operation_id.clone(),
         plan_sha256: plan.plan_sha256.clone(),
@@ -1983,6 +2146,65 @@ fn issued_funding_reconciles_burn_and_replays_without_a_second_withdrawal() {
     .expect("terminal funding replay");
     assert!(replay.terminal);
     assert_eq!(fixture.platform.mutations, mutations);
+
+    fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+#[test]
+fn lost_estate_funding_response_reuses_the_exact_ledger_transfer() {
+    let fixture = fixture();
+    let mut platform = fixture.platform;
+    platform.set_operator_cycles(100);
+    platform.set_estate_funding_balance(40);
+    let action = EnsureAction::FundEstate {
+        amount: 50,
+        created_at_time: 1_800_000_000_000_000_000,
+        expected_post_cycles: 90,
+        ledger: LEDGER.to_string(),
+        ledger_fee_cycles: 10,
+        name: "root-0".to_string(),
+        principal: TREASURY.to_string(),
+    };
+    let action_hash = crate::fleet_ensure::ops::action_sha256(&action);
+    platform.fail_once(action_hash.clone());
+    let state = crate::fleet_ensure::ops::read_state(
+        &crate::fleet_ensure::ops::EnsurePaths::under(
+            &fixture.root,
+            &platform.desired.environment,
+            &platform.desired.fleet,
+        ),
+        &platform.desired.fleet,
+    )
+    .expect("construct current state");
+    let mut record = EffectRecord {
+        action_sha256: action_hash.clone(),
+        created_principal: None,
+        destination_post_cycles: Some(40),
+        destination_pre_cycles: Some(40),
+        post_cycles: None,
+        pre_cycles: Some(100),
+        pre_canister_version: None,
+        progress_identity: None,
+        receipt: None,
+        state: EffectState::Intent,
+    };
+
+    assert!(
+        platform
+            .apply("operation", &action, &record, &state)
+            .is_err()
+    );
+    let replay = platform
+        .apply("operation", &action, &record, &state)
+        .expect("same transfer identity returns its retained receipt");
+    assert_eq!(platform.mutation_count(&action_hash), 1);
+    record.receipt = replay.receipt;
+    record.state = EffectState::Issued;
+    let observed = platform
+        .observe_effect("operation", &action, &record, &state)
+        .expect("observe both sides of the retained transfer");
+    assert!(observed.applied);
+    assert_eq!(observed.post_cycles, Some(40));
 
     fs::remove_dir_all(fixture.root).expect("remove test directory");
 }
@@ -3447,6 +3669,7 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
                 minimum_size: 1,
                 maximum_size: 2,
                 canister_cycles: Cycles::new(u128::MAX),
+                creation_execution_margin: Cycles::new(1),
             },
             cycles_funding: CyclesFundingBudget {
                 window_secs: 3_600,
@@ -3495,6 +3718,7 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
     let mut plan = FleetEnsurePlan {
         canisters: Vec::new(),
         conservation: CycleConservation {
+            estate_funding_domains: Vec::new(),
             expected_post_operation_cycles: 0,
             maximum_execution_burn_cycles: 0,
             maximum_new_funding_cycles: 0,
@@ -3520,9 +3744,18 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
 
     crate::fleet_ensure::ops::write_plan(&paths, &plan).expect("write current plan");
-    let encoded = fs::read_to_string(&paths.plan).expect("read current plan JSON");
-    assert!(encoded.contains(&format!("\"canister_cycles\": \"{}\"", u128::MAX)));
-    assert!(encoded.contains(&format!("\"maximum_cycles\": \"{}\"", u128::MAX)));
+    let encoded = fs::read(&paths.plan).expect("read current plan JSON");
+    let encoded: serde_json::Value =
+        serde_json::from_slice(&encoded).expect("decode current plan JSON");
+    let maximum = serde_json::Value::String(u128::MAX.to_string());
+    for field in ["canister_cycles", "maximum_cycles"] {
+        let values = json_field_values(&encoded, field);
+        assert!(!values.is_empty(), "current plan omits {field}");
+        assert!(
+            values.contains(&&maximum),
+            "current plan omits the maximum decimal {field}"
+        );
+    }
     let reopened = crate::fleet_ensure::ops::read_plan(&paths)
         .expect("read current plan")
         .expect("retained current plan");
@@ -3585,6 +3818,7 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
     let mut plan = FleetEnsurePlan {
         canisters: Vec::new(),
         conservation: CycleConservation {
+            estate_funding_domains: Vec::new(),
             expected_post_operation_cycles: 0,
             maximum_execution_burn_cycles: 0,
             maximum_new_funding_cycles: 0,
@@ -3627,11 +3861,16 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         crate::fleet_ensure::ops::compact_inline_plan(&paths, &inline)
             .expect("compact former inline current plan")
     );
-    let encoded = fs::read_to_string(&paths.plan).expect("read hash-only current plan");
+    let encoded = fs::read(&paths.plan).expect("read hash-only current plan");
     assert!(encoded.len() as u64 * 2 < inline_size);
-    assert!(!encoded.contains("\"bytes\""));
-    assert!(encoded.contains("\"bytes_sha256\""));
-    assert!(encoded.contains("\"chunk_hashes\""));
+    let encoded: serde_json::Value =
+        serde_json::from_slice(&encoded).expect("decode hash-only current plan");
+    assert!(json_field_values(&encoded, "bytes").is_empty());
+    assert_eq!(
+        json_field_values(&encoded, "bytes_sha256"),
+        [&serde_json::Value::String(sha256_hex(&bytes))]
+    );
+    assert_eq!(json_field_values(&encoded, "chunk_hashes").len(), 1);
     let object = paths
         .content
         .join(canic_core::cdk::utils::hash::hex_bytes(&chunk_hash));
@@ -4015,6 +4254,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
             Ok(FleetObservation {
                 additional_controlled_cycles: BTreeMap::new(),
                 canisters,
+                estate_funding_domains: BTreeMap::new(),
                 ledger_fee_cycles: self
                     .desired
                     .ledger_fee_cycles
@@ -4061,6 +4301,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                 );
                 return Ok(EffectObservation {
                     applied,
+                    estate_funding_required: None,
                     post_cycles,
                     progress_identity: format!("created:{:?}", record.created_principal),
                     retry: if post_cycles.is_some() && !applied {
@@ -4073,6 +4314,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
             if matches!(action, EnsureAction::Fund { .. }) {
                 return Ok(EffectObservation {
                     applied: record.receipt.is_some(),
+                    estate_funding_required: None,
                     post_cycles: None,
                     progress_identity: format!("fund:{:?}", record.receipt),
                     retry: EffectRetry::None,
@@ -4081,6 +4323,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
             let principal = match action {
                 EnsureAction::Delete { principal, .. }
                 | EnsureAction::FleetProtocol { principal, .. }
+                | EnsureAction::FundEstate { principal, .. }
                 | EnsureAction::Install { principal, .. }
                 | EnsureAction::Protocol { principal, .. }
                 | EnsureAction::SetControllers { principal, .. }
@@ -4120,10 +4363,12 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                 }
                 EnsureAction::Create { .. }
                 | EnsureAction::Fund { .. }
+                | EnsureAction::FundEstate { .. }
                 | EnsureAction::Transfer { .. } => false,
             };
             Ok(EffectObservation {
                 applied,
+                estate_funding_required: None,
                 post_cycles: None,
                 progress_identity: format!("pocketic:{action:?}:{applied}"),
                 retry: EffectRetry::None,
@@ -4140,6 +4385,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                 EnsureAction::Delete { principal, .. }
                 | EnsureAction::FleetProtocol { principal, .. }
                 | EnsureAction::Fund { principal, .. }
+                | EnsureAction::FundEstate { principal, .. }
                 | EnsureAction::Install { principal, .. }
                 | EnsureAction::Protocol { principal, .. }
                 | EnsureAction::SetControllers { principal, .. }
@@ -4235,6 +4481,9 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                         receipt: Some(format!("pocketic-fund-{id}")),
                     })
                 }
+                EnsureAction::FundEstate { .. } => Err(std::io::Error::other(
+                    "governed current-state journey has no estate funding domain",
+                )),
                 EnsureAction::Install {
                     mode,
                     principal: target,

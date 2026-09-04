@@ -17,8 +17,10 @@ Roadmap reconciled: 2026-08-30
 
 ## Decision Direction
 
-A future optional protocol may replenish one exact registered root estate
-Cycles Ledger account from a Fleet-authorized infrastructure source. It must:
+Current Fleet Ensure can fund a bounded deployment forecast through one
+reviewed `FundEstate` action. This deferred idea is narrower: a future optional
+protocol may replenish one exact registered root estate Cycles Ledger account
+for demand that arises after the terminal reviewed deployment plan. It must:
 
 1. derive the destination account from protected root/Fleet authority, never
    from an application payload;
@@ -49,6 +51,7 @@ into infrastructure authority.
 - distinct operator, Coordinator, root and application threat model; and
 - explicit maintainer-approved release position and batch plan.
 
-Until promotion, operators pre-fund the immutable maximum exposure, pause
-creation on insufficient estate balance and make an explicit deposit before
-resuming.
+Until promotion, unplanned post-deployment growth pauses and requires a new
+reviewed Fleet Ensure plan. Operators must not bypass its durable funding intent
+with an out-of-band deposit. Continuous autonomous replenishment remains
+deferred.

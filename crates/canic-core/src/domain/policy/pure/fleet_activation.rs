@@ -6,7 +6,10 @@
 
 use crate::{
     ids::{EndpointCall, EndpointCallKind},
-    protocol::{CANIC_COMMAND, CANIC_ROOT_COMMAND, CANIC_STATUS},
+    protocol::{
+        CANIC_COMMAND, CANIC_ROOT_COMMAND, CANIC_ROOT_STATUS, CANIC_STATUS,
+        CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
+    },
 };
 use thiserror::Error as ThisError;
 
@@ -26,8 +29,19 @@ pub enum FleetActivationEndpointPolicyError {
 /// Require one exact recovery endpoint admitted for a Prepared non-root.
 pub fn require_prepared_nonroot_endpoint(
     call: EndpointCall,
+    is_wasm_store: bool,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
-    if is_query(call, CANIC_STATUS) || is_update(call, &[CANIC_COMMAND]) {
+    let status = if is_wasm_store {
+        CANIC_WASM_STORE_STATUS
+    } else {
+        CANIC_STATUS
+    };
+    let command = if is_wasm_store {
+        CANIC_WASM_STORE_COMMAND
+    } else {
+        CANIC_COMMAND
+    };
+    if is_query(call, status) || is_update(call, &[command]) {
         return Ok(());
     }
     fenced(call)
@@ -47,7 +61,7 @@ pub fn require_prepared_store_data_endpoint(
 pub fn require_prepared_root_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
-    if is_query(call, CANIC_STATUS) || is_update(call, &[CANIC_ROOT_COMMAND]) {
+    if is_query(call, CANIC_ROOT_STATUS) || is_update(call, &[CANIC_ROOT_COMMAND]) {
         return Ok(());
     }
     fenced(call)
@@ -84,7 +98,7 @@ mod tests {
     fn prepared_root_admits_only_the_role_owned_entrypoints() {
         for (endpoint, kind) in [
             (CANIC_ROOT_COMMAND, EndpointCallKind::Update),
-            (CANIC_STATUS, EndpointCallKind::Query),
+            (CANIC_ROOT_STATUS, EndpointCallKind::Query),
         ] {
             assert_eq!(require_prepared_root_endpoint(call(endpoint, kind)), Ok(()));
         }
@@ -95,8 +109,8 @@ mod tests {
         for (endpoint, kind) in [
             ("application_update", EndpointCallKind::Update),
             (CANIC_ROOT_COMMAND, EndpointCallKind::Query),
-            (CANIC_STATUS, EndpointCallKind::Update),
-            (CANIC_STATUS, EndpointCallKind::QueryComposite),
+            (CANIC_ROOT_STATUS, EndpointCallKind::Update),
+            (CANIC_ROOT_STATUS, EndpointCallKind::QueryComposite),
         ] {
             assert_eq!(
                 require_prepared_root_endpoint(call(endpoint, kind)),
@@ -112,7 +126,7 @@ mod tests {
             (CANIC_COMMAND, EndpointCallKind::Update),
         ] {
             assert_eq!(
-                require_prepared_nonroot_endpoint(call(endpoint, kind)),
+                require_prepared_nonroot_endpoint(call(endpoint, kind), false),
                 Ok(())
             );
         }
@@ -124,7 +138,31 @@ mod tests {
             (CANIC_COMMAND, EndpointCallKind::Query),
         ] {
             assert_eq!(
-                require_prepared_nonroot_endpoint(call(endpoint, kind)),
+                require_prepared_nonroot_endpoint(call(endpoint, kind), false),
+                Err(FleetActivationEndpointPolicyError::Fenced { endpoint, kind })
+            );
+        }
+    }
+
+    #[test]
+    fn prepared_store_uses_only_its_role_owned_command_and_status() {
+        for (endpoint, kind) in [
+            (CANIC_WASM_STORE_STATUS, EndpointCallKind::Query),
+            (CANIC_WASM_STORE_COMMAND, EndpointCallKind::Update),
+        ] {
+            assert_eq!(
+                require_prepared_nonroot_endpoint(call(endpoint, kind), true),
+                Ok(())
+            );
+        }
+        for (endpoint, kind) in [
+            (CANIC_STATUS, EndpointCallKind::Query),
+            (CANIC_COMMAND, EndpointCallKind::Update),
+            (CANIC_WASM_STORE_STATUS, EndpointCallKind::Update),
+            (CANIC_WASM_STORE_COMMAND, EndpointCallKind::Query),
+        ] {
+            assert_eq!(
+                require_prepared_nonroot_endpoint(call(endpoint, kind), true),
                 Err(FleetActivationEndpointPolicyError::Fenced { endpoint, kind })
             );
         }

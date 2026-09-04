@@ -31,10 +31,38 @@ fi
 
 bash "$RUNNER" --check >/dev/null
 bash "$RUNNER" --help | rg -q -- '--smoke'
+bash "$RUNNER" --help | rg -q -- '--qualify'
 bash "$RUNNER" --help | rg -q -- '--artifact <artifact-id>'
+
+HASH_CHECK_ROOT="$SCRATCH/hash-check"
+mkdir -p "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-patches"
+cp "$RUNNER" "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-report.sh"
+cp "$ROOT/scripts/ci/wasm-ablation-artifacts.tsv" "$HASH_CHECK_ROOT/scripts/ci/"
+cp "$ROOT/scripts/ci/wasm-ablation-build-artifact.rs" "$HASH_CHECK_ROOT/scripts/ci/"
+cp "$COUNTER_SOURCE" "$HASH_CHECK_ROOT/scripts/ci/wasm-replica-function-count.rs"
+cp "$ROOT/scripts/ci/wasm-ablation-patches/b1-02-global-storage-registration.patch" \
+    "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-patches/"
+ln -s "$ROOT/apps" "$HASH_CHECK_ROOT/apps"
+ln -s "$ROOT/canisters" "$HASH_CHECK_ROOT/canisters"
+ln -s "$ROOT/crates" "$HASH_CHECK_ROOT/crates"
+awk -F '\t' 'BEGIN { OFS=FS } $1 == "02" { $6 = sprintf("%064d", 0) } { print }' \
+    "$ROOT/scripts/ci/wasm-ablation-experiments.tsv" \
+    >"$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-experiments.tsv"
+if bash "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-report.sh" --check >/dev/null 2>&1; then
+    echo "ablation manifest accepted a mismatched patch SHA-256" >&2
+    exit 1
+fi
 
 if bash "$RUNNER" --check --smoke >/dev/null 2>&1; then
     echo "smoke mode was accepted without an experiment run" >&2
+    exit 1
+fi
+if bash "$RUNNER" --check --qualify >/dev/null 2>&1; then
+    echo "qualification mode was accepted without an experiment run" >&2
+    exit 1
+fi
+if bash "$RUNNER" --list --smoke --qualify >/dev/null 2>&1; then
+    echo "multiple development run modes were accepted" >&2
     exit 1
 fi
 if bash "$RUNNER" --list --artifact canonical_app >/dev/null 2>&1; then
@@ -47,8 +75,8 @@ LISTING="$(bash "$RUNNER" --list)"
 printf '%s\n' "$LISTING" | rg -q $'^01\tb1-01-current-baseline\tready\tnone\t'
 printf '%s\n' "$LISTING" | rg -q $'^02\tb1-02-global-storage-registration\tready\tpatch\tcanonical$'
 printf '%s\n' "$LISTING" | rg -q $'^03\tb1-03-activation-record-codecs\tready\tpatch\tcanonical$'
-printf '%s\n' "$LISTING" | rg -q $'^04\tb1-04-authorization-record-codecs\tspecified\tpatch\tcanonical,runtime_probe$'
-printf '%s\n' "$LISTING" | rg -q $'^05\tb1-05-relevant-cbor-stub\tspecified\tpatch\tcanonical,runtime_probe,blob_storage_probe$'
+printf '%s\n' "$LISTING" | rg -q $'^04\tb1-04-authorization-record-codecs\tready\tpatch\tcanonical,runtime_probe$'
+printf '%s\n' "$LISTING" | rg -q $'^05\tb1-05-relevant-cbor-stub\tready\tpatch\tcanonical,runtime_probe,blob_storage_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^06\tb1-06-unconditional-recovery-dispatch\tspecified\tpatch\tcanonical,runtime_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^07\tb1-07-exact-role-capability-expansion\tplanned\tpatch\tcanonical$'
 printf '%s\n' "$LISTING" | rg -q $'^08\tb1-08-endpoint-candid-type-construction\tspecified\tpatch\tcanonical,runtime_probe,payload_limit_probe,blob_storage_probe$'
@@ -64,8 +92,6 @@ if printf '%s\n' "$LISTING" | rg -qi 'toko'; then
 fi
 
 for experiment in \
-    b1-04-authorization-record-codecs \
-    b1-05-relevant-cbor-stub \
     b1-06-unconditional-recovery-dispatch \
     b1-08-endpoint-candid-type-construction \
     b1-10-candid-serialization-newtypes \

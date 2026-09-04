@@ -86,7 +86,7 @@ mod tests {
         coordinator: Principal,
         request: CoordinatorStatusRequest,
     ) -> Result<CoordinatorStatusResponse, Error> {
-        pic.query_candid(coordinator, protocol::CANIC_STATUS, (request,))
+        pic.query_candid(coordinator, protocol::CANIC_COORDINATOR_STATUS, (request,))
             .expect("Coordinator status transport")
     }
 
@@ -96,8 +96,13 @@ mod tests {
         caller: Principal,
         request: CoordinatorStatusRequest,
     ) -> Result<CoordinatorStatusResponse, Error> {
-        pic.query_candid_as(coordinator, caller, protocol::CANIC_STATUS, (request,))
-            .expect("Coordinator status transport")
+        pic.query_candid_as(
+            coordinator,
+            caller,
+            protocol::CANIC_COORDINATOR_STATUS,
+            (request,),
+        )
+        .expect("Coordinator status transport")
     }
 
     fn command_error(
@@ -729,6 +734,7 @@ placement.minimum_distinct_roots = 2
                     minimum_size: 1,
                     maximum_size: 10,
                     canister_cycles: Cycles::new(1_000_000_000_000),
+                    creation_execution_margin: Cycles::new(1_000_000_000_000),
                 },
                 cycles_funding: CyclesFundingBudget {
                     window_secs: 3_600,

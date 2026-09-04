@@ -149,6 +149,16 @@ fn endpoint_emitters_match_the_current_role_and_separate_blob_surfaces() {
         }
     }
     methods.sort();
+    let duplicate_methods = methods
+        .windows(2)
+        .filter(|pair| pair[0] == pair[1])
+        .map(|pair| pair[0].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        duplicate_methods,
+        ["canic_status"],
+        "only the identical ordinary managed/standalone status family may share an emitted Rust endpoint name"
+    );
     methods.dedup();
 
     assert_eq!(
@@ -163,12 +173,35 @@ fn endpoint_emitters_match_the_current_role_and_separate_blob_surfaces() {
             "canic_blob_storage_update_gateway_principals",
             "canic_command",
             "canic_coordinator_command",
+            "canic_coordinator_status",
             "canic_root_command",
+            "canic_root_status",
             "canic_status",
             "canic_wasm_store_chunk",
+            "canic_wasm_store_command",
             "canic_wasm_store_publish_chunk",
+            "canic_wasm_store_status",
         ],
         "facade endpoint emitters diverged from the current role-owned and separately scoped blob surfaces"
+    );
+
+    let ordinary = read_text(&endpoint_root.join("role.rs"));
+    assert_eq!(
+        ordinary.matches("async fn canic_status(").count(),
+        2,
+        "managed and standalone-local emitters must remain the only ordinary status owners"
+    );
+    assert_eq!(
+        ordinary.matches("request: CanisterStatusRequest,").count(),
+        2,
+        "every ordinary canic_status emitter must use the CanisterStatusRequest family"
+    );
+    assert_eq!(
+        ordinary
+            .matches("Result<CanisterStatusResponse, ::canic::Error>")
+            .count(),
+        2,
+        "every ordinary canic_status emitter must use the CanisterStatusResponse family"
     );
 }
 
@@ -514,62 +547,6 @@ fn application_session_audit_is_bounded_protected_and_secret_free() {
 }
 
 #[test]
-fn exact_cycle_and_runtime_observability_is_controller_protected() {
-    let root = workspace_root();
-    let role = read_text(&root.join("crates/canic/src/macros/endpoints/role.rs"));
-    let root_surface = read_text(&root.join("crates/canic/src/macros/endpoints/root.rs"));
-    let store = read_text(&root.join("crates/canic/src/macros/endpoints/wasm_store.rs"));
-
-    for status in role.split("async fn canic_status(").skip(1).take(2) {
-        let authorization = status
-            .split("match request {")
-            .next()
-            .expect("role status authorization");
-        assert!(
-            authorization.contains("CanisterStatusRequest::CycleBalance")
-                && authorization.contains("CanisterStatusRequest::CycleHistory(_)")
-                && authorization.contains("CanisterStatusRequest::CycleTopups(_)")
-                && authorization.contains("CanisterStatusRequest::Metrics(_)")
-                && authorization.contains("access::auth::is_controller(caller)"),
-            "every generated role status must protect exact cycles and raw metrics"
-        );
-    }
-
-    let root_authorization = root_surface
-        .split("async fn canic_status(")
-        .nth(1)
-        .and_then(|status| status.split("match request {").next())
-        .expect("Root status authorization");
-    assert!(
-        root_authorization.contains("RootStatusRequest::CycleBalance")
-            && root_authorization.contains("RootStatusRequest::CycleHistory(_)")
-            && root_authorization.contains("RootStatusRequest::Metrics(_)")
-            && root_authorization.contains("access::auth::is_controller(caller)"),
-        "Root exact cycles and raw metrics must be controller-only"
-    );
-
-    let store_authorization = store
-        .split("async fn canic_status(")
-        .nth(1)
-        .and_then(|status| status.split("match request {").next())
-        .expect("Store status authorization");
-    assert!(
-        store_authorization.contains("StoreStatusRequest::CycleBalance")
-            && store_authorization.contains("StoreStatusRequest::CycleHistory(_)")
-            && store_authorization.contains("access::auth::is_controller(caller)"),
-        "Store exact cycles must be controller-only"
-    );
-
-    assert!(
-        role.contains("CanisterCommand::Observe(request)")
-            && role.contains("access::auth::is_controller(caller)")
-            && root_surface.contains("RootCommand::ObserveCanister(_)")
-            && root_surface.contains("ObservabilityApi::observe_root_controlled_canister("),
-        "managed telemetry must retain one controller-authenticated Root relay"
-    );
-}
-
-#[test]
 fn icrc21_dispatcher_uses_the_registered_typed_handler() {
     let method = "protocol_surface_transfer";
     Icrc21Dispatcher::register(method, |request| {
@@ -791,10 +768,10 @@ fn wasm_store_canonical_did_parses() {
     assert_eq!(
         methods,
         vec![
-            canic::protocol::CANIC_COMMAND,
-            canic::protocol::CANIC_STATUS,
             canic::protocol::CANIC_WASM_STORE_CHUNK,
+            canic::protocol::CANIC_WASM_STORE_COMMAND,
             canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+            canic::protocol::CANIC_WASM_STORE_STATUS,
             canic::protocol::ICRC10_SUPPORTED_STANDARDS,
         ],
         "canonical Store must expose only role-owned control, two byte lanes and ICRC-10"
@@ -838,7 +815,7 @@ fn wasm_store_status_surface_is_profile_exact() {
     assert!(
         did.contains(&format!(
             "{} : (StoreStatusRequest) -> (Result_1) query;",
-            canic::protocol::CANIC_STATUS
+            canic::protocol::CANIC_WASM_STORE_STATUS
         )),
         "canonical Store DID must expose its role-owned status query"
     );
@@ -865,7 +842,7 @@ fn fleet_coordinator_canonical_did_parses() {
         methods,
         vec![
             canic::protocol::CANIC_COORDINATOR_COMMAND,
-            canic::protocol::CANIC_STATUS,
+            canic::protocol::CANIC_COORDINATOR_STATUS,
         ],
         "Fleet Coordinator must expose only its role-owned command and status methods"
     );
@@ -1011,7 +988,7 @@ fn fleet_coordinator_status_surface_is_profile_exact() {
         "CoordinatorStatusRequest acquired an unreviewed variant:\n{request}"
     );
     assert!(
-        did.contains("canic_status : (CoordinatorStatusRequest) -> (Result_1) query;"),
+        did.contains("canic_coordinator_status : (CoordinatorStatusRequest) -> (Result_1) query;"),
         "canonical Coordinator DID must expose its role-owned status query"
     );
 }
@@ -1112,14 +1089,27 @@ fn role_status_dispatchers_keep_variant_specific_authority() {
 }
 
 #[test]
-fn root_and_coordinator_role_ingress_are_command_status_only() {
+fn infrastructure_role_ingress_uses_distinct_command_status_pairs() {
     assert_eq!(canic::protocol::CANIC_COMMAND, "canic_command");
     assert_eq!(
         canic::protocol::CANIC_COORDINATOR_COMMAND,
         "canic_coordinator_command"
     );
+    assert_eq!(
+        canic::protocol::CANIC_COORDINATOR_STATUS,
+        "canic_coordinator_status"
+    );
     assert_eq!(canic::protocol::CANIC_ROOT_COMMAND, "canic_root_command");
+    assert_eq!(canic::protocol::CANIC_ROOT_STATUS, "canic_root_status");
     assert_eq!(canic::protocol::CANIC_STATUS, "canic_status");
+    assert_eq!(
+        canic::protocol::CANIC_WASM_STORE_COMMAND,
+        "canic_wasm_store_command"
+    );
+    assert_eq!(
+        canic::protocol::CANIC_WASM_STORE_STATUS,
+        "canic_wasm_store_status"
+    );
 
     let bundles = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs"));
     let root_bundle = bundles
@@ -1140,8 +1130,11 @@ fn root_and_coordinator_role_ingress_are_command_status_only() {
 
     let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
     assert!(
-        root.contains("async fn canic_root_command(") && !root.contains("async fn canic_command("),
-        "Root must export only its explicitly named command entrypoint"
+        root.contains("async fn canic_root_command(")
+            && root.contains("async fn canic_root_status(")
+            && !root.contains("async fn canic_command(")
+            && !root.contains("async fn canic_status("),
+        "Root must export only its explicitly named command and status entrypoints"
     );
     for variant in [
         "AcceptFunding(",
@@ -1190,6 +1183,14 @@ fn root_and_coordinator_role_ingress_are_command_status_only() {
         );
     }
 
+    let issuer_stub =
+        read_text(&workspace_root().join("canisters/test/delegation_issuer_stub/src/lib.rs"));
+    assert!(
+        issuer_stub.contains("Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_COMMAND)")
+            && !issuer_stub.contains("Call::bounded_wait(fleet_subnet_root, CANIC_COMMAND)"),
+        "ordinary Components must address Root through the explicit Root command endpoint"
+    );
+
     assert_coordinator_ingress_is_command_status_only();
 }
 
@@ -1219,7 +1220,9 @@ fn assert_coordinator_ingress_is_command_status_only() {
     let start = read_text(&workspace_root().join("crates/canic/src/macros/start.rs"));
     assert!(
         coordinator_endpoints.contains("async fn canic_coordinator_command(")
+            && coordinator_endpoints.contains("async fn canic_coordinator_status(")
             && !coordinator_endpoints.contains("async fn canic_command(")
+            && !coordinator_endpoints.contains("async fn canic_status(")
             && coordinator_endpoints.contains("__canic_inspect_fleet_coordinator_update_message")
             && coordinator_endpoints.contains("__canic_fleet_coordinator_payload_max_bytes")
             && start.contains("__canic_start_ingress_payload_inspect!(fleet_coordinator)"),
@@ -1253,7 +1256,20 @@ fn assert_coordinator_ingress_is_command_status_only() {
         .filter(|name| name.starts_with("canic_"))
         .collect::<Vec<_>>();
     canic_methods.sort_unstable();
-    assert_eq!(canic_methods, ["canic_coordinator_command", "canic_status"]);
+    assert_eq!(
+        canic_methods,
+        ["canic_coordinator_command", "canic_coordinator_status"]
+    );
+
+    let store =
+        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/wasm_store.rs"));
+    assert!(
+        store.contains("async fn canic_wasm_store_command(")
+            && store.contains("async fn canic_wasm_store_status(")
+            && !store.contains("async fn canic_command(")
+            && !store.contains("async fn canic_status("),
+        "Wasm Store must export only its explicitly named command and status entrypoints"
+    );
 }
 
 #[test]
@@ -2132,7 +2148,7 @@ fn root_and_coordinator_commands_authorize_before_state_gates_or_dispatch() {
         );
     }
     let coordinator_status = coordinator
-        .split("async fn canic_status(")
+        .split("async fn canic_coordinator_status(")
         .nth(1)
         .expect("Coordinator status admission");
     assert!(

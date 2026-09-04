@@ -360,6 +360,9 @@ pub enum RoleContractFinding {
         capability: RoleCapabilityKey,
         feature: CanicFeatureKey,
     },
+    SurplusCryptoFeature {
+        feature: CanicFeatureKey,
+    },
     RoleUnknown {
         role: CanisterRole,
     },
@@ -391,6 +394,7 @@ impl RoleContractFinding {
             Self::PackageMetadataMismatch { .. } => "role_contract_package_metadata_mismatch",
             Self::PackageMissing { .. } => "role_contract_package_missing",
             Self::RequiredFeatureMissing { .. } => "role_contract_required_feature_missing",
+            Self::SurplusCryptoFeature { .. } => "role_contract_surplus_crypto_feature",
             Self::RoleUnknown { .. } => "role_contract_role_unknown",
             Self::RuntimeCanicDependencyMissing { .. } => {
                 "role_contract_runtime_canic_dependency_missing"

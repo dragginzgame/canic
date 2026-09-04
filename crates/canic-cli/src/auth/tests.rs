@@ -92,7 +92,7 @@ fn top_level_forwards_auth_global_icp_and_environment() {
 fn renewal_status_queries_root_status_endpoint() {
     let issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     let runtime = ScriptedAuthRenewalRuntime::new([scripted_response(
-        CANIC_STATUS,
+        CANIC_ROOT_STATUS,
         Some(root_issuer_renewal_status_arg(issuer)),
         Some("json"),
         renewal_status_with_batch_response_json(issuer),
@@ -133,7 +133,7 @@ fn renewal_status_queries_root_status_endpoint() {
     assert_eq!(json["target"]["candid_source"], "current_ensure_inventory");
     assert_eq!(json["status"], "issuer_unregistered");
     assert_eq!(json["issuer_observation"]["status"], "unavailable");
-    assert_eq!(runtime.called_methods(), vec![CANIC_STATUS]);
+    assert_eq!(runtime.called_methods(), vec![CANIC_ROOT_STATUS]);
     let medic = auth_renewal_medic_summary_from_result(&result);
     assert_eq!(medic.status, AuthRenewalMedicStatus::Warning);
     assert!(
@@ -153,7 +153,7 @@ fn renewal_status_reports_matching_issuer_observation() {
     let issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     let runtime = ScriptedAuthRenewalRuntime::new([
         scripted_response(
-            CANIC_STATUS,
+            CANIC_ROOT_STATUS,
             Some(root_issuer_renewal_status_arg(issuer)),
             Some("json"),
             renewal_status_response_json(issuer, [3; 32], 1_620_329_000_000_000_000),
@@ -177,7 +177,10 @@ fn renewal_status_reports_matching_issuer_observation() {
         result.issuer_observation.cert_hash,
         Some(hex_bytes([3; 32]))
     );
-    assert_eq!(runtime.called_methods(), vec![CANIC_STATUS, CANIC_STATUS]);
+    assert_eq!(
+        runtime.called_methods(),
+        vec![CANIC_ROOT_STATUS, CANIC_STATUS]
+    );
 }
 
 #[test]
@@ -185,7 +188,7 @@ fn renewal_status_reports_root_issuer_drift() {
     let issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     let runtime = ScriptedAuthRenewalRuntime::new([
         scripted_response(
-            CANIC_STATUS,
+            CANIC_ROOT_STATUS,
             Some(root_issuer_renewal_status_arg(issuer)),
             Some("json"),
             renewal_status_response_json(issuer, [3; 32], 1_620_329_000_000_000_000),
@@ -214,7 +217,7 @@ fn renewal_status_warns_when_active_proof_is_missing() {
     let issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     let runtime = ScriptedAuthRenewalRuntime::new([
         scripted_response(
-            CANIC_STATUS,
+            CANIC_ROOT_STATUS,
             Some(root_issuer_renewal_status_arg(issuer)),
             Some("json"),
             renewal_status_without_state_response_json(issuer),

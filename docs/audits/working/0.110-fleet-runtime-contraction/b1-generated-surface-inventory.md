@@ -139,7 +139,7 @@ methods remains an optimized-artifact question.
 
 ### Fleet Subnet Root
 
-The Root bundle emits `canic_root_command`, `canic_status` and
+The Root bundle emits `canic_root_command`, `canic_root_status` and
 `icrc10_supported_standards`. The command union contains:
 
 `AcceptFunding`, `ActivateFleetAdmission`, `ActivateFundingPolicyRotation`,
@@ -169,7 +169,8 @@ require controller authority.
 
 ### Fleet Coordinator
 
-The dedicated bundle emits only `canic_coordinator_command` and `canic_status`.
+The dedicated bundle emits only `canic_coordinator_command` and
+`canic_coordinator_status`.
 Its command union contains `AcknowledgeRootSnapshot`, `ActivateRegistry`,
 `ApplyFundingPolicyRotation`, `BeginFundingPolicyRotation`,
 `CompleteRootDeletion`, `JoinRoot`, `MutateAdmission`,
@@ -182,7 +183,7 @@ Its command union contains `AcknowledgeRootSnapshot`, `ActivateRegistry`,
 
 ### Wasm Store
 
-The Store bundle emits `canic_command`, `canic_status`,
+The Store bundle emits `canic_wasm_store_command`, `canic_wasm_store_status`,
 `canic_wasm_store_chunk`, `canic_wasm_store_publish_chunk` and
 `icrc10_supported_standards`. Its command union contains `ActivateFleet`,
 `InspectTemplate`, `PrepareChunkSet`, `PrepareFleetCredential`,

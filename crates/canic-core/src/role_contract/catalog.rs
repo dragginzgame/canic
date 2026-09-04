@@ -577,6 +577,21 @@ impl CanicFeatureKey {
         Self::WasmStoreCanister,
     ];
 
+    /// Whether this feature selects Canic-owned cryptographic implementation code.
+    #[must_use]
+    pub const fn is_auth_crypto(self) -> bool {
+        matches!(
+            self,
+            Self::AuthChainKeyEcdsa
+                | Self::AuthChainKeyRootSign
+                | Self::AuthDelegatedTokenVerify
+                | Self::AuthIssuerCanisterSigCreate
+                | Self::AuthIssuerCanisterSigVerify
+                | Self::AuthRootCanisterSigCreate
+                | Self::AuthRootCanisterSigVerify
+        )
+    }
+
     #[must_use]
     pub fn cargo_name(self) -> &'static str {
         feature_definition(self).cargo_name

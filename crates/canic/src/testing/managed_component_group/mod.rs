@@ -1322,6 +1322,7 @@ const fn test_root_limits(maximum_group_placements: u32) -> FleetSubnetRootLimit
     FleetSubnetRootLimits {
         canister_pool: FleetSubnetCanisterPoolConfig {
             canister_cycles: Cycles::new(1),
+            creation_execution_margin: Cycles::new(1),
             maximum_size: 4_096,
             minimum_size: 1,
         },

@@ -41,6 +41,7 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
+pub(crate) use platform::{EstateFundingObservation, estate_funding_applied};
 pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
 #[cfg(test)]
 pub(crate) use platform::{
@@ -80,6 +81,9 @@ pub struct EffectOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EffectObservation {
     pub applied: bool,
+    /// Exact Root-owned Cycles Ledger pause returned by current Component provisioning.
+    pub estate_funding_required:
+        Option<canic_core::dto::component_provisioning::RootEstateFundingRequired>,
     /// Exact live source balance observed while reconciling this effect.
     ///
     /// This is populated only when the terminal predicate itself owns a

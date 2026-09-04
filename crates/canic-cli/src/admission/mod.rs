@@ -776,7 +776,7 @@ fn query_coordinator_registry(
         icp,
         binding,
         coordinator,
-        canic_core::protocol::CANIC_STATUS,
+        canic_core::protocol::CANIC_COORDINATOR_STATUS,
         &RemoteCoordinatorStatusRequest::Registry,
     )?;
     match response {
@@ -797,7 +797,7 @@ fn query_coordinator_registry_version(
         icp,
         binding,
         coordinator,
-        canic_core::protocol::CANIC_STATUS,
+        canic_core::protocol::CANIC_COORDINATOR_STATUS,
         &RemoteCoordinatorStatusRequest::RegistryVersion,
     )?;
     match response {
@@ -818,7 +818,7 @@ fn query_coordinator_admission(
         icp,
         binding,
         coordinator,
-        canic_core::protocol::CANIC_STATUS,
+        canic_core::protocol::CANIC_COORDINATOR_STATUS,
         &RemoteCoordinatorStatusRequest::Admission(FleetAdmissionStatusRequest {
             selector: FleetAdmissionSelector::Fleet,
             page: PageRequest {
@@ -866,7 +866,7 @@ fn query_root_status(
             &connection.icp,
             binding,
             root,
-            canic_core::protocol::CANIC_STATUS,
+            canic_core::protocol::CANIC_ROOT_STATUS,
             &RemoteRootStatusRequest::Admission(PageRequest {
                 limit: ROOT_STATUS_PAGE_SIZE,
                 offset,

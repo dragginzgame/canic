@@ -1,16 +1,17 @@
 mod wasm;
 
 use crate::{
-    binaryen::{BinaryenExecutable, resolve_required_binaryen},
+    binaryen::BinaryenExecutable,
+    build_toolchain::BuildToolchain,
     candid_endpoints::parse_candid_service_endpoints,
     canister_build::{
         ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
         CanisterBuildProfile, WasmTransformMetrics,
     },
     durable_io::write_bytes,
+    ic_wasm::IcWasmExecutable,
     output_with_executable_busy_retry,
 };
-use canic_core::ids::BuildNetwork;
 use std::{
     collections::BTreeSet,
     fs,
@@ -20,11 +21,11 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use canic_core::ids::BuildNetwork;
 use flate2::{Compression, GzBuilder};
 
 pub use wasm::enforce_wasm_code_section_limit;
 
-pub const IC_WASM_TOOL: &str = "ic-wasm";
 const ARTIFACT_STAGE_ATTEMPTS: usize = 64;
 static ARTIFACT_STAGE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 const IC_WASM_FEATURE_FLAGS: &[&str] = &[
@@ -64,11 +65,17 @@ pub struct WasmArtifactFinalization<'a> {
 /// Apply the canonical transform/compression pipeline before publishing any final artifact.
 pub fn finalize_wasm_artifact(
     finalization: &WasmArtifactFinalization<'_>,
+    toolchain: &BuildToolchain,
 ) -> Result<Vec<ArtifactTransformOutput>, Box<dyn std::error::Error>> {
+    toolchain.require_profile(finalization.profile)?;
     stage_and_publish_artifact_set(finalization, |staged| {
-        let mut transforms = vec![maybe_shrink_wasm_artifact(&staged.wasm_path)?];
+        let mut transforms = vec![shrink_wasm_artifact(
+            toolchain.ic_wasm(),
+            &staged.wasm_path,
+        )?];
         if finalization.embed_candid {
-            let metadata = embed_candid_metadata(&staged.wasm_path, &staged.did_path)?;
+            let metadata =
+                embed_candid_metadata(toolchain.ic_wasm(), &staged.wasm_path, &staged.did_path)?;
             if metadata.outcome == ArtifactTransformOutcome::Applied {
                 validate_embedded_public_candid(&staged.wasm_path, &staged.did_path)?;
             }
@@ -80,6 +87,7 @@ pub fn finalize_wasm_artifact(
         }
         transforms.push(optimize_release_wasm_artifact(
             finalization.profile,
+            toolchain.binaryen(),
             &staged.wasm_path,
         )?);
         enforce_wasm_code_section_limit(finalization.build_network, &staged.wasm_path)?;
@@ -233,27 +241,12 @@ fn validate_embedded_public_candid(
     Ok(())
 }
 
-// Apply `ic-wasm shrink` when available; absence of the optional tool is not
-// fatal, but execution failures are surfaced because they usually mean bad IO.
-pub fn maybe_shrink_wasm_artifact(
+fn shrink_wasm_artifact(
+    tool: &IcWasmExecutable,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    maybe_shrink_wasm_artifact_with_command(IC_WASM_TOOL, wasm_path)
-}
-
-fn maybe_shrink_wasm_artifact_with_command(
-    command_name: &str,
-    wasm_path: &Path,
-) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    let Some(tool_version) = optional_ic_wasm_version(command_name)? else {
-        return Ok(transform_output(
-            ArtifactTransformKind::Shrink,
-            None,
-            ArtifactTransformOutcome::ToolUnavailable,
-        ));
-    };
     let shrunk_path = wasm_path.with_extension("wasm.shrunk");
-    let mut command = Command::new(command_name);
+    let mut command = Command::new(tool.path());
     command
         .arg(wasm_path)
         .arg("-o")
@@ -264,14 +257,16 @@ fn maybe_shrink_wasm_artifact_with_command(
             fs::rename(shrunk_path, wasm_path)?;
             Ok(transform_output(
                 ArtifactTransformKind::Shrink,
-                Some(tool_version),
+                Some(tool.version_identity().to_string()),
                 ArtifactTransformOutcome::Applied,
             ))
         }
         Ok(output) => {
             let _ = fs::remove_file(shrunk_path);
             Err(format!(
-                "ic-wasm shrink failed for {} with status {}: {}",
+                "ic-wasm shrink failed using {} ({}) for {} with status {}: {}",
+                tool.path().display(),
+                tool.version_identity(),
                 wasm_path.display(),
                 output.status,
                 String::from_utf8_lossy(&output.stderr).trim()
@@ -280,7 +275,12 @@ fn maybe_shrink_wasm_artifact_with_command(
         }
         Err(err) => {
             let _ = fs::remove_file(shrunk_path);
-            Err(format!("failed to run ic-wasm for {}: {err}", wasm_path.display()).into())
+            Err(format!(
+                "failed to run ic-wasm at {} for {}: {err}",
+                tool.path().display(),
+                wasm_path.display()
+            )
+            .into())
         }
     }
 }
@@ -320,25 +320,11 @@ fn deterministic_gzip_bytes(bytes: &[u8]) -> Result<Vec<u8>, std::io::Error> {
 // `icp canister metadata <canister> candid:service` introspection works during
 // development. Production `ic` builds skip this path.
 pub fn embed_candid_metadata(
+    tool: &IcWasmExecutable,
     wasm_path: &Path,
     did_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    embed_candid_metadata_with_command(IC_WASM_TOOL, wasm_path, did_path)
-}
-
-fn embed_candid_metadata_with_command(
-    command_name: &str,
-    wasm_path: &Path,
-    did_path: &Path,
-) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    let Some(tool_version) = optional_ic_wasm_version(command_name)? else {
-        return Ok(transform_output(
-            ArtifactTransformKind::CandidMetadata,
-            None,
-            ArtifactTransformOutcome::ToolUnavailable,
-        ));
-    };
-    let mut command = Command::new(command_name);
+    let mut command = Command::new(tool.path());
     command
         .arg(wasm_path)
         .args(["-o"])
@@ -357,7 +343,9 @@ fn embed_candid_metadata_with_command(
 
     if !output.status.success() {
         return Err(format!(
-            "ic-wasm metadata failed for {}: {}",
+            "ic-wasm metadata failed using {} ({}) for {}: {}",
+            tool.path().display(),
+            tool.version_identity(),
             wasm_path.display(),
             String::from_utf8_lossy(&output.stderr)
         )
@@ -366,44 +354,14 @@ fn embed_candid_metadata_with_command(
 
     Ok(transform_output(
         ArtifactTransformKind::CandidMetadata,
-        Some(tool_version),
+        Some(tool.version_identity().to_string()),
         ArtifactTransformOutcome::Applied,
     ))
 }
 
-fn optional_ic_wasm_version(
-    command_name: &str,
-) -> Result<Option<String>, Box<dyn std::error::Error>> {
-    let mut command = Command::new(command_name);
-    command.arg("--version");
-    let output = match output_with_executable_busy_retry(&mut command) {
-        Ok(output) => output,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(err) => return Err(format!("failed to inspect ic-wasm version: {err}").into()),
-    };
-    if !output.status.success() {
-        return Err(format!(
-            "ic-wasm --version failed with status {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        )
-        .into());
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let version = if stdout.trim().is_empty() {
-        stderr.trim()
-    } else {
-        stdout.trim()
-    };
-    if version.is_empty() {
-        return Err("ic-wasm --version returned no version identity".into());
-    }
-    Ok(Some(version.to_string()))
-}
-
 fn optimize_release_wasm_artifact(
     profile: CanisterBuildProfile,
+    tool: Option<&BinaryenExecutable>,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
     if profile != CanisterBuildProfile::Release {
@@ -411,8 +369,8 @@ fn optimize_release_wasm_artifact(
             ArtifactTransformKind::Optimize,
         ));
     }
-    let tool = resolve_required_binaryen()?;
-    optimize_release_wasm_artifact_with_tool(&tool, wasm_path)
+    let tool = tool.expect("release build toolchain always contains Binaryen");
+    optimize_release_wasm_artifact_with_tool(tool, wasm_path)
 }
 
 #[cfg(test)]

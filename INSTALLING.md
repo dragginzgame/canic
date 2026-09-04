@@ -21,17 +21,21 @@ make install-dev
 
 The maintainer setup installs the repository-pinned ICP CLI, `ic-wasm`,
 Binaryen, Candid tools and `sccache`, and configures the repository pre-commit
-formatter. Release artifact builds require the checksum-bound Binaryen 132
-`wasm-opt`; they fail rather than emitting unoptimized release bytes when it is
-missing or has a different identity or executable SHA-256. Published CLI users
-can install the governed optimizer without a Canic checkout:
+formatter. Every artifact build requires `ic-wasm 0.11.1`; release builds also
+require the checksum-bound Binaryen 132 `wasm-opt`. Builds fail during tool
+preflight rather than accepting another version or emitting noncanonical
+bytes. Published CLI users can install both governed Wasm tools without a
+Canic checkout:
 
 ```bash
 canic toolchain install
 ```
 
-The command prints the admitted path under `~/.local/bin`; place that directory
-before any other `wasm-opt` on `PATH`. Explicit
+The command prints both admitted executable paths under `~/.local/bin`. Canic
+prefers those canonical paths and passes them directly to every transform, so
+shell `PATH` changes are not required for `canic build`; PATH is used only when
+the canonical installation is absent. Installation warns when `HOME=/`, while
+missing-tool diagnostics name the canonical path that was checked. Explicit
 `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values remain
 authoritative. Otherwise Make and Canic artifact builds discover `sccache` and
 keep deterministic Wasm builds non-incremental.

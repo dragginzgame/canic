@@ -50,6 +50,7 @@ use canic_core::{
         component_provisioning_plan::ComponentProvisioningPlanOps, fleet_registry::FleetRegistryOps,
     },
     dto::{
+        canister::CanisterStatusType,
         component_provisioning::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
             FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
@@ -214,6 +215,17 @@ pub enum CurrentProtocolError {
     #[error("current Fleet protocol Registry is not in its deterministic initial chain: {0}")]
     RegistrySequenceConflict(String),
 
+    #[error("current Fleet protocol Registry {kind:?} {name} has no exact Principal")]
+    RegistryPrincipalMissing {
+        kind: DesiredCanisterKind,
+        name: String,
+    },
+
+    #[error(
+        "current Fleet protocol Registry Store {store} controller {controller} has no exact Principal"
+    )]
+    RegistryStoreControllerPrincipalMissing { store: String, controller: String },
+
     #[error("current Fleet protocol response does not match its reviewed action")]
     ResponseMismatch,
 
@@ -232,6 +244,48 @@ pub enum CurrentProtocolError {
         #[source]
         source: Box<Self>,
     },
+
+    #[error(
+        "terminal Fleet canister {canister} controller authority differs: expected {expected:?}, observed {observed:?}"
+    )]
+    TerminalCanisterControllers {
+        canister: Principal,
+        expected: Vec<Principal>,
+        observed: Vec<Principal>,
+    },
+
+    #[error(
+        "terminal Fleet canister {canister} module differs: expected {expected}, observed {observed:?}"
+    )]
+    TerminalCanisterModule {
+        canister: Principal,
+        expected: String,
+        observed: Option<String>,
+    },
+
+    #[error(
+        "terminal Fleet canister {canister} runtime status differs: expected {expected:?}, observed {observed:?}"
+    )]
+    TerminalCanisterStatus {
+        canister: Principal,
+        expected: CanisterStatusType,
+        observed: CanisterStatusType,
+    },
+
+    #[error(
+        "terminal Fleet canister {canister} Directory module differs: expected {expected}, observed {observed}"
+    )]
+    TerminalDirectoryModule {
+        canister: Principal,
+        expected: String,
+        observed: String,
+    },
+
+    #[error("current protocol sidecar changed: {}", path.display())]
+    ProtocolSidecarChanged { path: PathBuf },
+
+    #[error("current protocol sidecar is not a regular no-follow file: {}", path.display())]
+    ProtocolSidecarNotRegular { path: PathBuf },
 
     #[error(transparent)]
     ComponentPoolCapacity(#[from] RootPoolCapacityError),
@@ -752,17 +806,15 @@ pub(super) fn query_current_root_authorities(
     }) {
         let principal = retained_principal(desired, state, &configured.name)
             .and_then(|principal| Principal::from_text(principal).ok())
-            .ok_or_else(|| {
-                CurrentProtocolError::RegistrySequenceConflict(format!(
-                    "Root {} has no exact Principal",
-                    configured.name
-                ))
+            .ok_or_else(|| CurrentProtocolError::RegistryPrincipalMissing {
+                kind: DesiredCanisterKind::Root,
+                name: configured.name.clone(),
             })?;
         let response: RootStatusResponseFragment = query_with_candid(
             icp,
             root_candid,
             principal,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_ROOT_STATUS,
             &RootStatusRequestFragment::FleetAuthority,
         )?;
         let RootStatusResponseFragment::FleetAuthority(authority) = response else {
@@ -772,7 +824,7 @@ pub(super) fn query_current_root_authorities(
             icp,
             store_candid,
             authority.wasm_store_authority.wasm_store,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_WASM_STORE_STATUS,
             &StoreStatusRequest::Authority,
         )?;
         let StoreStatusResponse::Authority(store_authority) = store_response else {
@@ -923,7 +975,7 @@ pub(super) fn observe(
                     icp,
                     &resolved.candid_path,
                     resolved.target,
-                    protocol::CANIC_STATUS,
+                    protocol::CANIC_ROOT_STATUS,
                     &RootStatusRequestFragment::ComponentRegistry(request.clone()),
                 );
             let response = match response {
@@ -1012,6 +1064,9 @@ fn component_provisioning_observation(
         failure.failed_at_ns = 0;
     }
     let mut observation = observation(applied, &durable_progress)?;
+    observation
+        .estate_funding_required
+        .clone_from(&status.estate_funding_required);
     observation.progress_identity = format!(
         "component-provisioning:phase={:?}:accepted_roots={}/{}:provisioned_roots={}:directory_roots={}/{}:runtime_roots={}/{}:components={}:pending_failure={:?}:sha256={}",
         status.phase,
@@ -1146,7 +1201,7 @@ pub(super) fn apply(
                 icp,
                 &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COMMAND,
+                protocol::CANIC_WASM_STORE_COMMAND,
                 &StoreCommand::PrepareChunkSet(request.clone()),
             )?;
             let StoreCommandResponse::PrepareChunkSet(response) = response else {
@@ -1166,7 +1221,7 @@ pub(super) fn apply(
                 icp,
                 &resolved.candid_path,
                 resolved.target,
-                protocol::CANIC_COMMAND,
+                protocol::CANIC_WASM_STORE_COMMAND,
                 &StoreCommand::StageManifest(request.clone()),
             )?;
             if !matches!(response, StoreCommandResponse::StageManifest) {
@@ -1236,6 +1291,7 @@ fn observation<T: CandidType>(
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     Ok(EffectObservation {
         applied,
+        estate_funding_required: None,
         post_cycles: None,
         progress_identity: canic_core::cdk::utils::hash::sha256_hex(&bytes),
         retry: EffectRetry::None,
@@ -1245,6 +1301,7 @@ fn observation<T: CandidType>(
 fn unavailable_observation() -> EffectObservation {
     EffectObservation {
         applied: false,
+        estate_funding_required: None,
         post_cycles: None,
         progress_identity: "unavailable".to_string(),
         retry: EffectRetry::None,
@@ -1315,7 +1372,7 @@ fn query_store_staging(
         icp,
         &resolved.candid_path,
         resolved.target,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_WASM_STORE_STATUS,
         &StoreStatusRequest::Template(TemplateLookupRequest {
             template_id: template_id.clone(),
             version: version.clone(),
@@ -1337,7 +1394,7 @@ fn query_root_operation(
         icp,
         candid_path,
         root,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_ROOT_STATUS,
         &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
     );
     let response = match response {
@@ -1565,11 +1622,9 @@ fn compile_current_root_entries(
         }
         let root_principal = retained_principal(desired, state, &root.name)
             .and_then(|principal| Principal::from_text(principal).ok())
-            .ok_or_else(|| {
-                CurrentProtocolError::RegistrySequenceConflict(format!(
-                    "Root {} has no exact Principal",
-                    root.name
-                ))
+            .ok_or_else(|| CurrentProtocolError::RegistryPrincipalMissing {
+                kind: DesiredCanisterKind::Root,
+                name: root.name.clone(),
             })?;
         let authority = root_authorities
             .iter()
@@ -1632,11 +1687,9 @@ fn require_exact_store(
     };
     let store_principal = retained_principal(desired, state, &store.name)
         .and_then(|principal| Principal::from_text(principal).ok())
-        .ok_or_else(|| {
-            CurrentProtocolError::RegistrySequenceConflict(format!(
-                "Store {} has no exact Principal",
-                store.name
-            ))
+        .ok_or_else(|| CurrentProtocolError::RegistryPrincipalMissing {
+            kind: DesiredCanisterKind::Store,
+            name: store.name.clone(),
         })?;
     let mut configured_controllers = store
         .controllers
@@ -1652,12 +1705,12 @@ fn require_exact_store(
     for controller in &store.controller_canisters {
         let principal = retained_principal(desired, state, controller)
             .and_then(|principal| Principal::from_text(principal).ok())
-            .ok_or_else(|| {
-                CurrentProtocolError::RegistrySequenceConflict(format!(
-                    "Store {} controller {controller} has no exact Principal",
-                    store.name
-                ))
-            })?;
+            .ok_or_else(
+                || CurrentProtocolError::RegistryStoreControllerPrincipalMissing {
+                    store: store.name.clone(),
+                    controller: controller.clone(),
+                },
+            )?;
         configured_controllers.push(principal);
     }
     configured_controllers.sort_unstable();
@@ -2157,7 +2210,7 @@ pub(super) fn query_registry(
         icp,
         candid,
         coordinator,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_COORDINATOR_STATUS,
         &CoordinatorStatusRequest::Registry,
     )?;
     let CoordinatorStatusResponse::Registry(registry) = response else {
@@ -2179,7 +2232,7 @@ pub(super) fn query_operation(
         icp,
         candid,
         coordinator,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_COORDINATOR_STATUS,
         &CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
     );
     let response = match response {

@@ -2213,6 +2213,7 @@ mod tests {
                         minimum_size: 0,
                         maximum_size: 0,
                         canister_cycles: Cycles::new(1),
+                        creation_execution_margin: Cycles::new(1),
                     },
                     cycles_funding: CyclesFundingBudget {
                         window_secs: 1,

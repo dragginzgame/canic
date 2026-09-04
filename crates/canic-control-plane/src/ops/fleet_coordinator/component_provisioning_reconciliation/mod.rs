@@ -109,6 +109,7 @@ fn canonical_root_acceptance_response(
         fleet_registry: record.plan.fleet_registry.clone(),
         configuration_digest: record.plan.configuration_digest,
         fleet_subnet_root: batch.root.fleet_subnet_root,
+        estate_funding_required: None,
         phase: RootComponentProvisioningPhase::Accepted,
         placement_count,
         component_count,

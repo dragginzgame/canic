@@ -383,6 +383,7 @@ fn fixture() -> (
             runtimes_activated_at_ns: 6,
         },
         last_root_failure: None,
+        estate_funding_required: None,
     };
     (configuration, provisioning)
 }
@@ -432,6 +433,7 @@ fn root_binding(authority: FleetRegistryAuthority, root: u8) -> FleetSubnetRootB
                 minimum_size: 2,
                 maximum_size: 4,
                 canister_cycles: Cycles::new(1),
+                creation_execution_margin: Cycles::new(1),
             },
             cycles_funding: CyclesFundingBudget {
                 window_secs: 1,

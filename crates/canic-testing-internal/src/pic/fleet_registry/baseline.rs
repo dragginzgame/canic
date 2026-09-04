@@ -54,7 +54,17 @@ mod tests {
     #[cfg(test)]
     use canic::dto::runtime::{CanicRuntimeStatus, TimerRegistrationStatus};
     #[cfg(test)]
-    use canic::dto::{fleet_admission::FleetAdmissionProjectionStatusResponse, page::PageRequest};
+    use canic::dto::{
+        cycles::CycleTrackerEntry,
+        fleet_admission::FleetAdmissionProjectionStatusResponse,
+        metrics::{MetricEntry, MetricsKind},
+        observability::{
+            CanisterObservabilityRequest, CanisterObservabilityResponse,
+            FleetCanisterObservabilityRequest,
+        },
+        page::{Page, PageRequest},
+        role::{CycleBalanceStatusResponse, MetricsStatusRequest},
+    };
     use canic::ids::ManagedCanisterBinding;
     use canic::{
         CANIC_WASM_CHUNK_BYTES,
@@ -308,6 +318,8 @@ mod tests {
         ImportPoolCanister(PoolCanisterRequest),
         MaintainPool,
         #[cfg(test)]
+        ObserveCanister(FleetCanisterObservabilityRequest),
+        #[cfg(test)]
         PrepareAuthoritySnapshot(AuthoritySnapshotRequest),
         PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
         PrepareFleetActivation,
@@ -320,8 +332,8 @@ mod tests {
         SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
     }
 
-    #[derive(CandidType, Debug, Deserialize)]
-    #[allow(
+    #[derive(CandidType, Deserialize)]
+    #[expect(
         clippy::large_enum_variant,
         reason = "the direct Root wire decoder changes size across test-only variants"
     )]
@@ -331,6 +343,8 @@ mod tests {
         #[cfg(test)]
         InspectCanister(CanisterStatusResponse),
         MaintainPool(PoolMaintenanceResponse),
+        #[cfg(test)]
+        ObserveCanister(CanisterObservabilityResponse),
         OperationAccepted(OperationReceipt),
         #[cfg(test)]
         PrepareAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
@@ -351,12 +365,18 @@ mod tests {
         ComponentRegistry(RootComponentRegistryPreparationRequest),
         #[cfg(test)]
         ComponentRegistryActivePartition(ComponentRegistryActivePartitionRequest),
+        #[cfg(test)]
+        CycleBalance,
+        #[cfg(test)]
+        CycleHistory(PageRequest),
         FleetAuthority,
         #[cfg(test)]
         Funding,
         Inventory,
         Operation(OperationStatusRequest),
         Pool(CanisterPoolStatusRequest),
+        #[cfg(test)]
+        Metrics(MetricsStatusRequest),
         #[cfg(test)]
         Runtime,
     }
@@ -375,12 +395,18 @@ mod tests {
         ComponentRegistry(RootComponentRegistryStatusResponse),
         #[cfg(test)]
         ComponentRegistryActivePartition(ComponentRegistryActivePartitionResponse),
+        #[cfg(test)]
+        CycleBalance(CycleBalanceStatusResponse),
+        #[cfg(test)]
+        CycleHistory(Page<CycleTrackerEntry>),
         FleetAuthority(FleetSubnetRootAuthority),
         #[cfg(test)]
         Funding(RootFundingStatusResponse),
         Inventory(FleetSubnetRootCanisterSummary),
         Operation(RootOperationStatusResponse),
         Pool(CanisterPoolResponse),
+        #[cfg(test)]
+        Metrics(Page<MetricEntry>),
         #[cfg(test)]
         Runtime(Box<CanicRuntimeStatus>),
     }
@@ -395,12 +421,16 @@ mod tests {
             )
         )]
         Binding,
+        #[cfg(test)]
+        CycleHistory(PageRequest),
         Operation(OperationStatusRequest),
     }
 
-    #[derive(CandidType, Debug, Deserialize)]
+    #[derive(CandidType, Deserialize)]
     enum ManagedStatusResponseFragment {
         Binding(Box<ManagedCanisterBinding>),
+        #[cfg(test)]
+        CycleHistory(Page<CycleTrackerEntry>),
         Operation(Box<ManagedOperationStatusResponseFragment>),
     }
 
@@ -519,8 +549,227 @@ mod tests {
         root: Principal,
         request: RootStatusRequestFragment,
     ) -> Result<RootStatusResponseFragment, Error> {
-        pic.query_candid(root, canic::protocol::CANIC_STATUS, (request,))
+        pic.query_candid(root, canic::protocol::CANIC_ROOT_STATUS, (request,))
             .expect("Root status transport")
+    }
+
+    #[cfg(test)]
+    fn controller_authority_unavailable<T>(result: &Result<T, Error>) -> bool {
+        matches!(
+            result,
+            Err(error)
+                if error.code()
+                    == canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+        )
+    }
+
+    #[cfg(test)]
+    fn application_rejection<T>(result: Result<T, Error>, context: &str) -> Error {
+        match result {
+            Err(error) => error,
+            Ok(_) => panic!("{context}"),
+        }
+    }
+
+    #[cfg(test)]
+    fn validate_root_sensitive_observation<F>(
+        pic: &PocketIc,
+        root: Principal,
+        outsider: Principal,
+        request: F,
+        accepted: fn(&RootStatusResponseFragment) -> bool,
+    ) -> Result<(), ActiveComponentRegistryBaselineError>
+    where
+        F: Fn() -> RootStatusRequestFragment,
+    {
+        let denied: Result<RootStatusResponseFragment, Error> = pic.query_candid_as(
+            root,
+            outsider,
+            canic::protocol::CANIC_ROOT_STATUS,
+            (request(),),
+        )?;
+        if !controller_authority_unavailable(&denied) {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Root sensitive observability accepted a non-controller".to_string(),
+            ));
+        }
+        let response = baseline_application_result(
+            root_status(pic, root, request()),
+            "query controller-authenticated Root observability",
+        )?;
+        if !accepted(&response) {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Root sensitive observability returned the wrong response variant".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn validate_store_sensitive_observation<F>(
+        pic: &PocketIc,
+        store: Principal,
+        controller: Principal,
+        outsider: Principal,
+        request: F,
+        accepted: fn(&StoreStatusResponse) -> bool,
+    ) -> Result<(), ActiveComponentRegistryBaselineError>
+    where
+        F: Fn() -> StoreStatusRequest,
+    {
+        let denied: Result<StoreStatusResponse, Error> = pic.query_candid_as(
+            store,
+            outsider,
+            canic::protocol::CANIC_WASM_STORE_STATUS,
+            (request(),),
+        )?;
+        if !controller_authority_unavailable(&denied) {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Store sensitive observability accepted a non-controller".to_string(),
+            ));
+        }
+        let response: Result<StoreStatusResponse, Error> = pic.query_candid_as(
+            store,
+            controller,
+            canic::protocol::CANIC_WASM_STORE_STATUS,
+            (request(),),
+        )?;
+        let response = baseline_application_result(
+            response,
+            "query controller-authenticated Store observability",
+        )?;
+        if !accepted(&response) {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Store sensitive observability returned the wrong response variant".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn validate_sensitive_observability_authority(
+        pic: &PocketIc,
+        metadata: &ActiveComponentRegistryBaselineMetadata,
+    ) -> Result<(), ActiveComponentRegistryBaselineError> {
+        let outsider = Principal::from_slice(&[0x7f; 29]);
+        let page = || PageRequest {
+            limit: 1,
+            offset: 0,
+        };
+
+        validate_root_sensitive_observation(
+            pic,
+            metadata.root,
+            outsider,
+            || RootStatusRequestFragment::CycleBalance,
+            matches_root_cycle_balance,
+        )?;
+        validate_root_sensitive_observation(
+            pic,
+            metadata.root,
+            outsider,
+            || RootStatusRequestFragment::CycleHistory(page()),
+            matches_root_cycle_history,
+        )?;
+        validate_root_sensitive_observation(
+            pic,
+            metadata.root,
+            outsider,
+            || {
+                RootStatusRequestFragment::Metrics(MetricsStatusRequest {
+                    kind: MetricsKind::Runtime,
+                    page: page(),
+                })
+            },
+            matches_root_metrics,
+        )?;
+        validate_store_sensitive_observation(
+            pic,
+            metadata.wasm_store,
+            metadata.root,
+            outsider,
+            || StoreStatusRequest::CycleBalance,
+            matches_store_cycle_balance,
+        )?;
+        validate_store_sensitive_observation(
+            pic,
+            metadata.wasm_store,
+            metadata.root,
+            outsider,
+            || StoreStatusRequest::CycleHistory(page()),
+            matches_store_cycle_history,
+        )?;
+
+        let direct_denied: Result<ManagedStatusResponseFragment, Error> = pic.query_candid_as(
+            metadata.issuer.canister_id,
+            outsider,
+            canic::protocol::CANIC_STATUS,
+            (ManagedStatusRequestFragment::CycleHistory(page()),),
+        )?;
+        if !controller_authority_unavailable(&direct_denied) {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "managed cycle history accepted a non-controller".to_string(),
+            ));
+        }
+
+        let relay_request = || {
+            RootCommandFragment::ObserveCanister(FleetCanisterObservabilityRequest {
+                canister_id: metadata.issuer.canister_id,
+                request: CanisterObservabilityRequest::CycleHistory(page()),
+            })
+        };
+        let relay_denied: Result<RootCommandResponseFragment, Error> = pic.update_candid_as(
+            metadata.root,
+            outsider,
+            canic::protocol::CANIC_ROOT_COMMAND,
+            (relay_request(),),
+        )?;
+        if !controller_authority_unavailable(&relay_denied) {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Root observability relay accepted a non-controller".to_string(),
+            ));
+        }
+        let relayed: Result<RootCommandResponseFragment, Error> = pic.update_candid(
+            metadata.root,
+            canic::protocol::CANIC_ROOT_COMMAND,
+            (relay_request(),),
+        )?;
+        if !matches!(
+            baseline_application_result(relayed, "relay managed cycle history through Root")?,
+            RootCommandResponseFragment::ObserveCanister(
+                CanisterObservabilityResponse::CycleHistory(_)
+            )
+        ) {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Root observability relay returned the wrong response variant".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    const fn matches_root_cycle_balance(response: &RootStatusResponseFragment) -> bool {
+        matches!(response, RootStatusResponseFragment::CycleBalance(_))
+    }
+
+    #[cfg(test)]
+    const fn matches_root_cycle_history(response: &RootStatusResponseFragment) -> bool {
+        matches!(response, RootStatusResponseFragment::CycleHistory(_))
+    }
+
+    #[cfg(test)]
+    const fn matches_root_metrics(response: &RootStatusResponseFragment) -> bool {
+        matches!(response, RootStatusResponseFragment::Metrics(_))
+    }
+
+    #[cfg(test)]
+    const fn matches_store_cycle_balance(response: &StoreStatusResponse) -> bool {
+        matches!(response, StoreStatusResponse::CycleBalance(_))
+    }
+
+    #[cfg(test)]
+    const fn matches_store_cycle_history(response: &StoreStatusResponse) -> bool {
+        matches!(response, StoreStatusResponse::CycleHistory(_))
     }
 
     #[cfg(test)]
@@ -533,7 +782,7 @@ mod tests {
             .query_candid_as(
                 canister,
                 root,
-                canic::protocol::CANIC_STATUS,
+                canic::protocol::CANIC_ROOT_STATUS,
                 (ManagedStatusRequestFragment::Binding,),
             )
             .expect("managed binding status transport");
@@ -644,7 +893,7 @@ mod tests {
             .query_candid_as(
                 root,
                 caller,
-                canic::protocol::CANIC_STATUS,
+                canic::protocol::CANIC_ROOT_STATUS,
                 (RootStatusRequestFragment::Pool(CanisterPoolStatusRequest {
                     start_after: None,
                     limit: 256,
@@ -665,21 +914,21 @@ mod tests {
         context: &str,
     ) -> Result<(), ActiveComponentRegistryBaselineError>
     where
-        I: IntoIterator<Item = (L, Principal, Principal)>,
+        I: IntoIterator<Item = (L, Principal, Principal, &'static str)>,
         L: Into<String>,
     {
         let targets = targets
             .into_iter()
-            .map(|(label, canister_id, diagnostic_sender)| {
-                (label.into(), canister_id, diagnostic_sender)
+            .map(|(label, canister_id, diagnostic_sender, endpoint)| {
+                (label.into(), canister_id, diagnostic_sender, endpoint)
             })
             .collect::<Vec<_>>();
         let mut observations = Vec::with_capacity(targets.len());
         for _ in 0..tick_limit {
             observations.clear();
             let mut query_failures = Vec::new();
-            for (label, canister_id, _) in &targets {
-                match fetch_role_overview_readiness(pic, *canister_id) {
+            for (label, canister_id, _, endpoint) in &targets {
+                match fetch_role_overview_readiness(pic, *canister_id, endpoint) {
                     Ok(observation) => observations.push((label, *canister_id, observation)),
                     Err(error) => query_failures.push(RoleOverviewQueryFailure {
                         label: label.clone(),
@@ -693,7 +942,7 @@ mod tests {
                     pic,
                     targets
                         .iter()
-                        .map(|(label, canister_id, diagnostic_sender)| {
+                        .map(|(label, canister_id, diagnostic_sender, _)| {
                             (label.clone(), *canister_id, *diagnostic_sender)
                         }),
                     context,
@@ -718,7 +967,7 @@ mod tests {
                 .iter()
                 .zip(&observations)
                 .filter(|(_, (_, _, observation))| !observation.is_ready())
-                .map(|((label, canister_id, diagnostic_sender), _)| {
+                .map(|((label, canister_id, diagnostic_sender, _), _)| {
                     (label.clone(), *canister_id, *diagnostic_sender)
                 }),
             context,
@@ -739,10 +988,11 @@ mod tests {
     fn fetch_role_overview_readiness(
         pic: &PocketIc,
         canister_id: Principal,
+        endpoint: &str,
     ) -> Result<RoleOverviewReadinessObservation, CandidCallError> {
         match pic.query_candid::<Result<RoleOverviewStatusResponseFragment, Error>, _>(
             canister_id,
-            canic::protocol::CANIC_STATUS,
+            endpoint,
             (RoleOverviewStatusRequestFragment::Overview,),
         ) {
             Ok(Ok(RoleOverviewStatusResponseFragment::Overview(overview))) => {
@@ -778,8 +1028,12 @@ mod tests {
         coordinator: Principal,
         request: CoordinatorStatusRequest,
     ) -> Result<CoordinatorStatusResponse, Error> {
-        pic.query_candid(coordinator, canic::protocol::CANIC_STATUS, (request,))
-            .expect("Coordinator status transport")
+        pic.query_candid(
+            coordinator,
+            canic::protocol::CANIC_COORDINATOR_STATUS,
+            (request,),
+        )
+        .expect("Coordinator status transport")
     }
 
     #[cfg(test)]
@@ -980,8 +1234,13 @@ mod tests {
         caller: Principal,
         command: StoreCommand,
     ) -> Result<StoreCommandResponse, Error> {
-        pic.update_candid_as(store, caller, canic::protocol::CANIC_COMMAND, (command,))
-            .expect("Store command transport")
+        pic.update_candid_as(
+            store,
+            caller,
+            canic::protocol::CANIC_WASM_STORE_COMMAND,
+            (command,),
+        )
+        .expect("Store command transport")
     }
 
     fn store_prepare_as(
@@ -1209,11 +1468,36 @@ mod tests {
             wait_for_role_overviews_ready(
                 baseline.pocket_ic(),
                 [
-                    ("coordinator", metadata.coordinator, Principal::anonymous()),
-                    ("root", metadata.root, Principal::anonymous()),
-                    ("wasm_store", metadata.wasm_store, metadata.root),
-                    ("issuer", metadata.issuer.canister_id, metadata.root),
-                    ("verifier", metadata.verifier.canister_id, metadata.root),
+                    (
+                        "coordinator",
+                        metadata.coordinator,
+                        Principal::anonymous(),
+                        canic::protocol::CANIC_COORDINATOR_STATUS,
+                    ),
+                    (
+                        "root",
+                        metadata.root,
+                        Principal::anonymous(),
+                        canic::protocol::CANIC_ROOT_STATUS,
+                    ),
+                    (
+                        "wasm_store",
+                        metadata.wasm_store,
+                        metadata.root,
+                        canic::protocol::CANIC_WASM_STORE_STATUS,
+                    ),
+                    (
+                        "issuer",
+                        metadata.issuer.canister_id,
+                        metadata.root,
+                        canic::protocol::CANIC_STATUS,
+                    ),
+                    (
+                        "verifier",
+                        metadata.verifier.canister_id,
+                        metadata.root,
+                        canic::protocol::CANIC_STATUS,
+                    ),
                 ],
                 60,
                 "restored active Component Registry baseline",
@@ -2136,12 +2420,17 @@ exec icp "$@"
 
     #[test]
     fn prepared_mainnet_root_automatically_refills_one_exact_pool_asset() {
-        assert_mainnet_refill(false, 1);
+        assert_mainnet_refill(false, 1, 1);
     }
 
     #[test]
     fn uncertain_mainnet_refill_reuses_the_exact_paid_request() {
-        assert_mainnet_refill(true, 2);
+        assert_mainnet_refill(true, 1, 2);
+    }
+
+    #[test]
+    fn autonomous_refill_margin_survives_burn_and_replays_without_another_debit() {
+        assert_mainnet_refill(true, 4, 5);
     }
 
     #[test]
@@ -2635,7 +2924,7 @@ exec icp "$@"
                             .query_candid_as(
                                 fixture.root_id,
                                 *caller,
-                                canic::protocol::CANIC_STATUS,
+                                canic::protocol::CANIC_ROOT_STATUS,
                                 (RootStatusRequestFragment::Operation(OperationStatusRequest {
                                     operation_id,
                                 }),),
@@ -2660,7 +2949,11 @@ exec icp "$@"
                     matches!(entry.status, CanisterPoolAssetStatus::Workload { .. })
                 })
                 .map(|entry| {
-                    let readiness = fetch_role_overview_readiness(&pic, entry.canister_id)
+                    let readiness = fetch_role_overview_readiness(
+                        &pic,
+                        entry.canister_id,
+                        canic::protocol::CANIC_STATUS,
+                    )
                         .map_or_else(|error| format!("query-error={error}"), |status| status.to_string());
                     format!("canister={} {readiness}", entry.canister_id)
                 })
@@ -2790,7 +3083,7 @@ exec icp "$@"
         assert_eq!(child_binding.component, *hub_binding);
         for canister in workload_principals {
             assert!(matches!(
-                fetch_role_overview_readiness(&pic, canister)
+                fetch_role_overview_readiness(&pic, canister, canic::protocol::CANIC_STATUS)
                     .expect("query managed initial-Shard readiness"),
                 RoleOverviewReadinessObservation::Ready
             ));
@@ -4206,7 +4499,7 @@ exec icp "$@"
             .query_candid_as(
                 store,
                 caller,
-                canic::protocol::CANIC_STATUS,
+                canic::protocol::CANIC_WASM_STORE_STATUS,
                 (StoreStatusRequest::Template(TemplateLookupRequest {
                     template_id: template_id.clone(),
                     version: version.clone(),
@@ -5784,23 +6077,68 @@ exec icp "$@"
     }
 
     #[cfg(test)]
-    fn assert_mainnet_refill(first_response_pending: bool, expected_request_count: u64) {
+    fn assert_mainnet_refill(
+        first_response_pending: bool,
+        required_ready_assets: u32,
+        expected_request_count: u64,
+    ) {
+        const READINESS_FLOOR: u128 = 1_900_000_000_000;
+        const EXECUTION_MARGIN: u128 = 1_000_000_000_000;
+        const MANAGEMENT_CREATION_FEE: u128 = 500_000_000_000;
+        const LEDGER_FEE: u128 = 100_000_000;
+        const REPRESENTATIVE_BURN: [u128; 4] = [100_036, 340_125, 250_092, 160_059];
+
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let (root_wasm, cycles_ledger_wasm) = build_mainnet_refill_wasms();
         let _ = build_test_wasm_store_wasm();
         let store_fixture = build_root_store_fixture();
         let pic = build_pic();
-        let created_asset = std::cell::Cell::new(None);
-        let fixture = install_bootstrapped_root_with_pool_setup(
+        let created_assets = std::cell::RefCell::new(Vec::new());
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = root_canister_config_path(&workspace_root);
+        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
             &pic,
             root_wasm,
             Principal::from_slice(&[0x41; 29]),
             store_fixture,
+            BootstrappedRootPlacement {
+                canister_pool_maximum_size: Some(8),
+                canister_pool_minimum_size: Some(required_ready_assets),
+                canister_pool_cycles: Some(Cycles::new(READINESS_FLOOR)),
+                coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &config_path,
             |pic, root| {
                 let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
-                let asset = pic.create_canister_on_subnet(None, None, root_subnet);
-                pic.set_controllers(asset, None, vec![root])
-                    .expect("prepare returned pool asset controller");
+                let assets = REPRESENTATIVE_BURN
+                    .into_iter()
+                    .take(
+                        usize::try_from(required_ready_assets)
+                            .expect("bounded Ready-pool requirement"),
+                    )
+                    .map(|burn| {
+                        let asset = pic
+                            .create_canister_with_params(
+                                None,
+                                CreateCanisterParams {
+                                    cycles: Some(READINESS_FLOOR + EXECUTION_MARGIN - burn),
+                                    settings: None,
+                                    placement: Some(CreateCanisterPlacement::SubnetId(root_subnet)),
+                                },
+                            )
+                            .expect("create returned pool asset with bounded execution burn");
+                        pic.set_controllers(asset, None, vec![root])
+                            .expect("prepare returned pool asset controller");
+                        asset
+                    })
+                    .collect::<Vec<_>>();
                 let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
                     .expect("canonical Cycles Ledger principal");
                 pic.create_canister_with_id(None, None, cycles_ledger)
@@ -5809,26 +6147,34 @@ exec icp "$@"
                     cycles_ledger,
                     cycles_ledger_wasm,
                     encode_one(CyclesLedgerStubInitArgs {
-                        canister_ids: vec![asset],
+                        canister_ids: assets.clone(),
                         expected_controllers_by_index: None,
                         expected_root: root,
                         expected_subnet: root_subnet,
-                        initial_balances: None,
+                        initial_balances: Some(vec![CyclesLedgerStubAccountBalance {
+                            balance: Nat::from(
+                                u128::from(required_ready_assets)
+                                    * (READINESS_FLOOR
+                                        + EXECUTION_MARGIN
+                                        + MANAGEMENT_CREATION_FEE
+                                        + LEDGER_FEE),
+                            ),
+                            owner: root,
+                        }]),
                         pending_first_index: first_response_pending.then_some(0),
-                        withdrawal_fee: None,
+                        withdrawal_fee: Some(Nat::from(LEDGER_FEE)),
                     })
                     .expect("encode Cycles Ledger stub init"),
                     None,
                 );
-                created_asset.set(Some(asset));
+                created_assets.replace(assets);
                 Vec::new()
             },
         );
-        let asset = created_asset.get().expect("prepared pool asset");
 
-        for _ in 0..4 {
+        for _ in 0..(required_ready_assets.saturating_mul(4).saturating_add(4)) {
             let status = root_pool_status(&pic, fixture.root_id);
-            if status.ready == 1 {
+            if status.ready == required_ready_assets {
                 break;
             }
             let RootCommandResponseFragment::MaintainPool(_) =
@@ -5840,21 +6186,46 @@ exec icp "$@"
         }
 
         let status = root_pool_status(&pic, fixture.root_id);
-        assert_eq!(status.ready, 1);
+        assert_eq!(status.ready, required_ready_assets);
         assert_eq!(status.pending_reset, 0);
-        let entry = status
-            .entries
-            .iter()
-            .find(|entry| entry.canister_id == asset)
-            .expect("automatically created inventory entry");
-        assert_eq!(entry.origin, CanisterPoolAssetOrigin::Created);
-        assert_eq!(entry.status, CanisterPoolAssetStatus::Ready);
+        for asset in created_assets.borrow().iter() {
+            let entry = status
+                .entries
+                .iter()
+                .find(|entry| entry.canister_id == *asset)
+                .expect("automatically created inventory entry");
+            assert_eq!(entry.origin, CanisterPoolAssetOrigin::Created);
+            assert_eq!(entry.status, CanisterPoolAssetStatus::Ready);
+            assert!(entry.cycles.to_u128() >= READINESS_FLOOR);
+            assert!(entry.cycles.to_u128() < READINESS_FLOOR + EXECUTION_MARGIN);
+        }
         let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
             .expect("canonical Cycles Ledger principal");
         let request_count: u64 = pic
             .query_candid(cycles_ledger, "request_count", ())
             .expect("query ledger request count");
         assert_eq!(request_count, expected_request_count);
+        let requested_amounts: Vec<Nat> = pic
+            .query_candid(cycles_ledger, "requested_amounts", ())
+            .expect("query exact Ledger creation amounts");
+        assert_eq!(
+            requested_amounts,
+            vec![
+                Nat::from(READINESS_FLOOR + EXECUTION_MARGIN + MANAGEMENT_CREATION_FEE);
+                usize::try_from(required_ready_assets).expect("bounded Ready-pool requirement")
+            ]
+        );
+
+        let RootCommandResponseFragment::MaintainPool(_) =
+            root_command(&pic, fixture.root_id, RootCommandFragment::MaintainPool)
+                .expect("effect-free terminal pool replay")
+        else {
+            panic!("Root returned a differently correlated pool response");
+        };
+        let replay_request_count: u64 = pic
+            .query_candid(cycles_ledger, "request_count", ())
+            .expect("query replayed ledger request count");
+        assert_eq!(replay_request_count, expected_request_count);
     }
 
     #[cfg(test)]
@@ -6416,9 +6787,11 @@ exec icp "$@"
             RootCommandFragment::SynchronizeRegistry(foreign_sync),
         );
         assert_eq!(
-            rejected
-                .expect_err("another Fleet's Registry must not enter the co-located root")
-                .code(),
+            application_rejection(
+                rejected,
+                "another Fleet's Registry must not enter the co-located root",
+            )
+            .code(),
             canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         let _ = join_and_synchronize_root(&pic, second_coordinator, &second);
@@ -6542,13 +6915,15 @@ exec icp "$@"
     #[test]
     fn active_registry_issues_component_role_attestations() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let fixture = acquire_active_component_registry();
-        super::super::role_attestation::assert_registry_bound_role_attestation(
-            fixture.pic(),
-            fixture.root,
-            &fixture.issuer,
-            &fixture.verifier,
-        );
+        for _ in 0..2 {
+            let fixture = acquire_active_component_registry();
+            super::super::role_attestation::assert_registry_bound_role_attestation(
+                fixture.pic(),
+                fixture.root,
+                &fixture.issuer,
+                &fixture.verifier,
+            );
+        }
     }
 
     #[test]
@@ -6811,12 +7186,14 @@ exec icp "$@"
             operation_id: [0xd6; 32],
             component_spec: fixture.issuer.component_spec.clone(),
         };
-        let rejected = root_command(
-            pic,
-            fixture.root,
-            RootCommandFragment::ProvisionComponent(allocation_request.clone()),
-        )
-        .expect_err("active admission transition must fence Component allocation");
+        let rejected = application_rejection(
+            root_command(
+                pic,
+                fixture.root,
+                RootCommandFragment::ProvisionComponent(allocation_request.clone()),
+            ),
+            "active admission transition must fence Component allocation",
+        );
         assert_eq!(
             rejected.code(),
             canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
@@ -7179,9 +7556,11 @@ exec icp "$@"
             RootCommandFragment::ResumeAuthoritySnapshot(snapshot_request),
         );
         assert_eq!(
-            rejected_resume
-                .expect_err("restored root authority must remain mutation-fenced")
-                .code(),
+            application_rejection(
+                rejected_resume,
+                "restored root authority must remain mutation-fenced",
+            )
+            .code(),
             canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
         let fresh_allocation = root_command(
@@ -7539,11 +7918,36 @@ exec icp "$@"
         wait_for_role_overviews_ready(
             fixture.pic(),
             [
-                ("coordinator", fixture.coordinator, Principal::anonymous()),
-                ("root", fixture.root, Principal::anonymous()),
-                ("wasm_store", fixture.wasm_store, fixture.root),
-                ("issuer", fixture.issuer.canister_id, fixture.root),
-                ("verifier", fixture.verifier.canister_id, fixture.root),
+                (
+                    "coordinator",
+                    fixture.coordinator,
+                    Principal::anonymous(),
+                    canic::protocol::CANIC_COORDINATOR_STATUS,
+                ),
+                (
+                    "root",
+                    fixture.root,
+                    Principal::anonymous(),
+                    canic::protocol::CANIC_ROOT_STATUS,
+                ),
+                (
+                    "wasm_store",
+                    fixture.wasm_store,
+                    fixture.root,
+                    canic::protocol::CANIC_WASM_STORE_STATUS,
+                ),
+                (
+                    "issuer",
+                    fixture.issuer.canister_id,
+                    fixture.root,
+                    canic::protocol::CANIC_STATUS,
+                ),
+                (
+                    "verifier",
+                    fixture.verifier.canister_id,
+                    fixture.root,
+                    canic::protocol::CANIC_STATUS,
+                ),
             ],
             60,
             "fresh active Component Registry fixture",
@@ -7820,6 +8224,8 @@ exec icp "$@"
     ) -> Result<(), ActiveComponentRegistryBaselineError> {
         let pic = baseline.pocket_ic();
         let metadata = baseline.metadata();
+        #[cfg(test)]
+        validate_sensitive_observability_authority(pic, metadata)?;
         let CoordinatorStatusResponse::Registry(registry) = baseline_application_result(
             coordinator_status(
                 pic,
@@ -9265,6 +9671,10 @@ exec icp "$@"
             (
                 "uncertain mainnet refill replay",
                 uncertain_mainnet_refill_reuses_the_exact_paid_request,
+            ),
+            (
+                "autonomous refill margin and exact replay",
+                autonomous_refill_margin_survives_burn_and_replays_without_another_debit,
             ),
             (
                 "topped-up imported pool asset refresh",

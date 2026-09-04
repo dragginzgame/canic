@@ -208,8 +208,42 @@ controller-finalization margins to that floor; retained assets keep the floor
 as their target. Creation funding, one exact Cycles Ledger creation fee and one
 exact management creation fee are included in the reviewed maximum operator
 debit before any effect. Fresh convergence does not fund a Root's default
-Ledger account and does not rely on Root pool maintenance to discover an
-unreviewed payer.
+Ledger account implicitly and does not let Root pool maintenance discover an
+unreviewed payer. When the selected current protocol will provision Components,
+the plan instead exposes one separate funding domain for every Root. The
+forecast includes top-level Components, recursive configured initial children
+and the post-provision Ready-pool floor, less eligible retained Ready assets and
+already-completed workloads. Each row reports the raw Ledger balance, Root and
+Ledger identities, creation count and amount, Ledger and management fees,
+maximum plan-owned funding and exact shortfall independently from ordinary
+managed-canister funding.
+
+When the observed account is short, the reviewed plan contains one exact
+`FundEstate` action before the first Fleet protocol effect. Canic persists the
+transfer intent before debit, uses one stable Cycles Ledger duplicate identity,
+adopts an exact duplicate receipt after a lost response and re-observes both
+the source debit and Root-account credit. Apply then queries the account again
+before protocol work. An unexpected remaining deficit persists a typed
+`EstateFundingRequired` pause and issues no protocol command; obtain and review
+a new plan rather than funding the account outside Canic. Repeating apply while
+the balance is unchanged performs no remote effect and does not rotate the
+operation or its creation identities. A lower balance, funding above the
+reviewed maximum, changed Root or Ledger, or missing account observation also
+requires a newly reviewed plan rather than an inferred correction.
+
+Every autonomous pool creation retains its exact Ledger block, operation,
+amount, Ledger fee, management creation fee, readiness floor, execution margin
+and first observed native balance. Terminal conservation sums those receipts,
+requires unique operation and block identities, and rejects a missing,
+below-floor or impossible first observation. Later reinspection cannot replace
+the first balance. The plan-time forecast uses the complete bounded protected
+Root pool inventory, including dynamically created assets in every lifecycle
+and any durable pending creation, so a full pool fails before funding.
+This forecast does not reinterpret an already-Failed asset as reusable or
+silently top it up. A pool whose failed assets consume all configured capacity
+stops with the typed capacity failure and leaves every asset and cycle balance
+untouched; repairing those retained assets requires its own reviewed native
+funding and Root-reset operation.
 
 Planning rejects a fresh pool whose creation amount is below its readiness
 floor plus those margins. The typed failure reports the requested creation
@@ -495,14 +529,18 @@ This action is a Cycles Ledger `withdraw` to the target canister—a native
 canister top-up—not a transfer to the Principal's Ledger account. Its Ledger
 block/duplicate receipt proves issuance only. Completion requires a fresh
 Root-owned or management observation at or above `expected_native_post`.
-Canic exposes no Fleet Ensure action that substitutes a plain Ledger-account
-transfer for native funding.
+Ordinary `Fund` actions cannot substitute a Ledger-account transfer for native
+canister funding. Root estate funding is the separate, explicitly reviewed
+`FundEstate` action described above: it credits the exact protected Root Ledger
+account before autonomous creation and is never represented as native pool
+capacity.
 
-Fleet Ensure does not transfer pool funding to a Principal's Cycles Ledger
-account and no longer installs a temporary recovery canister. Pool creation and
-top-up target the native canister balance directly. An externally created
-Ledger-account credit is outside the current Fleet Ensure contract and must not
-be represented as native pool capacity or silently consumed by planning.
+Fleet Ensure no longer installs a temporary recovery canister. Direct pool
+creation and ordinary top-up target native canister balances, while
+`FundEstate` alone transfers the forecast shortfall to a Root's Cycles Ledger
+account. An externally created Ledger-account credit remains outside the
+reviewed operation and cannot be silently consumed or substituted for its
+durable transfer receipt.
 
 ## Retirement Boundary
 

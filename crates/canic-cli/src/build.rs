@@ -21,10 +21,9 @@ use crate::{
 use canic_core::ids::{BuildNetwork, CanisterRole, ReleaseBuildId};
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
 use canic_host::canister_build::{
-    CanisterArtifactBuildOptions, CanisterBuildProfile, ConfiguredCanisterArtifactBuildOutput,
-    WorkspaceBuildContext, build_workspace_canister_artifact,
-    build_workspace_canister_artifact_with_options, build_workspace_configured_canister_artifacts,
-    copy_icp_wasm_output, print_workspace_build_context_once,
+    CanisterArtifactBuildOptions, CanisterArtifactBuilder, CanisterBuildProfile,
+    ConfiguredCanisterArtifactBuildOutput, WorkspaceBuildContext, copy_icp_wasm_output,
+    print_workspace_build_context_once,
 };
 use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
@@ -215,8 +214,17 @@ where
                 "--standalone-local requires a non-Root application role".to_string(),
             ));
         }
+    }
+
+    let builder = CanisterArtifactBuilder::for_profile(context.profile)?;
+    eprintln!(
+        "Canic build tools:\n{}",
+        builder.diagnostic_lines().join("\n")
+    );
+
+    if let Some(role) = &options.role {
         print_workspace_build_context_once(&context)?;
-        let output = build_workspace_canister_artifact_with_options(
+        let output = builder.build_workspace_canister_artifact_with_options(
             &context,
             &options.artifact_build_options(),
         )?;
@@ -235,7 +243,7 @@ where
         )
         .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
         context = context.with_release_build_id(release.record.release_build_id);
-        build_app(&options, &context, &roles, started_at)?;
+        build_app(&options, &context, &roles, &builder, started_at)?;
     }
     Ok(())
 }
@@ -364,6 +372,7 @@ fn build_app(
     options: &BuildOptions,
     context: &WorkspaceBuildContext,
     roles: &[String],
+    builder: &CanisterArtifactBuilder,
     started_at: Instant,
 ) -> Result<(), BuildCommandError> {
     let style = TerminalStyle::detected();
@@ -386,7 +395,7 @@ fn build_app(
     let release_build_id = context
         .release_build_id
         .expect("complete App builds own one durable release-build identity");
-    let mut infrastructure = build_builtin_infrastructure(context)?;
+    let mut infrastructure = build_builtin_infrastructure(context, builder)?;
 
     let configured_started_at = Instant::now();
     let activity = TerminalActivity::start(format!(
@@ -394,7 +403,7 @@ fn build_app(
         roles.len(),
         context.profile.target_dir_name()
     ));
-    let build = build_workspace_configured_canister_artifacts(context, roles);
+    let build = builder.build_workspace_configured_canister_artifacts(context, roles);
     activity.finish();
     let outputs = build?;
     let configured_elapsed = configured_started_at.elapsed();
@@ -568,6 +577,7 @@ fn artifact_relative_path(icp_root: &Path, path: &Path) -> Result<String, BuildC
 
 fn build_builtin_infrastructure(
     context: &WorkspaceBuildContext,
+    builder: &CanisterArtifactBuilder,
 ) -> Result<Vec<InfrastructureCanisterArtifactBuildOutput>, BuildCommandError> {
     const BUILT_INS: [(&str, InfrastructureDeploymentScope); 2] = [
         ("fleet_coordinator", InfrastructureDeploymentScope::Fleet),
@@ -583,7 +593,7 @@ fn build_builtin_infrastructure(
             context.profile.target_dir_name()
         ));
         let started_at = Instant::now();
-        let build = build_workspace_canister_artifact(&context.with_role(*role));
+        let build = builder.build_workspace_canister_artifact(&context.with_role(*role));
         activity.finish();
         outputs.push(InfrastructureCanisterArtifactBuildOutput {
             role: (*role).to_string(),

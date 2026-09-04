@@ -207,6 +207,7 @@ fn limits() -> FleetSubnetRootLimits {
             minimum_size: 2,
             maximum_size: 2,
             canister_cycles: Cycles::new(5_000_000_000_000),
+            creation_execution_margin: Cycles::new(1_000_000_000_000),
         },
         cycles_funding: CyclesFundingBudget {
             window_secs: 3_600,

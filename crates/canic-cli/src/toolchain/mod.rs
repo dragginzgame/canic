@@ -2,7 +2,7 @@
 //!
 //! Responsibility: install checksum-authoritative external tools required by Canic builds.
 //! Does not own: release-Wasm transformation policy, Cargo toolchains, or arbitrary tool versions.
-//! Boundary: exposes the one governed Binaryen installation command without configuration axes.
+//! Boundary: exposes one governed complete Wasm-tool installation without configuration axes.
 
 use crate::{
     cli::{
@@ -11,7 +11,7 @@ use crate::{
     },
     version_text,
 };
-use canic_host::binaryen::{BinaryenToolError, install_required_binaryen};
+use canic_host::build_toolchain::{BuildToolchainError, install_required_build_toolchain};
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -20,13 +20,13 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum ToolchainCommandError {
     #[error(transparent)]
-    Binaryen(#[from] BinaryenToolError),
+    BuildToolchain(#[from] BuildToolchainError),
 
     #[error("{0}")]
     Usage(String),
 }
 
-/// Install the one checksum-authoritative release toolchain projection.
+/// Install the complete checksum-authoritative Wasm toolchain projection.
 pub fn run<I>(args: I) -> Result<(), ToolchainCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -51,8 +51,16 @@ fn run_install(args: Vec<OsString>) -> Result<(), ToolchainCommandError> {
     if !args.is_empty() {
         return Err(ToolchainCommandError::Usage(install_usage()));
     }
-    let executable = install_required_binaryen()?;
-    println!("{}", executable.path().display());
+    let installed = install_required_build_toolchain()?;
+    println!("ic-wasm={}", installed.ic_wasm().path().display());
+    println!("wasm-opt={}", installed.binaryen().path().display());
+    eprintln!(
+        "Canic builds use these admitted executable paths directly. To invoke the tools yourself, place {} on PATH.",
+        installed.install_directory().display()
+    );
+    if let Some(warning) = installed.root_home_warning() {
+        eprintln!("{warning}");
+    }
     Ok(())
 }
 
@@ -71,7 +79,7 @@ fn toolchain_command() -> ClapCommand {
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
             ClapCommand::new("install")
-                .about("Install the pinned Binaryen release optimizer")
+                .about("Install pinned ic-wasm and Binaryen tools")
                 .disable_help_flag(true),
         ))
 }
@@ -79,9 +87,9 @@ fn toolchain_command() -> ClapCommand {
 fn install_command() -> ClapCommand {
     ClapCommand::new("install")
         .bin_name("canic toolchain install")
-        .about("Install the pinned Binaryen release optimizer")
+        .about("Install pinned ic-wasm and Binaryen tools")
         .disable_help_flag(true)
-        .after_help("Output: prints the absolute admitted wasm-opt path for downstream PATH setup.")
+        .after_help("Output: prints the absolute admitted ic-wasm and wasm-opt paths.")
 }
 
 #[cfg(test)]

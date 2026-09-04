@@ -3,8 +3,9 @@
 use crate::storage::stable::canister_pool::{
     CanisterPoolAssetOriginRecord, CanisterPoolAssetRecord, CanisterPoolAssetStatusRecord,
     CanisterPoolClaimRecord, CanisterPoolCreationFailureRecord, CanisterPoolCreationProgressRecord,
-    CanisterPoolCreationRecord, CanisterPoolHandoffReceiptRecord, CanisterPoolHandoffRecord,
-    CanisterPoolRecycleResetRecord, CanisterPoolStore,
+    CanisterPoolCreationReceiptRecord, CanisterPoolCreationRecord,
+    CanisterPoolHandoffReceiptRecord, CanisterPoolHandoffRecord, CanisterPoolRecycleResetRecord,
+    CanisterPoolStore,
 };
 use crate::view::canister_pool::{
     CanisterPoolCreationFailureView, CanisterPoolCreationProgressView, CanisterPoolCreationView,
@@ -14,10 +15,12 @@ use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::error::InternalError,
     control_plane_support::model::replay::ReplayCostGuardSettlement,
+    dto::component_provisioning::RootEstateFundingRequired,
     dto::pool::{
         CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolClaim,
         CanisterPoolCreation, CanisterPoolCreationFailure, CanisterPoolCreationProgress,
-        CanisterPoolHandoff, CanisterPoolRecycleReset, CanisterPoolResponse,
+        CanisterPoolCreationReceipt, CanisterPoolHandoff, CanisterPoolRecycleReset,
+        CanisterPoolResponse,
     },
     ids::{ComponentInstanceId, FleetSubnetCanisterPoolConfig},
 };
@@ -33,11 +36,15 @@ pub struct CanisterPoolClaimKey {
 /// Complete protected identity of one Cycles Ledger pool-refill request.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CanisterPoolCreationAuthority {
+    pub creation_execution_margin: Cycles,
     pub operation_id: [u8; 32],
     pub cycles_ledger: Principal,
     pub placement_subnet: Principal,
     pub root: Principal,
     pub ledger_amount: Cycles,
+    pub ledger_fee: Cycles,
+    pub management_creation_fee: Cycles,
+    pub readiness_floor: Cycles,
     pub created_at_time_ns: u64,
 }
 
@@ -76,6 +83,7 @@ impl CanisterPoolOps {
                 CanisterPoolStore::insert(
                     canister_id,
                     CanisterPoolAssetRecord {
+                        creation_receipt: None,
                         cycles: Cycles::default(),
                         origin: CanisterPoolAssetOriginRecord::InfrastructureStore,
                         status: CanisterPoolAssetStatusRecord::Store,
@@ -114,6 +122,7 @@ impl CanisterPoolOps {
                     CanisterPoolStore::insert(
                         *canister_id,
                         CanisterPoolAssetRecord {
+                            creation_receipt: None,
                             cycles: Cycles::default(),
                             origin: CanisterPoolAssetOriginRecord::Imported,
                             status: CanisterPoolAssetStatusRecord::PendingReset,
@@ -159,6 +168,7 @@ impl CanisterPoolOps {
         now_ns: u64,
     ) -> Result<(), InternalError> {
         let mut asset = required_asset(canister_id)?;
+        retain_first_creation_observation(&mut asset, &cycles)?;
         asset.cycles = cycles;
         asset.status = match asset.status {
             CanisterPoolAssetStatusRecord::PendingReset
@@ -186,6 +196,7 @@ impl CanisterPoolOps {
     ) -> Result<(), InternalError> {
         let mut asset = required_asset(canister_id)?;
         if let Some(cycles) = observed_cycles {
+            retain_first_creation_observation(&mut asset, &cycles)?;
             asset.cycles = cycles;
         }
         asset.status = match asset.status {
@@ -531,13 +542,19 @@ impl CanisterPoolOps {
         }
         state.last_creation_timestamp_ns = authority.created_at_time_ns;
         state.creation = Some(CanisterPoolCreationRecord {
+            attempt_count: 0,
             operation_id: authority.operation_id,
             cycles_ledger: authority.cycles_ledger,
             placement_subnet: authority.placement_subnet,
             root: authority.root,
             ledger_amount: authority.ledger_amount,
+            ledger_fee: authority.ledger_fee,
+            readiness_floor: authority.readiness_floor,
+            creation_execution_margin: authority.creation_execution_margin,
+            management_creation_fee: authority.management_creation_fee,
             created_at_time_ns: authority.created_at_time_ns,
             prepared_at_ns,
+            last_attempt_at_ns: None,
             cost_guard_settlement: None,
             progress: CanisterPoolCreationProgressRecord::Intent {
                 uncertain_result: false,
@@ -550,6 +567,7 @@ impl CanisterPoolOps {
     pub fn begin_creation_attempt(
         operation_id: [u8; 32],
         settlement: ReplayCostGuardSettlement,
+        attempted_at_ns: u64,
     ) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
         let creation = state
@@ -564,6 +582,11 @@ impl CanisterPoolOps {
         }
         match creation.progress {
             CanisterPoolCreationProgressRecord::Intent { .. } => {
+                creation.attempt_count = creation
+                    .attempt_count
+                    .checked_add(1)
+                    .ok_or_else(InternalError::resource_exhausted)?;
+                creation.last_attempt_at_ns = Some(attempted_at_ns);
                 creation.cost_guard_settlement = Some(settlement);
                 creation.progress = CanisterPoolCreationProgressRecord::Intent {
                     uncertain_result: true,
@@ -573,6 +596,66 @@ impl CanisterPoolOps {
             }
             _ => Err(InternalError::conflict()),
         }
+    }
+
+    pub fn wait_for_creation_funding(
+        operation_id: [u8; 32],
+        available_cycles: u128,
+        observed_at_ns: u64,
+        retry_at_ns: u64,
+    ) -> Result<(), InternalError> {
+        let mut state = CanisterPoolStore::state();
+        let creation = state
+            .creation
+            .as_mut()
+            .ok_or_else(InternalError::unavailable)?;
+        require_creation_operation(creation, operation_id)?;
+        require_creation_cost_settled(creation)?;
+        validate_creation_funding_wait(creation, available_cycles, observed_at_ns, retry_at_ns)?;
+        match creation.progress {
+            CanisterPoolCreationProgressRecord::Intent {
+                uncertain_result: false,
+            }
+            | CanisterPoolCreationProgressRecord::WaitingForFunding { .. } => {
+                creation.progress = CanisterPoolCreationProgressRecord::WaitingForFunding {
+                    available_cycles,
+                    observed_at_ns,
+                    retry_at_ns,
+                };
+                CanisterPoolStore::set_state(state);
+                Ok(())
+            }
+            _ => Err(InternalError::conflict()),
+        }
+    }
+
+    pub fn resume_creation_after_funding(
+        operation_id: [u8; 32],
+        available_cycles: u128,
+    ) -> Result<(), InternalError> {
+        let mut state = CanisterPoolStore::state();
+        let creation = state
+            .creation
+            .as_mut()
+            .ok_or_else(InternalError::unavailable)?;
+        require_creation_operation(creation, operation_id)?;
+        require_creation_cost_settled(creation)?;
+        let CanisterPoolCreationProgressRecord::WaitingForFunding { .. } = creation.progress else {
+            return Err(InternalError::conflict());
+        };
+        let required = creation
+            .ledger_amount
+            .to_u128()
+            .checked_add(creation.ledger_fee.to_u128())
+            .ok_or_else(InternalError::resource_exhausted)?;
+        if available_cycles < required {
+            return Err(InternalError::conflict());
+        }
+        creation.progress = CanisterPoolCreationProgressRecord::Intent {
+            uncertain_result: false,
+        };
+        CanisterPoolStore::set_state(state);
+        Ok(())
     }
 
     pub fn finish_creation_attempt(
@@ -588,6 +671,30 @@ impl CanisterPoolOps {
         require_creation_attempt(creation, operation_id, settlement)?;
         creation.cost_guard_settlement = None;
         creation.progress = CanisterPoolCreationProgressRecord::Intent { uncertain_result };
+        CanisterPoolStore::set_state(state);
+        Ok(())
+    }
+
+    pub fn finish_creation_waiting_for_funding(
+        operation_id: [u8; 32],
+        settlement: ReplayCostGuardSettlement,
+        available_cycles: u128,
+        observed_at_ns: u64,
+        retry_at_ns: u64,
+    ) -> Result<(), InternalError> {
+        let mut state = CanisterPoolStore::state();
+        let creation = state
+            .creation
+            .as_mut()
+            .ok_or_else(InternalError::unavailable)?;
+        require_creation_attempt(creation, operation_id, settlement)?;
+        validate_creation_funding_wait(creation, available_cycles, observed_at_ns, retry_at_ns)?;
+        creation.cost_guard_settlement = None;
+        creation.progress = CanisterPoolCreationProgressRecord::WaitingForFunding {
+            available_cycles,
+            observed_at_ns,
+            retry_at_ns,
+        };
         CanisterPoolStore::set_state(state);
         Ok(())
     }
@@ -681,23 +788,25 @@ impl CanisterPoolOps {
         let state = CanisterPoolStore::state();
         let creation = state.creation.ok_or_else(InternalError::unavailable)?;
         require_creation_operation(&creation, operation_id)?;
-        let created_principal_is_exact = matches!(
-            creation.progress,
-            CanisterPoolCreationProgressRecord::Created {
-                canister_id: created,
-                ..
-            } if created == canister_id
-        );
-        if !created_principal_is_exact {
+        let CanisterPoolCreationProgressRecord::Created {
+            block_index,
+            canister_id: created,
+        } = creation.progress
+        else {
+            return Err(InternalError::conflict());
+        };
+        if created != canister_id {
             return Err(InternalError::conflict());
         }
+        let creation_receipt = creation_receipt(&creation, block_index);
         match CanisterPoolStore::get(&canister_id) {
-            Some(existing) if created_asset_is_adopted(&existing) => Ok(()),
+            Some(existing) if created_asset_is_adopted(&existing, &creation_receipt) => Ok(()),
             Some(_) => Err(InternalError::conflict()),
             None => {
                 CanisterPoolStore::insert(
                     canister_id,
                     CanisterPoolAssetRecord {
+                        creation_receipt: Some(creation_receipt),
                         cycles: Cycles::default(),
                         origin: CanisterPoolAssetOriginRecord::Created,
                         status: CanisterPoolAssetStatusRecord::PendingReset,
@@ -717,13 +826,12 @@ impl CanisterPoolOps {
             .creation
             .as_ref()
             .ok_or_else(InternalError::unavailable)?;
-        let CanisterPoolCreationProgressRecord::Created { canister_id, .. } = creation.progress
-        else {
+        let CanisterPoolCreationProgressRecord::Created { .. } = creation.progress else {
             return Err(InternalError::conflict());
         };
         require_creation_operation(creation, operation_id)?;
         require_creation_cost_settled(creation)?;
-        require_created_inventory_adoption(canister_id)?;
+        require_created_inventory_adoption(creation)?;
         state.next_creation_sequence = state
             .next_creation_sequence
             .checked_add(1)
@@ -828,6 +936,15 @@ impl CanisterPoolOps {
                     block_index,
                     canister_id,
                 },
+                CanisterPoolCreationProgressRecord::WaitingForFunding {
+                    available_cycles,
+                    observed_at_ns,
+                    retry_at_ns,
+                } => CanisterPoolCreationProgressView::WaitingForFunding {
+                    available_cycles,
+                    observed_at_ns,
+                    retry_at_ns,
+                },
                 CanisterPoolCreationProgressRecord::Blocked { failure } => {
                     CanisterPoolCreationProgressView::Blocked {
                         failure: creation_failure_to_view(failure),
@@ -835,15 +952,54 @@ impl CanisterPoolOps {
                 }
             };
             CanisterPoolCreationView {
+                attempt_count: creation.attempt_count,
                 operation_id: creation.operation_id,
                 cycles_ledger: creation.cycles_ledger,
                 placement_subnet: creation.placement_subnet,
                 root: creation.root,
                 ledger_amount: creation.ledger_amount,
+                ledger_fee: creation.ledger_fee,
+                readiness_floor: creation.readiness_floor,
+                creation_execution_margin: creation.creation_execution_margin,
+                management_creation_fee: creation.management_creation_fee,
                 created_at_time_ns: creation.created_at_time_ns,
+                last_attempt_at_ns: creation.last_attempt_at_ns,
                 cost_guard_settlement: creation.cost_guard_settlement,
                 progress,
             }
+        })
+    }
+
+    #[must_use]
+    pub fn estate_funding_required() -> Option<RootEstateFundingRequired> {
+        let creation = Self::pending_creation()?;
+        let CanisterPoolCreationProgressView::WaitingForFunding {
+            available_cycles,
+            retry_at_ns,
+            ..
+        } = creation.progress
+        else {
+            return None;
+        };
+        let required = creation
+            .ledger_amount
+            .to_u128()
+            .saturating_add(creation.ledger_fee.to_u128());
+        Some(RootEstateFundingRequired {
+            available: Cycles::new(available_cycles),
+            attempt_count: creation.attempt_count,
+            creation_amount: creation.ledger_amount,
+            cycles_ledger: creation.cycles_ledger,
+            execution_margin: creation.creation_execution_margin,
+            last_attempt_at_ns: creation.last_attempt_at_ns,
+            ledger_fee: creation.ledger_fee,
+            management_creation_fee: creation.management_creation_fee,
+            operation_id: creation.operation_id,
+            readiness_floor: creation.readiness_floor,
+            required: Cycles::new(required),
+            retry_at_ns,
+            root: creation.root,
+            shortfall: Cycles::new(required.saturating_sub(available_cycles)),
         })
     }
 
@@ -1023,28 +1179,24 @@ impl CanisterPoolOps {
     }
 
     #[must_use]
-    pub fn pooled_asset_count() -> u32 {
-        count_as_u32(
-            CanisterPoolStore::export()
-                .entries
-                .into_iter()
-                .filter(|entry| {
-                    matches!(
-                        entry.asset.status,
-                        CanisterPoolAssetStatusRecord::PendingReset
-                            | CanisterPoolAssetStatusRecord::Ready
-                            | CanisterPoolAssetStatusRecord::HandingOff { .. }
-                            | CanisterPoolAssetStatusRecord::Failed(_)
-                    )
-                })
-                .count(),
-        )
-    }
-
-    #[must_use]
-    pub fn standby_capacity_is_exhausted(config: &FleetSubnetCanisterPoolConfig) -> bool {
-        let pending_creation = u64::from(CanisterPoolStore::state().creation.is_some());
-        u64::from(Self::pooled_asset_count()) + pending_creation >= u64::from(config.maximum_size)
+    pub fn asset_capacity_is_exhausted(config: &FleetSubnetCanisterPoolConfig) -> bool {
+        let state = CanisterPoolStore::state();
+        let pending_creation =
+            u64::from(
+                state
+                    .creation
+                    .as_ref()
+                    .is_some_and(|creation| match creation.progress {
+                        CanisterPoolCreationProgressRecord::Created { canister_id, .. } => {
+                            CanisterPoolStore::get(&canister_id).is_none()
+                        }
+                        CanisterPoolCreationProgressRecord::Intent { .. }
+                        | CanisterPoolCreationProgressRecord::WaitingForFunding { .. }
+                        | CanisterPoolCreationProgressRecord::Blocked { .. } => true,
+                    }),
+            );
+        u64::from(Self::non_store_asset_count()) + pending_creation
+            >= u64::from(config.maximum_size)
     }
 
     /// Return every pool-side physical asset represented in a compact root summary.
@@ -1217,16 +1369,23 @@ const fn validate_config(config: &FleetSubnetCanisterPoolConfig) -> Result<(), I
     if config.canister_cycles.to_u128() == 0 {
         return Err(InternalError::invalid_input());
     }
+    if config.creation_execution_margin.to_u128() == 0 {
+        return Err(InternalError::invalid_input());
+    }
     Ok(())
 }
 
 fn creation_authority(existing: &CanisterPoolCreationRecord) -> CanisterPoolCreationAuthority {
     CanisterPoolCreationAuthority {
+        creation_execution_margin: existing.creation_execution_margin.clone(),
         operation_id: existing.operation_id,
         cycles_ledger: existing.cycles_ledger,
         placement_subnet: existing.placement_subnet,
         root: existing.root,
         ledger_amount: existing.ledger_amount.clone(),
+        ledger_fee: existing.ledger_fee.clone(),
+        management_creation_fee: existing.management_creation_fee.clone(),
+        readiness_floor: existing.readiness_floor.clone(),
         created_at_time_ns: existing.created_at_time_ns,
     }
 }
@@ -1268,20 +1427,103 @@ const fn require_creation_cost_settled(
     Ok(())
 }
 
-fn require_created_inventory_adoption(canister_id: Principal) -> Result<(), InternalError> {
-    let adopted =
-        CanisterPoolStore::get(&canister_id).is_some_and(|asset| created_asset_is_adopted(&asset));
+fn validate_creation_funding_wait(
+    creation: &CanisterPoolCreationRecord,
+    available_cycles: u128,
+    observed_at_ns: u64,
+    retry_at_ns: u64,
+) -> Result<(), InternalError> {
+    let required = creation
+        .ledger_amount
+        .to_u128()
+        .checked_add(creation.ledger_fee.to_u128())
+        .ok_or_else(InternalError::resource_exhausted)?;
+    let observation_is_monotonic = match creation.progress {
+        CanisterPoolCreationProgressRecord::WaitingForFunding {
+            observed_at_ns: previous,
+            ..
+        } => observed_at_ns >= previous,
+        _ => true,
+    };
+    let attempt_precedes_observation = creation
+        .last_attempt_at_ns
+        .is_none_or(|attempted_at_ns| attempted_at_ns <= observed_at_ns);
+    if available_cycles >= required
+        || observed_at_ns == 0
+        || retry_at_ns <= observed_at_ns
+        || !observation_is_monotonic
+        || !attempt_precedes_observation
+    {
+        return Err(InternalError::conflict());
+    }
+    Ok(())
+}
+
+fn require_created_inventory_adoption(
+    creation: &CanisterPoolCreationRecord,
+) -> Result<(), InternalError> {
+    let CanisterPoolCreationProgressRecord::Created {
+        block_index,
+        canister_id,
+    } = creation.progress
+    else {
+        return Err(InternalError::conflict());
+    };
+    let expected_receipt = creation_receipt(creation, block_index);
+    let adopted = CanisterPoolStore::get(&canister_id)
+        .is_some_and(|asset| created_asset_is_adopted(&asset, &expected_receipt));
     if !adopted {
         return Err(InternalError::conflict());
     }
     Ok(())
 }
 
-fn created_asset_is_adopted(asset: &CanisterPoolAssetRecord) -> bool {
-    if asset.origin != CanisterPoolAssetOriginRecord::Created {
-        return false;
+fn created_asset_is_adopted(
+    asset: &CanisterPoolAssetRecord,
+    expected_receipt: &CanisterPoolCreationReceiptRecord,
+) -> bool {
+    asset.origin == CanisterPoolAssetOriginRecord::Created
+        && asset.status == CanisterPoolAssetStatusRecord::PendingReset
+        && asset.creation_receipt.as_ref() == Some(expected_receipt)
+}
+
+fn creation_receipt(
+    creation: &CanisterPoolCreationRecord,
+    block_index: u64,
+) -> CanisterPoolCreationReceiptRecord {
+    CanisterPoolCreationReceiptRecord {
+        block_index,
+        operation_id: creation.operation_id,
+        cycles_ledger: creation.cycles_ledger,
+        ledger_amount: creation.ledger_amount.clone(),
+        ledger_fee: creation.ledger_fee.clone(),
+        readiness_floor: creation.readiness_floor.clone(),
+        creation_execution_margin: creation.creation_execution_margin.clone(),
+        management_creation_fee: creation.management_creation_fee.clone(),
+        first_observed_cycles: None,
     }
-    asset.status == CanisterPoolAssetStatusRecord::PendingReset
+}
+
+fn retain_first_creation_observation(
+    asset: &mut CanisterPoolAssetRecord,
+    observed: &Cycles,
+) -> Result<(), InternalError> {
+    let Some(receipt) = asset.creation_receipt.as_mut() else {
+        return Ok(());
+    };
+    if receipt.first_observed_cycles.is_some() {
+        return Ok(());
+    }
+    let funded_native_cycles = receipt
+        .ledger_amount
+        .to_u128()
+        .checked_sub(receipt.management_creation_fee.to_u128())
+        .ok_or_else(InternalError::conflict)?;
+    if observed.to_u128() > funded_native_cycles {
+        return Err(InternalError::conflict());
+    }
+    receipt.first_observed_cycles = Some(observed.clone());
+    Ok(())
 }
 
 const fn creation_is_known_unapplied(creation: &CanisterPoolCreationRecord) -> bool {
@@ -1289,10 +1531,11 @@ const fn creation_is_known_unapplied(creation: &CanisterPoolCreationRecord) -> b
         creation.progress,
         CanisterPoolCreationProgressRecord::Intent {
             uncertain_result: false
-        } | CanisterPoolCreationProgressRecord::Blocked {
-            failure: CanisterPoolCreationFailureRecord::LedgerCreationFailed
-                | CanisterPoolCreationFailureRecord::LedgerRejected
-        }
+        } | CanisterPoolCreationProgressRecord::WaitingForFunding { .. }
+            | CanisterPoolCreationProgressRecord::Blocked {
+                failure: CanisterPoolCreationFailureRecord::LedgerCreationFailed
+                    | CanisterPoolCreationFailureRecord::LedgerRejected
+            }
     )
 }
 
@@ -1313,7 +1556,7 @@ fn validate_new_asset_capacity(
     if CanisterPoolStore::get(&canister_id).is_some() {
         return Ok(());
     }
-    if CanisterPoolOps::standby_capacity_is_exhausted(config) {
+    if CanisterPoolOps::asset_capacity_is_exhausted(config) {
         return Err(InternalError::resource_exhausted());
     }
     Ok(())
@@ -1375,6 +1618,25 @@ const fn creation_to_dto(creation: CanisterPoolCreationRecord) -> CanisterPoolCr
             block_index,
             canister_id,
         },
+        CanisterPoolCreationProgressRecord::WaitingForFunding {
+            available_cycles,
+            observed_at_ns,
+            retry_at_ns,
+        } => {
+            let required_cycles = creation
+                .ledger_amount
+                .to_u128()
+                .saturating_add(creation.ledger_fee.to_u128());
+            CanisterPoolCreationProgress::WaitingForFunding {
+                available: Cycles::new(available_cycles),
+                attempt_count: creation.attempt_count,
+                last_attempt_at_ns: creation.last_attempt_at_ns,
+                observed_at_ns,
+                required: Cycles::new(required_cycles),
+                retry_at_ns,
+                shortfall: Cycles::new(required_cycles.saturating_sub(available_cycles)),
+            }
+        }
         CanisterPoolCreationProgressRecord::Blocked { failure } => {
             CanisterPoolCreationProgress::Blocked {
                 failure: creation_failure_to_dto(failure),
@@ -1382,12 +1644,18 @@ const fn creation_to_dto(creation: CanisterPoolCreationRecord) -> CanisterPoolCr
         }
     };
     CanisterPoolCreation {
+        attempt_count: creation.attempt_count,
         operation_id: creation.operation_id,
         cycles_ledger: creation.cycles_ledger,
         placement_subnet: creation.placement_subnet,
         root: creation.root,
         ledger_amount: creation.ledger_amount,
+        ledger_fee: creation.ledger_fee,
+        readiness_floor: creation.readiness_floor,
+        creation_execution_margin: creation.creation_execution_margin,
+        management_creation_fee: creation.management_creation_fee,
         created_at_time_ns: creation.created_at_time_ns,
+        last_attempt_at_ns: creation.last_attempt_at_ns,
         progress,
     }
 }
@@ -1459,6 +1727,19 @@ const fn creation_failure_from_dto(
 fn asset_to_dto(canister_id: Principal, asset: CanisterPoolAssetRecord) -> CanisterPoolAsset {
     CanisterPoolAsset {
         canister_id,
+        creation_receipt: asset
+            .creation_receipt
+            .map(|receipt| CanisterPoolCreationReceipt {
+                block_index: receipt.block_index,
+                operation_id: receipt.operation_id,
+                cycles_ledger: receipt.cycles_ledger,
+                ledger_amount: receipt.ledger_amount,
+                ledger_fee: receipt.ledger_fee,
+                readiness_floor: receipt.readiness_floor,
+                creation_execution_margin: receipt.creation_execution_margin,
+                management_creation_fee: receipt.management_creation_fee,
+                first_observed_cycles: receipt.first_observed_cycles,
+            }),
         cycles: asset.cycles,
         origin: match asset.origin {
             CanisterPoolAssetOriginRecord::InfrastructureStore => {
@@ -1530,22 +1811,35 @@ mod tests {
             minimum_size: 1,
             maximum_size: 4,
             canister_cycles: Cycles::new(100),
+            creation_execution_margin: Cycles::new(20),
         }
     }
 
     fn imported_ready(canister_id: Principal, cycles: Cycles, now_ns: u64) {
-        CanisterPoolOps::initialize_imports(&config(), &[canister_id], now_ns)
-            .expect("import asset");
+        imported_ready_with_config(&config(), canister_id, cycles, now_ns);
+    }
+
+    fn imported_ready_with_config(
+        config: &FleetSubnetCanisterPoolConfig,
+        canister_id: Principal,
+        cycles: Cycles,
+        now_ns: u64,
+    ) {
+        CanisterPoolOps::initialize_imports(config, &[canister_id], now_ns).expect("import asset");
         CanisterPoolOps::mark_ready(canister_id, cycles, now_ns).expect("ready asset");
     }
 
     fn creation_authority_for(operation_id: [u8; 32]) -> CanisterPoolCreationAuthority {
         CanisterPoolCreationAuthority {
+            creation_execution_margin: Cycles::new(100),
             operation_id,
             cycles_ledger: principal(8),
             placement_subnet: principal(7),
             root: principal(6),
             ledger_amount: Cycles::new(1_000),
+            ledger_fee: Cycles::new(10),
+            management_creation_fee: Cycles::new(500),
+            readiness_floor: Cycles::new(400),
             created_at_time_ns: 10,
         }
     }
@@ -1562,13 +1856,23 @@ mod tests {
             .expect("begin creation");
         CanisterPoolOps::begin_creation(creation_authority_for(operation_id), 11)
             .expect("exact creation replay");
-        CanisterPoolOps::begin_creation_attempt(operation_id, settlement)
+        CanisterPoolOps::begin_creation_attempt(operation_id, settlement, 11)
             .expect("begin ledger attempt");
         let created = principal(5);
         CanisterPoolOps::mark_creation_created(operation_id, 12, created)
             .expect("record ledger receipt");
         CanisterPoolOps::register_created_pending_reset(operation_id, created, 13)
             .expect("adopt created principal");
+        let exact_asset = CanisterPoolStore::get(&created).expect("created asset");
+        let mut tampered_asset = exact_asset.clone();
+        tampered_asset
+            .creation_receipt
+            .as_mut()
+            .expect("created receipt")
+            .ledger_amount = Cycles::new(999);
+        CanisterPoolStore::insert(created, tampered_asset);
+        assert!(CanisterPoolOps::commit_creation(operation_id).is_err());
+        CanisterPoolStore::insert(created, exact_asset);
         assert!(CanisterPoolOps::commit_creation(operation_id).is_err());
         CanisterPoolOps::settle_creation_attempt(operation_id, settlement)
             .expect("settle attempt authority");
@@ -1583,6 +1887,33 @@ mod tests {
         let asset = CanisterPoolStore::get(&created).expect("created physical inventory row");
         assert_eq!(asset.origin, CanisterPoolAssetOriginRecord::Created);
         assert_eq!(asset.status, CanisterPoolAssetStatusRecord::PendingReset);
+        assert_eq!(
+            asset.creation_receipt,
+            Some(CanisterPoolCreationReceiptRecord {
+                block_index: 12,
+                operation_id,
+                cycles_ledger: principal(8),
+                ledger_amount: Cycles::new(1_000),
+                ledger_fee: Cycles::new(10),
+                readiness_floor: Cycles::new(400),
+                creation_execution_margin: Cycles::new(100),
+                management_creation_fee: Cycles::new(500),
+                first_observed_cycles: None,
+            })
+        );
+        let mut observed_asset = asset;
+        assert!(retain_first_creation_observation(&mut observed_asset, &Cycles::new(501)).is_err());
+        retain_first_creation_observation(&mut observed_asset, &Cycles::new(450))
+            .expect("retain first exact native balance");
+        retain_first_creation_observation(&mut observed_asset, &Cycles::new(600))
+            .expect("later top-up does not rewrite first observation");
+        assert_eq!(
+            observed_asset
+                .creation_receipt
+                .expect("created receipt")
+                .first_observed_cycles,
+            Some(Cycles::new(450))
+        );
 
         let next_operation_id = [8; 32];
         assert!(
@@ -1613,9 +1944,45 @@ mod tests {
             quota_intent_id: IntentId(3),
             reservation_intent_id: IntentId(4),
         };
-        CanisterPoolOps::begin_creation_attempt(uncertain_operation_id, settlement)
+        CanisterPoolOps::begin_creation_attempt(uncertain_operation_id, settlement, 12)
             .expect("begin uncertain attempt");
         assert!(CanisterPoolOps::cancel_known_unapplied_creation().is_err());
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn underfunded_creation_pauses_and_resumes_the_same_operation() {
+        CanisterPoolStore::clear();
+        let operation_id = [11; 32];
+        CanisterPoolOps::begin_creation(creation_authority_for(operation_id), 10)
+            .expect("begin creation");
+
+        CanisterPoolOps::wait_for_creation_funding(operation_id, 900, 20, 30)
+            .expect("retain zero-attempt funding pause");
+        let waiting = CanisterPoolOps::estate_funding_required().expect("funding requirement");
+        assert_eq!(waiting.operation_id, operation_id);
+        assert_eq!(waiting.attempt_count, 0);
+        assert_eq!(waiting.available, Cycles::new(900));
+        assert_eq!(waiting.required, Cycles::new(1_010));
+        assert_eq!(waiting.shortfall, Cycles::new(110));
+        assert_eq!(waiting.retry_at_ns, 30);
+        assert_eq!(waiting.last_attempt_at_ns, None);
+
+        CanisterPoolOps::wait_for_creation_funding(operation_id, 900, 30, 40)
+            .expect("unchanged balance only advances observation time");
+        assert!(CanisterPoolOps::resume_creation_after_funding(operation_id, 1_009).is_err());
+        CanisterPoolOps::resume_creation_after_funding(operation_id, 1_010)
+            .expect("resume same creation after funding");
+        let settlement = ReplayCostGuardSettlement {
+            quota_intent_id: IntentId(5),
+            reservation_intent_id: IntentId(6),
+        };
+        CanisterPoolOps::begin_creation_attempt(operation_id, settlement, 50)
+            .expect("issue same creation intent");
+        let resumed = CanisterPoolOps::pending_creation().expect("pending creation");
+        assert_eq!(resumed.operation_id, operation_id);
+        assert_eq!(resumed.attempt_count, 1);
+        assert_eq!(resumed.last_attempt_at_ns, Some(50));
         CanisterPoolStore::clear();
     }
 
@@ -1628,7 +1995,7 @@ mod tests {
         CanisterPoolOps::begin_creation(creation_authority_for([5; 32]), 10)
             .expect("begin capacity-reserving creation");
 
-        assert!(CanisterPoolOps::standby_capacity_is_exhausted(&config()));
+        assert!(CanisterPoolOps::asset_capacity_is_exhausted(&config()));
         assert!(CanisterPoolOps::initialize_imports(&config(), &[principal(4)], 11).is_err());
         CanisterPoolStore::clear();
     }
@@ -1655,7 +2022,7 @@ mod tests {
         );
 
         CanisterPoolOps::finalize_claim(&claim, selected, 50).expect("finalize claim");
-        assert_eq!(CanisterPoolOps::pooled_asset_count(), 1);
+        assert_eq!(CanisterPoolOps::response(config(), None, 10).pooled, 1);
         assert_eq!(CanisterPoolOps::summary_pool_asset_count(), 1);
         assert_eq!(CanisterPoolOps::workload_count(), 1);
         CanisterPoolStore::clear();
@@ -1821,10 +2188,17 @@ mod tests {
     }
 
     #[test]
-    fn recycled_assets_remain_visible_above_the_import_ceiling() {
+    fn recycled_assets_remain_visible_at_the_complete_asset_ceiling() {
         CanisterPoolStore::clear();
+        let mut asset_config = config();
+        asset_config.maximum_size = 5;
         for byte in 1..=4 {
-            imported_ready(principal(byte), Cycles::new(100), u64::from(byte));
+            imported_ready_with_config(
+                &asset_config,
+                principal(byte),
+                Cycles::new(100),
+                u64::from(byte),
+            );
         }
 
         let claim = CanisterPoolClaimKey {
@@ -1836,13 +2210,16 @@ mod tests {
                 .expect("claim")
                 .expect("ready asset");
         CanisterPoolOps::finalize_claim(&claim, recycled, 5).expect("workload");
-        imported_ready(principal(5), Cycles::new(100), 6);
+        imported_ready_with_config(&asset_config, principal(5), Cycles::new(100), 6);
         CanisterPoolOps::register_recycled_pending(recycled, 6)
             .expect("recycled asset remains managed");
         CanisterPoolOps::register_recycled_pending(recycled, 7)
             .expect("exact recycle retry remains idempotent");
         assert_eq!(CanisterPoolOps::workload_count(), 1);
-        assert_eq!(CanisterPoolOps::pooled_asset_count(), 4);
+        assert_eq!(
+            CanisterPoolOps::response(asset_config.clone(), None, 10).pooled,
+            4
+        );
         CanisterPoolOps::validate_complete_recycling(recycled, claim.component)
             .expect_err("Registry membership cannot settle before reset is terminal");
         CanisterPoolOps::mark_ready(recycled, Cycles::new(100), 8)
@@ -1850,21 +2227,24 @@ mod tests {
         CanisterPoolOps::validate_complete_recycling(recycled, claim.component)
             .expect("terminal recycling is safe to settle with membership");
         assert_eq!(CanisterPoolOps::workload_count(), 1);
-        assert_eq!(CanisterPoolOps::pooled_asset_count(), 4);
+        assert_eq!(
+            CanisterPoolOps::response(asset_config.clone(), None, 10).pooled,
+            4
+        );
         CanisterPoolOps::complete_recycling(recycled, claim.component, 9)
             .expect("settle Registry membership into pool state");
         CanisterPoolOps::complete_recycling(recycled, claim.component, 10)
             .expect("exact recycling settlement replay");
         CanisterPoolOps::validate_complete_recycling(recycled, claim.component)
             .expect("terminal recycling settlement remains exact-retry safe");
-        let response = CanisterPoolOps::response(config(), None, 2);
+        let response = CanisterPoolOps::response(asset_config.clone(), None, 2);
         assert_eq!(response.tracked, 5);
         assert_eq!(response.pooled, 5);
-        assert_eq!(response.surplus, 1);
+        assert_eq!(response.surplus, 0);
         assert_eq!(response.recycling, 0);
         assert_eq!(response.entries.len(), 2);
         let cursor = response.next_start_after.expect("additional pool page");
-        let final_page = CanisterPoolOps::response(config(), Some(cursor), 3);
+        let final_page = CanisterPoolOps::response(asset_config, Some(cursor), 3);
         assert_eq!(final_page.tracked, 5);
         assert_eq!(final_page.entries.len(), 3);
         assert_eq!(final_page.next_start_after, None);
@@ -1906,7 +2286,7 @@ mod tests {
         );
 
         CanisterPoolOps::complete_handoff(canister_id, recipient, 50).expect("complete handoff");
-        assert_eq!(CanisterPoolOps::pooled_asset_count(), 0);
+        assert_eq!(CanisterPoolOps::response(config(), None, 10).pooled, 0);
         assert_eq!(CanisterPoolOps::pending_handoff(), None);
         assert_eq!(
             CanisterPoolOps::completed_handoff_recipient(canister_id),

@@ -125,11 +125,10 @@ pub enum ArtifactTransformKind {
     Optimize,
 }
 
-/// Result of one optional artifact transform decision.
+/// Result of one artifact transform decision.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ArtifactTransformOutcome {
     Applied,
-    ToolUnavailable,
     NotRequested,
 }
 

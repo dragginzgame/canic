@@ -4,7 +4,8 @@ use super::{
     RoleContractSource, SelectionProvenance, StateAllocationKey, allocation,
     built_in_role_capabilities,
     catalog::{self, default_features, implied_features},
-    derive_role_capabilities, resolve_effective_features, resolve_role_contract,
+    derive_role_capabilities, required_features_for_role, resolve_effective_features,
+    resolve_role_contract,
 };
 use crate::{
     config::schema::{
@@ -272,6 +273,107 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
             RoleCapabilityKey::RoleAttestationVerifier,
             RoleCapabilityKey::Runtime,
             RoleCapabilityKey::Sharding,
+        ])
+    );
+}
+
+#[test]
+fn root_chain_key_signing_feature_is_required_only_when_an_issuer_exists() {
+    let mut issuer = ConfigTestBuilder::canister_config(CanisterKind::Shard);
+    issuer.auth.delegated_token_issuer = true;
+    let config = ConfigTestBuilder::new()
+        .with_default_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
+        .with_default_canister("issuer", issuer)
+        .build();
+
+    let requirements = required_features_for_role(&config, &CanisterRole::ROOT)
+        .expect("configured Root role should resolve");
+    assert!(requirements.iter().any(|requirement| {
+        requirement.capability == RoleCapabilityKey::Root
+            && requirement.feature == CanicFeatureKey::AuthChainKeyRootSign
+    }));
+
+    assert!(matches!(
+        resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &config,
+                role: &CanisterRole::ROOT,
+            },
+            declared_features: BTreeSet::from([CanicFeatureKey::ControlPlane]),
+            default_features_enabled: false,
+        }),
+        RoleContractResolution::Rejected { errors }
+            if errors == vec![RoleContractFinding::RequiredFeatureMissing {
+                capability: RoleCapabilityKey::Root,
+                feature: CanicFeatureKey::AuthChainKeyRootSign,
+            }]
+    ));
+
+    assert!(matches!(
+        resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &config,
+                role: &CanisterRole::ROOT,
+            },
+            declared_features: BTreeSet::from([
+                CanicFeatureKey::AuthChainKeyRootSign,
+                CanicFeatureKey::ControlPlane,
+            ]),
+            default_features_enabled: false,
+        }),
+        RoleContractResolution::Resolved { .. }
+    ));
+}
+
+#[test]
+fn crypto_features_without_role_authority_are_rejected() {
+    let config = ConfigTestBuilder::new()
+        .with_default_canister_kind("app", CanisterKind::Service)
+        .build();
+    let role = CanisterRole::new("app");
+
+    assert_eq!(
+        resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &config,
+                role: &role,
+            },
+            declared_features: BTreeSet::from([CanicFeatureKey::AuthDelegatedTokenVerify]),
+            default_features_enabled: false,
+        }),
+        RoleContractResolution::Rejected {
+            errors: vec![RoleContractFinding::SurplusCryptoFeature {
+                feature: CanicFeatureKey::AuthDelegatedTokenVerify,
+            }],
+        }
+    );
+}
+
+#[test]
+fn required_crypto_feature_closure_is_not_treated_as_surplus() {
+    let mut app = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    app.auth.delegated_token_verifier = true;
+    let config = ConfigTestBuilder::new()
+        .with_default_canister("app", app)
+        .build();
+    let role = CanisterRole::new("app");
+
+    let RoleContractResolution::Resolved { contract } = resolve_role_contract(RoleContractInput {
+        source: RoleContractSource::Declared {
+            config: &config,
+            role: &role,
+        },
+        declared_features: BTreeSet::from([CanicFeatureKey::AuthDelegatedTokenVerify]),
+        default_features_enabled: false,
+    }) else {
+        panic!("exact delegated-token verification feature closure should resolve");
+    };
+    assert_eq!(
+        contract.effective_features,
+        BTreeSet::from([
+            CanicFeatureKey::AuthChainKeyEcdsa,
+            CanicFeatureKey::AuthDelegatedTokenVerify,
+            CanicFeatureKey::AuthIssuerCanisterSigVerify,
         ])
     );
 }

@@ -27,10 +27,10 @@ pub(in crate::workflow::runtime::template) struct WasmStoreInternalClient {
 }
 
 impl WasmStoreInternalClient {
-    const COMMAND: &str = protocol::CANIC_COMMAND;
+    const COMMAND: &str = protocol::CANIC_WASM_STORE_COMMAND;
     const CHUNK: &str = "canic_wasm_store_chunk";
     const PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
-    const STATUS: &str = protocol::CANIC_STATUS;
+    const STATUS: &str = protocol::CANIC_WASM_STORE_STATUS;
     #[cfg(test)]
     const ENDPOINTS: &[&str] = &[
         Self::COMMAND,
@@ -231,10 +231,10 @@ mod tests {
         assert_eq!(
             all,
             BTreeSet::from([
-                "canic_command",
-                "canic_status",
+                "canic_wasm_store_command",
                 "canic_wasm_store_chunk",
                 "canic_wasm_store_publish_chunk",
+                "canic_wasm_store_status",
             ])
         );
         assert_eq!(

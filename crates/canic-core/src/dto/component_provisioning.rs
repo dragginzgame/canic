@@ -5,6 +5,7 @@
 //! Boundary: the Coordinator retains the complete plan and sends each root only its exact batch.
 
 use crate::{
+    cdk::types::Cycles,
     config::{ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose},
     dto::fleet_registry::FleetRegistryVersion,
     ids::{
@@ -161,6 +162,7 @@ pub struct FleetComponentProvisioningStatusResponse {
     pub current_activation: Option<FleetComponentActivationRootProgress>,
     pub activation_in_flight_root: Option<Principal>,
     pub pending_root_failure: Option<FleetComponentProvisioningRootFailure>,
+    pub estate_funding_required: Option<RootEstateFundingRequired>,
     pub group_placement_count: u32,
     pub component_count: u32,
     pub planned_at_ns: u64,
@@ -419,6 +421,7 @@ pub struct RootComponentProvisioningStatusResponse {
     pub fleet_registry: FleetRegistryVersion,
     pub configuration_digest: ComponentDeploymentConfigurationDigest,
     pub fleet_subnet_root: Principal,
+    pub estate_funding_required: Option<RootEstateFundingRequired>,
     pub phase: RootComponentProvisioningPhase,
     pub placement_count: u32,
     pub component_count: u32,
@@ -438,4 +441,24 @@ pub struct RootComponentProvisioningStatusResponse {
     pub activation_started_at_ns: Option<u64>,
     pub runtimes_activated_at_ns: Option<u64>,
     pub receipt_content_hash: [u8; 32],
+}
+
+/// Exact durable funding pause for one Root-owned autonomous pool creation.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootEstateFundingRequired {
+    pub available: Cycles,
+    pub attempt_count: u32,
+    pub creation_amount: Cycles,
+    pub cycles_ledger: Principal,
+    pub execution_margin: Cycles,
+    pub last_attempt_at_ns: Option<u64>,
+    pub ledger_fee: Cycles,
+    pub management_creation_fee: Cycles,
+    pub operation_id: [u8; 32],
+    pub readiness_floor: Cycles,
+    pub required: Cycles,
+    pub retry_at_ns: u64,
+    pub root: Principal,
+    pub shortfall: Cycles,
 }

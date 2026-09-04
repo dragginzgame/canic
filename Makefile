@@ -10,7 +10,7 @@
         current-document-semantics-gate dependency-risk-inventory-test layering-gate \
         lint-workflows recovery-runbooks-gate release-integrity-contract-gate \
         release-validation-matrix-gate validation-runner-gate \
-        wasm-capability-size-report-gate \
+        wasm-capability-size-report-gate wasm-crypto-closure-gate \
         dependency-risk-gate gitleaks-scan shellcheck \
         install install-dev install-hooks update-dev \
         ensure-clean test-unit test-unit-fast test-ordinary test-pocketic workspace-test-inventory-gate \
@@ -273,10 +273,11 @@ test: test-unit
 # PocketIC suite.
 test-wasm: test-unit-fast
 
-# Complete local validation has three sequential barriers. Each barrier collects
+# Complete local validation has four sequential barriers. Each barrier collects
 # every independent target failure before returning. Compile/lint work starts
-# only after cheap source, policy, and security checks pass, and the complete
-# test graph starts only after compile and warning-denied Clippy pass.
+# only after cheap source, policy, and security checks pass. The feature matrix
+# starts only after compile and warning-denied Clippy pass, and the complete test
+# graph starts only after the feature matrix passes.
 # Primitive development targets retain only the operation named by that target.
 validate:
 	+@$(VALIDATION_RUNNER) \
@@ -284,11 +285,12 @@ validate:
 		check-invariants \
 		dependency-risk-gate \
 		gitleaks-scan \
-		shellcheck \
-		control-plane-feature-gate
+		shellcheck
 	+@$(VALIDATION_RUNNER) \
 		check \
 		clippy
+	+@$(VALIDATION_RUNNER) \
+		control-plane-feature-gate
 	+@$(VALIDATION_RUNNER) \
 		test
 
@@ -304,7 +306,8 @@ check-invariants:
 		audit-method-catalog-gate \
 		recovery-runbooks-gate \
 		validation-runner-gate \
-		wasm-capability-size-report-gate
+		wasm-capability-size-report-gate \
+		wasm-crypto-closure-gate
 
 # CI keeps tool installation as an immediate prerequisite, then collects every
 # independent preflight or security failure before gating expensive jobs.
@@ -321,13 +324,15 @@ ci-preflight:
 		audit-method-catalog-gate \
 		recovery-runbooks-gate \
 		workspace-test-inventory-gate \
-		wasm-capability-size-report-gate
+		wasm-capability-size-report-gate \
+		wasm-crypto-closure-gate
 
 ci-checks:
 	+@$(VALIDATION_RUNNER) \
-		control-plane-feature-gate \
 		fmt-check \
 		clippy
+	+@$(VALIDATION_RUNNER) \
+		control-plane-feature-gate
 
 ci-security:
 	+@$(VALIDATION_RUNNER) \
@@ -365,6 +370,9 @@ validation-runner-gate:
 
 wasm-capability-size-report-gate:
 	bash scripts/ci/test-wasm-capability-size-report.sh
+
+wasm-crypto-closure-gate:
+	bash scripts/ci/check-wasm-crypto-closure.sh
 
 dependency-risk-gate:
 	bash scripts/ci/check-dependency-risk-inventory.sh

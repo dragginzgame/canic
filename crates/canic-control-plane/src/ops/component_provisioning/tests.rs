@@ -123,6 +123,7 @@ fn root_binding(
                 minimum_size: 1,
                 maximum_size: 8,
                 canister_cycles: Cycles::new(5_000_000_000_000),
+                creation_execution_margin: Cycles::new(1_000_000_000_000),
             },
             cycles_funding: CyclesFundingBudget {
                 window_secs: 3_600,

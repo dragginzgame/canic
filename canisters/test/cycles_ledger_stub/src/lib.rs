@@ -334,6 +334,19 @@ fn request_count() -> u64 {
     })
 }
 
+#[ic_cdk::query]
+fn requested_amounts() -> Vec<Nat> {
+    STATE.with_borrow(|state| {
+        state
+            .as_ref()
+            .expect("Cycles Ledger stub is initialized")
+            .requests
+            .iter()
+            .map(|request| request.amount.clone())
+            .collect()
+    })
+}
+
 fn request_has_exact_authority(
     request: &CreateCanisterArgs,
     expected_controllers: &[Principal],

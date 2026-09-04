@@ -39,6 +39,16 @@ impl CyclesLedgerOps {
         map_infra(CyclesLedgerInfra::create_canister(root, subnet, amount, created_at_time).await)
     }
 
+    pub async fn balance_of(root: Principal) -> Result<Cycles, InternalError> {
+        let balance = map_infra(CyclesLedgerInfra::balance_of(root).await)?;
+        Self::checked_cycles(balance)
+    }
+
+    pub async fn fee() -> Result<Cycles, InternalError> {
+        let fee = map_infra(CyclesLedgerInfra::fee().await)?;
+        Self::checked_cycles(fee)
+    }
+
     pub fn checked_block_index(value: Nat) -> Result<u64, InternalError> {
         map_infra(CyclesLedgerInfra::checked_block_index(value))
     }

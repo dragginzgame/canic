@@ -148,6 +148,7 @@ fn limits() -> FleetSubnetRootLimits {
             minimum_size: 1,
             maximum_size: 10,
             canister_cycles: Cycles::new(5_000_000_000_000),
+            creation_execution_margin: Cycles::new(1_000_000_000_000),
         },
         cycles_funding: CyclesFundingBudget {
             window_secs: 3_600,
@@ -389,6 +390,7 @@ fn provisioned_receipts(
                 fleet_registry: plan.fleet_registry.clone(),
                 configuration_digest: plan.configuration_digest,
                 fleet_subnet_root: batch.root.fleet_subnet_root,
+                estate_funding_required: None,
                 phase: RootComponentProvisioningPhase::Provisioned,
                 placement_count,
                 component_count,

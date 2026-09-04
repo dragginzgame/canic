@@ -141,7 +141,8 @@ pub fn enforce_wasm_code_section_limit(
         }
         BuildNetwork::Local if code_section_bytes > CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES => {
             eprintln!(
-                "[WASM] WARN   {}  code={}  limit={}  local build only",
+                "{} {}  code={}  limit={}  local build only",
+                wasm_progress_prefix("WARN"),
                 compact_wasm_artifact_name(wasm_path),
                 format_byte_count(code_section_bytes),
                 format_byte_count(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES),
@@ -162,11 +163,20 @@ fn report_current_ic_mainnet_limit_distance(wasm_path: &Path, code_section_bytes
         "SIZE"
     };
     eprintln!(
-        "[WASM] {status:<6} {}  code={}  headroom={}",
+        "{} {}  code={}  headroom={}",
+        wasm_progress_prefix(status),
         compact_wasm_artifact_name(wasm_path),
         format_byte_count(code_section_bytes),
         format_byte_count(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES - code_section_bytes),
     );
+}
+
+fn wasm_progress_prefix(status: &str) -> String {
+    const SCOPE_WIDTH: usize = 12;
+    const STATUS_WIDTH: usize = 6;
+    const SCOPE: &str = "[WASM]";
+
+    format!("{SCOPE:<SCOPE_WIDTH$} {status:<STATUS_WIDTH$}")
 }
 
 fn compact_wasm_artifact_name(wasm_path: &Path) -> String {
@@ -505,5 +515,10 @@ mod tests {
 
         assert_eq!(compact_wasm_artifact_name(path), "root/candidate.wasm");
         assert_eq!(format_byte_count(8_713_911), "8.31 MiB (8713911 B)");
+    }
+
+    #[test]
+    fn wasm_progress_prefix_matches_the_governed_output_columns() {
+        assert_eq!(wasm_progress_prefix("SIZE"), "[WASM]       SIZE  ");
     }
 }

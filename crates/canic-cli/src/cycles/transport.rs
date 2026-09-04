@@ -21,6 +21,7 @@ use canic_core::dto::{
     observability::{CanisterObservabilityRequest, CanisterObservabilityResponse},
     page::PageRequest,
 };
+use canic_core::{ids::CanisterRole, role_contract::RoleCapabilityKey};
 use canic_host::{
     fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
     icp::IcpCli,
@@ -54,6 +55,35 @@ struct CycleQueryTarget {
 enum CycleObservationError {
     #[error(transparent)]
     Observability(#[from] FleetObservabilityError),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CycleObservationPlan {
+    BalanceOnly,
+    History,
+    HistoryWithTopups,
+    Unavailable,
+}
+
+#[derive(Debug, ThisError)]
+enum SupplementalCycleObservationError {
+    #[error("live cycle balance: {source}")]
+    LiveBalance {
+        #[source]
+        source: CycleObservationError,
+    },
+
+    #[error("top-up events: {source}")]
+    TopupEvents {
+        #[source]
+        source: CycleObservationError,
+    },
+
+    #[error("live cycle balance: {live_balance}; top-up events: {topup_events}")]
+    LiveBalanceAndTopups {
+        live_balance: CycleObservationError,
+        topup_events: CycleObservationError,
+    },
 }
 
 pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, CyclesCommandError> {
@@ -143,6 +173,10 @@ fn cycle_tracker_report(
     requested_since_secs: u64,
     generated_at_secs: u64,
 ) -> CyclesCanisterReport {
+    let plan = cycle_observation_plan(entry);
+    if plan == CycleObservationPlan::Unavailable {
+        return cycles_unavailable_report(entry, tree_prefix, requested_since_secs);
+    }
     let target = match cycle_query_target(options, fleet, entry) {
         Ok(target) => target,
         Err(error) => {
@@ -156,28 +190,48 @@ fn cycle_tracker_report(
         }
     };
     let live_cycles = query_live_cycle_balance(&target);
+    if plan == CycleObservationPlan::BalanceOnly {
+        return match live_cycles {
+            Ok(cycles) => cycles_balance_only_report(
+                entry,
+                tree_prefix,
+                requested_since_secs,
+                generated_at_secs,
+                cycles,
+            ),
+            Err(error) => cycles_error_report(
+                entry,
+                tree_prefix,
+                requested_since_secs,
+                None,
+                error.to_string(),
+            ),
+        };
+    }
     let result = query_cycle_tracker(&target, options.limit);
     match result {
         Ok(page) => {
-            let topup_events = query_topup_events(&target);
-            let live_cycles_error = live_cycles.as_ref().err().map(ToString::to_string);
-            let topup_events_error = topup_events.as_ref().err().map(ToString::to_string);
-            let observation_error = cycle_observation_error(
-                live_cycles_error.as_deref(),
-                topup_events_error.as_deref(),
-            );
+            let (live_cycles, live_cycles_error) = split_cycle_observation(live_cycles);
+            let (topup_events, topup_events_error) =
+                if plan == CycleObservationPlan::HistoryWithTopups {
+                    split_cycle_observation(query_topup_events(&target))
+                } else {
+                    (None, None)
+                };
+            let observation_error =
+                supplemental_cycle_observation_error(live_cycles_error, topup_events_error);
             let mut report = summarize_cycle_tracker(
                 entry,
                 page,
                 tree_prefix,
                 requested_since_secs,
                 generated_at_secs,
-                live_cycles.as_ref().ok().copied(),
-                topup_events.ok(),
+                live_cycles,
+                topup_events,
             );
             if let Some(error) = observation_error {
                 report.status = CyclesCanisterStatus::Error;
-                report.error = Some(error);
+                report.error = Some(error.to_string());
             }
             report
         }
@@ -188,6 +242,69 @@ fn cycle_tracker_report(
             live_cycles.ok().map(|cycles| (generated_at_secs, cycles)),
             error.to_string(),
         ),
+    }
+}
+
+fn cycle_observation_plan(entry: &RegistryEntry) -> CycleObservationPlan {
+    cycle_observation_plan_for(
+        entry.role.as_deref(),
+        entry
+            .protocol_binding
+            .as_ref()
+            .map(|binding| &binding.capabilities),
+    )
+}
+
+fn cycle_observation_plan_for(
+    role: Option<&str>,
+    capabilities: Option<&std::collections::BTreeSet<RoleCapabilityKey>>,
+) -> CycleObservationPlan {
+    if role == Some(CanisterRole::FLEET_COORDINATOR.as_str()) {
+        return CycleObservationPlan::Unavailable;
+    }
+    let Some(capabilities) = capabilities else {
+        return CycleObservationPlan::BalanceOnly;
+    };
+    if !capabilities.contains(&RoleCapabilityKey::Runtime) {
+        return CycleObservationPlan::BalanceOnly;
+    }
+    if capabilities.contains(&RoleCapabilityKey::AutomaticTopup)
+        && !matches!(
+            role,
+            Some(value)
+                if value == CanisterRole::ROOT.as_str()
+                    || value == CanisterRole::WASM_STORE.as_str()
+        )
+    {
+        CycleObservationPlan::HistoryWithTopups
+    } else {
+        CycleObservationPlan::History
+    }
+}
+
+fn split_cycle_observation<T>(
+    result: Result<T, CycleObservationError>,
+) -> (Option<T>, Option<CycleObservationError>) {
+    match result {
+        Ok(value) => (Some(value), None),
+        Err(error) => (None, Some(error)),
+    }
+}
+
+fn supplemental_cycle_observation_error(
+    live_balance: Option<CycleObservationError>,
+    topup_events: Option<CycleObservationError>,
+) -> Option<SupplementalCycleObservationError> {
+    match (live_balance, topup_events) {
+        (Some(source), None) => Some(SupplementalCycleObservationError::LiveBalance { source }),
+        (None, Some(source)) => Some(SupplementalCycleObservationError::TopupEvents { source }),
+        (Some(live_balance), Some(topup_events)) => {
+            Some(SupplementalCycleObservationError::LiveBalanceAndTopups {
+                live_balance,
+                topup_events,
+            })
+        }
+        (None, None) => None,
     }
 }
 
@@ -222,22 +339,65 @@ fn cycles_error_report(
     }
 }
 
-fn first_line(error: &str) -> &str {
-    error.lines().next().unwrap_or(error)
+fn cycles_unavailable_report(
+    entry: &RegistryEntry,
+    tree_prefix: String,
+    requested_since_secs: u64,
+) -> CyclesCanisterReport {
+    cycles_limited_report(
+        entry,
+        tree_prefix,
+        requested_since_secs,
+        CyclesCanisterStatus::Unavailable,
+        None,
+    )
 }
 
-fn cycle_observation_error(
-    live_cycles_error: Option<&str>,
-    topup_events_error: Option<&str>,
-) -> Option<String> {
-    let mut errors = Vec::new();
-    if let Some(error) = live_cycles_error {
-        errors.push(format!("live cycle balance: {}", first_line(error)));
+fn cycles_balance_only_report(
+    entry: &RegistryEntry,
+    tree_prefix: String,
+    requested_since_secs: u64,
+    observed_at_secs: u64,
+    cycles: u128,
+) -> CyclesCanisterReport {
+    cycles_limited_report(
+        entry,
+        tree_prefix,
+        requested_since_secs,
+        CyclesCanisterStatus::BalanceOnly,
+        Some((observed_at_secs, cycles)),
+    )
+}
+
+fn cycles_limited_report(
+    entry: &RegistryEntry,
+    tree_prefix: String,
+    requested_since_secs: u64,
+    status: CyclesCanisterStatus,
+    live_cycles: Option<(u64, u128)>,
+) -> CyclesCanisterReport {
+    CyclesCanisterReport {
+        role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
+        tree_prefix,
+        canister_id: entry.pid.clone(),
+        status,
+        sample_count: 0,
+        total_samples: 0,
+        requested_since_secs,
+        coverage_seconds: None,
+        coverage_status: CyclesCoverageStatus::None,
+        latest_timestamp_secs: live_cycles.map(|(timestamp, _)| timestamp),
+        latest_cycles: live_cycles.map(|(_, cycles)| cycles),
+        baseline_timestamp_secs: None,
+        baseline_cycles: None,
+        delta_cycles: None,
+        rate_cycles_per_hour: None,
+        burn_cycles: None,
+        burn_cycles_per_hour: None,
+        topup_cycles_per_hour: None,
+        topups: None,
+        error: None,
     }
-    if let Some(error) = topup_events_error {
-        errors.push(format!("top-up events: {}", first_line(error)));
-    }
-    (!errors.is_empty()).then(|| errors.join("; "))
 }
 
 pub(super) fn summarize_cycle_tracker(
@@ -554,18 +714,90 @@ mod tests {
     }
 
     #[test]
-    fn supplemental_cycle_query_failures_are_not_silently_dropped() {
+    fn cycle_observation_plan_is_capability_and_role_bound() {
+        use std::collections::BTreeSet;
+
+        let runtime = BTreeSet::from([RoleCapabilityKey::Runtime]);
+        let automatic = BTreeSet::from([
+            RoleCapabilityKey::AutomaticTopup,
+            RoleCapabilityKey::Runtime,
+        ]);
+
         assert_eq!(
-            cycle_observation_error(
-                Some("balance transport failed\nraw details"),
-                Some("top-up response malformed"),
-            )
-            .as_deref(),
-            Some(
-                "live cycle balance: balance transport failed; top-up events: top-up response malformed"
-            )
+            cycle_observation_plan_for(Some(CanisterRole::FLEET_COORDINATOR.as_str()), None),
+            CycleObservationPlan::Unavailable
         );
-        assert_eq!(cycle_observation_error(None, None), None);
+        assert_eq!(
+            cycle_observation_plan_for(Some("canister_pool_asset"), None),
+            CycleObservationPlan::BalanceOnly
+        );
+        assert_eq!(
+            cycle_observation_plan_for(Some("plain"), Some(&runtime)),
+            CycleObservationPlan::History
+        );
+        assert_eq!(
+            cycle_observation_plan_for(Some("funded"), Some(&automatic)),
+            CycleObservationPlan::HistoryWithTopups
+        );
+        assert_eq!(
+            cycle_observation_plan_for(Some(CanisterRole::ROOT.as_str()), Some(&automatic)),
+            CycleObservationPlan::History
+        );
+        assert_eq!(
+            cycle_observation_plan_for(Some(CanisterRole::WASM_STORE.as_str()), Some(&automatic)),
+            CycleObservationPlan::History
+        );
+    }
+
+    #[test]
+    fn limited_cycle_reports_distinguish_unavailable_from_balance_only() {
+        let entry = RegistryEntry {
+            pid: "aaaaa-aa".to_string(),
+            role: Some(CanisterRole::FLEET_COORDINATOR.to_string()),
+            parent_pid: None,
+            module_hash: None,
+            protocol_binding: None,
+        };
+
+        let unavailable = cycles_unavailable_report(&entry, String::new(), 10);
+        let balance_only = cycles_balance_only_report(&entry, String::new(), 10, 20, 30);
+
+        assert_eq!(unavailable.status, CyclesCanisterStatus::Unavailable);
+        assert_eq!(unavailable.latest_cycles, None);
+        assert_eq!(balance_only.status, CyclesCanisterStatus::BalanceOnly);
+        assert_eq!(balance_only.latest_timestamp_secs, Some(20));
+        assert_eq!(balance_only.latest_cycles, Some(30));
+        assert_eq!(
+            serde_json::to_value(balance_only).expect("serialize balance-only report")["status"],
+            "balance_only"
+        );
+    }
+
+    #[test]
+    fn supplemental_cycle_query_failures_remain_typed_until_projection() {
+        let error = supplemental_cycle_observation_error(
+            Some(CycleObservationError::Observability(
+                FleetObservabilityError::MissingRoot {
+                    canister: "aaaaa-aa".to_string(),
+                },
+            )),
+            Some(CycleObservationError::Observability(
+                FleetObservabilityError::RootCycleTopupsUnsupported,
+            )),
+        );
+
+        assert!(matches!(
+            error,
+            Some(SupplementalCycleObservationError::LiveBalanceAndTopups {
+                live_balance: CycleObservationError::Observability(
+                    FleetObservabilityError::MissingRoot { canister }
+                ),
+                topup_events: CycleObservationError::Observability(
+                    FleetObservabilityError::RootCycleTopupsUnsupported
+                ),
+            }) if canister == "aaaaa-aa"
+        ));
+        assert!(supplemental_cycle_observation_error(None, None).is_none());
     }
 
     #[test]

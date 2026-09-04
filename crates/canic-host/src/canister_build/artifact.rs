@@ -11,6 +11,7 @@ use crate::{
     artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
     bootstrap_store::build_bootstrap_wasm_store_artifact,
+    build_toolchain::BuildToolchain,
     cargo_command,
     release_set::AppConfigSnapshot,
     role_contract::{
@@ -34,13 +35,96 @@ use super::{
     },
 };
 
+///
+/// CanisterArtifactBuilder
+///
+/// One preflighted external-tool session used for every artifact in a build invocation.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CanisterArtifactBuilder {
+    toolchain: BuildToolchain,
+}
+
+impl CanisterArtifactBuilder {
+    /// Resolve every profile-required external tool before starting build work.
+    pub fn for_profile(profile: CanisterBuildProfile) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
+            toolchain: BuildToolchain::resolve(profile)?,
+        })
+    }
+
+    /// Return the exact selected executable paths and identities for operator diagnostics.
+    #[must_use]
+    pub fn diagnostic_lines(&self) -> Vec<String> {
+        self.toolchain.diagnostic_lines()
+    }
+
+    /// Build one configured role through this preflighted tool session.
+    pub fn build_workspace_canister_artifact(
+        &self,
+        context: &WorkspaceBuildContext,
+    ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
+        self.build_workspace_canister_artifact_with_options(
+            context,
+            &CanisterArtifactBuildOptions::default(),
+        )
+    }
+
+    /// Build one configured role with caller-selected Cargo and Candid options.
+    pub fn build_workspace_canister_artifact_with_options(
+        &self,
+        context: &WorkspaceBuildContext,
+        options: &CanisterArtifactBuildOptions,
+    ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
+        self.toolchain.require_profile(context.profile)?;
+        let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
+        match CanisterArtifactSource::for_role(&context.role) {
+            CanisterArtifactSource::FleetCoordinator => {
+                require_default_build_options(options, FLEET_COORDINATOR_ROLE)?;
+                return build_bootstrap_fleet_coordinator_artifact(context, &self.toolchain);
+            }
+            CanisterArtifactSource::WasmStore => {
+                require_default_build_options(options, WASM_STORE_ROLE)?;
+                return build_bootstrap_wasm_store_artifact(context, &self.toolchain);
+            }
+            CanisterArtifactSource::DeclaredRole => {}
+        }
+
+        let config = AppConfigSnapshot::load(&context.config_path)?;
+        let spec = resolve_canister_artifact_build_spec(context, config.model())?;
+        build_workspace_canister_artifact_from_spec(context, &spec, options, &self.toolchain)
+    }
+
+    /// Build every requested configured role through this preflighted tool session.
+    pub fn build_workspace_configured_canister_artifacts(
+        &self,
+        context: &WorkspaceBuildContext,
+        roles: &[String],
+    ) -> Result<Vec<ConfiguredCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
+        self.toolchain.require_profile(context.profile)?;
+        let config = AppConfigSnapshot::load(&context.config_path)?;
+        let specs = resolve_canister_artifact_build_specs(context, config.model(), roles)?;
+        let outputs = build_workspace_canister_artifacts_from_specs_with_toolchain(
+            context,
+            &specs,
+            &self.toolchain,
+        )?;
+
+        Ok(roles
+            .iter()
+            .cloned()
+            .zip(outputs)
+            .map(|(role, output)| ConfiguredCanisterArtifactBuildOutput { role, output })
+            .collect())
+    }
+}
+
 pub fn build_workspace_canister_artifact(
     context: &WorkspaceBuildContext,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    build_workspace_canister_artifact_with_options(
-        context,
-        &CanisterArtifactBuildOptions::default(),
-    )
+    CanisterArtifactBuilder::for_profile(context.profile)?
+        .build_workspace_canister_artifact(context)
 }
 
 /// Build one configured role with caller-selected Cargo features and Candid retention.
@@ -48,22 +132,8 @@ pub fn build_workspace_canister_artifact_with_options(
     context: &WorkspaceBuildContext,
     options: &CanisterArtifactBuildOptions,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
-    match CanisterArtifactSource::for_role(&context.role) {
-        CanisterArtifactSource::FleetCoordinator => {
-            require_default_build_options(options, FLEET_COORDINATOR_ROLE)?;
-            return build_bootstrap_fleet_coordinator_artifact(context);
-        }
-        CanisterArtifactSource::WasmStore => {
-            require_default_build_options(options, WASM_STORE_ROLE)?;
-            return build_bootstrap_wasm_store_artifact(context);
-        }
-        CanisterArtifactSource::DeclaredRole => {}
-    }
-
-    let config = AppConfigSnapshot::load(&context.config_path)?;
-    let spec = resolve_canister_artifact_build_spec(context, config.model())?;
-    build_workspace_canister_artifact_from_spec(context, &spec, options)
+    CanisterArtifactBuilder::for_profile(context.profile)?
+        .build_workspace_canister_artifact_with_options(context, options)
 }
 
 fn require_default_build_options(
@@ -84,16 +154,8 @@ pub fn build_workspace_configured_canister_artifacts(
     context: &WorkspaceBuildContext,
     roles: &[String],
 ) -> Result<Vec<ConfiguredCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
-    let config = AppConfigSnapshot::load(&context.config_path)?;
-    let specs = resolve_canister_artifact_build_specs(context, config.model(), roles)?;
-    let outputs = build_workspace_canister_artifacts_from_specs(context, &specs)?;
-
-    Ok(roles
-        .iter()
-        .cloned()
-        .zip(outputs)
-        .map(|(role, output)| ConfiguredCanisterArtifactBuildOutput { role, output })
-        .collect())
+    CanisterArtifactBuilder::for_profile(context.profile)?
+        .build_workspace_configured_canister_artifacts(context, roles)
 }
 
 /// Copy the uncompressed artifact to the path requested by ICP custom builds.
@@ -129,6 +191,7 @@ fn build_workspace_canister_artifact_from_spec(
     context: &WorkspaceBuildContext,
     spec: &CanisterArtifactBuildSpec,
     options: &CanisterArtifactBuildOptions,
+    toolchain: &BuildToolchain,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     if context.role != spec.role {
         return Err(format!(
@@ -167,14 +230,16 @@ fn build_workspace_canister_artifact_from_spec(
         &candid,
         profile,
         options.sidecar_only_candid,
+        toolchain,
     )
 }
 
-/// Build all admitted configured roles in one Cargo invocation per workspace and profile.
-pub fn build_workspace_canister_artifacts_from_specs(
+fn build_workspace_canister_artifacts_from_specs_with_toolchain(
     context: &WorkspaceBuildContext,
     specs: &[CanisterArtifactBuildSpec],
+    toolchain: &BuildToolchain,
 ) -> Result<Vec<CanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
+    toolchain.require_profile(context.profile)?;
     if specs.is_empty() {
         return Ok(Vec::new());
     }
@@ -233,6 +298,7 @@ pub fn build_workspace_canister_artifacts_from_specs(
                     &candid,
                     profile,
                     false,
+                    toolchain,
                 )
                 .map_err(|error| error.to_string())
             }));
@@ -278,18 +344,23 @@ fn finish_canister_artifact_output(
     candid: &[u8],
     profile: canic_core::role_contract::ProtocolProfileHashes,
     sidecar_only_candid: bool,
+    toolchain: &BuildToolchain,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    let transforms = finalize_wasm_artifact(&WasmArtifactFinalization {
-        profile: context.profile,
-        build_network: context.build_network,
-        embed_candid: !sidecar_only_candid && should_embed_candid_metadata(context.build_network),
-        validate_sidecar_only: sidecar_only_candid,
-        source_wasm_path: release_wasm_path,
-        candid,
-        wasm_path: &spec.wasm_path,
-        did_path: &spec.did_path,
-        wasm_gz_path: &spec.wasm_gz_path,
-    })?;
+    let transforms = finalize_wasm_artifact(
+        &WasmArtifactFinalization {
+            profile: context.profile,
+            build_network: context.build_network,
+            embed_candid: !sidecar_only_candid
+                && should_embed_candid_metadata(context.build_network),
+            validate_sidecar_only: sidecar_only_candid,
+            source_wasm_path: release_wasm_path,
+            candid,
+            wasm_path: &spec.wasm_path,
+            did_path: &spec.did_path,
+            wasm_gz_path: &spec.wasm_gz_path,
+        },
+        toolchain,
+    )?;
 
     Ok(CanisterArtifactBuildOutput {
         package_name: spec.package_name.clone(),

@@ -18,7 +18,8 @@ use std::cell::RefCell;
 const ROOT_ACCEPT_METHOD: &str = "root_funding_probe_accept";
 const ROOT_ACCEPT_THEN_TRAP_METHOD: &str = "root_funding_probe_accept_then_trap";
 const COORDINATOR_HANDLE_REQUEST_METHOD: &str = "root_funding_probe_handle_request";
-const FINAL_FUNDING_COMMAND_METHOD: &str = "canic_command";
+const COORDINATOR_FUNDING_COMMAND_METHOD: &str = "canic_coordinator_command";
+const ROOT_FUNDING_COMMAND_METHOD: &str = "canic_root_command";
 const FINAL_FUNDING_COMMAND_MAX_ENCODED_BYTES: u64 = 16_384;
 const LEDGER_FEE_METHOD: &str = "icrc1_fee";
 const LEDGER_DECIMALS_METHOD: &str = "icrc1_decimals";
@@ -215,7 +216,7 @@ fn prepare_intent(root: Principal, operation_id: [u8; 32], amount: u128) -> Gran
         trap("grant request exceeds final command payload bound");
     }
     let call_cost = cost_call(
-        FINAL_FUNDING_COMMAND_METHOD.len() as u64,
+        ROOT_FUNDING_COMMAND_METHOD.len() as u64,
         FINAL_FUNDING_COMMAND_MAX_ENCODED_BYTES,
     );
     let call_reservation = amount
@@ -266,7 +267,7 @@ async fn request() -> RootRequestObservation {
         trap("root grant request exceeds final command payload bound");
     }
     let call_cost = cost_call(
-        FINAL_FUNDING_COMMAND_METHOD.len() as u64,
+        COORDINATOR_FUNDING_COMMAND_METHOD.len() as u64,
         FINAL_FUNDING_COMMAND_MAX_ENCODED_BYTES,
     );
     let balance_before_request = canister_cycle_balance();

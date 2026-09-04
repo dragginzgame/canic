@@ -191,6 +191,9 @@ pub struct FleetSubnetCanisterPoolConfig {
     pub maximum_size: u32,
     /// Minimum retained balance required before a pool asset becomes Ready.
     pub canister_cycles: Cycles,
+    /// Native cycles retained above the Ready floor while a newly created asset is
+    /// created, inspected, controller-checked, and admitted to the pool.
+    pub creation_execution_margin: Cycles,
 }
 
 ///

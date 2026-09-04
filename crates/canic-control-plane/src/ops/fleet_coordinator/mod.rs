@@ -115,7 +115,7 @@ use canic_core::{
             RootComponentDirectorySynchronizationResponse,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningPhase, RootComponentProvisioningStatusResponse,
-            RootComponentPublicationRequest,
+            RootComponentPublicationRequest, RootEstateFundingRequired,
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -600,6 +600,7 @@ impl FleetCoordinatorOps {
             plan: request.plan,
             state: FleetComponentProvisioningStateRecord::Planned { planned_at_ns },
             last_root_failure: None,
+            estate_funding_required: None,
         };
         let mut next = current.clone();
         next.component_provisioning = Some(record.clone());
@@ -677,6 +678,7 @@ impl FleetCoordinatorOps {
             plan: request.plan,
             state: FleetComponentProvisioningStateRecord::Planned { planned_at_ns },
             last_root_failure: None,
+            estate_funding_required: None,
         };
         let mut next = current.clone();
         if let Some(receipt) = terminal_receipt {
@@ -922,15 +924,17 @@ impl FleetCoordinatorOps {
         };
         let acceptance = component_provisioning_root_acceptance_progress(record)?;
         let mut next = current.clone();
-        component_provisioning_operation_record_mut(&mut next, request.operation_id)?.state =
-            FleetComponentProvisioningStateRecord::ProvisioningRoots {
-                planned_at_ns: acceptance.planned_at_ns,
-                acceptances: acceptance.acceptances,
-                roots_accepted_at_ns,
-                provisions: progress.provisions,
-                current: progress.current.map(Box::new),
-                in_flight: Some(intent.clone()),
-            };
+        let next_record =
+            component_provisioning_operation_record_mut(&mut next, request.operation_id)?;
+        next_record.estate_funding_required = None;
+        next_record.state = FleetComponentProvisioningStateRecord::ProvisioningRoots {
+            planned_at_ns: acceptance.planned_at_ns,
+            acceptances: acceptance.acceptances,
+            roots_accepted_at_ns,
+            provisions: progress.provisions,
+            current: progress.current.map(Box::new),
+            in_flight: Some(intent.clone()),
+        };
         let next = Self::validate_current(next)?;
         Self::commit_transition(&current, next)?;
         Ok(FleetComponentProvisioningRootProvisionDisposition::Invoke(
@@ -964,6 +968,9 @@ impl FleetCoordinatorOps {
         let previous = progress.current_response.as_ref().ok_or_else(|| {
             receipt_invariant("root provisioning response has no durable predecessor")
         })?;
+        if response.estate_funding_required.is_some() {
+            return Err(InternalError::conflict());
+        }
         let acceptance = component_provisioning_root_acceptance(record, intent.root_index)?;
         validate_root_provision_response(RootProvisionResponseValidation {
             configuration: &current.component_deployment_configuration,
@@ -996,6 +1003,7 @@ impl FleetCoordinatorOps {
         let mut next = current.clone();
         let next_record =
             component_provisioning_operation_record_mut(&mut next, request.operation_id)?;
+        next_record.estate_funding_required = None;
         if provisioned_root_count == acceptance_progress.root_batch_count {
             next_record.state = FleetComponentProvisioningStateRecord::ComponentsProvisioned {
                 planned_at_ns: acceptance_progress.planned_at_ns,
@@ -1014,6 +1022,59 @@ impl FleetCoordinatorOps {
                 in_flight: None,
             };
         }
+        let next = Self::validate_current(next)?;
+        let result = component_provisioning_status_response(
+            component_provisioning_operation_record(&next, request.operation_id)?,
+        )?;
+        Self::commit_transition(&current, next)?;
+        Ok(result)
+    }
+
+    pub(crate) fn record_component_provisioning_estate_funding_pause(
+        request: &FleetComponentProvisioningAdvanceRequest,
+        response: RootComponentProvisioningStatusResponse,
+        recorded_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_operation_record(&current, request)?;
+        let mut progress = component_provisioning_root_provision_progress(record)?;
+        if classify_root_provision_advance(request, &progress)? != RootProvisionAdvance::Reconcile {
+            return Err(InternalError::conflict());
+        }
+        let intent = progress
+            .in_flight
+            .take()
+            .ok_or_else(|| receipt_invariant("estate funding pause lost its Root intent"))?;
+        if recorded_at_ns < intent.started_at_ns {
+            return Err(InternalError::invalid_input());
+        }
+        let previous = progress.current_response.as_ref().ok_or_else(|| {
+            receipt_invariant("estate funding pause has no durable Root predecessor")
+        })?;
+        require_same_root_progress_ignoring_estate_funding(previous, &response)?;
+        let funding = response
+            .estate_funding_required
+            .as_ref()
+            .ok_or_else(InternalError::conflict)?;
+        validate_estate_funding_pause(funding, &intent, recorded_at_ns)?;
+
+        let acceptance_progress = component_provisioning_root_acceptance_progress(record)?;
+        let roots_accepted_at_ns = progress
+            .roots_accepted_at_ns
+            .ok_or_else(|| receipt_invariant("estate funding pause lost its RootsAccepted time"))?;
+        let mut next = current.clone();
+        let next_record =
+            component_provisioning_operation_record_mut(&mut next, request.operation_id)?;
+        next_record.state = FleetComponentProvisioningStateRecord::ProvisioningRoots {
+            planned_at_ns: acceptance_progress.planned_at_ns,
+            acceptances: acceptance_progress.acceptances,
+            roots_accepted_at_ns,
+            provisions: progress.provisions,
+            current: progress.current.map(Box::new),
+            in_flight: None,
+        };
+        next_record.last_root_failure = None;
+        next_record.estate_funding_required = Some(funding.clone());
         let next = Self::validate_current(next)?;
         let result = component_provisioning_status_response(
             component_provisioning_operation_record(&next, request.operation_id)?,
@@ -2411,6 +2472,54 @@ fn root_provision_previous_observed_at(
     progress
         .roots_accepted_at_ns
         .ok_or_else(|| receipt_invariant("root provisioning lacks RootsAccepted time authority"))
+}
+
+fn require_same_root_progress_ignoring_estate_funding(
+    previous: &RootComponentProvisioningStatusResponse,
+    response: &RootComponentProvisioningStatusResponse,
+) -> Result<(), InternalError> {
+    let mut previous = previous.clone();
+    previous.estate_funding_required = None;
+    let mut response = response.clone();
+    response.estate_funding_required = None;
+    if previous != response {
+        return Err(InternalError::conflict());
+    }
+    Ok(())
+}
+
+fn validate_estate_funding_pause(
+    funding: &RootEstateFundingRequired,
+    intent: &FleetComponentProvisioningRootProvisionIntentRecord,
+    recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    let required = funding
+        .creation_amount
+        .to_u128()
+        .checked_add(funding.ledger_fee.to_u128())
+        .ok_or_else(InternalError::resource_exhausted)?;
+    let creation_amount = funding
+        .readiness_floor
+        .to_u128()
+        .checked_add(funding.execution_margin.to_u128())
+        .and_then(|amount| amount.checked_add(funding.management_creation_fee.to_u128()))
+        .ok_or_else(InternalError::resource_exhausted)?;
+    let exact_arithmetic = funding.required.to_u128() == required
+        && funding.creation_amount.to_u128() == creation_amount
+        && funding.shortfall.to_u128() == required.saturating_sub(funding.available.to_u128())
+        && funding.available < funding.required;
+    let exact_authority = funding.root == intent.fleet_subnet_root
+        && funding.operation_id != [0; 32]
+        && funding.readiness_floor.to_u128() > 0
+        && funding.execution_margin.to_u128() > 0;
+    let exact_timing = funding.retry_at_ns > 0
+        && funding
+            .last_attempt_at_ns
+            .is_none_or(|attempted_at_ns| attempted_at_ns > 0 && attempted_at_ns <= recorded_at_ns);
+    if !exact_arithmetic || !exact_authority || !exact_timing {
+        return Err(InternalError::conflict());
+    }
+    Ok(())
 }
 
 fn component_provisioning_root_acceptance(

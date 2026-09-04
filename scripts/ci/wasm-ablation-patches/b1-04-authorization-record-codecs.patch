@@ -12,12 +12,12 @@ index 2a851f0ae..e03f61d92 100644
 -};
 +use crate::storage::prelude::*;
  use std::cell::RefCell;
- 
+
  mod records;
 @@ -22,15 +16,22 @@ pub use records::{
      RootIssuerRenewalTemplateRecord, RootProofRecord,
  };
- 
+
 -eager_static! {
 -    pub(super) static AUTH_STATE: RefCell<Cell<AuthStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
 -        RefCell::new(Cell::init(
@@ -35,12 +35,12 @@ index 2a851f0ae..e03f61d92 100644
 +        self.0 = record;
 +    }
  }
- 
+
 -impl_storable_unbounded!(AuthStateRecord);
 +thread_local! {
 +    pub(super) static AUTH_STATE: RefCell<HeapAuthStateCell> =
 +        RefCell::new(HeapAuthStateCell(AuthStateRecord::default()));
 +}
- 
+
  ///
  /// AuthState

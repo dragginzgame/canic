@@ -1,6 +1,7 @@
 use crate::{
     artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_candid::resolve_infrastructure_candid,
+    build_toolchain::BuildToolchain,
     canister_build::{
         CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext,
         cache::{canister_build_target_root, configure_canister_cargo_command},
@@ -66,6 +67,7 @@ pub struct GeneratedWrapperDependencies {
 // local ICP artifact paths for downstream/root builds.
 pub fn build_bootstrap_wasm_store_artifact(
     context: &WorkspaceBuildContext,
+    toolchain: &BuildToolchain,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_wasm_store_source(&context.workspace_root, &context.icp_root)?;
     require_built_in_wasm_store_contract(&source.manifest_path)?;
@@ -109,17 +111,20 @@ pub fn build_bootstrap_wasm_store_artifact(
     if artifact_candid != candid {
         return Err("Wasm Store materialized Candid differs from its compiled profile".into());
     }
-    let transforms = finalize_wasm_artifact(&WasmArtifactFinalization {
-        profile: context.profile,
-        build_network: context.build_network,
-        embed_candid,
-        validate_sidecar_only: false,
-        source_wasm_path: &built_wasm_path,
-        candid: &artifact_candid,
-        wasm_path: &wasm_path,
-        did_path: &did_path,
-        wasm_gz_path: &wasm_gz_path,
-    })?;
+    let transforms = finalize_wasm_artifact(
+        &WasmArtifactFinalization {
+            profile: context.profile,
+            build_network: context.build_network,
+            embed_candid,
+            validate_sidecar_only: false,
+            source_wasm_path: &built_wasm_path,
+            candid: &artifact_candid,
+            wasm_path: &wasm_path,
+            did_path: &did_path,
+            wasm_gz_path: &wasm_gz_path,
+        },
+        toolchain,
+    )?;
     write_bytes(&profile_path, context.profile.target_dir_name().as_bytes())?;
 
     Ok(CanisterArtifactBuildOutput {

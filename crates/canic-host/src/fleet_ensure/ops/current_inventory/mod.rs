@@ -32,7 +32,9 @@ use canic_core::{
     cdk::utils::hash::hex_bytes,
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
     dto::{
-        canister::{CanisterInfo, CanisterInspectionRequest, CanisterStatusResponse},
+        canister::{
+            CanisterInfo, CanisterInspectionRequest, CanisterStatusResponse, CanisterStatusType,
+        },
         component_provisioning::{
             FleetComponentProvisioningPhase, FleetComponentProvisioningStatusResponse,
             RootComponentProvisioningPhase, RootComponentProvisioningResult,
@@ -537,6 +539,7 @@ fn query_entries(
                 parent.root,
                 child.pid,
             )?;
+            require_terminal_component_authority(parent.root, child.pid, &observed, protocol)?;
             let entry = registry_entry(&child, protocol, observed.module_hash.as_deref())?;
             insert_controlled_cycles(
                 &mut controlled_cycles_by_principal,
@@ -587,7 +590,7 @@ fn query_root_component_status(
             icp,
             candid_path,
             root,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_ROOT_STATUS,
             &RootInventoryStatusRequest::ComponentProvisioning(OperationStatusRequest {
                 operation_id,
             }),
@@ -725,9 +728,10 @@ fn append_root_components(
                 authority.root.fleet_subnet_root,
                 binding.canister_id,
             )?;
-            require_current_module(
+            require_terminal_component_authority(
+                authority.root.fleet_subnet_root,
                 binding.canister_id,
-                observed.module_hash.as_deref(),
+                &observed,
                 protocol,
             )?;
             entries.push(RegistryEntry {
@@ -1013,7 +1017,7 @@ fn validate_component_partition(
             icp,
             candid_path,
             root,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_ROOT_STATUS,
             &RootInventoryStatusRequest::ComponentRegistryActivePartition(
                 ComponentRegistryActivePartitionRequest {
                     component: member.binding.component,
@@ -1194,7 +1198,7 @@ fn validate_terminal_descendant_allocation(
             icp,
             root_candid_path,
             authority.root,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_ROOT_STATUS,
             &RootInventoryStatusRequest::ComponentChildProvisioning(OperationStatusRequest {
                 operation_id: authority.workload.operation_id,
             }),
@@ -1326,7 +1330,7 @@ fn append_pool_assets(
                 icp,
                 candid_path,
                 root.fleet_subnet_root,
-                protocol::CANIC_STATUS,
+                protocol::CANIC_ROOT_STATUS,
                 &RootInventoryStatusRequest::Pool(CanisterPoolStatusRequest {
                     start_after,
                     limit: 256,
@@ -1507,6 +1511,48 @@ fn observed_cycle_balance(status: &CanisterStatusResponse) -> Result<u128, Curre
         .map_err(|_| inventory_error("management cycle balance exceeds u128"))
 }
 
+fn require_terminal_component_authority(
+    root: Principal,
+    canister_id: Principal,
+    observed: &CanisterStatusResponse,
+    protocol: &ProtocolEntry,
+) -> Result<(), CurrentProtocolError> {
+    require_terminal_component_values(
+        root,
+        canister_id,
+        observed.status,
+        &observed.settings.controllers,
+        observed.module_hash.as_deref(),
+        protocol,
+    )
+}
+
+fn require_terminal_component_values(
+    root: Principal,
+    canister_id: Principal,
+    status: CanisterStatusType,
+    controllers: &[Principal],
+    module_hash: Option<&[u8]>,
+    protocol: &ProtocolEntry,
+) -> Result<(), CurrentProtocolError> {
+    if status != CanisterStatusType::Running {
+        return Err(CurrentProtocolError::TerminalCanisterStatus {
+            canister: canister_id,
+            expected: CanisterStatusType::Running,
+            observed: status,
+        });
+    }
+    let expected = vec![root];
+    if controllers != expected {
+        return Err(CurrentProtocolError::TerminalCanisterControllers {
+            canister: canister_id,
+            expected,
+            observed: controllers.to_vec(),
+        });
+    }
+    require_current_module(canister_id, module_hash, protocol)
+}
+
 fn insert_controlled_cycles(
     balances: &mut BTreeMap<String, u128>,
     principal: Principal,
@@ -1589,10 +1635,16 @@ fn registry_entry(
     if child.module_hash.as_ref().is_some_and(|hash| {
         hash.len() != 32 || hex_bytes(hash) != protocol_entry.installed_module_hash
     }) {
-        return Err(inventory_error(format!(
-            "Canister {} Directory module hash conflicts with its current-release protocol",
-            child.pid
-        )));
+        return Err(CurrentProtocolError::TerminalDirectoryModule {
+            canister: child.pid,
+            expected: protocol_entry.installed_module_hash.clone(),
+            observed: hex_bytes(
+                child
+                    .module_hash
+                    .as_deref()
+                    .expect("checked Directory hash"),
+            ),
+        });
     }
     Ok(RegistryEntry {
         pid: child.pid.to_text(),
@@ -1610,11 +1662,11 @@ fn require_current_module(
 ) -> Result<(), CurrentProtocolError> {
     let observed = observed_module_hash.map(hex_bytes);
     if observed.as_deref() != Some(protocol_entry.installed_module_hash.as_str()) {
-        return Err(inventory_error(format!(
-            "Canister {canister_id} Root-observed module hash is {}; expected {}",
-            observed.as_deref().unwrap_or("missing"),
-            protocol_entry.installed_module_hash
-        )));
+        return Err(CurrentProtocolError::TerminalCanisterModule {
+            canister: canister_id,
+            expected: protocol_entry.installed_module_hash.clone(),
+            observed,
+        });
     }
     Ok(())
 }
@@ -1788,10 +1840,9 @@ fn verify_protocol(
             });
         }
         Err(RegularFileReadError::NotRegular) => {
-            return Err(inventory_error(format!(
-                "current protocol sidecar is not a regular no-follow file: {}",
-                path.display()
-            )));
+            return Err(CurrentProtocolError::ProtocolSidecarNotRegular {
+                path: path.to_path_buf(),
+            });
         }
         Err(RegularFileReadError::Io(source)) => {
             return Err(CurrentProtocolError::ReadCandid {
@@ -1815,10 +1866,9 @@ fn verify_protocol(
     if observed.candid_sha256 != binding.candid_sha256
         || observed.protocol_profile_digest != binding.protocol_profile_digest
     {
-        return Err(inventory_error(format!(
-            "current protocol sidecar changed: {}",
-            path.display()
-        )));
+        return Err(CurrentProtocolError::ProtocolSidecarChanged {
+            path: path.to_path_buf(),
+        });
     }
     Ok(())
 }
@@ -1928,15 +1978,22 @@ mod tests {
         };
         assert!(matches!(
             registry_entry(&info, &protocol, None),
-            Err(CurrentProtocolError::Configuration(reason))
-                if reason.contains("Root-observed module hash is missing")
+            Err(CurrentProtocolError::TerminalCanisterModule {
+                canister,
+                expected: actual_expected,
+                observed: None,
+            }) if canister == child && actual_expected == expected
         ));
 
         assert!(matches!(
             registry_entry(&info, &protocol, Some(&[0x22; 32])),
-            Err(CurrentProtocolError::Configuration(reason))
-                if reason.contains(&format!("Root-observed module hash is {}", "22".repeat(32)))
-                    && reason.contains(&format!("expected {}", "11".repeat(32)))
+            Err(CurrentProtocolError::TerminalCanisterModule {
+                canister,
+                expected: actual_expected,
+                observed: Some(actual_observed),
+            }) if canister == child
+                && actual_expected == expected
+                && actual_observed == "22".repeat(32)
         ));
 
         let projected = registry_entry(&info, &protocol, Some(&[0x11; 32]))
@@ -1947,13 +2004,71 @@ mod tests {
         info.module_hash = Some(vec![0x22; 32]);
         assert!(matches!(
             registry_entry(&info, &protocol, Some(&[0x11; 32])),
-            Err(CurrentProtocolError::Configuration(reason))
-                if reason.contains("Directory module hash conflicts")
+            Err(CurrentProtocolError::TerminalDirectoryModule {
+                canister,
+                expected: actual_expected,
+                observed,
+            }) if canister == child
+                && actual_expected == expected
+                && observed == "22".repeat(32)
         ));
 
         info.module_hash = Some(vec![0x11; 32]);
         registry_entry(&info, &protocol, Some(&[0x11; 32]))
             .expect("matching Root and Directory observations remain accepted");
+    }
+
+    #[test]
+    fn terminal_component_requires_running_root_only_authority() {
+        let root = Principal::from_slice(&[7; 29]);
+        let component = Principal::from_slice(&[8; 29]);
+        let foreign = Principal::from_slice(&[9; 29]);
+        let expected_hash = [0x11; 32];
+        let protocol = protocol_entry(&hex_bytes(expected_hash));
+
+        assert!(matches!(
+            require_terminal_component_values(
+                root,
+                component,
+                CanisterStatusType::Stopped,
+                &[root],
+                Some(&expected_hash),
+                &protocol,
+            ),
+            Err(CurrentProtocolError::TerminalCanisterStatus {
+                canister,
+                expected: CanisterStatusType::Running,
+                observed: CanisterStatusType::Stopped,
+            }) if canister == component
+        ));
+
+        assert!(matches!(
+            require_terminal_component_values(
+                root,
+                component,
+                CanisterStatusType::Running,
+                &[root, foreign],
+                Some(&expected_hash),
+                &protocol,
+            ),
+            Err(CurrentProtocolError::TerminalCanisterControllers {
+                canister,
+                expected,
+                observed,
+            }) if canister == component
+                && expected == [root]
+                && observed == [root, foreign]
+        ));
+
+        require_terminal_component_values(
+            root,
+            component,
+            CanisterStatusType::Running,
+            &[root],
+            Some(&expected_hash),
+            &protocol,
+        )
+        .expect("running Component with exact Root-only authority");
     }
 
     #[test]
@@ -2479,6 +2594,7 @@ mod tests {
                     minimum_size: 0,
                     maximum_size: 1,
                     canister_cycles: Cycles::new(1),
+                    creation_execution_margin: Cycles::new(1),
                 },
                 cycles_funding: CyclesFundingBudget {
                     window_secs: 1,
@@ -2533,6 +2649,7 @@ mod tests {
             fleet_registry: source_fleet_registry,
             configuration_digest,
             fleet_subnet_root: root_principal,
+            estate_funding_required: None,
             phase: RootComponentProvisioningPhase::RuntimesActive,
             placement_count: 0,
             component_count: 0,
@@ -2594,6 +2711,7 @@ mod tests {
             current_activation: None,
             activation_in_flight_root: None,
             pending_root_failure: None,
+            estate_funding_required: None,
             group_placement_count: root_status.placement_count,
             component_count: root_status.component_count,
             planned_at_ns: 1,
@@ -2627,8 +2745,8 @@ mod tests {
         fs::write(&path, b"service : {};").expect("change sidecar");
         assert!(matches!(
             verify_protocol(&path, &binding),
-            Err(CurrentProtocolError::Configuration(reason))
-                if reason.contains("protocol sidecar changed")
+            Err(CurrentProtocolError::ProtocolSidecarChanged { path: observed })
+                if observed == path
         ));
     }
 
@@ -2671,8 +2789,8 @@ mod tests {
 
         assert!(matches!(
             verify_protocol(&link, &binding),
-            Err(CurrentProtocolError::Configuration(reason))
-                if reason.contains("not a regular no-follow file")
+            Err(CurrentProtocolError::ProtocolSidecarNotRegular { path: observed })
+                if observed == link
         ));
     }
 }

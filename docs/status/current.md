@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ## Purpose
 
@@ -25,8 +25,8 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.110.5` at
-`50f40171d6177c3d1e490b1fdb5f6163323b2cd5`. Its governed marker records the
+Current development begins from published `v0.110.6` at
+`f1fd3c59f428c57e28a2d6469ee8326f744ed021`. Its governed marker records the
 validated pre-version source below; immutable details are in
 [the 0.110 changelog](../changelog/0.110.md). Post-release work is retained
 under `Unreleased` until it forms a coherent batch. Source-development truth
@@ -205,6 +205,16 @@ existing content-addressed object store and reports only their local path,
 SHA-256 and byte size. Text-mode cycle quantities use consistent three-decimal
 `B`, `T` and `Q` units.
 
+## Open 0.110.7 Endpoint Contract Correction
+
+The maintained Canic surface no longer overloads one top-level method name
+with incompatible request and response types. Ordinary managed roles retain
+`canic_command` and `canic_status`; Fleet Coordinator, Fleet Subnet Root and
+Wasm Store own `canic_coordinator_*`, `canic_root_*` and
+`canic_wasm_store_*` command/status pairs respectively. Generic host tooling
+selects the exact pair from the already verified role binding. This is a
+pre-1.0 hard cut with no alias or fallback endpoint.
+
 ## B1-B10 State
 
 | Batch | State | Current evidence owner |
@@ -247,7 +257,7 @@ runtime or repository dependency.
 | Line | Active owner | State |
 | --- | --- | --- |
 | [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.5` published; valid eleven-role v6 baseline retained while B1 fixture and differential evidence remain active |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.6` published; valid eleven-role v6 baseline retained while B1 fixture and differential evidence remain active |
 | [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
@@ -280,8 +290,16 @@ baseline before any runtime contraction. Initial work:
   fixtures, plus immutable all-role global-registration attribution removing
   273,554 artifact-summed optimized code bytes and 662 defined functions while
   leaving bootstrap/lifecycle parity open,
-  an all-role-qualified inclusive activation-persistence switch, specified
-  authorization stable-codec and shared-CBOR-helper switches, an isolated
+  immutable inclusive activation-persistence attribution removing 3,001,136
+  artifact-summed optimized code bytes and 2,025 defined functions while
+  preserving every role's Candid hash and leaving activation parity open,
+  immutable authorization-persistence integration attribution removing
+  1,628,872 artifact-summed optimized code bytes and 897 defined functions
+  across all canonical roles, with the runtime fixture independently removing
+  148,935 code bytes and 88 functions while persistence and authorization
+  parity remain open,
+  a canonical-plus-runtime-and-blob-fixture-qualified shared-CBOR-helper switch,
+  an isolated
   watchdog-recovery dispatch switch
   and an endpoint-
   declaration-construction switch plus bounded endpoint-reply serialization,
@@ -297,8 +315,8 @@ release flow owns that boundary. Published `v0.110.5` closes the independent
 CANIC-124/CANIC-126/CANIC-127 qualification and convergence corrections, so B1
 measurement may proceed; B2 remains blocked on accepted complete B1 evidence.
 
-The current Unreleased overlay also closes an observability exposure discovered
-during downstream review. Exact cycle balance/history/top-up values and raw
+Published `v0.110.6` also closes an observability exposure discovered during
+downstream review. Exact cycle balance/history/top-up values and raw
 runtime metrics are controller-only on managed, standalone-local, Root and
 Store status surfaces. Fleet `info list`, `info cycles`, `info metrics` and
 terminal conservation retain operator access through existing Root authority:
@@ -307,7 +325,7 @@ and metrics use a controller-authenticated Root relay. No human principal is
 added as a managed Component controller, and Toko Miner remains downstream-
 owned.
 
-The Unreleased overlay also corrects the `v0.110.5` Component Child response
+Published `v0.110.6` also corrects the `v0.110.5` Component Child response
 regression. Child allocations requested by an Active parent now complete
 through the existing durable Root driver before returning their canister ID.
 Only initial bootstrap uses detached completion, because the Prepared parent
@@ -315,7 +333,7 @@ cannot yet serve the Directory convergence callback. This is a generic Canic
 lifecycle correction; no downstream application behavior is embedded in
 Canic.
 
-Terminal Fleet inventory in the Unreleased overlay now reconciles every Root
+Terminal Fleet inventory in published `v0.110.6` reconciles every Root
 pool Workload against the complete protected Component tree, including nested
 sharding, scaling and index descendants. Each physical workload must match its
 exact Component ID, allocation operation, Root, parent, role and current
@@ -325,6 +343,108 @@ logical parent only when the terminal row is an observed, protocol-bound
 Component; all other parent drift remains rejected. `canic info subnets` also
 retains the caller's selected ICP executable and environment instead of
 falling back to `local`.
+
+## 0.110.7 Audit and Validation Hardening
+
+Artifact builds now resolve the canonical `ic-wasm 0.11.1` and, for release,
+Binaryen 132 before Cargo compilation or release-build planning. One admitted
+absolute tool set serves the complete build, the canonical `~/.local/bin`
+installation takes precedence over PATH wrappers, and the public toolchain
+installer owns both checksum-verified downloads. Missing, mismatched and
+root-level `HOME=/` cases retain actionable exact-path diagnostics.
+
+The current Unreleased overlay fails terminal Component inventory closed unless
+Root management inspection proves the canister is running, Root-only controlled
+and on the exact current module. Authority, module, Directory, Registry-
+principal, release-network, Fleet-admission, protocol-sidecar and generator
+Candid-sidecar failures carry typed values, digests or paths through their test
+boundary.
+
+Cycle reporting now derives its observation plan from exact role and capability
+records. Coordinator history is unavailable, unbound pool assets report a typed
+balance-only result, Root and Store omit unsupported top-up calls, and eligible
+automatic-top-up Components retain the complete history/top-up path.
+
+Fleet Ensure also accounts for each Root's Cycles Ledger account independently
+from operator funding. Its current plan forecasts the canisters required by the
+selected Component action, recursive initial-child topology and configured
+Ready-pool floor, while crediting reusable Ready assets and completed
+workloads. It reports raw account balance, creation amount and count, Ledger and
+management fees, maximum plan-owned funding and shortfall. The reviewed plan
+places an exact `FundEstate` Ledger transfer before protocol work, persists its
+intent before debit, adopts an exact duplicate receipt after response loss and
+proves both operator debit and Root-account credit. Immediately before the
+first Fleet protocol effect, apply re-reads the exact Ledger/Root account;
+unexpected underfunding becomes a durable typed no-effect pause and an
+unchanged retry does not rewrite the journal or call the control plane.
+Terminal conservation reconciles actual plan-owned Root-account funding and
+actual protected creation receipts separately from operator funding of managed
+canisters.
+
+Autonomous creation funding includes the generated 1T execution margin above
+the Ready floor and management creation fee. Root retains each exact creation
+operation, Ledger block, amount, fees, policy and first live native balance;
+the first observation bounds pre-ready burn and cannot be rewritten by later
+inspection. Planning pages the complete protected pool inventory, so every
+dynamic asset and pending creation consumes capacity before any funding action.
+
+Behavioral PocketIC evidence replaces the removed source-text observability
+guard. The focused proof checks exact diagnostic codes and response variants for
+Root, Store, standalone, managed and relayed calls, including a capability-
+accurate automatic-top-up fixture and the restored active-Registry baseline that
+failed the prior full run. Governed progress emits `CANIC-TEST:E001`, allowing
+the validation runner to surface failure events without parsing presentation
+wording. The B1 ablation helper likewise emits a typed transform-metrics v1
+record instead of requiring optimizer log prose or changing the historical
+product helper it measures. Its separately resolved offline lock and exact
+experiment patch hashes are machine-bound. A development-only row-3 canonical
+App smoke passes for both patched and baseline artifacts against immutable
+`v0.110.5`, with the historical source tree and product lock restored exactly;
+it is intentionally not retained B1 evidence. The subsequent retained all-role
+run passes 44 clean artifact builds, structured transform checks and complete
+determinism, and records the material inclusive activation-persistence result.
+The retained row-4 run likewise passes 48 clean builds and complete
+determinism across the canonical roles plus `runtime_probe`, preserves every
+Candid hash and records material repeated authorization-persistence integration
+footprint without claiming persistence or authorization parity.
+Fleet plan persistence regressions likewise decode structured JSON and assert
+named values or absence rather than serializer text.
+
+Role-contract validation now derives Root chain-key signing from actual
+delegated-token issuer configuration and rejects surplus cryptographic features
+with a typed finding. The workspace selects the existing IC-stack `k256 0.13.4`
+family only, eliminating the parallel 0.14 cryptographic dependency family. A
+target-Wasm dependency gate checks every canonical deployed role for duplicate
+cryptographic package versions and proves all eight zero-auth roles contain no
+signature stack. Only Root and the two canonical roles that exercise token
+verification or issuance retain authentication cryptography. Optimized
+capability reports retain cryptography as a separate measured category so later
+symbol-level regressions remain visible.
+
+### Downstream feedback disposition
+
+The current patch candidate addresses the Canic-owned launch blockers recorded
+as `CANIC-007`, `CANIC-132` and `CANIC-133`: funding is plan-owned and
+replay-safe, autonomous creation has non-zero execution margin and exact
+first-observation evidence, and planning uses the complete protected pool
+inventory before authorizing a debit. It deliberately fails closed when
+already-Failed assets occupy all pool capacity; a separate reviewed native
+funding and Root-reset operation is still required to repair that retained
+estate without abandoning its cycles. Immutable release and downstream replay
+remain the other closure boundaries. `CANIC-129` is covered by an isolated
+packaged-consumer lock-resolution proof; the public testing facade remains the
+only supported downstream testing boundary. `CANIC-130` is already corrected
+in Canic; the remaining wrapper replay is downstream evidence rather than a
+second Canic owner.
+
+The non-blocking product requests stay explicit without expanding this release:
+the Fleet observatory (`CANIC-002`) and frontend delivery handoff (`CANIC-008`)
+retain their existing deferred designs; operator top-level Component lifecycle
+(`CANIC-010`) and a long-running multi-Subnet local Fleet (`CANIC-017`) now have
+separate unnumbered design homes. Release-evidence truth (`CANIC-014`) remains
+governed by structured release metadata, while release-build cost
+(`CANIC-087`) remains active B1 work. None of these deferred surfaces is a
+prerequisite for the current cycle-safe Fleet Ensure correction.
 
 ## Architecture Consolidation Audit Update
 
@@ -345,13 +465,18 @@ and an await-safe Root validation-context pilot remain deferred inputs.
 
 ## Next Authorized Action
 
-Continue B1 from immutable `v0.110.5`: measure qualified row 3, then qualify
-the specified rows 4 through 6 authorization stable-codec and shared-CBOR-
-helper patches plus the watchdog-recovery dispatch patch,
-row 8 endpoint-
-declaration construction and rows 10 and 12 endpoint-reply serialization and
-metrics-provider attribution, then complete the
-controlled ablations, optimized generated-surface proof, generic-
+Finish the current 0.110.7 cycle-safety batch before continuing contraction:
+retain the plan-owned Root estate funding action, complete protected pool
+inventory, non-zero autonomous creation margin and actual receipt-based
+terminal conservation as one candidate; then run the maintainer-owned complete
+release gate and obtain downstream no-effect replay. Do not fund an estate
+account outside the reviewed plan or treat this dirty source as published.
+
+After that blocker is immutable, continue B1 from immutable `v0.110.5`:
+measure qualified row 5, then qualify the specified row 6 watchdog-recovery
+dispatch patch, row 8 endpoint-declaration construction and rows 10 and 12
+endpoint-reply serialization and metrics-provider attribution, then complete
+the controlled ablations, optimized generated-surface proof, generic-
 instantiation cohort, accepted allowances and required compatible predecessor
 comparisons. Row 3 is an inclusive build-only attribution with no activation-
 parity or isolated-codec claim; row 4 preserves the auth call graph and same-
