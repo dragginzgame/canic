@@ -381,4 +381,5 @@ not begin B2 until the maintainer accepts the complete B1 baseline.
 
 
 
-<!-- canic-release-validation: version=0.110.5 source=03ea1a1f6af91c370d4e56352118faf85a4b5079 date=2026-09-02 gate=complete -->
+
+<!-- canic-release-validation: version=0.110.6 source=f391da0847dd800b74a862b5b5fa770413e5e808 date=2026-09-04 gate=complete -->
