@@ -20,8 +20,9 @@ use super::super::artifacts::{
     internal_test_artifact_maintenance_interval, internal_test_artifact_prune_policy,
     report_artifact_cache_maintenance,
 };
+use super::super::progress::{self as test_progress, ProgressStatus};
 use super::super::startup::start_pocket_ic;
-use super::fixture::progress;
+use super::fixture::{progress, progress_ready};
 
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
 #[cfg(test)]
@@ -251,7 +252,7 @@ pub(super) fn build_pic() -> PocketIc {
             .with_ii_subnet()
             .with_application_subnet(),
     );
-    progress("PocketIC instance ready");
+    progress_ready("PocketIC instance");
     pic
 }
 
@@ -266,7 +267,7 @@ pub(super) fn build_management_pic() -> PocketIc {
             .with_ii_subnet()
             .with_application_subnet(),
     );
-    progress("management-agent PocketIC instance ready");
+    progress_ready("management-agent PocketIC instance");
     pic
 }
 
@@ -280,7 +281,7 @@ pub(super) fn build_two_root_pic() -> PocketIc {
             .with_application_subnet()
             .with_application_subnet(),
     );
-    progress("two-Root PocketIC instance ready");
+    progress_ready("two-Root PocketIC instance");
     pic
 }
 
@@ -301,7 +302,7 @@ pub(super) fn build_icp_refill_pic() -> PocketIc {
                 ..IcpFeatures::default()
             }),
     );
-    progress("PocketIC instance with ICP Ledger and CMC ready");
+    progress_ready("PocketIC instance with ICP Ledger and CMC");
     pic
 }
 
@@ -395,7 +396,17 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
                 .expect("commit bootstrap Store artifact cache")
         }
     };
-    eprintln!("[pic_fleet_registry] bootstrap Store artifact {outcome}");
+    test_progress::timed(
+        "WASM",
+        if outcome.is_reused() {
+            ProgressStatus::Cache
+        } else {
+            ProgressStatus::Done
+        },
+        "bootstrap Store artifact",
+        outcome.record().timings().total(),
+    );
+    test_progress::detail("WASM", &format!("bootstrap Store cache: {outcome}"));
     report_artifact_cache_maintenance("bootstrap-wasm-store", outcome.record().maintenance());
 }
 

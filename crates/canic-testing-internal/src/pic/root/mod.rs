@@ -3,9 +3,12 @@
 use candid::Principal;
 use canic::ids::{BuildNetwork, CanisterRole};
 use ic_testkit::pic::PocketIc;
-use std::{collections::HashMap, io::Write, path::PathBuf, time::Instant};
+use std::{collections::HashMap, path::PathBuf, time::Instant};
 
-use super::CanicWasmBuildProfile;
+use super::{
+    CanicWasmBuildProfile,
+    progress::{self as test_progress, ProgressStatus},
+};
 
 mod artifacts;
 mod baseline;
@@ -58,15 +61,16 @@ pub struct RootBaselineMetadata {
 
 // Print one progress line for a root-test setup phase and flush immediately.
 fn progress(spec: &RootBaselineSpec<'_>, phase: &str) {
-    eprintln!("[{}] {phase}", spec.progress_prefix);
-    let _ = std::io::stderr().flush();
+    test_progress::event(spec.progress_prefix, ProgressStatus::Run, phase);
 }
 
 // Print one completed phase with wall-clock timing.
 fn progress_elapsed(spec: &RootBaselineSpec<'_>, phase: &str, started_at: Instant) {
-    progress(
-        spec,
-        &format!("{phase} in {:.2}s", started_at.elapsed().as_secs_f32()),
+    test_progress::timed(
+        spec.progress_prefix,
+        ProgressStatus::Done,
+        phase,
+        started_at.elapsed(),
     );
 }
 

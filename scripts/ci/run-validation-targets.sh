@@ -31,6 +31,12 @@ export CANIC_VALIDATION_RUNNER_DEPTH="$((RUNNER_DEPTH + 1))"
 MAX_FAILURE_DETAIL_LINES=160
 FAILURE_PATTERN='---- .* stdout ----|^test .* \.\.\. FAILED$|failures:|test result: FAILED|error(\[[A-Z0-9]+\])?:|target failed|make(\[[0-9]+\])?: \*\*\*'
 
+# The validation pipeline makes child stderr non-interactive. Preserve readable
+# test-progress colors when the outer runner is attached to a real terminal.
+if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]]; then
+    export CANIC_TEST_COLOR="${CANIC_TEST_COLOR:-always}"
+fi
+
 failed_targets=()
 targets=()
 results=()
