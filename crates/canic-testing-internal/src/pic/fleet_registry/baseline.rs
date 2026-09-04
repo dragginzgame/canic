@@ -6077,18 +6077,97 @@ exec icp "$@"
     }
 
     #[cfg(test)]
-    fn assert_mainnet_refill(
+    const MAINNET_REFILL_READINESS_FLOOR: u128 = 1_900_000_000_000;
+    #[cfg(test)]
+    const MAINNET_REFILL_EXECUTION_MARGIN: u128 = 1_000_000_000_000;
+    #[cfg(test)]
+    const MAINNET_REFILL_MANAGEMENT_CREATION_FEE: u128 = 500_000_000_000;
+    #[cfg(test)]
+    const MAINNET_REFILL_LEDGER_FEE: u128 = 100_000_000;
+    #[cfg(test)]
+    const MAINNET_REFILL_REPRESENTATIVE_BURN: [u128; 4] = [100_036, 340_125, 250_092, 160_059];
+
+    #[cfg(test)]
+    #[derive(Clone, Copy)]
+    struct MainnetRefillScenario {
         first_response_pending: bool,
         required_ready_assets: u32,
-        expected_request_count: u64,
-    ) {
-        const READINESS_FLOOR: u128 = 1_900_000_000_000;
-        const EXECUTION_MARGIN: u128 = 1_000_000_000_000;
-        const MANAGEMENT_CREATION_FEE: u128 = 500_000_000_000;
-        const LEDGER_FEE: u128 = 100_000_000;
-        const REPRESENTATIVE_BURN: [u128; 4] = [100_036, 340_125, 250_092, 160_059];
+    }
 
-        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+    #[cfg(test)]
+    struct MainnetRefillFixture {
+        assets: Vec<Principal>,
+        cycles_ledger: Principal,
+        pic: PocketIc,
+        root: Principal,
+    }
+
+    #[cfg(test)]
+    fn create_mainnet_refill_pool_and_ledger(
+        pic: &PocketIc,
+        root: Principal,
+        cycles_ledger_wasm: &[u8],
+        scenario: MainnetRefillScenario,
+    ) -> Vec<Principal> {
+        let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
+        let assets = MAINNET_REFILL_REPRESENTATIVE_BURN
+            .into_iter()
+            .take(
+                usize::try_from(scenario.required_ready_assets)
+                    .expect("bounded Ready-pool requirement"),
+            )
+            .map(|burn| {
+                let asset = pic
+                    .create_canister_with_params(
+                        None,
+                        CreateCanisterParams {
+                            cycles: Some(
+                                MAINNET_REFILL_READINESS_FLOOR + MAINNET_REFILL_EXECUTION_MARGIN
+                                    - burn,
+                            ),
+                            settings: None,
+                            placement: Some(CreateCanisterPlacement::SubnetId(root_subnet)),
+                        },
+                    )
+                    .expect("create returned pool asset with bounded execution burn");
+                pic.set_controllers(asset, None, vec![root])
+                    .expect("prepare returned pool asset controller");
+                asset
+            })
+            .collect::<Vec<_>>();
+        let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
+            .expect("canonical Cycles Ledger principal");
+        pic.create_canister_with_id(None, None, cycles_ledger)
+            .expect("create canonical Cycles Ledger stub principal");
+        pic.install_canister(
+            cycles_ledger,
+            cycles_ledger_wasm.to_vec(),
+            encode_one(CyclesLedgerStubInitArgs {
+                canister_ids: assets.clone(),
+                expected_controllers_by_index: None,
+                expected_root: root,
+                expected_subnet: root_subnet,
+                initial_balances: Some(vec![CyclesLedgerStubAccountBalance {
+                    balance: Nat::from(
+                        u128::from(scenario.required_ready_assets)
+                            * (MAINNET_REFILL_READINESS_FLOOR
+                                + MAINNET_REFILL_EXECUTION_MARGIN
+                                + MAINNET_REFILL_MANAGEMENT_CREATION_FEE
+                                + MAINNET_REFILL_LEDGER_FEE),
+                    ),
+                    owner: root,
+                }]),
+                pending_first_index: scenario.first_response_pending.then_some(0),
+                withdrawal_fee: Some(Nat::from(MAINNET_REFILL_LEDGER_FEE)),
+            })
+            .expect("encode Cycles Ledger stub init"),
+            None,
+        );
+        assets
+    }
+
+    #[cfg(test)]
+    fn build_mainnet_refill_fixture(scenario: MainnetRefillScenario) -> MainnetRefillFixture {
         let (root_wasm, cycles_ledger_wasm) = build_mainnet_refill_wasms();
         let _ = build_test_wasm_store_wasm();
         let store_fixture = build_root_store_fixture();
@@ -6103,8 +6182,8 @@ exec icp "$@"
             store_fixture,
             BootstrappedRootPlacement {
                 canister_pool_maximum_size: Some(8),
-                canister_pool_minimum_size: Some(required_ready_assets),
-                canister_pool_cycles: Some(Cycles::new(READINESS_FLOOR)),
+                canister_pool_minimum_size: Some(scenario.required_ready_assets),
+                canister_pool_cycles: Some(Cycles::new(MAINNET_REFILL_READINESS_FLOOR)),
                 coordinator_subnet: None,
                 existing_root: None,
                 existing_wasm_store: None,
@@ -6116,79 +6195,49 @@ exec icp "$@"
             },
             &config_path,
             |pic, root| {
-                let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
-                let assets = REPRESENTATIVE_BURN
-                    .into_iter()
-                    .take(
-                        usize::try_from(required_ready_assets)
-                            .expect("bounded Ready-pool requirement"),
-                    )
-                    .map(|burn| {
-                        let asset = pic
-                            .create_canister_with_params(
-                                None,
-                                CreateCanisterParams {
-                                    cycles: Some(READINESS_FLOOR + EXECUTION_MARGIN - burn),
-                                    settings: None,
-                                    placement: Some(CreateCanisterPlacement::SubnetId(root_subnet)),
-                                },
-                            )
-                            .expect("create returned pool asset with bounded execution burn");
-                        pic.set_controllers(asset, None, vec![root])
-                            .expect("prepare returned pool asset controller");
-                        asset
-                    })
-                    .collect::<Vec<_>>();
-                let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
-                    .expect("canonical Cycles Ledger principal");
-                pic.create_canister_with_id(None, None, cycles_ledger)
-                    .expect("create canonical Cycles Ledger stub principal");
-                pic.install_canister(
-                    cycles_ledger,
-                    cycles_ledger_wasm,
-                    encode_one(CyclesLedgerStubInitArgs {
-                        canister_ids: assets.clone(),
-                        expected_controllers_by_index: None,
-                        expected_root: root,
-                        expected_subnet: root_subnet,
-                        initial_balances: Some(vec![CyclesLedgerStubAccountBalance {
-                            balance: Nat::from(
-                                u128::from(required_ready_assets)
-                                    * (READINESS_FLOOR
-                                        + EXECUTION_MARGIN
-                                        + MANAGEMENT_CREATION_FEE
-                                        + LEDGER_FEE),
-                            ),
-                            owner: root,
-                        }]),
-                        pending_first_index: first_response_pending.then_some(0),
-                        withdrawal_fee: Some(Nat::from(LEDGER_FEE)),
-                    })
-                    .expect("encode Cycles Ledger stub init"),
-                    None,
-                );
+                let assets =
+                    create_mainnet_refill_pool_and_ledger(pic, root, &cycles_ledger_wasm, scenario);
                 created_assets.replace(assets);
                 Vec::new()
             },
         );
+        MainnetRefillFixture {
+            assets: created_assets.into_inner(),
+            cycles_ledger: Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
+                .expect("canonical Cycles Ledger principal"),
+            pic,
+            root: fixture.root_id,
+        }
+    }
 
-        for _ in 0..(required_ready_assets.saturating_mul(4).saturating_add(4)) {
-            let status = root_pool_status(&pic, fixture.root_id);
+    #[cfg(test)]
+    fn converge_mainnet_refill(fixture: &MainnetRefillFixture, required_ready_assets: u32) {
+        for _ in 0..required_ready_assets.saturating_mul(4).saturating_add(4) {
+            let status = root_pool_status(&fixture.pic, fixture.root);
             if status.ready == required_ready_assets {
                 break;
             }
-            let RootCommandResponseFragment::MaintainPool(_) =
-                root_command(&pic, fixture.root_id, RootCommandFragment::MaintainPool)
-                    .expect("automatic pool maintenance")
-            else {
+            let RootCommandResponseFragment::MaintainPool(_) = root_command(
+                &fixture.pic,
+                fixture.root,
+                RootCommandFragment::MaintainPool,
+            )
+            .expect("automatic pool maintenance") else {
                 panic!("Root returned a differently correlated pool response");
             };
         }
+    }
 
-        let status = root_pool_status(&pic, fixture.root_id);
+    #[cfg(test)]
+    fn assert_mainnet_refill_result(
+        fixture: &MainnetRefillFixture,
+        required_ready_assets: u32,
+        expected_request_count: u64,
+    ) {
+        let status = root_pool_status(&fixture.pic, fixture.root);
         assert_eq!(status.ready, required_ready_assets);
         assert_eq!(status.pending_reset, 0);
-        for asset in created_assets.borrow().iter() {
+        for asset in &fixture.assets {
             let entry = status
                 .entries
                 .iter()
@@ -6196,36 +6245,61 @@ exec icp "$@"
                 .expect("automatically created inventory entry");
             assert_eq!(entry.origin, CanisterPoolAssetOrigin::Created);
             assert_eq!(entry.status, CanisterPoolAssetStatus::Ready);
-            assert!(entry.cycles.to_u128() >= READINESS_FLOOR);
-            assert!(entry.cycles.to_u128() < READINESS_FLOOR + EXECUTION_MARGIN);
+            assert!(entry.cycles.to_u128() >= MAINNET_REFILL_READINESS_FLOOR);
+            assert!(
+                entry.cycles.to_u128()
+                    < MAINNET_REFILL_READINESS_FLOOR + MAINNET_REFILL_EXECUTION_MARGIN
+            );
         }
-        let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
-            .expect("canonical Cycles Ledger principal");
-        let request_count: u64 = pic
-            .query_candid(cycles_ledger, "request_count", ())
+        let request_count: u64 = fixture
+            .pic
+            .query_candid(fixture.cycles_ledger, "request_count", ())
             .expect("query ledger request count");
         assert_eq!(request_count, expected_request_count);
-        let requested_amounts: Vec<Nat> = pic
-            .query_candid(cycles_ledger, "requested_amounts", ())
+        let requested_amounts: Vec<Nat> = fixture
+            .pic
+            .query_candid(fixture.cycles_ledger, "requested_amounts", ())
             .expect("query exact Ledger creation amounts");
         assert_eq!(
             requested_amounts,
             vec![
-                Nat::from(READINESS_FLOOR + EXECUTION_MARGIN + MANAGEMENT_CREATION_FEE);
+                Nat::from(
+                    MAINNET_REFILL_READINESS_FLOOR
+                        + MAINNET_REFILL_EXECUTION_MARGIN
+                        + MAINNET_REFILL_MANAGEMENT_CREATION_FEE
+                );
                 usize::try_from(required_ready_assets).expect("bounded Ready-pool requirement")
             ]
         );
 
-        let RootCommandResponseFragment::MaintainPool(_) =
-            root_command(&pic, fixture.root_id, RootCommandFragment::MaintainPool)
-                .expect("effect-free terminal pool replay")
-        else {
+        let RootCommandResponseFragment::MaintainPool(_) = root_command(
+            &fixture.pic,
+            fixture.root,
+            RootCommandFragment::MaintainPool,
+        )
+        .expect("effect-free terminal pool replay") else {
             panic!("Root returned a differently correlated pool response");
         };
-        let replay_request_count: u64 = pic
-            .query_candid(cycles_ledger, "request_count", ())
+        let replay_request_count: u64 = fixture
+            .pic
+            .query_candid(fixture.cycles_ledger, "request_count", ())
             .expect("query replayed ledger request count");
         assert_eq!(replay_request_count, expected_request_count);
+    }
+
+    #[cfg(test)]
+    fn assert_mainnet_refill(
+        first_response_pending: bool,
+        required_ready_assets: u32,
+        expected_request_count: u64,
+    ) {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = build_mainnet_refill_fixture(MainnetRefillScenario {
+            first_response_pending,
+            required_ready_assets,
+        });
+        converge_mainnet_refill(&fixture, required_ready_assets);
+        assert_mainnet_refill_result(&fixture, required_ready_assets, expected_request_count);
     }
 
     #[cfg(test)]
