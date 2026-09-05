@@ -20,7 +20,7 @@ use canic::{
         rpc::RootRequestMetadata,
     },
     ids::{CanisterRole, ComponentBinding},
-    protocol::{CANIC_ROOT_COMMAND, CANIC_ROOT_STATUS},
+    protocol::{CANIC_ROOT_COMMAND, CANIC_ROOT_STATUS, CANIC_STATUS},
 };
 use ic_testkit::pic::{CandidCallExt, PocketIc};
 
@@ -36,14 +36,22 @@ enum RootCommandResponse {
 
 #[derive(CandidType)]
 enum RootStatusRequest {
-    Metrics(MetricsStatusRequest),
     RoleAttestation(RoleAttestationGetRequest),
 }
 
 #[derive(CandidType, Deserialize)]
 enum RootStatusResponse {
-    Metrics(Page<MetricEntry>),
     RoleAttestation(SignedRoleAttestation),
+}
+
+#[derive(CandidType)]
+enum ManagedStatusRequest {
+    Metrics(MetricsStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum ManagedStatusResponse {
+    Metrics(Page<MetricEntry>),
 }
 
 /// Exercise issuance, verification, and guard metrics through an active issuer Component.
@@ -285,12 +293,9 @@ fn issue_requested_role_attestation(
             ),),
         )
         .expect("role attestation retrieval transport");
-    match signed.expect("role attestation retrieval") {
-        RootStatusResponse::RoleAttestation(attestation) => attestation,
-        RootStatusResponse::Metrics(_) => {
-            panic!("Root returned a differently correlated status response")
-        }
-    }
+    let RootStatusResponse::RoleAttestation(attestation) =
+        signed.expect("role attestation retrieval");
+    attestation
 }
 
 fn require_attested_local_subnet(
@@ -383,12 +388,12 @@ fn query_metric_entries(
     canister: Principal,
     kind: MetricsKind,
 ) -> Vec<MetricEntry> {
-    let response: Result<RootStatusResponse, Error> = pic
+    let response: Result<ManagedStatusResponse, Error> = pic
         .query_candid_as(
             canister,
             caller,
-            CANIC_ROOT_STATUS,
-            (RootStatusRequest::Metrics(MetricsStatusRequest {
+            CANIC_STATUS,
+            (ManagedStatusRequest::Metrics(MetricsStatusRequest {
                 kind,
                 page: PageRequest {
                     limit: 10_000,
@@ -397,11 +402,8 @@ fn query_metric_entries(
             }),),
         )
         .expect("controller-authenticated metrics query transport");
-    let RootStatusResponse::Metrics(page) =
-        response.expect("controller-authenticated metrics query")
-    else {
-        panic!("canic_root_status returned a non-Metrics response")
-    };
+    let ManagedStatusResponse::Metrics(page) =
+        response.expect("controller-authenticated metrics query");
     page.entries
 }
 
