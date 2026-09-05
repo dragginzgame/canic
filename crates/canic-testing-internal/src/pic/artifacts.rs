@@ -1,18 +1,23 @@
 use canic_core::ids::BuildNetwork;
 use ic_testkit::artifacts::{
-    ArtifactCacheMaintenance, ArtifactCacheOutcome, ArtifactCachePreparation,
-    ArtifactCachePrunePolicy, ArtifactCacheSpec, LabeledWasmBuildSpec,
+    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
     SharedIncrementalTargetPrunePolicy, WasmBuildBatchConfig, WasmBuildBatchProgressEvent,
     WasmBuildBatchReport, WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildProgressPhase,
     WasmBuildSpec, build_wasm_canisters_cached_batch_with_config_and_progress,
-    prepare_artifact_cache, resolve_cargo_build_inputs,
 };
+#[cfg(feature = "pocketic-fixtures")]
+use ic_testkit::artifacts::{
+    ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
+    resolve_cargo_build_inputs,
+};
+#[cfg(feature = "pocketic-fixtures")]
+use std::fs;
+#[cfg(feature = "pocketic-fixtures")]
+use std::sync::OnceLock;
 use std::{
-    fs,
     path::{Path, PathBuf},
     process::{Command, Output},
-    sync::OnceLock,
     time::Duration,
 };
 
@@ -30,13 +35,14 @@ pub(super) const INTERNAL_TEST_RELEASE_BUILD_ID: (&str, &str) = (
     canic_core::ids::RELEASE_BUILD_ID_ENV,
     "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae",
 );
-#[cfg(test)]
+#[cfg(all(test, feature = "pocketic-fixtures"))]
 pub(super) const INTERNAL_TEST_RELEASE_BUILD_NONCE: [u8; 32] = [0x11; 32];
 pub(super) const INTERNAL_TEST_PROTOCOL_PROFILE_DIGEST: (&str, &str) = (
     canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV,
     "0404040404040404040404040404040404040404040404040404040404040404",
 );
 
+#[cfg(feature = "pocketic-fixtures")]
 pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> Vec<u8> {
     static WASM: OnceLock<Vec<u8>> = OnceLock::new();
     WASM.get_or_init(|| {
@@ -93,16 +99,18 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
 
 /// Reusable Cargo target for host-driven test artifact builds.
 #[must_use]
+#[cfg(any(test, feature = "pocketic-fixtures"))]
 pub(super) fn internal_test_artifact_build_target(workspace_root: &Path) -> PathBuf {
     workspace_root.join("target/pic-wasm")
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 pub(super) fn preflight_governed_shared_artifacts() {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let _ = build_canonical_fleet_coordinator_wasm(&workspace_root);
 }
 
+#[cfg(feature = "pocketic-fixtures")]
 fn canonical_fleet_coordinator_cache_spec(
     workspace_root: &Path,
     target_dir: &Path,
@@ -157,6 +165,7 @@ fn canonical_fleet_coordinator_cache_spec(
     )
 }
 
+#[cfg(feature = "pocketic-fixtures")]
 fn run_canonical_fleet_coordinator_build(
     workspace_root: &Path,
     target_dir: &Path,

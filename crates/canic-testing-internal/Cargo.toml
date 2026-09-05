@@ -13,6 +13,13 @@ publish = false
 # dependency.
 ignored = ["serde"]
 
+[features]
+# Keep the large governed PocketIC case catalogue out of ordinary and fast
+# library-test compilation. The workspace PocketIC lane enables it explicitly.
+default = ["pocketic-fixtures"]
+governed-pocketic-tests = ["pocketic-fixtures"]
+pocketic-fixtures = []
+
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true, features = ["testing"] }

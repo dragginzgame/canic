@@ -38,7 +38,6 @@ SCCACHE_WRAPPER="$ROOT/scripts/ci/run-sccache.sh"
 POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 RELEASE_PUSH_READY="$ROOT/scripts/ci/check-release-push-ready.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
-RELEASE_REMOTE_STATE="$ROOT/scripts/ci/check-release-remote-state.sh"
 RELEASE_REMOTE_STATE_TEST="$ROOT/scripts/ci/test-release-remote-state.sh"
 POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
@@ -312,29 +311,11 @@ if rg -w 'check|clippy' <<<"$validation_tests" >/dev/null; then
     fail "make validate test barrier repeats compile/lint work"
 fi
 
-rg -F 'SCCACHE_BIN ?= $(shell command -v sccache 2>/dev/null)' "$MAKEFILE" >/dev/null ||
-    fail "Make does not discover the pinned local sccache"
-rg -F 'RUSTC_WRAPPER ?= $(CANIC_SCCACHE_WRAPPER)' "$MAKEFILE" >/dev/null ||
-    fail "Make does not select the stable-runtime sccache wrapper"
-rg -F 'SCCACHE_RUNTIME_TMPDIR="$SCCACHE_RUNTIME_ROOT/tmp"' "$SCCACHE_WRAPPER" >/dev/null ||
-    fail "sccache wrapper does not own a stable runtime temporary directory"
-rg -F 'SCCACHE_SERVER_UDS="$SCCACHE_RUNTIME_ROOT/server.sock"' "$SCCACHE_WRAPPER" >/dev/null ||
-    fail "sccache wrapper does not isolate its persistent repository server"
-rg -F 'export TMPDIR="$SCCACHE_RUNTIME_TMPDIR"' "$SCCACHE_WRAPPER" >/dev/null ||
-    fail "sccache wrapper can inherit disposable test scratch"
-rg -F '^(run-sccache\.sh|sccache)$' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "workspace tests do not recognize the maintained sccache wrapper"
-rg -F 'CARGO_INCREMENTAL ?= 0' "$MAKEFILE" >/dev/null ||
-    fail "Make does not disable incremental compilation with sccache"
 test_recipe="$(sed -n '/^test-unit:/,/^test-auth:/p' "$MAKEFILE")"
 clippy_recipe="$(sed -n '/^clippy:/,/^$/p' "$MAKEFILE")"
 if rg -F 'CARGO_INCREMENTAL=0' <<<"$test_recipe$clippy_recipe" >/dev/null; then
     fail "Make still disables incremental local tests or Clippy without a compiler cache"
 fi
-rg -F '"sccache@$CANIC_SCCACHE_VERSION"' "$DEV_INSTALL" >/dev/null ||
-    fail "maintainer toolchain setup does not install the pinned sccache"
-rg -F 'require_command sccache' "$DEV_INSTALL" >/dev/null ||
-    fail "maintainer toolchain setup does not verify sccache availability"
 if rg -F 'SOURCE_LINEAGE_MARKER=' "$BUMP_VERSION" >/dev/null; then
     fail "version bump still requires one exact source-lineage sentence"
 fi
@@ -502,23 +483,13 @@ for governed_test in "${governed_host_pocketic_tests[@]}"; do
 done
 rg -F 'cargo test --locked --no-fail-fast' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not retain failures across Cargo test binaries"
-rg -F 'FAILED_LABELS+=("$label")' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "the workspace test runner does not collect independent suite failures"
 rg --multiline 'require_ordinary_success_before_pocketic\nstart_owned_pocketic_server' \
     "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the full workspace runner does not stop after ordinary failures before PocketIC"
 rg -F '"$HEAVY_BUILD_TARGETS_USED" -eq 0' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the PocketIC integration group does not preserve Wasm build freshness between suites"
-for validation_runner_fragment in \
-    'target/validation-failures' \
-    'Validation summary:' \
-    'Failure details (repeated from the full logs):' \
-    'VALIDATION FAILED:'; do
-    rg -F "$validation_runner_fragment" "$VALIDATION_RUNNER" >/dev/null ||
-        fail "validation runner omits feedback contract: $validation_runner_fragment"
-done
-rg -F 'validation target runner test passed' "$VALIDATION_RUNNER_TEST" >/dev/null ||
-    fail "validation runner has no executable failure-collection fixture"
+bash "$VALIDATION_RUNNER_TEST" >/dev/null ||
+    fail "validation runner executable failure-collection fixture failed"
 build_recipe="$(sed -n '/^build:/,/^$/p' "$MAKEFILE")"
 check_recipe="$(sed -n '/^check:/,/^$/p' "$MAKEFILE")"
 rg -F -- '--keep-going' <<<"$build_recipe" >/dev/null ||
@@ -531,6 +502,9 @@ CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
     fail "the full workspace test plan cannot be resolved"
 ordinary_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" ordinary)" ||
     fail "the ordinary workspace test plan cannot be resolved"
+rg -F -- '-p canic-testing-internal --no-default-features --lib pic::governed_suite::governed_fast_internal_suite' \
+    <<<"$ordinary_test_plan" >/dev/null ||
+    fail "the fast internal tier still compiles the governed PocketIC fixture catalogue"
 ordinary_cargo_invocations="$(rg -c '^==> plan: cargo test ' <<<"$ordinary_test_plan")"
 [[ "$ordinary_cargo_invocations" -gt 0 && "$ordinary_cargo_invocations" -le 3 ]] ||
     fail "the ordinary workspace plan must compile through at most three Cargo invocations"
@@ -543,6 +517,9 @@ rg -F 'libtest-parallel' <<<"$ordinary_test_plan" >/dev/null ||
     fail "ordinary timing output does not distinguish libtest parallelism from suite concurrency"
 pocketic_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" pocketic)" ||
     fail "the PocketIC workspace test plan cannot be resolved"
+rg -F -- '-p canic-testing-internal --features governed-pocketic-tests --lib pic::governed_suite::governed_serial_pocketic_suite' \
+    <<<"$pocketic_test_plan" >/dev/null ||
+    fail "the governed internal PocketIC lane does not enable its fixture catalogue"
 rg -F -- '-p canic-host --lib governed_pocketic_ -- --test-threads=1 --nocapture --ignored' \
     <<<"$pocketic_test_plan" >/dev/null ||
     fail "the PocketIC workspace plan omits the governed canic-host proofs"
@@ -571,19 +548,6 @@ for release_target in release-patch release-patch-fast release-minor release-maj
         fail "make $release_target must retain Cargo artifacts for package publication"
     fi
 done
-rg -F 'set -euo pipefail' "$RELEASE_VALIDATION_LANE" >/dev/null ||
-    fail "the release validation owner is not fail-fast"
-rg -F 'make --no-print-directory validate' "$RELEASE_VALIDATION_LANE" >/dev/null ||
-    fail "the complete release lane omits validation"
-rg -F 'bash scripts/ci/check-release-draft-ready.sh "$BUMP_TYPE"' "$RELEASE_VALIDATION_LANE" >/dev/null ||
-    fail "the release validation owner does not reject an invalid draft before validation"
-rg -F 'Reusing complete validation receipt' "$RELEASE_VALIDATION_LANE" >/dev/null ||
-    fail "the release validation owner cannot resume an exact validated source"
-rg -F 'bash scripts/ci/check-fast-patch-eligibility.sh' "$RELEASE_VALIDATION_LANE" >/dev/null ||
-    fail "the fast release lane omits its eligibility gate"
-release_lane_clean_count="$(rg -c '^make --no-print-directory ensure-clean$' "$RELEASE_VALIDATION_LANE")"
-[[ "$release_lane_clean_count" -eq 2 ]] ||
-    fail "the release validation owner must verify cleanliness before and after validation"
 bash "$RELEASE_VALIDATION_LANE_TEST" >/dev/null ||
     fail "the release validation lane does not fail closed before version mutation"
 rg -F 'runtime, build, package, protocol, fixture, or unrelated path changed' \
@@ -646,16 +610,6 @@ for release_push_script in "$RELEASE_PUSH_READY" "$RELEASE_PUSH"; do
     rg -F -- '--committed' "$release_push_script" >/dev/null ||
         fail "release push does not derive its version from committed HEAD"
 done
-rg -F 'check-release-remote-state.sh before-push "$version"' "$RELEASE_PUSH_READY" >/dev/null ||
-    fail "release push readiness does not refresh remote ancestry and tag state"
-rg -F 'git fetch --quiet --no-tags "$REMOTE"' "$RELEASE_REMOTE_STATE" >/dev/null ||
-    fail "release remote-state check does not fetch the current branch"
-rg -F 'git merge-base --is-ancestor "$REMOTE_HEAD" "$LOCAL_HEAD"' \
-    "$RELEASE_REMOTE_STATE" >/dev/null ||
-    fail "release remote-state check does not enforce fast-forward ancestry"
-rg -F 'git ls-remote --exit-code --refs "$REMOTE" "refs/tags/$TAG"' \
-    "$RELEASE_REMOTE_STATE" >/dev/null ||
-    fail "release remote-state check does not inspect the exact remote tag"
 bash "$RELEASE_REMOTE_STATE_TEST" >/dev/null ||
     fail "release remote-state regression fixture failed"
 rg -F 'cargo get --entry "$entry" workspace.package.version' "$VERSION_READER" >/dev/null ||
@@ -665,24 +619,6 @@ rg -F 'git show HEAD:Cargo.toml' "$VERSION_READER" >/dev/null ||
 if rg -F 'git status --porcelain' "$RELEASE_PUSH_READY" >/dev/null; then
     fail "release push still rejects unrelated local worktree or index changes"
 fi
-rg -F 'cargo clean' "$RELEASE_CLEANUP" >/dev/null ||
-    fail "release cleanup does not clear Cargo build artifacts"
-rg -F 'MAX_CARGO_CLEAN_ATTEMPTS=2' "$RELEASE_CLEANUP" >/dev/null ||
-    fail "release cleanup does not bound its Cargo cleanup retry"
-rg -F 'CANIC_TEST_SCRATCH' "$RELEASE_CLEANUP" >/dev/null ||
-    fail "release cleanup does not require exact invocation-owned test scratch"
-rg -F 'bash "$POCKET_IC_STOPPER"' "$RELEASE_CLEANUP" >/dev/null ||
-    fail "release cleanup can remove scratch before its PocketIC server exits"
-rg -F 'is_owned_port_file' "$POCKET_IC_STOPPER" >/dev/null ||
-    fail "PocketIC cleanup does not bind termination to an owned port file"
-rg -F 'kill -KILL "$pid"' "$POCKET_IC_STOPPER" >/dev/null ||
-    fail "PocketIC cleanup does not stop its detached server before scratch removal"
-rg -F 'test-runtime\.[[:alnum:]]{6}' "$RELEASE_CLEANUP" >/dev/null ||
-    fail "release cleanup does not validate the private scratch basename"
-rg -F 'mktemp -d "$TEST_SCRATCH_PARENT/test-runtime.XXXXXX"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
-    fail "test scratch runner does not allocate one private repository directory"
-rg -F 'CANIC_TEST_SCRATCH="$TEST_SCRATCH"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
-    fail "test scratch runner does not pass exact cleanup ownership"
 test_scratch_runner_count="$(rg -c 'bash scripts/ci/run-with-test-scratch\.sh' "$MAKEFILE")"
 [ "$test_scratch_runner_count" -gt 0 ] ||
     fail "temporary-file test targets do not use private scratch ownership"

@@ -1051,12 +1051,28 @@ impl FleetCoordinatorOps {
         let previous = progress.current_response.as_ref().ok_or_else(|| {
             receipt_invariant("estate funding pause has no durable Root predecessor")
         })?;
-        require_same_root_progress_ignoring_estate_funding(previous, &response)?;
+        let acceptance = component_provisioning_root_acceptance(record, intent.root_index)?;
+        let progress_advanced = validate_estate_funding_pause_progress(
+            &current.component_deployment_configuration,
+            record,
+            intent.root_index,
+            &acceptance,
+            previous,
+            &response,
+            recorded_at_ns,
+        )?;
         let funding = response
             .estate_funding_required
             .as_ref()
             .ok_or_else(InternalError::conflict)?;
         validate_estate_funding_pause(funding, &intent, recorded_at_ns)?;
+        if progress_advanced {
+            progress.current = Some(FleetComponentProvisioningRootProvisionRecord {
+                started_at_ns: intent.started_at_ns,
+                response: response.clone(),
+                recorded_at_ns,
+            });
+        }
 
         let acceptance_progress = component_provisioning_root_acceptance_progress(record)?;
         let roots_accepted_at_ns = progress
@@ -2488,6 +2504,30 @@ fn require_same_root_progress_ignoring_estate_funding(
     Ok(())
 }
 
+fn validate_estate_funding_pause_progress(
+    configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+    acceptance: &FleetComponentProvisioningRootAcceptanceRecord,
+    previous: &RootComponentProvisioningStatusResponse,
+    response: &RootComponentProvisioningStatusResponse,
+    recorded_at_ns: u64,
+) -> Result<bool, InternalError> {
+    if require_same_root_progress_ignoring_estate_funding(previous, response).is_ok() {
+        return Ok(false);
+    }
+    validate_root_provision_response(RootProvisionResponseValidation {
+        configuration,
+        record,
+        root_index,
+        acceptance,
+        previous,
+        response,
+        recorded_at_ns,
+    })?;
+    Ok(true)
+}
+
 fn validate_estate_funding_pause(
     funding: &RootEstateFundingRequired,
     intent: &FleetComponentProvisioningRootProvisionIntentRecord,
@@ -2553,7 +2593,7 @@ fn replay_recorded_root_provision(
             request.expected_current_root.is_some_and(|expected| {
                 expected.fleet_subnet_root == actual.fleet_subnet_root
                     && expected.component_count == actual.component_count
-                    && RootProvisioningCounts::from_progress(expected).advances_one_step_to(
+                    && RootProvisioningCounts::from_progress(expected).strictly_advances_to(
                         RootProvisioningCounts::from_progress(actual),
                         actual.component_count,
                     )

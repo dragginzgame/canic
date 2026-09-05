@@ -52,12 +52,12 @@ const COMBINED_LIFECYCLE_CONFIG_PATH: &str =
 static BUILD_ONCE: Once = Once::new();
 static AUTOMATIC_TOPUP_BUILD_ONCE: Once = Once::new();
 static COMBINED_BUILD_ONCE: Once = Once::new();
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 static MANAGED_COMPONENT_GROUP_BUILD_ONCE: Once = Once::new();
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 const MANAGED_COMPONENT_GROUP_CONFIG_PATH: &str =
     "apps/test/test-configs/managed-component-group.toml";
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 const MANAGED_COMPONENT_GROUP_PACKAGES: [&str; 6] = [
     "canister_index_child",
     "canister_index_hub",
@@ -402,7 +402,7 @@ fn build_combined_canister_once(workspace_root: &Path) {
 }
 
 // Build the public multi-role fixture Wasms once against their exact shared config.
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 fn build_managed_component_group_canisters_once(workspace_root: &Path) {
     MANAGED_COMPONENT_GROUP_BUILD_ONCE.call_once(|| {
         let target_dir = test_target_dir(workspace_root, "pic-managed-component-group-wasm");
@@ -574,9 +574,59 @@ fn workspace_root() -> PathBuf {
 // -----------------------------------------------------------------------------
 
 #[cfg(test)]
-pub(super) use tests::{governed_fast_cases, governed_pocketic_cases};
+pub(super) use fast_tests::governed_fast_cases;
+
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+pub(super) use tests::governed_pocketic_cases;
 
 #[cfg(test)]
+mod fast_tests {
+    use super::*;
+    use canic_core::bootstrap::{compiled::ComponentTopology, parse_config_model};
+
+    const LIFECYCLE_CANISTER_CONFIG: &str =
+        include_str!("../../../../apps/test/test-configs/root-sharding.toml");
+
+    #[test]
+    fn init_payload_component_spec_matches_embedded_canister_config() {
+        let payload = init_payload(Fake::principal(3), Fake::principal(1));
+        let CanisterInitAuthority::Component { root, binding } = payload.authority else {
+            panic!("managed lifecycle Component authority");
+        };
+        let config =
+            parse_config_model(LIFECYCLE_CANISTER_CONFIG).expect("lifecycle canister config");
+        let topology =
+            ComponentTopology::compile(&config).expect("compile lifecycle Component Topology");
+        let configured_spec = topology
+            .get(&binding.component_spec)
+            .expect("lifecycle Component Spec must be declared");
+
+        assert_eq!(configured_spec.component_role, binding.role);
+        assert_eq!(configured_spec.spec_hash, binding.spec_hash);
+        let admission = root
+            .component_admissions
+            .iter()
+            .find(|admission| admission.component_spec == binding.component_spec)
+            .expect("lifecycle Component Spec admission");
+        assert_eq!(admission.spec_hash, configured_spec.spec_hash);
+        assert_eq!(
+            root.component_topology_digest,
+            topology
+                .project_for_admissions(&root.component_admissions)
+                .and_then(|projection| projection.digest())
+                .expect("lifecycle Component topology projection")
+        );
+    }
+
+    pub fn governed_fast_cases() -> Vec<crate::pic::GovernedTestCase> {
+        vec![(
+            "lifecycle embedded Component Spec",
+            init_payload_component_spec_matches_embedded_canister_config,
+        )]
+    }
+}
+
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod tests {
     use super::*;
     use canic::{
@@ -593,7 +643,6 @@ mod tests {
         },
         protocol::{CANIC_COMMAND, CANIC_STATUS},
     };
-    use canic_core::bootstrap::{compiled::ComponentTopology, parse_config_model};
     use ic_testkit::pic::{CandidCallExt, CanisterInstallExt};
     use std::time::Duration;
 
@@ -634,40 +683,6 @@ mod tests {
         caller: Principal,
         workflow_runs: u32,
         icydb_request_session: ProbeEvidence,
-    }
-
-    const LIFECYCLE_CANISTER_CONFIG: &str =
-        include_str!("../../../../apps/test/test-configs/root-sharding.toml");
-
-    #[test]
-    fn init_payload_component_spec_matches_embedded_canister_config() {
-        let payload = init_payload(Fake::principal(3), Fake::principal(1));
-        let CanisterInitAuthority::Component { root, binding } = payload.authority else {
-            panic!("managed lifecycle Component authority");
-        };
-        let config =
-            parse_config_model(LIFECYCLE_CANISTER_CONFIG).expect("lifecycle canister config");
-        let topology =
-            ComponentTopology::compile(&config).expect("compile lifecycle Component Topology");
-        let configured_spec = topology
-            .get(&binding.component_spec)
-            .expect("lifecycle Component Spec must be declared");
-
-        assert_eq!(configured_spec.component_role, binding.role);
-        assert_eq!(configured_spec.spec_hash, binding.spec_hash);
-        let admission = root
-            .component_admissions
-            .iter()
-            .find(|admission| admission.component_spec == binding.component_spec)
-            .expect("lifecycle Component Spec admission");
-        assert_eq!(admission.spec_hash, configured_spec.spec_hash);
-        assert_eq!(
-            root.component_topology_digest,
-            topology
-                .project_for_admissions(&root.component_admissions)
-                .and_then(|projection| projection.digest())
-                .expect("lifecycle Component topology projection")
-        );
     }
 
     #[test]
@@ -1550,13 +1565,6 @@ mod tests {
         let result: Result<u32, Error> =
             pic.query_candid_or_panic(canister, "composed_framework_workflow_runs", ());
         result.expect("public workflow-run observation")
-    }
-
-    pub fn governed_fast_cases() -> Vec<crate::pic::GovernedTestCase> {
-        vec![(
-            "lifecycle embedded Component Spec",
-            init_payload_component_spec_matches_embedded_canister_config,
-        )]
     }
 
     pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {

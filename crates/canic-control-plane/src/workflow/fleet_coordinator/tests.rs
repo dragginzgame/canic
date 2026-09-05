@@ -3484,6 +3484,25 @@ fn coordinator_advances_each_accepted_root_and_freezes_terminal_receipts() {
     );
 }
 
+fn estate_funding_pause(root: Principal) -> RootEstateFundingRequired {
+    RootEstateFundingRequired {
+        available: Cycles::new(900),
+        attempt_count: 0,
+        creation_amount: Cycles::new(1_000),
+        cycles_ledger: principal(220),
+        execution_margin: Cycles::new(100),
+        last_attempt_at_ns: None,
+        ledger_fee: Cycles::new(10),
+        management_creation_fee: Cycles::new(500),
+        operation_id: [33; 32],
+        readiness_floor: Cycles::new(400),
+        required: Cycles::new(1_010),
+        retry_at_ns: 180,
+        root,
+        shortfall: Cycles::new(110),
+    }
+}
+
 #[test]
 fn coordinator_retains_typed_estate_funding_pause_without_advancing_root_progress() {
     let (config, plan_hash) = prepare_two_root_acceptance_plan();
@@ -3503,22 +3522,7 @@ fn coordinator_retains_typed_estate_funding_pause_without_advancing_root_progres
         .and_then(|current| current.component_provisioning.as_ref())
         .map(|record| provisioning_acceptances(&record.state)[0].response.clone())
         .expect("accepted Root response");
-    response.estate_funding_required = Some(RootEstateFundingRequired {
-        available: Cycles::new(900),
-        attempt_count: 0,
-        creation_amount: Cycles::new(1_000),
-        cycles_ledger: principal(220),
-        execution_margin: Cycles::new(100),
-        last_attempt_at_ns: None,
-        ledger_fee: Cycles::new(10),
-        management_creation_fee: Cycles::new(500),
-        operation_id: [33; 32],
-        readiness_floor: Cycles::new(400),
-        required: Cycles::new(1_010),
-        retry_at_ns: 180,
-        root: call.fleet_subnet_root,
-        shortfall: Cycles::new(110),
-    });
+    response.estate_funding_required = Some(estate_funding_pause(call.fleet_subnet_root));
 
     let paused = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_provisioning_estate_funding_pause(&request, response.clone(), 122)
@@ -3567,6 +3571,41 @@ fn coordinator_retains_typed_estate_funding_pause_without_advancing_root_progres
         .expect("record progress after funding");
     assert_eq!(resumed.estate_funding_required, None);
     assert_ne!(resumed.current_root, paused.current_root);
+}
+
+#[test]
+fn coordinator_retains_funding_pause_with_coalesced_root_progress() {
+    let (config, plan_hash) = prepare_two_root_acceptance_plan();
+    accept_every_planned_root(&config, plan_hash);
+    let status = component_provisioning_status(&config, plan_hash);
+    let request = root_provision_advance_request(&status);
+    let call = expect_root_provision_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_provisioning_root_for_test(&config, &request, 120)
+            .expect("persist Root provisioning intent"),
+        false,
+    );
+    let mut response = FleetCoordinatorRegistryStore::export()
+        .current
+        .as_ref()
+        .and_then(|current| current.component_provisioning.as_ref())
+        .map(|record| provisioning_acceptances(&record.state)[0].response.clone())
+        .expect("accepted Root response");
+    response.reserved_component_count = response.component_count;
+    response.estate_funding_required = Some(estate_funding_pause(call.fleet_subnet_root));
+
+    let paused = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_estate_funding_pause(&request, response.clone(), 122)
+        .expect("retain coalesced progress and typed funding pause");
+    let current = paused.current_root.expect("advanced Root cursor");
+    assert_eq!(current.reserved_component_count, current.component_count);
+    assert_eq!(current.claimed_component_count, 0);
+    assert_eq!(
+        paused.estate_funding_required,
+        response.estate_funding_required
+    );
+    assert_eq!(paused.provisioning_in_flight_root, None);
+    assert_eq!(paused.pending_root_failure, None);
 }
 
 #[test]

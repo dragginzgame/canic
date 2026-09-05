@@ -1338,9 +1338,13 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let mut before_finalization_journal = read_journal(&fresh_apply_paths)
         .expect("read pre-finalization journal")
         .expect("pre-finalization journal");
-    assert_eq!(before_finalization_journal.effects.len(), 9);
+    let finalization_intent_index = before_finalization_journal
+        .effects
+        .iter()
+        .position(|effect| effect.action_sha256 == fresh_finalizations[0])
+        .expect("first controller finalization intent");
     assert_eq!(
-        before_finalization_journal.effects[8].state,
+        before_finalization_journal.effects[finalization_intent_index].state,
         EffectState::Intent
     );
     assert_eq!(
@@ -1350,10 +1354,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
 
     let removed_intent = before_finalization_journal
         .effects
-        .pop()
-        .expect("remove first finalization intent");
+        .remove(finalization_intent_index);
     assert_eq!(removed_intent.state, EffectState::Intent);
-    assert_eq!(before_finalization_journal.effects.len(), 8);
     write_journal(&fresh_apply_paths, &before_finalization_journal)
         .expect("restore published pre-finalization journal shape");
     before_finalization.retained_cycles_by_principal.clear();
@@ -1380,7 +1382,15 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let after_first_effect = read_journal(&fresh_apply_paths)
         .expect("read first-finalization interruption journal")
         .expect("first-finalization interruption journal");
-    assert_eq!(after_first_effect.effects[8].state, EffectState::Intent);
+    assert_eq!(
+        after_first_effect
+            .effects
+            .iter()
+            .find(|effect| effect.action_sha256 == fresh_finalizations[0])
+            .expect("replayed first controller finalization intent")
+            .state,
+        EffectState::Intent
+    );
     let reconstructed_state = read_state(&fresh_apply_paths, &fresh.desired.fleet)
         .expect("read reconstructed fresh authority");
     assert_eq!(
@@ -1406,7 +1416,9 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     )
     .expect("resume both fresh controller finalizations");
     assert!(fresh_terminal.terminal);
-    assert_eq!(fresh_terminal.effects_applied, 10);
+    let planned_action_count = u32::try_from(workflow::ordered_actions(&fresh_plan).len())
+        .expect("Fleet Ensure action count fits its terminal counter");
+    assert_eq!(fresh_terminal.effects_applied, planned_action_count);
     for hash in &fresh_creates {
         assert_eq!(fresh_apply_platform.mutation_count(hash), 1);
     }

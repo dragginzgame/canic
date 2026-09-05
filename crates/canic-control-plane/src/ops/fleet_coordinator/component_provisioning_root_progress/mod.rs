@@ -70,7 +70,7 @@ impl RootProvisioningCounts {
         counts_are_bounded && phases_are_ordered
     }
 
-    pub(super) fn advances_one_step_to(self, next: Self, component_count: u32) -> bool {
+    pub(super) fn strictly_advances_to(self, next: Self, component_count: u32) -> bool {
         let states_are_canonical = [
             self.is_canonical(component_count),
             next.is_canonical(component_count),
@@ -80,52 +80,15 @@ impl RootProvisioningCounts {
         if !states_are_canonical {
             return false;
         }
-        let reservation_advances = [
-            self.claimed == 0,
-            self.installed == 0,
-            self.registry_committed == 0,
-            next.claimed == 0,
-            next.installed == 0,
-            next.registry_committed == 0,
-            self.reserved.checked_add(1) == Some(next.reserved),
+        let is_monotonic = [
+            next.reserved >= self.reserved,
+            next.claimed >= self.claimed,
+            next.installed >= self.installed,
+            next.registry_committed >= self.registry_committed,
         ]
         .into_iter()
         .all(|fact| fact);
-        let claim_advances = [
-            self.reserved == next.reserved,
-            self.installed == 0,
-            self.registry_committed == 0,
-            next.installed == 0,
-            next.registry_committed == 0,
-            self.claimed.checked_add(1) == Some(next.claimed),
-        ]
-        .into_iter()
-        .all(|fact| fact);
-        let install_advances = [
-            self.reserved == next.reserved,
-            self.claimed == next.claimed,
-            self.registry_committed == 0,
-            next.registry_committed == 0,
-            self.installed.checked_add(1) == Some(next.installed),
-        ]
-        .into_iter()
-        .all(|fact| fact);
-        let registry_advances = [
-            self.reserved == next.reserved,
-            self.claimed == next.claimed,
-            self.installed == next.installed,
-            self.registry_committed.checked_add(1) == Some(next.registry_committed),
-        ]
-        .into_iter()
-        .all(|fact| fact);
-        [
-            reservation_advances,
-            claim_advances,
-            install_advances,
-            registry_advances,
-        ]
-        .into_iter()
-        .any(|advances| advances)
+        is_monotonic && next != self
     }
 }
 
@@ -447,7 +410,7 @@ pub(super) fn classify_root_provision_advance(
         if let Some(expected) = request.expected_current_root
             && expected.fleet_subnet_root == actual.fleet_subnet_root
             && expected.component_count == actual.component_count
-            && RootProvisioningCounts::from_progress(expected).advances_one_step_to(
+            && RootProvisioningCounts::from_progress(expected).strictly_advances_to(
                 RootProvisioningCounts::from_progress(actual),
                 actual.component_count,
             )
@@ -569,4 +532,53 @@ fn terminal_root_provision_progress(
         published_fleet_registry: publication.map(|(version, _)| version.clone()),
         service_topology_published_at_ns: publication.map(|(_, published_at_ns)| published_at_ns),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RootProvisioningCounts;
+
+    const fn counts(
+        reserved: u32,
+        claimed: u32,
+        installed: u32,
+        registry_committed: u32,
+    ) -> RootProvisioningCounts {
+        RootProvisioningCounts {
+            reserved,
+            claimed,
+            installed,
+            registry_committed,
+        }
+    }
+
+    #[test]
+    fn coalesced_root_provisioning_progress_is_a_strict_monotonic_successor() {
+        let accepted = counts(0, 0, 0, 0);
+        let partially_reserved = counts(2, 0, 0, 0);
+        let partially_claimed = counts(5, 3, 0, 0);
+        let partially_installed = counts(5, 5, 4, 0);
+        let committed = counts(5, 5, 5, 5);
+
+        assert!(accepted.strictly_advances_to(partially_reserved, 5));
+        assert!(partially_reserved.strictly_advances_to(partially_claimed, 5));
+        assert!(partially_claimed.strictly_advances_to(partially_installed, 5));
+        assert!(partially_installed.strictly_advances_to(committed, 5));
+        assert!(accepted.strictly_advances_to(committed, 5));
+    }
+
+    #[test]
+    fn regressed_or_noncanonical_root_provisioning_progress_fails_closed() {
+        let current = counts(5, 3, 0, 0);
+
+        for invalid in [
+            current,
+            counts(5, 2, 0, 0),
+            counts(4, 3, 0, 0),
+            counts(5, 3, 1, 0),
+            counts(6, 3, 0, 0),
+        ] {
+            assert!(!current.strictly_advances_to(invalid, 5));
+        }
+    }
 }
