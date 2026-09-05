@@ -63,7 +63,7 @@ fn wait_for_worker_sync(
 
         let children: Result<CanisterStatusResponse, Error> = pic.query_candid_or_panic(
             hub_pid,
-            protocol::CANIC_ROOT_STATUS,
+            protocol::CANIC_STATUS,
             (CanisterStatusRequest::Children(PageRequest {
                 limit: 100,
                 offset: 0,
