@@ -291,12 +291,20 @@ pub fn lifecycle_participant_trap_wasm() -> Vec<u8> {
     WASM.get_or_init(|| {
         let workspace_root = workspace_root();
         let target_dir = test_target_dir(&workspace_root, "pic-lifecycle-participant-trap-wasm");
+        let config_path = workspace_root.join(LIFECYCLE_CANISTER_CONFIG_PATH);
+        let config_path = config_path.to_string_lossy();
         build_internal_test_wasm_canisters_with_env(
             &workspace_root,
             &target_dir,
             &["canister_test"],
             CanicWasmBuildProfile::Fast,
-            &[LIFECYCLE_PARTICIPANT_TRAP_ENV],
+            &[
+                LIFECYCLE_PARTICIPANT_TRAP_ENV,
+                (
+                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                    config_path.as_ref(),
+                ),
+            ],
         );
         read_wasm(
             &target_dir,
@@ -315,12 +323,20 @@ pub fn lifecycle_participant_init_trap_wasm() -> Vec<u8> {
         let workspace_root = workspace_root();
         let target_dir =
             test_target_dir(&workspace_root, "pic-lifecycle-participant-init-trap-wasm");
+        let config_path = workspace_root.join(LIFECYCLE_CANISTER_CONFIG_PATH);
+        let config_path = config_path.to_string_lossy();
         build_internal_test_wasm_canisters_with_env(
             &workspace_root,
             &target_dir,
             &["canister_test"],
             CanicWasmBuildProfile::Fast,
-            &[LIFECYCLE_PARTICIPANT_INIT_TRAP_ENV],
+            &[
+                LIFECYCLE_PARTICIPANT_INIT_TRAP_ENV,
+                (
+                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                    config_path.as_ref(),
+                ),
+            ],
         );
         read_wasm(
             &target_dir,
@@ -358,10 +374,24 @@ pub fn icydb_participant_trap_wasm() -> Vec<u8> {
 fn build_canisters_once(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
         let target_dir = test_target_dir(workspace_root, "pic-runtime-wasm");
+        let config_path = workspace_root.join(LIFECYCLE_CANISTER_CONFIG_PATH);
+        let config_path = config_path
+            .to_str()
+            .expect("lifecycle canister config path is UTF-8");
+        build_internal_test_wasm_canisters_with_env(
+            workspace_root,
+            &target_dir,
+            &["canister_test"],
+            CanicWasmBuildProfile::Fast,
+            &[(
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                config_path,
+            )],
+        );
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
-            &CANISTERS,
+            &CANISTERS[1..],
             CanicWasmBuildProfile::Fast,
         );
     });

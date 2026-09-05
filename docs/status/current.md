@@ -410,6 +410,9 @@ operation, Ledger block, amount, fees, policy and first live native balance;
 the first observation bounds pre-ready burn and cannot be rewritten by later
 inspection. Planning pages the complete protected pool inventory, so every
 dynamic asset and pending creation consumes capacity before any funding action.
+A capacity blocker discovered after a reviewed plan's effects have all applied
+retains its typed detail and durably closes that operation as replan-required,
+so a later plan cannot replay the completed infrastructure or funding effects.
 
 Behavioral PocketIC evidence replaces the removed source-text observability
 guard. The focused proof checks exact diagnostic codes and response variants for

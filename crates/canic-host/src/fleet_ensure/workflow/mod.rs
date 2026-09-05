@@ -1207,6 +1207,15 @@ where
                         .observe(&retained_plan.operation_id, &terminal_state)
                         .map_err(EnsureWorkflowError::Platform)?;
                 }
+                Err(error @ EnsurePolicyError::EstatePoolCapacity { .. }) => {
+                    retain_observed_cycles(&mut terminal_state, &terminal_observation);
+                    retain_completed_reinstalls(&mut terminal_state, &retained_plan, &journal);
+                    write_state(&paths, &terminal_state)?;
+                    journal.completion = FleetEnsureCompletion::ReplanRequired;
+                    journal.stalled_observations = 0;
+                    write_journal(&paths, &journal)?;
+                    return Err(error.into());
+                }
                 Err(error) => return Err(error.into()),
             }
         };

@@ -176,6 +176,8 @@ mod tests {
         FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlan, FleetEnsureStateRecord,
     };
     #[cfg(test)]
+    use canic_host::fleet_ensure::policy::EnsurePolicyError;
+    #[cfg(test)]
     use canic_host::fleet_ensure::{
         CompiledCurrentComponentProvisioning, CompiledCurrentProtocolStep,
         CurrentComponentGroupPlacement, CurrentRegistryStage, EnsureWorkflowError,
@@ -780,7 +782,7 @@ mod tests {
             .query_candid_as(
                 canister,
                 root,
-                canic::protocol::CANIC_ROOT_STATUS,
+                canic::protocol::CANIC_STATUS,
                 (ManagedStatusRequestFragment::Binding,),
             )
             .expect("managed binding status transport");
@@ -3613,6 +3615,10 @@ exec icp "$@"
             .expect("one application Subnet");
 
         let pool_count = 3_usize;
+        let initial_workload_count = 2_usize;
+        let pool_maximum_size = pool_count
+            .checked_add(initial_workload_count)
+            .expect("literal-zero pool capacity fits usize");
         let pool_creation_funding = readiness_floor
             .checked_add(3_000_000_000_000)
             .expect("literal-zero pool funding fits u128");
@@ -3654,7 +3660,7 @@ exec icp "$@"
             .collect::<Vec<_>>();
         let placement = BootstrappedRootPlacement {
             canister_pool_maximum_size: Some(
-                u32::try_from(pool_count).expect("literal-zero pool count fits u32"),
+                u32::try_from(pool_maximum_size).expect("literal-zero pool maximum fits u32"),
             ),
             canister_pool_minimum_size: Some(
                 u32::try_from(pool_count).expect("literal-zero pool count fits u32"),
@@ -3881,10 +3887,23 @@ exec icp "$@"
             &planned.plan.plan_sha256,
             &mut resumed_platform,
         );
-        assert!(
-            matches!(resumed, Err(EnsureWorkflowError::ConvergenceDrift)),
-            "fresh-process adapter must preserve completed infrastructure and require the current protocol replan: {resumed:?}"
-        );
+        match resumed {
+            Err(EnsureWorkflowError::ConvergenceDrift) => {}
+            Err(EnsureWorkflowError::Policy(EnsurePolicyError::EstatePoolCapacity {
+                allocated_workloads: 0,
+                available_slots: 2,
+                capacity_shortfall: 3,
+                eligible_ready_assets: 0,
+                maximum_size: 5,
+                occupied_assets: 3,
+                pending_creations: 0,
+                required_creation_count: 5,
+                ref root,
+            })) if root == "root" => {}
+            other => panic!(
+                "fresh-process adapter must preserve completed infrastructure and require a typed current-protocol replan boundary: {other:?}"
+            ),
+        }
         assert_eq!(
             std::fs::read_to_string(&controller_mutation_log)
                 .expect("read exact controller mutation log")
@@ -3939,15 +3958,16 @@ exec icp "$@"
             &mut protocol_platform,
         )
         .expect("plan current control-plane protocol through production adapter");
+        let protocol_actions = planned_actions(&protocol_plan.plan);
         assert!(
-            planned_actions(&protocol_plan.plan)
+            protocol_actions
                 .iter()
                 .any(|action| matches!(
                     action,
                     EnsureAction::FleetProtocol { action, .. }
                         if matches!(action.as_ref(), CurrentFleetProtocolAction::ProvisionComponents { .. })
                 )),
-            "the governed production plan must include Component provisioning"
+            "the governed production plan must include Component provisioning: {protocol_actions:#?}"
         );
         let protocol_terminal = fleet_ensure_workflow::apply(
             &adapter_root,
