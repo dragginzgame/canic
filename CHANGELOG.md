@@ -19,8 +19,9 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   hardens terminal Component authority and capability-aware cycle reporting,
   accounts for each Root-owned Cycles Ledger balance as a separately reviewed
   Fleet Ensure funding domain, gives its exact shortfall a replay-safe
-  plan-owned Ledger transfer, and proves actual autonomous-creation receipts,
-  fees and first observed balances before terminal conservation,
+  plan-owned Ledger transfer, retains truthful apply-time starting balances,
+  and proves canonical autonomous-creation receipts, fees and first observed
+  balances before terminal conservation,
   replaces observability/source-text assertions with typed PocketIC evidence,
   collapses the duplicate elliptic-curve dependency family, enforces typed
   crypto-feature closure, and gives test failures and Wasm optimizer

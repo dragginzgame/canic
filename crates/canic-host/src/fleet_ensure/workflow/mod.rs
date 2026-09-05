@@ -1723,10 +1723,7 @@ where
     {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
-    Ok((
-        observation,
-        retained_plan.conservation.observed_controlled_cycles,
-    ))
+    Ok((observation, current.conservation.observed_controlled_cycles))
 }
 
 fn estate_funding_requirement<E>(
@@ -3120,7 +3117,10 @@ const fn planned_estate_funding_pause_is_exact(
 }
 
 fn is_sha256_hex(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
