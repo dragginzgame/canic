@@ -533,4 +533,5 @@ not begin B2 until the maintainer accepts the complete B1 baseline.
 
 
 
-<!-- canic-release-validation: version=0.110.6 source=f391da0847dd800b74a862b5b5fa770413e5e808 date=2026-09-04 gate=complete -->
+
+<!-- canic-release-validation: version=0.110.7 source=2102b63700eb35bc69f03e9a595fdafae4779047 date=2026-09-05 gate=complete -->
