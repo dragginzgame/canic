@@ -10,6 +10,10 @@ fail() {
     exit 1
 }
 
+warn() {
+    echo "dependency risk warning: $1" >&2
+}
+
 [ -f "$INVENTORY" ] || fail "missing inventory: $INVENTORY"
 [ -f "$TOOLS" ] || fail "missing tool-version authority: $TOOLS"
 command -v cargo >/dev/null 2>&1 || fail "cargo is unavailable"
@@ -83,11 +87,6 @@ jq -r '
     | @tsv
 ' "$audit_json" | LC_ALL=C sort >"$actual"
 
-if ! diff -u "$expected" "$actual" >/dev/null; then
-    diff -u "$expected" "$actual" >&2 || true
-    fail "informational advisory inventory changed; review additions, removals, and package identities"
-fi
-
 metadata="$tmp_dir/metadata.json"
 (
     cd "$ROOT"
@@ -100,20 +99,33 @@ direct_dependencies="$tmp_dir/direct-dependencies.txt"
     cargo metadata --locked --offline --format-version 1 --no-deps
 ) | jq -r '.packages[].dependencies[].name' | LC_ALL=C sort -u >"$direct_dependencies"
 
+if ! diff -u "$expected" "$actual" >/dev/null; then
+    diff -u "$expected" "$actual" >&2 || true
+    warn "informational advisory inventory changed; review additions, removals, and package identities"
+fi
+
+while IFS=$'\t' read -r _advisory_id kind package _version _checksum; do
+    [ -n "$package" ] || continue
+    [ "$kind" = "unmaintained" ] ||
+        fail "$package has blocking cargo-audit warning kind $kind"
+    if rg -x -F "$package" "$direct_dependencies" >/dev/null; then
+        fail "$package is an unmaintained direct workspace dependency"
+    fi
+done <"$actual"
+
 while IFS=$'\t' read -r advisory_id kind package version _checksum introducers; do
     case "$advisory_id" in
     '' | \#*) continue ;;
     esac
     [ "$kind" = "unmaintained" ] || fail "$advisory_id is not classified as unmaintained"
-    if rg -x -F "$package" "$direct_dependencies" >/dev/null; then
-        fail "$package is now a direct workspace dependency"
-    fi
-
     package_id="$(jq -r --arg package "$package" --arg version "$version" '
         [.packages[] | select(.name == $package and .version == $version) | .id]
         | if length == 1 then .[0] else empty end
     ' "$metadata")"
-    [ -n "$package_id" ] || fail "$advisory_id package identity is absent or ambiguous"
+    if [ -z "$package_id" ]; then
+        warn "$advisory_id recorded package identity is no longer present: $package $version"
+        continue
+    fi
 
     expected_introducers_path="$tmp_dir/expected-introducers-$package.txt"
     actual_introducers_path="$tmp_dir/actual-introducers-$package.txt"
@@ -131,8 +143,9 @@ while IFS=$'\t' read -r advisory_id kind package version _checksum introducers; 
     ' "$metadata" | LC_ALL=C sort -u >"$actual_introducers_path"
     if ! diff -u "$expected_introducers_path" "$actual_introducers_path" >/dev/null; then
         diff -u "$expected_introducers_path" "$actual_introducers_path" >&2 || true
-        fail "$advisory_id immediate introducer set changed for $package"
+        warn "$advisory_id immediate introducer set changed for $package"
     fi
 done <"$INVENTORY"
 
-echo "dependency risk gate passed: zero vulnerabilities and 2 exact transitive advisories"
+warning_count="$(wc -l <"$actual")"
+echo "dependency risk gate passed: zero vulnerabilities; $warning_count transitive warning(s) reviewed"

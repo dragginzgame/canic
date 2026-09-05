@@ -303,8 +303,8 @@ run_test() {
         printf ' %q' "${cargo_args[@]}"
         if [ "$execution" = "pocketic-serial" ]; then
             printf ' -- --test-threads=1 --nocapture'
-        else
-            printf ' -- --nocapture'
+        elif [[ "${#libtest_args[@]}" -gt 0 ]]; then
+            printf ' --'
         fi
         if [[ "${#libtest_args[@]}" -gt 0 ]]; then
             printf ' %q' "${libtest_args[@]}"
@@ -317,8 +317,12 @@ run_test() {
     local status=0
     case "$execution" in
         parallel)
-            cargo test --locked --no-fail-fast "${cargo_args[@]}" -- --nocapture \
-                "${libtest_args[@]}" || status=$?
+            if [[ "${#libtest_args[@]}" -eq 0 ]]; then
+                cargo test --locked --no-fail-fast "${cargo_args[@]}" || status=$?
+            else
+                cargo test --locked --no-fail-fast "${cargo_args[@]}" -- \
+                    "${libtest_args[@]}" || status=$?
+            fi
             ;;
         pocketic-serial)
             cargo test --locked --no-fail-fast "${cargo_args[@]}" -- --test-threads=1 --nocapture \
@@ -538,6 +542,7 @@ if [[ "$MODE" != "pocketic" && "$MODE" != "targeted-pocketic" ]]; then
     run_parallel_test \
         "canic-testing-internal fast lib tests" \
         -p canic-testing-internal \
+        --no-default-features \
         --lib \
         pic::governed_suite::governed_fast_internal_suite \
         -- \
@@ -595,6 +600,7 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
         run_serial_pocketic_test \
             "targeted governed canic-testing-internal PocketIC suite" \
             -p canic-testing-internal \
+            --features governed-pocketic-tests \
             --lib \
             "$TARGETED_POCKETIC_TEST" \
             -- \
@@ -613,6 +619,7 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
         run_serial_pocketic_test \
             "targeted canic-testing-internal PocketIC proof" \
             -p canic-testing-internal \
+            --features governed-pocketic-tests \
             --lib \
             "$TARGETED_POCKETIC_TEST" \
             -- \
@@ -628,11 +635,12 @@ fi
 # One governed harness calls every internal PocketIC scenario in explicit
 # order, reports each result immediately and catches failures until the suite
 # boundary. Keeping one Rust process preserves its process-local artifact and
-# baseline pools. The deployment-restore and autonomous Root-removal proofs
-# remain the first two cases.
+# baseline pools. Scenario order remains owned by the fixture catalogue rather
+# than test display-name assertions.
 run_serial_pocketic_test \
     "canic-testing-internal ordered PocketIC suite" \
     -p canic-testing-internal \
+    --features governed-pocketic-tests \
     --lib \
     pic::governed_suite::governed_serial_pocketic_suite \
     -- \

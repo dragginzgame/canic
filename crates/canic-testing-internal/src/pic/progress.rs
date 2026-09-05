@@ -29,6 +29,7 @@ pub(super) enum ProgressStatus {
     Info,
     #[cfg(test)]
     Pass,
+    #[cfg(feature = "pocketic-fixtures")]
     Ready,
     Run,
     #[cfg(test)]
@@ -46,6 +47,7 @@ impl ProgressStatus {
             Self::Info => "INFO",
             #[cfg(test)]
             Self::Pass => "PASS",
+            #[cfg(feature = "pocketic-fixtures")]
             Self::Ready => "READY",
             Self::Run => "RUN",
             #[cfg(test)]
@@ -57,7 +59,9 @@ impl ProgressStatus {
 
     const fn color(self) -> &'static str {
         match self {
-            Self::Cache | Self::Done | Self::Ready => GREEN,
+            Self::Cache | Self::Done => GREEN,
+            #[cfg(feature = "pocketic-fixtures")]
+            Self::Ready => GREEN,
             #[cfg(test)]
             Self::Pass => GREEN,
             Self::Fail => RED,

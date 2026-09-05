@@ -6,6 +6,12 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ci/doc-guard-lib.sh"
 
 GUARD_LABEL="current document semantics"
+layout_warning_count=0
+
+warn_layout() {
+    echo "current document layout warning: $1" >&2
+    layout_warning_count=$((layout_warning_count + 1))
+}
 STATUS="$ROOT/docs/status/current.md"
 AGENTS="$ROOT/AGENTS.md"
 CI_GOVERNANCE="$ROOT/docs/governance/ci-deployment.md"
@@ -49,8 +55,7 @@ for design_entry in "$ROOT"/docs/design/*; do
     case "$(basename "$design_entry")" in
         0.* | archive | ideas) ;;
         *)
-            echo "unexpected top-level design collection: $(guard_path "$design_entry")" >&2
-            exit 1
+            warn_layout "unexpected top-level design collection: $(guard_path "$design_entry")"
             ;;
     esac
 done
@@ -60,8 +65,7 @@ for archive_entry in "$ROOT"/docs/design/archive/*; do
     case "$(basename "$archive_entry")" in
         0.* | post-46-backlog) ;;
         *)
-            echo "unexpected archived design collection: $(guard_path "$archive_entry")" >&2
-            exit 1
+            warn_layout "unexpected archived design collection: $(guard_path "$archive_entry")"
             ;;
     esac
 done
@@ -91,12 +95,10 @@ for design_dir in "$ROOT"/docs/design/0.* "$ROOT"/docs/design/archive/0.*; do
     design_file_count="$(find "$design_dir" -maxdepth 1 -type f | wc -l)"
     design_subdir_count="$(find "$design_dir" -mindepth 1 -maxdepth 1 -type d | wc -l)"
     [ "$design_file_count" -le "$max_files" ] || {
-        echo "design directory exceeds its compact file boundary: $(guard_path "$design_dir")" >&2
-        exit 1
+        warn_layout "design directory exceeds its compact file boundary: $(guard_path "$design_dir")"
     }
     [ "$design_subdir_count" -eq 0 ] || {
-        echo "numbered design directory contains a nested evidence directory: $(guard_path "$design_dir")" >&2
-        exit 1
+        warn_layout "numbered design directory contains a nested evidence directory: $(guard_path "$design_dir")"
     }
 
     while IFS= read -r design_file; do
@@ -104,13 +106,11 @@ for design_dir in "$ROOT"/docs/design/0.* "$ROOT"/docs/design/archive/0.*; do
             *design.md | status.md | *-status.md) ;;
             allocation-proposal.md | code-allocation-ledger.md)
                 [ "$max_files" -eq 4 ] || {
-                    echo "unexpected design-directory authority: $(guard_path "$design_file")" >&2
-                    exit 1
+                    warn_layout "unexpected design-directory authority: $(guard_path "$design_file")"
                 }
                 ;;
             *)
-                echo "unexpected design-directory file: $(guard_path "$design_file")" >&2
-                exit 1
+                warn_layout "unexpected design-directory file: $(guard_path "$design_file")"
                 ;;
         esac
     done < <(find "$design_dir" -maxdepth 1 -type f | sort)
@@ -128,10 +128,9 @@ indexed_idea_topics="$(
         sort
 )"
 if [[ "$actual_idea_topics" != "$indexed_idea_topics" ]]; then
-    echo "design-idea index does not match its topic directories" >&2
+    warn_layout "design-idea index does not match its topic directories"
     printf 'indexed:\n%s\nactual:\n%s\n' \
         "$indexed_idea_topics" "$actual_idea_topics" >&2
-    exit 1
 fi
 
 for idea_dir in "$design_ideas"/*; do
@@ -145,11 +144,10 @@ for idea_dir in "$design_ideas"/*; do
         case "${idea_file##*/}" in
             design.md | exploration.md | status.md) ;;
             *)
-                echo "optional design-idea topic has an unsupported authority document: $(guard_path "$idea_file")" >&2
-                exit 1
+                warn_layout "optional design-idea topic has an unsupported authority document: $(guard_path "$idea_file")"
                 ;;
         esac
     done < <(find "$idea_dir" -maxdepth 1 -type f -name '*.md' | sort)
 done
 
-echo "current document semantics guard passed"
+echo "current document semantics guard passed ($layout_warning_count advisory layout warning(s))"

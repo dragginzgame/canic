@@ -60,6 +60,14 @@ If a documentation fact must drive automation, represent it as a dedicated
 machine-readable field. Documentation gates remain lightweight and must not
 turn wording cleanup into a failed compile/test release cycle.
 
+Ordinary parallel Rust suites retain libtest's default output capture. Passing
+tests therefore do not print expected panic hooks or fixture chatter as live
+validation errors; Cargo emits captured output for a failed test. Long-running
+governed PocketIC suites keep live progress output. Document-layout preferences
+and drift in transitive informational advisory inventories are warnings. Missing
+required authority documents, known vulnerabilities, yanked dependencies and
+unmaintained direct dependencies remain blocking.
+
 Make-based work shares the repository `target/`. When `sccache` is available
 and no explicit `RUSTC_WRAPPER` is set, Make selects it through the repository
 wrapper and disables Rust incremental compilation so compiler results remain

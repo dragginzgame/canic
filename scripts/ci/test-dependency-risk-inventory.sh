@@ -57,20 +57,37 @@ jq '.warnings.unmaintained += [(.warnings.unmaintained[0]
     | .package.version = "1.0.0"
     | .package.checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]' \
     "$base" >"$new_warning"
-if bash "$GATE" --audit-json "$new_warning" >/dev/null 2>&1; then
-    fail "new informational advisory fixture was accepted"
-fi
+bash "$GATE" --audit-json "$new_warning" >/dev/null 2>&1 ||
+    fail "new transitive informational advisory fixture was rejected"
 
 missing_warning="$tmp_dir/missing-warning.json"
 jq '.warnings.unmaintained |= .[1:]' "$base" >"$missing_warning"
-if bash "$GATE" --audit-json "$missing_warning" >/dev/null 2>&1; then
-    fail "stale inventory fixture was accepted"
-fi
+bash "$GATE" --audit-json "$missing_warning" >/dev/null 2>&1 ||
+    fail "removed transitive informational advisory fixture was rejected"
 
 identity_drift="$tmp_dir/identity-drift.json"
 jq '.warnings.unmaintained[0].package.version = "9.9.9"' "$base" >"$identity_drift"
-if bash "$GATE" --audit-json "$identity_drift" >/dev/null 2>&1; then
-    fail "package identity drift fixture was accepted"
+bash "$GATE" --audit-json "$identity_drift" >/dev/null 2>&1 ||
+    fail "transitive informational package identity drift fixture was rejected"
+
+direct_warning="$tmp_dir/direct-warning.json"
+jq '.warnings.unmaintained += [(.warnings.unmaintained[0]
+    | .advisory.id = "RUSTSEC-2099-0002"
+    | .package.name = "serde"
+    | .package.version = "1.0.0")]' \
+    "$base" >"$direct_warning"
+if bash "$GATE" --audit-json "$direct_warning" >/dev/null 2>&1; then
+    fail "unmaintained direct dependency fixture was accepted"
+fi
+
+yanked_warning="$tmp_dir/yanked-warning.json"
+jq '.warnings.yanked = [(.warnings.unmaintained[0]
+    | .advisory.id = "RUSTSEC-2099-0003"
+    | .kind = "yanked"
+    | .package.name = "transitive-yanked-package")]' \
+    "$base" >"$yanked_warning"
+if bash "$GATE" --audit-json "$yanked_warning" >/dev/null 2>&1; then
+    fail "yanked dependency fixture was accepted"
 fi
 
 echo "dependency risk gate tests passed"

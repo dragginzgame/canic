@@ -264,9 +264,7 @@ mod tests {
     };
 
     #[cfg(test)]
-    use canic::dto::component_provisioning::{
-        FleetComponentProvisioningPhase, FleetComponentProvisioningRetryStage,
-    };
+    use canic::dto::component_provisioning::FleetComponentProvisioningPhase;
     #[cfg(test)]
     use canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
     #[cfg(test)]
@@ -2676,7 +2674,19 @@ exec icp "$@"
                 let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
                 let assets = (0..5)
                     .map(|_| {
-                        let asset = pic.create_canister_on_subnet(None, None, root_subnet);
+                        let asset = pic
+                            .create_canister_with_params(
+                                None,
+                                CreateCanisterParams {
+                                    cycles: Some(
+                                        QUALIFICATION_ASSET_CYCLES
+                                            + MAINNET_REFILL_EXECUTION_MARGIN,
+                                    ),
+                                    settings: None,
+                                    placement: Some(CreateCanisterPlacement::SubnetId(root_subnet)),
+                                },
+                            )
+                            .expect("prepare funded Cycles Ledger creation result");
                         pic.set_controllers(asset, None, vec![root])
                             .expect("prepare Cycles Ledger creation result");
                         asset
@@ -2694,9 +2704,18 @@ exec icp "$@"
                         expected_controllers_by_index: None,
                         expected_root: root,
                         expected_subnet: root_subnet,
-                        initial_balances: None,
+                        initial_balances: Some(vec![CyclesLedgerStubAccountBalance {
+                            balance: Nat::from(
+                                5_u128
+                                    * (QUALIFICATION_ASSET_CYCLES
+                                        + MAINNET_REFILL_EXECUTION_MARGIN
+                                        + MAINNET_REFILL_MANAGEMENT_CREATION_FEE
+                                        + MAINNET_REFILL_LEDGER_FEE),
+                            ),
+                            owner: root,
+                        }]),
                         pending_first_index: None,
-                        withdrawal_fee: None,
+                        withdrawal_fee: Some(Nat::from(MAINNET_REFILL_LEDGER_FEE)),
                     })
                     .expect("encode Cycles Ledger stub init"),
                     None,
@@ -2715,7 +2734,6 @@ exec icp "$@"
             &config_path,
         );
 
-        let mut pending_root_failure = None;
         let mut provisioned = None;
         let mut last_status = None;
         for _ in 0..240 {
@@ -2730,9 +2748,6 @@ exec icp "$@"
             else {
                 panic!("Coordinator returned a differently correlated operation status");
             };
-            if status.pending_root_failure.is_some() {
-                pending_root_failure = status.pending_root_failure;
-            }
             if status.provisioned_root_count == status.root_batch_count
                 && status.components_provisioned_at_ns.is_some()
             {
@@ -2744,6 +2759,24 @@ exec icp "$@"
             pic.tick();
         }
         let provisioned = provisioned.unwrap_or_else(|| {
+            let root_progress = match root_status(
+                &pic,
+                fixture.root_id,
+                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+            ) {
+                Ok(RootStatusResponseFragment::Operation(
+                    RootOperationStatusResponse::ProvisionComponents(status),
+                )) => format!(
+                    "phase={:?} reserved={} claimed={} installed={} committed={}",
+                    status.phase,
+                    status.reserved_component_count,
+                    status.claimed_component_count,
+                    status.installed_component_count,
+                    status.registry_committed_component_count,
+                ),
+                Ok(_) => "differently correlated operation status".to_string(),
+                Err(error) => format!("error={error}"),
+            };
             report_canister_diagnostics_batch(
                 &pic,
                 [
@@ -2752,23 +2785,13 @@ exec icp "$@"
                 ],
                 "fresh provisioning automatic pool readiness",
             );
-            panic!("fresh Component provisioning did not complete: {last_status:?}")
+            panic!(
+                "fresh Component provisioning did not complete: coordinator={last_status:?}; root={root_progress}"
+            )
         });
         assert_eq!(provisioned.component_count, 5);
-        let failure = pending_root_failure.expect("one automatic-capacity retry is observable");
-        assert_eq!(failure.fleet_subnet_root, fixture.root_id);
-        assert_eq!(
-            failure.stage,
-            FleetComponentProvisioningRetryStage::RootProvisioning
-        );
-        assert_eq!(
-            failure.diagnostic_code,
-            canic_core::diagnostics::codes::STATE_CONFLICT
-                .raw_code()
-                .raw()
-        );
-        assert!(failure.failed_at_ns > 0);
         assert!(provisioned.pending_root_failure.is_none());
+        assert!(provisioned.estate_funding_required.is_none());
 
         let pool = root_pool_status(&pic, fixture.root_id);
         assert_eq!(pool.workload, 5);

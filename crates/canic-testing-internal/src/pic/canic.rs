@@ -632,6 +632,7 @@ fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCal
     }
 }
 
+#[cfg(feature = "pocketic-fixtures")]
 pub(super) fn install_root_args_with_release_set_digest_and_coordinator(
     input: ManagedRootInstallInput<'_>,
 ) -> Result<Vec<u8>, Error> {

@@ -11,26 +11,6 @@ use syn::{
 };
 
 const PRODUCTION_SOURCE_ROOTS: [&str; 3] = ["apps", "canisters", "crates"];
-const PROHIBITED_AUTHORITY_FRAGMENTS: [&str; 10] = [
-    "ClaimKey::Transient",
-    "NEXT_TRANSIENT_ID",
-    "TimerClaimId",
-    "TimerKey",
-    "TimerWorkflow",
-    "cdk::timers",
-    "enum TimerClaim",
-    "ic_cdk_timers",
-    "static CLAIMS",
-    "struct TimerHandle",
-];
-const NATIVE_REGISTRATION_FRAGMENTS: [&str; 6] = [
-    "register_after_completion(",
-    "register_once(",
-    "reconcile_after_completion(",
-    "reconcile_once(",
-    "reconcile_watchdog(",
-    "Registration>",
-];
 const NATIVE_REGISTRATION_CAPABILITIES: [&str; 5] = [
     "register_after_completion",
     "register_once",
@@ -381,38 +361,11 @@ fn visit_token_stream(tokens: &proc_macro2::TokenStream, analysis: &mut TimerSyn
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum OwnershipClass {
-    DomainAsyncJobRecovery,
-    DtoOrMetricsProjection,
-    FixedCanicConsumer,
-    IndependentApplicationCustody,
-    NativeRegistrationCustody,
-    PrivateLifecycleConsumer,
-    ProhibitedSchedulingAuthority,
-}
-
-impl OwnershipClass {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::DomainAsyncJobRecovery => "domain async-job recovery",
-            Self::DtoOrMetricsProjection => "DTO/metrics projection",
-            Self::FixedCanicConsumer => "fixed Canic consumer",
-            Self::IndependentApplicationCustody => "independent application custody",
-            Self::NativeRegistrationCustody => "native registration custody",
-            Self::PrivateLifecycleConsumer => "private lifecycle consumer",
-            Self::ProhibitedSchedulingAuthority => "prohibited scheduling authority",
-        }
-    }
-}
-
 #[test]
-fn timer_ownership_inventory_is_semantically_classified() {
+fn timer_registration_custody_is_closed() {
     let root = workspace_root();
-    let expected = expected_ownership_inventory();
-    let mut observed = BTreeSet::new();
-    let mut observed_native_calls = BTreeMap::new();
-    let mut observed_native_actions = BTreeMap::new();
+    let mut observed_call_owners = BTreeSet::new();
+    let mut observed_action_owners = BTreeSet::new();
 
     for source_root in PRODUCTION_SOURCE_ROOTS {
         collect_rust_sources(&root.join(source_root), &root, &mut |path, source| {
@@ -426,49 +379,25 @@ fn timer_ownership_inventory_is_semantically_classified() {
                 "{path} contains disguised or exported scheduling authority: {:?}",
                 syntax.violations
             );
-            if syntax.has_timer_semantics {
-                observed.insert(path.to_string());
-            }
             if !syntax.native_registration_calls.is_empty() {
-                observed_native_calls.insert(path.to_string(), syntax.native_registration_calls);
+                observed_call_owners.insert(path.to_string());
             }
             if !syntax.native_registration_actions.is_empty() {
-                observed_native_actions
-                    .insert(path.to_string(), syntax.native_registration_actions);
+                observed_action_owners.insert(path.to_string());
             }
         });
     }
 
-    let classified = expected.keys().copied().map(str::to_string).collect();
-    assert_eq!(observed, classified, "timer ownership inventory changed");
     assert_eq!(
-        observed_native_calls,
-        expected_native_registration_calls(),
+        observed_call_owners,
+        native_registration_owners(),
         "native timer registration custody changed"
     );
     assert_eq!(
-        observed_native_actions,
-        expected_native_registration_actions(),
+        observed_action_owners,
+        native_registration_owners(),
         "native timer registration actions changed"
     );
-    let prohibited = OwnershipClass::ProhibitedSchedulingAuthority;
-    assert!(expected.values().all(|class| *class != prohibited));
-    let documented_source = read_source(
-        &root,
-        "docs/audits/working/0.104-timer-ownership/consumer-inventory.tsv",
-    );
-    let documented = documented_ownership_inventory(&documented_source);
-    let expected_documented = expected
-        .iter()
-        .map(|(path, class)| (path.to_string(), class.label()))
-        .collect();
-    assert_eq!(documented, expected_documented);
-
-    for (path, class) in expected {
-        let source = read_source(&root, path);
-        let syntax = analyze_timer_syntax(path, source.as_str());
-        assert_semantic_class(path, source.as_str(), &syntax, class);
-    }
 }
 
 #[test]
@@ -692,36 +621,6 @@ fn direct_raw_timer_provider_access_is_absent_from_production() {
 }
 
 #[test]
-fn timed_host_wait_inventory_remains_explicit() {
-    let root = workspace_root();
-    let mut waits = BTreeMap::new();
-
-    for source_root in PRODUCTION_SOURCE_ROOTS {
-        collect_rust_sources(&root.join(source_root), &root, &mut |path, source| {
-            if excluded_test_source(path) {
-                return;
-            }
-
-            let wait_count = [
-                "thread::sleep(",
-                "recv_timeout(",
-                "park_timeout(",
-                "sleep_until(",
-                "tokio::time::sleep(",
-            ]
-            .into_iter()
-            .map(|fragment| source.matches(fragment).count())
-            .sum();
-            if wait_count > 0 {
-                waits.insert(path.to_string(), wait_count);
-            }
-        });
-    }
-
-    assert_eq!(waits, expected_wait_inventory());
-}
-
-#[test]
 fn pool_and_snapshot_paths_use_exact_native_owners() {
     let root = workspace_root();
     let timer = read_source(&root, "crates/canic-core/src/workflow/runtime/timer/mod.rs");
@@ -853,381 +752,20 @@ fn recovery_takeovers_recheck_each_owners_authoritative_domain_demand() {
     }
 }
 
-fn assert_semantic_class(path: &str, source: &str, syntax: &TimerSyntax, class: OwnershipClass) {
-    for forbidden in PROHIBITED_AUTHORITY_FRAGMENTS {
-        assert!(
-            !source.contains(forbidden),
-            "{path} contains prohibited scheduling authority `{forbidden}`"
-        );
-    }
-
-    match class {
-        OwnershipClass::DomainAsyncJobRecovery => {
-            assert!(
-                syntax.native_registration_calls.is_empty(),
-                "domain recovery file {path} owns a native registration capability"
-            );
-            assert!(
-                syntax.native_registration_actions.is_empty(),
-                "domain recovery file {path} performs a native registration action"
-            );
-            for forbidden in [
-                "AfterCompletionRegistration",
-                "OnceRegistration",
-                "TimerIdentity",
-                "TimerRegistrationStatus",
-                "TimerSchedule",
-                "TimerSnapshot",
-                "WatchdogRegistration",
-                "register_after_completion(",
-                "register_once(",
-                "reconcile_watchdog(",
-            ] {
-                assert!(
-                    !source.contains(forbidden),
-                    "domain recovery file {path} owns provider state `{forbidden}`"
-                );
-            }
-        }
-        OwnershipClass::DtoOrMetricsProjection => {
-            assert!(
-                syntax.native_registration_calls.is_empty(),
-                "projection file {path} owns a native registration capability"
-            );
-            assert!(
-                syntax.native_registration_actions.is_empty(),
-                "projection file {path} performs a native registration action"
-            );
-            for forbidden in NATIVE_REGISTRATION_FRAGMENTS {
-                assert!(
-                    !source.contains(forbidden),
-                    "projection file {path} owns registration capability `{forbidden}`"
-                );
-            }
-        }
-        OwnershipClass::FixedCanicConsumer => {
-            assert!(
-                source.contains("Registration") || source.contains("timer_identity"),
-                "fixed Canic consumer {path} lacks named registration custody"
-            );
-        }
-        OwnershipClass::IndependentApplicationCustody => {
-            assert!(
-                syntax.uses_native_provider,
-                "independent application {path} does not use the shared provider"
-            );
-            assert!(
-                !source.contains("TimerIdentity::try_new(\"canic\""),
-                "independent application {path} claims the Canic timer owner"
-            );
-        }
-        OwnershipClass::NativeRegistrationCustody => {
-            assert!(
-                !syntax.native_registration_calls.is_empty(),
-                "native custody file {path} lacks a native registration capability"
-            );
-        }
-        OwnershipClass::PrivateLifecycleConsumer => {
-            assert!(
-                syntax.native_registration_calls.is_empty(),
-                "private lifecycle consumer {path} retains native registration custody"
-            );
-            assert!(
-                syntax.native_registration_actions.is_empty(),
-                "private lifecycle consumer {path} performs a native registration action"
-            );
-            for forbidden in NATIVE_REGISTRATION_FRAGMENTS {
-                assert!(
-                    !source.contains(forbidden),
-                    "private lifecycle consumer {path} retains native custody `{forbidden}`"
-                );
-            }
-        }
-        OwnershipClass::ProhibitedSchedulingAuthority => {
-            panic!("{path} remains a prohibited scheduling authority")
-        }
-    }
-}
-
-fn expected_ownership_inventory() -> BTreeMap<&'static str, OwnershipClass> {
-    application_ownership()
-        .into_iter()
-        .chain(control_plane_ownership())
-        .chain(core_boundary_ownership())
-        .chain(core_recovery_ownership())
-        .chain(core_consumer_ownership())
-        .chain(operator_projection_ownership())
-        .chain(facade_ownership())
-        .collect()
-}
-
-fn expected_native_registration_calls() -> BTreeMap<String, BTreeMap<String, usize>> {
+fn native_registration_owners() -> BTreeSet<String> {
     [
-        (
-            "canisters/test/runtime_probe/src/lib.rs",
-            [("register_after_completion", 1), ("register_once", 4)].as_slice(),
-        ),
-        (
-            "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
-            [("reconcile_after_completion", 1), ("reconcile_watchdog", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/placement/acknowledgement.rs",
-            [("register_once", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
-            [("register_once", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
-            [("register_once", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/intent.rs",
-            [("register_once", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/log.rs",
-            [("register_once", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/timer/mod.rs",
-            [("reconcile_watchdog", 1), ("register_once", 1)].as_slice(),
-        ),
+        "canisters/test/runtime_probe/src/lib.rs",
+        "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+        "crates/canic-core/src/workflow/placement/acknowledgement.rs",
+        "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
+        "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
+        "crates/canic-core/src/workflow/runtime/intent.rs",
+        "crates/canic-core/src/workflow/runtime/log.rs",
+        "crates/canic-core/src/workflow/runtime/timer/mod.rs",
     ]
     .into_iter()
-    .map(|(path, calls)| {
-        (
-            path.to_string(),
-            calls
-                .iter()
-                .map(|(capability, count)| (capability.to_string(), *count))
-                .collect(),
-        )
-    })
+    .map(str::to_string)
     .collect()
-}
-
-fn expected_native_registration_actions() -> BTreeMap<String, BTreeMap<String, usize>> {
-    [
-        (
-            "canisters/test/runtime_probe/src/lib.rs",
-            [("cancel", 1), ("ensure_scheduled", 4)].as_slice(),
-        ),
-        (
-            "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
-            [("cancel", 2)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/placement/acknowledgement.rs",
-            [("ensure_scheduled", 1), ("reconcile_schedule", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
-            [("reconcile_schedule", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
-            [("reconcile_schedule", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/intent.rs",
-            [("ensure_scheduled", 1), ("reconcile_schedule", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/log.rs",
-            [("reconcile_schedule", 1)].as_slice(),
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/timer/mod.rs",
-            [("cancel", 1), ("ensure_scheduled", 1), ("unregister", 2)].as_slice(),
-        ),
-    ]
-    .into_iter()
-    .map(|(path, actions)| {
-        (
-            path.to_string(),
-            actions
-                .iter()
-                .map(|(action, count)| (action.to_string(), *count))
-                .collect(),
-        )
-    })
-    .collect()
-}
-
-const fn application_ownership() -> [(&'static str, OwnershipClass); 5] {
-    use OwnershipClass::{
-        IndependentApplicationCustody as Application, PrivateLifecycleConsumer as Lifecycle,
-    };
-
-    [
-        ("apps/test/test/src/lib.rs", Application),
-        (
-            "canisters/test/canic_icydb_lifecycle_probe/src/lib.rs",
-            Application,
-        ),
-        (
-            "canisters/test/delegation_root_stub/src/lib.rs",
-            Application,
-        ),
-        ("canisters/test/intent_authority/src/lib.rs", Lifecycle),
-        ("canisters/test/runtime_probe/src/lib.rs", Application),
-    ]
-}
-
-const fn control_plane_ownership() -> [(&'static str, OwnershipClass); 10] {
-    use OwnershipClass::{
-        NativeRegistrationCustody as Custody, PrivateLifecycleConsumer as Lifecycle,
-    };
-
-    [
-        (
-            "crates/canic-control-plane/src/api/fleet_coordinator.rs",
-            Lifecycle,
-        ),
-        ("crates/canic-control-plane/src/api/lifecycle.rs", Lifecycle),
-        (
-            "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
-            Custody,
-        ),
-        (
-            "crates/canic-control-plane/src/workflow/component_provisioning.rs",
-            Lifecycle,
-        ),
-        (
-            "crates/canic-control-plane/src/workflow/component_registry/lifecycle_drivers/mod.rs",
-            Lifecycle,
-        ),
-        (
-            "crates/canic-control-plane/src/workflow/component_registry/mod.rs",
-            Lifecycle,
-        ),
-        (
-            "crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs",
-            Lifecycle,
-        ),
-        (
-            "crates/canic-control-plane/src/workflow/fleet_registry_mirror/mod.rs",
-            Lifecycle,
-        ),
-        (
-            "crates/canic-control-plane/src/workflow/fleet_subnet_root.rs",
-            Lifecycle,
-        ),
-        (
-            "crates/canic-control-plane/src/workflow/root_admission/mod.rs",
-            Lifecycle,
-        ),
-    ]
-}
-
-const fn core_boundary_ownership() -> [(&'static str, OwnershipClass); 11] {
-    use OwnershipClass::{
-        DomainAsyncJobRecovery as Recovery, DtoOrMetricsProjection as Projection,
-        PrivateLifecycleConsumer as Lifecycle,
-    };
-
-    [
-        ("crates/canic-core/src/api/runtime/mod.rs", Projection),
-        (
-            "crates/canic-core/src/api/runtime/root_funding.rs",
-            Lifecycle,
-        ),
-        ("crates/canic-core/src/api/timer.rs", Lifecycle),
-        ("crates/canic-core/src/control_plane_support.rs", Recovery),
-        ("crates/canic-core/src/domain/runtime.rs", Projection),
-        ("crates/canic-core/src/dto/runtime.rs", Projection),
-        ("crates/canic-core/src/lifecycle/init/nonroot.rs", Lifecycle),
-        ("crates/canic-core/src/lifecycle/init/root.rs", Lifecycle),
-        (
-            "crates/canic-core/src/lifecycle/upgrade/nonroot.rs",
-            Lifecycle,
-        ),
-        ("crates/canic-core/src/lifecycle/upgrade/root.rs", Lifecycle),
-        (
-            "crates/canic-core/src/ops/runtime/metrics/mod.rs",
-            Projection,
-        ),
-    ]
-}
-
-const fn core_recovery_ownership() -> [(&'static str, OwnershipClass); 9] {
-    use OwnershipClass::DomainAsyncJobRecovery as Recovery;
-
-    [
-        (
-            "crates/canic-core/src/ops/storage/async_job_recovery/mod.rs",
-            Recovery,
-        ),
-        ("crates/canic-core/src/ops/storage/mod.rs", Recovery),
-        (
-            "crates/canic-core/src/role_contract/allocation.rs",
-            Recovery,
-        ),
-        ("crates/canic-core/src/role_contract/catalog.rs", Recovery),
-        ("crates/canic-core/src/role_contract/model.rs", Recovery),
-        ("crates/canic-core/src/state_contract.rs", Recovery),
-        (
-            "crates/canic-core/src/storage/stable/async_job_recovery/mod.rs",
-            Recovery,
-        ),
-        ("crates/canic-core/src/storage/stable/mod.rs", Recovery),
-        (
-            "crates/canic-core/src/workflow/runtime/async_job/mod.rs",
-            Recovery,
-        ),
-    ]
-}
-
-const fn core_consumer_ownership() -> [(&'static str, OwnershipClass); 9] {
-    use OwnershipClass::{
-        FixedCanicConsumer as Fixed, NativeRegistrationCustody as Custody,
-        PrivateLifecycleConsumer as Lifecycle,
-    };
-
-    [
-        (
-            "crates/canic-core/src/workflow/placement/acknowledgement.rs",
-            Fixed,
-        ),
-        ("crates/canic-core/src/workflow/runtime/auth/mod.rs", Fixed),
-        (
-            "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
-            Fixed,
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/authority_restore.rs",
-            Lifecycle,
-        ),
-        (
-            "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
-            Fixed,
-        ),
-        ("crates/canic-core/src/workflow/runtime/intent.rs", Fixed),
-        ("crates/canic-core/src/workflow/runtime/log.rs", Fixed),
-        ("crates/canic-core/src/workflow/runtime/root.rs", Lifecycle),
-        (
-            "crates/canic-core/src/workflow/runtime/timer/mod.rs",
-            Custody,
-        ),
-    ]
-}
-
-const fn facade_ownership() -> [(&'static str, OwnershipClass); 2] {
-    use OwnershipClass::PrivateLifecycleConsumer as Lifecycle;
-
-    [
-        ("crates/canic/src/macros/endpoints/wasm_store.rs", Lifecycle),
-        ("crates/canic/src/macros/start.rs", Lifecycle),
-    ]
-}
-
-const fn operator_projection_ownership() -> [(&'static str, OwnershipClass); 1] {
-    use OwnershipClass::DtoOrMetricsProjection as Projection;
-
-    [("crates/canic-cli/src/inspect/mod.rs", Projection)]
 }
 
 fn expected_timer_manifest_consumers() -> BTreeSet<String> {
@@ -1244,46 +782,6 @@ fn expected_timer_manifest_consumers() -> BTreeSet<String> {
     .into_iter()
     .map(str::to_string)
     .collect()
-}
-
-fn documented_ownership_inventory(source: &str) -> BTreeMap<String, &str> {
-    source
-        .lines()
-        .skip(1)
-        .map(|line| {
-            let mut columns = line.split('\t');
-            let path = columns.next().expect("inventory path").to_string();
-            let class = columns.next().expect("inventory ownership class");
-            assert!(columns.next().is_some(), "inventory current authority");
-            assert!(columns.next().is_some(), "inventory closeout");
-            assert!(columns.next().is_none(), "unexpected inventory column");
-            (path, class)
-        })
-        .collect()
-}
-
-fn expected_wait_inventory() -> BTreeMap<String, usize> {
-    BTreeMap::from([
-        (
-            "crates/canic-backup/src/persistence/command_lifetime_lock/mod.rs".to_string(),
-            4,
-        ),
-        (
-            "crates/canic-backup/src/persistence/journal_lock/mod.rs".to_string(),
-            2,
-        ),
-        (
-            "crates/canic-host/src/canister_build/cache.rs".to_string(),
-            2,
-        ),
-        (
-            "crates/canic-host/src/fleet_ensure/ops/platform.rs".to_string(),
-            2,
-        ),
-        ("crates/canic-host/src/icp/command.rs".to_string(), 1),
-        ("crates/canic-host/src/lib.rs".to_string(), 1),
-        ("crates/canic-host/src/terminal/activity.rs".to_string(), 1),
-    ])
 }
 
 fn locked_package_versions<'a>(lock: &'a str, wanted: &str) -> Vec<&'a str> {

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 
 ## Purpose
 
@@ -215,6 +215,21 @@ Wasm Store own `canic_coordinator_*`, `canic_root_*` and
 selects the exact pair from the already verified role binding. This is a
 pre-1.0 hard cut with no alias or fallback endpoint.
 
+## Open 0.110.7 Validation Throughput
+
+The ordinary runner uses libtest's default captured output; governed PocketIC
+journeys alone retain live `--nocapture` progress. Its fast internal tier now
+compiles without the large PocketIC fixture catalogue, while the serial lane
+enables that catalogue explicitly. On the retained development cache, the same
+six fast checks complete in 2.34 seconds and the full governed catalogue still
+compiles independently in 10.37 seconds.
+
+Release guards retain executable authority, security and current-schema
+checks. Incidental source spelling, explanatory document layout and transitive
+informational-advisory inventory drift no longer block a candidate; missing
+authority documents, vulnerabilities, yanked packages and directly selected
+unmaintained dependencies remain fail-closed.
+
 ## B1-B10 State
 
 | Batch | State | Current evidence owner |
@@ -380,6 +395,14 @@ unchanged retry does not rewrite the journal or call the control plane.
 Terminal conservation reconciles actual plan-owned Root-account funding and
 actual protected creation receipts separately from operator funding of managed
 canisters.
+
+Coordinator observation no longer assumes it sees each Root provisioning step.
+It accepts a strictly advanced canonical cursor, including one that also
+reports the exact typed estate-funding pause, and records that progress before
+returning the pause. Unchanged, regressed and noncanonical cursors still fail
+closed. The governed five-Component journey supplies an exact Root Ledger
+balance and genuinely funded creation results; it reaches terminal provisioning
+without depending on a transient conflict or zero-cycle fixture shortcut.
 
 Autonomous creation funding includes the generated 1T execution margin above
 the Ready floor and management creation fee. Root retains each exact creation

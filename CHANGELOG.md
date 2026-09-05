@@ -14,14 +14,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.7` orders quick source and lint failures before expensive lanes,
+  reduces false-red test output and non-behavioral documentation/dependency
+  release blockers while retaining fail-closed security and authority checks,
   makes every infrastructure command/status entrypoint role-owned so one
   method name never carries incompatible Candid contracts,
   hardens terminal Component authority and capability-aware cycle reporting,
   accounts for each Root-owned Cycles Ledger balance as a separately reviewed
   Fleet Ensure funding domain, gives its exact shortfall a replay-safe
   plan-owned Ledger transfer, retains truthful apply-time starting balances,
-  and proves canonical autonomous-creation receipts, fees and first observed
-  balances before terminal conservation,
+  accepts coalesced canonical Root progress while retaining an exact typed
+  funding pause, and proves canonical autonomous-creation receipts, fees and
+  first observed balances before terminal conservation,
   replaces observability/source-text assertions with typed PocketIC evidence,
   collapses the duplicate elliptic-curve dependency family, enforces typed
   crypto-feature closure, and gives test failures and Wasm optimizer

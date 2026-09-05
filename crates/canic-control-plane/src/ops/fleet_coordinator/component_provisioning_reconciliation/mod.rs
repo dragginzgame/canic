@@ -238,7 +238,7 @@ pub(super) fn validate_root_provision_response(
             validate_root_provision_current(record, batch, acceptance, response)?;
             let previous_counts = RootProvisioningCounts::from_response(previous);
             let next_counts = RootProvisioningCounts::from_response(response);
-            if !previous_counts.advances_one_step_to(next_counts, response.component_count) {
+            if !previous_counts.strictly_advances_to(next_counts, response.component_count) {
                 return Err(InternalError::conflict());
             }
         }
