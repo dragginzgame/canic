@@ -3838,16 +3838,16 @@ fn assert_invalid_root_provision_responses(
     started_at_ns: u64,
     durable_intent: &FleetCoordinatorRegistryData,
 ) {
-    let mut skipped = response.clone();
-    skipped.claimed_component_count = 1;
+    let mut noncanonical = response.clone();
+    noncanonical.installed_component_count = 1;
     let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_provisioning_root_for_test(
             config,
             request,
-            skipped,
+            noncanonical,
             started_at_ns + 2,
         )
-        .expect_err("root response cannot skip a provisioning cursor");
+        .expect_err("root response cannot install before its claim cursor");
     assert_eq!(
         conflict.public_error().code(),
         canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
