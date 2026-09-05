@@ -82,6 +82,16 @@ enum RootStatusResponseFragment {
 }
 
 #[derive(CandidType)]
+enum CanisterStatusRequestFragment {
+    Readiness,
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterStatusResponseFragment {
+    Readiness(CanicReadinessStatus),
+}
+
+#[derive(CandidType)]
 enum StoreStatusRequestFragment {
     Operation(OperationStatusRequest),
 }
@@ -200,7 +210,7 @@ pub trait CanicPicExt {
         config_path: &Path,
     ) -> Result<Principal, Error>;
 
-    /// Wait until one Root reports `canic_root_status(Readiness)`.
+    /// Wait until one ordinary managed canister reports `canic_status(Readiness)`.
     fn wait_for_ready(
         &self,
         canister_id: Principal,
@@ -209,7 +219,16 @@ pub trait CanicPicExt {
         context: &str,
     );
 
-    /// Wait until all provided Roots report `canic_root_status(Readiness)`.
+    /// Wait until one Root reports `canic_root_status(Readiness)`.
+    fn wait_for_root_ready(
+        &self,
+        canister_id: Principal,
+        diagnostic_sender: Principal,
+        tick_limit: usize,
+        context: &str,
+    );
+
+    /// Wait until all provided ordinary managed canisters report readiness.
     fn wait_for_all_ready<I>(&self, targets: I, tick_limit: usize, context: &str)
     where
         I: IntoIterator<Item = (Principal, Principal)>;
@@ -249,6 +268,29 @@ impl CanicPicExt for PocketIc {
 
         report_canister_diagnostics(self, canister_id, diagnostic_sender, context);
         panic!("{context}: canister {canister_id} did not become ready after {tick_limit} ticks");
+    }
+
+    fn wait_for_root_ready(
+        &self,
+        canister_id: Principal,
+        diagnostic_sender: Principal,
+        tick_limit: usize,
+        context: &str,
+    ) {
+        for _ in 0..tick_limit {
+            self.tick();
+            match fetch_root_ready(self, canister_id) {
+                Ok(true) => return,
+                Ok(false) => {}
+                Err(error) => {
+                    report_canister_diagnostics(self, canister_id, diagnostic_sender, context);
+                    panic!("{context}: Root {canister_id} readiness query failed: {error:?}");
+                }
+            }
+        }
+
+        report_canister_diagnostics(self, canister_id, diagnostic_sender, context);
+        panic!("{context}: Root {canister_id} did not become ready after {tick_limit} ticks");
     }
 
     fn wait_for_all_ready<I>(&self, targets: I, tick_limit: usize, context: &str)
@@ -618,6 +660,20 @@ pub fn install_standalone_canister_on_pic(
 }
 
 fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
+    match pic.query_candid::<Result<CanisterStatusResponseFragment, Error>, _>(
+        canister_id,
+        protocol::CANIC_STATUS,
+        (CanisterStatusRequestFragment::Readiness,),
+    ) {
+        Ok(Ok(CanisterStatusResponseFragment::Readiness(readiness))) => {
+            Ok(readiness.status == ReadinessStatus::Ready)
+        }
+        Ok(Err(_)) => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+fn fetch_root_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
     match pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
         canister_id,
         protocol::CANIC_ROOT_STATUS,
@@ -626,7 +682,7 @@ fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCal
         Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {
             Ok(readiness.status == ReadinessStatus::Ready)
         }
-        Ok(Ok(_)) => panic!("role returned a differently correlated readiness status"),
+        Ok(Ok(_)) => panic!("Root returned a differently correlated readiness status"),
         Ok(Err(_)) => Ok(false),
         Err(error) => Err(error),
     }

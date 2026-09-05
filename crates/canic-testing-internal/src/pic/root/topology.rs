@@ -155,7 +155,7 @@ pub fn setup_root_topology(
 
 // Wait until root reports `canic_root_status(Readiness)`.
 pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &PocketIc, root_id: Principal) {
-    pic.wait_for_ready(
+    pic.wait_for_root_ready(
         root_id,
         Principal::anonymous(),
         spec.bootstrap_tick_limit,
