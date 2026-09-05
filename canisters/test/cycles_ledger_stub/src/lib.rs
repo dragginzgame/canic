@@ -28,6 +28,39 @@ struct Account {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct TransferArgs {
+    amount: Nat,
+    created_at_time: Option<u64>,
+    fee: Option<Nat>,
+    from_subaccount: Option<[u8; 32]>,
+    memo: Option<Vec<u8>>,
+    to: Account,
+}
+
+#[derive(CandidType)]
+#[expect(
+    dead_code,
+    reason = "the stub retains the complete Cycles Ledger transfer error boundary"
+)]
+enum TransferError {
+    BadBurn { min_burn_amount: Nat },
+    BadFee { expected_fee: Nat },
+    CreatedInFuture { ledger_time: u64 },
+    Duplicate { duplicate_of: Nat },
+    GenericError { error_code: Nat, message: String },
+    InsufficientFunds { balance: Nat },
+    TemporarilyUnavailable,
+    TooOld,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TransferRecord {
+    args: TransferArgs,
+    block_index: u64,
+    caller: Principal,
+}
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 struct WithdrawArgs {
     amount: Nat,
     created_at_time: Option<u64>,
@@ -110,6 +143,7 @@ struct State {
     pending_first_index: Option<usize>,
     requests: Vec<CreateCanisterArgs>,
     request_count: u64,
+    transfers: Vec<TransferRecord>,
     withdrawal_fee: u128,
     withdrawals: Vec<WithdrawalRecord>,
 }
@@ -168,6 +202,7 @@ fn init(args: InitArgs) {
             pending_first_index,
             requests: Vec::new(),
             request_count: 0,
+            transfers: Vec::new(),
             withdrawal_fee,
             withdrawals: Vec::new(),
         });
@@ -201,6 +236,80 @@ fn icrc1_fee() -> Nat {
                 .expect("Cycles Ledger stub is initialized")
                 .withdrawal_fee,
         )
+    })
+}
+
+#[ic_cdk::update]
+fn icrc1_transfer(args: TransferArgs) -> Result<Nat, TransferError> {
+    let caller = ic_cdk::api::msg_caller();
+    STATE.with_borrow_mut(|state| {
+        let state = state.as_mut().expect("Cycles Ledger stub is initialized");
+        if let Some(existing) = state
+            .transfers
+            .iter()
+            .find(|existing| existing.caller == caller && existing.args == args)
+        {
+            return Err(TransferError::Duplicate {
+                duplicate_of: Nat::from(existing.block_index),
+            });
+        }
+        if args.from_subaccount.is_some() || args.to.subaccount.is_some() {
+            return Err(TransferError::GenericError {
+                error_code: Nat::from(1_u8),
+                message: "the qualification stub accepts only default accounts".to_string(),
+            });
+        }
+        let expected_fee = state.withdrawal_fee;
+        if args
+            .fee
+            .as_ref()
+            .is_some_and(|fee| fee != &Nat::from(expected_fee))
+        {
+            return Err(TransferError::BadFee {
+                expected_fee: Nat::from(expected_fee),
+            });
+        }
+        let amount =
+            u128::try_from(args.amount.0.clone()).map_err(|_| TransferError::GenericError {
+                error_code: Nat::from(2_u8),
+                message: "transfer amount exceeds u128".to_string(),
+            })?;
+        let available = state.balances.get(&caller).copied().unwrap_or_default();
+        let debit =
+            amount
+                .checked_add(expected_fee)
+                .ok_or_else(|| TransferError::GenericError {
+                    error_code: Nat::from(3_u8),
+                    message: "transfer debit overflow".to_string(),
+                })?;
+        if available < debit {
+            return Err(TransferError::InsufficientFunds {
+                balance: Nat::from(available),
+            });
+        }
+        let destination = state
+            .balances
+            .get(&args.to.owner)
+            .copied()
+            .unwrap_or_default()
+            .checked_add(amount)
+            .ok_or_else(|| TransferError::GenericError {
+                error_code: Nat::from(4_u8),
+                message: "destination balance overflow".to_string(),
+            })?;
+        let block_index =
+            u64::try_from(state.transfers.len() + 1).map_err(|_| TransferError::GenericError {
+                error_code: Nat::from(5_u8),
+                message: "transfer history exhausted".to_string(),
+            })?;
+        state.balances.insert(caller, available - debit);
+        state.balances.insert(args.to.owner, destination);
+        state.transfers.push(TransferRecord {
+            args,
+            block_index,
+            caller,
+        });
+        Ok(Nat::from(block_index))
     })
 }
 

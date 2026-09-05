@@ -70,10 +70,10 @@ maximum_instances_per_parent = 4
 [component_specs.test]
 component_role = "test"
 maximum_instances = 1
+topup = {}
 
 [component_specs.test.standards]
 icrc21 = true
 
 [component_specs.test.auth]
 delegated_token_verifier = true
-role_attestation_cache = true

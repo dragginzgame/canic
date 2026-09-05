@@ -36,6 +36,9 @@ mod startup;
 #[cfg(test)]
 type GovernedTestCase = (&'static str, fn());
 
+#[cfg(test)]
+const TARGET_GOVERNED_CASE_ENV: &str = "CANIC_TARGET_GOVERNED_CASE";
+
 pub use artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 pub use audit::{
     RootAuditProbeFixture, install_audit_leaf_probe, install_audit_root_probe,
@@ -122,7 +125,18 @@ fn acquire_pic_unit_test_serial_guard() -> MutexGuard<'static, ()> {
 }
 
 #[cfg(test)]
-fn run_governed_test_cases(cases: Vec<GovernedTestCase>) {
+fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
+    if let Some(target) = std::env::var_os(TARGET_GOVERNED_CASE_ENV) {
+        let target = target
+            .to_str()
+            .expect("targeted governed case name must be UTF-8");
+        cases.retain(|(name, _test)| *name == target);
+        assert_eq!(
+            cases.len(),
+            1,
+            "{TARGET_GOVERNED_CASE_ENV} must name exactly one governed case"
+        );
+    }
     let mut failures = Vec::new();
     let mut timings = Vec::new();
     for (name, test) in cases {
