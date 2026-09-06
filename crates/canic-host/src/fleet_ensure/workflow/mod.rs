@@ -1091,6 +1091,14 @@ where
                                     maximum_updates: *maximum_updates,
                                 });
                             }
+                            if record.progress_identity.as_deref()
+                                == Some(&observed.progress_identity)
+                            {
+                                journal.stalled_observations =
+                                    journal.stalled_observations.saturating_add(1);
+                            } else {
+                                journal.stalled_observations = 0;
+                            }
                             record.maintenance_attempts += 1;
                             let attempts = record.maintenance_attempts;
                             // A failed or lost call consumes its reviewed attempt across process restart.
@@ -1155,7 +1163,10 @@ where
                         record.post_cycles = outcome.post_cycles;
                         record.progress_identity = Some(observed.progress_identity);
                         record.state = EffectState::Issued;
-                        journal.stalled_observations = 0;
+                        // A successful maintenance call can report no progress while Root work is in flight.
+                        if !maintenance_continuation {
+                            journal.stalled_observations = 0;
+                        }
                         write_journal(&paths, &journal)?;
                         continue;
                     }

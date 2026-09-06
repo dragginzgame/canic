@@ -638,22 +638,49 @@ cycle accounting and deterministic inventory order. Each issued batch is joined
 before returning a typed failure; failures prevent scheduling later batches.
 All 18 focused inventory regressions pass, including bounded concurrency,
 complete batch drainage, first-input error selection and fresh-read tests.
-Scoped all-feature host library/test Clippy passes. The real four-Workload plus
-four-Failed-asset recovery case passes after the host change, including exact
-lost-reply reconciliation, terminal inventory and effect-free replay: 385.60s
-for the case, 440s for the runner including compilation. It rebuilt its sealed
-artifact set in 33.92s; this is qualification, not a controlled speedup result.
-The subsequent edits only remove duplicate fresh cases and their unused path
-resolver; the executed four-Workload branch retains the same config and behavior.
-Both catalogue regressions and all-feature internal library/test Clippy pass
-again after those deletions. The full-suite duration remains unqualified; the
-performance batch must not be reported as having met a sub-hour release target
-yet. Focused logs remain at `/tmp/canic-bounded-inventory-tests.log`,
-`/tmp/canic-bounded-inventory-clippy.log`,
-`/tmp/canic-bounded-inventory-pocketic.log`,
-`/tmp/canic-consolidated-catalogue-tests.log` and
-`/tmp/canic-consolidated-catalogue-clippy.log`. These are local development
-results, not a published complete-validation receipt.
+Scoped all-feature host library/test Clippy passes. The retained inventory
+qualification is `/tmp/canic-bounded-inventory-pocketic.log`; both catalogue
+regressions also pass after the duplicate fresh journeys were removed.
+
+Funding tests now prepare real infrastructure and Ready imports through the
+production Ledger/initialization adapters and public Root commands. They begin
+host review at funding or repair, rather than repeating fresh infrastructure
+recovery. No completed host journal is manufactured. Full generated fresh and
+reinstall journeys retain their existing startup/recovery paths.
+
+The focused refill rerun reproduced the earlier 24-call maintenance failure:
+four assets existed, but the last was still PendingReset. The host had reset
+backoff after every successful maintenance call even when pool state was
+unchanged. It now retains unchanged-observation backoff until visible progress,
+without raising the update budget. Funding fixtures use production pacing.
+The focused restart regression proves increasing backoff, durable lost-call
+accounting, budget exhaustion and terminal observation at the bound. All five
+focused continuation authority/review regressions also pass. Combined all-feature
+library/test Clippy passes for both changed packages.
+
+Observed case timings, compared with the preceding maintainer run:
+
+| Case | Previous | Focused result |
+| --- | --- | --- |
+| Estate funding and autonomous creation | 3m41s | PASS, 171.19s |
+| Four Workloads plus four Failed assets | 5m29s | PASS, 186.95s |
+| Four Workloads refill four Ready assets | 5m18s | PASS, 208.90s |
+
+The final funding/refill runs include 27.73s/29.12s of sealed-artifact rebuilds;
+the repair run used cached artifacts and preceded the maintenance-only host
+correction. Its reviewed repair path contains no maintenance action. These are
+local observations, not controlled benchmark pairs. Exact funding, fee rejection,
+lost-response recovery, conservation and terminal replay assertions remain in
+their relevant cases. Logs are `/tmp/canic-prepared-funding-one.log`,
+`/tmp/canic-prepared-funding-repair.log`, `/tmp/canic-prepared-funding-refill.log`,
+`/tmp/canic-maintenance-backoff-tests.log` and
+`/tmp/canic-maintenance-backoff-clippy.log` and
+`/tmp/canic-prepared-funding-continuation.log`.
+
+The fixture/backoff correction is ready for review and the existing 0.110.8
+changelog draft includes it. The complete performance batch must not yet be
+reported as meeting a sub-hour release target: complete-gate runtime remains
+unmeasured. No broad suite, version transaction or publication was performed.
 
 The maintainer's final contract is explicit pre-1.0 reinstall. Application state
 and former host records may be discarded while cycles and asset control remain

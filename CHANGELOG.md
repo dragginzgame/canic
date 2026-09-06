@@ -18,7 +18,7 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   Ledger transfers before deletion, qualifies IcyDB 0.253.0 lifecycle composition and
   records further runtime-footprint audit evidence and corrects misleading
   validation error highlighting, consolidates duplicate test journeys and removes
-  repeated observation and fixture-build work.
+  repeated observation, fixture-build and funding-test setup work.
 - `0.110.7` orders quick source and lint failures before expensive lanes,
   reduces false-red test output and non-behavioral documentation/dependency
   release blockers while retaining fail-closed security and authority checks,
