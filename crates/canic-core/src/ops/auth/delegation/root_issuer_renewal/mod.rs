@@ -17,7 +17,7 @@ use crate::{
     log::Topic,
     model::auth::{RootIssuerRenewalState, RootIssuerRenewalTemplate},
     ops::storage::auth::{
-        AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
+        ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer, RootDelegationStateOps,
     },
 };
 
@@ -31,8 +31,8 @@ pub(super) fn commit_root_issuer_renewal_template(
     template: RootIssuerRenewalTemplate,
     now_ns: u64,
 ) -> RootIssuerRenewalTemplateResponse {
-    AuthStateOps::upsert_root_issuer_renewal_template(template.clone());
-    AuthStateOps::advance_delegated_auth_registry_epoch();
+    RootDelegationStateOps::upsert_root_issuer_renewal_template(template.clone());
+    RootDelegationStateOps::advance_delegated_auth_registry_epoch();
     if !template.enabled {
         record_disabled_renewal_template(&template, now_ns);
     }
@@ -52,12 +52,12 @@ pub(super) fn commit_root_issuer_renewal_template(
 pub(super) fn root_issuer_renewal_status(
     request: RootIssuerRenewalStatusRequest,
 ) -> RootIssuerRenewalStatusResponse {
-    let state = AuthStateOps::root_issuer_renewal_state(request.issuer_pid);
+    let state = RootDelegationStateOps::root_issuer_renewal_state(request.issuer_pid);
     let latest_batch = latest_issuer_renewal_batch(request.issuer_pid)
         .map(|(batch, issuer)| root_issuer_renewal_batch_view(&batch, &issuer));
 
     RootIssuerRenewalStatusResponse {
-        template: AuthStateOps::root_issuer_renewal_template(request.issuer_pid)
+        template: RootDelegationStateOps::root_issuer_renewal_template(request.issuer_pid)
             .map(|template| root_issuer_renewal_template_view(&template)),
         state: state.map(|state| root_issuer_renewal_state_view(&state)),
         latest_batch,
@@ -70,7 +70,7 @@ fn latest_issuer_renewal_batch(
     ChainKeyRootDelegationBatch,
     ChainKeyRootDelegationBatchIssuer,
 )> {
-    AuthStateOps::chain_key_root_delegation_batches()
+    RootDelegationStateOps::chain_key_root_delegation_batches()
         .into_iter()
         .filter_map(|batch| {
             let issuer = batch
@@ -90,31 +90,32 @@ fn latest_issuer_renewal_batch(
 }
 
 fn record_disabled_renewal_template(template: &RootIssuerRenewalTemplate, now_ns: u64) {
-    let Some(mut state) = AuthStateOps::root_issuer_renewal_state(template.issuer_pid) else {
+    let Some(mut state) = RootDelegationStateOps::root_issuer_renewal_state(template.issuer_pid)
+    else {
         return;
     };
 
     state.template_fingerprint = renewal_template_fingerprint(template);
     state.next_attempt_after_ns = now_ns;
     state.updated_at_ns = now_ns;
-    AuthStateOps::upsert_root_issuer_renewal_state(state);
+    RootDelegationStateOps::upsert_root_issuer_renewal_state(state);
 }
 
 pub(super) fn has_enabled_root_issuer_renewal_templates() -> bool {
-    AuthStateOps::root_issuer_renewal_templates()
+    RootDelegationStateOps::root_issuer_renewal_templates()
         .iter()
         .any(|template| template.enabled)
 }
 
 pub(super) fn next_root_issuer_renewal_template_deadline_ns(now_ns: u64) -> Option<u64> {
-    AuthStateOps::root_issuer_renewal_templates()
+    RootDelegationStateOps::root_issuer_renewal_templates()
         .into_iter()
         .filter(|template| template.enabled)
         .map(|template| {
             root_issuer_renewal_template_deadline_ns(
                 now_ns,
                 renewal_template_fingerprint(&template),
-                AuthStateOps::root_issuer_renewal_state(template.issuer_pid).as_ref(),
+                RootDelegationStateOps::root_issuer_renewal_state(template.issuer_pid).as_ref(),
             )
         })
         .min()
@@ -125,12 +126,12 @@ pub(super) fn earliest_active_root_issuer_proof_expiry_ns(
     registry_epoch: u64,
     registry_hash: [u8; 32],
 ) -> Option<u64> {
-    AuthStateOps::root_issuer_renewal_templates()
+    RootDelegationStateOps::root_issuer_renewal_templates()
         .into_iter()
         .filter(|template| template.enabled)
         .filter_map(|template| {
             let fingerprint = renewal_template_fingerprint(&template);
-            let state = AuthStateOps::root_issuer_renewal_state(template.issuer_pid)?;
+            let state = RootDelegationStateOps::root_issuer_renewal_state(template.issuer_pid)?;
             let expires_at_ns = state.last_installed_expires_at_ns?;
             (state.template_fingerprint == fingerprint
                 && now_ns < expires_at_ns
@@ -151,11 +152,13 @@ pub(super) fn all_enabled_root_issuer_proofs_match_registry(
     registry_epoch: u64,
     registry_hash: [u8; 32],
 ) -> bool {
-    AuthStateOps::root_issuer_renewal_templates()
+    RootDelegationStateOps::root_issuer_renewal_templates()
         .into_iter()
         .filter(|template| template.enabled)
         .all(|template| {
-            let Some(state) = AuthStateOps::root_issuer_renewal_state(template.issuer_pid) else {
+            let Some(state) =
+                RootDelegationStateOps::root_issuer_renewal_state(template.issuer_pid)
+            else {
                 return false;
             };
             state.template_fingerprint == renewal_template_fingerprint(&template)
@@ -181,7 +184,7 @@ fn active_root_issuer_proof_matches_registry(
     registry_epoch: u64,
     registry_hash: [u8; 32],
 ) -> bool {
-    AuthStateOps::chain_key_root_delegation_batches()
+    RootDelegationStateOps::chain_key_root_delegation_batches()
         .into_iter()
         .filter(|batch| {
             now_ns < batch.header.expires_at_ns

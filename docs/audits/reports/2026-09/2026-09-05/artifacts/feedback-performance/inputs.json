@@ -1,0 +1,25 @@
+{
+  "observed_date": "2026-09-06",
+  "test": "pic::fleet_registry::baseline::tests::literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay",
+  "command": "RUSTC_WRAPPER= bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh targeted-pocketic pic::fleet_registry::baseline::tests::literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay",
+  "execution_order": [
+    "candidate",
+    "baseline"
+  ],
+  "source_sha256": {
+    "platform.original.rs": "f1d3e27b4957cd4f18899c2ee46743d09cb5cdf9f88a38f1e82ad9ae88386032",
+    "platform.instrumented.rs": "2ee812a0796c63ea81155aa027f1c99470b20324179a456df5b36e8aa086a72b",
+    "platform.baseline.rs": "f877dc5a770dc7213ca26ab35d4f69677a679e1e4a9ce95f0df5c288b5e899f3"
+  },
+  "fixture_path": "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs",
+  "fixture_sha256": "9edcab616b86f21d75ddf93f32f4a239b0d8de18240c5edb8aeb6c45949dce23",
+  "restored_production_source_matches_original": true,
+  "only_candidate_baseline_behavior_difference": "with_observation_snapshot installs Some(FleetObservationSnapshot::default()) in candidate and None in baseline",
+  "artifact_sha256": {
+    "baseline.log": "dfb0938aa11a35c8d9480d6c8cb730126e0458c489a6d2e1ed78bf1a4a742a66",
+    "candidate.log": "1ee346fb6b1a31dd2f8714795a8fa742d21abcb8010b2579fba384fcf949dfb2",
+    "disable-observation-reuse.patch": "4768ad9370c91da0d0a6f91c59e964efa89611de40fa64661c677c41b9258cad",
+    "results.json": "d15e79e0b54bad4fd1ee7c7ba3a1718febb90baa20fd6b7ced91295d2c9262e4",
+    "timing-instrumentation.patch": "b9bac66bb5f8a57003704ae8223679e184975833b1152aed8a2037db6e5b0c9f"
+  }
+}

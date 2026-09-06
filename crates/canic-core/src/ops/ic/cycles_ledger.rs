@@ -7,10 +7,12 @@
 use crate::{
     InternalError,
     cdk::types::{Cycles, Principal},
+    dto::fleet_registry::FleetLedgerTransferIntent,
     infra::ic::{
         IcInfraError,
         cycles_ledger::{
             CyclesLedgerCreateCanisterError, CyclesLedgerCreateCanisterSuccess, CyclesLedgerInfra,
+            CyclesLedgerTransferError,
         },
     },
     ops::{OpsError, cost_guard::CostGuardPermit},
@@ -37,6 +39,16 @@ impl CyclesLedgerOps {
         InternalError,
     > {
         map_infra(CyclesLedgerInfra::create_canister(root, subnet, amount, created_at_time).await)
+    }
+
+    pub async fn transfer(
+        _permit: &CostGuardPermit,
+        intent: &FleetLedgerTransferIntent,
+    ) -> Result<Result<Nat, CyclesLedgerTransferError>, InternalError> {
+        if intent.source != crate::ops::ic::IcOps::canister_self() {
+            return Err(InternalError::conflict());
+        }
+        map_infra(CyclesLedgerInfra::transfer(intent).await)
     }
 
     pub async fn balance_of(root: Principal) -> Result<Cycles, InternalError> {

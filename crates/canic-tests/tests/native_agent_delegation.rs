@@ -222,11 +222,55 @@ fn retry_same_release_upgrade(
 }
 
 #[test]
+fn selected_issuer_corruption_rejects_same_release_restore() {
+    let fixture = setup_fresh_active_component_registry();
+    let issuer = fixture.issuer.canister_id;
+    let stable_memory: VectorMemory =
+        Rc::new(RefCell::new(fixture.pic().get_stable_memory(issuer)));
+    let manager = MemoryManager::init(stable_memory.clone());
+    let mut issuer_cell = Cell::<Vec<u8>, _>::init(manager.get(MemoryId::new(66)), Vec::new());
+    issuer_cell.set(vec![0xff]);
+    drop(issuer_cell);
+    drop(manager);
+    let bytes = Rc::try_unwrap(stable_memory)
+        .expect("exclusive stable-memory editor")
+        .into_inner();
+    fixture
+        .pic()
+        .set_stable_memory(issuer, bytes, BlobCompression::NoCompression);
+    let error = fixture
+        .pic()
+        .upgrade_canister(
+            issuer,
+            fixture.issuer_wasm(),
+            upgrade_args(),
+            Some(fixture.root),
+        )
+        .expect_err("selected issuer corruption must fail synchronous restoration");
+    assert_eq!(
+        error.error_code,
+        ic_testkit::pic::ErrorCode::CanisterCalledTrap
+    );
+}
+
+#[test]
 fn pem_backed_native_agent_prepares_retrieves_and_presents_delegated_token() {
     let mut fixture = setup_fresh_active_component_registry();
     let gateway_url = fixture.start_http_gateway();
     configure_issuer(&fixture);
     provision_delegation_proof(&fixture);
+
+    let installed_proof = issuer_stable_authority(fixture.pic(), fixture.issuer.canister_id);
+    retry_same_release_upgrade(
+        fixture.pic(),
+        fixture.issuer.canister_id,
+        fixture.issuer_wasm(),
+        fixture.root,
+    );
+    assert_eq!(
+        issuer_stable_authority(fixture.pic(), fixture.issuer.canister_id),
+        installed_proof
+    );
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -1365,6 +1409,22 @@ fn inject_application_authorization_state(
         .into_inner();
     pic.set_stable_memory(canister_id, stable_memory, BlobCompression::NoCompression);
     auth_state_bytes.len()
+}
+
+fn issuer_stable_authority(pic: &PocketIc, issuer: Principal) -> ciborium::Value {
+    let memory: VectorMemory = Rc::new(RefCell::new(pic.get_stable_memory(issuer)));
+    let manager = MemoryManager::init(memory);
+    let cell = Cell::<Vec<u8>, _>::init(manager.get(MemoryId::new(66)), Vec::new());
+    let state: ciborium::Value =
+        ciborium::from_reader(cell.get().as_slice()).expect("selected issuer authority");
+    let ciborium::Value::Map(fields) = &state else {
+        panic!("issuer authority record");
+    };
+    assert!(fields.iter().any(
+        |(key, value)| key.as_text() == Some("active_delegation_proof")
+            && *value != ciborium::Value::Null
+    ));
+    state
 }
 
 fn replace_cbor_field(state: &mut ciborium::Value, field: &str, replacement: ciborium::Value) {

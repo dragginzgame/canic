@@ -1787,6 +1787,7 @@ fn root_draining_record_to_view(
     record: RootFleetSubnetDrainingRecord,
 ) -> RootFleetSubnetDrainingView {
     RootFleetSubnetDrainingView {
+        asset_recipient: record.reservation.request.asset_recipient,
         operation_id: record.operation_id,
         fleet_subnet_root: record.fleet_subnet_root,
         placement_subnet: record.placement_subnet,
@@ -1981,6 +1982,8 @@ const fn root_deletion_preparation_intent_record_to_view(
     record: RootFleetSubnetDeletionPreparationIntentRecord,
 ) -> RootFleetSubnetDeletionPreparationIntentView {
     RootFleetSubnetDeletionPreparationIntentView {
+        ledger_transfer: record.ledger_transfer,
+        ledger_receipt: record.ledger_receipt,
         operation_id: record.operation_id,
         coordinator: record.coordinator,
         final_inventory_hash: record.final_inventory_hash,
@@ -2001,6 +2004,7 @@ const fn root_deletion_preparation_record_to_view(
     record: RootFleetSubnetDeletionPreparationRecord,
 ) -> RootFleetSubnetDeletionPreparationView {
     RootFleetSubnetDeletionPreparationView {
+        ledger_receipt: record.ledger_receipt,
         operation_id: record.operation_id,
         fleet_subnet_root: record.fleet_subnet_root,
         coordinator: record.coordinator,

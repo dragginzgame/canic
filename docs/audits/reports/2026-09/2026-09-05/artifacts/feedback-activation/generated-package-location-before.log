@@ -1,0 +1,95 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:46785/
+==> targeted canic-testing-internal PocketIC proof
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.37s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation ... [WASM]       SIZE   fleet_coordinator/candidate.wasm  code=3.88 MiB (4070557 B)  headroom=6.12 MiB (6415203 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2637573 B)  headroom=7.48 MiB (7848187 B)
+[WASM]       SIZE   scale_replica/candidate.wasm  code=2.31 MiB (2423740 B)  headroom=7.69 MiB (8062020 B)
+[WASM]       SIZE   app/candidate.wasm  code=2.30 MiB (2413526 B)  headroom=7.70 MiB (8072234 B)
+[WASM]       SIZE   scale_hub/candidate.wasm  code=2.77 MiB (2900042 B)  headroom=7.23 MiB (7585718 B)
+[WASM]       SIZE   user_hub/candidate.wasm  code=2.85 MiB (2985351 B)  headroom=7.15 MiB (7500409 B)
+[WASM]       SIZE   user_shard/candidate.wasm  code=3.13 MiB (3283548 B)  headroom=6.87 MiB (7202212 B)
+[WASM]       SIZE   root/candidate.wasm  code=8.30 MiB (8704350 B)  headroom=1.70 MiB (1781410 B)
+[FLEET]      DONE   literal-zero release artifacts (28)                  1m 48s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.38s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET]      DONE   literal-zero infrastructure replay complete          7m 41s
+
+thread 'pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation' (28918) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:4713:14:
+resume the original reviewed plan through every automatic successor: Platform(CurrentProtocol(Configuration("terminal inventory: role app protocol authority is unavailable: [PackageMissing { role: CanisterRole(\"app\") }]")))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 58 filtered out; finished in 897.83s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=534668 kB high_water=949788 kB threads=20
+==> targeted canic-testing-internal PocketIC proof failed in 899s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2026-09-05 19:46:58.217005545 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=membership component_index=1 canister=nodjf-gd777-77776-aaana-cai operation_id=[73, 94, 236, 37, 224, 185, 176, 251, 239, 91, 16, 44, 89, 165, 246, 92, 3, 0, 235, 210, 147, 204, 63, 67, 72, 115, 247, 119, 243, 205, 60, 214] diagnostic=E137
+2026-09-05 19:46:58.217005545 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[131, 84, 171, 122, 175, 85, 109, 226, 127, 202, 186, 84, 243, 225, 124, 102, 19, 35, 227, 83, 41, 74, 128, 131, 77, 242, 75, 232, 93, 101, 136, 36] phase=Published activated_components=1/3 diagnostic=E137
+2026-20092-60-50 91-90:54 61:95:94.6305238422: 5UTC9: [Canister .305238422p54kf -UTCo3777: [Canister -77776oqsol--aaadqbt777--cai77776] -[34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init startaaaea
+-cai] [34mINFO [0m|scale_replic| [Init] bootstrap (nonroot): init start
+2026-09-0250 2169-:049-05 19:46:59.305238422 UTC: [Canister p54kf-o3777-77776-aaadq-cai] [34mINFO [0m| user_shard | [Auth] delegated-token issuer canister-signature support ready issuer=p54kf-o3777-77776-aaadq-cai
+2026-09-05 19:46:59.305238422 UTC: [Canister p54kf-o3777-77776-aaadq-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+6:59.305238422 UTC: [Canister oqsol-bt777-2777760-2aaaea6--cai0] 9[34mINFO [0m|scale_replic| [Init] bootstrap (nonroot): init complete-
+05 19:46:59.305238422 UTC: [Canister p54kf-o3777-77776-aaadq2-0cai2] 6[34mINFO [0m| user_shard | [Init] canister marked READY-
+09-05 19:46:59.305238422 UTC: [Canister oqsol-bt777-77776-aaaea-cai] [34mINFO [0m|scale_replic| [Init] canister marked READY
+2026-09-05 19:46:59.600763672 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=membership component_index=1 canister=nodjf-gd777-77776-aaana-cai operation_id=[73, 94, 236, 37, 224, 185, 176, 251, 239, 91, 16, 44, 89, 165, 246, 92, 3, 0, 235, 210, 147, 204, 63, 67, 72, 115, 247, 119, 243, 205, 60, 214] diagnostic=E137
+2026-09-05 19:46:59.600763672 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[131, 84, 171, 122, 175, 85, 109, 226, 127, 202, 186, 84, 243, 225, 124, 102, 19, 35, 227, 83, 41, 74, 128, 131, 77, 242, 75, 232, 93, 101, 136, 36] phase=Published activated_components=1/3 diagnostic=E137
+2026-09-05 19:47:00.858381637 UTC: [Canister 2nodjf0-2gd7776--777760-9aaana--0cai5]  [34mINFO [0m| scale_hub  | [Init] bootstrap (nonroot): init start1
+9:47:00.858381637 UTC: [Canister mkogx-7d777-77776-aaala-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2026-09-05 19:47:00.858381637 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=mkogx-7d777-77776-aaala-cai, subnet=pp254-cl777-77776-aaaaq-cai, now=1788637620)
+2026-09-05 19:47:00.858381637 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=mkogx-7d777-77776-aaala-cai role=user_shard parent=mkogx-7d777-77776-aaala-cai
+2026-09-05 19:47:00.858381637 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=nodjf-gd777-77776-aaana-cai, subnet=pp254-cl777-77776-aaaaq-cai, now=1788637620)
+2026-09-05 19:47:00.858381637 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=nodjf-gd777-77776-aaana-cai role=scale_replica parent=nodjf-gd777-77776-aaana-cai
+2022062-60-90-90-50 51 91:94:74:70:00.0858381637. 858381637UTC : [Canister UTC: [Canister nodjfmkogx--gd7777d777--77776-aaana-cai] [32m OK  [0m| scale_hub  | [Init] scale.bootstrap: oqsol-bt777-77776-aaaea-cai pool=scales worker=8/8
+77776-aaala-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.create: p54kf-o3777-77776-aaadq-cai pool=user_shards slot=7
+22002266--0099--0055  1199::4477::0000..858381637858381637  UTCUTC: [Canister : [Canister mkogxnodjf--7d777gd777--7777677776--aaalaaaana--caicai] ] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.bootstrap: p54kf-o3777-77776-aaadq-cai pool=user_shards slot=7[34mINFO [0m| scale_hub  | [Init] bootstrap (nonroot): init complete
+
+2026-09-05 19:47:00.858381637 UTC: [Canister nodjf-gd777-77776-aaana-cai] [34mINFO [0m| scale_hub  | [Init] canister marked READY
+2026-09-05 19:47:00.858381637 UTC: [Canister mkogx-7d777-77776-aaala-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init complete
+2026-09-05 19:47:00.858381637 UTC: [Canister mkogx-7d777-77776-aaala-cai] [34mINFO [0m|  user_hub  | [Init] canister marked READY
+2026-09-05 19:47:01.057627009 UTC: [Canister mkogx-7d777-77776-aaala-cai] [33mWARN [0m|  user_hub  | [Rpc] placement receipt acknowledgement will retry operation_id=24ada396736ae7a5e2990acc4d7420145c49fbae7fb7a571af09b5270ed93275: E61
+2026-09-05 19:47:01.057627009 UTC: [Canister nodjf-gd777-77776-aaana-cai] [33mWARN [0m| scale_hub  | [Rpc] placement receipt acknowledgement will retry operation_id=1612f621b1704edea6ed55c9be1459982d12f0bd4aaf47c8a0b8b8fafbd640c7: E61
+2026-09-05 19:47:01.521325386 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=runtime component_index=2 canister=mkogx-7d777-77776-aaala-cai operation_id=[186, 174, 99, 156, 103, 237, 46, 166, 168, 107, 223, 47, 114, 249, 181, 92, 104, 65, 231, 195, 5, 180, 85, 135, 19, 23, 66, 211, 224, 144, 11, 233] diagnostic=E137
+2026-09-05 19:47:01.521325386 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[131, 84, 171, 122, 175, 85, 109, 226, 127, 202, 186, 84, 243, 225, 124, 102, 19, 35, 227, 83, 41, 74, 128, 131, 77, 242, 75, 232, 93, 101, 136, 36] phase=Published activated_components=2/3 diagnostic=E137
+2026-09-05 19:47:02.989483180 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2026-09-05 19:47:02.989483180 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Topology] root subnet identity initialized from lifecycle env: pp254-cl777-77776-aaaaq-cai
+2026-09-05 19:47:02.989483180 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) prepared managed inventory for Fleet activation
+2026-09-05 19:47:02.989483180 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Sync] sync.state: root cascade start snapshot=[fs]
+2026-09-05 19:47:02.989483180 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m| wasm_store | [Sync] sync.state: non-root cascade start snapshot=[fs]
+2026-09-05 19:47:03.912775127 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2026-09-05 19:47:03.912775127 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Topology] root subnet identity initialized from lifecycle env: pp254-cl777-77776-aaaaq-cai
+2026-09-05 19:47:03.912775127 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) complete
+2026-09-05 19:47:03.912775127 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] canister marked READY
+2026-09-05 19:47:04.079545990 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init start
+2026-09-05 19:47:04.079545990 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init complete
+2026-09-05 19:47:04.079545990 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m| wasm_store | [Init] canister marked READY
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-05T19:32:26.920442Z  INFO pocket_ic_server: The PocketIC server is listening on port 46785
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  899s     FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 899s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.49NhSI

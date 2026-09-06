@@ -23,12 +23,9 @@ use crate::{
         DesiredComponentGroupPlacement, DesiredFleet, DesiredFleetBootstrap,
         DesiredFleetBootstrapRoot, DesiredFleetProtocol, DesiredPresence,
         FLEET_ENSURE_SCHEMA_VERSION, MAX_FLEET_ENSURE_CANISTERS, RetainedRootStartAuthorityRecord,
-        RetainedRootStartBinding,
+        RootManagementBinding,
     },
-    fleet_ensure::ops::{
-        EnsurePaths, predecessor_root_status, read_root_start_authority, root_owned_lifecycle,
-        verify_root_start_release_authority, write_root_start_authority,
-    },
+    fleet_ensure::ops::{EnsurePaths, root_owned_lifecycle, write_root_start_authority},
     icp::IcpCli,
     icp_config::resolve_icp_build_network_from_root,
     network::resolve_canonical_network_id_from_root,
@@ -71,24 +68,28 @@ use thiserror::Error as ThisError;
 const MAX_GENERATOR_INPUT_BYTES: usize = 1024 * 1024;
 const MAINNET_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 const GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD: u128 = 1_000_000;
+// Create reserves one update plus one observation; ordinary observations keep
+// their own bound and do not inherit the additional Create execution interval.
 const GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES: u128 = 1_000_000_000_000;
-const GENERATED_POOL_CREATION_EXECUTION_MARGIN_CYCLES: u128 =
-    GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES;
+const GENERATED_POOL_CREATION_EXECUTION_MARGIN_CYCLES: u128 = 1_000_000_000_000;
 const GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES: u128 = 1_000_000_000_000;
 
 /// Return the generated fresh-pool funding that preserves one readiness floor
 /// across the bounded first observation and controller-finalization effects.
 #[doc(hidden)]
 pub fn fresh_pool_creation_funding(readiness_floor: u128) -> Result<u128, FleetGenerateError> {
-    readiness_floor
-        .checked_add(GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES)
-        .and_then(|funding| funding.checked_add(GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES))
-        .ok_or_else(|| {
-            FleetGenerateError::Authority(
-                "fresh pool creation funding plus its bounded pre-import execution margin overflowed"
-                    .to_string(),
-            )
-        })
+    crate::fleet_ensure::model::creation_observation_burn(
+        GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES,
+        GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES,
+    )
+    .and_then(|burn| readiness_floor.checked_add(burn))
+    .and_then(|funding| funding.checked_add(GENERATED_RETAINED_MAXIMUM_UPDATE_BURN_CYCLES))
+    .ok_or_else(|| {
+        FleetGenerateError::Authority(
+            "fresh pool creation funding plus its bounded pre-import execution margin overflowed"
+                .to_string(),
+        )
+    })
 }
 
 /// Exact local and live inputs for one no-effect desired-state generation.
@@ -122,6 +123,11 @@ pub struct GeneratedDesiredFleet {
 /// Typed no-effect Fleet generation failure.
 #[derive(Debug, ThisError)]
 pub enum FleetGenerateError {
+    #[error("invalid desired Fleet policy: {0}")]
+    Policy(#[from] crate::fleet_ensure::policy::EnsurePolicyError),
+    #[error("invalid protected funding policy: {0}")]
+    FundingPolicy(#[from] canic_core::control_plane_support::model::fleet_funding_policy::FleetFundingPolicyValidationError),
+
     #[error("failed to read Fleet generator input {path}: {source}")]
     Read {
         path: PathBuf,
@@ -168,11 +174,10 @@ pub enum FleetGenerateError {
     #[error("retained canister {canister} is unavailable: {reason}")]
     CanisterUnavailable { canister: String, reason: String },
 
-    #[error(transparent)]
-    StoppedRootStartRequired(Box<StoppedRootStartPrerequisite>),
+
 
     #[error(transparent)]
-    SealedSuccessorConvergenceRequired(Box<SealedSuccessorConvergenceRequired>),
+    StoppedRootStartRequired(Box<StoppedRootStartPrerequisite>),
 
     #[error(
         "retained canister {canister} controller set differs: actual {actual:?}, expected {expected:?}"
@@ -255,7 +260,7 @@ pub enum FleetGenerateError {
     "retained Root {root} is stopped after exact management verification \
      (Subnet {subnet}, controller {controller}, module SHA-256 {module_sha256}); \
      no protected Root query or desired-output mutation was attempted. Generator authority \
-     {authority_sha256} binds this exact module to desired successor {successor_module_sha256}. \
+     {authority_sha256} binds only the observed Root identities and installed modules. \
      The authority covers {root_count} stopped Root(s). Review and apply only the same-ID Start \
      through the current retained \
      `canic fleet ensure {fleet}` authority, \
@@ -269,26 +274,6 @@ pub struct StoppedRootStartPrerequisite {
     pub root: String,
     pub root_count: usize,
     pub subnet: String,
-    pub successor_module_sha256: String,
-}
-
-/// Exact sealed and requested successor identities for a mandatory convergence boundary.
-#[derive(Debug, Eq, PartialEq, ThisError)]
-#[error(
-    "retained Root-start authority for Fleet {fleet} is sealed to release build \
-     {sealed_release_build_id} and Root successor {sealed_successor_module_sha256}, but generation \
-     requested release build {requested_release_build_id} and Root successor \
-     {requested_successor_module_sha256}; the sealed authority cannot be retargeted. First review, \
-     apply, and terminally converge the retained desired successor with \
-     `canic fleet ensure {fleet}`. Then rerun `canic fleet generate {fleet}` for release build \
-     {requested_release_build_id} and review its fresh plan"
-)]
-pub struct SealedSuccessorConvergenceRequired {
-    pub fleet: String,
-    pub requested_release_build_id: String,
-    pub requested_successor_module_sha256: String,
-    pub sealed_release_build_id: String,
-    pub sealed_successor_module_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -683,8 +668,6 @@ struct RootEstateAuthorityRequest<'a, 'request> {
     app: &'a canic_core::ids::AppId,
     generation: &'a FleetGenerateRequest<'request>,
     root_candid: &'a Path,
-    root_wasm_sha256: &'a str,
-    predecessor_status_roots: &'a BTreeSet<String>,
     seed: &'a EstateSeed,
     source: &'a FleetSource,
     topology: &'a crate::component_topology::PlannedFleetTopology,
@@ -779,6 +762,15 @@ pub fn generate_desired_fleet(
     })
     .collect::<Vec<_>>();
     validate_root_pool_capacity(config.model(), &capacity_roots)?;
+    for root in &source.fleet_subnet_roots {
+        fresh_root_pool_count(root, &deployment_configuration)?;
+    }
+    validate_source_funding(
+        &source,
+        canonical_network_id(request, &source)?
+            == canic_core::ids::CanonicalNetworkId::ic_mainnet(),
+    )?;
+
     let (infrastructure, complete) = release_authority(request, config.component_topology())?;
     if complete.manifest.infrastructure_artifact_manifest_sha256 != infrastructure.digest {
         return Err(FleetGenerateError::Release(
@@ -847,6 +839,7 @@ pub fn generate_desired_fleet(
         treasury,
         ledger_fee_cycles,
     })?;
+    crate::fleet_ensure::policy::validate_terminal_pool_capacity(&desired)?;
     let observed_controlled_cycles = observed.values().try_fold(0_u128, |total, canister| {
         total.checked_add(canister.cycles).ok_or_else(|| {
             FleetGenerateError::Authority("observed controlled cycle total overflowed".to_string())
@@ -904,6 +897,31 @@ fn validate_fresh_generation_authority(
         )?;
     }
     Ok(())
+}
+
+fn fresh_root_pool_count(
+    source: &RootSource,
+    configuration: &ComponentDeploymentConfiguration,
+) -> Result<usize, FleetGenerateError> {
+    let workloads = crate::fleet_ensure::policy::initial_workload_count(
+        configuration,
+        source
+            .component_group_placements
+            .iter()
+            .flat_map(|(deployment, ordinals)| ordinals.iter().map(move |_| deployment.as_str())),
+        &source.placement_subnet,
+    )?;
+    let count = crate::fleet_ensure::policy::terminal_pool_supply(
+        &source.placement_subnet,
+        workloads,
+        source.canister_pool.minimum_size,
+        source.canister_pool.maximum_size,
+    )?;
+    usize::try_from(count).map_err(|_| {
+        FleetGenerateError::FreshSeedConflict(
+            "complete initial pool supply cannot be represented on this host".to_string(),
+        )
+    })
 }
 
 struct CompileDesiredRequest<'a> {
@@ -1061,7 +1079,20 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         }
         canisters.push(store);
         let mut pool_names = Vec::new();
-        for (pool_index, pool) in seed.pool_imports.iter().enumerate() {
+        let pool_count = if input.seed.fresh_estate {
+            fresh_root_pool_count(source, &input.deployment_configuration)?
+        } else {
+            seed.pool_imports.len()
+        };
+        if canisters.len().saturating_add(pool_count) > MAX_FLEET_ENSURE_CANISTERS {
+            return Err(FleetGenerateError::Policy(
+                crate::fleet_ensure::policy::EnsurePolicyError::TooManyCanisters {
+                    actual: canisters.len().saturating_add(pool_count),
+                    maximum: MAX_FLEET_ENSURE_CANISTERS,
+                },
+            ));
+        }
+        for pool_index in 0..pool_count {
             let name = format!("root-{index}-pool-{pool_index}");
             pool_names.push(name.clone());
             let readiness_floor = source.canister_pool.canister_cycles.to_u128();
@@ -1091,7 +1122,8 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
                 name,
                 parent: Some(root_name.clone()),
                 presence: DesiredPresence::Present,
-                principal: (!input.seed.fresh_estate).then(|| pool.clone()),
+                principal: (!input.seed.fresh_estate)
+                    .then(|| seed.pool_imports[pool_index].clone()),
                 protocol_binding: None,
                 replace: false,
                 subnet: source.placement_subnet.clone(),
@@ -1369,7 +1401,10 @@ fn observe_estate(
         let cycles = status
             .cycles
             .as_deref()
-            .unwrap_or("0")
+            .ok_or_else(|| FleetGenerateError::CanisterUnavailable {
+                canister: canister.clone(),
+                reason: "controller-authenticated native cycle balance is unavailable".to_string(),
+            })?
             .replace('_', "")
             .parse::<u128>()
             .map_err(|_| FleetGenerateError::Authority("invalid live cycle balance".to_string()))?;
@@ -1416,7 +1451,15 @@ fn observe_estate(
     }
     for root in &seed.roots {
         match root_statuses.get(&root.root) {
-            Some(CanisterRuntimeStatus::Running) => {}
+            Some(CanisterRuntimeStatus::Running)
+                if observed
+                    .get(&root.root)
+                    .and_then(|value| value.module_sha256.as_deref())
+                    == Some(*root_wasm_sha256) => {}
+            Some(CanisterRuntimeStatus::Running) => {
+                // Generation describes the replacement without querying a different runtime.
+                // The reviewed Ensure prerequisite owns the management reinstall.
+            }
             Some(CanisterRuntimeStatus::Stopped) => {
                 let observation = observed.get(&root.root).ok_or_else(|| {
                     FleetGenerateError::SeedTopology(format!(
@@ -1431,10 +1474,10 @@ fn observe_estate(
                     }
                 })?;
                 let root_name = retained_root_name(source, seed, topology, &root.root)?;
-                stopped_roots.push(RetainedRootStartBinding {
+                stopped_roots.push(RootManagementBinding {
                     controllers: vec![operator.to_text()],
                     name: root_name,
-                    predecessor_module_sha256: module_sha256,
+                    module_sha256,
                     principal: root.root.clone(),
                     subnet: observation.subnet.clone(),
                 });
@@ -1462,10 +1505,8 @@ fn observe_estate(
                 environment: request.environment.to_string(),
                 fleet: request.fleet.to_string(),
                 fleet_id: seed.fleet_id,
-                release_build_id: request.release_build_id,
                 roots: stopped_roots.clone(),
                 schema_version: FLEET_ENSURE_SCHEMA_VERSION,
-                successor_module_sha256: (*root_wasm_sha256).to_string(),
             },
         )
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
@@ -1474,31 +1515,27 @@ fn observe_estate(
                 authority_sha256: authority.authority_sha256,
                 controller: operator.to_text(),
                 fleet: request.fleet.to_string(),
-                module_sha256: first.predecessor_module_sha256.clone(),
+                module_sha256: first.module_sha256.clone(),
                 root: first.principal.clone(),
                 root_count: stopped_roots.len(),
                 subnet: first.subnet.clone(),
-                successor_module_sha256: (*root_wasm_sha256).to_string(),
             },
         )));
     }
-    let predecessor_status_roots = predecessor_status_roots(
-        request,
-        *operator,
-        seed,
-        source,
-        topology,
-        &observed,
-        root_wasm_sha256,
-    )?;
+    if seed.roots.iter().any(|root| {
+        observed
+            .get(&root.root)
+            .and_then(|live| live.module_sha256.as_deref())
+            != Some(*root_wasm_sha256)
+    }) {
+        return Ok(observed);
+    }
     observe_root_owned_pool_assets(
         &icp,
         &RootEstateAuthorityRequest {
             app,
             generation: request,
             root_candid,
-            root_wasm_sha256,
-            predecessor_status_roots: &predecessor_status_roots,
             seed,
             source,
             topology,
@@ -1506,113 +1543,6 @@ fn observe_estate(
         &mut observed,
     )?;
     Ok(observed)
-}
-
-fn predecessor_status_roots(
-    request: &FleetGenerateRequest<'_>,
-    operator: Principal,
-    seed: &EstateSeed,
-    source: &FleetSource,
-    topology: &PlannedFleetTopology,
-    observed: &BTreeMap<String, ObservedCanister>,
-    successor_module_sha256: &str,
-) -> Result<BTreeSet<String>, FleetGenerateError> {
-    let paths = EnsurePaths::under(request.root, request.environment, request.fleet);
-    let Some(authority) = read_root_start_authority(&paths)
-        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?
-    else {
-        return Ok(BTreeSet::new());
-    };
-    if let Some(binding) = authority.roots.iter().find(|binding| {
-        observed
-            .get(&binding.principal)
-            .and_then(|canister| canister.module_sha256.as_deref())
-            .is_some_and(|live_module| {
-                live_module != binding.predecessor_module_sha256
-                    && live_module != successor_module_sha256
-            })
-    }) {
-        return Err(FleetGenerateError::CanisterUnavailable {
-            canister: binding.principal.clone(),
-            reason:
-                "live Root module is neither the sealed predecessor nor the requested successor"
-                    .to_string(),
-        });
-    }
-    let has_matching_predecessor = authority.roots.iter().any(|binding| {
-        observed
-            .get(&binding.principal)
-            .and_then(|canister| canister.module_sha256.as_deref())
-            == Some(binding.predecessor_module_sha256.as_str())
-    });
-    if !has_matching_predecessor {
-        return Ok(BTreeSet::new());
-    }
-    let fleet_identity_matches = authority.environment == request.environment
-        && authority.fleet == request.fleet
-        && authority.fleet_id == seed.fleet_id;
-    if !fleet_identity_matches {
-        return Err(FleetGenerateError::Authority(
-            "retained Root-start authority does not bind the current Fleet identity".to_string(),
-        ));
-    }
-    verify_root_start_release_authority(request.root, &authority)
-        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
-    let requested_successor_matches = authority.release_build_id == request.release_build_id
-        && authority.successor_module_sha256 == successor_module_sha256;
-    if !requested_successor_matches {
-        return Err(FleetGenerateError::SealedSuccessorConvergenceRequired(
-            Box::new(SealedSuccessorConvergenceRequired {
-                fleet: request.fleet.to_string(),
-                requested_release_build_id: request.release_build_id.to_string(),
-                requested_successor_module_sha256: successor_module_sha256.to_string(),
-                sealed_release_build_id: authority.release_build_id.to_string(),
-                sealed_successor_module_sha256: authority.successor_module_sha256,
-            }),
-        ));
-    }
-    let expected_controller = operator.to_text();
-    let mut accepted = BTreeSet::new();
-    for binding in &authority.roots {
-        let root = seed
-            .roots
-            .iter()
-            .find(|root| root.root == binding.principal)
-            .ok_or_else(|| {
-                FleetGenerateError::Authority(format!(
-                    "retained Root-start authority names unknown Root {}",
-                    binding.principal
-                ))
-            })?;
-        let expected_name = retained_root_name(source, seed, topology, &root.root)?;
-        let exact_binding = binding.name == expected_name
-            && binding.subnet == root.placement_subnet
-            && binding.controllers == [expected_controller.clone()];
-        if !exact_binding {
-            return Err(FleetGenerateError::Authority(format!(
-                "retained predecessor status authority for Root {} conflicts with current Fleet identity",
-                binding.principal
-            )));
-        }
-        let live_module = observed
-            .get(&binding.principal)
-            .and_then(|canister| canister.module_sha256.as_deref())
-            .ok_or_else(|| {
-                FleetGenerateError::Authority(format!(
-                    "retained predecessor status authority has no live module for Root {}",
-                    binding.principal
-                ))
-            })?;
-        if live_module == binding.predecessor_module_sha256 {
-            accepted.insert(binding.principal.clone());
-        } else if live_module != successor_module_sha256 {
-            return Err(FleetGenerateError::Authority(format!(
-                "Root {} module is neither the sealed predecessor nor successor",
-                binding.principal
-            )));
-        }
-    }
-    Ok(accepted)
 }
 
 fn retained_root_name(
@@ -1688,16 +1618,14 @@ fn require_root_estate_authority(
     Ok(())
 }
 
-fn require_root_policy_convergence(
+fn require_root_policy_matches(
     root: &str,
     actual: &RootDesiredPolicy,
     expected: &RootDesiredPolicy,
-    observed_module_sha256: Option<&str>,
-    desired_module_sha256: &str,
 ) -> Result<(), FleetGenerateError> {
-    if actual != expected && observed_module_sha256 == Some(desired_module_sha256) {
+    if actual != expected {
         return Err(FleetGenerateError::SeedTopology(format!(
-            "Root {root} policy differs but its current module cannot converge that init-only drift without a reinstall"
+            "Root {root} installed policy differs from the current configuration"
         )));
     }
     Ok(())
@@ -1820,14 +1748,10 @@ fn observe_root_owned_pool_assets(
             installation_controller: parse_principal("operator", &request.source.operator)?,
             limits: planned.limits.clone(),
         };
-        require_root_policy_convergence(
+        require_root_policy_matches(
             &root.root,
             &RootDesiredPolicy::from(authority.as_ref()),
             &expected_policy,
-            observed
-                .get(&root.root)
-                .and_then(|value| value.module_sha256.as_deref()),
-            request.root_wasm_sha256,
         )?;
         let mut found = BTreeMap::new();
         let mut start_after = None;
@@ -1836,16 +1760,7 @@ fn observe_root_owned_pool_assets(
                 start_after,
                 limit: 256,
             });
-            let page = if request.predecessor_status_roots.contains(&root.root) {
-                predecessor_root_status::query_pool(icp, root_principal, start_after, 256).map_err(
-                    |error| FleetGenerateError::CanisterUnavailable {
-                        canister: root.root.clone(),
-                        reason: format!(
-                            "protected predecessor Root pool observation failed: {error}"
-                        ),
-                    },
-                )?
-            } else {
+            let page = {
                 let response: RootEstateStatusResponse = query_with_candid(
                     icp,
                     request.root_candid,
@@ -2181,6 +2096,28 @@ fn infrastructure_canister(
 
 fn config_cycles(cycles: u128) -> String {
     Cycles::new(cycles).to_config_string()
+}
+
+fn validate_source_funding(
+    source: &FleetSource,
+    ic_mainnet: bool,
+) -> Result<(), FleetGenerateError> {
+    use canic_core::control_plane_support::model::fleet_funding_policy::{
+        validate_coordinator_root_funding_policy, validate_fleet_root_funding_capacity,
+        validate_fleet_subnet_root_funding_authority,
+    };
+    let coordinator = coordinator_funding(source.funding_profile, &source.coordinator.root_funding);
+    let roots = source
+        .fleet_subnet_roots
+        .iter()
+        .map(|root| root_funding(source.funding_profile, &root.root_funding))
+        .collect::<Vec<_>>();
+    validate_coordinator_root_funding_policy(&coordinator)?;
+    for root in &roots {
+        validate_fleet_subnet_root_funding_authority(root, ic_mainnet)?;
+    }
+    validate_fleet_root_funding_capacity(&coordinator, &roots)?;
+    Ok(())
 }
 
 fn coordinator_funding(

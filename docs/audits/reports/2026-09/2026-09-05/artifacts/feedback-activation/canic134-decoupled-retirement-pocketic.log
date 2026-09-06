@@ -1,0 +1,140 @@
+patching file crates/canic-host/src/fleet_ensure/workflow/mod.rs
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-host v0.110.6 (/home/adam/projects/canic/.tmp/canic134-predecessor-owner-source/crates/canic-host)
+   Compiling canic-cycle-custody v0.110.7 (/home/adam/projects/canic/crates/canic-cycle-custody)
+   Compiling canic-testing-internal v0.110.6 (/home/adam/projects/canic/.tmp/canic134-predecessor-owner-source/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 48.23s
+    Finished `fast` profile [optimized] target(s) in 0.34s
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:43943/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-testing-internal v0.110.6 (/home/adam/projects/canic/.tmp/canic134-predecessor-owner-source/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 13.65s
+     Running unittests src/lib.rs (/home/adam/projects/canic/target/canic134-predecessor-owner/debug/deps/canic_testing_internal-2d957919476f54c2)
+
+running 1 test
+test predecessor_retirement::tests::pinned_owner_retires_and_seals_genuine_predecessor ... [FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             29.16s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.48s
+[FLEET]      RUN    finished PIC wasm build
+[FLEET]      DONE   root artifacts ready                                 31.48s
+[WASM]       DONE   Fleet Coordinator artifact                            4.64s
+[FLEET]      DONE   Coordinator artifact ready                            5.07s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       CACHE  delegation_issuer_stub                                0.45s
+[FLEET]      DONE   Store and Component artifacts ready                   1.63s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.14s
+[FLEET]      DONE   Root and Store installed                              4.40s
+[FLEET]      DONE   Coordinator installed                                 1.27s
+[FLEET]      DONE   Root joined and synchronized                          0.13s
+[FLEET]      DONE   Component Registry activated                          2.99s
+[FLEET]      DONE   fresh Fleet validated                                 0.01s
+[FLEET]      DONE   fresh Fleet setup complete                           47.13s
+CANIC134 HTTP verify
+CANIC134 HTTP verify
+CANIC134 HTTP funding_idle
+CANIC134 HTTP removal_request
+CANIC134 HTTP pool
+CANIC134 HTTP verify
+CANIC134 original host intent settled; one real controller mutation; unissued Stop untouched
+CANIC134 capture begins
+CANIC134 HTTP verify
+CANIC134 HTTP funding_idle
+CANIC134 HTTP removal_request
+CANIC134 HTTP pool
+CANIC134 HTTP root_status
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP ledger
+CANIC134 HTTP root_status
+CANIC134 HTTP pool
+CANIC134 HTTP removal_request
+CANIC134 HTTP funding_idle
+CANIC134 HTTP verify
+CANIC134 HTTP verify
+CANIC134 HTTP funding_idle
+CANIC134 HTTP pool
+CANIC134 HTTP removal_request
+CANIC134 HTTP ledger
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP verify
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP removal_status
+CANIC134 HTTP root_status
+CANIC134 HTTP root_info
+CANIC134 HTTP verify
+CANIC134 HTTP root_status
+CANIC134 HTTP root_info
+CANIC134 HTTP pool
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP observe
+CANIC134 HTTP ledger
+CANIC134 pinned owner: assets=10, final_native=2019347364227566, operator_ledger=7999800000000, fees=200000000, retirement_debit=10837862761, custody_burn=92465997474, Store_residual=425891567021
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 129.42s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=422868 kB high_water=458616 kB threads=20
+==> targeted canic-testing-internal PocketIC proof done in 143s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  143s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 144s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.jYJMlk

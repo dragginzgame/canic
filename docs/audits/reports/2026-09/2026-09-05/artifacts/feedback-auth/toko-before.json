@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "label": "toko-before",
+  "wasm_sha256": "241b154fdd74dd4ba338b5ca03288045dd7660634bb3d6416a5020828abe19a1",
+  "named_wasm_sha256": "9b3f5e6e8bdeee2ecaaaa3a715826fdc57252b5ceae651679d5f5575442fe3ad",
+  "executable_sections_sha256": "4a0f526cd70c5f8b1d660083432da7d2ca152ba736018111dcd2e842107d225a",
+  "named_executable_sections_match": false,
+  "raw_bytes": 6900605,
+  "gzip_bytes": 2444329,
+  "code_section_bytes": 6466908,
+  "data_section_bytes": 328074,
+  "defined_functions": 9223,
+  "named_items": 9687,
+  "state_symbols": {
+    "issuer": [],
+    "root_delegation": [
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::advance_delegated_auth_registry_epoch",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::chain_key_root_delegation_batch",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::chain_key_root_delegation_batches",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::prune_chain_key_root_delegation_batches",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::root_issuer_policies",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::root_issuer_renewal_state",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::root_issuer_renewal_template",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::root_issuer_renewal_templates",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::upsert_chain_key_root_delegation_batch",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::upsert_root_issuer_renewal_state",
+      "<canic_core[22476f0060e07700]::storage::stable::auth::ROOT_DELEGATION_STATE::{closure#0} as core[9b3796e30d99ddb7]::ops::function::FnOnce<(core[9b3796e30d99ddb7]::option::Option<&mut core[9b3796e30d99ddb7]::option::Option<core[9b3796e30d99ddb7]::cell::RefCell<ic_stable_structures[294c407a3f4dbf30]::cell::Cell<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord, ic_stable_structures[294c407a3f4dbf30]::memory_manager::VirtualMemory<ic_stable_structures[294c407a3f4dbf30]::ic0_memory::Ic0StableMemory>>>>>,)>>::call_once",
+      "<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord as core[9b3796e30d99ddb7]::clone::Clone>::clone",
+      "<ic_stable_structures[294c407a3f4dbf30]::cell::Cell<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord, ic_stable_structures[294c407a3f4dbf30]::memory_manager::VirtualMemory<ic_stable_structures[294c407a3f4dbf30]::ic0_memory::Ic0StableMemory>>>::flush_value",
+      "<ic_stable_structures[294c407a3f4dbf30]::cell::Cell<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord, ic_stable_structures[294c407a3f4dbf30]::memory_manager::VirtualMemory<ic_stable_structures[294c407a3f4dbf30]::ic0_memory::Ic0StableMemory>>>::new",
+      "<ic_stable_structures[294c407a3f4dbf30]::cell::Cell<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord, ic_stable_structures[294c407a3f4dbf30]::memory_manager::VirtualMemory<ic_stable_structures[294c407a3f4dbf30]::ic0_memory::Ic0StableMemory>>>::set",
+      "core[9b3796e30d99ddb7]::ptr::drop_glue::<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord>"
+    ],
+    "local_authorization": []
+  },
+  "linked_state_symbols": {
+    "issuer": [],
+    "root_delegation": [
+      "<&mut ciborium[91be003c53129eed]::de::Deserializer<&[u8]> as serde_core[acbac3b95aaea78]::de::Deserializer>::deserialize_map::<<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord as serde_core[acbac3b95aaea78]::de::Deserialize>::deserialize::__Visitor>",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::advance_delegated_auth_registry_epoch",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::chain_key_root_delegation_batch",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::chain_key_root_delegation_batches",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::prune_chain_key_root_delegation_batches",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::root_issuer_policies",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::root_issuer_renewal_state",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::root_issuer_renewal_template",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::root_issuer_renewal_templates",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::upsert_chain_key_root_delegation_batch",
+      "<canic_core[22476f0060e07700]::ops::storage::auth::RootDelegationStateOps>::upsert_root_issuer_renewal_state",
+      "<canic_core[22476f0060e07700]::storage::stable::auth::ROOT_DELEGATION_STATE::{closure#0} as core[9b3796e30d99ddb7]::ops::function::FnOnce<(core[9b3796e30d99ddb7]::option::Option<&mut core[9b3796e30d99ddb7]::option::Option<core[9b3796e30d99ddb7]::cell::RefCell<ic_stable_structures[294c407a3f4dbf30]::cell::Cell<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord, ic_stable_structures[294c407a3f4dbf30]::memory_manager::VirtualMemory<ic_stable_structures[294c407a3f4dbf30]::ic0_memory::Ic0StableMemory>>>>>,)>>::call_once",
+      "<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord as core[9b3796e30d99ddb7]::clone::Clone>::clone",
+      "<ic_stable_structures[294c407a3f4dbf30]::cell::Cell<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord, ic_stable_structures[294c407a3f4dbf30]::memory_manager::VirtualMemory<ic_stable_structures[294c407a3f4dbf30]::ic0_memory::Ic0StableMemory>>>::flush_value",
+      "<ic_stable_structures[294c407a3f4dbf30]::cell::Cell<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord, ic_stable_structures[294c407a3f4dbf30]::memory_manager::VirtualMemory<ic_stable_structures[294c407a3f4dbf30]::ic0_memory::Ic0StableMemory>>>::new",
+      "<ic_stable_structures[294c407a3f4dbf30]::cell::Cell<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord, ic_stable_structures[294c407a3f4dbf30]::memory_manager::VirtualMemory<ic_stable_structures[294c407a3f4dbf30]::ic0_memory::Ic0StableMemory>>>::set",
+      "canic_core[22476f0060e07700]::storage::stable::auth::init_root_delegation_state::_::_::__canic_register_static_memory_declaration::_::__CTOR_PRIVATE_REF::__ctor_private",
+      "core[9b3796e30d99ddb7]::ptr::drop_glue::<canic_core[22476f0060e07700]::storage::stable::auth::records::RootDelegationStateRecord>"
+    ],
+    "local_authorization": []
+  },
+  "candid_sha256": "d3c4da3f3c699f673a460dd083a9e3f0ab3c40f3751edc6892c2bb1de2f80cf4"
+}

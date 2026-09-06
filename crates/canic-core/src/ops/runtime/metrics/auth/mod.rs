@@ -10,9 +10,11 @@ mod sessions;
 use std::{cell::RefCell, collections::HashMap};
 
 pub use attestation::{record_attestation_epoch_rejected, record_attestation_verify_failed};
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+pub use sessions::record_application_session_cleanup;
 pub use sessions::{
-    record_application_session_cleanup, record_application_session_clear,
-    record_application_session_created, record_application_session_establishment_started,
+    record_application_session_clear, record_application_session_created,
+    record_application_session_establishment_started,
     record_application_session_expired_observation,
     record_application_session_generation_invalidation, record_application_session_idempotent,
     record_application_session_rejected, record_application_session_replaced,
@@ -54,6 +56,7 @@ impl AuthMetricSurface {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum AuthMetricOperation {
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     Cleanup,
     Clear,
     Establish,
@@ -67,6 +70,7 @@ impl AuthMetricOperation {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            #[cfg(any(test, feature = "auth-local-application-authorization"))]
             Self::Cleanup => "cleanup",
             Self::Clear => "clear",
             Self::Establish => "establish",

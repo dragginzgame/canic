@@ -20,12 +20,19 @@ ignored = ["serde_bytes"]
 default = []
 sharding = []
 auth-chain-key-ecdsa = ["dep:k256"]
-auth-chain-key-root-sign = ["auth-chain-key-ecdsa"]
+auth-chain-key-root-sign = ["auth-chain-key-ecdsa", "auth-root-delegation-state"]
+auth-delegated-token-issuer-state = []
 auth-root-canister-sig-create = ["dep:ic-canister-sig-creation", "dep:ic-certification"]
 auth-root-canister-sig-verify = ["dep:ic-signature-verification"]
-auth-issuer-canister-sig-create = ["dep:ic-canister-sig-creation", "dep:ic-certification"]
+auth-issuer-canister-sig-create = [
+    "auth-delegated-token-issuer-state",
+    "dep:ic-canister-sig-creation",
+    "dep:ic-certification",
+]
 auth-issuer-canister-sig-verify = ["dep:ic-signature-verification"]
 auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig-verify"]
+auth-local-application-authorization = ["auth-delegated-token-verify"]
+auth-root-delegation-state = []
 blob-storage = []
 blob-storage-billing = ["blob-storage"]
 internal-test-fixtures = []

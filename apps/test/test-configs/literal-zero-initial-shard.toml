@@ -40,8 +40,8 @@ maximum_instances = 1
 [component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
-policy.initial_shards = 1
-policy.max_shards = 2
+policy.initial_shards = 4
+policy.max_shards = 4
 
 [component_specs.users.children.user_shard]
 kind = "shard"
@@ -52,7 +52,7 @@ delegated_token_verifier = true
 role_attestation_cache = true
 
 [component_specs.users.spawn_grants.user_hub.user_shard]
-maximum_instances_per_parent = 2
+maximum_instances_per_parent = 4
 
 [component_groups.qualification.components.users]
 component_spec = "users"

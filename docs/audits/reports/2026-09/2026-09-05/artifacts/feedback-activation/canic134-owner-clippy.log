@@ -1,0 +1,5 @@
+   Compiling canic-macros v0.110.7 (/home/adam/projects/canic/crates/canic-macros)
+    Checking canic-cycle-custody v0.110.7 (/home/adam/projects/canic/crates/canic-cycle-custody)
+    Checking canic v0.110.7 (/home/adam/projects/canic/crates/canic)
+    Checking canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 3.22s

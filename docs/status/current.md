@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 ## Purpose
 
@@ -25,8 +25,8 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.110.6` at
-`f1fd3c59f428c57e28a2d6469ee8326f744ed021`. Its governed marker records the
+Current development begins from published `v0.110.7` at
+`2cd3588b639f467e4f536461fcc7cec60af5719e`. Its governed marker records the
 validated pre-version source below; immutable details are in
 [the 0.110 changelog](../changelog/0.110.md). Post-release work is retained
 under `Unreleased` until it forms a coherent batch. Source-development truth
@@ -205,7 +205,7 @@ existing content-addressed object store and reports only their local path,
 SHA-256 and byte size. Text-mode cycle quantities use consistent three-decimal
 `B`, `T` and `Q` units.
 
-## Open 0.110.7 Endpoint Contract Correction
+## Published 0.110.7 Endpoint Contract Correction
 
 The maintained Canic surface no longer overloads one top-level method name
 with incompatible request and response types. Ordinary managed roles retain
@@ -215,7 +215,7 @@ Wasm Store own `canic_coordinator_*`, `canic_root_*` and
 selects the exact pair from the already verified role binding. This is a
 pre-1.0 hard cut with no alias or fallback endpoint.
 
-## Open 0.110.7 Validation Throughput
+## Published 0.110.7 Validation Throughput
 
 The ordinary runner uses libtest's default captured output; governed PocketIC
 journeys alone retain live `--nocapture` progress. Its fast internal tier now
@@ -272,7 +272,7 @@ runtime or repository dependency.
 | Line | Active owner | State |
 | --- | --- | --- |
 | [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
-| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.6` published; valid eleven-role v6 baseline retained while B1 fixture and differential evidence remain active |
+| [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.7` published; bounded authorization-persistence split active without accepting B1 or the remaining B2/B3 families |
 | [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
@@ -313,9 +313,10 @@ baseline before any runtime contraction. Initial work:
   across all canonical roles, with the runtime fixture independently removing
   148,935 code bytes and 88 functions while persistence and authorization
   parity remain open,
-  a canonical-plus-runtime-and-blob-fixture-qualified shared-CBOR-helper switch,
-  an isolated
-  watchdog-recovery dispatch switch
+  immutable shared-CBOR-helper attribution removing 9,332,399 artifact-summed
+  canonical code bytes and 5,344 defined functions while preserving every
+  Candid hash and leaving codec, persistence and runtime parity open,
+  a canonical-plus-runtime-qualified watchdog-recovery dispatch switch
   and an endpoint-
   declaration-construction switch plus bounded endpoint-reply serialization,
   a specified metrics-provider switch and immutable payload-limited raw-
@@ -433,6 +434,26 @@ The retained row-4 run likewise passes 48 clean builds and complete
 determinism across the canonical roles plus `runtime_probe`, preserves every
 Candid hash and records material repeated authorization-persistence integration
 footprint without claiming persistence or authorization parity.
+The retained row-5 run passes 52 clean builds and complete determinism across
+the canonical roles plus `runtime_probe` and `blob_storage_probe`, preserves
+every Candid hash and attributes 9,332,399 artifact-summed optimized code bytes
+and 5,344 defined functions to the shared bounded CBOR helper's canonical-role
+reachability. Its intentionally overlapping build-only stub proves no codec,
+persistence, restore or runtime parity; it prioritizes role-selected storage
+and residual-codec remeasurement rather than direct production deletion.
+Row 8's first development qualification passed ten canonical artifacts before
+the Wasm Store's production sidecar comparison correctly rejected its
+deliberately changed counterfactual Candid. The audit switch now isolates that
+comparison without weakening the production builder, and an exact Store
+qualification passes. The full selector has not passed against the current
+patch identity, so row 8 remains `specified`; narrowed qualification is
+development-only and cannot retain a measurement.
+Row 10's exact canonical-App qualification also passes artifact, gzip, Candid
+and structured-metric validation. Its complete selector and immutable paired
+measurement remain open, so row 10 remains `specified`.
+Row 12's exact canonical-App qualification passes the same artifact boundary;
+its complete selector, metrics behavior proof and immutable paired measurement
+remain open, so row 12 remains `specified`.
 Fleet plan persistence regressions likewise decode structured JSON and assert
 named values or absence rather than serializer text.
 
@@ -447,17 +468,54 @@ verification or issuance retain authentication cryptography. Optimized
 capability reports retain cryptography as a separate measured category so later
 symbol-level regressions remain visible.
 
+## Open 0.110.8 Capability-Owned Authorization Persistence
+
+The maintainer explicitly authorized this bounded vertical slice without
+accepting complete B1 or opening the remaining B2/B3 state families. The former
+aggregate authorization record, stable cell and storage facade are hard-cut
+into three exact owners:
+
+- local application authorization owns sessions, replay fences and the local
+  authority generation;
+- a delegated-token issuer owns only its installed active proof; and
+- Root owns issuer policy, proof and Registry epochs, renewal state and
+  chain-key batches.
+
+Verification alone owns no persistence. Coordinator and Store select no auth
+allocation, and the facade no longer activates all control-plane role defaults
+through its optional dependency. Root still authenticates operator calls with
+controller authority and protocol calls with the exact Coordinator Principal
+in its protected Fleet activation binding; neither path depends on local
+application authorization.
+
+Typed role-contract tests prove the exact allocation and missing-feature
+values. Stable-state tests cover each record owner and bounded local-session
+capacity without exact serialized-byte assertions. Targeted optimized builds
+show no auth declaration in Coordinator or the verifier-only runtime probe,
+only Root delegation state in Root, and exactly issuer plus local-application
+state in their combined fixture. The governed seven-test native authorization
+and delegation PocketIC target passes, including same-release restoration
+rejection after corrupting the selected issuer cell. These results do not claim
+that unrelated runtime storage has been contracted or that the full B1/B2
+artifact matrix has been remeasured.
+
+The same open patch advances only the isolated lifecycle-composition fixture to
+the exact published IcyDB 0.253.0 family with default features disabled.
+Production Canic crates remain IcyDB-free, and the governed dependency check
+now compares parsed Cargo package and dependency fields instead of source
+formatting. Targeted host, lint and Wasm builds plus the exact PocketIC
+composed-ingress journey pass against the new family.
+
 ### Downstream feedback disposition
 
 The current patch candidate addresses the Canic-owned launch blockers recorded
 as `CANIC-007`, `CANIC-132` and `CANIC-133`: funding is plan-owned and
 replay-safe, autonomous creation has non-zero execution margin and exact
 first-observation evidence, and planning uses the complete protected pool
-inventory before authorizing a debit. It deliberately fails closed when
-already-Failed assets occupy all pool capacity; a separate reviewed native
-funding and Root-reset operation is still required to repair that retained
-estate without abandoning its cycles. Immutable release and downstream replay
-remain the other closure boundaries. `CANIC-129` is covered by an isolated
+inventory before authorizing a debit. Reviewed native funding and Root
+reconciliation for exact retained Failed/PendingReset identities now have
+production-host repair, conservation and replay evidence linked below.
+Immutable release and downstream replay remain closure boundaries. `CANIC-129` is covered by an isolated
 packaged-consumer lock-resolution proof; the public testing facade remains the
 only supported downstream testing boundary. `CANIC-130` is already corrected
 in Canic; the remaining wrapper replay is downstream evidence rather than a
@@ -491,16 +549,82 @@ and an await-safe Root validation-context pilot remain deferred inputs.
 
 ## Next Authorized Action
 
-Finish the current 0.110.7 cycle-safety batch before continuing contraction:
-retain the plan-owned Root estate funding action, complete protected pool
-inventory, non-zero autonomous creation margin and actual receipt-based
-terminal conservation as one candidate; then run the maintainer-owned complete
-release gate and obtain downstream no-effect replay. Do not fund an estate
-account outside the reviewed plan or treat this dirty source as published.
+The accepted `CANIC-007` and `CANIC-132`–`CANIC-138` correction batch is
+**ready for release approval**. No implementation, direct-evidence or
+propagation blocker remains identified within its final accepted scope.
+The next boundary is the maintainer-approved governed release flow; no version,
+Git publication, broad validation, deployment or 0.111 action is inferred.
+Package versions remain 0.110.7 and the complete open changelog draft is 0.110.8.
+No runtime, host, CLI, DTO, Candid or fixture source changed during closeout;
+only documentation and evidence were updated.
 
-After that blocker is immutable, continue B1 from immutable `v0.110.5`:
-measure qualified row 5, then qualify the specified row 6 watchdog-recovery
-dispatch patch, row 8 endpoint-declaration construction and rows 10 and 12
+The maintainer's final contract is explicit pre-1.0 reinstall. Application state
+and former host records may be discarded while cycles and asset control remain
+accounted for. Whole-Fleet evacuation applies only when deleting the Fleet.
+The earlier classification of complete deletion as a release blocker was too
+broad and is withdrawn. Custody, pinned predecessor readers, superseded
+Store-adoption handling and compatibility ordering are removed. No replacement
+recovery mode or redesign is part of this batch.
+
+The [generated reinstall journey](../audits/reports/2026-09/2026-09-05/fleet-reinstall-journey.md)
+passes in 522.04s. Generation avoids protected queries on a different Root
+module. A reviewed three-effect `root_reinstall_prerequisite` uses the existing
+intent/version journal; it survives an actual lost install response and fresh
+adapter reconstruction. A separately reviewed `full` plan completes 18 effects
+through bounded successor phases and reaches a working Fleet. Reset replay,
+original full-plan replay and newly planned replay are effect-free. Exact
+controllers and the Root's 1B Ledger balance are retained; aggregate native
+debit remains below the fixture's 10T bound. The host now accounts for installed
+PendingReset assets and defers creation funding while infrastructure and import
+reconciliation restore owned capacity.
+
+Final focused evidence:
+
+- 138 Fleet host tests, 47 selected Fleet CLI tests and scoped warning-denied
+  Clippy pass after the final host/policy/fixture changes.
+- Five canonical Coordinator Candid tests pass, including structural Rust/DID
+  equality for the required Ledger receipt. DTO/Candid source is unchanged
+  since that run. JSON includes current scope and exact reinstall bindings;
+  CLI reports distinguish prerequisite completion from full Fleet readiness.
+- The final [Coordinator preflight checkpoint](../audits/reports/2026-09/2026-09-05/artifacts/fleet-retirement/coordinator-preflight-pocketic.log)
+  passes in 142.74s: fee rejection permits a valid request, Root and Coordinator
+  Ledger transfers reconcile both lost replies, replay is effect-free, and
+  returned assets remain controlled after Root deletion.
+- Earlier qualified outcomes remain retained: complete nineteen-Workload plus
+  five-Ready supply, four-Workload refill, full-capacity four-Failed repair,
+  selected authorization storage and seven native auth/delegation cases,
+  shared funding-policy admission and bounded continuation. Their exact
+  checkpoint boundaries are in the readiness report.
+
+[Check records and selected source digests](../audits/reports/2026-09/2026-09-05/artifacts/fleet-reinstall/checks.json)
+retain the final logs and reviewed source. This is targeted working-tree
+qualification, not an immutable published validation receipt or B1 acceptance.
+No broad suite was pre-run during coding.
+
+Toko Miner must pin the published release, rebuild its sealed artifacts,
+reconcile staging capacity with its complete generated topology, verify actual
+controller/seed/cycle authority, and rehearse the reviewed reset followed by
+full Ensure convergence. It must validate its application initialization,
+authorization, required descendants and Ready reserve, interruption recovery,
+cycle accounting and both effect-free replays. The Canic nineteen-plus-five
+proof is not a live Toko adoption result. Toko remained read-only.
+
+Optional follow-up, not a blocker for this release: complete Coordinator native
+evacuation/deletion and whole-Fleet terminal conservation if Fleet deletion is
+requested; CANIC-139 whole-release reuse; further build/deployment performance
+work. The existing Coordinator Ledger receipt alone does not authorize deleting
+its still-funded canister. Live deletion applicability remains downstream work.
+
+The [readiness handoff](../audits/reports/2026-09/2026-09-05/fleet-feedback-readiness.md)
+owns the full requirement/evidence map and release/downstream/follow-up
+classification. The [hard-cut review](../audits/reports/2026-09/2026-09-05/fleet-hard-cut-review.md)
+owns the design disposition. Historical custody artifacts qualify only removed
+code. The [complete five-plus-five comparison](../audits/reports/2026-09/2026-09-05/fleet-feedback-performance.md)
+retains the 27.86% apply-to-readiness and 33.47% apply-through-replay reductions;
+these are one controlled local pair, not mainnet timing or unchanged-build reuse.
+
+After the correction batch, continue B1 from immutable `v0.110.5`:
+qualify row 8 endpoint-declaration construction and rows 10 and 12
 endpoint-reply serialization and metrics-provider attribution, then complete
 the controlled ablations, optimized generated-surface proof, generic-
 instantiation cohort, accepted allowances and required compatible predecessor

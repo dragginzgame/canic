@@ -31,6 +31,8 @@ mod root_authority;
 #[cfg(feature = "root-control-plane")]
 pub mod root_funding;
 #[cfg(feature = "root-control-plane")]
+mod root_ledger_retirement;
+#[cfg(feature = "root-control-plane")]
 pub mod root_status;
 #[cfg(feature = "root-control-plane")]
 pub mod runtime;

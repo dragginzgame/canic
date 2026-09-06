@@ -247,6 +247,7 @@ pub struct FleetFundingPolicyRotationRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCoordinatorRegistryRecord {
+    pub retirement: FleetRetirementRecord,
     pub configured_app: AppId,
     pub authority: FleetRegistryAuthority,
     pub component_deployment_configuration: ComponentDeploymentConfiguration,
@@ -275,6 +276,22 @@ pub struct FleetCoordinatorRegistryRecord {
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 impl FleetCoordinatorRegistryRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "FleetCoordinatorRegistryRecord";
+}
+
+/// Exact stages of the Coordinator's final Ledger transfer; no prior state is adopted.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetRetirementRecord {
+    NotStarted,
+    Transferring {
+        request: canic_core::dto::fleet_registry::FleetRetirementRequest,
+        prepared_at_ns: u64,
+        transfer: canic_core::dto::fleet_registry::FleetLedgerTransferIntent,
+    },
+    Complete {
+        request: canic_core::dto::fleet_registry::FleetRetirementRequest,
+        prepared_at_ns: u64,
+        receipt: canic_core::dto::fleet_registry::FleetLedgerTransferReceipt,
+    },
 }
 
 ///

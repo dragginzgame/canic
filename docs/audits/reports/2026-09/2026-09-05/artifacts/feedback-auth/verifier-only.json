@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "verifier-only",
+  "wasm_sha256": "d3a42f1741254760c0a5a589c26ee1773abb16435616aa76ad180b3bb6174f47",
+  "named_wasm_sha256": "63a0187dd86c4045caba82dcc6fc8ecd5d2666e97c1ad54dd6449f94348b476a",
+  "executable_sections_sha256": "1920a5cb218b455f8fe44fa964625bef08d0b591158a9e347fc76ebca096f1d2",
+  "named_executable_sections_match": false,
+  "raw_bytes": 2058339,
+  "gzip_bytes": 739731,
+  "code_section_bytes": 1855645,
+  "data_section_bytes": 180603,
+  "defined_functions": 3776,
+  "named_items": 4095,
+  "state_symbols": {
+    "issuer": [],
+    "root_delegation": [],
+    "local_authorization": []
+  },
+  "linked_state_symbols": {
+    "issuer": [],
+    "root_delegation": [],
+    "local_authorization": []
+  },
+  "candid_sha256": "39b18ad0b2589f36dd6b46cb1ae6704d83e6893fb224bda2daf189d952e1f96b"
+}

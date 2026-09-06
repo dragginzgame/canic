@@ -200,6 +200,9 @@ macro_rules! __canic_build_internal {
                 $crate::__internal::core::role_contract::RoleCapabilityKey::Root => {
                     println!("cargo:rustc-cfg=canic_capability_root");
                 }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::RootDelegation => {
+                    println!("cargo:rustc-cfg=canic_capability_root_delegation");
+                }
                 $crate::__internal::core::role_contract::RoleCapabilityKey::RootControlPlane => {
                     println!("cargo:rustc-cfg=canic_capability_root_control_plane");
                 }

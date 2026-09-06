@@ -16,6 +16,7 @@ pub const CANIC_CUSTOM_CFG_NAMES: &[&str] = &[
     "canic_capability_role_attestation_verifier",
     "canic_capability_root",
     "canic_capability_root_control_plane",
+    "canic_capability_root_delegation",
     "canic_capability_runtime",
     "canic_capability_scaling",
     "canic_capability_sharding",

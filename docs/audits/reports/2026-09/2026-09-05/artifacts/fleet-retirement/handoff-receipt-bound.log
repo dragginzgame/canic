@@ -1,0 +1,9 @@
+   Compiling canic-control-plane v0.110.7 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 39.77s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-bf68de2166ac2c23)
+
+running 1 test
+test storage::stable::canister_pool::tests::handoff_receipt_persists_maximum_principal_and_timestamp ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 244 filtered out; finished in 0.00s
+

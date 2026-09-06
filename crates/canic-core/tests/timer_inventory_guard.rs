@@ -529,13 +529,27 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.7.0"]);
     assert_eq!(locked_package_versions(&lock, "ic-cdk-timers"), ["1.0.0"]);
-    assert_eq!(locked_package_versions(&lock, "icydb"), ["0.252.1"]);
+    assert_eq!(locked_package_versions(&lock, "icydb"), ["0.253.0"]);
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
-    assert!(workspace_manifest.contains("ic-timers = \"=0.7.0\""));
-    assert!(workspace_manifest.contains("icydb = { version = \"=0.252.1\""));
-    assert!(!workspace_manifest.contains("icydb-model ="));
-    assert!(!workspace_manifest.contains("ic-cdk-timers ="));
+    let workspace_dependencies = workspace_dependencies(&workspace_manifest);
+    assert_eq!(
+        dependency_version(&workspace_dependencies, "ic-timers"),
+        "=0.7.0"
+    );
+    assert_eq!(
+        dependency_version(&workspace_dependencies, "icydb"),
+        "=0.253.0"
+    );
+    assert_eq!(
+        workspace_dependencies["icydb"]
+            .as_table()
+            .and_then(|dependency| dependency.get("default-features"))
+            .and_then(toml::Value::as_bool),
+        Some(false)
+    );
+    assert!(!workspace_dependencies.contains_key("icydb-model"));
+    assert!(!workspace_dependencies.contains_key("ic-cdk-timers"));
 
     let mut direct_icydb_model_consumers = BTreeSet::new();
     let mut timer_consumers = BTreeSet::from(["Cargo.toml".to_string()]);
@@ -546,22 +560,14 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
             &root,
             "Cargo.toml",
             &mut |path, manifest| {
-                if manifest
-                    .lines()
-                    .any(|line| line.trim_start().starts_with("ic-timers ="))
-                {
+                let dependencies = direct_dependency_names(manifest);
+                if dependencies.contains("ic-timers") {
                     timer_consumers.insert(path.to_string());
                 }
-                if manifest
-                    .lines()
-                    .any(|line| line.trim_start().starts_with("ic-cdk-timers ="))
-                {
+                if dependencies.contains("ic-cdk-timers") {
                     raw_provider_consumers.insert(path.to_string());
                 }
-                if manifest
-                    .lines()
-                    .any(|line| line.trim_start().starts_with("icydb-model ="))
-                {
+                if dependencies.contains("icydb-model") {
                     direct_icydb_model_consumers.insert(path.to_string());
                 }
             },
@@ -784,26 +790,74 @@ fn expected_timer_manifest_consumers() -> BTreeSet<String> {
     .collect()
 }
 
-fn locked_package_versions<'a>(lock: &'a str, wanted: &str) -> Vec<&'a str> {
-    lock.split("[[package]]")
-        .skip(1)
-        .filter_map(|package| {
-            let mut name = None;
-            let mut version = None;
-            for line in package.lines() {
-                let line = line.trim();
-                name = name.or_else(|| quoted_value(line, "name"));
-                version = version.or_else(|| quoted_value(line, "version"));
-            }
-            if name == Some(wanted) { version } else { None }
+fn locked_package_versions(lock: &str, wanted: &str) -> Vec<String> {
+    let lock: toml::Value = toml::from_str(lock).expect("Cargo.lock must be valid TOML");
+    lock.get("package")
+        .and_then(toml::Value::as_array)
+        .expect("Cargo.lock must contain package records")
+        .iter()
+        .filter(|package| package.get("name").and_then(toml::Value::as_str) == Some(wanted))
+        .map(|package| {
+            package
+                .get("version")
+                .and_then(toml::Value::as_str)
+                .unwrap_or_else(|| panic!("locked package {wanted} must have a version"))
+                .to_string()
         })
         .collect()
 }
 
-fn quoted_value<'a>(line: &'a str, field: &str) -> Option<&'a str> {
-    line.strip_prefix(field)
-        .and_then(|rest| rest.strip_prefix(" = \""))
-        .and_then(|rest| rest.strip_suffix('"'))
+fn workspace_dependencies(manifest: &str) -> toml::Table {
+    let manifest: toml::Value =
+        toml::from_str(manifest).expect("workspace manifest must be valid TOML");
+    manifest
+        .get("workspace")
+        .and_then(toml::Value::as_table)
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(toml::Value::as_table)
+        .expect("workspace manifest must declare workspace dependencies")
+        .clone()
+}
+
+fn dependency_version<'a>(dependencies: &'a toml::Table, name: &str) -> &'a str {
+    let dependency = dependencies
+        .get(name)
+        .unwrap_or_else(|| panic!("workspace dependency {name} must be declared"));
+    dependency
+        .as_str()
+        .or_else(|| {
+            dependency
+                .as_table()
+                .and_then(|dependency| dependency.get("version"))
+                .and_then(toml::Value::as_str)
+        })
+        .unwrap_or_else(|| panic!("workspace dependency {name} must declare a version"))
+}
+
+fn direct_dependency_names(manifest: &str) -> BTreeSet<String> {
+    let manifest: toml::Value =
+        toml::from_str(manifest).expect("production manifest must be valid TOML");
+    let mut dependencies = BTreeSet::new();
+    collect_direct_dependency_names(&manifest, &mut dependencies);
+    dependencies
+}
+
+fn collect_direct_dependency_names(value: &toml::Value, dependencies: &mut BTreeSet<String>) {
+    let Some(table) = value.as_table() else {
+        return;
+    };
+    for (name, value) in table {
+        if matches!(
+            name.as_str(),
+            "dependencies" | "dev-dependencies" | "build-dependencies"
+        ) {
+            if let Some(dependency_table) = value.as_table() {
+                dependencies.extend(dependency_table.keys().cloned());
+            }
+        } else {
+            collect_direct_dependency_names(value, dependencies);
+        }
+    }
 }
 
 fn collect_rust_sources(directory: &Path, root: &Path, visit: &mut impl FnMut(&str, &str)) {

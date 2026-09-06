@@ -43,7 +43,7 @@ use crate::{
             record_application_session_rejected, record_application_session_replaced,
         },
         storage::auth::{
-            AuthStateOps,
+            LocalApplicationAuthorizationStateOps,
             application_sessions::{ApplicationReplayResolution, ApplicationSessionStateError},
         },
     },
@@ -163,7 +163,8 @@ impl AuthApi {
         let caller = IcOps::msg_caller();
         require_application_caller(caller)?;
         application_session_authority()?;
-        let removed = AuthStateOps::clear_application_session(caller).map_err(map_state_error)?;
+        let removed = LocalApplicationAuthorizationStateOps::clear_application_session(caller)
+            .map_err(map_state_error)?;
         record_application_session_clear(removed);
         IntentCleanupWorkflow::reconcile_after_terminal();
         Ok(ApplicationSessionCommandResponse::Cleared)
@@ -174,7 +175,8 @@ impl AuthApi {
         let caller = IcOps::msg_caller();
         require_application_caller(caller)?;
         let authority = application_session_authority()?;
-        let Some(session) = AuthStateOps::application_session(caller).map_err(map_state_error)?
+        let Some(session) = LocalApplicationAuthorizationStateOps::application_session(caller)
+            .map_err(map_state_error)?
         else {
             return Ok(ApplicationSessionStatus::Inactive(
                 InactiveApplicationSession::Missing,
@@ -197,8 +199,11 @@ impl AuthApi {
     ) -> Result<ApplicationSessionAuditResponse, Error> {
         let authority = application_session_authority()?;
         let verifier = AuthOps::auth_proof_verifier_config().map_err(Error::from)?;
-        let sessions = AuthStateOps::application_session_page(page.offset, page.limit)
-            .map_err(map_state_error)?;
+        let sessions = LocalApplicationAuthorizationStateOps::application_session_page(
+            page.offset,
+            page.limit,
+        )
+        .map_err(map_state_error)?;
         let now_ns = IcOps::now_nanos();
         let entries = sessions
             .entries

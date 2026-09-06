@@ -204,6 +204,7 @@ mod tests {
             RoleCapabilityKey::RoleAttestationVerifier,
             RoleCapabilityKey::Root,
             RoleCapabilityKey::RootControlPlane,
+            RoleCapabilityKey::RootDelegation,
             RoleCapabilityKey::Runtime,
             RoleCapabilityKey::Scaling,
             RoleCapabilityKey::Sharding,

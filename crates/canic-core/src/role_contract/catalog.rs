@@ -73,7 +73,7 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
     feature(
         CanicFeatureKey::AuthChainKeyRootSign,
         "auth-chain-key-root-sign",
-        CanicFeatureEffect::NoState,
+        CanicFeatureEffect::StateBearing,
     ),
     feature(
         CanicFeatureKey::AuthDelegatedTokenVerify,
@@ -83,12 +83,17 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
     feature(
         CanicFeatureKey::AuthIssuerCanisterSigCreate,
         "auth-issuer-canister-sig-create",
-        CanicFeatureEffect::NoState,
+        CanicFeatureEffect::StateBearing,
     ),
     feature(
         CanicFeatureKey::AuthIssuerCanisterSigVerify,
         "auth-issuer-canister-sig-verify",
         CanicFeatureEffect::NoState,
+    ),
+    feature(
+        CanicFeatureKey::AuthLocalApplicationAuthorization,
+        "auth-local-application-authorization",
+        CanicFeatureEffect::StateBearing,
     ),
     feature(
         CanicFeatureKey::AuthRootCanisterSigCreate,
@@ -158,6 +163,10 @@ const FEATURE_IMPLICATIONS: &[FeatureImplication] = &[
         to: CanicFeatureKey::AuthIssuerCanisterSigVerify,
     },
     FeatureImplication {
+        from: CanicFeatureKey::AuthLocalApplicationAuthorization,
+        to: CanicFeatureKey::AuthDelegatedTokenVerify,
+    },
+    FeatureImplication {
         from: CanicFeatureKey::BlobStorageBilling,
         to: CanicFeatureKey::BlobStorage,
     },
@@ -185,8 +194,8 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
     requirement(
         RoleCapabilityKey::LocalApplicationAuthorization,
         "auth.local_application_authorization",
-        CanicFeatureKey::AuthDelegatedTokenVerify,
-        "local application-session establishment verifies delegated-token authority",
+        CanicFeatureKey::AuthLocalApplicationAuthorization,
+        "local application authorization owns session persistence and delegated-token verification",
     ),
     requirement(
         RoleCapabilityKey::RoleAttestationSigner,
@@ -285,26 +294,21 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
         RoleCapabilityKey::Runtime,
         StateAllocationKey::CorePlacementAcknowledgement,
     ),
-    capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CoreAuthState),
+    capability_allocation(
+        RoleCapabilityKey::RootDelegation,
+        StateAllocationKey::CoreRootDelegationState,
+    ),
     capability_allocation(
         RoleCapabilityKey::Root,
         StateAllocationKey::CoreAuthorityRestoreFence,
     ),
     capability_allocation(
         RoleCapabilityKey::DelegatedTokenIssuer,
-        StateAllocationKey::CoreAuthState,
+        StateAllocationKey::CoreDelegatedTokenIssuerState,
     ),
     capability_allocation(
-        RoleCapabilityKey::DelegatedTokenVerifier,
-        StateAllocationKey::CoreAuthState,
-    ),
-    capability_allocation(
-        RoleCapabilityKey::RoleAttestationSigner,
-        StateAllocationKey::CoreAuthState,
-    ),
-    capability_allocation(
-        RoleCapabilityKey::RoleAttestationVerifier,
-        StateAllocationKey::CoreAuthState,
+        RoleCapabilityKey::LocalApplicationAuthorization,
+        StateAllocationKey::CoreLocalApplicationAuthorizationState,
     ),
     capability_allocation(
         RoleCapabilityKey::Root,
@@ -386,6 +390,14 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
 
 const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     feature_allocation(
+        CanicFeatureKey::AuthIssuerCanisterSigCreate,
+        StateAllocationKey::CoreDelegatedTokenIssuerState,
+    ),
+    feature_allocation(
+        CanicFeatureKey::AuthLocalApplicationAuthorization,
+        StateAllocationKey::CoreLocalApplicationAuthorizationState,
+    ),
+    feature_allocation(
         CanicFeatureKey::BlobStorage,
         StateAllocationKey::BlobStorageRoots,
     ),
@@ -400,6 +412,10 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     feature_allocation(
         CanicFeatureKey::BlobStorageBilling,
         StateAllocationKey::BlobStorageBilling,
+    ),
+    feature_allocation(
+        CanicFeatureKey::AuthChainKeyRootSign,
+        StateAllocationKey::CoreRootDelegationState,
     ),
     feature_allocation(
         CanicFeatureKey::ControlPlane,
@@ -566,6 +582,7 @@ impl CanicFeatureKey {
         Self::AuthDelegatedTokenVerify,
         Self::AuthIssuerCanisterSigCreate,
         Self::AuthIssuerCanisterSigVerify,
+        Self::AuthLocalApplicationAuthorization,
         Self::AuthRootCanisterSigCreate,
         Self::AuthRootCanisterSigVerify,
         Self::BlobStorage,

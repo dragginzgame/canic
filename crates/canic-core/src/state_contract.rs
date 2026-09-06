@@ -11,7 +11,10 @@ use serde::Serialize;
 use crate::role_contract::allocation::memory::{
     application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
     async_job_recovery::ASYNC_JOB_RECOVERY_ID,
-    auth::AUTH_STATE_ID,
+    auth::{
+        DELEGATED_TOKEN_ISSUER_STATE_ID, LOCAL_APPLICATION_AUTHORIZATION_STATE_ID,
+        ROOT_DELEGATION_STATE_ID,
+    },
     authority_restore::AUTHORITY_RESTORE_FENCE_ID,
     blob_storage::{
         BLOB_STORAGE_BILLING_ID, BLOB_STORAGE_GATEWAY_PRINCIPALS_ID,
@@ -170,8 +173,18 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::CoreAuthState,
-            auth_state_domains(),
+            StateAllocationKey::CoreLocalApplicationAuthorizationState,
+            local_application_authorization_state_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreDelegatedTokenIssuerState,
+            delegated_token_issuer_state_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreRootDelegationState,
+            root_delegation_state_domains(),
             Vec::new(),
         ),
         descriptor(
@@ -412,16 +425,46 @@ fn fleet_state_domains() -> Vec<StateDomainManifest> {
     )]
 }
 
-fn auth_state_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::stable::auth::{AuthStateData, AuthStateRecord};
+fn local_application_authorization_state_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::auth::{
+        LocalApplicationAuthorizationStateData, LocalApplicationAuthorizationStateRecord,
+    };
 
     vec![state_domain(
-        "auth_state",
-        AUTH_STATE_ID,
-        AuthStateRecord::STATE_CONTRACT_NAME,
-        AuthStateData::STATE_CONTRACT_NAME,
+        "local_application_authorization",
+        LOCAL_APPLICATION_AUTHORIZATION_STATE_ID,
+        LocalApplicationAuthorizationStateRecord::STATE_CONTRACT_NAME,
+        LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
         60,
-        "auth_state_delegated_proofs_are_chain_key_only",
+        "application_sessions_match_the_current_local_authority_generation",
+    )]
+}
+
+fn delegated_token_issuer_state_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::auth::{
+        DelegatedTokenIssuerStateData, DelegatedTokenIssuerStateRecord,
+    };
+
+    vec![state_domain(
+        "delegated_token_issuer",
+        DELEGATED_TOKEN_ISSUER_STATE_ID,
+        DelegatedTokenIssuerStateRecord::STATE_CONTRACT_NAME,
+        DelegatedTokenIssuerStateData::STATE_CONTRACT_NAME,
+        61,
+        "active_delegation_proof_is_bound_to_the_current_issuer",
+    )]
+}
+
+fn root_delegation_state_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::auth::{RootDelegationStateData, RootDelegationStateRecord};
+
+    vec![state_domain(
+        "root_delegation",
+        ROOT_DELEGATION_STATE_ID,
+        RootDelegationStateRecord::STATE_CONTRACT_NAME,
+        RootDelegationStateData::STATE_CONTRACT_NAME,
+        62,
+        "root_delegation_policy_epochs_and_batches_are_monotonic",
     )]
 }
 
@@ -821,7 +864,11 @@ mod tests {
     #[test]
     fn auth_and_replay_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
-            auth::{AuthStateData, AuthStateRecord},
+            auth::{
+                DelegatedTokenIssuerStateData, DelegatedTokenIssuerStateRecord,
+                LocalApplicationAuthorizationStateData, LocalApplicationAuthorizationStateRecord,
+                RootDelegationStateData, RootDelegationStateRecord,
+            },
             replay::{ReplayReceiptRecord, ReplayReceiptsData},
         };
 
@@ -829,10 +876,22 @@ mod tests {
 
         for (allocation, domain, record, snapshot) in [
             (
-                StateAllocationKey::CoreAuthState,
-                "auth_state",
-                AuthStateRecord::STATE_CONTRACT_NAME,
-                AuthStateData::STATE_CONTRACT_NAME,
+                StateAllocationKey::CoreLocalApplicationAuthorizationState,
+                "local_application_authorization",
+                LocalApplicationAuthorizationStateRecord::STATE_CONTRACT_NAME,
+                LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreDelegatedTokenIssuerState,
+                "delegated_token_issuer",
+                DelegatedTokenIssuerStateRecord::STATE_CONTRACT_NAME,
+                DelegatedTokenIssuerStateData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreRootDelegationState,
+                "root_delegation",
+                RootDelegationStateRecord::STATE_CONTRACT_NAME,
+                RootDelegationStateData::STATE_CONTRACT_NAME,
             ),
             (
                 StateAllocationKey::CoreReplayReceipts,

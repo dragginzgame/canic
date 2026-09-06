@@ -23,6 +23,7 @@ macro_rules! canic_emit_root_command_endpoint {
             ),
             AdoptStore(::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest),
             BootstrapStore(::canic::dto::root_store::RootStoreBootstrapRequest),
+            #[cfg(canic_capability_root_delegation)]
             GetOrCreateDelegationProof,
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffRequest),
             ImportPoolCanister(::canic::dto::pool::PoolCanisterRequest),
@@ -68,7 +69,9 @@ macro_rules! canic_emit_root_command_endpoint {
                 ::canic::dto::component_provisioning::RootComponentDirectorySynchronizationRequest,
             ),
             SynchronizeRegistry(::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest),
+            #[cfg(canic_capability_root_delegation)]
             UpsertIssuerPolicy(::canic::dto::auth::RootIssuerPolicyUpsertRequest),
+            #[cfg(canic_capability_root_delegation)]
             UpsertIssuerRenewalTemplate(
                 ::canic::dto::auth::RootIssuerRenewalTemplateUpsertRequest,
             ),
@@ -87,6 +90,7 @@ macro_rules! canic_emit_root_command_endpoint {
             ActivateFundingPolicyRotation(
                 ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt,
             ),
+            #[cfg(canic_capability_root_delegation)]
             GetOrCreateDelegationProof(::canic::dto::auth::RootDelegationProofBatchProof),
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffResponse),
             ImportPoolCanister(::canic::dto::pool::PoolImportResponse),
@@ -122,7 +126,9 @@ macro_rules! canic_emit_root_command_endpoint {
             SynchronizeComponentDirectories(
                 ::canic::dto::component_provisioning::RootComponentDirectorySynchronizationResponse,
             ),
+            #[cfg(canic_capability_root_delegation)]
             UpsertIssuerPolicy(::canic::dto::auth::RootIssuerPolicyResponse),
+            #[cfg(canic_capability_root_delegation)]
             UpsertIssuerRenewalTemplate(
                 ::canic::dto::auth::RootIssuerRenewalTemplateResponse,
             ),
@@ -213,9 +219,9 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::SetCyclesFunding(_)
                     | RootCommand::SetFleetStatus(_)
                     | RootCommand::SynchronizeRegistry(_)
-                    | RootCommand::UpsertIssuerPolicy(_)
-                    | RootCommand::UpsertIssuerRenewalTemplate(_)
             );
+            #[cfg(canic_capability_root_delegation)]
+            let controller_command = controller_command || matches!(&command, RootCommand::UpsertIssuerPolicy(_) | RootCommand::UpsertIssuerRenewalTemplate(_));
             if controller_command {
                 $crate::__internal::core::access::auth::is_controller(caller)
                     .await
@@ -250,6 +256,7 @@ macro_rules! canic_emit_root_command_endpoint {
                 }
             }
 
+            #[cfg(canic_capability_root_delegation)]
             if matches!(&command, RootCommand::GetOrCreateDelegationProof) {
                 use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
                 let context = $crate::__internal::core::access::expr::AccessContext {
@@ -375,6 +382,7 @@ macro_rules! canic_emit_root_command_endpoint {
                         ::canic::dto::role::OperationReceipt { operation_id },
                     ))
                 }
+                #[cfg(canic_capability_root_delegation)]
                 RootCommand::GetOrCreateDelegationProof => {
                     $crate::__internal::core::api::auth::AuthApi::get_or_create_chain_key_delegation_proof_root()
                         .await
@@ -719,10 +727,12 @@ macro_rules! canic_emit_root_command_endpoint {
                         .await
                         .map(RootCommandResponse::OperationAccepted)
                 }
+                #[cfg(canic_capability_root_delegation)]
                 RootCommand::UpsertIssuerPolicy(request) => {
                     $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_policy_root(request)
                         .map(RootCommandResponse::UpsertIssuerPolicy)
                 }
+                #[cfg(canic_capability_root_delegation)]
                 RootCommand::UpsertIssuerRenewalTemplate(request) => {
                     $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_renewal_template_root(request)
                         .map(RootCommandResponse::UpsertIssuerRenewalTemplate)
@@ -772,6 +782,7 @@ macro_rules! canic_emit_root_status_endpoint {
             Funding,
             Health,
             Inventory,
+            #[cfg(canic_capability_root_delegation)]
             IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest),
             Logs(::canic::dto::role::LogStatusRequest),
             Metrics(::canic::dto::role::MetricsStatusRequest),
@@ -827,6 +838,7 @@ macro_rules! canic_emit_root_status_endpoint {
             Funding(::canic::dto::root::RootFundingStatusResponse),
             Health(::canic::dto::runtime::CanicHealthStatus),
             Inventory(::canic::dto::fleet_subnet_root::FleetSubnetRootCanisterSummary),
+            #[cfg(canic_capability_root_delegation)]
             IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusResponse),
             Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
             Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
@@ -875,6 +887,10 @@ macro_rules! canic_emit_root_status_endpoint {
                     // The durable operation owner supplies the exact public, peer, or
                     // controller authority used by the dispatch arm below.
                 }
+                #[cfg(canic_capability_root_delegation)]
+                RootStatusRequest::IssuerRenewal(_) => {
+                    $crate::__internal::core::access::auth::is_controller(caller).await.map_err(::canic::Error::from)?;
+                }
                 RootStatusRequest::Admission(_)
                 | RootStatusRequest::AuthorityRestore
                 | RootStatusRequest::ComponentDirectoryHead(_)
@@ -889,7 +905,6 @@ macro_rules! canic_emit_root_status_endpoint {
                 | RootStatusRequest::Funding
                 | RootStatusRequest::Health
                 | RootStatusRequest::Inventory
-                | RootStatusRequest::IssuerRenewal(_)
                 | RootStatusRequest::Logs(_)
                 | RootStatusRequest::Metrics(_)
                 | RootStatusRequest::Pool(_)
@@ -987,6 +1002,7 @@ macro_rules! canic_emit_root_status_endpoint {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_canister_summary()
                         .map(RootStatusResponse::Inventory)
                 }
+                #[cfg(canic_capability_root_delegation)]
                 RootStatusRequest::IssuerRenewal(request) => {
                     $crate::__internal::core::api::auth::AuthApi::root_issuer_renewal_status_root(
                         request,

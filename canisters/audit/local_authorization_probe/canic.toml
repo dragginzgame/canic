@@ -1,0 +1,47 @@
+[app]
+name = "local_authorization_probe"
+init_mode = "enabled"
+
+
+[roles.root]
+kind = "root"
+package = "../root_probe"
+
+[roles.app]
+kind = "canister"
+package = "."
+
+[auth.delegated_tokens]
+enabled = true
+build_network = "local"
+
+[auth.delegated_tokens.chain_key_root_proof]
+key_id = "key_1"
+derivation_path_hash_hex = "fe51a87b988d221227b134c48f36787e891a902dcb5d48ea5f94cff8bfed5a16"
+derivation_path_hex = ["63616e6963", "64656c65676174696f6e"]
+public_key_hex = "02f1a0a900c4b9d53ff5ec024c0e37e7a54174c6ae1d0a77312aebea349adc0b7a"
+key_version = 1
+min_accepted_key_version = 1
+min_accepted_proof_epoch = 2
+min_accepted_registry_epoch = 2
+valid_from_ns = 0
+accept_until_ns = 4102444800000000000
+max_revocation_latency_ns = 60000000000
+
+[standards]
+icrc21 = true
+
+[component_specs.default]
+component_role = "app"
+maximum_instances = 1
+
+[component_specs.default.standards]
+icrc21 = true
+
+[component_specs.default.auth]
+delegated_token_verifier = true
+
+[component_specs.default.auth.local_application_authorization]
+allowed_scopes = ["probe:read"]
+default_session_ttl_secs = 900
+maximum_session_ttl_secs = 1800

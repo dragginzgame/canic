@@ -1309,6 +1309,7 @@ fn root_draining_reservation_request(
     let mut expected_root = root.clone();
     expected_root.status = FleetSubnetRootStatus::Active;
     FleetSubnetRootDrainingReservationRequest {
+        asset_recipient: registry.authority.binding.coordinator,
         operation_id,
         expected_registry: registry.clone(),
         expected_root,
@@ -5832,12 +5833,39 @@ fn assert_root_deletion_lifecycle(
     );
 
     let readiness_request = FleetSubnetRootDeletionReadinessRequest {
+        ledger_receipt: canic_core::dto::fleet_registry::FleetLedgerTransferReceipt {
+            intent: canic_core::dto::fleet_registry::FleetLedgerTransferIntent {
+                source: root.fleet_subnet_root,
+                destination: coordinator,
+                balance_before: 100,
+                fee: 10,
+                created_at_time: 30,
+                memo: operation_id,
+            },
+            block_index: Some(1),
+        },
         operation_id,
         fleet_subnet_root: root.fleet_subnet_root,
         expected_intent_hash: intent.intent_hash,
         observed_cycles_after_reclamation: 90_000_000_000,
         cycles_reclaimed_at_ns: 30,
     };
+    let before = FleetCoordinatorRegistryStore::export();
+    let mut wrong_destination = readiness_request.clone();
+    wrong_destination.ledger_receipt.intent.destination = root.fleet_subnet_root;
+    let rejected =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::record_root_deletion_readiness(
+            root.fleet_subnet_root,
+            coordinator,
+            wrong_destination,
+            31,
+        )
+        .expect_err("refuse deletion with a receipt for another destination");
+    assert_eq!(
+        rejected.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before);
     let readiness =
         crate::ops::fleet_coordinator::FleetCoordinatorOps::record_root_deletion_readiness(
             root.fleet_subnet_root,

@@ -1,0 +1,45 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+==> compiler cache start: requests=436 hits=0 misses=232
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:38149/
+==> targeted canic-testing-internal PocketIC proof
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.32s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay ... [WASM]       SIZE   fleet_coordinator/candidate.wasm  code=3.88 MiB (4070557 B)  headroom=6.12 MiB (6415203 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2637574 B)  headroom=7.48 MiB (7848186 B)
+[WASM]       SIZE   user_hub/candidate.wasm  code=2.85 MiB (2984684 B)  headroom=7.15 MiB (7501076 B)
+[WASM]       SIZE   user_shard/candidate.wasm  code=3.13 MiB (3282885 B)  headroom=6.87 MiB (7202875 B)
+[WASM]       SIZE   root/candidate.wasm  code=8.30 MiB (8700081 B)  headroom=1.70 MiB (1785679 B)
+[FLEET]      DONE   literal-zero release artifacts (19)                  3m 26s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       DONE   cycles_ledger_stub                                    0.95s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET]      DONE   literal-zero infrastructure replay complete          3m 23s
+[FLEET]      DONE   literal-zero imports reconciled by host              2m 41s
+[FLEET]      RUN    converging literal-zero control plane
+[FLEET]      DONE   literal-zero control plane converged                 2m 33s
+[FLEET]      RUN    proving literal-zero terminal replay
+[FLEET]      DONE   literal-zero terminal replay complete                1m 12s
+[FLEET]      DONE   literal-zero production-adapter journey complete    13m 24s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 804.10s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=450588 kB high_water=474276 kB threads=20
+==> targeted canic-testing-internal PocketIC proof done in 804s
+==> compiler cache delta: unavailable (sccache server reset during the run)
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  804s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 805s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.Iy6XeF

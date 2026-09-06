@@ -315,6 +315,7 @@ fn retain_terminal_fleet(root: &Path, environment: &str, fleet_name: &str) {
     write_plan(
         &paths,
         &FleetEnsurePlan {
+            continuation: None,
             canisters: Vec::new(),
             conservation: CycleConservation {
                 estate_funding_domains: Vec::new(),
@@ -334,6 +335,7 @@ fn retain_terminal_fleet(root: &Path, environment: &str, fleet_name: &str) {
             plan_sha256: plan_sha256.clone(),
             planned_at_time: 1,
             protocol_actions: Vec::new(),
+            root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,
             schema_version: FLEET_ENSURE_SCHEMA_VERSION,
@@ -345,6 +347,7 @@ fn retain_terminal_fleet(root: &Path, environment: &str, fleet_name: &str) {
     write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::Converged,
             estate_funding_required: None,
             effects: Vec::new(),

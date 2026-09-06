@@ -23,6 +23,7 @@ Usage:
     [--artifact <artifact-id>] --source <commit> \
     --product-root <clean-linked-worktree> --output-root <directory>
   scripts/ci/wasm-ablation-report.sh --qualify --experiment <id> \
+    [--artifact <artifact-id>] \
     --source <commit> --product-root <clean-linked-worktree> \
     --output-root <directory>
 
@@ -38,9 +39,10 @@ sccache wrapper when available. Smoke output is never retention-eligible and
 does not make a determinism claim.
 
 Qualification mode is also development-only. It accepts one `specified` patch,
-builds its variant once across every selected artifact and validates the exact
-artifacts and structured metrics. It emits no baseline or determinism claim and
-is never retention-eligible.
+builds its variant once across every selected artifact, or one exact selected
+artifact when narrowed explicitly, and validates the exact artifacts and
+structured metrics. It emits no baseline or determinism claim and is never
+retention-eligible.
 EOF
 }
 
@@ -250,8 +252,8 @@ check_manifests
 if [[ "$RUN_MODE" != "retained" && "$ACTION" != "run" ]]; then
     fail "--$RUN_MODE is valid only with --experiment"
 fi
-if [[ -n "$ARTIFACT_OVERRIDE" && "$RUN_MODE" != "smoke" ]]; then
-    fail "--artifact is valid only with --smoke"
+if [[ -n "$ARTIFACT_OVERRIDE" && "$RUN_MODE" != "smoke" && "$RUN_MODE" != "qualify" ]]; then
+    fail "--artifact is valid only with --smoke or --qualify"
 fi
 
 if [[ "$ACTION" == "check" ]]; then
@@ -286,20 +288,20 @@ selected_run_artifacts() {
 
     selected_artifacts="$(select_artifacts "$ARTIFACT_SELECTORS")"
     [[ -n "$selected_artifacts" ]] || fail "no artifacts selected for $EXPERIMENT"
-    if [[ "$RUN_MODE" != "smoke" ]]; then
+    if [[ "$RUN_MODE" != "smoke" && -z "$ARTIFACT_OVERRIDE" ]]; then
         printf '%s\n' "$selected_artifacts"
         return
     fi
-    if [[ -z "$ARTIFACT_OVERRIDE" ]]; then
+    if [[ "$RUN_MODE" == "smoke" && -z "$ARTIFACT_OVERRIDE" ]]; then
         printf '%s\n' "$selected_artifacts" | awk 'NR == 1 { print; exit }'
         return
     fi
     [[ "$ARTIFACT_OVERRIDE" =~ ^[a-z0-9_]+$ ]] ||
-        fail "invalid smoke artifact ID: $ARTIFACT_OVERRIDE"
+        fail "invalid development artifact ID: $ARTIFACT_OVERRIDE"
     selected_override="$(printf '%s\n' "$selected_artifacts" |
         awk -F '\t' -v artifact="$ARTIFACT_OVERRIDE" '$1 == artifact { print; exit }')"
     [[ -n "$selected_override" ]] ||
-        fail "smoke artifact $ARTIFACT_OVERRIDE is not selected by $EXPERIMENT"
+        fail "artifact $ARTIFACT_OVERRIDE is not selected by $EXPERIMENT"
     printf '%s\n' "$selected_override"
 }
 

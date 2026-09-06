@@ -44,7 +44,7 @@ use crate::{
     model::auth::{
         ChainKeyRootDelegationInstallFailure, RootIssuerPolicy, RootIssuerRenewalTemplate,
     },
-    ops::{config::ConfigOps, ic::IcOps, storage::auth::AuthStateOps},
+    ops::{config::ConfigOps, ic::IcOps, storage::auth::RootDelegationStateOps},
 };
 
 // -----------------------------------------------------------------------------
@@ -82,7 +82,7 @@ impl AuthOps {
     }
 
     pub(crate) fn root_issuer_policy(issuer_pid: Principal) -> Option<RootIssuerPolicy> {
-        crate::ops::storage::auth::AuthStateOps::root_issuer_policy(issuer_pid)
+        RootDelegationStateOps::root_issuer_policy(issuer_pid)
     }
 
     pub(crate) fn root_issuer_renewal_template_from_request(
@@ -179,7 +179,7 @@ impl AuthOps {
                 )
             })?
             .policy;
-        AuthStateOps::advance_delegated_auth_registry_epoch_at_least(
+        RootDelegationStateOps::advance_delegated_auth_registry_epoch_at_least(
             root_key_policy.min_accepted_registry_epoch,
         );
         let registry =
@@ -312,6 +312,7 @@ impl AuthOps {
         cfg!(feature = "auth-chain-key-ecdsa")
     }
 
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(crate) const fn chain_key_root_sign_enabled() -> bool {
         cfg!(feature = "auth-chain-key-root-sign")
     }

@@ -34,7 +34,7 @@ use crate::{
     workflow::runtime::timer::TimerAuthorityWorkflow,
 };
 const RUNTIME_FEATURE_SOURCE: &str = "compile_feature";
-const RUNTIME_FEATURE_FLAGS: [(&str, bool); 10] = [
+const RUNTIME_FEATURE_FLAGS: [(&str, bool); 11] = [
     (
         "auth-chain-key-ecdsa",
         cfg!(feature = "auth-chain-key-ecdsa"),
@@ -54,6 +54,10 @@ const RUNTIME_FEATURE_FLAGS: [(&str, bool); 10] = [
     (
         "auth-issuer-canister-sig-verify",
         cfg!(feature = "auth-issuer-canister-sig-verify"),
+    ),
+    (
+        "auth-local-application-authorization",
+        cfg!(feature = "auth-local-application-authorization"),
     ),
     (
         "auth-root-canister-sig-create",

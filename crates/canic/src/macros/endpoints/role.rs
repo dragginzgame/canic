@@ -55,6 +55,8 @@ macro_rules! __canic_compiled_role_capabilities {
         );
         #[cfg(canic_capability_root)]
         capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::Root);
+        #[cfg(canic_capability_root_delegation)]
+        capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::RootDelegation);
         #[cfg(canic_capability_root_control_plane)]
         capabilities
             .insert($crate::__internal::core::role_contract::RoleCapabilityKey::RootControlPlane);

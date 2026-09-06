@@ -5,15 +5,19 @@
 //! Boundary: endpoint and access adapters consume the same current authority projection.
 
 use super::AuthOps;
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+use crate::model::auth::application_authorization::{
+    ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
+};
 use crate::{
     InternalError,
     config::schema::LocalApplicationAuthorizationConfig,
     ids::{CanisterRole, FleetKey, ManagedCanisterBinding},
-    model::auth::application_authorization::{
-        ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
-        LocalApplicationAuthoritySnapshot,
+    model::auth::application_authorization::LocalApplicationAuthoritySnapshot,
+    ops::{
+        config::ConfigOps, runtime::env::EnvOps,
+        storage::auth::LocalApplicationAuthorizationStateOps,
     },
-    ops::{config::ConfigOps, runtime::env::EnvOps, storage::auth::AuthStateOps},
 };
 
 /// Protected configuration and exact current identity for local application authorization.
@@ -40,12 +44,13 @@ impl AuthOps {
             snapshot: LocalApplicationAuthoritySnapshot::new(
                 fleet,
                 role,
-                AuthStateOps::application_authority_generation(),
+                LocalApplicationAuthorizationStateOps::application_authority_generation(),
             ),
         }))
     }
 
     /// Project the current protected binding used for local generation transitions.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub(crate) fn local_application_authority_binding()
     -> Result<LocalApplicationAuthorityBinding, InternalError> {
         let Some(authority) = Self::local_application_authorization_authority()? else {

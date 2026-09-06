@@ -30,8 +30,10 @@ use canic_host::{
     fleet_ensure::{
         DesiredFleetLoadError, EnsureWorkflowError, FleetEnsureReport, FleetGenerateError,
         FleetGenerateRequest, FreshEstateSeedRequest, IcpEnsurePlatform, IcpEnsurePlatformError,
-        LoadedDesiredFleet, apply, generate_desired_fleet, initialize_fresh_estate_seed,
-        load_desired_fleet, plan, report_json_value, retained_in_progress_plan,
+        LoadedDesiredFleet, apply,
+        dto::{FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState},
+        generate_desired_fleet, initialize_fresh_estate_seed, load_desired_fleet, plan,
+        report_json_value, retained_in_progress_plan,
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
@@ -82,7 +84,7 @@ pub enum FleetCommandError {
     Workflow(Box<EnsureWorkflowError<IcpEnsurePlatformError>>),
 
     #[error(transparent)]
-    Generate(#[from] FleetGenerateError),
+    Generate(Box<FleetGenerateError>),
 
     #[error("generated Fleet output already exists with different contents: {0}")]
     OutputConflict(PathBuf),
@@ -107,6 +109,12 @@ pub enum FleetCommandError {
 impl From<EnsureWorkflowError<IcpEnsurePlatformError>> for FleetCommandError {
     fn from(error: EnsureWorkflowError<IcpEnsurePlatformError>) -> Self {
         Self::Workflow(Box::new(error))
+    }
+}
+
+impl From<FleetGenerateError> for FleetCommandError {
+    fn from(error: FleetGenerateError) -> Self {
+        Self::Generate(Box::new(error))
     }
 }
 
@@ -339,7 +347,7 @@ fn ensure_command() -> Command {
                 .long("json")
                 .action(ArgAction::SetTrue)
                 .num_args(0)
-                .help("Print the complete machine-readable report"),
+                .help("Print the JSON report to stdout and JSON phase events to stderr"),
         )
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
@@ -375,7 +383,11 @@ where
         root.join(&options.desired)
     };
     let loaded = load_ensure_authority(&root, &desired_path, &options)?;
-    let mut platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root);
+    let json_progress = options.json;
+    let mut platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root)
+        .with_progress_handler(move |progress| {
+            eprintln!("{}", render_progress(&progress, json_progress));
+        });
     let report = if let Some(digest) = &options.apply {
         apply(
             &root,
@@ -518,6 +530,38 @@ fn publish_generated(
     }
     canic_host::durable_io::create_new_bytes_with_parents(path, bytes)?;
     Ok(())
+}
+
+fn render_progress(progress: &FleetEnsureProgress, json: bool) -> String {
+    if json {
+        return serde_json::json!({
+            "event": "fleet_ensure_progress",
+            "schema_version": 1,
+            "progress": progress,
+        })
+        .to_string();
+    }
+    let phase = match progress.phase {
+        FleetEnsurePhase::Infrastructure => "infrastructure",
+        FleetEnsurePhase::ImportReconciliation => "import reconciliation",
+        FleetEnsurePhase::ControlPlane => "control plane",
+        FleetEnsurePhase::WorkloadProvisioning => "Workload provisioning",
+        FleetEnsurePhase::PoolReadiness => "pool readiness",
+        FleetEnsurePhase::TerminalVerification => "terminal verification",
+        FleetEnsurePhase::Complete => "complete",
+    };
+    let state = match progress.state {
+        FleetEnsureProgressState::Advancing => "advancing",
+        FleetEnsureProgressState::AwaitingProgress => "awaiting progress",
+        FleetEnsureProgressState::PrerequisiteComplete => "prerequisite complete",
+        FleetEnsureProgressState::FundingRequired => "funding required",
+        FleetEnsureProgressState::ReviewRequired { .. } => "new review required",
+        FleetEnsureProgressState::Complete => "complete",
+    };
+    format!(
+        "Fleet ensure: {phase}: {state} ({}/{} reviewed effects applied)",
+        progress.applied_effects, progress.reviewed_effects
+    )
 }
 
 fn render_report(report: &FleetEnsureReport, json: bool) -> Result<(), FleetCommandError> {

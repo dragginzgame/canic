@@ -231,6 +231,12 @@ pub(super) fn validate_root_draining_reservations(
                 receipt_invariant("Fleet Subnet Root draining reservation source root is missing")
             })?;
         let response_is_exact = [
+            ![
+                Principal::anonymous(),
+                Principal::management_canister(),
+                request.expected_root.fleet_subnet_root,
+            ]
+            .contains(&request.asset_recipient),
             request.operation_id != [0; 32],
             request.expected_root.status == FleetSubnetRootStatus::Active,
             source_root == &request.expected_root,
@@ -379,6 +385,15 @@ pub(super) fn validate_root_draining_reservation_request(
     version: &FleetRegistryVersion,
     request: &FleetSubnetRootDrainingReservationRequest,
 ) -> Result<(), InternalError> {
+    if [
+        Principal::anonymous(),
+        Principal::management_canister(),
+        request.expected_root.fleet_subnet_root,
+    ]
+    .contains(&request.asset_recipient)
+    {
+        return Err(InternalError::invalid_input());
+    }
     if request.expected_registry != *version {
         return Err(InternalError::conflict());
     }

@@ -123,6 +123,7 @@ impl FleetCoordinatorOps {
         )?
         .ok_or_else(InternalError::unavailable)?;
         let request_is_valid = [
+            valid_root_ledger_receipt(&request, intent),
             request.expected_intent_hash == intent.intent_hash,
             request.observed_cycles_after_reclamation
                 <= intent.request.observed_cycles_before_reclamation,
@@ -448,6 +449,29 @@ fn sort_root_deletion_records<T>(records: &mut [T], root: impl Fn(&T) -> Princip
     records.sort_by(|left, right| root(left).as_slice().cmp(root(right).as_slice()));
 }
 
+fn valid_root_ledger_receipt(
+    request: &FleetSubnetRootDeletionReadinessRequest,
+    preparation: &FleetSubnetRootDeletionReadinessIntentResponse,
+) -> bool {
+    let receipt = &request.ledger_receipt;
+    let transfer = &receipt.intent;
+    let amount_is_valid = if transfer.balance_before == 0 {
+        transfer.fee == 0 && receipt.block_index.is_none()
+    } else {
+        transfer.balance_before > transfer.fee && transfer.fee > 0 && receipt.block_index.is_some()
+    };
+    [
+        transfer.source == request.fleet_subnet_root,
+        transfer.destination == preparation.coordinator,
+        transfer.memo == request.operation_id,
+        transfer.created_at_time >= preparation.request.prepared_at_ns,
+        transfer.created_at_time <= request.cycles_reclaimed_at_ns,
+        amount_is_valid,
+    ]
+    .into_iter()
+    .all(|valid| valid)
+}
+
 fn canonical_root_deletion_record_order<T>(records: &[T], root: impl Fn(&T) -> Principal) -> bool {
     records
         .windows(2)
@@ -613,6 +637,7 @@ fn validate_root_deletion_readiness_receipts(
         let mut expected = response.clone();
         expected.readiness_hash = [0; 32];
         let receipt_is_exact = [
+            valid_root_ledger_receipt(&response.request, intent),
             response.request.expected_intent_hash == intent.intent_hash,
             response.coordinator == intent.coordinator,
             response.final_inventory_hash == intent.request.final_inventory_hash,

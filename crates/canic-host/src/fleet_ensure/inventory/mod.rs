@@ -231,7 +231,7 @@ pub fn discover_current_fleets(
             continue;
         }
         let plan = matching_terminal_plan(&paths, environment, fleet.as_str(), &journal)?;
-        if plan.scope == FleetEnsurePlanScope::RootStartPrerequisite {
+        if plan.scope != FleetEnsurePlanScope::Full {
             continue;
         }
         let current = resolve_current_fleet(root, environment, fleet.as_str())?;

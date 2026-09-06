@@ -1,0 +1,36 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:35245/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 12.18s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::four_workloads_and_four_failed_assets_repair_without_new_creation ... [FLEET]      CACHE  literal-zero release artifacts (16)                   1.11s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.39s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET]      DONE   literal-zero infrastructure replay complete          1m 59s
+[FLEET]      RUN    establishing four Workloads before reserve funding
+[FLEET]      DONE   four Workloads active with no Ready reserve          27.76s
+[FLEET]      DONE   funded autonomous production-adapter journey complete   5m 49s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 58 filtered out; finished in 349.17s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=445196 kB high_water=462372 kB threads=20
+==> targeted canic-testing-internal PocketIC proof done in 362s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  362s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 363s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.NS3wwo

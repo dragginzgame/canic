@@ -14,6 +14,7 @@ members = [
     "apps/test/user_hub",
     "apps/test/user_shard",
     "canisters/audit/leaf_probe",
+    "canisters/audit/local_authorization_probe",
     "canisters/audit/minimal",
     "canisters/audit/minimal_metrics",
     "canisters/audit/root_probe",
@@ -94,7 +95,7 @@ ic-stable-structures = "0.7.2"
 ic-testkit = "0.9.0"
 ic-timers = "=0.7.0"
 ic0 = "1.1.0"
-icydb = { version = "=0.252.1", default-features = false }
+icydb = { version = "=0.253.0", default-features = false }
 k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
 quote = "1.0"

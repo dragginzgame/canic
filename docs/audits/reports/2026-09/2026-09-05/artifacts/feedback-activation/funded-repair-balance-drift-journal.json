@@ -1,0 +1,29 @@
+{
+  "completion": "in_progress",
+  "estate_funding_required": null,
+  "effects": [
+    {
+      "maintenance_attempts": 0,
+      "action_sha256": "ccc9a75ac67165f014a0fa56183f407ee8e33083bb65af9eb0ae2a3d26cc3b87",
+      "created_principal": null,
+      "destination_post_cycles": null,
+      "destination_pre_cycles": null,
+      "post_cycles": "7999997749144",
+      "pre_cycles": "4499995491646",
+      "pre_canister_version": null,
+      "progress_identity": "native-topup:ledger-withdraw:1:actual:Some(7999997749144):expected:8000000000000:margin:2000000000000",
+      "receipt": "1",
+      "state": "issued"
+    }
+  ],
+  "fleet": "canic-121-literal-zero-estate",
+  "initial_controlled_cycles": "668910082031579",
+  "initial_estate_funding_cycles_by_root": {
+    "root": "0"
+  },
+  "initial_operator_cycles": "1331000000000000",
+  "operation_id": "e10dae2f65fcad3f88ec22b26f69410e1bd82e5342b781e01bd0ae28b5f20355",
+  "plan_sha256": "62bf7b5d3db57bf146a48d7c2821ad0ca464068921e8bc6dd120d61d1efca62f",
+  "schema_version": 1,
+  "stalled_observations": 2
+}

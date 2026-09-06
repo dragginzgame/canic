@@ -552,6 +552,16 @@ async fn activate_root_runtime(
     }
 }
 
+fn activation_root_failure(stage: &'static str, error: InternalError) -> InternalError {
+    canic_core::log!(
+        Topic::Fleet,
+        Error,
+        "Root runtime activation failed stage={stage} diagnostic={}",
+        error.code()
+    );
+    error
+}
+
 async fn activate_fresh_root_runtime(
     request: &RootComponentActivationRequest,
     provisioning: &RootComponentProvisioningView,
@@ -559,7 +569,9 @@ async fn activate_fresh_root_runtime(
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
     let prepared =
         if observed.phase == FleetActivationPhase::Prepared && observed.credential.is_none() {
-            root_fleet_activation::prepare_root().await?
+            root_fleet_activation::prepare_root()
+                .await
+                .map_err(|error| activation_root_failure("prepare", error))?
         } else {
             observed
         };
@@ -571,7 +583,8 @@ async fn activate_fresh_root_runtime(
                 credential,
             },
         ))
-        .await?
+        .await
+        .map_err(|error| activation_root_failure("resume", error))?
         .status
     } else {
         prepared
@@ -1173,16 +1186,8 @@ fn validate_component_registry_authority(
         runtime_phase,
         runtime_operation_id,
     );
-    let registry_authority_facts = [
-        &current.root == root,
-        current.release_set == release_set,
-        current.root_draining.is_none(),
-        ComponentRegistryOps::registry_covers_preparation(
-            &current.prepared_against_registry,
-            fleet_registry,
-        ),
-    ];
-    let registry_authority_is_exact = registry_authority_facts.into_iter().all(|fact| fact);
+    let registry_authority_is_exact =
+        component_registry_authority_is_exact(current, root, release_set, fleet_registry);
     let Some(runtime_mode) = runtime_mode else {
         return Err(InternalError::conflict());
     };
@@ -1191,6 +1196,50 @@ fn validate_component_registry_authority(
     }
     ComponentRegistryOps::require_top_level_allocation_open()?;
     Ok(runtime_mode)
+}
+
+fn component_registry_authority_is_exact(
+    current: &RootComponentRegistryView,
+    root: &canic_core::ids::FleetSubnetRootBinding,
+    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    fleet_registry: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+) -> bool {
+    [
+        &current.root == root,
+        current.release_set == release_set,
+        current.root_draining.is_none(),
+        ComponentRegistryOps::registry_covers_preparation(
+            &current.prepared_against_registry,
+            fleet_registry,
+        ),
+    ]
+    .into_iter()
+    .all(|fact| fact)
+}
+
+fn sealed_initial_activation_can_resume(
+    inventory: Option<RootComponentInitialInventoryView>,
+    runtime_phase: FleetActivationPhase,
+    runtime_operation_id: [u8; 32],
+    runtime_mode: RootComponentProvisioningRuntimeMode,
+    component_count: u32,
+    activated_component_count: u32,
+) -> bool {
+    let Some(inventory) = inventory else {
+        return false;
+    };
+    [
+        runtime_phase == FleetActivationPhase::Prepared,
+        runtime_mode == RootComponentProvisioningRuntimeMode::FreshRoot,
+        inventory.fleet_activation_operation_id == runtime_operation_id,
+        inventory.component_count == component_count,
+        activated_component_count == component_count,
+        inventory.sealed_at_ns > 0,
+        inventory.inventory_hash != [0; 32],
+        !inventory.root_runtime_activated,
+    ]
+    .into_iter()
+    .all(|fact| fact)
 }
 
 fn component_provisioning_runtime_mode(
@@ -1238,6 +1287,23 @@ fn validate_activation_runtime_authority(
         .as_ref()
         .ok_or_else(InternalError::conflict)?
         .fleet_registry;
+    // The inventory seal closes admission, but it must not close recovery of
+    // the same startup whose Store or Component observation is still pending.
+    if sealed_initial_activation_can_resume(
+        registry.initial_inventory,
+        runtime.phase,
+        runtime.identity.operation_id,
+        provisioning.runtime_mode,
+        provisioning.component_count,
+        provisioning.activated_component_count,
+    ) && component_registry_authority_is_exact(
+        &registry,
+        &authority.binding,
+        authority.initial_release_set,
+        published_registry,
+    ) {
+        return Ok(());
+    }
     let actual = validate_component_registry_authority(
         &registry,
         &authority.binding,
@@ -1441,6 +1507,93 @@ mod tests {
         assert!(validate_registry_commit_progress(2, 3, 0, false).is_err());
         assert!(validate_registry_commit_progress(3, 3, 0, true).is_err());
         assert!(validate_registry_commit_progress(1, 3, 1, true).is_ok());
+    }
+
+    #[test]
+    fn sealed_startup_retries_only_its_exact_completed_component_batch() {
+        let inventory = RootComponentInitialInventoryView {
+            fleet_activation_operation_id: [7; 32],
+            component_count: 1,
+            inventory_hash: [8; 32],
+            sealed_at_ns: 9,
+            directories_converged: false,
+            root_runtime_activated: false,
+        };
+        let resumable = |inventory, phase, operation, mode, activated| {
+            sealed_initial_activation_can_resume(inventory, phase, operation, mode, 1, activated)
+        };
+        for directories_converged in [false, true] {
+            assert!(resumable(
+                Some(RootComponentInitialInventoryView {
+                    directories_converged,
+                    ..inventory
+                }),
+                FleetActivationPhase::Prepared,
+                [7; 32],
+                RootComponentProvisioningRuntimeMode::FreshRoot,
+                1
+            ));
+        }
+        for invalid in [
+            None,
+            Some(RootComponentInitialInventoryView {
+                fleet_activation_operation_id: [6; 32],
+                ..inventory
+            }),
+            Some(RootComponentInitialInventoryView {
+                component_count: 2,
+                ..inventory
+            }),
+            Some(RootComponentInitialInventoryView {
+                root_runtime_activated: true,
+                ..inventory
+            }),
+            Some(RootComponentInitialInventoryView {
+                inventory_hash: [0; 32],
+                ..inventory
+            }),
+            Some(RootComponentInitialInventoryView {
+                sealed_at_ns: 0,
+                ..inventory
+            }),
+        ] {
+            assert!(!resumable(
+                invalid,
+                FleetActivationPhase::Prepared,
+                [7; 32],
+                RootComponentProvisioningRuntimeMode::FreshRoot,
+                1
+            ));
+        }
+        assert!(!resumable(
+            Some(inventory),
+            FleetActivationPhase::Active,
+            [7; 32],
+            RootComponentProvisioningRuntimeMode::FreshRoot,
+            1
+        ));
+        assert!(!resumable(
+            Some(inventory),
+            FleetActivationPhase::Prepared,
+            [7; 32],
+            RootComponentProvisioningRuntimeMode::ActiveRoot,
+            1
+        ));
+        assert!(!resumable(
+            Some(inventory),
+            FleetActivationPhase::Prepared,
+            [7; 32],
+            RootComponentProvisioningRuntimeMode::FreshRoot,
+            0
+        ));
+        assert_eq!(
+            component_provisioning_runtime_mode(
+                Some(inventory),
+                FleetActivationPhase::Prepared,
+                [7; 32]
+            ),
+            None
+        );
     }
 
     #[test]

@@ -6,6 +6,7 @@
 
 use crate::{
     cdk::types::Cycles,
+    dto::fleet_registry::FleetLedgerTransferIntent,
     infra::ic::{IcInfraError, call::Call, known::CYCLES_LEDGER_CANISTER},
 };
 use candid::{CandidType, Nat, Principal};
@@ -128,6 +129,32 @@ pub enum CyclesLedgerInfraError {
 
     #[error("Cycles Ledger block index {value} exceeds u64")]
     BlockIndexOverflow { value: Nat },
+
+    #[error("retirement Ledger balance {balance} cannot cover transfer fee {fee}")]
+    InvalidTransfer { balance: u128, fee: u128 },
+}
+
+/// ICRC-1 transfer failure retained as a typed boundary until workflow classification.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum CyclesLedgerTransferError {
+    BadBurn { min_burn_amount: Nat },
+    BadFee { expected_fee: Nat },
+    CreatedInFuture { ledger_time: u64 },
+    Duplicate { duplicate_of: Nat },
+    GenericError { error_code: Nat, message: String },
+    InsufficientFunds { balance: Nat },
+    TemporarilyUnavailable,
+    TooOld,
+}
+
+#[derive(CandidType)]
+struct CyclesLedgerTransferArgs {
+    amount: Nat,
+    created_at_time: Option<u64>,
+    fee: Option<Nat>,
+    from_subaccount: Option<[u8; 32]>,
+    memo: Option<Vec<u8>>,
+    to: CyclesLedgerAccount,
 }
 
 /// Raw Cycles Ledger adapter.
@@ -165,6 +192,37 @@ impl CyclesLedgerInfra {
                     }),
                     subnet_selection: Some(CyclesLedgerSubnetSelection::Subnet { subnet }),
                 }),
+            })?
+            .execute()
+            .await?
+            .candid()
+    }
+
+    /// Execute the exact retirement transfer whose intent the caller has persisted.
+    pub async fn transfer(
+        intent: &FleetLedgerTransferIntent,
+    ) -> Result<Result<Nat, CyclesLedgerTransferError>, IcInfraError> {
+        let amount = intent
+            .balance_before
+            .checked_sub(intent.fee)
+            .filter(|amount| *amount > 0)
+            .ok_or_else(|| {
+                IcInfraError::from(CyclesLedgerInfraError::InvalidTransfer {
+                    balance: intent.balance_before,
+                    fee: intent.fee,
+                })
+            })?;
+        Call::unbounded_wait(*CYCLES_LEDGER_CANISTER, "icrc1_transfer")
+            .with_arg(CyclesLedgerTransferArgs {
+                amount: amount.into(),
+                created_at_time: Some(intent.created_at_time),
+                fee: Some(intent.fee.into()),
+                from_subaccount: None,
+                memo: Some(intent.memo.to_vec()),
+                to: CyclesLedgerAccount {
+                    owner: intent.destination,
+                    subaccount: None,
+                },
             })?
             .execute()
             .await?

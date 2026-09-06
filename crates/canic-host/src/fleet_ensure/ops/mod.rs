@@ -5,11 +5,11 @@
 //! Boundary: workflow persists an intent here before invoking one platform effect.
 
 mod canic_init;
+pub(super) mod continuation;
 mod current_inventory;
 pub(super) mod current_protocol;
 mod plan_content;
 mod platform;
-pub(crate) mod predecessor_root_status;
 mod protocol;
 
 use crate::{
@@ -23,15 +23,11 @@ use crate::{
         FleetEnsureStateRecord, FleetObservation, ProtocolArtifactDigests,
         RetainedRootStartAuthorityRecord, RootManagementObservation, RootOwnedCanisterLifecycle,
     },
-    icp_config::resolve_icp_build_network_from_root,
-    release_build::validate_finalized_release_build_manifest,
-    release_set::{
-        CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest,
-        load_persisted_current_release_set_manifest,
-        verify_persisted_canic_infrastructure_artifact,
-    },
 };
-use canic_core::{cdk::utils::hash::sha256_hex, dto::pool::CanisterPoolAssetStatus};
+use canic_core::{
+    cdk::{types::Cycles, utils::hash::sha256_hex},
+    dto::pool::CanisterPoolAssetStatus,
+};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -47,6 +43,21 @@ pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
 pub(crate) use platform::{
     NativeFundingObservation, install_effect_applied, native_funding_applied,
 };
+
+/// Decode the reviewed bounds for Create execution and its first live observation.
+pub(crate) fn maximum_creation_observation_burn(desired: &DesiredFleet) -> Option<u128> {
+    let observation = desired
+        .maximum_observation_burn_cycles
+        .parse::<Cycles>()
+        .ok()?
+        .to_u128();
+    let update = desired
+        .maximum_update_burn_cycles
+        .parse::<Cycles>()
+        .ok()?
+        .to_u128();
+    crate::fleet_ensure::model::creation_observation_burn(observation, update)
+}
 
 pub(crate) const fn root_owned_lifecycle(
     kind: DesiredCanisterKind,
@@ -97,6 +108,8 @@ pub struct EffectObservation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EffectRetry {
     None,
+    /// The protected Ready reserve is incomplete; continue the bounded Root-owned refill.
+    ContinuePoolMaintenance,
     /// A created Root-owned canister is intentionally not observable by the
     /// operator until the exact Root installation later in this same plan.
     /// Continue the reviewed prerequisites, then revisit this issued effect.
@@ -105,10 +118,6 @@ pub enum EffectRetry {
     /// first live balance is outside the reviewed target and observation-burn
     /// bound. Close the immutable operation before any later action.
     ReplanRequiredAfterCreateBalanceDrift,
-    /// The retained intent was synchronously rejected before mutation and its
-    /// exact live prerequisite is now management-proved. Close the immutable
-    /// operation and require a newly reviewed plan.
-    ReplanRequiredAfterRejectedPrerequisite,
     ReplayExactIssuedCommand,
 }
 
@@ -123,6 +132,9 @@ pub struct TerminalFleetInventory {
 /// Platform boundary used by the workflow and deterministic test adapters.
 pub trait EnsurePlatform {
     type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Report informational progress without changing operation authority or effects.
+    fn report_progress(&mut self, _progress: crate::fleet_ensure::dto::FleetEnsureProgress) {}
 
     /// Bind every observation and effect to the desired input retained by the
     /// reviewed operation. Production adapters must replace any newer caller
@@ -148,6 +160,15 @@ pub trait EnsurePlatform {
     /// Compile current Canic control-plane work from protected roles, topology,
     /// and live Registry evidence. Generic applications have no such work.
     fn protocol_actions(
+        &mut self,
+        _operation_id: &str,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Vec<EnsureAction>, Self::Error> {
+        Ok(Vec::new())
+    }
+
+    /// Expand the complete fresh protocol from reviewed init inputs, without remote effects.
+    fn fresh_protocol_actions(
         &mut self,
         _operation_id: &str,
         _state: &FleetEnsureStateRecord,
@@ -267,6 +288,8 @@ impl EnsurePaths {
 
 #[derive(Debug, ThisError)]
 pub enum EnsureStateError {
+    #[error("Fleet ensure continuation authority is invalid: {reason}")]
+    ContinuationAuthority { reason: String },
     #[error("Fleet ensure document is invalid at {}: {source}", path.display())]
     Decode {
         path: PathBuf,
@@ -279,9 +302,6 @@ pub enum EnsureStateError {
 
     #[error("Fleet ensure retained Root-start authority is invalid at {}", path.display())]
     InvalidRootStartAuthority { path: PathBuf },
-
-    #[error("Fleet ensure retained Root-start release authority is invalid: {reason}")]
-    InvalidRootStartReleaseAuthority { reason: String },
 
     #[error("Fleet ensure document has unsupported schema {actual} at {}", path.display())]
     WrongSchema { path: PathBuf, actual: u16 },
@@ -342,7 +362,10 @@ pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
 pub fn read_journal(
     paths: &EnsurePaths,
 ) -> Result<Option<FleetEnsureJournalRecord>, EnsureStateError> {
-    let value: Option<FleetEnsureJournalRecord> = read_current(&paths.journal)?;
+    let mut value: Option<FleetEnsureJournalRecord> = read_current(&paths.journal)?;
+    if let Some(journal) = &mut value {
+        continuation::hydrate_phases(paths, journal)?;
+    }
     validate_schema(value, &paths.journal, |record| record.schema_version)
 }
 
@@ -382,54 +405,6 @@ pub(crate) fn read_root_start_authority(
                 })
         })
         .transpose()
-}
-
-/// Independently prove the finalized release and raw successor Wasm named by a Start authority.
-pub(crate) fn verify_root_start_release_authority(
-    root: &Path,
-    authority: &RetainedRootStartAuthorityRecord,
-) -> Result<(), EnsureStateError> {
-    let invalid = |reason: String| EnsureStateError::InvalidRootStartReleaseAuthority { reason };
-    let complete = load_persisted_current_release_set_manifest(root, authority.release_build_id)
-        .map_err(|error| invalid(error.to_string()))?;
-    validate_finalized_release_build_manifest(root, authority.release_build_id, &complete.path)
-        .map_err(|error| invalid(error.to_string()))?;
-    let expected_network = resolve_icp_build_network_from_root(root, &authority.environment)
-        .map_err(|error| invalid(error.to_string()))?;
-    if complete.manifest.build_network != expected_network {
-        return Err(invalid(format!(
-            "release build {} targets {}, but environment {} requires {}",
-            authority.release_build_id,
-            complete.manifest.build_network,
-            authority.environment,
-            expected_network,
-        )));
-    }
-    let infrastructure =
-        load_persisted_canic_infrastructure_artifact_manifest(root, authority.release_build_id)
-            .map_err(|error| invalid(error.to_string()))?;
-    if complete.manifest.infrastructure_artifact_manifest_sha256 != infrastructure.digest {
-        return Err(invalid(
-            "finalized release set does not bind its infrastructure manifest".to_string(),
-        ));
-    }
-    let successor = infrastructure
-        .manifest
-        .entries
-        .iter()
-        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
-        .ok_or_else(|| {
-            invalid("finalized release has no Fleet Subnet Root artifact".to_string())
-        })?;
-    let release_matches = successor.release_build_id == authority.release_build_id;
-    let successor_matches = successor.wasm_sha256_hex == authority.successor_module_sha256;
-    if !(release_matches && successor_matches) {
-        return Err(invalid(
-            "finalized release Root artifact differs from the sealed successor".to_string(),
-        ));
-    }
-    verify_persisted_canic_infrastructure_artifact(root, successor)
-        .map_err(|error| invalid(error.to_string()))
 }
 
 pub(crate) fn compact_inline_plan(
@@ -485,7 +460,10 @@ pub fn resolve_desired_artifacts(
     root: &Path,
     desired: &DesiredFleet,
 ) -> Result<DesiredFleetArtifacts, EnsureStateError> {
-    let mut artifacts = DesiredFleetArtifacts::default();
+    let mut artifacts = DesiredFleetArtifacts {
+        continuation: continuation::resolve_authority(root, desired)?,
+        ..DesiredFleetArtifacts::default()
+    };
     for canister in &desired.canisters {
         if let Some(wasm) = &canister.wasm {
             artifacts
@@ -587,7 +565,6 @@ fn is_sha256(value: &str) -> bool {
 fn valid_root_start_authority(authority: &RetainedRootStartAuthorityRecord) -> bool {
     if authority.roots.is_empty()
         || authority.roots.len() > crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS
-        || !is_sha256(&authority.successor_module_sha256)
         || !authority.has_valid_digest()
     {
         return false;
@@ -605,7 +582,7 @@ fn valid_root_start_authority(authority: &RetainedRootStartAuthorityRecord) -> b
             && !controllers.is_empty()
             && names.insert(root.name.as_str())
             && principals.insert(root.principal.as_str())
-            && is_sha256(&root.predecessor_module_sha256)
+            && is_sha256(&root.module_sha256)
     })
 }
 

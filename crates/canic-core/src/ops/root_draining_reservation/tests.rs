@@ -60,6 +60,7 @@ fn fixture() -> FleetSubnetRootDrainingReservationResponse {
     };
     FleetSubnetRootDrainingReservationResponse {
         request: FleetSubnetRootDrainingReservationRequest {
+            asset_recipient: expected_registry.authority.binding.coordinator,
             operation_id: [5; 32],
             expected_registry,
             expected_root: FleetSubnetRootEntry {

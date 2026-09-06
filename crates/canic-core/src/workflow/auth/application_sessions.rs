@@ -25,7 +25,7 @@ use crate::{
         LocalApplicationSession, VerifiedApplicationAuthority,
     },
     ops::storage::auth::{
-        AuthStateOps,
+        LocalApplicationAuthorizationStateOps,
         application_sessions::{
             ApplicationReplayResolution, ApplicationSessionCommitResult,
             ApplicationSessionStateError,
@@ -105,7 +105,7 @@ impl ApplicationSessionWorkflow {
         establishment_request_hash: [u8; 32],
         now_ns: u64,
     ) -> Result<ApplicationReplayResolution, ApplicationSessionStateError> {
-        AuthStateOps::resolve_application_replay(
+        LocalApplicationAuthorizationStateOps::resolve_application_replay(
             proof_fingerprint,
             caller,
             caller,
@@ -118,7 +118,9 @@ impl ApplicationSessionWorkflow {
     pub fn establish_verified(
         input: ApplicationSessionEstablishInput,
     ) -> Result<ApplicationSessionEstablishResult, ApplicationSessionWorkflowError> {
-        if input.authority_generation != AuthStateOps::application_authority_generation() {
+        if input.authority_generation
+            != LocalApplicationAuthorizationStateOps::application_authority_generation()
+        {
             return Err(ApplicationSessionWorkflowError::State(
                 ApplicationSessionStateError::AuthorityGenerationMismatch,
             ));
@@ -148,8 +150,9 @@ impl ApplicationSessionWorkflow {
             narrow_application_session_scopes(input.authority.scopes(), input.requested_scopes)
                 .map_err(ApplicationSessionWorkflowError::AdmissionDenied)?;
 
-        let current_session = AuthStateOps::application_session(caller)?;
-        let occupancy = AuthStateOps::application_session_occupancy(caller)?;
+        let current_session = LocalApplicationAuthorizationStateOps::application_session(caller)?;
+        let occupancy =
+            LocalApplicationAuthorizationStateOps::application_session_occupancy(caller)?;
         let admission = decide_application_session_admission(ApplicationSessionAdmissionInput {
             replay: ApplicationReplayDisposition::Absent,
             replacing_existing_session: current_session.is_some(),
@@ -184,7 +187,10 @@ impl ApplicationSessionWorkflow {
             input.authority.proof_expires_at_ns(),
         )
         .map_err(ApplicationSessionWorkflowError::ModelInvalid)?;
-        let committed = AuthStateOps::commit_application_session(session.clone(), replay)?;
+        let committed = LocalApplicationAuthorizationStateOps::commit_application_session(
+            session.clone(),
+            replay,
+        )?;
         match (admission, committed) {
             (
                 ApplicationSessionAdmissionDecision::CommitNew,

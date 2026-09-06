@@ -254,7 +254,7 @@ mod tests {
                     StateAllocationKey::CoreRuntimeBindings,
                     StateAllocationKey::CoreFleetState,
                     StateAllocationKey::CoreFleetActivation,
-                    StateAllocationKey::CoreAuthState,
+                    StateAllocationKey::CoreRootDelegationState,
                     StateAllocationKey::CoreReplayReceipts,
                     StateAllocationKey::CoreCycles,
                     StateAllocationKey::CoreRuntimeLog,
@@ -399,9 +399,9 @@ mod tests {
                 && domain.memory_id == Some(10)
         }));
         assert!(
-            role.state
-                .iter()
-                .any(|domain| { domain.domain == "auth_state" && domain.owner == "canic-core" })
+            role.state.iter().any(|domain| {
+                domain.domain == "root_delegation" && domain.owner == "canic-core"
+            })
         );
     }
 

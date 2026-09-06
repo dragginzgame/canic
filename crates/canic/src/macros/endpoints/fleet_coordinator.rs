@@ -92,6 +92,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                     | CoordinatorCommand::PrepareRootDeletionExecution(_)
                     | CoordinatorCommand::ProvisionComponents(_)
                     | CoordinatorCommand::RemoveRoot(_)
+                    | CoordinatorCommand::Retire(_)
                     | CoordinatorCommand::ResumeAuthoritySnapshot(_)
                     | CoordinatorCommand::SetRootFunding(_)
                     | CoordinatorCommand::StageFundingPolicyRotationRoot(_)

@@ -1,0 +1,5 @@
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.7 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-cycle-custody v0.110.7 (/home/adam/projects/canic/crates/canic-cycle-custody)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 08s

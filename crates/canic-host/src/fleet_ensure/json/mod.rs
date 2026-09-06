@@ -8,8 +8,7 @@
 mod tests;
 
 use crate::fleet_ensure::model::{
-    CanisterPlan, CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan, FleetEnsurePlanScope,
-    FleetEnsureReport,
+    CanisterPlan, CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan, FleetEnsureReport,
 };
 use std::fmt::Display;
 
@@ -53,6 +52,7 @@ fn plan_json_value(plan: &FleetEnsurePlan) -> Result<Value, serde_json::Error> {
         ),
     );
     insert_serialized(&mut projection, "conservation", &plan.conservation)?;
+    insert_serialized(&mut projection, "continuation", &plan.continuation)?;
     insert_serialized(&mut projection, "desired_sha256", &plan.desired_sha256)?;
     insert_serialized(&mut projection, "environment", &plan.environment)?;
     insert_serialized(&mut projection, "fleet", &plan.fleet)?;
@@ -68,23 +68,24 @@ fn plan_json_value(plan: &FleetEnsurePlan) -> Result<Value, serde_json::Error> {
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     );
-    if let Some(authority) = &plan.root_start_authority {
-        insert_serialized(&mut projection, "root_start_authority", authority)?;
-    }
-    if let Some(desired) = &plan.reviewed_desired {
-        insert_serialized(&mut projection, "reviewed_desired", desired)?;
-    }
+    insert_serialized(
+        &mut projection,
+        "root_start_authority",
+        &plan.root_start_authority,
+    )?;
+    insert_serialized(
+        &mut projection,
+        "root_reinstall_bindings",
+        &plan.root_reinstall_bindings,
+    )?;
+    insert_serialized(&mut projection, "reviewed_desired", &plan.reviewed_desired)?;
     insert_serialized(&mut projection, "schema_version", &plan.schema_version)?;
-    if plan.scope != FleetEnsurePlanScope::Full {
-        insert_serialized(&mut projection, "scope", &plan.scope)?;
-    }
-    if let Some(operation_id) = &plan.terminal_inventory_operation_id {
-        insert_serialized(
-            &mut projection,
-            "terminal_inventory_operation_id",
-            operation_id,
-        )?;
-    }
+    insert_serialized(&mut projection, "scope", &plan.scope)?;
+    insert_serialized(
+        &mut projection,
+        "terminal_inventory_operation_id",
+        &plan.terminal_inventory_operation_id,
+    )?;
     Ok(Value::Object(projection))
 }
 

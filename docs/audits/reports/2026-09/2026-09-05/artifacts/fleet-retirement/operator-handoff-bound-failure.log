@@ -1,0 +1,108 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:43989/
+==> targeted canic-testing-internal PocketIC proof
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.53s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness ... [FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              1.10s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.50s
+[FLEET]      RUN    finished PIC wasm build
+[FLEET]      DONE   root artifacts ready                                  3.29s
+[WASM]       CACHE  Fleet Coordinator artifact                            1.09s
+[FLEET]      DONE   Coordinator artifact ready                            1.58s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       CACHE  delegation_issuer_stub                                0.49s
+[FLEET]      DONE   Store and Component artifacts ready                   1.80s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.11s
+[FLEET]      DONE   Root and Store installed                              4.60s
+[FLEET]      DONE   Coordinator installed                                 1.60s
+[FLEET]      DONE   Root joined and synchronized                          0.16s
+[FLEET]      DONE   Component Registry activated                          3.51s
+[FLEET]      DONE   fresh Fleet validated                                 0.02s
+[FLEET]      DONE   fresh Fleet setup complete                           16.66s
+[WASM]       RUN    delegation_root_stub (1/2)
+[WASM]       RUN    cycles_ledger_stub (2/2)
+[WASM]       CACHE  delegation_root_stub                                  0.47s
+[WASM]       CACHE  cycles_ledger_stub                                    0.00s
+[WASM]       DONE   batch: 0 built, 2 cached, 0 failed                    0.48s
+autonomous Root removal timeout: canister=dmkut-c3777-77776-qaaaq-cai status_sender=2vxsx-fae status=ok(state=Running version=1451 controllers=1 module_hash_bytes=32 memory_bytes=429_922_830 cycles=179_870_386_631_569) log_sender=2vxsx-fae logs=[10@1620328630000000065]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] upload_chunk: dfj7p-ut777-77776-qaaba-cai (968.116 KB)", [11@1620328630000000070]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: dciz3-zl777-77776-qaabq-cai", [12@1620328630000000077]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: dxpiw-yd777-77776-qaaca-cai", [13@1620328630000000084]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: dqooc-v3777-77776-qaacq-cai", [14@1620328630000000091]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: dznf6-dt777-77776-qaada-cai", [15@1620328630000000098]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: d6mdk-ol777-77776-qaadq-cai", [16@1620328630000000105]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: ctche-bd777-77776-qaaea-cai", [17@1620328630000000112]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: cudbq-m3777-77776-qaaeq-cai", [18@1620328630000000119]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: c5akm-2t777-77776-qaafa-cai", [19@1620328630000000126]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: c2bmy-xl777-77776-qaafq-cai", [20@1620328630000000133]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: cpg5v-wd777-77776-qaaga-cai", [21@1620328636000000156]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] install_chunked_code: dciz3-zl777-77776-qaabq-cai store=dfj7p-ut777-77776-qaaba-cai chunks=1", [22@1620328660000000159]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] install_chunked_code: dxpiw-yd777-77776-qaaca-cai store=dfj7p-ut777-77776-qaaba-cai chunks=1", [23@1620328674000000161]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) start", [24@1620328674000000161]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai", [25@1620328674000000161]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) prepared managed inventory for Fleet activation", [26@1620328674000000161]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Sync] sync.state: root cascade start snapshot=[fs]", [27@1620328674000000166]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) start", [28@1620328674000000166]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai", [29@1620328674000000166]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) complete", [30@1620328674000000166]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] canister marked READY", [31@1620328675000000178]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] stop_canister: dxpiw-yd777-77776-qaaca-cai", [32@1620328677000000184]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: dxpiw-yd777-77776-qaaca-cai", [33@1620328679000000191]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] stop_canister: dciz3-zl777-77776-qaabq-cai", [34@1620328681000000197]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: dciz3-zl777-77776-qaabq-cai", [35@1620328682000000202]="Panicked at 'expected an element with length <= 64 bytes, but found 67 bytes', /home/adam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ic-stable-structures-0.7.2/src/storable.rs:63:17", [36@1620328682000000202]="[TRAP]: Panicked at 'expected an element with length <= 64 bytes, but found 67 bytes', /home/adam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ic-stable-structures-0.7.2/src/storable.rs:63:17", [37@1620328682000000202]="[ic-cdk-timers] timer failed (code 5): IC0503: Error from Canister dmkut-c3777-77776-qaaaq-cai: Canister called `ic0.trap` with message: 'Panicked at 'expected an element with length <= 64 bytes, but found 67 bytes', /home/adam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ic-stable-structures-0.7.2/src/storable.rs:63:17'.\nConsider gracefully handling failures from this canister or altering the canister to handle exceptions. See documentation: https://docs.internetcomputer.org/references/execution-errors#trapped-explicitly"
+autonomous Coordinator Root-removal timeout: canister=dllsh-pd777-77776-qaaaa-cai status_sender=2vxsx-fae status=ok(state=Running version=3608 controllers=2 module_hash_bytes=32 memory_bytes=305_659_285 cycles=599_910_849_172_413) log_sender=2vxsx-fae logs=<empty>
+
+thread 'pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness' (23444) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:9821:13:
+Root must autonomously reach external deletion readiness; root(final_inventory, removal, reclamation, binding, store_deletion, readiness_intent, readiness, preparation)=Some((false, false, false, false, false, false, false, false)); pool(tracked, store, store_deletion_pending, workload, handing_off)=(11, 1, 0, 0, 1); coordinator(draining, removal, readiness_intent, readiness, execution, completion)=Some((true, false, false, false, false, false)); progress_transitions=1; stagnant_seconds=511
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 59 filtered out; finished in 61.17s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=378312 kB high_water=423100 kB threads=19
+==> targeted canic-testing-internal PocketIC proof failed in 62s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2021-05-06 19:17:10.000000091 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: dznf6-dt777-77776-qaada-cai
+2021-05-06 19:17:10.000000098 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: d6mdk-ol777-77776-qaadq-cai
+2021-05-06 19:17:10.000000105 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: ctche-bd777-77776-qaaea-cai
+2021-05-06 19:17:10.000000112 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: cudbq-m3777-77776-qaaeq-cai
+2021-05-06 19:17:10.000000119 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: c5akm-2t777-77776-qaafa-cai
+2021-05-06 19:17:10.000000126 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: c2bmy-xl777-77776-qaafq-cai
+2021-05-06 19:17:10.000000133 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: cpg5v-wd777-77776-qaaga-cai
+2021-05-06 19:17:15.000000156 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: issuer
+2021-05-06 19:17:15.000000156 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:16.000000156 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] install_chunked_code: dciz3-zl777-77776-qaabq-cai store=dfj7p-ut777-77776-qaaba-cai chunks=1
+2021-05-06 19:17:28.000000156 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|   issuer   | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:28.000000156 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|   issuer   | [Auth] delegated-token issuer canister-signature support ready issuer=dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:17:28.000000156 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|   issuer   | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:28.000000156 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|   issuer   | [Init] canister marked READY
+2021-05-06 19:17:39.000000159 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: issuer
+2021-05-06 19:17:39.000000159 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:40.000000159 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] install_chunked_code: dxpiw-yd777-77776-qaaca-cai store=dfj7p-ut777-77776-qaaba-cai chunks=1
+2021-05-06 19:17:49.000000159 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|   issuer   | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:49.000000159 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|   issuer   | [Auth] delegated-token issuer canister-signature support ready issuer=dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:17:49.000000159 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|   issuer   | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:49.000000159 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|   issuer   | [Init] canister marked READY
+2021-05-06 19:17:54.000000161 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2021-05-06 19:17:54.000000161 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai
+2021-05-06 19:17:54.000000161 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) prepared managed inventory for Fleet activation
+2021-05-06 19:17:54.000000161 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Sync] sync.state: root cascade start snapshot=[fs]
+2021-05-06 19:17:54.000000161 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Sync] sync.state: non-root cascade start snapshot=[fs]
+2021-05-06 19:17:54.000000166 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2021-05-06 19:17:54.000000166 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai
+2021-05-06 19:17:54.000000166 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) complete
+2021-05-06 19:17:54.000000166 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] canister marked READY
+2021-05-06 19:17:54.000000167 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:54.000000167 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:54.000000167 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Init] canister marked READY
+2021-05-06 19:17:55.000000178 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] stop_canister: dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:17:57.000000184 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:17:59.000000191 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] stop_canister: dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:18:01.000000197 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:18:02.000000202 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] Panicked at 'expected an element with length <= 64 bytes, but found 67 bytes', /home/adam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ic-stable-structures-0.7.2/src/storable.rs:63:17
+2021-05-06 19:18:02.000000202 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [ic-cdk-timers] timer failed (code 5): IC0503: Error from Canister dmkut-c3777-77776-qaaaq-cai: Canister called `ic0.trap` with message: 'Panicked at 'expected an element with length <= 64 bytes, but found 67 bytes', /home/adam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ic-stable-structures-0.7.2/src/storable.rs:63:17'.
+Consider gracefully handling failures from this canister or altering the canister to handle exceptions. See documentation: https://docs.internetcomputer.org/references/execution-errors#trapped-explicitly
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-06T12:17:40.801608Z  INFO pocket_ic_server: The PocketIC server is listening on port 43989
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  62s      FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 63s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.6CKrR5

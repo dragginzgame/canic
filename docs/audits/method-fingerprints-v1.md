@@ -116,7 +116,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `82a9247dd34694903cac42171786eb02b943ce72c4ff04d1acbde1a42c2658ab` | `scripts/ci/check-audit-method-catalog.sh` |
 | `b6890c680167d19bc7fb6ea59ec12ed7ae882f186535bab72f758579c2765508` | `scripts/ci/check-release-integrity-contract.sh` |
 | `eee02a45e2fd6512b2641209c12ad33e08b9d1659114bf9a828face730a044cc` | `scripts/ci/instruction-audit-report.sh` |
-| `f42462d5b69b05ecbcb90ed9ff39f24fe296870a1341c79ffe6af5628f5a5bca` | `scripts/ci/run-layering-guards.sh` |
+| `93ac1f3c77d9d58009cae84c4570e51306a077a207262c9316aea6f2fdae122c` | `scripts/ci/run-layering-guards.sh` |
 | `839ee5608894b029fc466056e166a782f04d8f3c6e5f601d248a5b8e475e94ca` | `scripts/ci/list-config-canisters.sh` |
 | `089e5408ede48b45d95813d96ed7ad9bfa9814453a0630af7eff3fa80b5636b2` | `scripts/ci/require_icp.sh` |
 | `68c3164708aab17a5a58217f9f9374c3505130e0b8eb36c3a435cc4f779366d0` | `scripts/ci/wasm-audit-report.sh` |

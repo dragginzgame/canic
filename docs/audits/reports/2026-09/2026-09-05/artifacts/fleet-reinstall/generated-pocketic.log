@@ -1,0 +1,83 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:36025/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 21.87s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet ... [WASM]       SIZE   fleet_coordinator/candidate.wasm  code=4.27 MiB (4479609 B)  headroom=5.73 MiB (6006151 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2638261 B)  headroom=7.48 MiB (7847499 B)
+[WASM]       SIZE   app/candidate.wasm  code=2.53 MiB (2652542 B)  headroom=7.47 MiB (7833218 B)
+[WASM]       SIZE   root/candidate.wasm  code=7.65 MiB (8019528 B)  headroom=2.35 MiB (2466232 B)
+[FLEET]      DONE   literal-zero release artifacts (16)                  32.42s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.40s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"infrastructure","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":10,"state":{"kind":"advancing"}},"unix_ms":1788702202651}
+[FLEET-MEASURE] {"progress":{"applied_effects":8,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"infrastructure","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":10,"state":{"kind":"advancing"}},"unix_ms":1788702244856}
+[FLEET-MEASURE] {"progress":{"applied_effects":10,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"terminal_verification","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":10,"state":{"kind":"advancing"}},"unix_ms":1788702261792}
+[FLEET-MEASURE] {"progress":{"applied_effects":10,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"terminal_verification","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":12,"state":{"kind":"prerequisite_complete"}},"unix_ms":1788702274088}
+[FLEET-MEASURE] {"progress":{"applied_effects":10,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"import_reconciliation","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":12,"state":{"kind":"advancing"}},"unix_ms":1788702274088}
+[FLEET]      DONE   literal-zero infrastructure replay complete          1m 23s
+[FLEET-MEASURE] {"progress":{"applied_effects":10,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"import_reconciliation","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":12,"state":{"kind":"advancing"}},"unix_ms":1788702284458}
+[FLEET-MEASURE] {"progress":{"applied_effects":12,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"terminal_verification","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":12,"state":{"kind":"advancing"}},"unix_ms":1788702295450}
+[FLEET-MEASURE] {"progress":{"applied_effects":12,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"terminal_verification","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":26,"state":{"kind":"prerequisite_complete"}},"unix_ms":1788702309054}
+[FLEET-MEASURE] {"progress":{"applied_effects":12,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"control_plane","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":26,"state":{"kind":"advancing"}},"unix_ms":1788702309054}
+[FLEET-MEASURE] {"progress":{"applied_effects":24,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"workload_provisioning","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":26,"state":{"kind":"advancing"}},"unix_ms":1788702353330}
+[FLEET-MEASURE] {"progress":{"applied_effects":24,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"workload_provisioning","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":26,"state":{"kind":"awaiting_progress"}},"unix_ms":1788702358163}
+[FLEET-MEASURE] {"progress":{"applied_effects":24,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"workload_provisioning","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":26,"state":{"kind":"awaiting_progress"}},"unix_ms":1788702361229}
+[FLEET-MEASURE] {"progress":{"applied_effects":24,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"workload_provisioning","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":26,"state":{"kind":"awaiting_progress"}},"unix_ms":1788702362480}
+[FLEET-MEASURE] {"progress":{"applied_effects":25,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"pool_readiness","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":26,"state":{"kind":"advancing"}},"unix_ms":1788702363545}
+[FLEET-MEASURE] {"progress":{"applied_effects":26,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"terminal_verification","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":26,"state":{"kind":"advancing"}},"unix_ms":1788702365471}
+[FLEET-MEASURE] {"progress":{"applied_effects":26,"operation_id":"af258f48b9f221ad3896429cce3c53b09637bd3b7f9b39a3f2302686bece5c16","phase":"complete","plan_sha256":"af9819d8880be5fd1e8524dab6fdbb5ce94313c24d6f78743ff0e23a6fbb5c9f","reviewed_effects":26,"state":{"kind":"complete"}},"unix_ms":1788702385408}
+[WASM]       SIZE   fleet_coordinator/candidate.wasm  code=4.27 MiB (4479609 B)  headroom=5.73 MiB (6006151 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2638261 B)  headroom=7.48 MiB (7847499 B)
+[WASM]       SIZE   app/candidate.wasm  code=2.53 MiB (2652542 B)  headroom=7.47 MiB (7833218 B)
+[WASM]       SIZE   root/candidate.wasm  code=7.65 MiB (8019528 B)  headroom=2.35 MiB (2466232 B)
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"infrastructure","plan_sha256":"afa46c4588e7d0138601c1b9965a3fc9501ac7c96f7671a7bcb3d55064ff0532","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1788702423519}
+[FLEET-MEASURE] {"progress":{"applied_effects":1,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"infrastructure","plan_sha256":"afa46c4588e7d0138601c1b9965a3fc9501ac7c96f7671a7bcb3d55064ff0532","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1788702440002}
+[FLEET-MEASURE] {"progress":{"applied_effects":3,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"terminal_verification","plan_sha256":"afa46c4588e7d0138601c1b9965a3fc9501ac7c96f7671a7bcb3d55064ff0532","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1788702447911}
+[FLEET-MEASURE] {"progress":{"applied_effects":3,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"infrastructure","plan_sha256":"afa46c4588e7d0138601c1b9965a3fc9501ac7c96f7671a7bcb3d55064ff0532","reviewed_effects":3,"state":{"kind":"prerequisite_complete"}},"unix_ms":1788702450938}
+[FLEET-MEASURE] {"progress":{"applied_effects":3,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"infrastructure","plan_sha256":"afa46c4588e7d0138601c1b9965a3fc9501ac7c96f7671a7bcb3d55064ff0532","reviewed_effects":3,"state":{"kind":"prerequisite_complete"}},"unix_ms":1788702454019}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"infrastructure","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":2,"state":{"kind":"advancing"}},"unix_ms":1788702476323}
+[FLEET-MEASURE] {"progress":{"applied_effects":2,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"terminal_verification","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":2,"state":{"kind":"advancing"}},"unix_ms":1788702493715}
+[FLEET-MEASURE] {"progress":{"applied_effects":2,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"terminal_verification","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":4,"state":{"kind":"prerequisite_complete"}},"unix_ms":1788702506043}
+[FLEET-MEASURE] {"progress":{"applied_effects":2,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"import_reconciliation","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":4,"state":{"kind":"advancing"}},"unix_ms":1788702506043}
+[FLEET-MEASURE] {"progress":{"applied_effects":4,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"terminal_verification","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":4,"state":{"kind":"advancing"}},"unix_ms":1788702522132}
+[FLEET-MEASURE] {"progress":{"applied_effects":4,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"terminal_verification","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"prerequisite_complete"}},"unix_ms":1788702535674}
+[FLEET-MEASURE] {"progress":{"applied_effects":4,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"control_plane","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"advancing"}},"unix_ms":1788702535674}
+[FLEET-MEASURE] {"progress":{"applied_effects":16,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"workload_provisioning","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"advancing"}},"unix_ms":1788702579558}
+[FLEET-MEASURE] {"progress":{"applied_effects":16,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"workload_provisioning","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"awaiting_progress"}},"unix_ms":1788702583957}
+[FLEET-MEASURE] {"progress":{"applied_effects":16,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"workload_provisioning","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"awaiting_progress"}},"unix_ms":1788702586874}
+[FLEET-MEASURE] {"progress":{"applied_effects":16,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"workload_provisioning","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"awaiting_progress"}},"unix_ms":1788702588106}
+[FLEET-MEASURE] {"progress":{"applied_effects":16,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"workload_provisioning","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"awaiting_progress"}},"unix_ms":1788702589241}
+[FLEET-MEASURE] {"progress":{"applied_effects":17,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"pool_readiness","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"advancing"}},"unix_ms":1788702590416}
+[FLEET-MEASURE] {"progress":{"applied_effects":18,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"terminal_verification","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"advancing"}},"unix_ms":1788702592340}
+[FLEET-MEASURE] {"progress":{"applied_effects":18,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"complete","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"complete"}},"unix_ms":1788702612451}
+[FLEET-MEASURE] {"progress":{"applied_effects":18,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"complete","plan_sha256":"76256a4a1c1dbd3716939961cbfa104d283ae469dbdf31f58dbc70b3f582a1ef","reviewed_effects":18,"state":{"kind":"complete"}},"unix_ms":1788702632799}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"terminal_verification","plan_sha256":"d0041d2517bbd16631a47e91e09e5bb75c3514113c72df7642581744ce581267","reviewed_effects":0,"state":{"kind":"advancing"}},"unix_ms":1788702666312}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"b213263f3f37732e9aaf67f82672953a2d968823be6b429418dc3bcae3c197b6","phase":"complete","plan_sha256":"d0041d2517bbd16631a47e91e09e5bb75c3514113c72df7642581744ce581267","reviewed_effects":0,"state":{"kind":"complete"}},"unix_ms":1788702686459}
+[FLEET]      RUN    generated changed-release reinstall, recovery and replay complete
+[FLEET]      DONE   generated reinstall journey complete                 8m 41s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 522.04s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=480944 kB high_water=495900 kB threads=20
+==> targeted canic-testing-internal PocketIC proof done in 544s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  544s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 545s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.SrfECh

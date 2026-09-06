@@ -79,7 +79,7 @@ if rg "ops::replay|ReplayReceipt|ReplayPayloadHasher|ReplayReceiptDecision|Repla
     failed=1
 fi
 
-if rg "RootDelegatedRoleGrantPolicy|RootDelegationAudiencePolicy|\bRootIssuerPolicy\b|AuthStateOps::upsert_root_issuer_policy|fn root_issuer_policy_|fn validate_root_issuer_policy_upsert_request" crates/canic-core/src/api --glob '*.rs' --glob '!**/tests.rs'; then
+if rg "RootDelegatedRoleGrantPolicy|RootDelegationAudiencePolicy|\bRootIssuerPolicy\b|RootDelegationStateOps::upsert_root_issuer_policy|fn root_issuer_policy_|fn validate_root_issuer_policy_upsert_request" crates/canic-core/src/api --glob '*.rs' --glob '!**/tests.rs'; then
     echo "api must delegate root issuer policy upsert handling to auth ops" >&2
     failed=1
 fi

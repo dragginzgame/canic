@@ -4,6 +4,8 @@
 //! Does not own: storage, clocks, transport, live observation, or effects.
 //! Boundary: workflow supplies exact desired/live inputs and persists the returned immutable plan.
 
+pub(in crate::fleet_ensure) mod root_reinstall;
+
 use crate::{
     component_topology::{
         RootPoolImportCapacityError, RootPoolImportCapacityInput,
@@ -16,13 +18,17 @@ use crate::{
         EstateFundingDomainPlan, EstatePoolAssetLifecycle, FLEET_ENSURE_SCHEMA_VERSION,
         FleetEnsurePlan, FleetEnsurePlanScope, FleetObservation, InstallMode, LiveCanister,
         MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
-        RetainedRootStartAuthorityRecord, RetainedRootStartBinding, RootManagementObservation,
+        RetainedRootStartAuthorityRecord, RootManagementBinding, RootManagementObservation,
         RootOwnedCanisterLifecycle,
     },
 };
 use candid::Principal;
 use canic_core::{
     cdk::types::Cycles,
+    control_plane_support::model::fleet_funding_policy::{
+        FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
+        validate_fleet_root_funding_capacity, validate_fleet_subnet_root_funding_authority,
+    },
     ids::{FleetName, FleetSubnetCanisterPoolConfig},
 };
 use sha2::{Digest, Sha256};
@@ -33,6 +39,18 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum EnsurePolicyError {
+    #[error(
+        "Root {root} requires {workloads} Workloads plus {ready_floor} Ready assets, exceeding pool maximum {maximum_size}"
+    )]
+    TerminalPoolCapacity {
+        root: String,
+        workloads: u32,
+        ready_floor: u32,
+        maximum_size: u32,
+    },
+    #[error("invalid protected funding policy: {0}")]
+    FundingPolicy(#[from] FleetFundingPolicyValidationError),
+
     #[error("cycle arithmetic overflow while compiling {field}")]
     ArithmeticOverflow { field: &'static str },
 
@@ -183,8 +201,8 @@ pub enum EnsurePolicyError {
     #[error("retained pool asset {name} has no exact Root-owned lifecycle observation")]
     MissingPoolLifecycle { name: String },
 
-    #[error("retained pool evidence cannot be fenced by an exact reinstall of {name}")]
-    RecoveryReinstallUnavailable { name: String },
+    #[error("canister {name} is not an exact present infrastructure reinstall target")]
+    InvalidInfrastructureReinstall { name: String },
 
     #[error("Root-owned canister {name} is still awaiting exact current balance observation")]
     PendingRootOwnedBalance { name: String },
@@ -276,7 +294,7 @@ pub fn compile_plan(
     }
     let operation_id = operation_id(desired_sha256, &desired.environment, requested_fleet);
     let mut accumulator = PlanAccumulator::new();
-    let recovery_reinstalls = recovery_reinstall_canisters(desired, observation)?;
+    let reviewed_reinstalls = reviewed_reinstall_canisters(desired, observation)?;
 
     for (index, configured) in desired.canisters.iter().enumerate() {
         let observed = observation
@@ -301,12 +319,12 @@ pub fn compile_plan(
             cycle_policy,
             bounds,
             action_time,
-            recovery_reinstalls.contains(&configured.name),
+            reviewed_reinstalls.contains(&configured.name),
             &mut accumulator,
         )?;
         accumulator.canisters.push(plan);
     }
-    for name in &recovery_reinstalls {
+    for name in &reviewed_reinstalls {
         let has_exact_reinstall = accumulator.canisters.iter().any(|canister| {
             canister.name == *name
                 && canister.actions.iter().any(|action| {
@@ -320,7 +338,7 @@ pub fn compile_plan(
                 })
         });
         if !has_exact_reinstall {
-            return Err(EnsurePolicyError::RecoveryReinstallUnavailable { name: name.clone() });
+            return Err(EnsurePolicyError::InvalidInfrastructureReinstall { name: name.clone() });
         }
     }
 
@@ -412,6 +430,49 @@ pub fn compile_plan(
                     .is_some_and(|live| live.principal == *principal)
         });
         let operation_matches = match current_action.as_ref() {
+            CurrentFleetProtocolAction::MaintainPoolReadiness {
+                maximum_updates,
+                minimum_ready,
+                readiness_floor,
+            } => pool_readiness_authority_matches(
+                desired,
+                observation,
+                principal,
+                *minimum_ready,
+                readiness_floor,
+                Some(*maximum_updates),
+            ),
+            CurrentFleetProtocolAction::ObservePoolReadiness {
+                minimum_ready,
+                readiness_floor,
+            } => pool_readiness_authority_matches(
+                desired,
+                observation,
+                principal,
+                *minimum_ready,
+                readiness_floor,
+                None,
+            ),
+            CurrentFleetProtocolAction::ReconcilePoolAsset {
+                request,
+                minimum_cycles,
+            } => observation
+                .estate_funding_domains
+                .iter()
+                .any(|(_root, domain)| {
+                    domain.root_principal.as_deref() == Some(principal)
+                        && domain.pool.as_ref().is_some_and(|pool| {
+                            minimum_cycles.to_u128() == pool.readiness_floor_cycles
+                                && pool.assets.iter().any(|asset| {
+                                    asset.principal == request.canister_id.to_text()
+                                        && matches!(
+                                            asset.lifecycle,
+                                            EstatePoolAssetLifecycle::PendingReset
+                                                | EstatePoolAssetLifecycle::Failed
+                                        )
+                                })
+                        })
+                }),
             CurrentFleetProtocolAction::ProvisionComponents { request, .. } => {
                 canic_core::cdk::utils::hash::decode_hex(&operation_id)
                     .ok()
@@ -449,7 +510,7 @@ pub fn compile_plan(
             maximum: MAX_FLEET_ENSURE_PROTOCOL_STEPS,
         });
     }
-    if recovery_reinstalls.is_empty() && protocol_actions.is_empty() {
+    if reviewed_reinstalls.is_empty() && protocol_actions.is_empty() {
         let pending = desired.canisters.iter().find_map(|configured| {
             observation
                 .canisters
@@ -493,7 +554,41 @@ pub fn compile_plan(
         &mut protocol_actions,
     )?;
 
-    let estate_funding_domains = compile_estate_funding_domains(desired, observation, bounds)?;
+    let continuation = artifacts.continuation.clone().filter(|_| {
+        !accumulator.canisters.is_empty()
+            && (accumulator
+                .canisters
+                .iter()
+                .all(|canister| canister.disposition == CanisterDisposition::Create)
+                || (accumulator
+                    .canisters
+                    .iter()
+                    .any(|canister| canister.disposition == CanisterDisposition::Reinstall)
+                    && accumulator.canisters.iter().all(|canister| {
+                        matches!(
+                            canister.disposition,
+                            CanisterDisposition::Reuse | CanisterDisposition::Reinstall
+                        )
+                    })))
+            && desired.protocol_steps.is_empty()
+            && protocol_actions.is_empty()
+    });
+    let reconciliation_only = !protocol_actions.is_empty() && protocol_actions.iter().all(|action| matches!(action,
+        EnsureAction::FleetProtocol { action, .. } if matches!(action.as_ref(), CurrentFleetProtocolAction::ReconcilePoolAsset { .. })
+    ));
+    append_pool_reconciliation_funding(
+        desired,
+        observation,
+        &protocol_actions,
+        bounds,
+        created_at_time,
+        &mut accumulator,
+    )?;
+    // Infrastructure replacement must finish before owned imports can become Ready.
+    // Its sealed continuation reviews only protocol effects, never extra creation debit.
+    let defer_pool_creation = reconciliation_only || continuation.is_some();
+    let estate_funding_domains =
+        compile_estate_funding_domains(desired, observation, bounds, defer_pool_creation)?;
     append_estate_funding_actions(
         &estate_funding_domains,
         created_at_time,
@@ -514,6 +609,23 @@ pub fn compile_plan(
                 field: "observation burn",
             })?,
     )?;
+
+    if let Some(authority) = &continuation {
+        let per_step = bounds
+            .observation_burn
+            .checked_mul(3)
+            .and_then(|burn| burn.checked_add(bounds.update_burn))
+            .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                field: "successor burn bound",
+            })?;
+        accumulator.add_burn(
+            per_step
+                .checked_mul(u128::from(authority.maximum_successor_actions))
+                .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                    field: "successor burn bound",
+                })?,
+        )?;
+    }
 
     let observed_estate_funding_cycles =
         estate_funding_domains
@@ -581,6 +693,7 @@ pub fn compile_plan(
         scheduled_transfer_cycles: accumulator.transfers,
     };
     let mut plan = FleetEnsurePlan {
+        continuation,
         canisters: accumulator.canisters,
         conservation,
         desired_sha256: desired_sha256.to_string(),
@@ -590,6 +703,7 @@ pub fn compile_plan(
         plan_sha256: String::new(),
         planned_at_time: created_at_time,
         protocol_actions,
+        root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: Some(Box::new(
             crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(desired),
@@ -600,6 +714,144 @@ pub fn compile_plan(
     };
     plan.plan_sha256 = expected_plan_sha256(&plan);
     Ok(plan)
+}
+
+fn pool_readiness_authority_matches(
+    desired: &DesiredFleet,
+    observation: &FleetObservation,
+    principal: &str,
+    minimum_ready: u32,
+    readiness_floor: &Cycles,
+    maximum_updates: Option<u32>,
+) -> bool {
+    let network_matches = desired.bootstrap.as_ref().is_some_and(|bootstrap| {
+        let mainnet =
+            bootstrap.canonical_network_id == canic_core::ids::CanonicalNetworkId::ic_mainnet();
+        (mainnet && !bootstrap.fresh_estate) == maximum_updates.is_some()
+    });
+    network_matches
+        && observation
+            .estate_funding_domains
+            .iter()
+            .any(|(root, domain)| {
+                domain.root_principal.as_deref() == Some(principal)
+                    && desired_root_pool_policy(desired, root).is_ok_and(|pool| {
+                        pool.minimum_size == minimum_ready
+                            && pool.canister_cycles == *readiness_floor
+                            && maximum_updates.is_none_or(|maximum| {
+                                maximum == pool_maintenance_update_bound(minimum_ready)
+                            })
+                    })
+            })
+}
+
+/// Fund exact retained inventory assets before their separately journalled Root reconciliation.
+fn append_pool_reconciliation_funding(
+    desired: &DesiredFleet,
+    observation: &FleetObservation,
+    protocol_actions: &[EnsureAction],
+    bounds: CycleBounds,
+    created_at_time: u64,
+    accumulator: &mut PlanAccumulator,
+) -> Result<(), EnsurePolicyError> {
+    for (index, action) in protocol_actions.iter().enumerate() {
+        let EnsureAction::FleetProtocol {
+            action,
+            principal: root,
+            name,
+            ..
+        } = action
+        else {
+            continue;
+        };
+        let CurrentFleetProtocolAction::ReconcilePoolAsset { request, .. } = action.as_ref() else {
+            continue;
+        };
+        let principal = request.canister_id.to_text();
+        let pool = observation
+            .estate_funding_domains
+            .values()
+            .find(|domain| domain.root_principal.as_deref() == Some(root))
+            .and_then(|domain| domain.pool.as_ref())
+            .ok_or_else(|| EnsurePolicyError::InvalidProtocolStep(name.clone()))?;
+        let asset = pool
+            .assets
+            .iter()
+            .find(|asset| asset.principal == principal)
+            .ok_or_else(|| EnsurePolicyError::InvalidProtocolStep(name.clone()))?;
+        let minimum = checked_add(
+            pool.readiness_floor_cycles,
+            pool.creation_execution_margin_cycles,
+            "pool recovery target",
+        )?;
+        if asset.cycles >= minimum {
+            continue;
+        }
+        let margin = checked_add(
+            bounds.observation_burn,
+            bounds.update_burn,
+            "pool reconciliation burn",
+        )?;
+        let deficit = minimum - asset.cycles;
+        let amount = checked_add(deficit, margin, "pool reconciliation funding")?;
+        let expected_post_cycles =
+            checked_add(asset.cycles, amount, "pool reconciliation post balance")?;
+        let offset = desired
+            .canisters
+            .len()
+            .checked_add(index)
+            .and_then(|value| u64::try_from(value).ok())
+            .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                field: "pool funding timestamp",
+            })?;
+        let action_time =
+            created_at_time
+                .checked_add(offset)
+                .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                    field: "pool funding timestamp",
+                })?;
+        let plan_index = if let Some(index) = accumulator
+            .canisters
+            .iter()
+            .position(|plan| plan.principal.as_deref() == Some(&principal))
+        {
+            index
+        } else {
+            accumulator.canisters.push(CanisterPlan {
+                actions: Vec::new(),
+                disposition: CanisterDisposition::Reuse,
+                name: name.clone(),
+                observed_cycles: asset.cycles,
+                principal: Some(principal.clone()),
+            });
+            accumulator.canisters.len() - 1
+        };
+        let target_name = accumulator.canisters[plan_index].name.clone();
+        // A retained Failed/PendingReset row is fenced from ordinary configured-target funding.
+        if accumulator.canisters[plan_index]
+            .actions
+            .iter()
+            .any(|action| matches!(action, EnsureAction::Fund { .. }))
+        {
+            return Err(EnsurePolicyError::InvalidProtocolStep(name.clone()));
+        }
+        accumulator.canisters[plan_index]
+            .actions
+            .push(EnsureAction::Fund {
+                pool_root: Some(root.clone()),
+                amount,
+                created_at_time: action_time,
+                expected_post_cycles,
+                funding_deficit_cycles: deficit,
+                funding_margin_cycles: margin,
+                ledger: desired.cycles_ledger.clone(),
+                name: target_name,
+                principal,
+            });
+        accumulator.add_funding(amount)?;
+        accumulator.add_fee(bounds.ledger_fee)?;
+    }
+    Ok(())
 }
 
 fn append_estate_funding_actions(
@@ -783,10 +1035,10 @@ fn compile_root_start_plan(
                 name: configured.name.clone(),
             }
         })?;
-        root_start_bindings.push(RetainedRootStartBinding {
+        root_start_bindings.push(RootManagementBinding {
             controllers: actual_controllers.clone(),
             name: configured.name.clone(),
-            predecessor_module_sha256: observed_module.to_string(),
+            module_sha256: observed_module.to_string(),
             principal: observed.live.principal.clone(),
             subnet: observed.subnet.clone(),
         });
@@ -801,11 +1053,12 @@ fn compile_root_start_plan(
             observed.live.cycles,
             "Root-start observed cycles",
         )?;
+        let actions = vec![EnsureAction::Start {
+            name: configured.name.clone(),
+            principal: observed.live.principal.clone(),
+        }];
         canisters.push(CanisterPlan {
-            actions: vec![EnsureAction::Start {
-                name: configured.name.clone(),
-                principal: observed.live.principal.clone(),
-            }],
+            actions,
             disposition: CanisterDisposition::Reuse,
             name: configured.name.clone(),
             observed_cycles: observed.live.cycles,
@@ -833,10 +1086,15 @@ fn compile_root_start_plan(
             name: "Root-start prerequisite".to_string(),
         });
     }
-    let target_count =
-        u128::try_from(canisters.len()).map_err(|_| EnsurePolicyError::ArithmeticOverflow {
-            field: "Root-start target count",
-        })?;
+    let target_count = u128::try_from(
+        canisters
+            .iter()
+            .map(|canister| canister.actions.len())
+            .sum::<usize>(),
+    )
+    .map_err(|_| EnsurePolicyError::ArithmeticOverflow {
+        field: "Root-start target count",
+    })?;
     let maximum_execution_burn_cycles = bounds.update_burn.checked_mul(target_count).ok_or(
         EnsurePolicyError::ArithmeticOverflow {
             field: "Root-start execution burn",
@@ -849,6 +1107,7 @@ fn compile_root_start_plan(
         })?;
     let mut plan = FleetEnsurePlan {
         canisters,
+        continuation: None,
         conservation: CycleConservation {
             estate_funding_domains: Vec::new(),
             expected_post_operation_cycles,
@@ -867,6 +1126,7 @@ fn compile_root_start_plan(
         plan_sha256: String::new(),
         planned_at_time: created_at_time,
         protocol_actions: Vec::new(),
+        root_reinstall_bindings: Vec::new(),
         root_start_authority: retained_authority.map(|authority| Box::new(authority.clone())),
         reviewed_desired: Some(Box::new(
             crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(desired),
@@ -883,7 +1143,7 @@ fn validate_root_start_authority<'a>(
     desired: &DesiredFleet,
     requested_fleet: &str,
     authority: Option<&'a RetainedRootStartAuthorityRecord>,
-    root_start_bindings: &[RetainedRootStartBinding],
+    root_start_bindings: &[RootManagementBinding],
     authority_required: bool,
 ) -> Result<Option<&'a RetainedRootStartAuthorityRecord>, EnsurePolicyError> {
     if !authority_required {
@@ -1126,27 +1386,11 @@ fn create_plan(
             configured.controller_canisters.as_slice() == std::slice::from_ref(parent)
         });
     if temporary_pool_observation_controller {
-        let admissible_burn_cycles = checked_add(
-            bounds.observation_burn,
-            bounds.update_burn,
-            "fresh pool pre-import burn",
-        )?;
-        let required_creation_funding_cycles = checked_add(
-            cycle_policy.minimum_cycles,
-            admissible_burn_cycles,
-            "fresh pool creation funding",
-        )?;
-        if cycle_policy.initial_cycles < required_creation_funding_cycles {
-            return Err(EnsurePolicyError::FreshPoolCreationFundingInsufficient {
-                admissible_burn_cycles,
-                creation_funding_cycles: cycle_policy.initial_cycles,
-                name: configured.name.clone(),
-                readiness_floor_cycles: cycle_policy.minimum_cycles,
-                required_creation_funding_cycles,
-                shortfall_cycles: required_creation_funding_cycles - cycle_policy.initial_cycles,
-            });
-        }
+        validate_fresh_pool_creation_funding(&configured.name, cycle_policy, bounds)?;
     }
+    // The first Create balance includes execution as well as observation.
+    // Observation accounting is added independently for every planned action.
+    accumulator.add_burn(bounds.update_burn)?;
     accumulator.add_funding(cycle_policy.initial_cycles)?;
     accumulator.add_fee(bounds.ledger_fee)?;
     accumulator.add_fee(bounds.management_creation_fee)?;
@@ -1212,6 +1456,41 @@ fn create_plan(
             .map(|live| live.principal.clone())
             .or_else(|| configured.principal.clone()),
     })
+}
+
+fn validate_fresh_pool_creation_funding(
+    name: &str,
+    cycle_policy: CanisterCyclePolicy,
+    bounds: CycleBounds,
+) -> Result<(), EnsurePolicyError> {
+    let creation_burn = crate::fleet_ensure::model::creation_observation_burn(
+        bounds.observation_burn,
+        bounds.update_burn,
+    )
+    .ok_or(EnsurePolicyError::ArithmeticOverflow {
+        field: "Create execution and observation burn",
+    })?;
+    let admissible_burn_cycles = checked_add(
+        creation_burn,
+        bounds.update_burn,
+        "fresh pool pre-import burn",
+    )?;
+    let required_creation_funding_cycles = checked_add(
+        cycle_policy.minimum_cycles,
+        admissible_burn_cycles,
+        "fresh pool creation funding",
+    )?;
+    if cycle_policy.initial_cycles < required_creation_funding_cycles {
+        return Err(EnsurePolicyError::FreshPoolCreationFundingInsufficient {
+            admissible_burn_cycles,
+            creation_funding_cycles: cycle_policy.initial_cycles,
+            name: name.to_string(),
+            readiness_floor_cycles: cycle_policy.minimum_cycles,
+            required_creation_funding_cycles,
+            shortfall_cycles: required_creation_funding_cycles - cycle_policy.initial_cycles,
+        });
+    }
+    Ok(())
 }
 
 #[expect(
@@ -1379,6 +1658,11 @@ fn append_target_funding(
     actions.insert(
         0,
         EnsureAction::Fund {
+            pool_root: if configured.kind == DesiredCanisterKind::Pool {
+                live.controllers.first().cloned()
+            } else {
+                None
+            },
             amount,
             created_at_time,
             expected_post_cycles,
@@ -1393,7 +1677,7 @@ fn append_target_funding(
     accumulator.add_fee(bounds.ledger_fee)
 }
 
-fn recovery_reinstall_canisters(
+fn reviewed_reinstall_canisters(
     desired: &DesiredFleet,
     observation: &FleetObservation,
 ) -> Result<BTreeSet<String>, EnsurePolicyError> {
@@ -1414,7 +1698,7 @@ fn recovery_reinstall_canisters(
                 | DesiredCanisterKind::Store
         ) && configured.presence == DesiredPresence::Present;
         if !exact_infrastructure {
-            return Err(EnsurePolicyError::RecoveryReinstallUnavailable {
+            return Err(EnsurePolicyError::InvalidInfrastructureReinstall {
                 name: configured.name.clone(),
             });
         }
@@ -1540,6 +1824,8 @@ fn validate_authority(
     requested_fleet: &str,
 ) -> Result<(), EnsurePolicyError> {
     validate_path_identity(desired, requested_fleet)?;
+    validate_funding_policy(desired)?;
+    validate_terminal_pool_capacity(desired)?;
     if let Some(bootstrap) = &desired.bootstrap {
         for root in &bootstrap.roots {
             validate_bootstrap_root_pool_import_capacity(root)?;
@@ -1701,6 +1987,60 @@ fn validate_authority(
         });
     }
     Ok(())
+}
+
+/// Apply the runtime's protected funding invariants before reviewing any effects.
+pub fn validate_funding_policy(desired: &DesiredFleet) -> Result<(), EnsurePolicyError> {
+    let Some(bootstrap) = &desired.bootstrap else {
+        return Ok(());
+    };
+    let ic_mainnet =
+        bootstrap.canonical_network_id == canic_core::ids::CanonicalNetworkId::ic_mainnet();
+    for root in &bootstrap.roots {
+        validate_fleet_subnet_root_funding_authority(&root.funding, ic_mainnet)?;
+    }
+    if let Some(coordinator) = &bootstrap.root_funding {
+        validate_coordinator_root_funding_policy(coordinator)?;
+        validate_fleet_root_funding_capacity(
+            coordinator,
+            bootstrap.roots.iter().map(|root| &root.funding),
+        )?;
+    }
+    Ok(())
+}
+
+/// Prove terminal workload and reserve capacity before any external effect.
+pub fn validate_terminal_pool_capacity(desired: &DesiredFleet) -> Result<(), EnsurePolicyError> {
+    let Some(bootstrap) = &desired.bootstrap else {
+        return Ok(());
+    };
+    if desired.protocol.is_none() {
+        return Ok(());
+    }
+    for root in &bootstrap.roots {
+        let workloads = desired_initial_root_workloads(desired, &root.root)?;
+        let pool = &root.limits.canister_pool;
+        terminal_pool_supply(&root.root, workloads, pool.minimum_size, pool.maximum_size)?;
+    }
+    Ok(())
+}
+
+/// Require physical capacity for the complete Workload tree and the independent Ready reserve.
+pub(super) fn terminal_pool_supply(
+    root: &str,
+    workloads: u32,
+    ready_floor: u32,
+    maximum_size: u32,
+) -> Result<u32, EnsurePolicyError> {
+    workloads
+        .checked_add(ready_floor)
+        .filter(|total| *total <= maximum_size)
+        .ok_or_else(|| EnsurePolicyError::TerminalPoolCapacity {
+            root: root.to_string(),
+            workloads,
+            ready_floor,
+            maximum_size,
+        })
 }
 
 fn validate_bootstrap_root_pool_import_capacity(
@@ -1950,6 +2290,7 @@ fn compile_estate_funding_domains(
     desired: &DesiredFleet,
     observation: &FleetObservation,
     bounds: CycleBounds,
+    defer_pool_creation: bool,
 ) -> Result<Vec<EstateFundingDomainPlan>, EnsurePolicyError> {
     let Some(bootstrap) = desired.bootstrap.as_ref() else {
         if observation.estate_funding_domains.is_empty() {
@@ -1973,6 +2314,7 @@ fn compile_estate_funding_domains(
             root,
             observation,
             bounds,
+            defer_pool_creation,
         )?);
     }
     Ok(domains)
@@ -1983,6 +2325,7 @@ fn compile_estate_funding_domain(
     root: &DesiredFleetBootstrapRoot,
     observation: &FleetObservation,
     bounds: CycleBounds,
+    defer_pool_creation: bool,
 ) -> Result<EstateFundingDomainPlan, EnsurePolicyError> {
     let observed = observation
         .estate_funding_domains
@@ -1999,6 +2342,7 @@ fn compile_estate_funding_domain(
         asset_cycles,
         bounds.management_creation_fee,
         observation,
+        defer_pool_creation,
     )?;
     let creation_execution_margin_cycles = root
         .limits
@@ -2156,6 +2500,7 @@ fn required_root_pool_creations(
     required_asset_cycles: u128,
     management_creation_fee: u128,
     observation: &FleetObservation,
+    defer_pool_creation: bool,
 ) -> Result<RootPoolCreationForecast, EnsurePolicyError> {
     let workload_count = desired_initial_root_workloads(desired, root)?;
     let desired_pool = desired_root_pool_policy(desired, root)?;
@@ -2166,6 +2511,42 @@ fn required_root_pool_creations(
             reason: format!("Root {root} has no funding-account observation"),
         })?;
     if let Some(pool) = domain.pool.as_ref() {
+        if defer_pool_creation {
+            let pending = pending_pool_creation_forecast(
+                root,
+                pool,
+                desired_pool,
+                required_asset_cycles,
+                management_creation_fee,
+            )?;
+            let counts = observed_pool_counts(pool, pending.unmaterialized, required_asset_cycles)?;
+            if counts.occupied_assets > desired_pool.maximum_size {
+                return Err(EnsurePolicyError::EstatePoolCapacity {
+                    allocated_workloads: counts.allocated_workloads,
+                    available_slots: 0,
+                    capacity_shortfall: counts.occupied_assets - desired_pool.maximum_size,
+                    eligible_ready_assets: counts.eligible_ready_assets,
+                    maximum_size: desired_pool.maximum_size,
+                    occupied_assets: counts.occupied_assets,
+                    pending_creations: pending.unmaterialized,
+                    required_creation_count: 0,
+                    root: root.to_string(),
+                });
+            }
+            // Infrastructure and import reconciliation restore owned capacity first.
+            // Observe real Ready receipts before reviewing creation or Ledger-account funding.
+            return Ok(RootPoolCreationForecast {
+                allocated_workloads: counts.allocated_workloads,
+                available_slots: desired_pool.maximum_size - counts.occupied_assets,
+                eligible_ready_assets: counts.eligible_ready_assets,
+                maximum_size: desired_pool.maximum_size,
+                occupied_assets: counts.occupied_assets,
+                pending_creations: pending.unmaterialized,
+                pending_creation: pool.pending_creation.clone(),
+                planned_workloads: workload_count,
+                required_creation_count: 0,
+            });
+        }
         return forecast_observed_root_pool(
             root,
             pool,
@@ -2211,7 +2592,7 @@ fn forecast_configured_root_pool(
     observation: &FleetObservation,
     root: &str,
     workload_count: u32,
-    ready_floor: u32,
+    _ready_floor: u32,
     required_asset_cycles: u128,
     maximum_size: u32,
 ) -> Result<RootPoolCreationForecast, EnsurePolicyError> {
@@ -2231,14 +2612,6 @@ fn forecast_configured_root_pool(
                     .get(&canister.name)
                     .and_then(Option::as_ref);
                 match live.map(|live| (live.root_owned_lifecycle, live.cycles)) {
-                    None => Ok((
-                        ready
-                            .checked_add(1)
-                            .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                                field: "planned Ready-pool asset count",
-                            })?,
-                        workload,
-                    )),
                     Some((Some(RootOwnedCanisterLifecycle::Idle), cycles))
                         if cycles >= required_asset_cycles =>
                     {
@@ -2269,12 +2642,9 @@ fn forecast_configured_root_pool(
                 }
             },
         )?;
-    let required_creation_count = required_estate_creation_count(
-        workload_count,
-        ready_floor,
-        reusable_ready_assets,
-        completed_workloads,
-    )?;
+    // Infrastructure prerequisites cannot promise Root readiness. Replan from protected
+    // inventory after installation and reviewed import reconciliation before estate funding.
+    let required_creation_count = 0;
     let occupied_assets = reusable_ready_assets
         .checked_add(completed_workloads)
         .ok_or(EnsurePolicyError::ArithmeticOverflow {
@@ -2487,42 +2857,53 @@ fn desired_initial_root_workloads(
             .ok_or_else(|| EnsurePolicyError::EstateFundingTopology {
                 reason: "estate workload forecast requires typed Fleet protocol".to_string(),
             })?;
-    let configuration = &bootstrap.component_deployment_configuration;
-    protocol
-        .component_group_placements
-        .iter()
-        .filter(|placement| placement.root == root)
-        .try_fold(0_u32, |total, placement| {
-            let deployment = configuration
-                .deployment_topology
-                .component_group_deployments
+    initial_workload_count(
+        &bootstrap.component_deployment_configuration,
+        protocol
+            .component_group_placements
+            .iter()
+            .filter(|placement| placement.root == root)
+            .map(|placement| placement.deployment.as_str()),
+        root,
+    )
+}
+
+/// Count every initial top-level and descendant Workload from the shared compiled topology.
+pub(super) fn initial_workload_count<'a>(
+    configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+    mut deployments: impl Iterator<Item = &'a str>,
+    root: &str,
+) -> Result<u32, EnsurePolicyError> {
+    deployments.try_fold(0_u32, |total, deployment_name| {
+        let deployment = configuration
+            .deployment_topology
+            .component_group_deployments
+            .iter()
+            .find(|deployment| deployment.deployment.as_str() == deployment_name)
+            .ok_or_else(|| EnsurePolicyError::EstateFundingTopology {
+                reason: format!(
+                    "Root {root} placement references unknown deployment {deployment_name}"
+                ),
+            })?;
+        deployment.members.iter().try_fold(total, |total, member| {
+            let spec = configuration
+                .component_topology
+                .component_specs
                 .iter()
-                .find(|deployment| deployment.deployment.as_str() == placement.deployment)
+                .find(|spec| spec.component_spec == member.component_spec)
                 .ok_or_else(|| EnsurePolicyError::EstateFundingTopology {
                     reason: format!(
-                        "Root {root} placement references unknown deployment {}",
-                        placement.deployment
+                        "Root {root} deployment references unknown Component Spec {}",
+                        member.component_spec
                     ),
                 })?;
-            deployment.members.iter().try_fold(total, |total, member| {
-                let spec = configuration
-                    .component_topology
-                    .component_specs
-                    .iter()
-                    .find(|spec| spec.component_spec == member.component_spec)
-                    .ok_or_else(|| EnsurePolicyError::EstateFundingTopology {
-                        reason: format!(
-                            "Root {root} deployment references unknown Component Spec {}",
-                            member.component_spec
-                        ),
-                    })?;
-                total.checked_add(initial_role_tree_size(spec)?).ok_or(
-                    EnsurePolicyError::ArithmeticOverflow {
-                        field: "estate initial workload count",
-                    },
-                )
-            })
+            total.checked_add(initial_role_tree_size(spec)?).ok_or(
+                EnsurePolicyError::ArithmeticOverflow {
+                    field: "estate initial workload count",
+                },
+            )
         })
+    })
 }
 
 fn required_estate_creation_count(
@@ -2745,6 +3126,38 @@ fn maximum_observation_count(
         })
 }
 
+/// Exact conservative reservation for a protocol-only successor over fresh known identities.
+pub(super) fn successor_phase_burn(
+    desired: &DesiredFleet,
+    plan: &FleetEnsurePlan,
+) -> Result<u128, EnsurePolicyError> {
+    let bounds = cycle_bounds(desired)?;
+    let observations =
+        maximum_observation_count(desired, &plan.canisters, &plan.protocol_actions, 0)?;
+    let mut total = bounds.observation_burn.checked_mul(observations).ok_or(
+        EnsurePolicyError::ArithmeticOverflow {
+            field: "successor observation burn",
+        },
+    )?;
+    for action in &plan.protocol_actions {
+        let EnsureAction::FleetProtocol {
+            maximum_execution_burn_cycles,
+            ..
+        } = action
+        else {
+            return Err(EnsurePolicyError::InvalidProtocolStep(
+                action.name().to_string(),
+            ));
+        };
+        total = checked_add(
+            total,
+            *maximum_execution_burn_cycles,
+            "successor execution burn",
+        )?;
+    }
+    Ok(total)
+}
+
 fn terminal_protocol_observation_bound(
     desired: &DesiredFleet,
     protocol_actions: &[EnsureAction],
@@ -2800,6 +3213,11 @@ pub(super) struct EffectObservationPolicy {
     pub paced: bool,
 }
 
+/// Bound command-driven creation and lost-response reconciliation within one reviewed action.
+pub(super) const fn pool_maintenance_update_bound(minimum_ready: u32) -> u32 {
+    minimum_ready.saturating_mul(2).saturating_add(16)
+}
+
 /// Keep ordinary effects on the configured bound while giving the one
 /// long-running protocol operation a topology-derived, globally bounded lane.
 pub(super) fn effect_observation_policy(
@@ -2815,6 +3233,18 @@ pub(super) fn effect_observation_policy(
             paced: false,
         });
     };
+    if matches!(
+        current.as_ref(),
+        CurrentFleetProtocolAction::MaintainPoolReadiness { .. }
+            | CurrentFleetProtocolAction::ObservePoolReadiness { .. }
+    ) {
+        return Ok(EffectObservationPolicy {
+            maximum_stalled_observations: desired
+                .maximum_stalled_observations
+                .max(MAXIMUM_PACED_PROTOCOL_STALL_OBSERVATIONS),
+            paced: true,
+        });
+    }
     let crate::fleet_ensure::model::CurrentFleetProtocolAction::ProvisionComponents {
         request, ..
     } = current.as_ref()
@@ -3024,6 +3454,12 @@ fn hash_field(hasher: &mut Sha256, value: &[u8]) {
 
 #[cfg(test)]
 mod tests {
+    use super::{
+        CurrentFleetProtocolAction, CycleBounds, DesiredFleet, FLEET_ENSURE_SCHEMA_VERSION,
+        FleetObservation, append_pool_reconciliation_funding,
+    };
+    use std::collections::BTreeMap;
+
     use super::{
         EnsurePolicyError, PlanAccumulator, append_estate_funding_actions,
         component_provisioning_observation_bound_from_counts, forecast_observed_root_pool,
@@ -3254,6 +3690,125 @@ mod tests {
             Err(EnsurePolicyError::EstateFundingTopology { reason })
                 if reason.contains("unresolved creation response")
         ));
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one complete inventory proof binds funding, retained identities and the no-creation outcome"
+    )]
+    fn full_failed_inventory_funds_exact_retained_assets_without_creating_replacements() {
+        let root = Principal::from_slice(&[10]).to_text();
+        let desired = DesiredFleet {
+            bootstrap: None,
+            canisters: Vec::new(),
+            cycles_ledger: Principal::from_slice(&[11]).to_text(),
+            environment: "local".into(),
+            fleet: "repair".into(),
+            ledger_fee_cycles: "5".into(),
+            management_creation_fee_cycles: "500".into(),
+            material_cycle_threshold: "1".into(),
+            maximum_observation_burn_cycles: "10".into(),
+            maximum_stalled_observations: 8,
+            maximum_update_burn_cycles: "20".into(),
+            operator: Principal::from_slice(&[12]).to_text(),
+            protocol: None,
+            protocol_steps: Vec::new(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            treasury: "coordinator".into(),
+        };
+        let mut pool = observed_pool([
+            EstatePoolAssetLifecycle::Workload,
+            EstatePoolAssetLifecycle::Workload,
+            EstatePoolAssetLifecycle::Workload,
+            EstatePoolAssetLifecycle::Workload,
+            EstatePoolAssetLifecycle::Failed,
+            EstatePoolAssetLifecycle::Failed,
+            EstatePoolAssetLifecycle::Failed,
+            EstatePoolAssetLifecycle::Failed,
+        ]);
+        let mut actions = Vec::new();
+        for (index, asset) in pool.assets.iter_mut().enumerate() {
+            let canister_id =
+                Principal::from_slice(&[u8::try_from(index + 20).expect("bounded asset")]);
+            asset.principal = canister_id.to_text();
+            if asset.lifecycle == EstatePoolAssetLifecycle::Failed {
+                asset.cycles -= 1;
+                actions.push(EnsureAction::FleetProtocol {
+                    action: Box::new(CurrentFleetProtocolAction::ReconcilePoolAsset {
+                        request: canic_core::dto::pool::PoolCanisterRequest { canister_id },
+                        minimum_cycles: Cycles::new(pool.readiness_floor_cycles),
+                    }),
+                    candid: "root.did".into(),
+                    candid_sha256: "42".repeat(32),
+                    maximum_execution_burn_cycles: 20,
+                    name: format!("pool-reconcile-{canister_id}"),
+                    principal: root.clone(),
+                });
+            }
+        }
+        assert!(matches!(
+            forecast_observed_root_pool("root", &pool, &pool_policy(4, 8), 4, 4, 1_900, 500),
+            Err(EnsurePolicyError::EstatePoolCapacity {
+                capacity_shortfall: 4,
+                ..
+            })
+        ));
+        let observation = FleetObservation {
+            additional_controlled_cycles: pool
+                .assets
+                .iter()
+                .map(|asset| (asset.principal.clone(), asset.cycles))
+                .collect(),
+            canisters: BTreeMap::new(),
+            estate_funding_domains: BTreeMap::from([(
+                "root".into(),
+                crate::fleet_ensure::model::EstateFundingDomainObservation {
+                    balance_cycles: Some(0),
+                    cycles_ledger: desired.cycles_ledger.clone(),
+                    pool: Some(pool.clone()),
+                    root_principal: Some(root.clone()),
+                },
+            )]),
+            ledger_fee_cycles: 5,
+            operator_cycles: 10_000,
+            protocol_ready: BTreeMap::new(),
+        };
+        let mut accumulator = PlanAccumulator::new();
+        append_pool_reconciliation_funding(
+            &desired,
+            &observation,
+            &actions,
+            CycleBounds {
+                ledger_fee: 5,
+                management_creation_fee: 500,
+                material_threshold: 1,
+                observation_burn: 10,
+                update_burn: 20,
+            },
+            100,
+            &mut accumulator,
+        )
+        .expect("review recovery funding");
+        assert_eq!(accumulator.new_funding, 4 * 131);
+        assert_eq!(accumulator.fees, 4 * 5);
+        for plan in &accumulator.canisters {
+            assert!(matches!(plan.actions.as_slice(), [EnsureAction::Fund {
+                pool_root: Some(bound_root), principal, amount: 131, expected_post_cycles: 2_030,
+                funding_deficit_cycles: 101, funding_margin_cycles: 30, ..
+            }] if bound_root == &root && Some(principal) == plan.principal.as_ref()));
+        }
+        for asset in &mut pool.assets {
+            if asset.lifecycle == EstatePoolAssetLifecycle::Failed {
+                asset.cycles = 2_000;
+                asset.lifecycle = EstatePoolAssetLifecycle::Ready;
+            }
+        }
+        let recovered =
+            forecast_observed_root_pool("root", &pool, &pool_policy(4, 8), 4, 4, 1_900, 500)
+                .expect("recovered full pool satisfies the same demand");
+        assert_eq!(recovered.eligible_ready_assets, 4);
+        assert_eq!(recovered.required_creation_count, 0);
     }
 
     fn pool_policy(minimum_size: u32, maximum_size: u32) -> FleetSubnetCanisterPoolConfig {

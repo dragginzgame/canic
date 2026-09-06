@@ -4,6 +4,11 @@
 //! Does not own: intent storage schemas, business policy, or endpoint authorization.
 //! Boundary: runtime workflow timer coordinating intent storage cleanup and metrics.
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+use crate::ops::{
+    runtime::metrics::auth::record_application_session_cleanup,
+    storage::auth::LocalApplicationAuthorizationStateOps,
+};
 use crate::{
     InternalError,
     domain::{policy::pure::intent::decide_receipt_replay_window, runtime::FailureSeverity},
@@ -18,18 +23,12 @@ use crate::{
     },
     ops::{
         ic::IcOps,
-        runtime::metrics::{
-            auth::record_application_session_cleanup,
-            intent::{
-                IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
-                IntentMetricSurface, IntentMetrics,
-            },
+        runtime::metrics::intent::{
+            IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
+            IntentMetrics,
         },
         runtime::recent_failure::{RecentFailureInput, RecentFailureOps},
-        storage::{
-            auth::AuthStateOps,
-            intent::{IntentStoreOps, ReceiptBackedIntentOps},
-        },
+        storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
 };
@@ -446,16 +445,23 @@ impl IntentCleanupWorkflow {
                 }
             }
         }
-        let application_session_cleanup_start = crate::perf::perf_counter();
-        let application_sessions = AuthStateOps::cleanup_application_sessions(now_ns)
-            .map_err(|_| InternalError::invariant())?;
-        crate::perf::record_checkpoint(
-            module_path!(),
-            "application_session_cleanup",
-            crate::perf::perf_counter().saturating_sub(application_session_cleanup_start),
-        );
-        let application_sessions_removed = application_sessions.total_removed();
-        record_application_session_cleanup(application_sessions_removed);
+        #[cfg(any(test, feature = "auth-local-application-authorization"))]
+        let application_sessions_removed = {
+            let application_session_cleanup_start = crate::perf::perf_counter();
+            let application_sessions =
+                LocalApplicationAuthorizationStateOps::cleanup_application_sessions(now_ns)
+                    .map_err(|_| InternalError::invariant())?;
+            crate::perf::record_checkpoint(
+                module_path!(),
+                "application_session_cleanup",
+                crate::perf::perf_counter().saturating_sub(application_session_cleanup_start),
+            );
+            let removed = application_sessions.total_removed();
+            record_application_session_cleanup(removed);
+            removed
+        };
+        #[cfg(not(any(test, feature = "auth-local-application-authorization")))]
+        let application_sessions_removed = 0;
         Ok(IntentCleanupBatch {
             application_receipts_removed,
             application_sessions_removed,
@@ -535,7 +541,11 @@ impl IntentCleanupWorkflow {
             .map(Self::deadline_ns)
             .transpose()?;
         let application = ReceiptBackedIntentOps::receipt_capacity()?.next_eligibility_at_ns;
-        let application_session = AuthStateOps::application_session_cleanup_due_at_ns();
+        #[cfg(any(test, feature = "auth-local-application-authorization"))]
+        let application_session =
+            LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns();
+        #[cfg(not(any(test, feature = "auth-local-application-authorization")))]
+        let application_session = None;
         Ok([local, application, application_session]
             .into_iter()
             .flatten()

@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "predecessor_commit": "f1fd3c59f428c57e28a2d6469ee8326f744ed021",
+  "unchanged_archived_files": 3547,
+  "test_only_overlay_files": [
+    "Cargo.lock",
+    "crates/canic-testing-internal/Cargo.toml",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs"
+  ],
+  "custody_proof_wasms": {
+    "canic_cycle_custody": {
+      "sha256": "fa97ef41f52541b892d377fa685d769b19595a33be75d087a9a487f8060c9246",
+      "bytes": 928168
+    },
+    "cycles_ledger_stub": {
+      "sha256": "4a6f21a7307d0ece2ca9aa9435fe06a984fb8abaf4a8d033224eec32fa3ae307",
+      "bytes": 710679
+    }
+  },
+  "predecessor_artifacts": {
+    "root": {
+      "archive_path": "target/pic-wasm/wasm32-unknown-unknown/fast/delegation_root_stub.wasm",
+      "sha256": "117b2a0bc9e7bb1993d574fdf2c53f5baf3a111339ad460d7acd3beaf2a2d1e9",
+      "bytes": 10243209,
+      "endpoint_exports": [
+        "canister_query canic_status",
+        "canister_query icrc10_supported_standards",
+        "canister_query root_now_secs",
+        "canister_update <ic-cdk internal> timer_executor",
+        "canister_update canic_root_command",
+        "canister_update root_verify_role_attestation",
+        "canister_update test_provision_chain_key_delegation_proof_for_issuer"
+      ]
+    },
+    "coordinator": {
+      "archive_path": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/fleet_coordinator/fleet_coordinator.wasm",
+      "sha256": "b3f764b09303ab5a90556e9212ab36a666e786433de368e1460e8da0f955ada6",
+      "bytes": 4563959,
+      "endpoint_exports": [
+        "canister_query canic_status",
+        "canister_update <ic-cdk internal> timer_executor",
+        "canister_update canic_coordinator_command"
+      ]
+    },
+    "store": {
+      "archive_path": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.wasm",
+      "sha256": "7001e3a9fd2f99ad2dbbd066d9edd41e72d7d08fb6265e8a01ef2ba3bd27eac4",
+      "bytes": 3252403,
+      "endpoint_exports": [
+        "canister_query canic_status",
+        "canister_query icrc10_supported_standards",
+        "canister_update <ic-cdk internal> timer_executor",
+        "canister_update canic_command",
+        "canister_update canic_wasm_store_chunk",
+        "canister_update canic_wasm_store_publish_chunk"
+      ]
+    }
+  },
+  "earlier_custody_proof_wasms": {
+    "canic_cycle_custody": {
+      "sha256": "a68c1789fc8196800729086c2bc75171a9d9875715aa3153b9a439e2d262454a",
+      "bytes": 924539
+    },
+    "cycles_ledger_stub": {
+      "sha256": "4a6f21a7307d0ece2ca9aa9435fe06a984fb8abaf4a8d033224eec32fa3ae307",
+      "bytes": 710679
+    }
+  },
+  "current_proof_log": "canic134-predecessor-custody-operator.log",
+  "proof_source_sha256": "3ce96a7d04a1312ceaabcdc5043edb741601ee2e2c30cfedbe64994cf27ee4f0",
+  "proof_patch_sha256": "2299d2b7a9d62a66f70925d77931a3986fbeda4dfc6a4b65f364a6500bfad9a2",
+  "observed_conservation": {
+    "final_native": 2019332923947627,
+    "operator_ledger": 7999800000000,
+    "fees": 200000000,
+    "store_residual": 425891488554,
+    "retirement_debit": 14130048587,
+    "admission_debit": 686449140,
+    "custody_debit": 102943691470,
+    "assets": 10,
+    "transfers": 2,
+    "creations": 0,
+    "initial_native": 2019876575625378,
+    "root_ledger": 5000000000000,
+    "coordinator_ledger": 3000000000000,
+    "initial_assets": 10
+  },
+  "reproduction_patch_verified_paths": [
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs",
+    "crates/canic-testing-internal/Cargo.toml",
+    "Cargo.lock"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "observed_date": "2026-09-06",
+  "checks": [
+    {
+      "log": "role-contract-tests.log",
+      "command": "RUSTC_WRAPPER= cargo test --locked --offline -p canic-core --lib role_contract::tests::",
+      "result": "pass",
+      "tests_passed": 26,
+      "sha256": "790fdffd3b3c754be42eb2a27d8ba484b5a412e974f3143a0eb64cf874f1d11d"
+    },
+    {
+      "log": "funding-policy-tests.log",
+      "command": "RUSTC_WRAPPER= cargo test --locked --offline -p canic-core --lib model::fleet_funding_policy::tests::",
+      "result": "pass",
+      "tests_passed": 4,
+      "sha256": "d79d8786b36d4531f517dfa6ebcb609a0c43905d27ab329664d77103dea8353a"
+    },
+    {
+      "log": "medic-library-tests.log",
+      "command": "RUSTC_WRAPPER= cargo test --locked --offline -p canic-cli --lib medic::tests::",
+      "result": "pass",
+      "tests_passed": 39,
+      "sha256": "66f9b56b0d876feefee3da51d1f908c4dca0ea2b19360d4d7887c36d07709b69"
+    },
+    {
+      "log": "fixture-clippy.log",
+      "command": "RUSTC_WRAPPER= cargo clippy --locked --offline -p canic-testing-internal --tests --features governed-pocketic-tests -- -D warnings",
+      "result": "pass",
+      "tests_passed": null,
+      "sha256": "89301acd8ee49d4e3f749775e2a7a27559a8f543c546de84c01a09842f7b827f"
+    },
+    {
+      "log": "custody-fixture-regression.log",
+      "command": "RUSTC_WRAPPER= bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh targeted-pocketic pic::cycle_custody::host_owner::custody_host_recovers_settings_install_and_progress_replies",
+      "result": "pass",
+      "tests_passed": 1,
+      "test_seconds": 24.49,
+      "sha256": "f2e85a92083cffb1fb33f420d212b317e1d057d26f6bc032fb2b2f38822d8bff"
+    }
+  ],
+  "source_sha256": {
+    "crates/canic-host/src/fleet_ensure/ops/platform.rs": "f1d3e27b4957cd4f18899c2ee46743d09cb5cdf9f88a38f1e82ad9ae88386032",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "9edcab616b86f21d75ddf93f32f4a239b0d8de18240c5edb8aeb6c45949dce23",
+    "crates/canic-testing-internal/src/pic/cycle_custody/host_owner/mod.rs": "9ebc3bdb981d384441e9c031cd1ef42eef31f25915175354b4537f1c050e6ac7",
+    "crates/canic-testing-internal/src/pic/cycle_custody/host_owner/retirement/mod.rs": "774793a2ef5452d05de2b402b42940013921c69bb99e6993df750ea435bd6608"
+  }
+}

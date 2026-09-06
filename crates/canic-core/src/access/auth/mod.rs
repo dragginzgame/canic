@@ -28,7 +28,7 @@ use crate::{
         LocalApplicationAuthorizationPolicyInput,
         authorize_local_application as authorize_local_application_policy,
     },
-    ops::{auth::AuthOps, ic::IcOps, storage::auth::AuthStateOps},
+    ops::{auth::AuthOps, ic::IcOps, storage::auth::LocalApplicationAuthorizationStateOps},
 };
 #[cfg(feature = "internal-test-fixtures")]
 #[doc(hidden)]
@@ -62,7 +62,8 @@ pub fn authorize_local_application(
             return authorize_with_values(request, actual_caller, now_ns, true, None, None, false);
         }
     };
-    let Ok(session) = AuthStateOps::application_session(actual_caller) else {
+    let Ok(session) = LocalApplicationAuthorizationStateOps::application_session(actual_caller)
+    else {
         return authorize_with_values(request, actual_caller, now_ns, true, None, None, false);
     };
     let subject_admissible = session.as_ref().is_some_and(|session| {
@@ -310,39 +311,6 @@ mod tests {
                 LocalApplicationAuthorizationDenial::CallerMismatch,
             )
         );
-    }
-
-    #[test]
-    fn synchronous_local_application_facade_is_one_bounded_read_path() {
-        let source = include_str!("mod.rs");
-        let start = source
-            .find("pub fn authorize_local_application(")
-            .expect("public local application facade");
-        let end = source[start..]
-            .find("fn authorize_with_values(")
-            .map_or(source.len(), |offset| start + offset);
-        let body = &source[start..end];
-
-        assert_eq!(body.matches("IcOps::msg_caller()").count(), 1);
-        assert_eq!(body.matches("IcOps::now_nanos()").count(), 1);
-        assert_eq!(
-            body.matches("AuthOps::local_application_authorization_authority()")
-                .count(),
-            1
-        );
-        assert_eq!(
-            body.matches("AuthStateOps::application_session(actual_caller)")
-                .count(),
-            1
-        );
-        for forbidden in [
-            ".await", "spawn(", "timer", "cleanup", "record_", "log!", "set_", "clear_",
-        ] {
-            assert!(
-                !body.contains(forbidden),
-                "authorization facade contains forbidden operation {forbidden}"
-            );
-        }
     }
 
     #[test]

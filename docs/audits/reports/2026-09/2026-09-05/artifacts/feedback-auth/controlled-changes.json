@@ -1,0 +1,12 @@
+[
+  {
+    "path": "crates/canic-core/src/role_contract/policy.rs",
+    "before_sha256": "c5219023b0f2e26b1dac5b5c427c956a3ba8d6590ab23725240067ee554d5ce7",
+    "after_sha256": "ae5fd5104db572d9c9aea482c25f09cfac8199c8d26595dadfeeb8868a65397e"
+  },
+  {
+    "path": "crates/canic-control-plane/Cargo.toml",
+    "before_sha256": "11aca9f7e4cd60edf8e1555770dc98c7952d3abbd85bda054a14fe1992356f86",
+    "after_sha256": "d7896c2d2ed7d7c430ff42666816427b848bd964ca81abe93dfeb16eb825a5cd"
+  }
+]

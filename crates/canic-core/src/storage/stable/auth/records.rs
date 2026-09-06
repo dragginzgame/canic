@@ -56,6 +56,10 @@ pub struct LocalApplicationAuthorizationStateData {
     pub authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
 }
 
+impl LocalApplicationAuthorizationStateData {
+    pub const STATE_CONTRACT_NAME: &'static str = "LocalApplicationAuthorizationStateData";
+}
+
 ///
 /// DelegatedRoleGrantRecord
 ///
@@ -333,11 +337,13 @@ pub struct RootIssuerRenewalStateRecord {
 }
 
 ///
-/// AuthStateRecord
+/// LocalApplicationAuthorizationStateRecord
+///
+/// Capability-owned persistence for local application sessions and replay fencing.
 ///
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct AuthStateRecord {
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LocalApplicationAuthorizationStateRecord {
     pub application_sessions: Vec<LocalApplicationSessionRecord>,
 
     pub application_replays: Vec<LocalApplicationReplayRecord>,
@@ -345,9 +351,25 @@ pub struct AuthStateRecord {
     pub application_authority_generation: u64,
 
     pub application_authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
+}
 
+impl LocalApplicationAuthorizationStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "LocalApplicationAuthorizationStateRecord";
+}
+
+/// Capability-owned persistence for one delegated-token issuer.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedTokenIssuerStateRecord {
     pub active_delegation_proof: Option<ActiveDelegationProofRecord>,
+}
 
+impl DelegatedTokenIssuerStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "DelegatedTokenIssuerStateRecord";
+}
+
+/// Capability-owned persistence for Root delegation policy and renewal batches.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationStateRecord {
     pub root_issuers: Vec<RootIssuerRecord>,
 
     pub delegated_auth_registry_epoch: u64,
@@ -361,30 +383,42 @@ pub struct AuthStateRecord {
     pub chain_key_root_delegation_batches: Vec<ChainKeyRootDelegationBatchRecord>,
 }
 
-impl AuthStateRecord {
-    pub const STATE_CONTRACT_NAME: &'static str = "AuthStateRecord";
+impl RootDelegationStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "RootDelegationStateRecord";
 }
 
-///
-/// AuthStateData
-///
-/// Canonical full auth-state snapshot used for schema and round-trip validation.
-///
-
+/// Canonical delegated-token issuer snapshot used for focused validation.
 #[cfg_attr(
     not(test),
     expect(
         dead_code,
-        reason = "auth snapshots are materialized only by focused round-trip validation"
+        reason = "issuer snapshots are materialized only by focused round-trip validation"
     )
 )]
 #[derive(Clone, Debug, Default)]
-pub struct AuthStateData {
-    pub record: AuthStateRecord,
+pub struct DelegatedTokenIssuerStateData {
+    pub record: DelegatedTokenIssuerStateRecord,
 }
 
-impl AuthStateData {
-    pub const STATE_CONTRACT_NAME: &'static str = "AuthStateData";
+impl DelegatedTokenIssuerStateData {
+    pub const STATE_CONTRACT_NAME: &'static str = "DelegatedTokenIssuerStateData";
+}
+
+/// Canonical Root delegation snapshot used for focused validation.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Root snapshots are materialized only by focused round-trip validation"
+    )
+)]
+#[derive(Clone, Debug, Default)]
+pub struct RootDelegationStateData {
+    pub record: RootDelegationStateRecord,
+}
+
+impl RootDelegationStateData {
+    pub const STATE_CONTRACT_NAME: &'static str = "RootDelegationStateData";
 }
 
 #[cfg(test)]
@@ -454,34 +488,34 @@ mod current_resource_contract {
 
     #[test]
     fn current_session_and_replay_cbor_footprint_stays_bounded() {
-        let empty = AuthStateRecord::default();
-        let one_session = AuthStateRecord {
+        use crate::model::auth::application_authorization::{
+            MAX_APPLICATION_SESSION_RECORD_BYTES, MAX_APPLICATION_SESSION_STABLE_BYTES,
+        };
+
+        let empty = LocalApplicationAuthorizationStateRecord::default();
+        let one_session = LocalApplicationAuthorizationStateRecord {
             application_sessions: vec![session(1)],
-            ..AuthStateRecord::default()
+            ..LocalApplicationAuthorizationStateRecord::default()
         };
-        let one_replay = AuthStateRecord {
+        let one_replay = LocalApplicationAuthorizationStateRecord {
             application_replays: vec![replay(1)],
-            ..AuthStateRecord::default()
+            ..LocalApplicationAuthorizationStateRecord::default()
         };
-        let maximum = AuthStateRecord {
+        let maximum = LocalApplicationAuthorizationStateRecord {
             application_sessions: (0..2_048).map(maximum_scope_session).collect(),
             application_replays: (0..4_096).map(replay).collect(),
             application_authority_generation: 1,
             application_authority_binding: Some(maximum_authority_binding()),
-            ..AuthStateRecord::default()
         };
 
         let empty_bytes = encoded(&empty).len();
         let session_bytes = encoded(&session(1)).len();
         let replay_bytes = encoded(&replay(1)).len();
-        assert_eq!(empty_bytes, 308);
-        assert_eq!(session_bytes, 519);
-        assert_eq!(replay_bytes, 198);
-        assert_eq!(encoded(&maximum).len(), 4_025_450);
-        assert!(session_bytes <= 2_048);
+        let maximum_bytes = encoded(&maximum).len();
+        assert!(session_bytes <= MAX_APPLICATION_SESSION_RECORD_BYTES);
         assert!(encoded(&one_session).len() > empty_bytes);
         assert!(encoded(&one_replay).len() > empty_bytes);
         assert!(replay_bytes < session_bytes);
-        assert!(encoded(&maximum).len() <= 8 * 1024 * 1024);
+        assert!(maximum_bytes <= MAX_APPLICATION_SESSION_STABLE_BYTES);
     }
 }

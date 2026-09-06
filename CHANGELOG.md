@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.8` makes authorization state capability-owned, advances Fleet launch
+  and recovery corrections, qualifies reviewed Fleet reinstall and accounts for
+  Ledger transfers before deletion, qualifies IcyDB 0.253.0 lifecycle composition and
+  records further runtime-footprint audit evidence.
 - `0.110.7` orders quick source and lint failures before expensive lanes,
   reduces false-red test output and non-behavioral documentation/dependency
   release blockers while retaining fail-closed security and authority checks,

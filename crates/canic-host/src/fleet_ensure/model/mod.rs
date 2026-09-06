@@ -4,6 +4,8 @@
 //! Does not own: transport parsing, policy decisions, persistence, or IC effects.
 //! Boundary: workflow persists these records before and after every effect.
 
+mod serialization;
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -363,6 +365,7 @@ pub struct DesiredComponentGroupPlacement {
 /// Content identities resolved from current desired-state artifact paths by ops.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DesiredFleetArtifacts {
+    pub continuation: Option<FleetEnsureContinuationAuthority>,
     pub drain_candid_sha256_by_canister: BTreeMap<String, String>,
     pub init_arg_sha256_by_canister: BTreeMap<String, String>,
     pub init_candid_sha256_by_canister: BTreeMap<String, String>,
@@ -411,14 +414,17 @@ pub enum EnsureAction {
         principal: String,
     },
     Fund {
+        /// Exact Root Principal for protected observation of a pool funding target.
+        #[serde(deserialize_with = "serialization::required_option")]
+        pool_root: Option<String>,
         #[serde(with = "u128_text")]
         amount: u128,
         created_at_time: u64,
-        #[serde(default, with = "u128_text", skip_serializing_if = "is_zero_u128")]
+        #[serde(with = "u128_text")]
         expected_post_cycles: u128,
-        #[serde(default, with = "u128_text", skip_serializing_if = "is_zero_u128")]
+        #[serde(with = "u128_text")]
         funding_deficit_cycles: u128,
-        #[serde(default, with = "u128_text", skip_serializing_if = "is_zero_u128")]
+        #[serde(with = "u128_text")]
         funding_margin_cycles: u128,
         ledger: String,
         name: String,
@@ -528,6 +534,20 @@ impl EnsureAction {
     reason = "each exact typed action is boxed by EnsureAction before durable retention"
 )]
 pub enum CurrentFleetProtocolAction {
+    /// Verify host-created local supply without authorizing mainnet-only refill.
+    ObservePoolReadiness {
+        minimum_ready: u32,
+        readiness_floor: canic_core::cdk::types::Cycles,
+    },
+    MaintainPoolReadiness {
+        maximum_updates: u32,
+        minimum_ready: u32,
+        readiness_floor: canic_core::cdk::types::Cycles,
+    },
+    ReconcilePoolAsset {
+        request: canic_core::dto::pool::PoolCanisterRequest,
+        minimum_cycles: canic_core::cdk::types::Cycles,
+    },
     ActivateRegistry {
         expected_registry: canic_core::dto::fleet_registry::FleetRegistry,
         expected_version: canic_core::dto::fleet_registry::FleetRegistryVersion,
@@ -581,6 +601,9 @@ impl CurrentFleetProtocolAction {
             | Self::JoinRoot { .. }
             | Self::ProvisionComponents { .. } => DesiredCanisterKind::Coordinator,
             Self::ActivateRegistryMirror { .. }
+            | Self::ReconcilePoolAsset { .. }
+            | Self::MaintainPoolReadiness { .. }
+            | Self::ObservePoolReadiness { .. }
             | Self::AdoptStore { .. }
             | Self::BootstrapStore { .. }
             | Self::PrepareComponentRegistry { .. }
@@ -596,6 +619,9 @@ impl CurrentFleetProtocolAction {
     pub const fn operation_id(&self) -> Option<[u8; 32]> {
         match self {
             Self::ActivateRegistry { .. }
+            | Self::ReconcilePoolAsset { .. }
+            | Self::MaintainPoolReadiness { .. }
+            | Self::ObservePoolReadiness { .. }
             | Self::JoinRoot { .. }
             | Self::PrepareComponentRegistry { .. }
             | Self::PrepareStoreChunkSet { .. }
@@ -622,12 +648,14 @@ pub enum InstallMode {
 /// Planned disposition and effects for one controlled canister.
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct CanisterPlan {
     pub actions: Vec<EnsureAction>,
     pub disposition: CanisterDisposition,
     pub name: String,
     #[serde(with = "u128_text")]
     pub observed_cycles: u128,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub principal: Option<String>,
 }
 
@@ -760,12 +788,15 @@ pub struct ActualCycleConservation {
     pub received_new_funding_cycles: u128,
 }
 
-/// Whether the first live balance of a newly created canister is covered by
-/// the exact observation-burn authority reviewed in the desired Fleet.
-///
-/// Creation response evidence owns the requested amount. The subsequent live
-/// status owns the retained balance, which may be lower only by the explicitly
-/// bounded observation burn incurred before that status is read.
+/// Sum the separately reviewed Create execution and first-observation bounds.
+/// Overflow cannot grant an unbounded allowance.
+pub(crate) const fn creation_observation_burn(observation: u128, update: u128) -> Option<u128> {
+    observation.checked_add(update)
+}
+
+/// Whether a newly created canister's first balance is covered by its reviewed
+/// Create execution plus first-observation allowance. The Ledger receipt owns
+/// the requested amount; live status owns the exact retained balance.
 pub(crate) const fn create_balance_is_terminal(
     actual_cycles: Option<u128>,
     requested_initial_cycles: u128,
@@ -844,7 +875,10 @@ impl<'de> Deserialize<'de> for ReviewedDesiredFleetRecord {
 
 /// Immutable reviewed plan produced from desired state plus one live observation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct FleetEnsurePlan {
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub continuation: Option<FleetEnsureContinuationAuthority>,
     pub canisters: Vec<CanisterPlan>,
     pub conservation: CycleConservation,
     pub desired_sha256: String,
@@ -854,15 +888,16 @@ pub struct FleetEnsurePlan {
     pub plan_sha256: String,
     pub planned_at_time: u64,
     pub protocol_actions: Vec<EnsureAction>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "serialization::required_option")]
     pub root_start_authority: Option<Box<RetainedRootStartAuthorityRecord>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Exact installed Root authority approved for replacement by this plan.
+    pub root_reinstall_bindings: Vec<RootManagementBinding>,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub reviewed_desired: Option<Box<ReviewedDesiredFleetRecord>>,
     pub schema_version: u16,
-    #[serde(default, skip_serializing_if = "FleetEnsurePlanScope::is_full")]
     pub scope: FleetEnsurePlanScope,
     /// Exact terminal operation that owns the currently active Registry observation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "serialization::required_option")]
     pub terminal_inventory_operation_id: Option<String>,
 }
 
@@ -873,7 +908,9 @@ pub enum FleetEnsurePlanScope {
     /// Complete desired-state convergence after all protected roles are observable.
     #[default]
     Full,
-    /// Same-identity start of exact management-verified retained Roots only.
+    /// Exact reviewed Root reset before current protected interfaces become available.
+    RootReinstallPrerequisite,
+    /// Exact management-authorized Root Start prerequisite.
     RootStartPrerequisite,
 }
 
@@ -883,16 +920,9 @@ impl FleetEnsurePlanScope {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Full => "full",
+            Self::RootReinstallPrerequisite => "root_reinstall_prerequisite",
             Self::RootStartPrerequisite => "root_start_prerequisite",
         }
-    }
-
-    #[expect(
-        clippy::trivially_copy_pass_by_ref,
-        reason = "Serde skip_serializing_if requires a borrowed field predicate"
-    )]
-    const fn is_full(&self) -> bool {
-        matches!(self, Self::Full)
     }
 }
 
@@ -911,21 +941,21 @@ pub struct RootManagementObservation {
     pub roots: BTreeMap<String, RootManagementCanisterObservation>,
 }
 
-/// One exact retained Root module accepted only for a same-identity Start prerequisite.
+/// Exact installed Root identity, module and controller authority observed through management.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct RetainedRootStartBinding {
+pub struct RootManagementBinding {
     pub controllers: Vec<String>,
     pub name: String,
-    pub predecessor_module_sha256: String,
+    pub module_sha256: String,
     pub principal: String,
     pub subnet: String,
 }
 
-/// Generator-owned authority for starting verified retained Roots before protected observation.
+/// Generator-owned authority for management-bound Root prerequisites before protected observation.
 ///
-/// This record cannot authorize installation, replacement, funding, or any paid effect. The
-/// reviewed prerequisite plan embeds it so later apply and replay do not depend on a mutable file.
+/// The separately reviewed plan permits only Start for the exact observed module.
+/// It cannot authorize replacement, installation or reuse across releases.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RetainedRootStartAuthorityRecord {
@@ -933,10 +963,8 @@ pub struct RetainedRootStartAuthorityRecord {
     pub environment: String,
     pub fleet: String,
     pub fleet_id: canic_core::ids::FleetId,
-    pub release_build_id: canic_core::ids::ReleaseBuildId,
-    pub roots: Vec<RetainedRootStartBinding>,
+    pub roots: Vec<RootManagementBinding>,
     pub schema_version: u16,
-    pub successor_module_sha256: String,
 }
 
 impl RetainedRootStartAuthorityRecord {
@@ -982,8 +1010,12 @@ pub enum FleetEnsureCompletion {
 /// Durable intent/result record for one action.
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct EffectRecord {
+    /// Root maintenance calls whose intent was persisted, including lost responses.
+    pub maintenance_attempts: u32,
     pub action_sha256: String,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub created_principal: Option<String>,
     #[serde(with = "option_u128_text")]
     pub destination_post_cycles: Option<u128>,
@@ -993,9 +1025,11 @@ pub struct EffectRecord {
     pub post_cycles: Option<u128>,
     #[serde(with = "option_u128_text")]
     pub pre_cycles: Option<u128>,
-    #[serde(default)]
+    #[serde(deserialize_with = "serialization::required_option")]
     pub pre_canister_version: Option<u64>,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub progress_identity: Option<String>,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub receipt: Option<String>,
     pub state: EffectState,
 }
@@ -1071,22 +1105,21 @@ pub fn reconcile_retirement_transfer(
 /// Current discovered identities retained only to seed live observation.
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct FleetEnsureStateRecord {
+    #[serde(deserialize_with = "serialization::required_option")]
     pub active_registry: Option<canic_core::dto::fleet_registry::FleetRegistry>,
     /// Exact applied action identities for the adjacent completed reinstalls.
-    #[serde(default)]
     pub completed_reinstall_action_sha256: BTreeMap<String, String>,
     /// Exact operation owning the adjacent completed-reinstall thresholds.
-    #[serde(default)]
+    #[serde(deserialize_with = "serialization::required_option")]
     pub completed_reinstall_operation_id: Option<String>,
     /// Pre-effect version thresholds for exact journal-proved reinstalls in the
     /// immediately preceding nonterminal operation.
-    #[serde(default)]
     pub completed_reinstalls: BTreeMap<String, u64>,
     pub fleet: String,
     pub pending_principals: BTreeMap<String, String>,
     pub principals: BTreeMap<String, String>,
-    #[serde(default)]
     pub retained_cycles_by_principal: BTreeMap<String, u128>,
     pub schema_version: u16,
     pub topology: BTreeMap<String, FleetEnsureTopologyRecord>,
@@ -1094,19 +1127,27 @@ pub struct FleetEnsureStateRecord {
 
 /// Current typed topology retained independently from any historical install evidence.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct FleetEnsureTopologyRecord {
     pub kind: DesiredCanisterKind,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub module_hash: Option<String>,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub parent: Option<String>,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub protocol_binding: Option<crate::protocol_binding::RegistryProtocolBinding>,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub role: Option<String>,
 }
 
 /// Sole current-generation host journal for one Fleet ensure operation.
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct FleetEnsureJournalRecord {
+    pub successor_phases: Vec<FleetEnsureSuccessorPhaseRecord>,
     pub completion: FleetEnsureCompletion,
+    #[serde(deserialize_with = "serialization::required_option")]
     pub estate_funding_required: Option<EstateFundingRequiredRecord>,
     pub effects: Vec<EffectRecord>,
     pub fleet: String,
@@ -1122,6 +1163,41 @@ pub struct FleetEnsureJournalRecord {
     pub stalled_observations: u32,
 }
 
+/// Reviewed input identities and finite protocol expansion for a fresh Fleet.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetEnsureContinuationAuthority {
+    pub app_config_sha256: String,
+    pub application_artifact_union_sha256: String,
+    pub coordinator_candid_sha256: String,
+    pub maximum_successor_actions: u32,
+    pub root_candid_sha256: String,
+    pub store_candid_sha256: String,
+}
+
+/// One immutable successor plan retained before its first effect intent.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetEnsureSuccessorPhaseRecord {
+    #[serde(with = "u128_text")]
+    pub execution_burn_before_phase: u128,
+    pub plan_sha256: String,
+    /// Hydrated by the owning file reader; durable JSON contains only the digest.
+    #[serde(skip)]
+    pub plan: Option<Box<FleetEnsurePlan>>,
+}
+
+/// Typed boundary requiring a new review instead of automatic protocol continuation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FleetEnsureSuccessorReviewReason {
+    AdditionalEffect,
+    BudgetExceeded,
+    ChangedInputs,
+    PhaseBound,
+    ProtocolAuthority,
+}
+
 /// Result returned by one plan-only or apply invocation.
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -1130,10 +1206,6 @@ pub struct FleetEnsureReport {
     pub effects_applied: u32,
     pub plan: FleetEnsurePlan,
     pub terminal: bool,
-}
-
-const fn is_zero_u128(value: &u128) -> bool {
-    *value == 0
 }
 
 mod u128_text {

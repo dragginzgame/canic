@@ -1,0 +1,607 @@
+{
+  "canisters": [
+    {
+      "actions": [],
+      "disposition": "reuse",
+      "name": "coordinator",
+      "observed_cycles": "499974768367138",
+      "principal": "pi33i-pt777-77776-aaaaa-cai"
+    },
+    {
+      "actions": [],
+      "disposition": "reuse",
+      "name": "root",
+      "observed_cycles": "79951915734785",
+      "principal": "pp254-cl777-77776-aaaaq-cai"
+    },
+    {
+      "actions": [],
+      "disposition": "reuse",
+      "name": "store",
+      "observed_cycles": "79983515977848",
+      "principal": "pgzwa-ud777-77776-aaaba-cai"
+    },
+    {
+      "actions": [
+        {
+          "amount": "3500004258258",
+          "created_at_time": 1800000000000000006,
+          "expected_post_cycles": "8000000000000",
+          "funding_deficit_cycles": "1500004258258",
+          "funding_margin_cycles": "2000000000000",
+          "kind": "fund",
+          "ledger": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "name": "pool-0",
+          "pool_root": "pp254-cl777-77776-aaaaq-cai",
+          "principal": "pbyqu-z3777-77776-aaabq-cai"
+        }
+      ],
+      "disposition": "reuse",
+      "name": "pool-0",
+      "observed_cycles": "4499995741742",
+      "principal": "pbyqu-z3777-77776-aaabq-cai"
+    },
+    {
+      "actions": [
+        {
+          "amount": "3500004258258",
+          "created_at_time": 1800000000000000007,
+          "expected_post_cycles": "8000000000000",
+          "funding_deficit_cycles": "1500004258258",
+          "funding_margin_cycles": "2000000000000",
+          "kind": "fund",
+          "ledger": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "name": "pool-1",
+          "pool_root": "pp254-cl777-77776-aaaaq-cai",
+          "principal": "pu7bz-yt777-77776-aaaca-cai"
+        }
+      ],
+      "disposition": "reuse",
+      "name": "pool-1",
+      "observed_cycles": "4499995741742",
+      "principal": "pu7bz-yt777-77776-aaaca-cai"
+    }
+  ],
+  "conservation": {
+    "estate_funding_domains": [
+      {
+        "allocated_workloads": 0,
+        "available_cycles": "0",
+        "available_pool_slots": 0,
+        "creation_amount_cycles": "6000000000000",
+        "creation_execution_margin_cycles": "1000000000000",
+        "cycles_ledger": "um5iw-rqaaa-aaaaq-qaaba-cai",
+        "eligible_ready_pool_assets": 0,
+        "initial_pool_assets": [
+          "created:pool-0",
+          "created:pool-1",
+          "pbyqu-z3777-77776-aaabq-cai",
+          "pu7bz-yt777-77776-aaaca-cai"
+        ],
+        "ledger_fee_cycles": "0",
+        "management_creation_fee_cycles": "0",
+        "maximum_creation_debit_cycles": "0",
+        "maximum_creation_fee_cycles": "0",
+        "maximum_funding_cycles": "0",
+        "occupied_pool_assets": 2,
+        "pending_creation": null,
+        "pending_creation_count": 0,
+        "planned_initial_workloads": 1,
+        "pool_maximum_size": 2,
+        "readiness_floor_cycles": "5000000000000",
+        "required_creation_count": 0,
+        "root": "root",
+        "root_principal": "pp254-cl777-77776-aaaaq-cai",
+        "shortfall_cycles": "0"
+      }
+    ],
+    "expected_post_operation_cycles": "560910200079771",
+    "maximum_execution_burn_cycles": "115000000000000",
+    "maximum_new_funding_cycles": "7000008516516",
+    "maximum_operator_debit_cycles": "7000008516516",
+    "maximum_unavoidable_fee_cycles": "0",
+    "observed_controlled_cycles": "668910191563255",
+    "retained_in_reused_canisters_cycles": "668910191563255",
+    "scheduled_transfer_cycles": "0"
+  },
+  "desired_sha256": "c75541be4d6dbcc9b6c7dda10c664a28b1e045c89e9fd77fa4867361b28d89e7",
+  "environment": "local",
+  "fleet": "canic-121-literal-zero-estate",
+  "operation_id": "e10dae2f65fcad3f88ec22b26f69410e1bd82e5342b781e01bd0ae28b5f20355",
+  "plan_sha256": "62bf7b5d3db57bf146a48d7c2821ad0ca464068921e8bc6dd120d61d1efca62f",
+  "planned_at_time": 1800000000000000001,
+  "protocol_actions": [
+    {
+      "action": {
+        "kind": "reconcile_pool_asset",
+        "minimum_cycles": "5000000000000",
+        "request": {
+          "canister_id": "pbyqu-z3777-77776-aaabq-cai"
+        }
+      },
+      "candid": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.did",
+      "candid_sha256": "1dfc97f488f91db748bd07088af2cd973f6f3a6739422c9f30ed25d3c4cb626b",
+      "kind": "fleet_protocol",
+      "maximum_execution_burn_cycles": "1000000000000",
+      "name": "pool-reconcile-pbyqu-z3777-77776-aaabq-cai",
+      "principal": "pp254-cl777-77776-aaaaq-cai"
+    },
+    {
+      "action": {
+        "kind": "reconcile_pool_asset",
+        "minimum_cycles": "5000000000000",
+        "request": {
+          "canister_id": "pu7bz-yt777-77776-aaaca-cai"
+        }
+      },
+      "candid": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.did",
+      "candid_sha256": "1dfc97f488f91db748bd07088af2cd973f6f3a6739422c9f30ed25d3c4cb626b",
+      "kind": "fleet_protocol",
+      "maximum_execution_burn_cycles": "1000000000000",
+      "name": "pool-reconcile-pu7bz-yt777-77776-aaaca-cai",
+      "principal": "pp254-cl777-77776-aaaaq-cai"
+    }
+  ],
+  "reviewed_desired": {
+    "desired": {
+      "bootstrap": {
+        "admission": {
+          "fleet_principals": [
+            "wmzac-nabae-aqcai-baeaq-caiba-eaqca-ibaea-qcaib-aeaqc-aibae-aqc"
+          ],
+          "rules": [],
+          "schema_version": 1,
+          "template_digest": [
+            225,
+            42,
+            181,
+            155,
+            7,
+            51,
+            111,
+            80,
+            227,
+            73,
+            78,
+            164,
+            207,
+            70,
+            86,
+            183,
+            206,
+            221,
+            86,
+            31,
+            220,
+            60,
+            121,
+            26,
+            231,
+            176,
+            40,
+            3,
+            74,
+            246,
+            146,
+            163
+          ]
+        },
+        "app": "standalone",
+        "canonical_network_id": "402b3681453fb9cfa356b6ea7abde2de53cc4c665caaf438535bddc1e1679f60",
+        "component_deployment_configuration": {
+          "component_group_topology": {
+            "component_groups": [
+              {
+                "component_group": "qualification",
+                "members": [
+                  {
+                    "Component": {
+                      "component_spec": "default",
+                      "kind": "Ordinary",
+                      "labels": [],
+                      "member": "default",
+                      "service_purpose": null
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "component_topology": {
+            "component_specs": [
+              {
+                "children": [],
+                "component_role": "app",
+                "component_spec": "default",
+                "limits": {
+                  "cycles_funding": {
+                    "maximum_cycles": "1000000000000000",
+                    "window_secs": 3600
+                  },
+                  "maximum_descendants": 20000,
+                  "maximum_registry_bytes": 16777216
+                },
+                "maximum_fleet_instances": 1,
+                "spawn_grants": [],
+                "spec_hash": [
+                  177,
+                  195,
+                  128,
+                  142,
+                  186,
+                  136,
+                  181,
+                  94,
+                  142,
+                  250,
+                  223,
+                  188,
+                  133,
+                  130,
+                  160,
+                  193,
+                  212,
+                  170,
+                  136,
+                  99,
+                  39,
+                  254,
+                  242,
+                  84,
+                  162,
+                  188,
+                  11,
+                  241,
+                  155,
+                  8,
+                  218,
+                  161
+                ]
+              }
+            ],
+            "provisioning_grants": []
+          },
+          "deployment_topology": {
+            "component_group_deployments": [
+              {
+                "component_group": "qualification",
+                "deployment": "qualification",
+                "initial_placements": 1,
+                "labels": [],
+                "maximum_placements": 1,
+                "member_limits": [],
+                "members": [
+                  {
+                    "component_spec": "default",
+                    "component_spec_hash": [
+                      177,
+                      195,
+                      128,
+                      142,
+                      186,
+                      136,
+                      181,
+                      94,
+                      142,
+                      250,
+                      223,
+                      188,
+                      133,
+                      130,
+                      160,
+                      193,
+                      212,
+                      170,
+                      136,
+                      99,
+                      39,
+                      254,
+                      242,
+                      84,
+                      162,
+                      188,
+                      11,
+                      241,
+                      155,
+                      8,
+                      218,
+                      161
+                    ],
+                    "labels": [],
+                    "limits": {
+                      "maximum_descendants": 20000,
+                      "maximum_registry_bytes": 16777216,
+                      "spawn_grant_reductions": []
+                    },
+                    "member_path": [
+                      "default"
+                    ],
+                    "purpose": "Ordinary"
+                  }
+                ],
+                "placement": {
+                  "maximum_per_root": 1,
+                  "minimum_distinct_roots": 1
+                },
+                "service_purpose": null
+              }
+            ]
+          },
+          "fleet_service_topology": {
+            "targets": []
+          }
+        },
+        "coordinator": "coordinator",
+        "coordinator_subnet": "753q6-ah42a-rm7md-yb6nn-3egqb-e2tyy-zdjgf-ind25-haovq-fe74w-pqe",
+        "fleet_id": "7979797979797979797979797979797979797979797979797979797979797979",
+        "fresh_estate": true,
+        "release_build_id": "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae",
+        "root_funding": {
+          "budget": {
+            "maximum_cycles": "30000000000000",
+            "window_secs": 7776000
+          },
+          "funding_profile": "single_subnet",
+          "maximum_automatic_cycles": "120000000000000",
+          "maximum_automatic_grants": 4,
+          "minimum_reserve_cycles": "30000000000000"
+        },
+        "roots": [
+          {
+            "canister_pool_imports": [
+              "pool-0",
+              "pool-1"
+            ],
+            "component_admissions": [
+              {
+                "component_spec": "default",
+                "maximum_root_instances": 1,
+                "spec_hash": [
+                  177,
+                  195,
+                  128,
+                  142,
+                  186,
+                  136,
+                  181,
+                  94,
+                  142,
+                  250,
+                  223,
+                  188,
+                  133,
+                  130,
+                  160,
+                  193,
+                  212,
+                  170,
+                  136,
+                  99,
+                  39,
+                  254,
+                  242,
+                  84,
+                  162,
+                  188,
+                  11,
+                  241,
+                  155,
+                  8,
+                  218,
+                  161
+                ]
+              }
+            ],
+            "component_topology_digest": [
+              111,
+              10,
+              224,
+              44,
+              212,
+              11,
+              183,
+              230,
+              155,
+              133,
+              235,
+              183,
+              223,
+              230,
+              16,
+              59,
+              253,
+              243,
+              85,
+              202,
+              177,
+              79,
+              219,
+              104,
+              181,
+              0,
+              6,
+              166,
+              196,
+              60,
+              61,
+              95
+            ],
+            "funding": {
+              "icp_refill": null,
+              "root_funding": {
+                "budget": {
+                  "maximum_cycles": "30000000000000",
+                  "window_secs": 7776000
+                },
+                "cooldown_secs": 2592000,
+                "funding_profile": "single_subnet",
+                "maximum_automatic_cycles": "120000000000000",
+                "maximum_automatic_grants": 4,
+                "request_threshold": "10000000000000",
+                "target_balance": "30000000000000"
+              }
+            },
+            "limits": {
+              "canister_pool": {
+                "canister_cycles": "5000000000000",
+                "creation_execution_margin": "1000000000000",
+                "maximum_size": 2,
+                "minimum_size": 1
+              },
+              "cycles_funding": {
+                "maximum_cycles": "1000000000000000",
+                "window_secs": 3600
+              },
+              "maximum_component_instances": 4096,
+              "maximum_group_placements": 16,
+              "maximum_registry_bytes": 16777216,
+              "maximum_wasm_store_bytes": 536870912
+            },
+            "placement_subnet": "753q6-ah42a-rm7md-yb6nn-3egqb-e2tyy-zdjgf-ind25-haovq-fe74w-pqe",
+            "root": "root",
+            "store": "store"
+          }
+        ]
+      },
+      "canisters": [
+        {
+          "canic_init": {
+            "role": "coordinator"
+          },
+          "controller_canisters": [],
+          "controllers": [
+            "7nptk-yvxzz-yfo5f-ieog4-vzgqd-rvete-cu2fr-36wgg-c5ds4-vdi26-nqe"
+          ],
+          "drain": null,
+          "init_arg": null,
+          "init_candid": null,
+          "initial_cycles": "500000000000000",
+          "kind": "coordinator",
+          "minimum_cycles": "0",
+          "name": "coordinator",
+          "parent": null,
+          "presence": "present",
+          "principal": null,
+          "replace": false,
+          "subnet": "753q6-ah42a-rm7md-yb6nn-3egqb-e2tyy-zdjgf-ind25-haovq-fe74w-pqe",
+          "wasm": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/fleet_coordinator/fleet_coordinator.wasm"
+        },
+        {
+          "canic_init": {
+            "role": "root",
+            "root": "root"
+          },
+          "controller_canisters": [],
+          "controllers": [
+            "7nptk-yvxzz-yfo5f-ieog4-vzgqd-rvete-cu2fr-36wgg-c5ds4-vdi26-nqe"
+          ],
+          "drain": null,
+          "init_arg": null,
+          "init_candid": null,
+          "initial_cycles": "80000000000000",
+          "kind": "root",
+          "minimum_cycles": "0",
+          "name": "root",
+          "parent": "coordinator",
+          "presence": "present",
+          "principal": null,
+          "replace": false,
+          "subnet": "753q6-ah42a-rm7md-yb6nn-3egqb-e2tyy-zdjgf-ind25-haovq-fe74w-pqe",
+          "wasm": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm"
+        },
+        {
+          "canic_init": {
+            "role": "store",
+            "root": "root"
+          },
+          "controller_canisters": [
+            "root"
+          ],
+          "controllers": [
+            "7nptk-yvxzz-yfo5f-ieog4-vzgqd-rvete-cu2fr-36wgg-c5ds4-vdi26-nqe"
+          ],
+          "drain": null,
+          "init_arg": null,
+          "init_candid": null,
+          "initial_cycles": "80000000000000",
+          "kind": "store",
+          "minimum_cycles": "0",
+          "name": "store",
+          "parent": "root",
+          "presence": "present",
+          "principal": null,
+          "replace": false,
+          "subnet": "753q6-ah42a-rm7md-yb6nn-3egqb-e2tyy-zdjgf-ind25-haovq-fe74w-pqe",
+          "wasm": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.wasm"
+        },
+        {
+          "canic_init": null,
+          "controller_canisters": [
+            "root"
+          ],
+          "controllers": [],
+          "drain": null,
+          "init_arg": null,
+          "init_candid": null,
+          "initial_cycles": "4500000000000",
+          "kind": "pool",
+          "minimum_cycles": "0",
+          "name": "pool-0",
+          "parent": "root",
+          "presence": "present",
+          "principal": null,
+          "replace": false,
+          "subnet": "753q6-ah42a-rm7md-yb6nn-3egqb-e2tyy-zdjgf-ind25-haovq-fe74w-pqe",
+          "wasm": null
+        },
+        {
+          "canic_init": null,
+          "controller_canisters": [
+            "root"
+          ],
+          "controllers": [],
+          "drain": null,
+          "init_arg": null,
+          "init_candid": null,
+          "initial_cycles": "4500000000000",
+          "kind": "pool",
+          "minimum_cycles": "0",
+          "name": "pool-1",
+          "parent": "root",
+          "presence": "present",
+          "principal": null,
+          "replace": false,
+          "subnet": "753q6-ah42a-rm7md-yb6nn-3egqb-e2tyy-zdjgf-ind25-haovq-fe74w-pqe",
+          "wasm": null
+        }
+      ],
+      "cycles_ledger": "um5iw-rqaaa-aaaaq-qaaba-cai",
+      "environment": "local",
+      "fleet": "canic-121-literal-zero-estate",
+      "ledger_fee_cycles": "0",
+      "management_creation_fee_cycles": "0",
+      "material_cycle_threshold": "0",
+      "maximum_observation_burn_cycles": "1000000000000",
+      "maximum_stalled_observations": 64,
+      "maximum_update_burn_cycles": "1000000000000",
+      "operator": "7nptk-yvxzz-yfo5f-ieog4-vzgqd-rvete-cu2fr-36wgg-c5ds4-vdi26-nqe",
+      "protocol": {
+        "app_config": "/home/adam/projects/canic/canisters/audit/root_probe/activation.toml",
+        "component_group_placements": [
+          {
+            "deployment": "qualification",
+            "ordinal": 0,
+            "root": "root"
+          }
+        ],
+        "coordinator_candid": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/fleet_coordinator/fleet_coordinator.did",
+        "root_candid": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.did",
+        "store_candid": ".canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.did"
+      },
+      "schema_version": 1,
+      "treasury": "coordinator"
+    },
+    "protocol_steps": []
+  },
+  "schema_version": 1
+}

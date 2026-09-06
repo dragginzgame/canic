@@ -1,9 +1,9 @@
 # B1 Controlled-Ablation Manifest
 
-Date: 2026-09-04
+Date: 2026-09-05
 State: experiment and artifact manifests plus frozen function counter
-executable; rows 2, 3, 4 and 11 measured, row 5 qualified, four source switches
-specified and remaining immutable measurements open
+executable; rows 2, 3, 4, 5 and 11 measured, row 6 qualified, three source
+switches specified and remaining immutable measurements open
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
 Baseline authority: immutable `v0.110.5` at
 `50f40171d6177c3d1e490b1fdb5f6163323b2cd5`
@@ -15,11 +15,12 @@ including the exact SHA-256 of every runnable or specified patch,
 and one artifact roster for the eleven canonical roles plus four Canic-owned
 capability fixtures. The runner can execute the unchanged baseline, the fixed
 `Page<T>` cohort, the measured row 2 global-storage-registration and row 11
-payload-adapter switches, the measured row 3 activation-persistence and row 4
-authorization-persistence switches, and the qualified row 5 shared-CBOR switch.
-Rows 6, 8, 10 and 12 have exact audit-only patches against the unchanged
-`v0.110.5` source, but remain non-runnable until
-their selected build sets are qualified. The runner refuses every other
+payload-adapter switches, and the measured row 3 activation-persistence, row 4
+authorization-persistence and row 5 shared-CBOR switches.
+Row 6 is qualified across its complete canonical-plus-runtime selector. Rows
+8, 10 and 12 have exact audit-only patches against the unchanged `v0.110.5`
+source, but remain non-runnable until their selected build sets are qualified.
+The runner refuses every other
 experiment until its exact one-switch patch or compatible cross-commit input
 exists.
 
@@ -42,6 +43,18 @@ family. Every role retains its exact Candid hash. This is material repeated
 pressure for role-selected activation persistence and B3 separation, but the
 fail-closed switch proves no activation, restore or recovery parity and cannot
 distinguish the included subfamilies from one another.
+
+The immutable
+[row 5 report](../../reports/2026-09/2026-09-05/wasm-ablation-b1-05.md)
+attributes 9,332,399 optimized code-section bytes and 5,344 replica-limited
+defined functions across the eleven canonical artifacts to callers reachable
+through the shared bounded CBOR helper. Root accounts for 1,804,522 code bytes
+and Fleet Coordinator for 1,380,816; ordinary roles generally account for
+roughly 596--706 KiB each. The runtime and blob-storage fixtures independently
+lose 583,559 and 603,437 code bytes. This deliberately overlaps rows 3 and 4,
+leaves direct Ciborium callers intact and proves no codec or persistence
+parity, so it prioritizes role-selected persistence and later residual-codec
+measurement without authorizing the audit stub as production code.
 
 The immutable
 [row 11 report](../../reports/2026-09/2026-09-03/wasm-ablation-b1-11.md)
@@ -83,8 +96,8 @@ the row's exact SHA-256 before the runner accepts the catalog.
 | 2 | global stable-storage registration | `memory_macros.rs`, `storage/stable` | measured; material role-wide result, lifecycle parity open |
 | 3 | activation records/codecs | activation model, stable storage and mapper | measured; material inclusive all-role result, activation parity open |
 | 4 | authorization records/codecs | auth model, stable storage, ops and workflow | measured; material canonical-plus-runtime-fixture result, persistence and authorization parity open |
-| 5 | bounded relevant-CBOR stub | shared CBOR adapter and its reachable callers | ready; canonical roles plus runtime and blob fixtures qualified |
-| 6 | unconditional recovery dispatch | timer API/workflow and Root pool watchdog | specified patch; build qualification open |
+| 5 | bounded relevant-CBOR stub | shared CBOR adapter and its reachable callers | measured; material canonical-plus-runtime/blob-fixture result, codec and persistence parity open |
+| 6 | unconditional recovery dispatch | timer API/workflow and Root pool watchdog | ready; canonical roles plus runtime fixture qualified |
 | 7 | current versus exact role/capability expansion | build, start and endpoint macros | planned patch |
 | 8 | endpoint Candid type construction | endpoint procedural expansion | specified patch; build qualification open |
 | 9 | Candid type documentation | reachable DTOs, IDs and endpoint types | planned patch |
@@ -265,13 +278,18 @@ CARGO_NET_OFFLINE=true cargo check --offline --locked \
 ```
 
 Those packages cover the control-plane-heavy Root, combined runtime auth and
-opt-in blob-storage billing shapes. The subsequent non-retainable qualification
+opt-in blob-storage billing shapes. The non-retainable qualification
 builds all eleven canonical roles plus `runtime_probe` and
 `blob_storage_probe` once through the authoritative release builder. Every
 typed transform record and final Wasm, gzip, Candid and independent function
-count validates, and the exact product source and lock are restored. The run
-provides no baseline, determinism, codec/persistence parity or optimized delta.
-Row 5 is therefore `ready` for governed two-pair measurement.
+count validates, and the exact product source and lock are restored. The
+subsequent governed two-pair measurement passes complete artifact and metric
+determinism for all thirteen artifacts and preserves every Candid hash. Across
+the eleven canonical artifacts, the switch removes 9,332,399 artifact-summed
+optimized code bytes and 5,344 defined functions; the two fixtures lose
+another 1,186,996 code bytes and 702 functions. Row 5 is therefore `measured`,
+but remains build-only shared-helper attribution with no codec, persistence,
+restore, recovery or runtime parity claim.
 
 Row 6's exact patch identity is bound by the executable experiment manifest.
 It keeps the shared timer runtime, identities, claims, registrations, inventory,
@@ -292,10 +310,14 @@ CARGO_NET_OFFLINE=true cargo check --offline --locked \
   -p canister_root -p runtime_probe
 ```
 
-Those packages cover the Root pool watchdog and non-Root core watchdog. They do
-not qualify the complete canonical plus runtime-probe selector, run watchdog
-ownership/recovery journeys or provide an optimized delta, so row 6 remains
-`specified`.
+Those packages cover the Root pool watchdog and non-Root core watchdog. The
+subsequent non-retainable qualification builds all eleven canonical roles plus
+`runtime_probe` once through the authoritative release builder. Every typed
+transform record and final Wasm, gzip, Candid and independent function count
+validates, and the exact product source and lock are restored. The run does not
+execute watchdog ownership/recovery journeys, provide an optimized delta or
+claim behavior parity. Row 6 is therefore `ready` for governed two-pair
+measurement.
 
 Row 8's exact patch identity is bound by the executable experiment manifest.
 It marks ordinary IC CDK query/update expansions as Candid-hidden and omits the
@@ -323,9 +345,23 @@ CARGO_NET_OFFLINE=true cargo check --offline --locked \
 A governed release build of the payload-limit fixture produced a `didc`-valid
 27-byte `service : (opt blob) -> {}` declaration while the final Wasm retained
 all four fixture update exports plus the selected Canic role methods. That
-single fixture proves the declaration and runtime-export separation, but it
-does not qualify the complete canonical plus three-fixture selector or provide
-an immutable optimized before/after delta, so row 8 remains `specified`.
+single fixture proves the declaration and runtime-export separation.
+
+The first complete development qualification then passed the first ten
+canonical artifacts and failed closed at Wasm Store: its production builder
+correctly rejected the deliberately changed generated declaration against the
+checked-in canonical sidecar. The row-8 switch now includes a host-only audit
+accommodation which filters that canonical path only inside the
+counterfactual. It does not weaken the production builder or enter measured
+canister code. An exact-artifact qualification of `canonical_wasm_store` with
+that switch passed artifact, gzip, Candid and metric validation in 165 seconds.
+Qualification may now select one exact experiment-owned artifact so a repaired
+counterfactual boundary can be checked without rebuilding unrelated artifacts;
+this remains development-only and cannot produce retention-eligible evidence.
+
+The complete canonical plus three-fixture selector has not passed against the
+current exact patch identity and no immutable optimized before/after delta
+exists, so row 8 remains `specified`.
 
 Row 10's exact patch identity is bound by the executable experiment manifest.
 For ordinary endpoints it makes the IC CDK runtime wrapper Candid-hidden, gives
@@ -355,10 +391,11 @@ byte-identical 9,225-byte Candid with SHA-256
 `fb5a55c930325f32d26ae91a49a6e47ebd3db4ea79290d07a21bb54d7ff6d0a9`
 and identical Wasm export lists. The Wasm artifacts differed, establishing
 that the switch reaches runtime code without changing the declared protocol.
-Those single builds are qualification evidence only: they do not satisfy the
-runner's two-build determinism, complete selected-artifact matrix or immutable
-delta requirements, so row 10 remains `specified` and no savings value is
-retained.
+An exact `canonical_app` development qualification also passes artifact, gzip,
+Candid and structured-metric validation in 179 seconds. These single-artifact
+builds are qualification evidence only: they do not satisfy the runner's
+two-build determinism, complete selected-artifact matrix or immutable delta
+requirements, so row 10 remains `specified` and no savings value is retained.
 
 Row 11's exact patch identity is bound by the executable experiment manifest
 and remains byte-identical to the switch retained by its immutable report.
@@ -421,8 +458,10 @@ CARGO_NET_OFFLINE=true cargo check --offline --locked \
 
 Those packages cover control-plane-heavy Root, an ordinary application role
 and Store projection. They do not qualify all eleven canonical artifacts, run
-a metrics journey or provide an immutable optimized delta, so row 12 remains
-`specified` and no savings value is retained.
+a metrics journey or provide an immutable optimized delta. An exact
+`canonical_app` development qualification passes artifact, gzip, Candid and
+structured-metric validation in 186 seconds. The complete selector remains
+unqualified, so row 12 stays `specified` and no savings value is retained.
 
 ## Artifact Vector And Validator Boundary
 
@@ -526,12 +565,12 @@ bash scripts/ci/wasm-ablation-report.sh \
 
 ## Next Step
 
-Measure qualified row 5, then qualify row 6, row 8, row 10 and row 12
-against every selected artifact on a clean candidate and measure them
+Qualify rows 8, 10 and 12 against every selected artifact on a clean candidate,
+then measure ready row 6 and the newly qualified experiments
 through the governed runner. Measured row 2 confirms the direct hypothesis
 behind B2 but does not supply its required lifecycle parity; measured row 3
-provides inclusive activation-persistence pressure while measured row 4 and
-qualified row 5 provide differently scoped and intentionally overlapping
+provides inclusive activation-persistence pressure while measured rows 4 and
+5 provide differently scoped and intentionally overlapping
 persistence/codec attribution needed to choose B3 work; row 6 isolates the
 recovery dispatch rooted by shared
 watchdog registration. None is a behavior-preserving result. Keep B2 blocked

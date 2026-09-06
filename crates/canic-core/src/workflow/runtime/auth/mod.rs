@@ -14,15 +14,12 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     config::ConfigModel,
-    domain::policy::pure::auth::application_authorization::{
-        ApplicationAuthorityBindingTransition, decide_application_authority_binding_transition,
-    },
+    domain::policy::pure::auth::application_authorization::ApplicationAuthorityBindingTransition,
     dto::auth::SignedRoleAttestation,
     format::display_optional,
     ids::{CanisterRole, ManagedCanisterBinding},
     log,
     log::Topic,
-    model::auth::application_authorization::LocalApplicationAuthorityBinding,
     ops::{
         auth::{AuthExpiryError, AuthOps, AuthOpsError},
         config::{ConfigOps, RootConfigOps},
@@ -31,9 +28,14 @@ use crate::{
         runtime::metrics::auth::{
             record_attestation_epoch_rejected, record_attestation_verify_failed,
         },
-        storage::auth::AuthStateOps,
     },
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
+};
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+use crate::{
+    domain::policy::pure::auth::application_authorization::decide_application_authority_binding_transition,
+    model::auth::application_authorization::LocalApplicationAuthorityBinding,
+    ops::storage::auth::LocalApplicationAuthorizationStateOps,
 };
 
 ///
@@ -48,27 +50,42 @@ pub struct RuntimeAuthWorkflow;
 
 impl RuntimeAuthWorkflow {
     /// Reconcile the one locally activated application authority binding.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn reconcile_local_application_authority()
     -> Result<ApplicationAuthorityBindingTransition, InternalError> {
         let binding = AuthOps::local_application_authority_binding()?;
         Self::reconcile_application_authority_binding(binding)
     }
 
+    /// Leave local application authorization uninitialized when its capability is absent.
+    #[cfg(not(any(test, feature = "auth-local-application-authorization")))]
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the capability-absent lane preserves the fallible workflow signature"
+    )]
+    pub const fn reconcile_local_application_authority()
+    -> Result<ApplicationAuthorityBindingTransition, InternalError> {
+        Ok(ApplicationAuthorityBindingTransition::Unchanged)
+    }
+
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     fn reconcile_application_authority_binding(
         binding: LocalApplicationAuthorityBinding,
     ) -> Result<ApplicationAuthorityBindingTransition, InternalError> {
-        let previous = AuthStateOps::application_authority_binding()
+        let previous = LocalApplicationAuthorizationStateOps::application_authority_binding()
             .map_err(|_| InternalError::invariant())?;
         let transition =
             decide_application_authority_binding_transition(previous.as_ref(), &binding);
         match transition {
             ApplicationAuthorityBindingTransition::AdvanceGeneration => {
-                AuthStateOps::advance_application_authority_binding_generation(binding)
-                    .map_err(|_| InternalError::invariant())?;
+                LocalApplicationAuthorizationStateOps::advance_application_authority_binding_generation(
+                    binding,
+                )
+                .map_err(|_| InternalError::invariant())?;
             }
             ApplicationAuthorityBindingTransition::Initialize
             | ApplicationAuthorityBindingTransition::UpdateWithoutGeneration => {
-                AuthStateOps::set_application_authority_binding(binding)
+                LocalApplicationAuthorizationStateOps::set_application_authority_binding(binding)
                     .map_err(|_| InternalError::invariant())?;
             }
             ApplicationAuthorityBindingTransition::Unchanged => {}
@@ -77,24 +94,28 @@ impl RuntimeAuthWorkflow {
     }
 
     /// Return the exact root issuer-renewal native identity.
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(crate) fn root_issuer_renewal_timer_identity()
     -> Result<ic_timers::TimerIdentity, crate::workflow::runtime::timer::TimerError> {
         renewal::RootIssuerRenewalWorkflow::timer_identity()
     }
 
     /// Return the claimed root issuer-renewal identity, when declared.
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(crate) fn claimed_root_issuer_renewal_timer_identity()
     -> Result<Option<ic_timers::TimerIdentity>, crate::workflow::runtime::timer::TimerError> {
         renewal::RootIssuerRenewalWorkflow::claimed_timer_identity()
     }
 
     /// Cancel the retained root issuer-renewal registration for snapshot suspension.
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(crate) fn cancel_root_issuer_renewal_timer()
     -> Result<(), crate::workflow::runtime::timer::TimerError> {
         renewal::RootIssuerRenewalWorkflow::cancel_timer()
     }
 
     /// Recover one expired root issuer-renewal attempt from authoritative auth demand.
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(crate) fn recover_expired_root_issuer_renewal(now_ns: u64) -> bool {
         renewal::RootIssuerRenewalWorkflow::recover_expired(now_ns)
     }
@@ -113,6 +134,7 @@ impl RuntimeAuthWorkflow {
             return Err(InternalError::invariant());
         }
 
+        #[cfg(any(test, feature = "auth-root-delegation-state"))]
         if AuthOps::has_enabled_root_issuer_renewal_templates()
             && !AuthOps::chain_key_root_sign_enabled()
         {
@@ -381,7 +403,8 @@ mod tests {
             ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
         },
         ops::storage::auth::{
-            AuthStateOps, application_sessions::ApplicationSessionTestStateGuard,
+            LocalApplicationAuthorizationStateOps,
+            application_sessions::ApplicationSessionTestStateGuard,
         },
         test::{config::ConfigTestBuilder, seams, support::fleet_key},
     };
@@ -416,26 +439,38 @@ mod tests {
             RuntimeAuthWorkflow::reconcile_application_authority_binding(original).unwrap(),
             ApplicationAuthorityBindingTransition::Initialize
         );
-        assert_eq!(AuthStateOps::application_authority_generation(), 0);
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_authority_generation(),
+            0
+        );
 
         let expanded = application_authority_binding(&["app:read", "app:write"], 1_000);
         assert_eq!(
             RuntimeAuthWorkflow::reconcile_application_authority_binding(expanded).unwrap(),
             ApplicationAuthorityBindingTransition::UpdateWithoutGeneration
         );
-        assert_eq!(AuthStateOps::application_authority_generation(), 0);
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_authority_generation(),
+            0
+        );
 
         let narrowed = application_authority_binding(&["app:read"], 900);
         assert_eq!(
             RuntimeAuthWorkflow::reconcile_application_authority_binding(narrowed.clone()).unwrap(),
             ApplicationAuthorityBindingTransition::AdvanceGeneration
         );
-        assert_eq!(AuthStateOps::application_authority_generation(), 1);
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_authority_generation(),
+            1
+        );
         assert_eq!(
             RuntimeAuthWorkflow::reconcile_application_authority_binding(narrowed).unwrap(),
             ApplicationAuthorityBindingTransition::Unchanged
         );
-        assert_eq!(AuthStateOps::application_authority_generation(), 1);
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_authority_generation(),
+            1
+        );
     }
 
     #[test]

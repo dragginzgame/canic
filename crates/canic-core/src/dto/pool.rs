@@ -150,7 +150,7 @@ pub struct CanisterPoolStatusRequest {
 }
 
 /// Selects one pool Canister for an import or reset retry command.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PoolCanisterRequest {
     pub canister_id: Principal,
 }

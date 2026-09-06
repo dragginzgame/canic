@@ -55,8 +55,81 @@ fn fresh_pool_creation_funding_preserves_toko_shaped_readiness_floor() {
     assert_eq!(
         fresh_pool_creation_funding(1_900_000_000_000)
             .expect("compile Toko-shaped fresh pool funding"),
-        3_900_000_000_000
+        4_900_000_000_000
     );
+}
+
+#[test]
+fn fresh_pool_supply_includes_both_hubs_initial_shards_and_ready_reserve() {
+    let root = temp_dir("fleet-generate-complete-local-supply");
+    fs::create_dir_all(&root).expect("create bootstrap fixture directory");
+    let config_path = root.join("canic.toml");
+    let configuration = format!(
+        "{}{}",
+        multi_component_config(),
+        r#"
+[roles.hub]
+kind = "canister"
+package = "hub"
+fleet_admission = true
+
+[roles.shard]
+kind = "canister"
+package = "shard"
+fleet_admission = true
+
+[component_specs.hubs]
+component_role = "hub"
+maximum_instances = 2
+
+[component_specs.hubs.sharding.pools.shards]
+canister_role = "shard"
+policy.capacity = 100
+policy.initial_shards = 8
+policy.max_shards = 8
+
+[component_specs.hubs.children.shard]
+kind = "shard"
+
+[component_specs.hubs.spawn_grants.hub.shard]
+maximum_instances_per_parent = 8
+
+[component_groups.app.components.first_hub]
+component_spec = "hubs"
+
+[component_groups.app.components.second_hub]
+component_spec = "hubs"
+"#
+    );
+    let mut source = multi_component_source("operator", "coordinator", "root");
+    let root_source = &mut source.fleet_subnet_roots[0];
+    root_source.canister_pool.minimum_size = 5;
+    root_source.canister_pool.maximum_size = 24;
+    for (initial_shards, expected_supply) in [(8, 24), (1, 10)] {
+        fs::write(
+            &config_path,
+            configuration.replace(
+                "policy.initial_shards = 8",
+                &format!("policy.initial_shards = {initial_shards}"),
+            ),
+        )
+        .expect("write complete bootstrap configuration");
+        let config = AppConfigSnapshot::load(&config_path).expect("load bootstrap configuration");
+        let compiled = ComponentDeploymentConfiguration::compile(config.model())
+            .expect("compile initial Workload topology");
+        assert_eq!(
+            fresh_root_pool_count(root_source, &compiled).expect("complete fresh pool supply"),
+            expected_supply
+        );
+        root_source.canister_pool.maximum_size = 5;
+        assert!(matches!(
+            fresh_root_pool_count(root_source, &compiled),
+            Err(FleetGenerateError::Policy(
+                crate::fleet_ensure::policy::EnsurePolicyError::TerminalPoolCapacity { .. }
+            ))
+        ));
+        root_source.canister_pool.maximum_size = 24;
+    }
 }
 
 #[test]
@@ -82,7 +155,8 @@ fn retained_pool_imports_above_root_initialisation_maximum_reject_during_generat
     let coordinator_subnet = Principal::from_slice(&[32]).to_text();
     let placement = Principal::from_slice(&[33]).to_text();
     let root = Principal::from_slice(&[34]).to_text();
-    let source = multi_component_source(&operator, &coordinator_subnet, &placement);
+    let mut source = multi_component_source(&operator, &coordinator_subnet, &placement);
+    source.fleet_subnet_roots[0].canister_pool.maximum_size = 2;
     let seed = EstateSeed {
         schema_version: 1,
         fleet_id: "a4".repeat(32).parse().expect("Fleet ID"),
@@ -220,7 +294,7 @@ fn management_runtime_and_module_observations_fail_closed() {
 }
 
 #[test]
-fn root_policy_drift_requires_the_reviewed_reinstall() {
+fn retained_root_policy_must_match_current_configuration() {
     let operator = Principal::from_slice(&[11]);
     let source = multi_component_source(
         &operator.to_text(),
@@ -238,32 +312,12 @@ fn root_policy_drift_requires_the_reviewed_reinstall() {
     let mut retained = expected.clone();
     retained.limits.canister_pool.canister_cycles = Cycles::new(2_000_000_000_000);
 
-    require_root_policy_convergence(
-        "retained-root",
-        &retained,
-        &expected,
-        Some(&"15".repeat(32)),
-        &"16".repeat(32),
-    )
-    .expect("old pool policy converges through current Root reinstall");
     assert!(matches!(
-        require_root_policy_convergence(
-            "retained-root",
-            &retained,
-            &expected,
-            Some(&"16".repeat(32)),
-            &"16".repeat(32),
-        ),
+        require_root_policy_matches("retained-root", &retained, &expected),
         Err(FleetGenerateError::SeedTopology(_))
     ));
-    require_root_policy_convergence(
-        "retained-root",
-        &expected,
-        &expected,
-        Some(&"16".repeat(32)),
-        &"16".repeat(32),
-    )
-    .expect("matching current policy needs no reinstall");
+    require_root_policy_matches("retained-root", &expected, &expected)
+        .expect("matching current policy");
 }
 
 #[test]
@@ -574,17 +628,22 @@ fn generation_rejects_component_demand_above_pool_target_before_observation() {
         source: &source_path,
     };
 
-    assert!(matches!(
-        generate_desired_fleet(&request),
-        Err(FleetGenerateError::ComponentPoolCapacity(
-            RootPoolCapacityError::Insufficient {
-                component_spec,
-                pool_target_cycles: 4_800_000_000_000,
-                required_cycles: 5_000_000_000_000,
-                root,
-            }
-        )) if component_spec.as_str() == "app" && root == fleet_root
-    ));
+    let result = generate_desired_fleet(&request);
+    assert!(
+        matches!(
+            &result,
+            Err(FleetGenerateError::ComponentPoolCapacity(
+                RootPoolCapacityError::Insufficient {
+                    component_spec,
+                    pool_target_cycles: 4_800_000_000_000,
+                    required_cycles: 5_000_000_000_000,
+                    root,
+                }
+            )) if component_spec.as_str() == "app" && root == &fleet_root
+        ),
+        "{:?}",
+        result.as_ref().err()
+    );
 }
 
 #[test]
@@ -677,7 +736,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     fs::create_dir_all(source_path.parent().expect("deployment parent"))
         .expect("create deployment parent");
     let source_document = multi_component_source_toml(&operator, &coordinator_subnet, &placement)
-        .replace("maximum_size = 2", "maximum_size = 5")
+        .replace("maximum_size = 3", "maximum_size = 5")
         .replacen(
             &format!("principals = [\"{operator}\"]"),
             &format!(
@@ -723,7 +782,15 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &pool_two,
     );
     let coordinator_module_hash = "83".repeat(32);
-    let root_module_hash = "84".repeat(32);
+    let root_module_hash =
+        load_persisted_canic_infrastructure_artifact_manifest(&root, release_build_id)
+            .expect("current infrastructure authority")
+            .manifest
+            .entries
+            .into_iter()
+            .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+            .expect("current Root artifact")
+            .wasm_sha256_hex;
     let store_module_hash = "85".repeat(32);
     let write_icp = |root_runtime_status| {
         write_fake_icp(
@@ -865,6 +932,16 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         Cycles::from_human_config_str(value).expect("generated cycle value uses compact units");
     }
 
+    let mut fresh_source: toml::Value =
+        toml::from_str(&fs::read_to_string(&source_path).expect("read retained source policy"))
+            .expect("decode source for a separately reviewed fresh operation");
+    fresh_source["coordinator"]["creation_funding"]["cycles"] = toml::Value::String("500T".into());
+    let source_path = root.join("fleets/fresh-policy.toml");
+    fs::write(
+        &source_path,
+        toml::to_string(&fresh_source).expect("encode fresh policy"),
+    )
+    .expect("reserve the full fresh convergence observation budget");
     let fresh_seed_path = root.join("deployments/fresh-multi-component.estate.toml");
     let fresh_id = initialize_fresh_estate_seed(&FreshEstateSeedRequest {
         cycles_ledger: &mainnet_cycles_ledger(),
@@ -954,7 +1031,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .iter()
         .filter(|canister| canister.kind == DesiredCanisterKind::Pool)
         .collect::<Vec<_>>();
-    assert_eq!(fresh_pools.len(), 2);
+    assert_eq!(fresh_pools.len(), 3);
     assert!(
         fresh_pools
             .iter()
@@ -1012,11 +1089,11 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(matches!(
         insufficient_error,
         crate::fleet_ensure::policy::EnsurePolicyError::FreshPoolCreationFundingInsufficient {
-            admissible_burn_cycles: 2_000_000_000_000,
+            admissible_burn_cycles: 3_000_000_000_000,
             creation_funding_cycles: 1_900_000_000_000,
             readiness_floor_cycles: 1_900_000_000_000,
-            required_creation_funding_cycles: 3_900_000_000_000,
-            shortfall_cycles: 2_000_000_000_000,
+            required_creation_funding_cycles: 4_900_000_000_000,
+            shortfall_cycles: 3_000_000_000_000,
             ..
         }
     ));
@@ -1140,7 +1217,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             .iter()
             .find(|(_, name, _)| name.as_str() == pool.name.as_str())
             .expect("fresh pool creation is reviewed directly");
-        assert_eq!(pool.initial_cycles, "7T");
+        assert_eq!(pool.initial_cycles, "8T");
         assert_eq!(pool.minimum_cycles, "5T");
         assert_eq!(
             pool.initial_cycles
@@ -1149,59 +1226,60 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             Ok(*funded),
         );
     }
-    let legacy_pool = fresh_pools.first().expect("first fresh pool");
-    let mut legacy_desired = fresh.desired.clone();
-    legacy_desired.maximum_update_burn_cycles = "100B".to_string();
-    let legacy_desired_pool = legacy_desired
+    let underfunded_pool = fresh_pools.first().expect("first fresh pool");
+    let mut underfunded_desired = fresh.desired.clone();
+    underfunded_desired.maximum_update_burn_cycles = "100B".to_string();
+    let underfunded_desired_pool = underfunded_desired
         .canisters
         .iter_mut()
-        .find(|canister| canister.name == legacy_pool.name)
-        .expect("Toko-shaped published-line pool");
-    legacy_desired_pool.initial_cycles = "1.9T".to_string();
-    legacy_desired_pool.minimum_cycles = "1.9T".to_string();
-    let legacy_principal = Principal::from_slice(&[91]).to_text();
-    let mut legacy_state = read_state(
-        &EnsurePaths::under(&root, "local", "legacy-underfunded-pool"),
-        "legacy-underfunded-pool",
+        .find(|canister| canister.name == underfunded_pool.name)
+        .expect("current underfunded pool");
+    underfunded_desired_pool.initial_cycles = "1.9T".to_string();
+    underfunded_desired_pool.minimum_cycles = "1.9T".to_string();
+    let underfunded_principal = Principal::from_slice(&[91]).to_text();
+    let mut underfunded_state = read_state(
+        &EnsurePaths::under(&root, "local", "underfunded-underfunded-pool"),
+        "underfunded-underfunded-pool",
     )
-    .expect("construct legacy underfunded state");
-    legacy_state
+    .expect("construct current underfunded state");
+    underfunded_state
         .pending_principals
-        .insert(legacy_pool.name.clone(), legacy_principal.clone());
-    let legacy_action = EnsureAction::Create {
-        controller_canisters: legacy_pool.controller_canisters.clone(),
+        .insert(underfunded_pool.name.clone(), underfunded_principal.clone());
+    let underfunded_action = EnsureAction::Create {
+        controller_canisters: underfunded_pool.controller_canisters.clone(),
         controllers: vec![fresh.desired.operator.clone()],
         created_at_time: 1_800_000_000_000_000_000,
         ledger: fresh.desired.cycles_ledger.clone(),
-        name: legacy_pool.name.clone(),
+        name: underfunded_pool.name.clone(),
         requested_initial_cycles: 1_900_000_000_000,
-        subnet: legacy_pool.subnet.clone(),
+        subnet: underfunded_pool.subnet.clone(),
     };
-    let legacy_record = EffectRecord {
-        action_sha256: action_sha256(&legacy_action),
-        created_principal: Some(legacy_principal),
+    let underfunded_record = EffectRecord {
+        maintenance_attempts: 0,
+        action_sha256: action_sha256(&underfunded_action),
+        created_principal: Some(underfunded_principal),
         destination_post_cycles: None,
         destination_pre_cycles: None,
         post_cycles: Some(1_899_998_056_000),
         pre_cycles: None,
         pre_canister_version: None,
-        progress_identity: Some("legacy-first-live-balance".to_string()),
-        receipt: Some("legacy-create-receipt".to_string()),
+        progress_identity: Some("underfunded-first-live-balance".to_string()),
+        receipt: Some("underfunded-create-receipt".to_string()),
         state: EffectState::Applied,
     };
-    let legacy_error = workflow::retain_applied_create_authority::<io::Error>(
-        &legacy_desired,
-        &legacy_action,
-        &legacy_record,
-        &mut legacy_state,
+    let underfunded_error = workflow::retain_applied_create_authority::<io::Error>(
+        &underfunded_desired,
+        &underfunded_action,
+        &underfunded_record,
+        &mut underfunded_state,
     )
-    .expect_err("underfunded published-line pool stops before controller finalization");
+    .expect_err("underfunded current pool stops before controller finalization");
     assert!(matches!(
-        legacy_error,
+        underfunded_error,
         workflow::EnsureWorkflowError::FreshPoolCreationUnderfunded(details)
         if matches!(details.as_ref(), workflow::FreshPoolCreationUnderfundedError {
             live_balance_cycles: 1_899_998_056_000,
-            maximum_observation_burn_cycles: 1_000_000_000_000,
+            maximum_observation_burn_cycles: 1_100_000_000_000,
             pre_finalization_shortfall_cycles: 100_001_944_000,
             readiness_floor_cycles: 1_900_000_000_000,
             readiness_shortfall_cycles: 1_944_000,
@@ -1241,6 +1319,23 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let fresh_apply_root = root.join("fresh-controller-finalization");
     copy_test_tree(&root.join("artifacts"), &fresh_apply_root.join("artifacts"))
         .expect("copy fresh release artifacts");
+    copy_test_tree(
+        &root.join(".canic/release-builds"),
+        &fresh_apply_root.join(".canic/release-builds"),
+    )
+    .expect("retain exact continuation release inputs across process reconstruction");
+    copy_test_file(
+        &app_config,
+        fresh_apply_root.join(
+            &fresh
+                .desired
+                .protocol
+                .as_ref()
+                .expect("typed fresh protocol")
+                .app_config,
+        ),
+    )
+    .expect("retain the unchanged reviewed App config");
     let fresh_apply_paths = EnsurePaths::under(
         &fresh_apply_root,
         &fresh.desired.environment,
@@ -1256,6 +1351,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     write_journal(
         &fresh_apply_paths,
         &FleetEnsureJournalRecord {
+            successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
             estate_funding_required: None,
             effects: Vec::new(),
@@ -1290,7 +1386,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .filter(|action| matches!(action, EnsureAction::Create { .. }))
         .map(action_sha256)
         .collect::<Vec<_>>();
-    assert_eq!(fresh_finalizations.len(), 2);
+    assert_eq!(fresh_finalizations.len(), fresh_pools.len());
     assert_eq!(fresh_creates.len(), fresh.desired.canisters.len());
     let mut fresh_apply_platform = crate::fleet_ensure::tests::MockPlatform::new(
         fresh.desired.clone(),
@@ -1485,6 +1581,23 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let retained_root = root.join("retained-root-only-resume");
     copy_test_tree(&root.join("artifacts"), &retained_root.join("artifacts"))
         .expect("copy retained release artifacts");
+    copy_test_tree(
+        &root.join(".canic/release-builds"),
+        &retained_root.join(".canic/release-builds"),
+    )
+    .expect("retain exact continuation release inputs across process reconstruction");
+    copy_test_file(
+        &app_config,
+        retained_root.join(
+            &fresh
+                .desired
+                .protocol
+                .as_ref()
+                .expect("typed fresh protocol")
+                .app_config,
+        ),
+    )
+    .expect("retain the unchanged reviewed App config");
     let retained_paths = EnsurePaths::under(
         &retained_root,
         &fresh.desired.environment,
@@ -1519,11 +1632,12 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         })
         .map(|action| action_sha256(action))
         .collect::<Vec<_>>();
-    assert_eq!(pool_creates.len(), 2);
+    assert_eq!(pool_creates.len(), fresh_pools.len());
     retained_platform.fail_once(pool_creates[1].clone());
     write_journal(
         &retained_paths,
         &FleetEnsureJournalRecord {
+            successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
             estate_funding_required: None,
             effects: Vec::new(),
@@ -1692,12 +1806,26 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         icp.to_str().expect("fake ICP path"),
         &root,
     );
+    let management = allocated_fresh_platform
+        .observe_root_management(&allocated_fresh_state, &BTreeSet::new())
+        .expect("management observation does not authorize a reset")
+        .expect("allocated stopped Root management evidence");
+    assert_eq!(
+        management.roots["root-0"].live.status,
+        CanisterRuntimeStatus::Stopped
+    );
     assert!(
-        allocated_fresh_platform
-            .observe_root_management(&allocated_fresh_state, &BTreeSet::new())
-            .expect("observe the exact allocated fresh Root")
-            .is_some(),
-        "once allocation retains a Principal, ordinary Root management applies"
+        crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
+            crate::fleet_ensure::policy::RootStartPlanInput {
+                authority: None,
+                created_at_time: 1,
+                desired: &fresh.desired,
+                desired_sha256: &sha256_hex(b"unreviewed management observation"),
+                observation: &management,
+                requested_fleet: &fresh.desired.fleet,
+            }
+        )
+        .is_err()
     );
     assert!(matches!(
         initialize_fresh_estate_seed(&FreshEstateSeedRequest {
@@ -1834,10 +1962,13 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &mut recovery_platform,
     )
     .expect_err("post-effect protocol work requires a successor review");
-    assert!(matches!(
-        recovery_error,
-        workflow::EnsureWorkflowError::ConvergenceDrift
-    ));
+    assert!(
+        matches!(
+            recovery_error,
+            workflow::EnsureWorkflowError::SuccessorReviewRequired { .. }
+        ),
+        "unexpected review boundary: {recovery_error:?}"
+    );
     assert_eq!(recovery_platform.mutations, 5);
     let recovery_paths = EnsurePaths::under(
         &root,
@@ -2078,8 +2209,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         [EnsureAction::FleetProtocol { .. }]
     ));
 
-    let mut production_recovery_desired = recovery_desired.clone();
-    production_recovery_desired.fleet = "retained-multi-component-live-recovery".to_string();
     let coordinator_hash = artifacts
         .wasm_sha256_by_canister
         .get("coordinator")
@@ -2092,610 +2221,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .wasm_sha256_by_canister
         .get("store-0")
         .expect("Store artifact");
-    let predecessor_root_hash = sha256_hex(b"retained predecessor Root protocol");
-    let predecessor_store_hash = sha256_hex(b"retained predecessor Store protocol");
-    assert_ne!(&predecessor_root_hash, root_hash);
-    assert_ne!(&predecessor_store_hash, store_hash);
-    write_fake_icp(
-        &root,
-        FakeIcpFixture {
-            authority: &retained_authority,
-            coordinator: &coordinator,
-            coordinator_module_hash: coordinator_hash,
-            fleet_root: &fleet_root,
-            operator: &operator,
-            pool: &retained_pool,
-            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
-            root_module_hash: &predecessor_root_hash,
-            root_runtime_status: "running",
-            root_status_error: Some(canic_core::diagnostics::codes::STATE_CONFLICT),
-            store: &store,
-            store_has_root_controller: true,
-            store_module_hash: &predecessor_store_hash,
-        },
-    );
-    let mut state = retained_ensure_state(&production_recovery_desired, &observed, &artifacts);
-    state
-        .topology
-        .get_mut("root-0")
-        .expect("retained Root topology")
-        .module_hash = None;
-    state
-        .topology
-        .get_mut("store-0")
-        .expect("retained Store topology")
-        .module_hash = None;
-    assert_eq!(state.topology["root-0"].module_hash, None);
-    assert_eq!(state.topology["store-0"].module_hash, None);
-    write_state(
-        &EnsurePaths::under(
-            &root,
-            &production_recovery_desired.environment,
-            &production_recovery_desired.fleet,
-        ),
-        &state,
-    )
-    .expect("retain exact current Fleet evidence");
-    let mut production_platform = IcpEnsurePlatform::new(
-        production_recovery_desired.clone(),
-        icp.to_str().expect("fake ICP path"),
-        &root,
-    );
-    let production_recovery = workflow::plan(
-        &root,
-        &production_recovery_desired,
-        &source_digest,
-        &production_recovery_desired.fleet,
-        1_800_000_000_000_000_100,
-        &mut production_platform,
-    )
-    .expect("plan conflicted Root recovery from retained exact balances");
-    let production_actions = workflow::ordered_actions(&production_recovery.plan);
-    assert_eq!(
-        production_actions
-            .iter()
-            .filter(|action| matches!(
-                action,
-                EnsureAction::Install {
-                    mode: crate::fleet_ensure::model::InstallMode::Reinstall,
-                    ..
-                }
-            ))
-            .count(),
-        3,
-    );
-    assert!(production_recovery.plan.protocol_actions.is_empty());
-    assert!(matches!(
-        production_actions.as_slice(),
-        [
-            EnsureAction::Install {
-                canic_init: Some(DesiredCanisterInit::Coordinator),
-                ..
-            },
-            EnsureAction::Install {
-                canic_init: Some(DesiredCanisterInit::Store { .. }),
-                ..
-            },
-            EnsureAction::Install {
-                canic_init: Some(DesiredCanisterInit::Root { .. }),
-                ..
-            }
-        ]
-    ));
-    assert_eq!(
-        production_recovery
-            .plan
-            .conservation
-            .maximum_new_funding_cycles,
-        0
-    );
-    assert_eq!(
-        production_recovery
-            .plan
-            .conservation
-            .maximum_operator_debit_cycles,
-        0
-    );
-    let pool_names = production_recovery_desired
-        .canisters
-        .iter()
-        .filter(|canister| canister.kind == DesiredCanisterKind::Pool)
-        .map(|canister| canister.name.as_str())
-        .collect::<BTreeSet<_>>();
-    let retained_assets = production_recovery
-        .plan
-        .canisters
-        .iter()
-        .filter(|canister| pool_names.contains(canister.name.as_str()))
-        .map(|canister| canister.observed_cycles)
-        .collect::<BTreeSet<_>>();
-    assert_eq!(
-        retained_assets,
-        BTreeSet::from([4_900_000_000_000, 5_000_000_000_000])
-    );
-
-    let production_paths = EnsurePaths::under(
-        &root,
-        &production_recovery_desired.environment,
-        &production_recovery_desired.fleet,
-    );
-    let mut retained_rejected_plan = production_recovery.plan.clone();
-    let retained_store_control = retained_controller_preparation_action(
-        &root,
-        &production_recovery_desired,
-        &state,
-        &retained_rejected_plan.operation_id,
-    );
-    let EnsureAction::FleetProtocol {
-        action: retained_store_control_request,
-        ..
-    } = &retained_store_control
-    else {
-        unreachable!("retained Store controller action is typed protocol");
-    };
-    let CurrentFleetProtocolAction::AdoptStore { request } =
-        retained_store_control_request.as_ref()
-    else {
-        unreachable!("retained Store controller action is adoption");
-    };
-    assert!(
-        crate::fleet_ensure::ops::current_protocol::retained_store_control_request_is_exact(
-            &root,
-            &production_recovery_desired,
-            &retained_rejected_plan.operation_id,
-            &state,
-            "root-0",
-            request,
-        )
-        .expect("validate retained Store controller request")
-    );
-    let mut wrong_operation_request = request.clone();
-    wrong_operation_request.operation_id[0] ^= 1;
-    assert!(
-        !crate::fleet_ensure::ops::current_protocol::retained_store_control_request_is_exact(
-            &root,
-            &production_recovery_desired,
-            &retained_rejected_plan.operation_id,
-            &state,
-            "root-0",
-            &wrong_operation_request,
-        )
-        .expect("reject wrong retained operation")
-    );
-    let mut wrong_store_request = request.clone();
-    wrong_store_request.authority.wasm_store = Principal::anonymous();
-    assert!(
-        !crate::fleet_ensure::ops::current_protocol::retained_store_control_request_is_exact(
-            &root,
-            &production_recovery_desired,
-            &retained_rejected_plan.operation_id,
-            &state,
-            "root-0",
-            &wrong_store_request,
-        )
-        .expect("reject wrong retained Store")
-    );
-    assert!(
-        !crate::fleet_ensure::ops::current_protocol::retained_store_control_request_is_exact(
-            &root,
-            &production_recovery_desired,
-            &retained_rejected_plan.operation_id,
-            &state,
-            "missing-root",
-            request,
-        )
-        .expect("reject wrong retained Root")
-    );
-    retained_rejected_plan
-        .protocol_actions
-        .push(retained_store_control.clone());
-    retained_rejected_plan.plan_sha256 =
-        crate::fleet_ensure::policy::expected_plan_sha256(&retained_rejected_plan);
-    let retained_action_hashes = workflow::ordered_actions(&retained_rejected_plan)
-        .into_iter()
-        .map(action_sha256)
-        .collect::<Vec<_>>();
-    let coordinator_install = workflow::ordered_actions(&retained_rejected_plan)
-        .into_iter()
-        .next()
-        .expect("retained Coordinator reinstall");
-    assert!(matches!(
-        coordinator_install,
-        EnsureAction::Install {
-            canic_init: Some(DesiredCanisterInit::Coordinator),
-            ..
-        }
-    ));
-    assert_eq!(
-        workflow::ordered_actions(&retained_rejected_plan)
-            .get(1)
-            .copied(),
-        Some(&retained_store_control)
-    );
-    write_plan(&production_paths, &retained_rejected_plan)
-        .expect("write retained rejected plan bytes");
-    write_journal(
-        &production_paths,
-        &FleetEnsureJournalRecord {
-            completion: FleetEnsureCompletion::InProgress,
-            estate_funding_required: None,
-            effects: vec![
-                EffectRecord {
-                    action_sha256: action_sha256(coordinator_install),
-                    created_principal: None,
-                    destination_post_cycles: None,
-                    destination_pre_cycles: None,
-                    post_cycles: Some(270_000_000_000_000),
-                    pre_cycles: Some(270_000_000_000_000),
-                    pre_canister_version: Some(0),
-                    progress_identity: Some("install:coordinator:version:1".to_string()),
-                    receipt: None,
-                    state: EffectState::Applied,
-                },
-                EffectRecord {
-                    action_sha256: action_sha256(&retained_store_control),
-                    created_principal: None,
-                    destination_post_cycles: None,
-                    destination_pre_cycles: None,
-                    post_cycles: None,
-                    pre_cycles: Some(30_000_000_000_000),
-                    pre_canister_version: Some(1),
-                    progress_identity: None,
-                    receipt: None,
-                    state: EffectState::Intent,
-                },
-            ],
-            fleet: retained_rejected_plan.fleet.clone(),
-            initial_controlled_cycles: retained_rejected_plan
-                .conservation
-                .observed_controlled_cycles,
-            initial_estate_funding_cycles_by_root: retained_rejected_plan
-                .conservation
-                .estate_funding_domains
-                .iter()
-                .map(|domain| {
-                    (
-                        domain.root.clone(),
-                        domain.available_cycles.unwrap_or_default(),
-                    )
-                })
-                .collect(),
-            initial_operator_cycles: 500_000_000_000_000,
-            operation_id: retained_rejected_plan.operation_id.clone(),
-            plan_sha256: retained_rejected_plan.plan_sha256.clone(),
-            schema_version: crate::fleet_ensure::model::FLEET_ENSURE_SCHEMA_VERSION,
-            stalled_observations: 1,
-        },
-    )
-    .expect("write retained rejected journal bytes");
-    fs::write(root.join("root-status-count"), b"1\n").expect("select retained typed E132 status");
-    fs::write(root.join("root-protocol-error"), b"1\n")
-        .expect("select retained typed E132 response");
-    let replan_error = workflow::apply(
-        &root,
-        &production_recovery_desired,
-        &source_digest,
-        &production_recovery_desired.fleet,
-        &retained_rejected_plan.plan_sha256,
-        &mut production_platform,
-    )
-    .expect_err("predecessor Store adoption closes only at replan boundary");
-    assert!(
-        matches!(
-            &replan_error,
-            workflow::EnsureWorkflowError::ReplanRequiredAfterRejectedPrerequisite { .. }
-        ),
-        "unexpected retained rejection result: {replan_error:?}"
-    );
-    let rejected_journal = read_journal(&production_paths)
-        .expect("read rejected journal")
-        .expect("retained rejected journal");
-    assert_eq!(
-        rejected_journal.completion,
-        FleetEnsureCompletion::ReplanRequired
-    );
-    assert_eq!(
-        rejected_journal
-            .effects
-            .iter()
-            .map(|effect| effect.action_sha256.clone())
-            .collect::<Vec<_>>(),
-        retained_action_hashes[..2]
-    );
-    assert_eq!(rejected_journal.effects[0].state, EffectState::Applied);
-    assert_eq!(rejected_journal.effects[1].state, EffectState::Intent);
-    assert!(rejected_journal.effects[1].receipt.is_none());
-    let rejected_state = read_state(&production_paths, &production_recovery_desired.fleet)
-        .expect("read exact rejected state");
-    assert_eq!(
-        rejected_state.completed_reinstalls,
-        BTreeMap::from([("coordinator".to_string(), 0)])
-    );
-    assert!(!rejected_state.completed_reinstalls.contains_key("root-0"));
-    assert!(!rejected_state.completed_reinstalls.contains_key("store-0"));
-
-    let retained_replan_files = [
-        fs::read(&production_paths.state).expect("read retained replan state"),
-        fs::read(&production_paths.plan).expect("read retained replan plan"),
-        fs::read(&production_paths.journal).expect("read retained replan journal"),
-    ];
-    let alternate_source_digest = "fe".repeat(32);
-    let alternate_error = workflow::plan(
-        &root,
-        &production_recovery_desired,
-        &alternate_source_digest,
-        &production_recovery_desired.fleet,
-        1_800_000_000_000_000_100,
-        &mut production_platform,
-    )
-    .expect_err("alternate desired input cannot clear completed reinstall evidence");
-    assert!(matches!(
-        alternate_error,
-        workflow::EnsureWorkflowError::RetainedReinstallDesiredConflict {
-            actual,
-            expected,
-        } if actual == alternate_source_digest && expected == source_digest
-    ));
-    assert_eq!(
-        [
-            fs::read(&production_paths.state).expect("reread retained replan state"),
-            fs::read(&production_paths.plan).expect("reread retained replan plan"),
-            fs::read(&production_paths.journal).expect("reread retained replan journal"),
-        ],
-        retained_replan_files,
-        "rejected read-only planning must leave every retained authority byte unchanged"
-    );
-    assert_eq!(
-        read_state(&production_paths, &production_recovery_desired.fleet)
-            .expect("reread exact rejected state"),
-        rejected_state,
-    );
-
-    fs::write(root.join("root-status-count"), b"1\n")
-        .expect("retain typed predecessor Root status for fresh planning");
-    fs::remove_file(root.join("root-protocol-error"))
-        .expect("clear retained typed E132 response for replanning");
-    let fresh_replan = workflow::plan(
-        &root,
-        &production_recovery_desired,
-        &source_digest,
-        &production_recovery_desired.fleet,
-        1_800_000_000_000_000_101,
-        &mut production_platform,
-    )
-    .expect("fresh plan preserves only the proved Coordinator reinstall");
-    let fresh_actions = workflow::ordered_actions(&fresh_replan.plan);
-    assert!(fresh_replan.plan.protocol_actions.is_empty());
-    assert!(fresh_actions.iter().all(|action| {
-        !matches!(
-            action,
-            EnsureAction::Install {
-                canic_init: Some(DesiredCanisterInit::Coordinator),
-                ..
-            }
-        )
-    }));
-    assert!(matches!(
-        fresh_actions.as_slice(),
-        [
-            EnsureAction::Install {
-                canic_init: Some(DesiredCanisterInit::Store { .. }),
-                ..
-            },
-            EnsureAction::Install {
-                canic_init: Some(DesiredCanisterInit::Root { .. }),
-                ..
-            }
-        ]
-    ));
-    assert_eq!(fresh_replan.plan.conservation.maximum_new_funding_cycles, 0);
-    assert_eq!(
-        fresh_replan.plan.conservation.maximum_operator_debit_cycles,
-        0
-    );
-
-    let mut exact_replan_platform =
-        RetainedEnsurePlatform::new(&production_recovery_desired, &observed, &pool_one)
-            .with_successor_store_adoption(&root);
-    for configured in &production_recovery_desired.canisters {
-        let principal = configured
-            .principal
-            .as_deref()
-            .expect("retained exact Principal");
-        let live = exact_replan_platform
-            .live
-            .get_mut(principal)
-            .expect("retained exact live canister");
-        match configured.kind {
-            DesiredCanisterKind::Coordinator => {
-                live.module_sha256 = Some(coordinator_hash.clone());
-            }
-            DesiredCanisterKind::Root => {
-                live.module_sha256 = Some(predecessor_root_hash.clone());
-                live.reinstall_required = true;
-            }
-            DesiredCanisterKind::Store => {
-                live.controllers = vec![fleet_root.clone(), operator.clone()];
-                live.controllers.sort();
-                live.module_sha256 = Some(predecessor_store_hash.clone());
-                live.reinstall_required = true;
-            }
-            DesiredCanisterKind::Auxiliary
-            | DesiredCanisterKind::Pool
-            | DesiredCanisterKind::Component => {}
-        }
-    }
-    let initial_exact_cycles = exact_replan_platform.total_cycles();
-    let exact_replan_error = workflow::apply(
-        &root,
-        &production_recovery_desired,
-        &source_digest,
-        &production_recovery_desired.fleet,
-        &fresh_replan.plan.plan_sha256,
-        &mut exact_replan_platform,
-    )
-    .expect_err("successor Store adoption requires one newly reviewed plan");
-    assert!(matches!(
-        exact_replan_error,
-        workflow::EnsureWorkflowError::ConvergenceDrift
-    ));
-    assert_eq!(exact_replan_platform.mutations, 2);
-    assert_eq!(exact_replan_platform.total_cycles(), initial_exact_cycles);
-    let exact_reinstall_journal = read_journal(&production_paths)
-        .expect("read exact reinstall journal")
-        .expect("exact reinstall journal");
-    assert_eq!(
-        exact_reinstall_journal.completion,
-        FleetEnsureCompletion::ReplanRequired
-    );
-    assert_eq!(exact_reinstall_journal.effects.len(), 2);
-    assert!(
-        exact_reinstall_journal
-            .effects
-            .iter()
-            .all(|effect| effect.state == EffectState::Applied)
-    );
-
-    let mut successor_platform = exact_replan_platform.fresh_process();
-    let successor_plan = workflow::plan(
-        &root,
-        &production_recovery_desired,
-        &source_digest,
-        &production_recovery_desired.fleet,
-        1_800_000_000_000_000_102,
-        &mut successor_platform,
-    )
-    .expect("plan successor-only Store adoption after exact reinstalls");
-    assert!(
-        successor_plan
-            .plan
-            .canisters
-            .iter()
-            .all(|canister| canister.actions.is_empty())
-    );
-    assert!(matches!(
-        successor_plan.plan.protocol_actions.as_slice(),
-        [EnsureAction::FleetProtocol { action, name, principal, .. }]
-            if matches!(
-                action.as_ref(),
-                CurrentFleetProtocolAction::AdoptStore { .. }
-            ) && name == "root-store-adoption:root-0"
-                && principal == &fleet_root
-    ));
-    assert_eq!(
-        successor_plan.plan.conservation.maximum_new_funding_cycles,
-        0
-    );
-    assert_eq!(
-        successor_plan
-            .plan
-            .conservation
-            .maximum_operator_debit_cycles,
-        0
-    );
-    let successor_applied = workflow::apply(
-        &root,
-        &production_recovery_desired,
-        &source_digest,
-        &production_recovery_desired.fleet,
-        &successor_plan.plan.plan_sha256,
-        &mut successor_platform,
-    )
-    .expect("successor Root accepts exact Store authority");
-    assert!(successor_applied.terminal);
-    assert_eq!(successor_platform.mutations, 1);
-    assert_eq!(successor_platform.total_cycles(), initial_exact_cycles);
-    let exact_replay_plan = workflow::plan(
-        &root,
-        &production_recovery_desired,
-        &source_digest,
-        &production_recovery_desired.fleet,
-        1_800_000_000_000_000_103,
-        &mut successor_platform,
-    )
-    .expect("plan exact terminal replay");
-    assert!(workflow::ordered_actions(&exact_replay_plan.plan).is_empty());
-    let exact_replay = workflow::apply(
-        &root,
-        &production_recovery_desired,
-        &source_digest,
-        &production_recovery_desired.fleet,
-        &exact_replay_plan.plan.plan_sha256,
-        &mut successor_platform,
-    )
-    .expect("exact terminal replay is effect-free");
-    assert!(exact_replay.terminal);
-    assert_eq!(exact_replay.effects_applied, 0);
-    assert_eq!(successor_platform.mutations, 1);
-    assert_eq!(successor_platform.total_cycles(), initial_exact_cycles);
-
-    write_state(&production_paths, &state).expect("restore pre-replan retained state");
-    write_plan(&production_paths, &retained_rejected_plan)
-        .expect("restore pre-replan retained plan");
-    let mut wrong_controller_journal = rejected_journal;
-    wrong_controller_journal.completion = FleetEnsureCompletion::InProgress;
-    wrong_controller_journal.effects[1].post_cycles = None;
-    wrong_controller_journal.effects[1].progress_identity = None;
-    wrong_controller_journal.stalled_observations = 1;
-    write_journal(&production_paths, &wrong_controller_journal)
-        .expect("restore pre-replan retained journal");
-    write_fake_icp(
-        &root,
-        FakeIcpFixture {
-            authority: &retained_authority,
-            coordinator: &coordinator,
-            coordinator_module_hash: coordinator_hash,
-            fleet_root: &fleet_root,
-            operator: &operator,
-            pool: &retained_pool,
-            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
-            root_module_hash: &predecessor_root_hash,
-            root_runtime_status: "running",
-            root_status_error: Some(canic_core::diagnostics::codes::STATE_CONFLICT),
-            store: &store,
-            store_has_root_controller: false,
-            store_module_hash: &predecessor_store_hash,
-        },
-    );
-    fs::write(root.join("root-status-count"), b"1\n")
-        .expect("select wrong-controller typed E132 status");
-    fs::write(root.join("root-protocol-error"), b"1\n")
-        .expect("select wrong-controller typed E132 response");
-    let mut wrong_controller_platform = IcpEnsurePlatform::new(
-        production_recovery_desired.clone(),
-        icp.to_str().expect("fake ICP path"),
-        &root,
-    );
-    assert!(matches!(
-        workflow::apply(
-            &root,
-            &production_recovery_desired,
-            &source_digest,
-            &production_recovery_desired.fleet,
-            &retained_rejected_plan.plan_sha256,
-            &mut wrong_controller_platform,
-        ),
-        Err(workflow::EnsureWorkflowError::Platform(
-            IcpEnsurePlatformError::CurrentProtocol(_)
-        ))
-    ));
-    let wrong_controller_retained = read_journal(&production_paths)
-        .expect("read wrong-controller journal")
-        .expect("wrong-controller journal retained");
-    assert_eq!(
-        wrong_controller_retained.completion,
-        FleetEnsureCompletion::InProgress
-    );
-    assert_eq!(
-        wrong_controller_retained.effects[0].state,
-        EffectState::Applied
-    );
-    assert_eq!(
-        wrong_controller_retained.effects[1].state,
-        EffectState::Intent
-    );
-    assert!(wrong_controller_retained.effects[1].receipt.is_none());
-
     let successor_release =
         plan_release_build_for_profile(&root, crate::build_profile::CanisterBuildProfile::Fast)
             .expect("plan distinct requested successor release");
@@ -2774,61 +2299,17 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         stopped_error,
         FleetGenerateError::StoppedRootStartRequired(details)
             if details.module_sha256 == stopped_root_hash
-                && details.successor_module_sha256 == requested_successor_root_hash
     ));
     let stopped_paths =
         EnsurePaths::under(&root, &stopped_desired.environment, &stopped_desired.fleet);
     let stopped_authority = read_root_start_authority(&stopped_paths)
         .expect("read retained Root-start authority")
         .expect("generator retained Root-start authority");
-    assert_eq!(
-        stopped_authority.release_build_id,
-        successor_release_build_id
-    );
-    assert_eq!(
-        stopped_authority.successor_module_sha256,
-        requested_successor_root_hash
-    );
-    crate::fleet_ensure::ops::verify_root_start_release_authority(&root, &stopped_authority)
-        .expect("sealed authority resolves its exact finalized successor");
-    let mut wrong_release_authority = stopped_authority.clone();
-    wrong_release_authority.release_build_id = release_build_id;
-    wrong_release_authority.seal();
-    assert!(matches!(
-        crate::fleet_ensure::ops::verify_root_start_release_authority(
-            &root,
-            &wrong_release_authority,
-        ),
-        Err(crate::fleet_ensure::ops::EnsureStateError::InvalidRootStartReleaseAuthority { .. })
-    ));
-    let mut wrong_successor_authority = stopped_authority.clone();
-    wrong_successor_authority.successor_module_sha256 = "00".repeat(32);
-    wrong_successor_authority.seal();
-    assert!(matches!(
-        crate::fleet_ensure::ops::verify_root_start_release_authority(
-            &root,
-            &wrong_successor_authority,
-        ),
-        Err(crate::fleet_ensure::ops::EnsureStateError::InvalidRootStartReleaseAuthority { .. })
-    ));
-    let successor_root_entry = successor_manifest
-        .manifest
-        .entries
-        .iter()
-        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
-        .expect("requested successor Root entry");
-    let successor_root_path = root.join(&successor_root_entry.wasm_relative_path);
-    let successor_root_bytes = fs::read(&successor_root_path).expect("read successor Root bytes");
-    fs::write(&successor_root_path, b"changed successor Root").expect("tamper successor Root");
-    assert!(matches!(
-        crate::fleet_ensure::ops::verify_root_start_release_authority(&root, &stopped_authority,),
-        Err(crate::fleet_ensure::ops::EnsureStateError::InvalidRootStartReleaseAuthority { .. })
-    ));
-    fs::write(&successor_root_path, successor_root_bytes).expect("restore successor Root bytes");
+    assert_eq!(stopped_authority.roots[0].module_sha256, stopped_root_hash);
     let retained_authority_bytes = fs::read(&stopped_paths.root_start_authority)
         .expect("read exact retained Root-start authority bytes");
     let mut tampered_authority = stopped_authority.clone();
-    tampered_authority.successor_module_sha256 = "00".repeat(32);
+    tampered_authority.roots[0].module_sha256 = "00".repeat(32);
     fs::write(
         &stopped_paths.root_start_authority,
         serde_json::to_vec_pretty(&tampered_authority).expect("encode tampered authority"),
@@ -2891,21 +2372,53 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         seed: &seed_path,
         source: &source_path,
     };
-    let Err(later_error) = generate_desired_fleet(&later_request) else {
-        panic!("a later successor cannot retarget the sealed predecessor authority");
-    };
-    assert!(
-        matches!(
-        &later_error,
-        FleetGenerateError::SealedSuccessorConvergenceRequired(details)
-            if details.fleet == stopped_desired.fleet
-                && details.sealed_release_build_id == successor_release_build_id.to_string()
-                && details.sealed_successor_module_sha256 == requested_successor_root_hash
-                && details.requested_release_build_id == later_release_build_id.to_string()
-                && details.requested_successor_module_sha256 == later_root_hash
-        ),
-        "unexpected later-successor result: {later_error:?}"
+    let later = generate_desired_fleet(&later_request)
+        .expect("generate replacement authority without protected predecessor queries");
+    let mut reinstall_platform =
+        IcpEnsurePlatform::new(later.desired.clone(), icp.to_str().unwrap(), &root);
+    let reinstall = workflow::plan(
+        &root,
+        &later.desired,
+        &source_digest,
+        &later.desired.fleet,
+        1_800_000_000_000_000_110,
+        &mut reinstall_platform,
+    )
+    .expect("review the exact Root reset before current protocol observation");
+    assert_eq!(
+        reinstall.plan.scope,
+        crate::fleet_ensure::model::FleetEnsurePlanScope::RootReinstallPrerequisite
     );
+    assert_eq!(
+        reinstall.plan.root_reinstall_bindings[0].module_sha256,
+        stopped_root_hash
+    );
+    assert!(matches!(reinstall.plan.canisters[0].actions.as_slice(),
+        [EnsureAction::Stop { .. }, EnsureAction::Install { mode: crate::fleet_ensure::model::InstallMode::Reinstall,
+            wasm_sha256, .. }, EnsureAction::Start { .. }] if wasm_sha256 == &later_root_hash));
+    let mut foreign = later.desired.clone();
+    foreign
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Root)
+        .unwrap()
+        .controllers
+        .push(principal_text(99));
+    let mut foreign_platform =
+        IcpEnsurePlatform::new(foreign.clone(), icp.to_str().unwrap(), &root);
+    assert!(matches!(
+        workflow::plan(
+            &root,
+            &foreign,
+            &source_digest,
+            &foreign.fleet,
+            1_800_000_000_000_000_111,
+            &mut foreign_platform
+        ),
+        Err(workflow::EnsureWorkflowError::Policy(
+            crate::fleet_ensure::policy::EnsurePolicyError::RootManagementAuthorityMismatch { .. }
+        ))
+    ));
     assert_eq!(
         fs::read(&stopped_paths.root_start_authority)
             .expect("read unchanged sealed Root-start authority"),
@@ -2913,7 +2426,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     );
     assert!(
         !root_status_counter.exists(),
-        "later generation must reject before a protected predecessor query"
+        "later generation and reset planning must not query a different runtime"
     );
     write_fake_icp(
         &root,
@@ -3076,11 +2589,16 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .join("current-release-set-manifest.json");
     let retained_release_manifest_bytes = fs::read(&retained_release_manifest_path)
         .expect("read retained desired release manifest bytes");
-    fs::write(
-        &retained_release_manifest_path,
-        b"{\"schema_version\":1,\"historical\":true}",
-    )
-    .expect("replace retained desired release manifest with unsupported historical bytes");
+    fs::remove_file(&retained_release_manifest_path)
+        .expect("remove unrelated retained desired release manifest");
+    let successor_release_manifest_path = root
+        .join(".canic/release-builds")
+        .join(successor_release_build_id.to_string())
+        .join("current-release-set-manifest.json");
+    let successor_release_manifest_bytes = fs::read(&successor_release_manifest_path)
+        .expect("retain requested application release manifest");
+    fs::remove_file(&successor_release_manifest_path)
+        .expect("Start does not require the requested application release manifest");
     let retained_root_artifact_path = root.join(
         configured_root
             .wasm
@@ -3245,55 +2763,12 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(retained_after_start.principals.is_empty());
     assert!(retained_after_start.topology.is_empty());
 
-    let mut wrong_bridge_successor = stopped_authority;
-    wrong_bridge_successor.successor_module_sha256 = "00".repeat(32);
-    wrong_bridge_successor.seal();
     fs::write(
-        &stopped_paths.root_start_authority,
-        serde_json::to_vec_pretty(&wrong_bridge_successor).expect("encode wrong bridge authority"),
+        &successor_release_manifest_path,
+        successor_release_manifest_bytes,
     )
-    .expect("write wrong bridge authority");
-    assert!(matches!(
-        generate_desired_fleet(&stopped_request),
-        Err(FleetGenerateError::Authority(_))
-    ));
-    fs::write(
-        &stopped_paths.root_start_authority,
-        &retained_authority_bytes,
-    )
-    .expect("restore exact bridge authority");
+    .expect("restore release authority for independent generation");
 
-    let unrelated_running_module = "11".repeat(32);
-    write_fake_icp(
-        &root,
-        FakeIcpFixture {
-            authority: &retained_authority,
-            coordinator: &coordinator,
-            coordinator_module_hash: coordinator_hash,
-            fleet_root: &fleet_root,
-            operator: &operator,
-            pool: &retained_pool,
-            controller_cycle_balance: Some((&pool_one, 4_800_000_000_000)),
-            root_module_hash: &unrelated_running_module,
-            root_runtime_status: "running",
-            root_status_error: None,
-            store: &store,
-            store_has_root_controller: true,
-            store_module_hash: store_hash,
-        },
-    );
-    if root_status_counter.exists() {
-        fs::remove_file(&root_status_counter).expect("reset exact bridge status fixture");
-    }
-    fs::write(
-        root.join("predecessor-pool-status"),
-        b"exact predecessor shape\n",
-    )
-    .expect("select predecessor response for unrelated module");
-    assert!(matches!(
-        generate_desired_fleet(&stopped_request),
-        Err(FleetGenerateError::CanisterUnavailable { .. })
-    ));
     write_fake_icp(
         &root,
         FakeIcpFixture {
@@ -3313,30 +2788,27 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         },
     );
     if root_status_counter.exists() {
-        fs::remove_file(&root_status_counter).expect("reset successful bridge status fixture");
+        fs::remove_file(&root_status_counter).expect("reset Root status fixture");
     }
     fs::write(root.join("root-started"), b"running\n")
         .expect("restore terminal Root-start observation");
-    fs::write(
-        root.join("predecessor-pool-status"),
-        b"exact predecessor shape\n",
-    )
-    .expect("select exact predecessor Root pool response");
+    let authority_before_reinstall_gate =
+        fs::read(&stopped_paths.root_start_authority).expect("retained exact Root-start authority");
     let regenerated = generate_desired_fleet(&stopped_request)
-        .expect("bridge exact predecessor status after reviewed Root Start");
+        .expect("generate the replacement after the Start prerequisite");
+    assert_eq!(regenerated.observed_canisters, 2);
     assert_eq!(
-        regenerated
-            .desired
-            .bootstrap
-            .as_ref()
-            .expect("regenerated bootstrap")
-            .release_build_id,
-        successor_release_build_id
+        fs::read(&stopped_paths.root_start_authority).expect("unchanged Root-start authority"),
+        authority_before_reinstall_gate,
     );
+    assert!(!root_status_counter.exists());
     assert_eq!(
         fs::read(&preserved_output).expect("read unchanged retained desired authority"),
         b"retained desired authority\n"
     );
+
+    fs::write(&root_status_counter, b"1\n").expect("prime later pool-only fake query");
+
     fs::write(
         &retained_release_manifest_path,
         retained_release_manifest_bytes,
@@ -3344,72 +2816,6 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     .expect("restore retained desired release manifest for later independent cases");
     fs::write(&retained_root_artifact_path, retained_root_artifact_bytes)
         .expect("restore retained desired Root artifact for later independent cases");
-    assert_eq!(regenerated.observed_canisters, 5);
-    assert_eq!(regenerated.observed_controlled_cycles, 319_899_950_000_000);
-    assert!(root_status_counter.exists());
-
-    let successor_desired_sha256 = sha256_hex(
-        &serde_json::to_vec(&regenerated.desired).expect("encode regenerated desired Fleet"),
-    );
-    let mut successor_platform = IcpEnsurePlatform::new(
-        regenerated.desired.clone(),
-        icp.to_str().expect("fake ICP path"),
-        &root,
-    );
-    let successor_plan = workflow::plan(
-        &root,
-        &regenerated.desired,
-        &successor_desired_sha256,
-        &regenerated.desired.fleet,
-        1_800_000_000_000_000_175,
-        &mut successor_platform,
-    )
-    .expect("review ordinary successor plan through predecessor status bridge");
-    let successor_actions = workflow::ordered_actions(&successor_plan.plan);
-    assert!(successor_actions.iter().any(|action| {
-        matches!(
-            action,
-            EnsureAction::Install {
-                mode: crate::fleet_ensure::model::InstallMode::Reinstall,
-                name,
-                wasm_sha256,
-                ..
-            } if name == "root-0" && wasm_sha256 == &requested_successor_root_hash
-        )
-    }));
-    assert!(successor_actions.iter().all(|action| {
-        !matches!(
-            action,
-            EnsureAction::Create { .. }
-                | EnsureAction::Delete { .. }
-                | EnsureAction::Fund { .. }
-                | EnsureAction::Transfer { .. }
-        )
-    }));
-    assert_eq!(
-        successor_plan
-            .plan
-            .conservation
-            .maximum_operator_debit_cycles,
-        0
-    );
-    assert_eq!(
-        successor_plan.plan.conservation.maximum_new_funding_cycles,
-        0
-    );
-    assert_eq!(
-        successor_plan
-            .plan
-            .conservation
-            .maximum_unavoidable_fee_cycles,
-        0
-    );
-    assert_eq!(
-        successor_plan.plan.conservation.scheduled_transfer_cycles,
-        0
-    );
-
-    fs::write(&root_status_counter, b"1\n").expect("prime later pool-only fake query");
 
     let mut pending_pool = retained_pool;
     let pending = pending_pool
@@ -3466,7 +2872,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .iter()
         .find(|canister| canister.principal.as_deref() == Some(pool_two.as_str()))
         .expect("pending retained asset plan");
-    assert_eq!(retained_pending.observed_cycles, 5_000_000_000_000);
+    assert_eq!(retained_pending.observed_cycles, 6_000_000_000_000);
     assert!(retained_pending.actions.is_empty());
     assert_eq!(pending_plan.plan.conservation.maximum_new_funding_cycles, 0);
 
@@ -3500,7 +2906,9 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(
         matches!(
             &error,
-            workflow::EnsureWorkflowError::Platform(IcpEnsurePlatformError::CurrentProtocol(_))
+            workflow::EnsureWorkflowError::Policy(
+                crate::fleet_ensure::policy::EnsurePolicyError::MissingOperatorController { .. }
+            )
         ),
         "unexpected controller-drift error: {error:?}"
     );
@@ -3593,7 +3001,6 @@ struct RetainedEnsurePlatform {
     mutations: u32,
     post_effect_protocol: bool,
     post_effect_protocol_applied: bool,
-    successor_store_adoption_root: Option<PathBuf>,
     terminal_observation_protocol: bool,
 }
 
@@ -3752,7 +3159,6 @@ impl RetainedEnsurePlatform {
             mutations: 0,
             post_effect_protocol: false,
             post_effect_protocol_applied: false,
-            successor_store_adoption_root: None,
             terminal_observation_protocol: false,
         }
     }
@@ -3766,19 +3172,12 @@ impl RetainedEnsurePlatform {
             mutations: 0,
             post_effect_protocol: self.post_effect_protocol,
             post_effect_protocol_applied: self.post_effect_protocol_applied,
-            successor_store_adoption_root: self.successor_store_adoption_root.clone(),
             terminal_observation_protocol: self.terminal_observation_protocol,
         }
     }
 
     fn with_post_effect_root_owned_protocol(mut self) -> Self {
         self.post_effect_protocol = true;
-        self
-    }
-
-    fn with_successor_store_adoption(mut self, root: &Path) -> Self {
-        self.post_effect_protocol = true;
-        self.successor_store_adoption_root = Some(root.to_path_buf());
         self
     }
 
@@ -3982,7 +3381,7 @@ impl EnsurePlatform for RetainedEnsurePlatform {
     fn protocol_actions(
         &mut self,
         operation_id: &str,
-        state: &FleetEnsureStateRecord,
+        _state: &FleetEnsureStateRecord,
     ) -> Result<Vec<EnsureAction>, Self::Error> {
         if self.terminal_observation_protocol {
             return Ok(terminal_observation_protocol_actions(
@@ -3994,14 +3393,6 @@ impl EnsurePlatform for RetainedEnsurePlatform {
             && self.infrastructure_ready()
             && !self.post_effect_protocol_applied
         {
-            if let Some(root) = &self.successor_store_adoption_root {
-                return Ok(vec![successor_store_adoption_action(
-                    root,
-                    &self.desired,
-                    state,
-                    operation_id,
-                )]);
-            }
             return Ok(
                 terminal_observation_protocol_actions(&self.desired, operation_id)
                     .into_iter()
@@ -4259,60 +3650,6 @@ fn terminal_observation_protocol_actions(
     ]
 }
 
-fn retained_controller_preparation_action(
-    root: &Path,
-    desired: &DesiredFleet,
-    state: &FleetEnsureStateRecord,
-    operation_id: &str,
-) -> EnsureAction {
-    let protocol = desired.protocol.as_ref().expect("generated protocol");
-    let configured_root = desired
-        .canisters
-        .iter()
-        .find(|canister| canister.kind == DesiredCanisterKind::Root)
-        .expect("retained Root");
-    let request = crate::fleet_ensure::ops::current_protocol::expected_retained_store_control_request_for_test(
-        root,
-        desired,
-        operation_id,
-        state,
-        &configured_root.name,
-    )
-    .expect("compile retained Store controller request")
-    .expect("retained Store controller request");
-    let subject_text = configured_root
-        .principal
-        .clone()
-        .expect("retained Root Principal");
-    let candid_bytes = fs::read(root.join(&protocol.root_candid)).expect("read Root Candid");
-    EnsureAction::FleetProtocol {
-        action: Box::new(CurrentFleetProtocolAction::AdoptStore { request }),
-        candid: protocol.root_candid.clone(),
-        candid_sha256: sha256_hex(&candid_bytes),
-        maximum_execution_burn_cycles: desired
-            .maximum_update_burn_cycles
-            .parse::<Cycles>()
-            .expect("maximum update burn")
-            .to_u128(),
-        name: format!("root-store-control:{}", configured_root.name),
-        principal: subject_text,
-    }
-}
-
-fn successor_store_adoption_action(
-    root: &Path,
-    desired: &DesiredFleet,
-    state: &FleetEnsureStateRecord,
-    operation_id: &str,
-) -> EnsureAction {
-    let mut action = retained_controller_preparation_action(root, desired, state, operation_id);
-    let EnsureAction::FleetProtocol { name, .. } = &mut action else {
-        unreachable!("Store adoption helper always returns one typed protocol action");
-    };
-    *name = "root-store-adoption:root-0".to_string();
-    action
-}
-
 fn retained_ensure_state(
     desired: &DesiredFleet,
     observed: &BTreeMap<String, ObservedCanister>,
@@ -4396,6 +3733,26 @@ placement.minimum_distinct_roots = 1
 "#
 }
 
+#[test]
+fn protected_funding_admission_rejects_five_automatic_root_grants() {
+    let mut source = multi_component_source("operator", "coordinator", "root");
+    source.coordinator.root_funding.maximum_automatic_grants = 4;
+    source.coordinator.root_funding.maximum_automatic_cycles = Cycles::new(120_000_000_000_000);
+    source.fleet_subnet_roots[0]
+        .root_funding
+        .maximum_automatic_grants = 4;
+    source.fleet_subnet_roots[0]
+        .root_funding
+        .maximum_automatic_cycles = Cycles::new(120_000_000_000_000);
+    validate_source_funding(&source, false).expect("four grants satisfy protected policy");
+    source.fleet_subnet_roots[0]
+        .root_funding
+        .maximum_automatic_grants = 5;
+    assert!(matches!(validate_source_funding(&source, false), Err(FleetGenerateError::FundingPolicy(
+        canic_core::control_plane_support::model::fleet_funding_policy::FleetFundingPolicyValidationError::RootAutomaticGrantCountInvalid
+    ))));
+}
+
 fn multi_component_source(
     operator: &str,
     coordinator_subnet: &str,
@@ -4436,7 +3793,7 @@ fn multi_component_source(
             component_admissions: BTreeMap::from([("app".parse().expect("Component Spec"), 1)]),
             canister_pool: PoolSource {
                 minimum_size: 2,
-                maximum_size: 2,
+                maximum_size: 3,
                 canister_cycles: Cycles::new(5_000_000_000_000),
                 imports: Vec::new(),
             },
@@ -4511,7 +3868,7 @@ app = [0]
 
 [fleet_subnet_roots.canister_pool]
 minimum_size = 2
-maximum_size = 2
+maximum_size = 3
 canister_cycles = "5T"
 
 [fleet_subnet_roots.root_funding]
@@ -4674,6 +4031,11 @@ fn gzip(bytes: &[u8]) -> Vec<u8> {
     encoder.finish().expect("finish gzip")
 }
 
+fn copy_test_file(source: &Path, destination: PathBuf) -> io::Result<u64> {
+    fs::create_dir_all(destination.parent().expect("fixture file parent"))?;
+    fs::copy(source, destination)
+}
+
 fn copy_test_tree(source: &Path, destination: &Path) -> io::Result<()> {
     fs::create_dir_all(destination)?;
     for entry in fs::read_dir(source)? {
@@ -4725,15 +4087,13 @@ fn retained_root_authority(
         epoch: 1,
     };
     let root_source = source.fleet_subnet_roots.first().expect("Root source");
-    let mut retained_limits = root_limits(root_source);
-    retained_limits.canister_pool.canister_cycles = Cycles::new(2_000_000_000_000);
     let binding = FleetSubnetRootBinding {
         authority: registry.clone(),
         placement_subnet,
         fleet_subnet_root: root,
         component_admissions: planned.component_admissions.clone(),
         component_topology_digest: planned.component_topology_digest,
-        limits: retained_limits,
+        limits: root_limits(root_source),
         funding: root_funding(source.funding_profile, &root_source.root_funding),
     };
     FleetSubnetRootAuthority {
@@ -4870,7 +4230,6 @@ fn write_fake_icp_with_status_projection(
     let executable = root.join("fake-icp");
     let counter = root.join("root-status-count");
     let root_protocol_error = root.join("root-protocol-error");
-    let predecessor_pool_status = root.join("predecessor-pool-status");
     let root_started = root.join("root-started");
     let root_start_count = root.join("root-start-count");
     let store_status_count = root.join("store-status-count");
@@ -4883,9 +4242,7 @@ fn write_fake_icp_with_status_projection(
     if root_protocol_error.exists() {
         fs::remove_file(&root_protocol_error).expect("reset fake Root protocol error");
     }
-    if predecessor_pool_status.exists() {
-        fs::remove_file(&predecessor_pool_status).expect("reset predecessor pool response");
-    }
+
     if store_status_count.exists() {
         fs::remove_file(&store_status_count).expect("reset Store status counter");
     }
@@ -4958,12 +4315,6 @@ fn write_fake_icp_with_status_projection(
             root_protocol_error.display(),
         )
     });
-    let predecessor_pool_response = serde_json::json!({
-        "response_bytes": hex_bytes(
-            crate::fleet_ensure::ops::predecessor_root_status::encode_pool_response_fixture(pool)
-        )
-    })
-    .to_string();
     let ledger_response = candid_response_json(&Nat::from(100_000_000_u64));
     let ledger_balance_response = candid_response_json(&Nat::from(1_000_000_000_000_000_u64));
     let controller_cycle_case =
@@ -4981,6 +4332,15 @@ fi
 "#
         )
     });
+    let inspection = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
+        FixturePoolInspectionResponse::InspectCanister(FixturePoolInspection {
+            cycles: Nat::from(6_000_000_000_000_u128),
+            module_hash: None,
+            settings: FixturePoolControllers {
+                controllers: vec![Principal::from_text(fleet_root).expect("Root")],
+            },
+        }),
+    ));
     let script = format!(
         r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
@@ -5027,6 +4387,10 @@ if [ "$1" = "canister" ] && [ "$2" = "start" ] && [ "$3" = "{fleet_root}" ]; the
 fi
 if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
 {controller_cycle_case}
+  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_root_command" ]; then
+    printf '%s\n' '{inspection}'
+    exit 0
+  fi
   if [ "$4" = "icrc1_fee" ]; then
     printf '%s\n' '{ledger_response}'
     exit 0
@@ -5043,8 +4407,6 @@ if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
     if [ "$count" = "0" ]; then
       printf '%s\n' '1' > "{counter}"
       printf '%s\n' '{authority_response}'
-    elif [ -f "{predecessor_pool_status}" ]; then
-      printf '%s\n' '{predecessor_pool_response}'
     else
       {root_error_case}
       printf '%s\n' "$((count + 1))" > "{counter}"
@@ -5057,7 +4419,6 @@ printf '%s\n' 'unsupported fake ICP command' >&2
 exit 42
 "#,
         counter = counter.display(),
-        predecessor_pool_status = predecessor_pool_status.display(),
         root_start_count = root_start_count.display(),
         root_started = root_started.display(),
     );
@@ -5065,6 +4426,21 @@ exit 42
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
         .expect("make fake ICP executable runnable");
     executable
+}
+
+#[derive(candid::CandidType)]
+enum FixturePoolInspectionResponse {
+    InspectCanister(FixturePoolInspection),
+}
+#[derive(candid::CandidType)]
+struct FixturePoolInspection {
+    cycles: Nat,
+    module_hash: Option<Vec<u8>>,
+    settings: FixturePoolControllers,
+}
+#[derive(candid::CandidType)]
+struct FixturePoolControllers {
+    controllers: Vec<Principal>,
 }
 
 #[derive(candid::CandidType)]

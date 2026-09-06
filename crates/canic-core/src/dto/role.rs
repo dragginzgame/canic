@@ -32,6 +32,7 @@ pub enum RoleCapability {
     RoleAttestationVerifier,
     Root,
     RootControlPlane,
+    RootDelegation,
     Runtime,
     Scaling,
     Sharding,

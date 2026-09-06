@@ -66,53 +66,55 @@ protected Root pool inventory and exact cycle balances before publishing
 `fleets/<fleet>.toml`. A Root-owned Store or pool asset is resolved through the
 Root's protected inventory; a retained Store controller handoff accepts only
 Root-only ownership or the exact Root-plus-operator set before installation.
-The live Root's identity authority must match exactly. Init-only policy fields
-may differ only when the reviewed current Root artifact will be reinstalled to
-converge them; an already-current Root with policy drift fails closed. A seeded
+The live Root's identity authority and installed policy must match the current
+configuration exactly; policy drift fails closed. A seeded
 pool identity remains in the conservation set as it moves from idle bootstrap
 capacity through claimed state to a Component workload, without receiving pool
 minimum top-ups or being counted twice.
 
-A stopped retained Root requires a separately reviewed prerequisite rather
-than a desired-document mutation. Generation first verifies the exact
-management-observed Principal, Subnet, controller set and installed module
-hash, then atomically seals the live predecessor to the newly requested
-finalized release and Root artifact. It returns a deterministic same-ID Start
-diagnostic before calling any protected Root endpoint or changing
-`fleets/<fleet>.toml`.
+A retained Root that cannot serve the current protected endpoint requires a
+management observation before any protected query. For a stopped Root,
+`root_start_prerequisite` seals the exact Principal, Subnet, controller set and
+installed module. Start planning, execution and replay do
+not require a successor artifact or application release manifest. The issued
+plan retains its exact observed authority and permits only the transition from
+Stopped to Running with that module. Reinstall is a separate, explicit reviewed
+effect: it discards application state while retaining exact cycle and asset
+control. Canister identities and their cycle accounts may remain in place.
+When the installed Root module differs, generation returns the replacement
+input without calling the old Root's protected interface. Ensure planning
+produces `root_reinstall_prerequisite`, with exact installed module, Principal,
+Subnet and controller bindings in `root_reinstall_bindings`. Review and apply
+that plan to stop the Root, reinstall its sealed current initializer and start
+it again. The same journal records intent and the pre-install canister version;
+a lost response resumes observation instead of repeating an already completed
+reset.
 
-Fleet Ensure uses the retained desired document only for stable Fleet and Root
-identity. It independently loads the sealed authority's finalized release-set
-and infrastructure manifests and re-reads the exact raw successor Wasm; it does
-not require the authority's release or successor to equal the older retained
-desired release, and does not decode or regenerate that old release manifest.
-This boundary works even when current schema-1 state has
-retained cycle balances but no Principal or topology projection. The explicitly
-scoped plan contains only the same-ID Root `Start`; it has no create,
-replacement, reinstall, funding, transfer, fee or operator-debit authority and
-cannot publish or backfill Fleet topology. Text and JSON output expose the
-`root_start_prerequisite` scope. Apply that exact digest, then rerun generation
-to publish and review the newly requested desired release. A stopping Root,
-missing module, changed identity, foreign controller, wrong Subnet, unfinalized
-or changed successor artifact, or malformed management observation fails
-closed. Once the exact Root is running, generation performs the complete
-protected Fleet-authority and pool-inventory verification; management evidence
-never substitutes for those proofs.
+A completed prerequisite is not a ready Fleet. Run Ensure planning again and
+review its full plan for the remaining infrastructure and current protocol
+convergence. Repeat `canic fleet ensure <fleet> --desired <path>` to plan, then
+apply the reviewed digest with `--apply <plan_sha256>` using the same environment
+and identity. JSON reports expose `plan.scope`; text reports expose `plan_scope`.
+`terminal: true` means completion of that scope. Fleet readiness requires a
+terminal `full` plan; `prerequisite_complete` is an intermediate result.
+The reset request is not a persistent desired-state flag. A
+completed Fleet therefore plans no additional reinstall. The
+[changed-release PocketIC journey](../../audits/reports/2026-09/2026-09-05/fleet-reinstall-journey.md)
+qualifies generation, reviewed reset, lost-response recovery, working Fleet
+reconstruction, conservation and both effect-free replay paths.
 
-The predecessor seal also fixes the successor order. If live predecessor A is
-sealed to successor C, a later build D cannot retarget that authority while A
-is still live. Generation returns a typed
-`SealedSuccessorConvergenceRequired` diagnostic containing the sealed C and
-requested D release-build IDs and Root artifact hashes. First plan and apply
-the unchanged retained desired C with `canic fleet ensure <fleet>` until its
-terminal re-observation succeeds. Then reuse the finalized D build, rerun
-`canic fleet generate <fleet>` with D's release-build ID, explicitly replace
-the converged C desired document by its reviewed SHA-256, and review a fresh D
-plan. C apply, C terminal proof, D generation and D planning are four distinct
-review boundaries. Neither the diagnostic nor either planning pass changes the
-sealed authority or grants D an effect through C's predecessor bridge.
+Whole-Fleet evacuation applies only to deletion and is an optional follow-up to
+this reinstall correction. Existing Root deletion returns native cycles and
+transfers its Ledger balance with an exact receipt; the Coordinator can then
+transfer its own Ledger balance to the reviewed operator. That Ledger receipt
+alone does not authorize deleting a Coordinator with native cycles remaining.
+Complete Coordinator native evacuation/deletion remains outside the qualified
+flow. Explicit reinstall requires no current endpoints on old code or temporary
+recovery artifact. The Root-start
+prerequisite itself authorizes no reinstall. Current source changes do not add
+endpoints to an installed release; protected queries require current authority.
 
-Retained-estate treasury policy is explicit adoption, not discovery: it must
+Retained-estate treasury policy requires an explicit identity: it must
 name an already-present, non-replaceable controlled canister. Omitting
 `treasury` selects the exact seeded Coordinator. Canic does not silently invent
 or globally search for a retained identity. Missing, foreign, duplicate,
@@ -184,17 +186,30 @@ burn. Only `fleet ensure --apply <plan_sha256>` may create canisters. Each
 creation intent is durable before the Cycles Ledger call; a duplicate response
 recovers the same Principal, and later role creation, typed initialization and
 protocol work resolve only those retained identities. The Coordinator is the
-logical treasury for the fresh operation. Each configured Root's
-`canister_pool.minimum_size` becomes its initial set of root-controlled pool
-assets; retained `imports` are forbidden in a fresh seed.
+logical treasury for the fresh operation. Each Root receives enough host-created
+pool assets for every initial top-level Component and recursive initial child,
+plus its independent `canister_pool.minimum_size` Ready reserve. Generation
+rejects a total above `canister_pool.maximum_size` before any effect. Retained
+`imports` are forbidden in a fresh seed. Local readiness observes this supply;
+autonomous Root creation remains restricted to IC-mainnet builds.
 
-Fresh convergence can cross two reviewed-plan boundaries. The first plan
-allocates and installs roles whose Principals did not exist at generation time.
-When those retained results make the typed control-plane graph compilable, the
-terminal check closes that journal as `ReplanRequired` instead of silently
-adding unreviewed effects. Run plan-only again, review and apply the new digest,
-and continue until the report is terminal. The immediate plan after terminal
-convergence has no mutation action.
+A fresh plan binds the App config, complete artifact union and role Candid
+identities and reserves a finite successor-action and execution-burn budget.
+Apply installs infrastructure, reconciles imported assets, and advances the
+resulting canonical control-plane and provisioning actions under that original
+reviewed plan. Each successor plan is retained by digest before its first
+effect intent. Response loss and process restart resume the same journal and
+cumulative conservation baseline. Immediate replay of the completed original
+plan has no effect.
+
+A changed input, additional effect or debit, exhausted phase limit, or
+insufficient remaining burn budget returns a typed new-review requirement.
+Review the resulting current plan before authorizing that additional work.
+Progress events distinguish advancing, awaiting progress, prerequisite
+completion, funding required, new review required and complete convergence.
+JSON progress remains on stderr; the final report is on stdout. The larger
+generator-to-runtime and retained-estate recovery qualification is still in
+progress in the open correction batch.
 
 The management creation fee is explicit because it is network/Subnet economic
 authority and cannot be inferred from release metadata. Zero is appropriate
@@ -203,9 +218,10 @@ cannot silently change the reviewed debit or conservation equation.
 
 Initial pool assets are direct Fleet Ensure creation actions. The configured
 `canister_pool.canister_cycles` value is their readiness floor, not their fresh
-creation amount. Fresh generation adds the exact bounded first-observation and
-controller-finalization margins to that floor; retained assets keep the floor
-as their target. Creation funding, one exact Cycles Ledger creation fee and one
+creation amount. Fresh generation adds 1T for Create execution, 1T for its first
+observation and 1T for controller finalization. These are bounded reservations,
+not assumed fees or measured per-call costs. Retained assets keep the floor as
+their target. Creation funding, one exact Cycles Ledger creation fee and one
 exact management creation fee are included in the reviewed maximum operator
 debit before any effect. Fresh convergence does not fund a Root's default
 Ledger account implicitly and does not let Root pool maintenance discover an
@@ -238,12 +254,14 @@ requires unique operation and block identities, and rejects a missing,
 below-floor or impossible first observation. Later reinspection cannot replace
 the first balance. The plan-time forecast uses the complete bounded protected
 Root pool inventory, including dynamically created assets in every lifecycle
-and any durable pending creation, so a full pool fails before funding.
-This forecast does not reinterpret an already-Failed asset as reusable or
-silently top it up. A pool whose failed assets consume all configured capacity
-stops with the typed capacity failure and leaves every asset and cycle balance
-untouched; repairing those retained assets requires its own reviewed native
-funding and Root-reset operation.
+and any durable pending creation. When retained Failed or PendingReset assets
+can satisfy the reserve, planning reviews their exact native funding and Root
+reconciliation before forecasting additional creation. Apply repairs only
+those reviewed identities; a subsequent protected inventory must establish
+their readiness. This supports a full pool with four Workloads and four Failed
+reserve assets without funding the Root account or creating another canister.
+If the protected inventory cannot satisfy the required capacity through those
+repairs, planning returns the typed capacity failure before funding.
 
 Planning rejects a fresh pool whose creation amount is below its readiness
 floor plus those margins. The typed failure reports the requested creation
@@ -440,28 +458,18 @@ retained by the current Fleet Ensure state. A zero-valued `PendingReset` row is
 treated the same way. Missing exact evidence is a blocker. This narrow
 observation cannot create, fund, replace, transfer, drain or delete anything.
 
-If an exact retained Root is stopped, planning uses management status before
-calling its protected role endpoint. Exact current state may defer observation
-of that Root's already-bound Store and pool children only long enough to review
-one same-Principal `Start` action. Child, Root, parent, topology and controller
-bindings must all match, and no other mutation is admitted from deferred
-evidence. After the Root starts, ordinary protected observation resumes.
+Root management prerequisites use management status before protected Root
+queries. The Start-only plan embeds its generator authority, and apply revalidates
+the exact target and installed module. Its completion reports
+`prerequisite_complete`; it does not publish terminal Fleet topology.
 
-The reviewed prerequisite embeds the complete generator authority and still
-permits only `Start`; it cannot install either module or authorize a paid
-effect. Apply revalidates stopped status, Principal, Subnet, controllers and
-predecessor module before issuing that Start. A missing, changed or unrelated
-live module fails before a plan or effect. Terminal replay reuses the embedded
-authority and cannot issue a second Start.
-
-The resulting corrective graph reinstalls the Coordinator, replays the exact
-Root-owned Store-controller adoption, reinstalls the Store, and only then
-reinstalls the Root. All later protocol work stays fenced until ordinary
-protected observation resumes. Reinstall intent records the management
-canister version before the effect; terminal observation requires the requested
-module at a strictly newer version. A same-module predecessor therefore cannot
-be mistaken for an applied reinstall, including after process restart or a
-lost response.
+Outside this Start-only prerequisite, the reviewed Ensure plan owns explicit
+infrastructure reinstall effects. Pool-policy drift and status failures cannot
+independently select a reset. The reviewed reinstall records the management canister version before the
+effect. Terminal observation requires the requested module at a strictly newer
+version, including after response loss or process reconstruction. The generated
+changed-release journey now qualifies the complete transition through a current
+working Fleet. The Root-only prerequisite remains a separate completion scope.
 
 The normal ICP CLI status projection supplies module, controller, runtime and
 cycle evidence. If that projection omits `canister_version`, Canic obtains the
@@ -545,8 +553,9 @@ durable transfer receipt.
 ## Retirement Boundary
 
 An IC controller cannot pull cycles from an arbitrary canister. A material
-source must therefore declare an idempotent, controller-authorized drain
-endpoint before replacement or deletion:
+source selected for deletion must therefore declare an idempotent,
+controller-authorized drain endpoint. In-place reinstall retains its cycle
+accounts and requires no drain solely because its module changes:
 
 ```toml
 [canisters.drain]
@@ -580,10 +589,13 @@ contracts. Historical release notes remain evidence only. Current desired
 state, current `v1` ensure state, and current live observations are the only
 host authorities.
 
-A successor Canic runtime correction does not upgrade an already-installed
-predecessor Root merely because a newer CLI reopens its issued plan. Under the
-pre-1.0 reinstall-only contract, the operator must discard the predecessor's
-local in-progress ensure evidence and review a new current desired-state plan.
-That plan may reuse the same controlled Principals and cycle balances while
-reinstalling current infrastructure artifacts; it is not a cross-release
-recovery or migration contract.
+A release boundary discards the predecessor's installation state and current
+Fleet authority. The new host does not resume an old journal with substituted
+desired input or silently fill omitted durable fields. Cycle conservation must
+be established before controlled infrastructure is erased. Any retirement work
+runs under its exact original authority; its receipts account for cycles and
+do not admit old identities, topology, stable bytes or protocols into the new
+Fleet. The replacement Fleet uses a separately reviewed current plan. Exact
+controlled canister identities and their cycle accounts may remain in place;
+identity reuse is not promised. Same-release interruption recovery retains its exact current plan,
+journal, installed artifact and paid-effect receipts.

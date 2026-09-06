@@ -15,6 +15,7 @@ mod component_provisioning_validation;
 mod deployment_ledger;
 mod funding_rotation;
 mod registry_history;
+mod retirement;
 mod root_deletion;
 mod root_funding;
 mod root_lifecycle;
@@ -237,6 +238,11 @@ impl FleetCoordinatorOps {
             ));
         }
         let current = Self::current()?;
+        if let Some(status) = retirement::retirement_status(&current.retirement)
+            && status.request.operation_id == operation_id
+        {
+            return Ok(CoordinatorOperationStatusResponse::Retirement(status));
+        }
 
         let mut active_provisioning_matches = [
             current.component_provisioning.as_ref(),
@@ -309,6 +315,8 @@ impl FleetCoordinatorOps {
             args.admission,
         )?;
         Ok(FleetCoordinatorRegistryRecord {
+            retirement:
+                crate::storage::stable::fleet_coordinator::FleetRetirementRecord::NotStarted,
             configured_app: args.configured_app,
             authority: args.authority,
             component_deployment_configuration: args.component_deployment_configuration,
@@ -1866,6 +1874,7 @@ impl FleetCoordinatorOps {
         current: FleetCoordinatorRegistryRecord,
     ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         let current = Self::validate_current_registry(current)?;
+        retirement::validate_retirement(&current)?;
         validate_component_provisioning_record(&current)?;
         validate_component_scale_out_receipts(&current)?;
         validate_component_scale_out_progress(&current)?;

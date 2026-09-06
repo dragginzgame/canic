@@ -120,7 +120,7 @@ mod tests {
         cdk::types::Principal,
         dto::auth::{DelegatedRoleGrant, DelegationAudience},
         ids::CanisterRole,
-        ops::storage::auth::AuthStateOps,
+        ops::storage::auth::RootDelegationStateOps,
     };
     use std::cell::Cell;
 
@@ -171,20 +171,20 @@ mod tests {
     #[test]
     fn root_issuer_policy_upsert_accepts_and_advances_registry_epoch() {
         let issuer_pid = p(121);
-        let epoch_before = AuthStateOps::delegated_auth_registry_epoch();
+        let epoch_before = RootDelegationStateOps::delegated_auth_registry_epoch();
 
         let response = upsert_policy(policy_request(issuer_pid))
             .expect("valid root issuer policy should be accepted");
 
         assert_eq!(response.issuer.issuer_pid, issuer_pid);
         assert_eq!(
-            AuthStateOps::root_issuer_policy(issuer_pid)
+            RootDelegationStateOps::root_issuer_policy(issuer_pid)
                 .expect("accepted policy must be persisted")
                 .issuer_pid,
             issuer_pid
         );
         assert_eq!(
-            AuthStateOps::delegated_auth_registry_epoch(),
+            RootDelegationStateOps::delegated_auth_registry_epoch(),
             epoch_before + 1
         );
     }
@@ -198,7 +198,7 @@ mod tests {
             policy_request(issuer_pid),
             test_fleet(),
             || {
-                assert!(AuthStateOps::root_issuer_policy(issuer_pid).is_some());
+                assert!(RootDelegationStateOps::root_issuer_policy(issuer_pid).is_some());
                 reconciled.set(true);
                 Ok(())
             },
@@ -214,8 +214,8 @@ mod tests {
         let issuer_pid = p(122);
         upsert_policy(policy_request(issuer_pid))
             .expect("baseline root issuer policy should be accepted");
-        let policy_before = AuthStateOps::root_issuer_policy(issuer_pid);
-        let epoch_before = AuthStateOps::delegated_auth_registry_epoch();
+        let policy_before = RootDelegationStateOps::root_issuer_policy(issuer_pid);
+        let epoch_before = RootDelegationStateOps::delegated_auth_registry_epoch();
 
         let mut zero_ttl = policy_request(issuer_pid);
         zero_ttl.max_cert_ttl_ns = 0;
@@ -249,8 +249,14 @@ mod tests {
             let err =
                 upsert_policy(request).expect_err("invalid root issuer policy must be rejected");
             assert_eq!(err.public_error().code(), expected_code.raw_code());
-            assert_eq!(AuthStateOps::root_issuer_policy(issuer_pid), policy_before);
-            assert_eq!(AuthStateOps::delegated_auth_registry_epoch(), epoch_before);
+            assert_eq!(
+                RootDelegationStateOps::root_issuer_policy(issuer_pid),
+                policy_before
+            );
+            assert_eq!(
+                RootDelegationStateOps::delegated_auth_registry_epoch(),
+                epoch_before
+            );
         }
     }
 
@@ -265,7 +271,7 @@ mod tests {
             test_fleet(),
             90,
             || {
-                assert!(AuthStateOps::root_issuer_renewal_template(issuer_pid).is_some());
+                assert!(RootDelegationStateOps::root_issuer_renewal_template(issuer_pid).is_some());
                 reconciliations.set(reconciliations.get() + 1);
                 Ok(())
             },
@@ -274,14 +280,14 @@ mod tests {
 
         assert_eq!(response.template.issuer_pid, issuer_pid);
         assert_eq!(reconciliations.get(), 1);
-        assert!(AuthStateOps::root_issuer_renewal_template(issuer_pid).is_some());
+        assert!(RootDelegationStateOps::root_issuer_renewal_template(issuer_pid).is_some());
     }
 
     #[test]
     fn renewal_template_rejections_preserve_state_and_skip_timer_reconciliation() {
         let issuer_pid = p(124);
         upsert_policy(policy_request(issuer_pid)).expect("root issuer policy should be accepted");
-        let epoch_before = AuthStateOps::delegated_auth_registry_epoch();
+        let epoch_before = RootDelegationStateOps::delegated_auth_registry_epoch();
         let reconciled = Cell::new(false);
 
         let mut zero_ttl = renewal_request(issuer_pid);
@@ -329,8 +335,13 @@ mod tests {
             .expect_err("invalid renewal template must be rejected");
 
             assert_eq!(err.public_error().code(), expected_code);
-            assert!(AuthStateOps::root_issuer_renewal_template(rejected_issuer).is_none());
-            assert_eq!(AuthStateOps::delegated_auth_registry_epoch(), epoch_before);
+            assert!(
+                RootDelegationStateOps::root_issuer_renewal_template(rejected_issuer).is_none()
+            );
+            assert_eq!(
+                RootDelegationStateOps::delegated_auth_registry_epoch(),
+                epoch_before
+            );
             assert!(!reconciled.get());
         }
     }

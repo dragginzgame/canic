@@ -76,6 +76,7 @@ pub fn record_application_session_expired_observation() {
 }
 
 /// Record the bounded number of expired records removed by one cleanup call.
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub fn record_application_session_cleanup(removed: usize) {
     for _ in 0..removed {
         record(

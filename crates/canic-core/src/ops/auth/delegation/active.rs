@@ -19,7 +19,7 @@ use crate::{
         },
         auth::delegated::chain_key::ChainKeyRootProofError,
         ic::IcOps,
-        storage::auth::AuthStateOps,
+        storage::auth::DelegatedTokenIssuerStateOps,
     },
 };
 
@@ -47,7 +47,7 @@ pub(super) fn install_active_delegation_proof(
 pub(super) fn active_delegation_proof(
     now_ns: u64,
 ) -> Result<Option<ActiveDelegationProof>, InternalError> {
-    let proof = AuthStateOps::active_delegation_proof(now_ns);
+    let proof = DelegatedTokenIssuerStateOps::active_delegation_proof(now_ns);
     if let Some(proof) = proof.as_ref() {
         require_current_epoch_floors(proof)?;
     }
@@ -57,7 +57,7 @@ pub(super) fn active_delegation_proof(
 pub(super) fn active_delegation_proof_status(
     now_ns: u64,
 ) -> Result<ActiveDelegationProofStatusResponse, InternalError> {
-    let proof = AuthStateOps::active_delegation_proof_snapshot();
+    let proof = DelegatedTokenIssuerStateOps::active_delegation_proof_snapshot();
     if let Some(proof) = proof.as_ref()
         && now_ns < proof.expires_at_ns
     {
@@ -67,7 +67,7 @@ pub(super) fn active_delegation_proof_status(
 }
 
 fn set_active_delegation_proof(proof: ActiveDelegationProof) {
-    AuthStateOps::set_active_delegation_proof(proof);
+    DelegatedTokenIssuerStateOps::set_active_delegation_proof(proof);
 }
 
 fn require_current_epoch_floors(proof: &ActiveDelegationProof) -> Result<(), InternalError> {

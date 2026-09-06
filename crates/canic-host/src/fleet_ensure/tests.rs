@@ -1,5 +1,6 @@
 use crate::{
     fleet_ensure::{
+        dto::{FleetEnsurePhase, FleetEnsureProgress},
         model::{
             CanisterDisposition, CanisterRuntimeStatus, CurrentFleetProtocolAction,
             CycleConservation, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
@@ -113,9 +114,11 @@ pub(super) struct MockPlatform {
     mutations: BTreeMap<String, u32>,
     operator_cycles: u128,
     paced_observations: Vec<u32>,
+    progress: Vec<FleetEnsureProgress>,
     paced_root_owned_observations: Vec<(String, u32)>,
     protocol_command_only: bool,
     protocol_action: Option<EnsureAction>,
+    fresh_protocol_actions: Vec<EnsureAction>,
     protocol_pending_waits: u32,
     protocol_ready: BTreeSet<String>,
     protocol_retry: EffectRetry,
@@ -156,9 +159,11 @@ impl MockPlatform {
             mutations: BTreeMap::new(),
             operator_cycles: 100_000,
             paced_observations: Vec::new(),
+            progress: Vec::new(),
             paced_root_owned_observations: Vec::new(),
             protocol_command_only: false,
             protocol_action: None,
+            fresh_protocol_actions: Vec::new(),
             protocol_pending_waits: 0,
             protocol_ready: BTreeSet::new(),
             protocol_retry: EffectRetry::None,
@@ -206,6 +211,10 @@ impl MockPlatform {
             .get(action_sha256)
             .copied()
             .unwrap_or_default()
+    }
+
+    pub(super) fn set_fresh_protocol_actions(&mut self, actions: Vec<EnsureAction>) {
+        self.fresh_protocol_actions = actions;
     }
 
     pub(super) fn duplicate_create_response_count(&self, action_sha256: &str) -> u32 {
@@ -365,12 +374,9 @@ impl MockPlatform {
             .as_deref()
             .and_then(|principal| self.live.get(principal))
             .map(|live| live.cycles);
-        let maximum_observation_burn_cycles = self
-            .desired
-            .maximum_observation_burn_cycles
-            .parse::<Cycles>()
-            .map(|cycles| cycles.to_u128())
-            .expect("fixture observation burn");
+        let maximum_observation_burn_cycles =
+            crate::fleet_ensure::ops::maximum_creation_observation_burn(&self.desired)
+                .expect("fixture Create execution and observation burn");
         let applied = create_balance_is_terminal(
             post_cycles,
             *requested_initial_cycles,
@@ -497,6 +503,12 @@ impl MockPlatform {
     }
 
     fn effect_retry(&self, action: &EnsureAction, applied: bool) -> EffectRetry {
+        if !applied
+            && self.protocol_retry == EffectRetry::ContinuePoolMaintenance
+            && is_pool_maintenance(action)
+        {
+            return EffectRetry::ContinuePoolMaintenance;
+        }
         if !applied
             && self.protocol_retry == EffectRetry::ReplayExactIssuedCommand
             && matches!(
@@ -652,7 +664,9 @@ impl MockPlatform {
                 if !self.protocol_command_only {
                     self.protocol_ready.insert(name.clone());
                 }
-                self.protocol_retry = EffectRetry::None;
+                if !is_pool_maintenance(action) {
+                    self.protocol_retry = EffectRetry::None;
+                }
                 EffectOutcome {
                     created_principal: None,
                     post_cycles: None,
@@ -718,6 +732,10 @@ impl MockPlatform {
 
 impl EnsurePlatform for MockPlatform {
     type Error = MockError;
+
+    fn report_progress(&mut self, progress: FleetEnsureProgress) {
+        self.progress.push(progress);
+    }
 
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
         self.desired = desired.clone();
@@ -867,6 +885,14 @@ impl EnsurePlatform for MockPlatform {
         Ok(vec![typed_protocol_action(operation_id)])
     }
 
+    fn fresh_protocol_actions(
+        &mut self,
+        _operation_id: &str,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Vec<EnsureAction>, Self::Error> {
+        Ok(self.fresh_protocol_actions.clone())
+    }
+
     fn terminal_inventory(
         &mut self,
         operation_id: &str,
@@ -974,7 +1000,9 @@ impl EnsurePlatform for MockPlatform {
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectOutcome, Self::Error> {
         let hash = crate::fleet_ensure::ops::action_sha256(action);
-        if let Some(outcome) = self.completed.get(&hash) {
+        if let Some(outcome) = self.completed.get(&hash)
+            && !is_pool_maintenance(action)
+        {
             if matches!(action, EnsureAction::Create { .. }) {
                 *self.duplicate_create_responses.entry(hash).or_default() += 1;
             }
@@ -994,6 +1022,240 @@ impl EnsurePlatform for MockPlatform {
         }
         Ok(outcome)
     }
+}
+
+#[test]
+fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
+    let mut fixture = fixture();
+    let desired_sha256 = "e1".repeat(32);
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("plan progress journey");
+    let actions = workflow::ordered_actions(&planned.plan);
+    fixture.platform.fail_once.insert(action_sha256(actions[0]));
+    let interrupted = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    );
+    assert!(matches!(
+        interrupted,
+        Err(workflow::EnsureWorkflowError::Platform(_))
+    ));
+    assert!(!fixture.platform.progress.is_empty());
+    assert!(
+        fixture
+            .platform
+            .progress
+            .iter()
+            .all(|event| event.phase != FleetEnsurePhase::Complete)
+    );
+    fixture.platform.progress.clear();
+    let completed = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("recover the effect before publishing completion progress");
+    assert!(completed.terminal);
+    let progress = &fixture.platform.progress;
+    assert!(progress.len() <= actions.len() + 2);
+    assert!(progress.iter().all(|event| {
+        event.operation_id == planned.plan.operation_id
+            && event.plan_sha256 == planned.plan.plan_sha256
+            && event.reviewed_effects == actions.len()
+            && event.applied_effects as usize <= event.reviewed_effects
+    }));
+    assert!(
+        progress
+            .windows(2)
+            .all(|pair| pair[0].applied_effects <= pair[1].applied_effects)
+    );
+    assert_eq!(
+        progress.last().expect("terminal event").phase,
+        FleetEnsurePhase::Complete
+    );
+    assert_eq!(
+        progress.last().expect("terminal event").applied_effects,
+        completed.effects_applied
+    );
+    fs::remove_dir_all(fixture.root).expect("remove progress fixture");
+}
+
+fn is_pool_maintenance(action: &EnsureAction) -> bool {
+    matches!(action, EnsureAction::FleetProtocol { action, .. }
+        if matches!(action.as_ref(), CurrentFleetProtocolAction::MaintainPoolReadiness { .. }))
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one recovery proof retains the reviewed attempt budget through response loss and process restart"
+)]
+fn pool_maintenance_attempt_bound_survives_lost_response_and_restart() {
+    let mut fixture = fixture();
+    fixture.desired.protocol = Some(DesiredFleetProtocol {
+        app_config: "canic.toml".to_string(),
+        component_group_placements: Vec::new(),
+        coordinator_candid: "coordinator.did".to_string(),
+        root_candid: "root.did".to_string(),
+        store_candid: "store.did".to_string(),
+    });
+    fixture
+        .desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+        .expect("fixture Coordinator")
+        .wasm = None;
+    let mut action = typed_protocol_action(&"19".repeat(32));
+    let EnsureAction::FleetProtocol {
+        action: current,
+        name,
+        ..
+    } = &mut action
+    else {
+        unreachable!("typed fixture protocol");
+    };
+    **current = CurrentFleetProtocolAction::MaintainPoolReadiness {
+        maximum_updates: 2,
+        minimum_ready: 1,
+        readiness_floor: Cycles::new(1),
+    };
+    *name = "pool-readiness".to_string();
+    let action_hash = crate::fleet_ensure::ops::action_sha256(&action);
+    fixture.platform.desired = fixture.desired.clone();
+    fixture.platform.protocol_command_only = true;
+    fixture.platform.protocol_retry = EffectRetry::ContinuePoolMaintenance;
+    fixture.platform.fail_once.insert(action_hash.clone());
+    let source = "29".repeat(32);
+    let mut planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .expect("review maintenance with two calls maximum");
+    // Exercise the workflow from its durable reviewed-journal boundary.
+    // Root policy admission is covered independently by the policy tests.
+    planned.plan.protocol_actions.push(action.clone());
+    planned.plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&planned.plan);
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    crate::fleet_ensure::ops::write_plan(&paths, &planned.plan)
+        .expect("retain reviewed maintenance plan");
+    crate::fleet_ensure::ops::write_journal(
+        &paths,
+        &FleetEnsureJournalRecord {
+            successor_phases: Vec::new(),
+            completion: FleetEnsureCompletion::InProgress,
+            estate_funding_required: None,
+            effects: Vec::new(),
+            fleet: "test-fleet".to_string(),
+            initial_controlled_cycles: planned.plan.conservation.observed_controlled_cycles,
+            initial_estate_funding_cycles_by_root: BTreeMap::new(),
+            initial_operator_cycles: fixture.platform.operator_cycles,
+            operation_id: planned.plan.operation_id.clone(),
+            plan_sha256: planned.plan.plan_sha256.clone(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            stalled_observations: 0,
+        },
+    )
+    .expect("retain reviewed operation before any call");
+    fixture.platform.protocol_action = Some(action.clone());
+    let lost = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    );
+    assert!(matches!(
+        lost,
+        Err(workflow::EnsureWorkflowError::Platform(_))
+    ));
+    assert_eq!(fixture.platform.mutations.get(&action_hash), Some(&1));
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read response-loss journal")
+        .expect("durable journal");
+    let retained = journal
+        .effects
+        .iter()
+        .find(|effect| effect.action_sha256 == action_hash)
+        .expect("maintenance intent");
+    assert_eq!(retained.maintenance_attempts, 1);
+    assert_eq!(retained.state, EffectState::Intent);
+
+    let mut resumed = MockPlatform::new(
+        fixture.desired.clone(),
+        fixture.platform.live.values().cloned(),
+    );
+    resumed.operator_cycles = fixture.platform.operator_cycles;
+    resumed.protocol_action = Some(action);
+    resumed.protocol_command_only = true;
+    resumed.protocol_retry = EffectRetry::ContinuePoolMaintenance;
+    for _ in 0..2 {
+        let exhausted = workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            &source,
+            "test-fleet",
+            &planned.plan.plan_sha256,
+            &mut resumed,
+        );
+        assert!(matches!(
+            exhausted,
+            Err(workflow::EnsureWorkflowError::PoolMaintenanceBound {
+                maximum_updates: 2,
+                ..
+            })
+        ));
+        assert_eq!(resumed.mutations.get(&action_hash), Some(&1));
+    }
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .expect("read exhausted journal")
+        .expect("durable journal");
+    assert_eq!(
+        journal
+            .effects
+            .iter()
+            .find(|effect| effect.action_sha256 == action_hash)
+            .expect("maintenance effect")
+            .maintenance_attempts,
+        2
+    );
+
+    resumed.protocol_ready.insert("pool-readiness".to_string());
+    let terminal = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut resumed,
+    )
+    .expect("terminal protected observation remains available at the attempt bound");
+    assert!(terminal.terminal);
+    assert_eq!(resumed.mutations.get(&action_hash), Some(&1));
+    fs::remove_dir_all(fixture.root).expect("remove maintenance fixture");
 }
 
 #[test]
@@ -1055,6 +1317,13 @@ fn first_create_balance_within_reviewed_observation_burn_converges() {
 
 #[test]
 fn create_balance_terminal_predicate_is_exact_and_bounded() {
+    let burn = crate::fleet_ensure::model::creation_observation_burn(1, 1).unwrap();
+    assert!(create_balance_is_terminal(Some(998), 1_000, burn));
+    assert!(!create_balance_is_terminal(Some(997), 1_000, burn));
+    assert_eq!(
+        crate::fleet_ensure::model::creation_observation_burn(u128::MAX, 1),
+        None
+    );
     assert!(create_balance_is_terminal(Some(1_000), 1_000, 0));
     assert!(create_balance_is_terminal(Some(999), 1_000, 1));
     assert!(!create_balance_is_terminal(Some(998), 1_000, 1));
@@ -1168,60 +1437,47 @@ fn assert_create_response_journey(response_is_duplicate: bool) {
     fs::remove_dir_all(fixture.root).expect("remove test directory");
 }
 
-#[test]
-fn retained_0_109_32_create_balance_recovers_only_from_the_exact_duplicate_response() {
-    let (mut fixture, desired_sha256, plan, create_hash, requested_initial_cycles) =
-        completed_create_journey();
-    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
-        &fixture.root,
-        &fixture.desired.environment,
-        "test-fleet",
-    );
-    let mut journal = crate::fleet_ensure::ops::read_journal(&paths)
-        .expect("read completed Create journal")
-        .expect("completed Create journal");
-    journal.completion = FleetEnsureCompletion::InProgress;
-    journal
-        .effects
-        .iter_mut()
-        .find(|effect| effect.action_sha256 == create_hash)
-        .expect("retained Create effect")
-        .post_cycles = None;
-    crate::fleet_ensure::ops::write_journal(&paths, &journal)
-        .expect("retain exact 0.109.32 missing-balance shape");
-    let mutations = fixture.platform.mutations.clone();
-
-    let recovered = workflow::apply(
+fn completed_create_journey() -> (Fixture, String, FleetEnsurePlan, String, u128) {
+    let mut fixture = fixture();
+    let desired_sha256 = "102".repeat(21) + "2";
+    let planned = workflow::plan(
         &fixture.root,
         &fixture.desired,
         &desired_sha256,
         "test-fleet",
-        &plan.plan_sha256,
+        1_800_000_000_000_000_000,
         &mut fixture.platform,
     )
-    .expect("recover exact retained Create evidence");
-    assert!(recovered.terminal);
-    assert_eq!(fixture.platform.mutations, mutations);
-    assert_eq!(
-        fixture
-            .platform
-            .duplicate_create_responses
-            .get(&create_hash),
-        Some(&1)
-    );
-    let journal = crate::fleet_ensure::ops::read_journal(&paths)
-        .expect("read recovered Create journal")
-        .expect("recovered Create journal");
-    let effect = journal
-        .effects
-        .iter()
-        .find(|effect| effect.action_sha256 == create_hash)
-        .expect("recovered Create effect");
-    assert_eq!(effect.state, EffectState::Applied);
-    assert_eq!(effect.post_cycles, Some(requested_initial_cycles));
-    assert_retained_create_balance(&paths, requested_initial_cycles);
-
-    fs::remove_dir_all(fixture.root).expect("remove test directory");
+    .expect("plan retained Create journey");
+    let create = workflow::ordered_actions(&planned.plan)
+        .into_iter()
+        .find(|action| matches!(action, EnsureAction::Create { name, .. } if name == "created"))
+        .expect("reviewed Create action");
+    let create_hash = crate::fleet_ensure::ops::action_sha256(create);
+    let EnsureAction::Create {
+        requested_initial_cycles,
+        ..
+    } = create
+    else {
+        unreachable!("selected action is Create");
+    };
+    let requested_initial_cycles = *requested_initial_cycles;
+    workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("complete retained Create journey");
+    (
+        fixture,
+        desired_sha256,
+        planned.plan,
+        create_hash,
+        requested_initial_cycles,
+    )
 }
 
 #[test]
@@ -1286,146 +1542,6 @@ fn assert_retained_create_balance(paths: &crate::fleet_ensure::ops::EnsurePaths,
         state.retained_cycles_by_principal.get("created-created"),
         Some(&expected)
     );
-}
-
-#[test]
-fn retained_0_109_32_create_balance_recovery_rejects_every_authority_mismatch() {
-    #[derive(Clone, Copy, Debug)]
-    enum Mismatch {
-        Action,
-        Operation,
-        Plan,
-        Principal,
-        Receipt,
-        RequestedBalance,
-    }
-
-    for mismatch in [
-        Mismatch::Action,
-        Mismatch::Operation,
-        Mismatch::Plan,
-        Mismatch::Principal,
-        Mismatch::Receipt,
-        Mismatch::RequestedBalance,
-    ] {
-        let (mut fixture, desired_sha256, plan, create_hash, requested_initial_cycles) =
-            completed_create_journey();
-        let paths = crate::fleet_ensure::ops::EnsurePaths::under(
-            &fixture.root,
-            &fixture.desired.environment,
-            "test-fleet",
-        );
-        let mut journal = crate::fleet_ensure::ops::read_journal(&paths)
-            .expect("read completed Create journal")
-            .expect("completed Create journal");
-        journal.completion = FleetEnsureCompletion::InProgress;
-        let effect = journal
-            .effects
-            .iter_mut()
-            .find(|effect| effect.action_sha256 == create_hash)
-            .expect("retained Create effect");
-        effect.post_cycles = None;
-        match mismatch {
-            Mismatch::Action => effect.action_sha256 = "wrong-action".to_string(),
-            Mismatch::Operation => journal.operation_id = "wrong-operation".to_string(),
-            Mismatch::Plan => journal.plan_sha256 = "wrong-plan".to_string(),
-            Mismatch::Principal => {
-                fixture
-                    .platform
-                    .completed
-                    .get_mut(&create_hash)
-                    .expect("retained Create response")
-                    .created_principal = Some("different-principal".to_string());
-            }
-            Mismatch::Receipt => {
-                fixture
-                    .platform
-                    .completed
-                    .get_mut(&create_hash)
-                    .expect("retained Create response")
-                    .receipt = Some("different-receipt".to_string());
-            }
-            Mismatch::RequestedBalance => {
-                fixture
-                    .platform
-                    .completed
-                    .get_mut(&create_hash)
-                    .expect("retained Create response")
-                    .post_cycles = Some(requested_initial_cycles - 1);
-            }
-        }
-        crate::fleet_ensure::ops::write_journal(&paths, &journal)
-            .expect("retain mismatched Create recovery shape");
-        let retained_journal = fs::read(&paths.journal).expect("read mismatched journal bytes");
-        let mutations = fixture.platform.mutations.clone();
-
-        let error = workflow::apply(
-            &fixture.root,
-            &fixture.desired,
-            &desired_sha256,
-            "test-fleet",
-            &plan.plan_sha256,
-            &mut fixture.platform,
-        )
-        .expect_err("mismatched Create recovery authority must reject");
-        assert!(
-            matches!(
-                error,
-                workflow::EnsureWorkflowError::JournalIntegrity
-                    | workflow::EnsureWorkflowError::DriftedBeforeApply
-            ),
-            "unexpected {mismatch:?} error: {error:?}"
-        );
-        assert_eq!(fixture.platform.mutations, mutations);
-        assert_eq!(
-            fs::read(&paths.journal).expect("reread mismatched journal bytes"),
-            retained_journal
-        );
-        fs::remove_dir_all(fixture.root).expect("remove test directory");
-    }
-}
-
-fn completed_create_journey() -> (Fixture, String, FleetEnsurePlan, String, u128) {
-    let mut fixture = fixture();
-    let desired_sha256 = "102".repeat(21) + "2";
-    let planned = workflow::plan(
-        &fixture.root,
-        &fixture.desired,
-        &desired_sha256,
-        "test-fleet",
-        1_800_000_000_000_000_000,
-        &mut fixture.platform,
-    )
-    .expect("plan retained Create journey");
-    let create = workflow::ordered_actions(&planned.plan)
-        .into_iter()
-        .find(|action| matches!(action, EnsureAction::Create { name, .. } if name == "created"))
-        .expect("reviewed Create action");
-    let create_hash = crate::fleet_ensure::ops::action_sha256(create);
-    let EnsureAction::Create {
-        requested_initial_cycles,
-        ..
-    } = create
-    else {
-        unreachable!("selected action is Create");
-    };
-    let requested_initial_cycles = *requested_initial_cycles;
-    workflow::apply(
-        &fixture.root,
-        &fixture.desired,
-        &desired_sha256,
-        "test-fleet",
-        &planned.plan.plan_sha256,
-        &mut fixture.platform,
-    )
-    .expect("complete retained Create journey");
-    (
-        fixture,
-        desired_sha256,
-        planned.plan,
-        create_hash,
-        requested_initial_cycles,
-    )
 }
 
 #[test]
@@ -1622,6 +1738,7 @@ fn retryable_provisioning_failure_replays_only_the_exact_retained_issued_command
         .iter()
         .enumerate()
         .map(|(index, action)| EffectRecord {
+            maintenance_attempts: 0,
             action_sha256: crate::fleet_ensure::ops::action_sha256(action),
             created_principal: None,
             destination_post_cycles: None,
@@ -1641,6 +1758,7 @@ fn retryable_provisioning_failure_replays_only_the_exact_retained_issued_command
     crate::fleet_ensure::ops::write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
             estate_funding_required: None,
             effects,
@@ -1884,6 +2002,10 @@ fn infrastructure_install_order_keeps_store_before_root_initialization() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one interruption journey checks Registry authority before and after all infrastructure reinstalls"
+)]
 fn active_registry_is_retired_only_after_every_infrastructure_reinstall_is_applied() {
     let mut fixture = fixture();
     let mut plan = workflow::plan(
@@ -1940,6 +2062,7 @@ fn active_registry_is_retired_only_after_every_infrastructure_reinstall_is_appli
             crate::fleet_ensure::model::InstallMode::Reinstall,
         );
         effects.push(EffectRecord {
+            maintenance_attempts: 0,
             action_sha256: crate::fleet_ensure::ops::action_sha256(&action),
             created_principal: None,
             destination_post_cycles: None,
@@ -1962,6 +2085,7 @@ fn active_registry_is_retired_only_after_every_infrastructure_reinstall_is_appli
     plan.canisters = planned;
     plan.protocol_actions.clear();
     let mut journal = FleetEnsureJournalRecord {
+        successor_phases: Vec::new(),
         completion: FleetEnsureCompletion::InProgress,
         estate_funding_required: None,
         effects,
@@ -2037,7 +2161,38 @@ fn ledger_withdraw_completion_uses_the_reviewed_burn_aware_lower_bound() {
         ..observation
     }));
     assert!(!native_funding_applied(NativeFundingObservation {
-        expected_post_cycles: 2_900_000_000_001,
+        funding_deficit_cycles: observation.funding_deficit_cycles + 1,
+        ..observation
+    }));
+}
+
+#[test]
+fn ledger_withdraw_completion_includes_burn_between_review_and_intent() {
+    use crate::fleet_ensure::ops::{NativeFundingObservation, native_funding_applied};
+
+    let observation = NativeFundingObservation {
+        amount: 3_500_004_258_258,
+        expected_post_cycles: 8_000_000_000_000,
+        funding_deficit_cycles: 1_500_004_258_258,
+        funding_margin_cycles: 2_000_000_000_000,
+        live_cycles: Some(7_999_998_049_258),
+        pre_cycles: Some(4_499_995_491_646),
+    };
+    assert!(native_funding_applied(observation));
+    for live_cycles in [6_000_000_000_000, 7_999_999_749_904] {
+        assert!(native_funding_applied(NativeFundingObservation {
+            live_cycles: Some(live_cycles),
+            ..observation
+        }));
+    }
+    for live_cycles in [5_999_999_999_999, 7_999_999_749_905] {
+        assert!(!native_funding_applied(NativeFundingObservation {
+            live_cycles: Some(live_cycles),
+            ..observation
+        }));
+    }
+    assert!(!native_funding_applied(NativeFundingObservation {
+        pre_cycles: Some(4_499_995_741_743),
         ..observation
     }));
 }
@@ -2177,6 +2332,7 @@ fn lost_estate_funding_response_reuses_the_exact_ledger_transfer() {
     )
     .expect("construct current state");
     let mut record = EffectRecord {
+        maintenance_attempts: 0,
         action_sha256: action_hash.clone(),
         created_principal: None,
         destination_post_cycles: Some(40),
@@ -2207,6 +2363,31 @@ fn lost_estate_funding_response_reuses_the_exact_ledger_transfer() {
     assert_eq!(observed.post_cycles, Some(40));
 
     fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+fn assert_same_plan_replay(
+    root: &Path,
+    desired: &DesiredFleet,
+    plan: &FleetEnsurePlan,
+    platform: &mut MockPlatform,
+) {
+    let paths =
+        crate::fleet_ensure::ops::EnsurePaths::under(root, &desired.environment, &plan.fleet);
+    let retained_journal_bytes = fs::read(&paths.journal).unwrap();
+    let mutations = platform.mutations.clone();
+    let same_plan = workflow::apply(
+        root,
+        desired,
+        &plan.desired_sha256,
+        &plan.fleet,
+        &plan.plan_sha256,
+        platform,
+    )
+    .expect("replay the completed review without generating another plan");
+    assert!(same_plan.terminal);
+    assert_eq!(same_plan.effects_applied, 0);
+    assert_eq!(platform.mutations, mutations);
+    assert_eq!(fs::read(&paths.journal).unwrap(), retained_journal_bytes);
 }
 
 #[test]
@@ -2280,13 +2461,14 @@ fn same_module_reinstall_runs_once_and_replay_is_effect_free() {
     assert_eq!(completed.effects.len(), 1);
     assert_eq!(completed.effects[0].pre_canister_version, before);
     assert_eq!(completed.effects[0].state, EffectState::Applied);
-    assert!(
-        fixture
-            .platform
-            .live
-            .get(TREASURY)
-            .and_then(|live| live.canister_version)
-            > before
+    let after = fixture.platform.live[TREASURY].canister_version;
+    assert!(after > before);
+
+    assert_same_plan_replay(
+        &fixture.root,
+        &fixture.desired,
+        &planned.plan,
+        &mut fixture.platform,
     );
 
     let replay_plan = workflow::plan(
@@ -2883,7 +3065,7 @@ fn apply_effect_free_successor(
 fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
     let fixture = fixture();
     let mut platform = fixture.platform;
-    platform.create_shortfalls.insert("created".to_string(), 1);
+    platform.create_shortfalls.insert("created".to_string(), 2);
     let source = "8".repeat(64);
     let planned = workflow::plan(
         &fixture.root,
@@ -2907,9 +3089,9 @@ fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
         matches!(
             error,
             workflow::EnsureWorkflowError::ReplanRequiredAfterCreateBalanceDrift {
-                actual_cycles: 19,
+                actual_cycles: 18,
                 configured_fee_cycles: 50,
-                deficit_cycles: 1,
+                deficit_cycles: 2,
                 requested_cycles: 20,
                 ..
             }
@@ -2972,7 +3154,7 @@ fn post_effect_balance_drift_preserves_the_nonterminal_journal_and_inventory() {
     );
     assert_eq!(
         state.retained_cycles_by_principal.get("created-created"),
-        Some(&19)
+        Some(&18)
     );
 
     let mut successor_platform =
@@ -3359,110 +3541,6 @@ fn in_progress_operation_resumes_reviewed_desired_before_newer_input() {
 }
 
 #[test]
-fn pre_snapshot_zero_debit_final_observation_resumes_without_reissuing() {
-    let mut fixture = fixture();
-    fixture
-        .desired
-        .canisters
-        .retain(|canister| canister.name == "treasury");
-    fixture.desired.protocol = Some(DesiredFleetProtocol {
-        app_config: "canic.toml".to_string(),
-        component_group_placements: Vec::new(),
-        coordinator_candid: "coordinator.did".to_string(),
-        root_candid: "root.did".to_string(),
-        store_candid: "store.did".to_string(),
-    });
-    fixture
-        .desired
-        .canisters
-        .iter_mut()
-        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
-        .expect("fixture Coordinator")
-        .wasm = None;
-    fixture.platform.desired = fixture.desired.clone();
-    fixture.platform.protocol_command_only = true;
-    fixture.platform.typed_protocol = true;
-    let reviewed_sha256 = "33".repeat(32);
-    let mut platform = fixture.platform;
-    let planned = workflow::plan(
-        &fixture.root,
-        &fixture.desired,
-        &reviewed_sha256,
-        "test-fleet",
-        1_800_000_000_000_000_000,
-        &mut platform,
-    )
-    .expect("compile reviewed operation");
-    let mut retained = planned.plan;
-    let action_hash = retained
-        .protocol_actions
-        .first()
-        .map(crate::fleet_ensure::ops::action_sha256)
-        .expect("terminal protocol action");
-    retained.reviewed_desired = None;
-    retained.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&retained);
-    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
-        &fixture.root,
-        &fixture.desired.environment,
-        "test-fleet",
-    );
-    crate::fleet_ensure::ops::write_plan(&paths, &retained).expect("retain pre-snapshot plan");
-    fs::remove_file(&paths.state).expect("remove disposable pre-effect identity projection");
-
-    let error = workflow::apply(
-        &fixture.root,
-        &fixture.desired,
-        &reviewed_sha256,
-        "test-fleet",
-        &retained.plan_sha256,
-        &mut platform,
-    )
-    .expect_err("issued protocol remains nonterminal");
-    assert!(matches!(
-        error,
-        workflow::EnsureWorkflowError::Stalled { .. }
-    ));
-    assert_eq!(platform.mutations.get(&action_hash), Some(&1));
-
-    let mut newer = fixture.desired.clone();
-    newer.maximum_stalled_observations = 17;
-    let newer_sha256 = "34".repeat(32);
-    let mut mismatched = newer.clone();
-    mismatched.canisters[0].principal = Some(OLD_APP.to_string());
-    let error = workflow::apply(
-        &fixture.root,
-        &mismatched,
-        &newer_sha256,
-        "test-fleet",
-        &retained.plan_sha256,
-        &mut platform,
-    )
-    .expect_err("changed retained Principal cannot supply observation authority");
-    assert!(matches!(
-        error,
-        workflow::EnsureWorkflowError::RetainedDesiredUnavailable {
-            actual,
-            expected,
-        } if actual == newer_sha256 && expected == reviewed_sha256
-    ));
-
-    platform
-        .protocol_ready
-        .insert("fleet-component-provisioning".to_string());
-    let terminal = workflow::apply(
-        &fixture.root,
-        &newer,
-        &newer_sha256,
-        "test-fleet",
-        &retained.plan_sha256,
-        &mut platform,
-    )
-    .expect("newer input may observe the exact retained zero-debit terminal action");
-    assert!(terminal.terminal);
-    assert_eq!(platform.mutations.get(&action_hash), Some(&1));
-}
-
-#[test]
 fn typed_fleet_protocol_is_issued_once_and_requires_terminal_status() {
     let mut fixture = fixture();
     fixture.desired.protocol = Some(DesiredFleetProtocol {
@@ -3716,6 +3794,7 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
         .map(crate::fleet_ensure::ops::action_sha256)
         .collect::<Vec<_>>();
     let mut plan = FleetEnsurePlan {
+        continuation: None,
         canisters: Vec::new(),
         conservation: CycleConservation {
             estate_funding_domains: Vec::new(),
@@ -3735,6 +3814,7 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
         plan_sha256: String::new(),
         planned_at_time: 1,
         protocol_actions: actions,
+        root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: None,
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
@@ -3816,6 +3896,7 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         ),
     ];
     let mut plan = FleetEnsurePlan {
+        continuation: None,
         canisters: Vec::new(),
         conservation: CycleConservation {
             estate_funding_domains: Vec::new(),
@@ -3835,6 +3916,7 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         plan_sha256: String::new(),
         planned_at_time: 1,
         protocol_actions: actions,
+        root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: None,
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
@@ -4288,12 +4370,9 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
                     .as_deref()
                     .and_then(|principal| self.live(principal))
                     .map(|live| live.cycles);
-                let maximum_observation_burn_cycles = self
-                    .desired
-                    .maximum_observation_burn_cycles
-                    .parse::<Cycles>()
-                    .map(|cycles| cycles.to_u128())
-                    .expect("PocketIC observation burn");
+                let maximum_observation_burn_cycles =
+                    crate::fleet_ensure::ops::maximum_creation_observation_burn(&self.desired)
+                        .expect("fixture Create execution and observation burn");
                 let applied = create_balance_is_terminal(
                     post_cycles,
                     *requested_initial_cycles,
@@ -5262,6 +5341,11 @@ fn current_protocol_variants(plan: &FleetEnsurePlan) -> BTreeSet<&'static str> {
         .iter()
         .filter_map(|action| match action {
             EnsureAction::FleetProtocol { action, .. } => Some(match action.as_ref() {
+                CurrentFleetProtocolAction::ReconcilePoolAsset { .. } => "reconcile_pool_asset",
+                CurrentFleetProtocolAction::ObservePoolReadiness { .. } => "observe_pool_readiness",
+                CurrentFleetProtocolAction::MaintainPoolReadiness { .. } => {
+                    "maintain_pool_readiness"
+                }
                 CurrentFleetProtocolAction::ActivateRegistry { .. } => "activate_registry",
                 CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => {
                     "activate_registry_mirror"

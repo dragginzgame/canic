@@ -1432,6 +1432,8 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         let record = RootFleetSubnetDeletionPreparationIntentRecord {
+            ledger_transfer: None,
+            ledger_receipt: None,
             operation_id,
             coordinator,
             final_inventory_hash: inventory.inventory_hash,
@@ -1449,6 +1451,85 @@ impl ComponentRegistryOps {
         RootComponentRegistryStore::prepare_root_deletion(&current, record).map_err(
             |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
+        Self::root_deletion_preparation_intent_if_present(operation_id)?
+            .ok_or_else(InternalError::invariant)
+    }
+
+    pub(crate) fn begin_root_ledger_transfer(
+        operation_id: [u8; 32],
+        balance_before: u128,
+        fee: u128,
+        created_at_time: u64,
+    ) -> Result<canic_core::dto::fleet_registry::FleetLedgerTransferIntent, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        let mut record = draining
+            .root_deletion_preparation_intent
+            .clone()
+            .ok_or_else(InternalError::unavailable)?;
+        let transfer = canic_core::dto::fleet_registry::FleetLedgerTransferIntent {
+            source: draining.fleet_subnet_root,
+            destination: record.coordinator,
+            balance_before,
+            fee,
+            created_at_time,
+            memo: operation_id,
+        };
+        if let Some(existing) = &record.ledger_transfer {
+            return if *existing == transfer {
+                Ok(existing.clone())
+            } else {
+                Err(InternalError::conflict())
+            };
+        }
+        record.ledger_transfer = Some(transfer.clone());
+        RootComponentRegistryStore::record_root_ledger_transfer(&current, record)
+            .map_err(|_| InternalError::conflict())?;
+        Ok(transfer)
+    }
+
+    pub(crate) fn complete_root_ledger_transfer(
+        operation_id: [u8; 32],
+        block_index: Option<u128>,
+    ) -> Result<RootFleetSubnetDeletionPreparationIntentView, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        let mut record = draining
+            .root_deletion_preparation_intent
+            .clone()
+            .ok_or_else(InternalError::unavailable)?;
+        let intent = record
+            .ledger_transfer
+            .clone()
+            .ok_or_else(InternalError::unavailable)?;
+        let receipt = canic_core::dto::fleet_registry::FleetLedgerTransferReceipt {
+            intent,
+            block_index,
+        };
+        if record
+            .ledger_receipt
+            .as_ref()
+            .is_some_and(|existing| *existing != receipt)
+        {
+            return Err(InternalError::conflict());
+        }
+        record.ledger_receipt = Some(receipt);
+        RootComponentRegistryStore::record_root_ledger_transfer(&current, record)
+            .map_err(|_| InternalError::conflict())?;
         Self::root_deletion_preparation_intent_if_present(operation_id)?
             .ok_or_else(InternalError::invariant)
     }
@@ -1551,6 +1632,10 @@ impl ComponentRegistryOps {
             .as_ref()
             .ok_or_else(InternalError::unavailable)?;
         let record = RootFleetSubnetDeletionPreparationRecord {
+            ledger_receipt: intent
+                .ledger_receipt
+                .clone()
+                .ok_or_else(InternalError::unavailable)?,
             operation_id,
             fleet_subnet_root: draining.fleet_subnet_root,
             coordinator: intent.coordinator,

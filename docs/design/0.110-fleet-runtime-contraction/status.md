@@ -1,8 +1,48 @@
 # Canic 0.110 Implementation Status
 
-Date: 2026-09-04
+Date: 2026-09-06
 
 ## Status
+
+- Authorized correction batch (2026-09-05): resolve `CANIC-007` and
+  `CANIC-132` through `CANIC-138` within Canic. Runtime/auth owns synchronous
+  selected-store validation and auth-free Root reachability; host/Fleet Ensure
+  owns shared policy admission, complete capacity, reviewed native funding and
+  pool reconciliation, and management-bound same-module Start. Required
+  evidence includes typed rejection before effects, corrupted issuer restore,
+  exact enabled/disabled role surfaces, lost responses, process reconstruction,
+  terminal cycle conservation and immediate effect-free replay. Status: ready
+  for release approval;
+  publication and downstream effects remain separate boundaries.
+  The focused four-Shard and direct nineteen-Workload activation/replay cases
+  pass. Automatic five-Workload/five-Ready convergence passes in 548.96s;
+  four-Workload reserve refill passes in 377.41s; the full four-Workload/four-
+  Failed repair passes in 349.17s without Root-account funding or creation.
+  All 138 focused Fleet host tests and scoped Clippy pass. Seven native auth
+  cases, auth-free Root activation, and the controlled Toko Root comparison
+  pass; the latter removes 333,288 code-section bytes (5.15%). Named optimized
+  symbol evidence remains separate from canonical artifact measurements.
+  Generated nineteen-plus-five passes in 990.33s, including all 104 effects,
+  terminal conservation and both completed-plan and newly planned effect-free
+  replay. The corrected fixture preserves source-relative package authority
+  and checks it before host effects.
+  CANIC-134 follows the maintainer's 2026-09-06 correction: explicit reinstall
+  discards state while preserving cycle and asset control. Full evacuation is
+  conditional on deleting the Fleet. The separate custody implementation and
+  pinned predecessor owner have been removed. The Root Ledger deletion slice
+  passes its lost-reply checkpoint; complete whole-Fleet deletion is optional
+  follow-up. Pool-policy/status errors no longer select implicit resets.
+  Start retains only exact installed-module authority. The Root reinstall
+  prerequisite now binds stop/reinstall/start to exact management authority;
+  generation avoids protected calls on a different Root module. All 138 focused
+  host cases pass after this change. The generated changed-release PocketIC
+  journey passes in 522.04s, including a working Fleet after lost-response
+  recovery, conservation and both effect-free replays. Live Toko applicability
+  remains downstream qualification. All 47 selected Fleet CLI tests and five
+  canonical Coordinator Candid tests pass. The final Coordinator preflight and
+  Ledger lost-reply checkpoint passes in 142.74s. The correction batch is ready
+  for release approval; the governed release gate and publication remain.
+  See the [feedback readiness report](../../audits/reports/2026-09/2026-09-05/fleet-feedback-readiness.md).
 
 - State: B1 promoted and active after accepted 0.109 closeout.
 - Review verdict: the frozen replica-validator-equivalent function counter,
@@ -12,9 +52,10 @@ Date: 2026-09-04
 - Outcome: create durable absolute Wasm code-section and replica-limited
   defined-function headroom through storage, codec and whole generated-surface
   endpoint/provider/recovery reachability cuts.
-- Capability boundary: zero new runtime capability. Retirement, cycle
-  transfer, estates, host-only version inventory and status redesign do not
-  enter or block this line.
+- Capability boundary: the contraction work adds no runtime capability.
+  The separately authorized CANIC-134 correction permits explicit hard-cut
+  reinstall and cycle-safe Fleet deletion. General estates, host-only version inventory and
+  status redesign remain outside this line.
 - Provenance: immutable predecessor `3185dc45b` (`v0.109.35`), superseding the older
   tracked 0.110 revision last changed at `ef3acc17c`.
 - Compatibility: reinstall-only. Selected codec cuts retain no predecessor
@@ -28,7 +69,11 @@ Date: 2026-09-04
 - First release: immutable `v0.110.0` at `d29a7cc72` carries the initial
   `CANIC-119` through `CANIC-121` fresh-estate correction and corrected
   canonical-role baseline; it does not claim B1 completion or authorize B2.
-- Latest release: immutable `v0.110.6` at `f1fd3c59f` repairs active child
+- Latest release: immutable `v0.110.7` at `2cd3588b6` completes the endpoint,
+  validation, terminal-authority, estate-funding, cryptography and retained
+  B1 attribution work recorded in the detailed changelog. It does not accept
+  B1 or authorize the remaining B2/B3 families.
+- Published `v0.110.6` repairs active child
   response completion, terminal Fleet discovery, backup and descendant
   authority, and controller-protects exact observability while preserving
   operator access through Root relays. The earlier public host-only CANIC-124
@@ -55,7 +100,7 @@ Date: 2026-09-04
   protocol-bound Pool-to-Component promotion may change logical parent, and
   `info subnets` retains the selected ICP executable and environment. This
   operator correction does not promote B2 or expand runtime capability.
-- Current Unreleased hardening: terminal Components additionally require exact
+- Published `v0.110.7` hardening: terminal Components additionally require exact
   running state, Root-only controllers and current management/Directory module
   identity; cycle reporting is capability-aware; Fleet Ensure treats every
   Root Cycles Ledger account as a separately observed and reviewed funding
@@ -77,6 +122,28 @@ Date: 2026-09-04
   cryptography symbols separately. Aligning the existing chain-key
   implementation with the IC client stack's `k256 0.13.4` dependency is a
   non-protocol contraction; chain-key replacement remains unauthorized.
+- Current open 0.110.8 slice: the maintainer explicitly authorized the bounded
+  authorization-persistence split before complete B1 acceptance. Local
+  application sessions, delegated-token issuer proof and Root delegation
+  policy now use separate records, stable cells, operations and allocation
+  keys. Verification alone, Coordinator and Store select no auth persistence;
+  Root selects only Root delegation state. Typed contract tests and targeted
+  optimized Coordinator, Root, verifier-only and combined issuer/local builds
+  prove the selected declaration set. This slice neither accepts B1 nor opens
+  unrelated storage families.
+- Current open 0.110.8 dependency alignment advances only the isolated
+  lifecycle-composition fixture to the exact IcyDB 0.253.0 family with default
+  features disabled. It adds no IcyDB edge to a production Canic crate and
+  changes no Fleet runtime capability or B1/B2 verdict.
+- Row 8 remains `specified`. Its first full development qualification passed
+  ten canonical artifacts before the Wasm Store correctly enforced canonical
+  Candid parity. The audit-only switch now isolates that counterfactual
+  comparison and the exact Store artifact qualifies, but the complete selector
+  has not passed against the current patch identity and no retained measurement
+  is claimed.
+- Rows 10 and 12 remain `specified`; their exact canonical-App development
+  qualifications pass, while their complete selectors and immutable paired
+  measurements remain open.
 
 Design: [Fleet runtime contraction](0.110-design.md)
 
@@ -162,9 +229,9 @@ Current canonical-role evidence:
 
 | Batch | Outcome | Direct evidence | Status |
 | --- | --- | --- | --- |
-| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, repository-owned capability fixture matrix, replica-validator-equivalent local-function count, generated-surface inventory, complete artifact vector, current/predecessor delta for the deleted temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active from immutable `v0.110.5`; valid `CANIC-WASM-001/v6` size/determinism evidence, generated-surface/destruction traces, pool-Ledger source absence, the machine-checked eighteen-row ablation harness and repository-owned frozen function counter, immutable all-role row 2 attribution supporting role-selected storage wiring without lifecycle parity, immutable all-role row 3 inclusive activation-persistence attribution supporting role-selected separation without activation parity, immutable canonical-plus-runtime-fixture row 4 authorization-persistence attribution without persistence or authorization parity, selected-artifact qualification for row 5, specified audit-only rows 6, 8, 10 and 12, immutable row 11 payload-adapter attribution retaining the safety path, the `Page<T>`/`N = 5` generic fixture and hash-bound downstream routing observation are retained, while counter-backed immutable role/fixture measurements, complete selected-artifact build qualification for the remaining specified rows, remaining source-ablation patches and measurements, optimized-artifact absence, generic measurements/post-`-Oz` mapping, accepted allowances and compatible predecessor artifact evidence remain open |
-| B2 | Role-selected storage reachability | Lazy TLS, direct generated wiring, storage/lifecycle inventory contraction, data-only reservations, symbol absence and full remeasurement | Blocked on B1 |
-| B3 | Capability-owned activation/auth records and only still-justified codecs | Concrete records, phase cache, bounded codec evidence and full remeasurement | Blocked on B2 decision |
+| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, repository-owned capability fixture matrix, replica-validator-equivalent local-function count, generated-surface inventory, complete artifact vector, current/predecessor delta for the deleted temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active from immutable `v0.110.5`; valid `CANIC-WASM-001/v6` size/determinism evidence, generated-surface/destruction traces, pool-Ledger source absence, the machine-checked eighteen-row ablation harness and repository-owned frozen function counter, immutable all-role row 2 attribution supporting role-selected storage wiring without lifecycle parity, immutable all-role row 3 inclusive activation-persistence attribution supporting role-selected separation without activation parity, immutable canonical-plus-runtime-fixture row 4 authorization-persistence attribution without persistence or authorization parity, immutable canonical-plus-runtime/blob-fixture row 5 shared-CBOR-helper attribution without codec or persistence parity, selected-artifact qualification for row 6, specified audit-only rows 8, 10 and 12, immutable row 11 payload-adapter attribution retaining the safety path, the `Page<T>`/`N = 5` generic fixture and hash-bound downstream routing observation are retained, while counter-backed immutable role/fixture measurements, complete selected-artifact build qualification for the remaining specified rows, remaining source-ablation patches and measurements, optimized-artifact absence, generic measurements/post-`-Oz` mapping, accepted allowances and compatible predecessor artifact evidence remain open |
+| B2 | Role-selected storage reachability | Lazy TLS, direct generated wiring, storage/lifecycle inventory contraction, data-only reservations, symbol absence and full remeasurement | Blocked overall on B1; bounded auth stable-declaration sub-slice explicitly active and targeted role evidence passes |
+| B3 | Capability-owned activation/auth records and only still-justified codecs | Concrete records, phase cache, bounded codec evidence and full remeasurement | Blocked overall on B2 decision; bounded auth-record split explicitly active without selecting another codec cut |
 | B4 | Endpoint, recovery and role-capability pruning | Complete generated-surface inventory, exact Candid/provider reachability, optimized body/function evidence, direct dispatch, continued absence of the hard-deleted temporary pool Ledger recovery family, role pruning and full remeasurement | Mandatory after the B3 decision while known role-inapplicable reachability remains |
 | B5 | Canic-owned qualification and closeout | Canonical and fixture 5% byte/function reserves, capability matrix, per-role generated-surface absence, total-module limit, instructions, determinism, structured reinstall-only guard, optional consumer observations and immutable audit | Blocked on final B2-B4 decision |
 
@@ -180,13 +247,16 @@ Current canonical-role evidence:
 
 ## Next Authorized Action
 
-Continue B1 from immutable `v0.110.5`: measure qualified row 5, then qualify the
-specified row 6 watchdog-recovery-dispatch patch plus
-row 8 endpoint-declaration construction and rows 10 and 12 endpoint-reply
+Finish focused review of the explicitly authorized authorization-persistence
+slice and keep its targeted optimized-artifact evidence separate from complete
+B2 remeasurement. This does not accept B1 or authorize another state family.
+
+Then continue B1 from immutable `v0.110.5`: qualify row 8 endpoint-declaration
+construction and rows 10 and 12 endpoint-reply
 serialization and metrics-provider attribution. Then
 complete the remaining controlled ablations,
 optimized generated-
 surface absence, generic cohort and accepted allowances and obtain compatible
 predecessor evidence where required. The source generated-surface and complete
-allocation/destruction inventories are retained. Do not begin B2 until the
-maintainer accepts the complete B1 evidence.
+allocation/destruction inventories are retained. Do not begin the remaining B2
+or B3 scope until the maintainer accepts the complete B1 evidence.

@@ -1,0 +1,83 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:33941/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 34.94s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation ... [WASM]       SIZE   fleet_coordinator/candidate.wasm  code=3.88 MiB (4070557 B)  headroom=6.12 MiB (6415203 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2637573 B)  headroom=7.48 MiB (7848187 B)
+[WASM]       SIZE   app/candidate.wasm  code=2.30 MiB (2413526 B)  headroom=7.70 MiB (8072234 B)
+[WASM]       SIZE   scale_replica/candidate.wasm  code=2.31 MiB (2423740 B)  headroom=7.69 MiB (8062020 B)
+[WASM]       SIZE   scale_hub/candidate.wasm  code=2.77 MiB (2900042 B)  headroom=7.23 MiB (7585718 B)
+[WASM]       SIZE   user_hub/candidate.wasm  code=2.85 MiB (2985351 B)  headroom=7.15 MiB (7500409 B)
+[WASM]       SIZE   user_shard/candidate.wasm  code=3.13 MiB (3283548 B)  headroom=6.87 MiB (7202212 B)
+[WASM]       SIZE   root/candidate.wasm  code=8.30 MiB (8704350 B)  headroom=1.70 MiB (1781410 B)
+[FLEET]      DONE   literal-zero release artifacts (28)                  52.96s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.56s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET] fixture creation setup debit: 0 cycles
+[FLEET]      RUN    planning literal-zero infrastructure
+
+thread 'pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation' (49229) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:4202:9:
+the production wrapper must lose one controller-update response: Err(ReplanRequiredAfterCreateBalanceDrift { actual_cycles: 78316390487639, canister: "root-0", configured_fee_cycles: 0, deficit_cycles: 1683609512361, requested_cycles: 80000000000000 })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 53 filtered out; finished in 67.89s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=259280 kB high_water=259280 kB threads=20
+==> targeted canic-testing-internal PocketIC proof failed in 103s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-05T16:50:29.686646Z  INFO pocket_ic_server: The PocketIC server is listening on port 33941
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  103s     FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 104s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.adGnwr

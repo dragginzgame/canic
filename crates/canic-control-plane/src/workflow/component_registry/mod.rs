@@ -3339,9 +3339,12 @@ pub async fn converge_root_activation_inventory(
     fleet_activation_operation_id: [u8; 32],
 ) -> Result<RootComponentInitialInventoryView, InternalError> {
     let sealed =
-        ComponentRegistryOps::validate_sealed_initial_inventory(fleet_activation_operation_id)?;
+        ComponentRegistryOps::validate_sealed_initial_inventory(fleet_activation_operation_id)
+            .map_err(|error| initial_inventory_failure("sealed_inventory", error))?;
     for operation_id in &sealed.operation_ids {
-        verify_initial_component_convergence(*operation_id).await?;
+        verify_initial_component_convergence(*operation_id)
+            .await
+            .map_err(|error| initial_inventory_failure("component_convergence", error))?;
     }
     let unchanged =
         ComponentRegistryOps::validate_sealed_initial_inventory(fleet_activation_operation_id)?;
@@ -3500,8 +3503,20 @@ pub fn registered_component_member_authority(
     })
 }
 
+fn initial_inventory_failure(stage: &'static str, error: InternalError) -> InternalError {
+    canic_core::log!(
+        Topic::Fleet,
+        Error,
+        "Root initial inventory failed stage={stage} diagnostic={}",
+        error.code()
+    );
+    error
+}
+
 async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<(), InternalError> {
-    let plan = prepared_initial_component_runtime_plan(operation_id).await?;
+    let plan = Box::pin(prepared_initial_component_runtime_plan(operation_id))
+        .await
+        .map_err(|error| initial_inventory_failure("runtime_plan", error))?;
     let membership = committed_directory_receipt(&plan.allocation)?
         .membership
         .as_ref()
@@ -3531,7 +3546,17 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
     };
     let active_authority_hash =
         ComponentRuntimeOps::directory_authority_hash(&active_request.authority)?;
-    if membership.directory_authority_hash != active_authority_hash {
+    // Validate the immutable membership hash against its own partition, then
+    // require the live runtime to cover the current descendant Directory.
+    let membership_partition = ComponentRegistryOps::active_membership_partition(operation_id)?;
+    let membership_authority = ComponentRuntimeDirectoryAuthority {
+        fleet: plan.directory_request.authority.fleet.clone(),
+        component: component_directory_head(&membership_partition),
+        component_group: plan.directory_request.authority.component_group.clone(),
+    };
+    if membership.directory_authority_hash
+        != ComponentRuntimeOps::directory_authority_hash(&membership_authority)?
+    {
         return Err(InternalError::invariant());
     }
     let observed = query_component_runtime_status(plan.target_canister, operation_id).await?;
@@ -3864,17 +3889,27 @@ async fn prepared_component_runtime_plan_with_authority(
     {
         return Err(InternalError::invariant());
     }
+    // A committed membership reconstructs the immutable pre-child Directory.
+    // Its live successor is read independently when validating active membership.
+    let direct_children = if committed_directory_receipt(&allocation)?
+        .membership
+        .is_some()
+    {
+        Vec::new()
+    } else {
+        active_component_direct_children(&partition, install.canister)?
+    };
     Ok(PreparedComponentRuntimePlan {
         root_binding: root_authority.binding,
         allocation,
-        partition: partition.clone(),
+        partition,
         target_canister: install.canister,
         target_binding: ManagedCanisterBinding::Component(install.durable.binding),
         deployment: install.deployment,
         directory_request: ComponentRuntimeDirectoryPreparationRequest {
             operation_id,
             authority,
-            direct_children: active_component_direct_children(&partition, install.canister)?,
+            direct_children,
         },
         activation_authority_hash: committed_directory_hash,
         directory_authority_hash,

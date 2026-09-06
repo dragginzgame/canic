@@ -113,9 +113,38 @@ key remains an independent allocation.
 | `FleetCoordinatorAdmission` | 64 | Coordinator | rebuild | Initialize the current admission policy and distribute a new transition. Prior participant receipts and transition history are discarded. |
 | `RootAdmission` | 65 | Root | rebuild | Recreate Root-local policy/participants through the current Coordinator transition. Prior reservations and retained results are not imported. |
 
-## Role-Level Destruction Sets
+## Post-Baseline Authorization Split Overlay
 
-The exact catalog projection for the canonical roles is:
+The maintainer explicitly authorized the bounded authorization-persistence
+vertical slice before accepting complete B1 or the wider B2/B3 batches. The
+working overlay now has 41 allocation keys and active memory IDs 10 through 67.
+It replaces the immutable baseline's aggregate `CoreAuthState` row with three
+independent allocations:
+
+| Allocation key | ID | Selected owners | Cross-release disposition |
+| --- | --- | --- | --- |
+| `CoreLocalApplicationAuthorizationState` | 34 | roles with local application authorization | discard sessions and replay entries; rebuild configured local authority from the current release |
+| `CoreDelegatedTokenIssuerState` | 66 | delegated-token issuers | discard the installed active proof; install fresh proof material under current Root authority |
+| `CoreRootDelegationState` | 67 | Roots with delegated-auth issuer support | discard predecessor issuers, epochs, renewal cursors and chain-key batches; rebuild current issuer policy and issue fresh credentials |
+
+Cryptographic verification alone selects no authorization persistence.
+Coordinator, Store and auth-free Roots select no authorization allocation; a
+Root with delegated-auth issuer support selects `CoreRootDelegationState`; a combined issuer and local-session role selects the
+issuer and local allocations but not the Root allocation. The declarations are
+feature-selected as well as role-catalogued, so an absent capability does not
+register the corresponding stable-memory key.
+
+Targeted optimized development builds support that projection: Coordinator and
+the verifier-only `runtime_probe` contain no `canic.core.auth.*` declaration,
+Root contains only `canic.core.auth.root_delegation.state.v1`, and the combined
+issuer/local fixture contains only the delegated-token issuer and local-
+application declarations. This is non-immutable slice evidence, not complete
+B1 remeasurement or proof that unrelated runtime state is absent.
+
+## Immutable Baseline Role-Level Destruction Sets
+
+The exact catalog projection below records the immutable `v0.110.5` baseline;
+the authorization rows are superseded by the working overlay above:
 
 - every managed role and Store with `Runtime` selects the common Runtime set:
   `CoreRuntimeChildren`, `CoreRuntimeBindings`, `CoreFleetState`,
@@ -183,4 +212,5 @@ import path or wait for a particular consumer's migration policy.
 The allocation inventory is complete and all non-reconstructable domains are
 named. Consumer application reseed is explicitly outside the Canic gate. B1
 still requires accepted instruction/table allowances and maintainer acceptance
-of the hard-cut preconditions. B2 and B3 remain blocked.
+of the hard-cut preconditions. The explicitly authorized authorization split
+does not accept B1 or authorize the remaining B2/B3 state families.

@@ -1,0 +1,97 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:34573/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 38.03s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation ... [WASM]       SIZE   fleet_coordinator/candidate.wasm  code=3.88 MiB (4070557 B)  headroom=6.12 MiB (6415203 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2637573 B)  headroom=7.48 MiB (7848187 B)
+[WASM]       SIZE   app/candidate.wasm  code=2.30 MiB (2413526 B)  headroom=7.70 MiB (8072234 B)
+[WASM]       SIZE   scale_replica/candidate.wasm  code=2.31 MiB (2423740 B)  headroom=7.69 MiB (8062020 B)
+[WASM]       SIZE   scale_hub/candidate.wasm  code=2.77 MiB (2900042 B)  headroom=7.23 MiB (7585718 B)
+[WASM]       SIZE   user_hub/candidate.wasm  code=2.85 MiB (2985351 B)  headroom=7.15 MiB (7500409 B)
+[WASM]       SIZE   user_shard/candidate.wasm  code=3.13 MiB (3283548 B)  headroom=6.87 MiB (7202212 B)
+[WASM]       SIZE   root/candidate.wasm  code=8.30 MiB (8704350 B)  headroom=1.70 MiB (1781410 B)
+[FLEET]      DONE   literal-zero release artifacts (28)                  50.42s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.38s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET]      DONE   literal-zero infrastructure replay complete          8m 00s
+
+thread 'pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation' (23330) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:4523:14:
+resume the original reviewed plan through every automatic successor: Stalled { action: "fleet-component-provisioning", observations: 15, progress_identity: "component-provisioning:phase=ActivatingRuntimes:accepted_roots=1/1:provisioned_roots=1:directory_roots=1/1:runtime_roots=0/1:components=3:pending_failure=Some((Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, RuntimeActivation, 132)):sha256=3561ad7b0d0c1363a6b691c3f5371da1736735020c70a78bda11b4b1add74e39" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 53 filtered out; finished in 841.45s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=536656 kB high_water=569064 kB threads=20
+==> targeted canic-testing-internal PocketIC proof failed in 880s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2026-09-05 17:29:28.858984091 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=membership component_index=1 canister=nodjf-gd777-77776-aaana-cai operation_id=[27, 148, 84, 2, 6, 27, 219, 206, 102, 22, 79, 42, 132, 108, 149, 51, 55, 214, 60, 95, 214, 154, 157, 244, 76, 84, 194, 173, 162, 198, 241, 117] diagnostic=E137
+2026-09-05 17:29:28.858984091 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[238, 185, 253, 54, 241, 4, 194, 26, 202, 214, 187, 125, 57, 57, 13, 9, 231, 0, 51, 48, 187, 72, 124, 201, 42, 42, 68, 36, 205, 239, 79, 181] phase=Published activated_components=1/3 diagnostic=E137
+2026-09-05 17:29:29.124469981 UTC: [Canister ocuzs-nd777-77776-aaaha-cai] [34mINFO [0m|scale_replic| [Init] bootstrap (nonroot): init start
+2026-09-05 17:29:29.124469981 UTC: [Canister ocuzs-nd777-77776-aaaha-cai] [34mINFO [0m|scale_replic| [Init] bootstrap (nonroot): init complete
+2026-09-05 17:29:29.124469981 UTC: [Canister ocuzs-nd777-77776-aaaha-cai] [34mINFO [0m|scale_replic| [Init] canister marked READY2
+026-09-05 17:29:29.124469981 UTC: [Canister olxso-3l777-77776-aaagq-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init start
+2026-09-05 17:29:29.124469981 UTC: [Canister olxso-3l777-77776-aaagq-cai] [34mINFO [0m| user_shard | [Auth] delegated-token issuer canister-signature support ready issuer=olxso-3l777-77776-aaagq-cai
+2026-09-05 17:29:29.124469981 UTC: [Canister olxso-3l777-77776-aaagq-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+2026-09-05 17:29:29.124469981 UTC: [Canister olxso-3l777-77776-aaagq-cai] [34mINFO [0m| user_shard | [Init] canister marked READY
+2026-09-05 17:29:30.488379797 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=membership component_index=1 canister=nodjf-gd777-77776-aaana-cai operation_id=[27, 148, 84, 2, 6, 27, 219, 206, 102, 22, 79, 42, 132, 108, 149, 51, 55, 214, 60, 95, 214, 154, 157, 244, 76, 84, 194, 173, 162, 198, 241, 117] diagnostic=E140
+2026-09-05 17:29:30.488379797 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[238, 185, 253, 54, 241, 4, 194, 26, 202, 214, 187, 125, 57, 57, 13, 9, 231, 0, 51, 48, 187, 72, 124, 201, 42, 42, 68, 36, 205, 239, 79, 181] phase=Published activated_components=1/3 diagnostic=E140
+2022062-60-90-90-50 51 71:72:92:93:03.0792388564. 792388564UTC : [Canister UTCnodjf: [Canister -mnpadgd777--s377777776--77776aaana--aaalqcai-] cai[34mINFO [0m| scale_hub  | [Init] bootstrap (nonroot): init start] 
+[34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=mnpad-s3777-77776-aaalq-cai, subnet=pp254-cl777-77776-aaaaq-cai, now=1788629370)
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=mnpad-s3777-77776-aaalq-cai role=user_shard parent=mnpad-s3777-77776-aaalq-cai
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=nodjf-gd777-77776-aaana-cai, subnet=pp254-cl777-77776-aaaaq-cai, now=1788629370)
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=nodjf-gd777-77776-aaana-cai role=scale_replica parent=nodjf-gd777-77776-aaana-cai
+2026-0290-2065- 0197-:0259 :1370:.27923885649 :UTC3: [Canister 0.792388564mnpad -UTCs3777: [Canister -77776-nodjfaaalq--gd777cai-] 77776[32m OK  [0m|  user_hub  | [Sharding] ✨ shard.create: olxso-3l777-77776-aaagq-cai pool=user_shards slot=4-
+aaana-cai] [32m OK  [0m| scale_hub  | [Init] scale.bootstrap: ocuzs-nd777-77776-aaaha-cai pool=scales worker=5/8
+2026-09-05 17:29:30.792388564 UTC: [Canister mnpad-s3777-77776-aaalq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.bootstrap: olxso-3l777-77776-aaagq-cai pool=user_shards slot=4
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=mnpad-s3777-77776-aaalq-cai, subnet=pp254-cl777-77776-aaaaq-cai, now=1788629370)
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=mnpad-s3777-77776-aaalq-cai role=user_shard parent=mnpad-s3777-77776-aaalq-cai
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=nodjf-gd777-77776-aaana-cai, subnet=pp254-cl777-77776-aaaaq-cai, now=1788629370)
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=nodjf-gd777-77776-aaana-cai role=scale_replica parent=nodjf-gd777-77776-aaana-cai
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=mnpad-s3777-77776-aaalq-cai role=user_shard parent=mnpad-s3777-77776-aaalq-cai diagnostic=E140
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=mnpad-s3777-77776-aaalq-cai, subnet=pp254-cl777-77776-aaaaq-cai, now=1788629370): E140
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=nodjf-gd777-77776-aaana-cai role=scale_replica parent=nodjf-gd777-77776-aaana-cai diagnostic=E140
+2026-09-05 17:29:30.792388564 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=nodjf-gd777-77776-aaana-cai, subnet=pp254-cl777-77776-aaaaq-cai, now=1788629370): E140
+22002266--0099--0055  1177::2299::3300..792388564792388564  UTCUTC: [Canister : [Canister mnpad-nodjfs3777--gd77777776--77776aaalq--aaanacai-] cai[33mWARN [0m|  user_hub  | [Init] non-root bootstrap waiting for managed authority (attempt 9/64): E61] 
+[33mWARN [0m| scale_hub  | [Init] non-root bootstrap waiting for managed authority (attempt 9/64): E61
+2026-09-05 17:29:31.012372482 UTC: [Canister nodjf-gd777-77776-aaana-cai] [33mWARN [0m| scale_hub  | [Rpc] placement receipt acknowledgement will retry operation_id=4a0a806910e4c144313f9fe5350524ce04d09a308e582f56ad1fe65eb879c952: E6120
+26-09-05 17:29:31.012372482 UTC: [Canister mnpad-s3777-77776-aaalq-cai] [33mWARN [0m|  user_hub  | [Rpc] placement receipt acknowledgement will retry operation_id=0698e0c2f9ac7971f0ac97d2b6fc6090f8384ac8dcb5999982387d0ec9ea7735: E61
+2026-09-05 17:29:31.620057809 UTC: [Canister ofv7g-a3777-77776-aaahq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: user_shard
+2026-09-05 17:29:31.620057809 UTC: [Canister ofv7g-a3777-77776-aaahq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2026-09-05 17:29:31.620057809 UTC: [Canister ozrfx-x3777-77776-aaafq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: scale_replica
+2026-09-05 17:29:31.620057809 UTC: [Canister ozrfx-x3777-77776-aaafq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2026-09-05 17:29:31.810244485 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] install_chunked_code: ofv7g-a3777-77776-aaahq-cai store=pgzwa-ud777-77776-aaaba-cai chunks=1
+2026-09-05 17:29:31.810244485 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] install_chunked_code: ozrfx-x3777-77776-aaafq-cai store=pgzwa-ud777-77776-aaaba-cai chunks=1
+2026-09-05 17:29:31.976145205 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=membership component_index=1 canister=nodjf-gd777-77776-aaana-cai operation_id=[27, 148, 84, 2, 6, 27, 219, 206, 102, 22, 79, 42, 132, 108, 149, 51, 55, 214, 60, 95, 214, 154, 157, 244, 76, 84, 194, 173, 162, 198, 241, 117] diagnostic=E137
+2026-09-05 17:29:31.976145205 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[238, 185, 253, 54, 241, 4, 194, 26, 202, 214, 187, 125, 57, 57, 13, 9, 231, 0, 51, 48, 187, 72, 124, 201, 42, 42, 68, 36, 205, 239, 79, 181] phase=Published activated_components=1/3 diagnostic=E137
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-05T17:14:53.312591Z  INFO pocket_ic_server: The PocketIC server is listening on port 34573
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  880s     FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 881s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.BQQlWG

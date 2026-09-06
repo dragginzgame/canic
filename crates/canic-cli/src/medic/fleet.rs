@@ -83,7 +83,25 @@ fn current_desired_check(
     resolution: &CurrentFleetResolution,
 ) -> MedicCheck {
     let path = root.join("fleets").join(format!("{fleet}.toml"));
-    match load_desired_fleet(&path) {
+    let loaded = load_desired_fleet(&path);
+    if let Ok(loaded) = &loaded
+        && let Err(error) = canic_host::fleet_ensure::policy::validate_funding_policy(
+            &loaded.desired,
+        )
+        .and_then(|()| {
+            canic_host::fleet_ensure::policy::validate_terminal_pool_capacity(&loaded.desired)
+        })
+    {
+        return MedicCheck::fail(
+            MedicCategory::Funding,
+            "current_fleet_funding_policy_invalid",
+            "desired_fleet",
+            error.to_string(),
+            ensure_plan_next(fleet),
+            MedicSource::CurrentEnsure,
+        );
+    }
+    match loaded {
         Ok(loaded)
             if loaded.sha256 == resolution.plan.desired_sha256
                 && loaded.desired.environment == resolution.plan.environment

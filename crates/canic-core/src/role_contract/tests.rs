@@ -111,7 +111,10 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::CoreRuntimeBindings, vec![31]),
         (StateAllocationKey::CoreFleetState, vec![32]),
         (StateAllocationKey::CoreFleetActivation, vec![33]),
-        (StateAllocationKey::CoreAuthState, vec![34]),
+        (
+            StateAllocationKey::CoreLocalApplicationAuthorizationState,
+            vec![34],
+        ),
         (StateAllocationKey::CoreReplayReceipts, vec![35]),
         (StateAllocationKey::CoreCycles, vec![36, 37, 38]),
         (StateAllocationKey::CoreCyclesIcpRefillRecords, vec![39]),
@@ -131,6 +134,8 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
         (StateAllocationKey::CoreAsyncJobRecovery, vec![60]),
         (StateAllocationKey::CoreFleetAdmissionProjection, vec![61]),
+        (StateAllocationKey::CoreDelegatedTokenIssuerState, vec![66]),
+        (StateAllocationKey::CoreRootDelegationState, vec![67]),
         (StateAllocationKey::FleetCoordinatorFunding, vec![62]),
         (StateAllocationKey::RootFunding, vec![63]),
         (StateAllocationKey::FleetCoordinatorAdmission, vec![64]),
@@ -191,6 +196,10 @@ fn canonical_allocations_form_packed_owner_ledgers() {
         ids(AllocationOwner::CanicCore),
         (allocation::CANIC_CORE_MIN_ID
             ..=allocation::memory::fleet_admission_projection::FLEET_ADMISSION_PROJECTION_ID)
+            .chain([
+                allocation::memory::auth::DELEGATED_TOKEN_ISSUER_STATE_ID,
+                allocation::memory::auth::ROOT_DELEGATION_STATE_ID,
+            ])
             .collect::<Vec<_>>()
     );
 }
@@ -289,7 +298,7 @@ fn root_chain_key_signing_feature_is_required_only_when_an_issuer_exists() {
     let requirements = required_features_for_role(&config, &CanisterRole::ROOT)
         .expect("configured Root role should resolve");
     assert!(requirements.iter().any(|requirement| {
-        requirement.capability == RoleCapabilityKey::Root
+        requirement.capability == RoleCapabilityKey::RootDelegation
             && requirement.feature == CanicFeatureKey::AuthChainKeyRootSign
     }));
 
@@ -304,7 +313,7 @@ fn root_chain_key_signing_feature_is_required_only_when_an_issuer_exists() {
         }),
         RoleContractResolution::Rejected { errors }
             if errors == vec![RoleContractFinding::RequiredFeatureMissing {
-                capability: RoleCapabilityKey::Root,
+                capability: RoleCapabilityKey::RootDelegation,
                 feature: CanicFeatureKey::AuthChainKeyRootSign,
             }]
     ));
@@ -321,8 +330,40 @@ fn root_chain_key_signing_feature_is_required_only_when_an_issuer_exists() {
             ]),
             default_features_enabled: false,
         }),
-        RoleContractResolution::Resolved { .. }
+        RoleContractResolution::Resolved { contract } if contract.allocations.iter().any(|allocation| allocation.key == StateAllocationKey::CoreRootDelegationState)
     ));
+}
+
+#[test]
+fn disabled_delegation_excludes_root_auth_even_with_an_issuer_declaration() {
+    let mut issuer = ConfigTestBuilder::canister_config(CanisterKind::Shard);
+    issuer.auth.delegated_token_issuer = true;
+    let mut config = ConfigTestBuilder::new()
+        .with_default_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
+        .with_default_canister("issuer", issuer)
+        .build();
+    config.auth.delegated_tokens.enabled = false;
+    let RoleContractResolution::Resolved { contract } = resolve_role_contract(RoleContractInput {
+        source: RoleContractSource::Declared {
+            config: &config,
+            role: &CanisterRole::ROOT,
+        },
+        declared_features: BTreeSet::from([CanicFeatureKey::ControlPlane]),
+        default_features_enabled: false,
+    }) else {
+        panic!("auth-free Root must resolve without cryptographic features");
+    };
+    assert!(
+        !contract
+            .capabilities
+            .contains(&RoleCapabilityKey::RootDelegation)
+    );
+    assert!(
+        !contract
+            .allocations
+            .iter()
+            .any(|allocation| allocation.key == StateAllocationKey::CoreRootDelegationState)
+    );
 }
 
 #[test]
@@ -424,6 +465,107 @@ fn local_application_authorization_capability_is_exactly_role_pruned() {
     assert!(
         !built_in_role_capabilities(BuiltInRoleKind::WasmStore)
             .contains(&RoleCapabilityKey::LocalApplicationAuthorization)
+    );
+}
+
+#[test]
+fn auth_capabilities_select_only_their_owned_persistence() {
+    let mut verifier = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    verifier.auth.delegated_token_verifier = true;
+
+    let mut local = verifier.clone();
+    local.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
+        allowed_scopes: vec!["app:read".to_string()],
+        default_session_ttl_secs: 900,
+        maximum_session_ttl_secs: 1_800,
+    });
+
+    let mut issuer = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    issuer.auth.delegated_token_issuer = true;
+
+    let resolve = |canister: CanisterConfig, declared_features: BTreeSet<CanicFeatureKey>| {
+        let role = CanisterRole::new("service");
+        let config = ConfigTestBuilder::new()
+            .with_default_canister(role.clone(), canister)
+            .build();
+        let resolution = resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &config,
+                role: &role,
+            },
+            declared_features,
+            default_features_enabled: false,
+        });
+        let RoleContractResolution::Resolved { contract } = resolution else {
+            panic!("auth role contract should resolve: {resolution:?}");
+        };
+        contract
+            .allocations
+            .into_iter()
+            .filter_map(|allocation| match allocation.key {
+                StateAllocationKey::CoreDelegatedTokenIssuerState
+                | StateAllocationKey::CoreLocalApplicationAuthorizationState
+                | StateAllocationKey::CoreRootDelegationState => Some(allocation.key),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>()
+    };
+
+    assert!(
+        resolve(
+            verifier,
+            BTreeSet::from([CanicFeatureKey::AuthDelegatedTokenVerify]),
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        resolve(
+            local,
+            BTreeSet::from([CanicFeatureKey::AuthLocalApplicationAuthorization]),
+        ),
+        BTreeSet::from([StateAllocationKey::CoreLocalApplicationAuthorizationState])
+    );
+    assert_eq!(
+        resolve(
+            issuer,
+            BTreeSet::from([
+                CanicFeatureKey::AuthDelegatedTokenVerify,
+                CanicFeatureKey::AuthIssuerCanisterSigCreate,
+            ]),
+        ),
+        BTreeSet::from([StateAllocationKey::CoreDelegatedTokenIssuerState])
+    );
+}
+
+#[test]
+fn local_application_authorization_rejects_the_verifier_only_feature_set() {
+    let mut canister = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    canister.auth.delegated_token_verifier = true;
+    canister.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
+        allowed_scopes: vec!["app:read".to_string()],
+        default_session_ttl_secs: 900,
+        maximum_session_ttl_secs: 1_800,
+    });
+    let role = CanisterRole::new("service");
+    let config = ConfigTestBuilder::new()
+        .with_default_canister(role.clone(), canister)
+        .build();
+
+    assert_eq!(
+        resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &config,
+                role: &role,
+            },
+            declared_features: BTreeSet::from([CanicFeatureKey::AuthDelegatedTokenVerify]),
+            default_features_enabled: false,
+        }),
+        RoleContractResolution::Rejected {
+            errors: vec![RoleContractFinding::RequiredFeatureMissing {
+                capability: RoleCapabilityKey::LocalApplicationAuthorization,
+                feature: CanicFeatureKey::AuthLocalApplicationAuthorization,
+            }],
+        }
     );
 }
 
@@ -711,8 +853,21 @@ fn repeated_selection_merges_allocation_provenance() {
         allocation_ids(&contract.allocations),
         vec![
             10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
-            34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59, 60, 63, 65,
+            35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59, 60, 63, 65,
         ]
+    );
+    assert_eq!(
+        contract
+            .allocations
+            .iter()
+            .filter_map(|allocation| match allocation.key {
+                StateAllocationKey::CoreDelegatedTokenIssuerState
+                | StateAllocationKey::CoreLocalApplicationAuthorizationState
+                | StateAllocationKey::CoreRootDelegationState => Some(allocation.key),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::new()
     );
 }
 
@@ -752,6 +907,12 @@ fn built_in_fleet_coordinator_selects_admission_registry_funding_and_restore_fen
     };
 
     assert_eq!(allocation_ids(&contract.allocations), vec![15, 59, 62, 64]);
+    assert!(contract.allocations.iter().all(|allocation| !matches!(
+        allocation.key,
+        StateAllocationKey::CoreDelegatedTokenIssuerState
+            | StateAllocationKey::CoreLocalApplicationAuthorizationState
+            | StateAllocationKey::CoreRootDelegationState
+    )));
     assert_eq!(
         contract.required_features,
         BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister])

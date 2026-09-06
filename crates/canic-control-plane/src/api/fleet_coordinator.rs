@@ -169,6 +169,12 @@ impl FleetCoordinatorApi {
                 .await
                 .map(CoordinatorCommandResponse::ResumeAuthoritySnapshot)
             }
+            CoordinatorCommand::Retire(request) => {
+                crate::workflow::fleet_coordinator::retirement::retire(msg_caller(), request)
+                    .await
+                    .map(CoordinatorCommandResponse::Retire)
+                    .map_err(Into::into)
+            }
             CoordinatorCommand::SetRootFunding(request) => Self::set_root_funding(request)
                 .map(CoordinatorCommandResponse::SetRootFunding),
             CoordinatorCommand::StageFundingPolicyRotationRoot(request) => {
