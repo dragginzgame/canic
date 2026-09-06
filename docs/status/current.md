@@ -782,4 +782,5 @@ not begin B2 until the maintainer accepts the complete B1 baseline.
 
 
 
-<!-- canic-release-validation: version=0.110.7 source=2102b63700eb35bc69f03e9a595fdafae4779047 date=2026-09-05 gate=complete -->
+
+<!-- canic-release-validation: version=0.110.8 source=488211386c94ca811de0294bf7e8ea3f514fb16b date=2026-09-06 gate=complete -->
