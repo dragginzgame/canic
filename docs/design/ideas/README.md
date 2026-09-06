@@ -1,9 +1,9 @@
 # Design Ideas
 
 This directory holds unnumbered, deferred design concepts. Files here are not
-release requirements, scheduled lines or implementation authority. A moved
-draft may retain its former working number internally as historical review
-context; that number is retired and has no current planning meaning.
+release requirements, scheduled lines or implementation authority. A retired
+working number has no current planning meaning. Historical review or
+investigation approval does not authorize resuming an idea.
 
 Each idea uses one descriptive topic directory with `design.md` and, only
 where it preserves useful prior context, `status.md` or `exploration.md`.
@@ -12,25 +12,50 @@ Supporting implementation evidence does not belong here.
 ## Current Topics
 
 - `canonical-fleet-subnet-root/`
-- `coordinator-workers/`
 - `cross-subnet-data-transport-groundwork/`
 - `declarative-authentication-profiles/`
-- `delulu-canyon-integration-opportunities/`
 - `demand-driven-canister-pool-maintenance/`
 - `estate-budget-replenishment/`
 - `fleet-observatory/`
 - `immutable-test-checkout-lease/`
-- `language-neutral-managed-guest-feasibility/`
 - `long-running-multi-subnet-local-fleet/`
-- `optional-encrypted-canister-snapshot-archives/`
 - `operator-funding-conversion-authority/`
 - `operator-top-level-component-lifecycle/`
 - `product-frontend-delivery-handoff/`
 - `standalone-blob-service-extraction/`
 
-The [canonical Fleet Subnet Root crate](canonical-fleet-subnet-root/design.md)
-is a future priority slice for consideration after the current release work.
-Its release position remains unassigned.
+## Maintainer Priorities
+
+The two most pressing ideas, identified by the maintainer on 2026-09-06, are:
+
+1. [Canonical infrastructure crates](canonical-fleet-subnet-root/design.md):
+   give Root one Canic-owned entrypoint and consistent Fleet crate names.
+2. [Standalone blob extraction](standalone-blob-service-extraction/design.md):
+   remove application blob-storage semantics from Canic infrastructure.
+
+These take priority over the other deferred ideas. Release positions and a
+complete implementation sequence remain unassigned; current release work and
+accepted roadmap boundaries still apply.
+
+## Review Disposition
+
+Reviewed against current Canic contracts on 2026-09-06:
+
+- Keep the concrete product needs: canonical infrastructure crates, pool
+  maintenance, operator Component lifecycle, local multi-Subnet development,
+  frontend handoff, host-first Observatory and bounded estate replenishment.
+- Retain transport measurement, authentication profiles and funding conversion
+  as unscheduled proposals using current call, command/status, Fleet Ensure
+  and application-authorization owners.
+- Keep blob extraction conditional on a maintained external service and real
+  consumer. The current Canic blob subsystem has not been removed.
+- Re-measure checkout-lease benefits after current runner/cache improvements.
+
+The oversized speculative plans and schemas have been replaced with bounded
+idea notes. Earlier research remains in Git history. Retained topics confer no
+release position; promotion still requires a current need and complete batch.
+
+## Promotion
 
 Move an idea to a top-level numbered directory only when it has a concrete
 need and owner, an accepted release position, a complete release-batch plan

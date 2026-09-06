@@ -1,6 +1,7 @@
 # Idea: Product Frontend Delivery Handoff
 
 Date: 2026-08-18
+Reviewed: 2026-09-06
 
 ## Status
 
@@ -9,8 +10,9 @@ Date: 2026-08-18
 - Need: an external product frontend must consume exact Canic App/Fleet
   identity, generated role bindings and environment trust inputs without
   scraping incidental operator state.
-- Sequence: this may be promoted independently after 0.105 freezes direct
-  application authorization. It does not gate the infrastructure estate path.
+- Baseline: direct application authorization is already released. A future
+  handoff must consume that maintained contract and terminal Fleet Ensure
+  inventory. It does not gate the infrastructure estate path.
 - Downstream boundary: Prequel Wars is the first concrete consumer, but the
   contract must remain application-neutral and Canic must not depend on its
   frontend package.
@@ -55,7 +57,8 @@ tokens, provisioning authority or Fleet mutation capability.
 6. qualify one independently built asset frontend without making it a Canic
    Component or granting it privileged infrastructure authority; and
 7. prove a generic fixture can authenticate and call one App entry role and
-   one 0.105-authorized managed Component through generated bindings.
+   one managed Component using current local application authorization through
+   generated bindings.
 
 Until promotion, downstream frontends remain independently built and hosted.
 They must use explicit environment configuration and generated bindings and

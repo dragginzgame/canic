@@ -89,7 +89,6 @@ Retain the declarative-policy idea, with Fleet-wide reach as the initial
 candidate. The former configuration sketches and detailed release plan are
 retired until a current consumer and complete batch justify them.
 
-Coordinator Workers and transport extensions are not prerequisites for
-profile compilation. Current authentication and session contracts are the
-baseline. No cross-release token, session or issuer-state compatibility is
-proposed.
+Current authentication and session contracts are the baseline. Transport
+extensions are not prerequisites for profile compilation. No cross-release
+token, session or issuer-state compatibility is proposed.

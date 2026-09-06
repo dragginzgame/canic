@@ -939,10 +939,11 @@ impl IcpEnsurePlatform {
             .collect()
     }
 
-    fn current_protocol_artifacts_are_live(
+    fn current_protocol_owners_are_ready(
         &self,
         state: &FleetEnsureStateRecord,
     ) -> Result<bool, IcpEnsurePlatformError> {
+        let mut owners = Vec::new();
         for configured in self.desired.canisters.iter().filter(|configured| {
             configured.presence == crate::fleet_ensure::model::DesiredPresence::Present
                 && matches!(
@@ -952,10 +953,24 @@ impl IcpEnsurePlatform {
                         | DesiredCanisterKind::Store
                 )
         }) {
-            let Some(principal) = self.current_principal(state, &configured.name) else {
+            let live = self
+                .current_principal(state, &configured.name)
+                .map(|principal| self.status_optional(principal))
+                .transpose()?
+                .flatten();
+            if live
+                .as_ref()
+                .is_some_and(|live| live.status != CanisterRuntimeStatus::Running)
+            {
                 return Ok(false);
-            };
-            let Some(live) = self.status_optional(principal)? else {
+            }
+            owners.push((configured, live));
+        }
+        // Check running state and module identity from the same fresh status read.
+        // Keep missing-owner/module decisions after the status scan so transport
+        // failures retain their existing precedence.
+        for (configured, live) in owners {
+            let Some(live) = live else {
                 return Ok(false);
             };
             let Some(wasm) = configured.wasm.as_deref() else {
@@ -1470,32 +1485,6 @@ impl IcpEnsurePlatform {
         live.canister_version = Some(exact.canister_version);
         live.module_sha256 = exact.module_sha256;
         Ok(Some(live))
-    }
-
-    fn has_stopped_retained_protocol_owner(
-        &self,
-        state: &FleetEnsureStateRecord,
-    ) -> Result<bool, IcpEnsurePlatformError> {
-        for configured in self.desired.canisters.iter().filter(|configured| {
-            configured.presence == crate::fleet_ensure::model::DesiredPresence::Present
-                && matches!(
-                    configured.kind,
-                    DesiredCanisterKind::Coordinator
-                        | DesiredCanisterKind::Root
-                        | DesiredCanisterKind::Store
-                )
-        }) {
-            let Some(principal) = self.current_principal(state, &configured.name) else {
-                continue;
-            };
-            let Some(live) = self.status_optional(principal)? else {
-                continue;
-            };
-            if live.status != CanisterRuntimeStatus::Running {
-                return Ok(true);
-            }
-        }
-        Ok(false)
     }
 
     fn observe_configured_canister(
@@ -2528,10 +2517,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             return Ok(Vec::new());
         }
         current_protocol::validate_component_pool_capacity(&self.root, &self.desired)?;
-        if self.has_stopped_retained_protocol_owner(state)? {
-            return Ok(Vec::new());
-        }
-        if !self.current_protocol_artifacts_are_live(state)? {
+        if !self.current_protocol_owners_are_ready(state)? {
             return Ok(Vec::new());
         }
         let reconciliation = current_protocol::compile_pool_reconciliation(
@@ -3742,6 +3728,158 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[cfg(unix)]
+    struct ProtocolOwnersFixture {
+        root: PathBuf,
+        platform: IcpEnsurePlatform,
+        state: FleetEnsureStateRecord,
+    }
+
+    #[cfg(unix)]
+    impl ProtocolOwnersFixture {
+        fn new() -> Self {
+            use std::{fs, os::unix::fs::PermissionsExt};
+
+            let root = crate::test_support::temp_dir("canic-protocol-owner-observations");
+            fs::create_dir_all(&root).unwrap();
+            fs::write(root.join("owner.wasm"), b"current-owner-module").unwrap();
+            let executable = root.join("icp");
+            fs::write(&executable, format!(
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.3.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != status ]; do shift; done\nshift\nprintf '%s\\n' \"$1\" >> '{}'/calls\ncat '{}'/\"$1\".json\n",
+                root.display(), root.display(),
+            )).unwrap();
+            fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+            let canisters = ["coordinator", "root", "store"].map(|name| {
+                serde_json::json!({
+                    "controller_canisters": [], "controllers": [], "drain": null,
+                    "initial_cycles": "1T", "init_arg": null, "init_candid": null,
+                    "kind": name, "minimum_cycles": "1T", "name": name,
+                    "parent": null, "presence": "present", "principal": name,
+                    "replace": false, "subnet": "subnet", "wasm": "owner.wasm",
+                })
+            });
+            let desired = serde_json::from_value(serde_json::json!({
+                "bootstrap": null, "canisters": canisters, "cycles_ledger": "ledger",
+                "environment": "local", "fleet": "owners", "ledger_fee_cycles": "100M",
+                "management_creation_fee_cycles": "500B", "material_cycle_threshold": "1B",
+                "maximum_observation_burn_cycles": "1B", "maximum_stalled_observations": 4,
+                "maximum_update_burn_cycles": "1B", "operator": "operator", "protocol": null,
+                "schema_version": 1, "treasury": "treasury",
+            }))
+            .unwrap();
+            let platform = IcpEnsurePlatform::new(desired, executable.to_str().unwrap(), &root);
+            let paths = crate::fleet_ensure::ops::EnsurePaths::under(&root, "local", "owners");
+            let state = crate::fleet_ensure::ops::read_state(&paths, "owners").unwrap();
+            let fixture = Self {
+                root,
+                platform,
+                state,
+            };
+            for name in ["coordinator", "root", "store"] {
+                fixture.status(name, "Running", true);
+            }
+            fixture
+        }
+
+        fn status(&self, name: &str, status: &str, current_module: bool) {
+            let module = if current_module {
+                artifact_hash(&self.root.join("owner.wasm")).unwrap()
+            } else {
+                "ff".repeat(32)
+            };
+            std::fs::write(
+                self.root.join(format!("{name}.json")),
+                serde_json::json!({
+                    "id": name, "status": status, "settings": { "controllers": [] },
+                    "module_hash": module, "cycles": "1000000000000",
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn protocol_owner_observations_read_each_owner_once_and_refresh_between_calls() {
+        let fixture = ProtocolOwnersFixture::new();
+        assert!(
+            fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state)
+                .unwrap()
+        );
+        assert_eq!(
+            std::fs::read_to_string(fixture.root.join("calls")).unwrap(),
+            "coordinator\nroot\nstore\n"
+        );
+        fixture.status("store", "Stopping", true);
+        assert!(
+            !fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state)
+                .unwrap()
+        );
+        fixture.status("store", "Stopped", true);
+        assert!(
+            !fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state)
+                .unwrap()
+        );
+        fixture.status("store", "Running", false);
+        assert!(
+            !fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state)
+                .unwrap()
+        );
+        fixture.status("store", "Running", true);
+        assert!(
+            fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state)
+                .unwrap()
+        );
+        assert_eq!(
+            std::fs::read_to_string(fixture.root.join("calls"))
+                .unwrap()
+                .lines()
+                .count(),
+            15
+        );
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn protocol_owner_observations_preserve_missing_owner_and_transport_failures() {
+        let mut fixture = ProtocolOwnersFixture::new();
+        fixture.platform.desired.canisters[0].principal = None;
+        assert!(
+            !fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state)
+                .unwrap()
+        );
+        std::fs::remove_file(fixture.root.join("store.json")).unwrap();
+        assert!(matches!(
+            fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state),
+            Err(IcpEnsurePlatformError::Icp(_))
+        ));
+        fixture.platform.desired.canisters[0].principal = Some("coordinator".to_string());
+        fixture.status("coordinator", "Running", false);
+        assert!(matches!(
+            fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state),
+            Err(IcpEnsurePlatformError::Icp(_))
+        ));
+        std::fs::remove_dir_all(fixture.root).unwrap();
     }
 
     #[cfg(unix)]

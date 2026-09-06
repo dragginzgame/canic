@@ -1,6 +1,7 @@
 # Idea: Immutable Cross-Process Test Checkout Lease
 
 Date: 2026-08-19
+Reviewed: 2026-09-06
 
 ## Status
 
@@ -11,7 +12,8 @@ Date: 2026-08-19
   enforce.
 - Current safety: ordinary `ic-testkit` batches continue to resolve and
   validate their own inputs. This idea is a performance opportunity, not a
-  correctness or 0.104 release blocker.
+  correctness or current release blocker. Re-measure the remaining cost after
+  the current runner and artifact-cache improvements before promotion.
 - Ownership: Canic owns the checkout and runner enforcement boundary;
   `ic-testkit` may own a generic prepared-input service or cross-process
   snapshot format only after that boundary exists.
@@ -93,7 +95,7 @@ Either form should:
 This idea does not:
 
 - change application, canister, Candid or stable-state behavior;
-- make 0.104 depend on a test-performance optimization;
+- make the current release depend on this test-performance optimization;
 - weaken ordinary input validation or exact artifact fingerprints;
 - promise a portable hostile-code sandbox;
 - treat advisory locks as authority over editors or arbitrary same-user

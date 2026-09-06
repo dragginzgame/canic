@@ -532,7 +532,7 @@ fi
 # Run ordinary unit/lib/bin tests with libtest's default parallelism. The
 # internal harness remains separate because its library contains PocketIC
 # journeys protected by process-local fixture serialization.
-if [[ "$MODE" != "pocketic" && "$MODE" != "targeted-pocketic" ]]; then
+if [[ "$MODE" == "full" || "$MODE" == "ordinary" ]]; then
     run_parallel_test \
         "workspace parallel lib/bin tests" \
         --workspace \

@@ -209,9 +209,7 @@ mod governed_suite {
     fn governed_serial_pocketic_suite() {
         assert_governed_pocketic_inventory();
         artifacts::preflight_governed_shared_artifacts();
-        let mut cases = fleet_registry::governed_pocketic_cases();
-        cases.extend(fleet_coordinator::governed_pocketic_cases());
-        cases.extend(lifecycle::governed_pocketic_cases());
+        let cases = ordered_governed_pocketic_cases();
         run_governed_test_cases(cases);
     }
 
@@ -223,9 +221,44 @@ mod governed_suite {
 
     #[cfg(feature = "governed-pocketic-tests")]
     fn assert_governed_pocketic_inventory() {
+        let cases = ordered_governed_pocketic_cases();
+        assert_unique_governed_case_names(&cases);
+    }
+
+    #[cfg(feature = "governed-pocketic-tests")]
+    fn ordered_governed_pocketic_cases() -> Vec<GovernedTestCase> {
         let mut cases = fleet_registry::governed_pocketic_cases();
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_pocketic_cases());
+        // Retain one process and its caches, but expose short regressions before
+        // the complete Fleet provisioning and recovery journeys.
+        cases.extend(fleet_registry::governed_fleet_journey_cases());
+        cases
+    }
+
+    #[test]
+    #[cfg(feature = "governed-pocketic-tests")]
+    fn governed_pocketic_inventory_preserves_baseline_order_and_journey_suffix() {
+        let cases = ordered_governed_pocketic_cases();
+        let journeys = fleet_registry::governed_fleet_journey_cases();
+        assert!(!journeys.is_empty());
+        let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        assert!(names.starts_with(&["Fleet deployment restore", "autonomous Root removal"]));
+        let journey_names = journeys.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        assert!(names.ends_with(&journey_names));
+        for required in [
+            "generated reinstall recovers and converges",
+            "generated nineteen Workloads and five Ready retain one reviewed operation",
+            "four initial Shards preserve sealed Root activation",
+            "four Workloads refill four Ready assets with lost funding and creation responses",
+            "four Workloads and four Failed assets repair without new creation",
+        ] {
+            assert!(
+                journey_names.contains(&required),
+                "missing required proof: {required}"
+            );
+        }
+        assert!(names.len() > journey_names.len());
         assert_unique_governed_case_names(&cases);
     }
 

@@ -551,8 +551,9 @@ and an await-safe Root validation-context pilot remain deferred inputs.
 
 The accepted `CANIC-007` and `CANIC-132`–`CANIC-138` correction batch is
 implemented, with release validation still pending after the fixture
-corrections below. The latest failing PocketIC journey has not been rerun;
-its completion remains required before claiming the release gate passed.
+corrections below. The latest maintainer run passed the corrected
+fresh-provisioning case and the generated nineteen-Workload/five-Ready journey,
+then was stopped after more than an hour. The complete release gate has not passed.
 The next boundary is the maintainer-approved governed release flow; no version,
 Git publication, broad validation, deployment or 0.111 action is inferred.
 Package versions remain 0.110.7 and the complete open changelog draft is 0.110.8.
@@ -593,10 +594,66 @@ used the Store installation controller against a Root controlled by the default
 PocketIC identity. Those calls now use the existing Root helpers; Store calls
 retain their distinct controller. Production authorization is unchanged.
 All-feature library/test Clippy passes for `canic-testing-internal`. The fresh
-provisioning journey and the earlier `ICP_ENVIRONMENT` wrapper correction still
-need deployment qualification; the maintainer deferred long PocketIC reruns.
+provisioning journey and the earlier `ICP_ENVIRONMENT` wrapper correction passed
+in the maintainer's subsequent run; generated reinstall took 8m23s and generated
+nineteen-Workload convergence plus replay took 17m06s. That interrupted run does
+not qualify the remaining suites.
 Earlier journey logs and selected source digests describe their retained
 checkpoints, not qualification of these subsequent fixture edits.
+
+The test-flow correction moves expensive Fleet journeys after the shorter
+internal regressions in the same process, removes the
+duplicate reporter-regression invocation, and makes `test-wasm` select only its
+advertised fast integrations. `make test-pocketic-case CASE=<exact-test-path>`
+runs a focused regression through the existing runner. This improves development
+selection and time to useful failures; it does not establish a shorter complete
+release time. Repeated full-estate setup and production-adapter observation
+costs remain performance work. No long PocketIC rerun was started for this change.
+Both catalogue regressions, all-feature internal library/test Clippy, ShellCheck,
+the release-integrity guard and exact-case/fast-lane command-plan checks pass.
+The standalone one- and five-Workload fresh journeys are removed as repetitions
+of the generated nineteen-Workload/five-Ready journey's exact recovery and replay
+path. The one-Workload fresh setup also remains inside generated reinstall;
+small-topology activation, funding and Failed-asset recovery remain distinct
+registered proofs. Retained runs spent 4m32s and 9m08s respectively on the removed
+journeys; removing that work is not a measurement of the complete revised gate.
+
+Further performance corrections remove the duplicate infrastructure-status scan
+inside protocol planning: each ready Coordinator, Root and Store is now read once,
+with running state and module identity checked against that same response. The
+next call still observes fresh state, and transport failures retain precedence
+over missing-owner/module decisions. Two focused transport regressions pass.
+The reinstall fixture now caches both complete sealed artifact sets under two
+fixed, distinct test release identities. A private-cache regression passes for
+separate keys and exact first-release restoration after acquiring the second;
+production release identity allocation is unchanged. Combined all-feature
+library/test Clippy passes for `canic-host` and `canic-testing-internal`.
+These remove known repeated work but do not establish a new full-suite duration.
+The generated reinstall journey has not been rerun after this cache correction;
+its existing authority, interruption and effect-free replay assertions remain.
+
+Terminal inventory now overlaps independent Component and descendant status
+reads in batches of four. It retains fresh observations, exact authority checks,
+cycle accounting and deterministic inventory order. Each issued batch is joined
+before returning a typed failure; failures prevent scheduling later batches.
+All 18 focused inventory regressions pass, including bounded concurrency,
+complete batch drainage, first-input error selection and fresh-read tests.
+Scoped all-feature host library/test Clippy passes. The real four-Workload plus
+four-Failed-asset recovery case passes after the host change, including exact
+lost-reply reconciliation, terminal inventory and effect-free replay: 385.60s
+for the case, 440s for the runner including compilation. It rebuilt its sealed
+artifact set in 33.92s; this is qualification, not a controlled speedup result.
+The subsequent edits only remove duplicate fresh cases and their unused path
+resolver; the executed four-Workload branch retains the same config and behavior.
+Both catalogue regressions and all-feature internal library/test Clippy pass
+again after those deletions. The full-suite duration remains unqualified; the
+performance batch must not be reported as having met a sub-hour release target
+yet. Focused logs remain at `/tmp/canic-bounded-inventory-tests.log`,
+`/tmp/canic-bounded-inventory-clippy.log`,
+`/tmp/canic-bounded-inventory-pocketic.log`,
+`/tmp/canic-consolidated-catalogue-tests.log` and
+`/tmp/canic-consolidated-catalogue-clippy.log`. These are local development
+results, not a published complete-validation receipt.
 
 The maintainer's final contract is explicit pre-1.0 reinstall. Application state
 and former host records may be discarded while cycles and asset control remain
