@@ -2,7 +2,7 @@
   "observed_date": "2026-09-06",
   "scope": "CANIC-007 and CANIC-132\u2013138 correction closeout",
   "evidence_kind": "targeted working-tree qualification; not a governed release-validation receipt",
-  "closeout_changes": "documentation and evidence only; no runtime, host, CLI, DTO, Candid or fixture source edited",
+  "closeout_changes": "Initial closeout changed documentation and evidence only; subsequent protocol-surface test correction spells HashSet::default() explicitly, with no behavior or contract change.",
   "checks": [
     {
       "log": "host-tests.log",
@@ -57,10 +57,19 @@
       "test_seconds": 142.74,
       "log_sha256": "e93c75cf0143d3c396db7356ef9b0d8022dedf0f7b2862191885571662905fb4",
       "reproduction_command": "RUSTC_WRAPPER= bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh targeted-pocketic pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness"
+    },
+    {
+      "log": "protocol-surface-clippy.log",
+      "result": "pass",
+      "tests_passed": null,
+      "tests_ignored": null,
+      "test_seconds": null,
+      "log_sha256": "deacf753e5c4878080753785a28f7d1524f1169c30e2de8379fc36c84fe400bc",
+      "reproduction_command": "RUSTC_WRAPPER= cargo clippy --locked --offline -p canic --test protocol_surface --all-features -- -D warnings"
     }
   ],
   "source_sha256": {
-    "crates/canic/tests/protocol_surface.rs": "c87c839c0306a7577fb474a8c36f210a4e3e14a063ffa90da0c27cd2f421fb7b",
+    "crates/canic/tests/protocol_surface.rs": "a3016102b79df2d07d8245e0baca9d371a9ad46c6caaf6054dca58a57389184a",
     "crates/canic-cli/src/fleet/mod.rs": "b8b6e28ee5e85d723f3bc6edcf0ec4671e78a1217704fe5df77905558571e9c4",
     "crates/canic-cli/src/fleet/tests.rs": "77ee5d47468a89c19f81ecf1d757f144387a0c48cfd34bd4fdc7f67e0e186aeb",
     "crates/canic-cli/src/medic/fleet.rs": "aa680282225c3386aa4806f5d2c25e04f5de5b1376447f035a6af67901f48345",
@@ -101,5 +110,14 @@
     "crates/canic-host/src/fleet_ensure/workflow/mod.rs": "cdff8f2420072dea9c0d584faac0d3d0da7f564000c7fd9e873cd35db578d494",
     "crates/canic-host/src/fleet_ensure/workflow/root_reinstall/mod.rs": "6a377509b62adc6461d7f518580badcf92a73ddfd37f86375b499e0fbb471c83",
     "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "45cb5eb0c97359c84c17f24757e1a0b781f9fbd9c1a819762567a6b5fb90ab71"
-  }
+  },
+  "source_changes_after_initial_closeout": [
+    {
+      "path": "crates/canic/tests/protocol_surface.rs",
+      "previous_sha256": "c87c839c0306a7577fb474a8c36f210a4e3e14a063ffa90da0c27cd2f421fb7b",
+      "current_sha256": "a3016102b79df2d07d8245e0baca9d371a9ad46c6caaf6054dca58a57389184a",
+      "reason": "Explicit HashSet::default() resolves default_trait_access without changing the Candid comparison.",
+      "validating_log": "protocol-surface-clippy.log"
+    }
+  ]
 }

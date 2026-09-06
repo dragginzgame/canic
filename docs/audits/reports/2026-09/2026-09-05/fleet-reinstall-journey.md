@@ -46,8 +46,12 @@ cycle debit and one host install per infrastructure canister.
 - [Canonical Coordinator Candid](artifacts/fleet-retirement/coordinator-protocol-tests.log):
   five pass, including structural equality with the Rust receipt types.
 - [Final check records](artifacts/fleet-reinstall/checks.json): log hashes and
-  selected source digests captured at closeout. No source changed after the
-  applicable passing checks; closeout edits only documentation and evidence.
+  selected source digests captured at closeout, with the subsequent test-only
+  explicit `HashSet::default()` correction recorded separately.
+- [Protocol-surface Clippy](artifacts/fleet-reinstall/protocol-surface-clippy.log):
+  the corrected test target passes with all features and warnings denied.
+  Comparison behavior and runtime source are unchanged; existing behavioral
+  evidence remains applicable.
 
 The Root Ledger account remains at 1B cycles. The aggregate native balance of
 Coordinator, Root, Store and both pool assets is nonincreasing, with debit below

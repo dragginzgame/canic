@@ -1,0 +1,43 @@
+    Checking der v0.7.10
+    Checking generic-array v0.14.9
+   Compiling canic v0.110.7 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-macros v0.110.7 (/home/adam/projects/canic/crates/canic-macros)
+    Checking tower v0.5.3
+    Checking hyper-util v0.1.20
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+    Checking rustls v0.23.43
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.6
+    Checking crypto-bigint v0.5.5
+    Checking tower-http v0.6.11
+    Checking sec1 v0.7.3
+    Checking digest v0.10.7
+    Checking sha2 v0.10.9
+    Checking hmac v0.12.1
+    Checking signature v2.2.0
+    Checking ic_bls12_381 v0.10.1
+    Checking rfc6979 v0.4.0
+    Checking ic_principal v0.1.5
+    Checking ic-certification v3.2.0
+    Checking ic-representation-independent-hash v3.2.0
+    Checking candid v0.10.35
+    Checking ic-stable-structures v0.7.2
+    Checking ic-verify-bls-signature v0.6.0
+    Checking elliptic-curve v0.13.8
+    Checking ecdsa v0.16.9
+    Checking ic-memory v0.12.3
+    Checking k256 v0.13.4
+    Checking ic-canister-sig-creation v1.3.1
+    Checking ic-cdk v0.20.2
+    Checking ic-management-canister-types v0.8.0
+    Checking ic-transport-types v0.49.2
+    Checking candid_parser v0.4.1
+    Checking ic-signature-verification v0.3.0
+    Checking tokio-rustls v0.26.4
+    Checking rustls-platform-verifier v0.7.0
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.13.4
+    Checking pocket-ic v16.0.0
+    Checking ic-testkit v0.9.0
+    Checking canic-control-plane v0.110.7 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 00s

@@ -34,8 +34,11 @@ versioning and publication remain outstanding.
   open changelog describe that same contract.
 - **Evidence applicability:** the final host policy/observation and fixture
   changes precede the final host, CLI, Clippy and PocketIC passes. No DTO or
-  Candid change followed the five conformance passes. This closeout changes
-  only documentation and evidence, so no Rust or PocketIC rerun is required.
+  Candid change followed the five conformance passes. Initial closeout changed
+  only documentation and evidence. A subsequent explicit `HashSet::default()`
+  correction in the conformance test passes
+  [targeted all-feature Clippy](artifacts/fleet-reinstall/protocol-surface-clippy.log).
+  Its comparison behavior is unchanged; no PocketIC rerun is required.
   [Check records and selected source digests](artifacts/fleet-reinstall/checks.json)
   bind the retained logs and capture the reviewed source for subsequent changes;
   they are not an immutable release-validation receipt.

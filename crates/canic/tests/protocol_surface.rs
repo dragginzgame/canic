@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -739,7 +740,7 @@ fn fleet_coordinator_retirement_types_match_rust() {
         let mut rust = TypeContainer::new();
         let ty = rust.add::<T>();
         let ty = env.merge_type(rust.env, ty);
-        candid::types::subtype::equal(&mut Default::default(), &env, &canonical, &ty)
+        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
             .expect("canonical retirement type must equal the current Rust contract");
     }
     use canic::dto::fleet_registry::{
