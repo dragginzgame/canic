@@ -1,0 +1,39 @@
+   Compiling canic v0.110.7 (/home/adam/projects/canic/crates/canic)
+   Compiling futures-util v0.3.34
+   Compiling ic_principal v0.1.5
+   Compiling criterion v0.8.2
+   Compiling candid v0.10.35
+   Compiling ic-stable-structures v0.7.2
+   Compiling ic-memory v0.12.3
+   Compiling ic-cdk v0.20.2
+   Compiling candid_parser v0.4.1
+   Compiling futures-executor v0.3.34
+   Compiling futures v0.3.34
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 52.98s
+     Running tests/workspace_manifest.rs (target/debug/deps/workspace_manifest-faccefabe554ad3e)
+
+running 7 tests
+test blob_storage_billing_feature_is_opt_in_and_implies_blob_storage ... ok
+test published_package_feature_docs_match_manifests ... ok
+test cdylib_members_do_not_emit_rlib_artifacts ... ok
+test workspace_members_inherit_versions_from_root ... ok
+test publishable_members_do_not_depend_on_unpublished_workspace_members ... ok
+test canic_role_declaration_packages_exist ... ok
+test canic_package_metadata_resolves_to_declared_app_roles ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+
+     Running tests/cost_guard_boundary_guard.rs (target/debug/deps/cost_guard_boundary_guard-ceb6ec47b0090adc)
+
+running 7 tests
+test icp_refill_value_transfer_adapters_require_cost_guard_permit ... ok
+test management_deployment_adapters_require_cost_guard_permit ... ok
+test cycles_ledger_paid_adapters_require_cost_guard_permit ... ok
+test control_plane_cost_guard_mutation_uses_core_workflow_authority ... ok
+test provisioning_has_no_raw_create_adapter_and_guards_install_effects ... ok
+test production_cost_guard_call_sites_match_reviewed_inventory ... ok
+test cost_guard_permit_construction_stays_private ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+

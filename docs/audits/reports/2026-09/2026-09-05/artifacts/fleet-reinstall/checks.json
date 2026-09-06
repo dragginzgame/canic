@@ -2,7 +2,7 @@
   "observed_date": "2026-09-06",
   "scope": "CANIC-007 and CANIC-132\u2013138 correction closeout",
   "evidence_kind": "targeted working-tree qualification; not a governed release-validation receipt",
-  "closeout_changes": "Initial closeout changed documentation and evidence only. Subsequent test-only lint corrections use explicit HashSet::default(), extract a JSON funding fixture and drop the PocketIC fixture after its last use. Runtime behavior and product contracts are unchanged; test-target lint coverage procedure is clarified. Subsequent core release-test corrections complete the Coordinator Retire replay-policy manifest, refresh the asset-recipient-bound hash vector and remove the fixed config inventory count; retirement execution and Candid remain unchanged. A later test-only timing correction bounds the placement recovery timestamp by the operation start/end observations; production code and the shared test-lock policy are unchanged.",
+  "closeout_changes": "Initial closeout changed documentation and evidence only. Subsequent test-only lint corrections use explicit HashSet::default(), extract a JSON funding fixture and drop the PocketIC fixture after its last use. Runtime behavior and product contracts are unchanged; test-target lint coverage procedure is clarified. Subsequent core release-test corrections complete the Coordinator Retire replay-policy manifest, refresh the asset-recipient-bound hash vector and remove the fixed config inventory count; retirement execution and Candid remain unchanged. A later test-only timing correction bounds the placement recovery timestamp by the operation start/end observations; production code and the shared test-lock policy are unchanged. Integration-test corrections document the existing local authorization feature and validate both named Ledger paid-adapter signatures structurally; no runtime or manifest change.",
   "checks": [
     {
       "log": "host-tests.log",
@@ -120,6 +120,24 @@
       "test_seconds": null,
       "log_sha256": "1671d382c458b8d8b42603524667f6f07f49aa7dacd75f86a9c7d4f6d9505aff",
       "reproduction_command": "RUSTC_WRAPPER= cargo clippy --locked --offline --keep-going -p canic-core --lib --tests --all-features -- -D warnings"
+    },
+    {
+      "log": "integration-contract-tests.log",
+      "result": "pass",
+      "tests_passed": 14,
+      "tests_ignored": 0,
+      "test_seconds": null,
+      "log_sha256": "90ba0ce11e04547ee4c2339ee4fd031df71e044cd5c3c9bcff55240495da6c63",
+      "reproduction_command": "RUSTC_WRAPPER= cargo test --locked --offline --no-fail-fast -p canic -p canic-core --test workspace_manifest --test cost_guard_boundary_guard"
+    },
+    {
+      "log": "cost-guard-clippy.log",
+      "result": "pass",
+      "tests_passed": null,
+      "tests_ignored": null,
+      "test_seconds": null,
+      "log_sha256": "210de229f45f20d885aeafd42512477ad33f306525fff13da3be357ca960f29f",
+      "reproduction_command": "RUSTC_WRAPPER= cargo clippy --locked --offline --keep-going -p canic-core --test cost_guard_boundary_guard --all-features -- -D warnings"
     }
   ],
   "source_sha256": {
@@ -170,7 +188,9 @@
     "crates/canic-core/src/replay_policy/role_command_manifest.rs": "874b96fcb74974c3ff592ec6366ec40ff66b2ed01a6c02098d9fb2a32569c6f4",
     "crates/canic-core/src/replay_policy/tests/role_command.rs": "abfed59d025af468091da9f160ac9f971858aaddc60766f4c5ea7dd036946363",
     "crates/canic-core/src/replay_policy/tests/cost.rs": "14cc4cc659dafe4c5a11646938009f781e6b385c0fe76d2f6eb3003d1901e3a1",
-    "crates/canic-core/src/workflow/placement/index/tests.rs": "437ef1544b30343a802bc1dd7a2379cf6fdf5993f8df03a5a02cdf7bf33c839d"
+    "crates/canic-core/src/workflow/placement/index/tests.rs": "437ef1544b30343a802bc1dd7a2379cf6fdf5993f8df03a5a02cdf7bf33c839d",
+    "crates/canic/README.md": "d30e86eca35861a7c211977829864499051e03ef4ca11a3ac7a17172df228648",
+    "crates/canic-core/tests/cost_guard_boundary_guard.rs": "1eb0f0a9efb6924c8aaf9b3510d31ffbfe96996a37ee9e38bbb59504d50f607d"
   },
   "source_changes_after_initial_closeout": [
     {
@@ -235,6 +255,20 @@
       "current_sha256": "437ef1544b30343a802bc1dd7a2379cf6fdf5993f8df03a5a02cdf7bf33c839d",
       "reason": "Check the recovery timestamp within observed start/end bounds instead of requiring two wall-clock reads to occur in one second. Exact recovery authority and removal assertions remain.",
       "validating_log": "core-timing-tests.log"
+    },
+    {
+      "path": "crates/canic/README.md",
+      "previous_sha256": "9a4034a2add88e4175d9ba01da2dadfc62e5e93291c8ea5663e48a6fa960b429",
+      "current_sha256": "d30e86eca35861a7c211977829864499051e03ef4ca11a3ac7a17172df228648",
+      "reason": "Document the current opt-in local application authorization feature.",
+      "validating_log": "integration-contract-tests.log"
+    },
+    {
+      "path": "crates/canic-core/tests/cost_guard_boundary_guard.rs",
+      "previous_sha256": "379d2190b74e88fe5404ca20ad63885456d66f2297984dcf51fecf1103b12ecc",
+      "current_sha256": "1eb0f0a9efb6924c8aaf9b3510d31ffbfe96996a37ee9e38bbb59504d50f607d",
+      "reason": "Inspect the named Ledger creation and transfer signatures for mandatory CostGuardPermit references instead of counting permit spellings across the file.",
+      "validating_log": "integration-contract-tests.log"
     }
   ]
 }
