@@ -1,198 +1,62 @@
 # Idea: Coordinator Workers
 
-Date: 2026-07-26
+Reviewed: 2026-09-06
 
 ## Status
 
-- Classification: deferred, unnumbered idea. Its former working number was
-  `0.107`; no Worker is part of the scheduled Fleet-expansion path.
-- Former review status: proposed concept only.
-- Release boundary: reinstall only.
-- Implementation approval: none.
-- Dependency: the
-  [0.100 Fleet Coordinator design](../../archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
-  establishes the sole Fleet Registry writer and Fleet Subnet Roots.
-- Purpose: reserve a bounded way for the Coordinator to create one or more
-  infrastructure Canisters that partition high-cardinality coordination work.
+- Deferred and unnumbered; no implementation or release is approved.
+- Priority: low until a measured Coordinator bottleneck justifies another
+  infrastructure canister role.
+- Owner: Fleet Coordinator for policy, assignment and lifecycle authority.
+- Repository scope: Canic only.
 
-This design intentionally does not freeze a public API, stable schema,
-creation backend, worker artifact carrier or first worker kind. Those
-contracts must be completed before implementation.
+## Current Boundary
 
-## Concept
+The Coordinator already owns Root funding requests, exact acceptance receipts
+and bounded recovery in its
+[workflow](../../../../crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs).
+A Worker is not required to provide Root funding or ordinary Fleet operation.
 
-`Coordinator Worker` is a working term, not frozen terminology.
+The Coordinator remains the sole Fleet Registry writer. Roots retain
+Component lifecycle and local estate authority. Adding execution partitions
+must not create a second owner of either contract.
 
-The Fleet Coordinator may create one or more **Coordinator Workers** to take
-bounded operational work off the Coordinator:
+## Retained Direction
 
-~~~text
-Fleet Coordinator
-  owns policy, worker assignments and Fleet authority
-       |
-       +-- Coordinator Worker: partition A
-       +-- Coordinator Worker: partition B
-       +-- Coordinator Worker: partition C
-~~~
+If measured cardinality or throughput exceeds the existing bounded design,
+the Coordinator could assign one typed responsibility to a bounded Worker.
+A Worker would:
 
-The edge is assignment and lifecycle authority for infrastructure workers. It
-does not make the Coordinator a Fleet Subnet Root, Component parent,
-application router or “super root”.
+- bind to one exact Coordinator, Fleet, assignment and operation;
+- retain only the observations, intents and receipts for that assignment;
+- perform effects under explicit finite budget and scope;
+- return bounded progress and completion evidence; and
+- have no Fleet Registry write authority, Component lifecycle authority,
+  application-data routing or recursive worker creation.
 
-A Coordinator Worker:
+Root funding is only a possible workload. Before choosing it, show why the
+current request-driven funding protocol cannot satisfy the measured need.
+Do not introduce heartbeats, central polling or Worker wallets just to create
+work for a new layer. Any delegated executor must preserve one canonical
+funding intent/receipt owner and exact lost-response reconciliation.
 
-- is Fleet-scoped infrastructure outside the Component topology;
-- has one exact Coordinator and Fleet binding;
-- performs one typed, bounded responsibility;
-- receives an exact bounded assignment from the Coordinator;
-- retains only the observations, intents and receipts needed for that
-  assignment;
-- returns bounded summaries to the Coordinator; and
-- cannot write the Fleet Registry, manage Components, route application data
-  or create an unbounded worker hierarchy.
+## Evidence Before Scheduling
 
-The Coordinator remains the sole policy and assignment authority. A Worker is
-an executor and state partition, not another Coordinator.
+- A measured bottleneck under a concrete supported Fleet size and workload.
+- Comparison with bounded batching, indexing and scheduling in the existing
+  Coordinator, including added cross-Subnet calls and operating cost.
+- One selected Worker responsibility, final terminology, artifact carrier,
+  placement authority and finite count/assignment limits.
+- Exact assignment activation, draining, revocation and failure behavior
+  without two executors owning the same effect.
+- Intent-before-effect creation, bounded debit and uncertain-result recovery.
+- Same-release interruption/restore, Worker failure isolation and terminal
+  effect-free replay in PocketIC.
+- Runtime/build/validation budgets and a complete accepted batch.
 
-## Why Workers
+## Disposition
 
-Some Fleet-wide responsibilities may eventually cover thousands of Fleet
-Subnet Roots. Keeping every observation, timer and effect journal in the
-Coordinator would turn the sole authority into a throughput and storage
-bottleneck.
-
-Workers allow the Coordinator to reason about a bounded number of aggregate
-partitions while operational detail remains distributed. For example, 10,000
-roots could be divided among tens of Workers rather than giving the
-Coordinator 10,000 independent polling and funding journals. Assignment
-limits and Worker count are deployment policy, not protocol constants.
-
-Workers do not eliminate cross-Subnet calls. They make those calls sparse,
-partitioned and proportional to useful work rather than central polling
-frequency.
-
-## Motivating Example: Root Cycles Coordination
-
-The first candidate responsibility is Fleet Subnet Root cycles monitoring and
-top-up.
-
-The preferred observation direction is push-first:
-
-1. each root reads its own cycles balance locally;
-2. it sends a jittered heartbeat and an earlier low-runway report to its
-   assigned Worker;
-3. the Worker tracks the next expected report and a bounded funding policy;
-4. the Worker durably journals an exact assigned-root top-up before attaching
-   cycles; and
-5. the Coordinator receives only bounded aggregate health and budget
-   summaries.
-
-Pulling every root on a fixed interval would reproduce the fanout the Worker
-layer is intended to remove. A root-exposed diagnostic endpoint may still be
-useful for recovery, but routine management-Canister status polling must not
-force a Worker to become a root controller merely to observe cycles.
-
-A missed root report is different from a confirmed low balance. The eventual
-contract must choose a bounded response such as alerting, a conservative
-dead-man top-up based on the last accepted observation, or explicit operator
-recovery. It must not silently invent a current balance or repeat an uncertain
-transfer.
-
-The cycles example does not make every Worker a generic cycles wallet. A
-Worker may fund only exact assigned Fleet infrastructure under Coordinator
-policy and finite per-root, per-window and operating-reserve limits.
-
-## Creation Boundary
-
-0.107 may let the Coordinator create Workers as demand grows, but creation
-must remain a typed infrastructure workflow:
-
-- the maximum Worker count and maximum assignment size are finite;
-- the Worker kind and exact qualified Wasm are fixed before creation;
-- raw or caller-selected Wasm is never accepted;
-- placement and creation funding are explicit;
-- durable intent precedes the external creation effect;
-- an uncertain result is observed before retry; and
-- the created Worker has an immutable Fleet/Coordinator binding.
-
-The implementation design must choose how the Coordinator obtains the exact
-Worker artifact and how it creates a Worker on an eligible physical Subnet.
-Possible mechanisms include an embedded qualified artifact or an exact
-Coordinator infrastructure store, plus ordinary management-Canister or
-Cycles-Ledger-backed creation where applicable. Listing possibilities here
-does not select one.
-
-Worker placement must consume the
-[0.100 qualified Subnet model](../../archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md#physical-subnet-kind-and-topology-evidence)
-rather than invent a narrower two-way classification. Host-side provider
-topology may inform an installation or operator policy only from one exact
-registry-version-bound observation. A Coordinator or Worker cannot read the
-host's `.icq` cache; dynamic Worker creation therefore requires a separate
-authenticated, bounded synchronization contract if current Subnet kind or
-provider composition becomes runtime policy.
-
-The 0.100 root-local Wasm Store remains application-artifact infrastructure.
-It is not automatically a Coordinator Worker artifact store.
-
-## Authority Boundary
-
-| Concern | Sole authority |
-| --- | --- |
-| Fleet Registry and Fleet policy | Fleet Coordinator |
-| Worker kind, limits and assignment | Coordinator-owned Worker authority |
-| Worker creation and lifecycle intent | Fleet Coordinator |
-| assigned operational observations and receipts | exact Coordinator Worker |
-| Fleet Subnet Root lifecycle | Fleet Registry and exact Fleet Subnet Root |
-| Component and child lifecycle | exact Fleet Subnet Root |
-| application routing and data | application code |
-
-Worker summaries are observations, not Fleet Registry authority. Worker
-controller status, cycles possession or receipt history grants no root,
-Component or application authority.
-
-## Required Design Decisions
-
-Before implementation, 0.107 must freeze:
-
-1. the final Worker term, typed worker kinds and first implemented
-   responsibility;
-2. Worker identity, binding, maximum count and assignment limits;
-3. the Coordinator-owned Worker Registry or equivalent durable authority;
-4. exact artifact build, carriage, verification and installation ownership;
-5. placement and creation-funding behavior for
-   `SubnetKind::{Application, CloudEngine, System, Unknown}`, including
-   restricted system Subnets and any exact provider-composition policy;
-6. assignment activation, draining, failure, restore and replacement;
-7. per-Worker budget, operating reserve and replenishment ownership;
-8. push, heartbeat, stale-report and optional diagnostic-pull semantics;
-9. idempotent effect and response-loss reconciliation; and
-10. backup, restore, inspection, Medic and bounded summary surfaces.
-
-## Non-Goals
-
-This concept does not:
-
-- add Workers to 0.100 or 0.101;
-- make a prior installation adopt Workers;
-- authorize a general-purpose Canister factory;
-- permit arbitrary Wasm, unbounded Worker creation or recursive Workers;
-- create another Fleet Registry writer;
-- move Component lifecycle into Workers;
-- make the Coordinator an application-data proxy;
-- let a Coordinator or Worker read host `.icq` files or accept unversioned
-  provider metadata; or
-- commit to automatic cycles purchasing, minting or treasury management.
-
-## Completion Gate
-
-0.107 is ready for implementation only when one exact Worker kind completes
-the decisions above and proves that:
-
-- the Coordinator remains the sole Fleet policy authority;
-- every Worker and assignment is bounded;
-- Worker failure cannot corrupt Fleet Registry or root-local lifecycle state;
-- uncertain creation and operational effects cannot replay blindly;
-- adding Workers reduces Coordinator fanout without introducing hidden
-  authority; and
-- current APIs, state and documentation contain no generic or recursive
-  worker escape hatch.
+Retain only as a scaling contingency. The speculative Root heartbeat/top-up
+architecture and former release plan are removed. If existing Coordinator
+mechanisms meet the measured workload, drop the Worker proposal rather than
+adding another infrastructure role.

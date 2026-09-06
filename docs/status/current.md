@@ -550,8 +550,9 @@ and an await-safe Root validation-context pilot remain deferred inputs.
 ## Next Authorized Action
 
 The accepted `CANIC-007` and `CANIC-132`–`CANIC-138` correction batch is
-**ready for release approval**. No implementation, direct-evidence or
-propagation blocker remains identified within its final accepted scope.
+implemented, with release validation still pending after the fixture
+corrections below. The latest failing PocketIC journey has not been rerun;
+its completion remains required before claiming the release gate passed.
 The next boundary is the maintainer-approved governed release flow; no version,
 Git publication, broad validation, deployment or 0.111 action is inferred.
 Package versions remain 0.110.7 and the complete open changelog draft is 0.110.8.
@@ -585,6 +586,17 @@ instead of counting permit spellings across the file. Both affected targets
 pass (14 tests); all-feature Clippy passes for the changed cost-guard target.
 Runtime and package manifests are unchanged. The broader Clippy attempt lost
 dependency artifacts when `target/` disappeared; the focused retry passed.
+
+The latest release attempt exposed a fixture controller mismatch in fresh
+provisioning: pool maintenance and import commands, plus their status queries,
+used the Store installation controller against a Root controlled by the default
+PocketIC identity. Those calls now use the existing Root helpers; Store calls
+retain their distinct controller. Production authorization is unchanged.
+All-feature library/test Clippy passes for `canic-testing-internal`. The fresh
+provisioning journey and the earlier `ICP_ENVIRONMENT` wrapper correction still
+need deployment qualification; the maintainer deferred long PocketIC reruns.
+Earlier journey logs and selected source digests describe their retained
+checkpoints, not qualification of these subsequent fixture edits.
 
 The maintainer's final contract is explicit pre-1.0 reinstall. Application state
 and former host records may be discarded while cycles and asset control remain
