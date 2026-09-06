@@ -2,7 +2,7 @@
   "observed_date": "2026-09-06",
   "scope": "CANIC-007 and CANIC-132\u2013138 correction closeout",
   "evidence_kind": "targeted working-tree qualification; not a governed release-validation receipt",
-  "closeout_changes": "Initial closeout changed documentation and evidence only. Subsequent test-only lint corrections use explicit HashSet::default(), extract a JSON funding fixture and drop the PocketIC fixture after its last use. Runtime behavior and product contracts are unchanged; test-target lint coverage procedure is clarified.",
+  "closeout_changes": "Initial closeout changed documentation and evidence only. Subsequent test-only lint corrections use explicit HashSet::default(), extract a JSON funding fixture and drop the PocketIC fixture after its last use. Runtime behavior and product contracts are unchanged; test-target lint coverage procedure is clarified. Subsequent core release-test corrections complete the Coordinator Retire replay-policy manifest, refresh the asset-recipient-bound hash vector and remove the fixed config inventory count; retirement execution and Candid remain unchanged.",
   "checks": [
     {
       "log": "host-tests.log",
@@ -84,6 +84,24 @@
       "test_seconds": 0.0,
       "log_sha256": "59ee172a7a841adfe6feccb9213e6d488cef290870d0752dea31005bc81aa71e",
       "reproduction_command": "RUSTC_WRAPPER= cargo test --locked --offline -p canic-host --lib fleet_ensure::json::tests::report_projects_store_chunk_as_bounded_local_content_reference -- --exact"
+    },
+    {
+      "log": "core-contract-tests.log",
+      "result": "pass",
+      "tests_passed": 32,
+      "tests_ignored": 0,
+      "test_seconds": 1.1,
+      "log_sha256": "09a72a2e6584aff3905513731b9df58941abba3f0f09427e2a9eb09c8e954b6a",
+      "reproduction_command": "RUSTC_WRAPPER= cargo test --locked --offline -p canic-core --lib -- config::schema::tests::every_checked_in_canic_config_parses_and_validates ops::root_draining_reservation::tests:: replay_policy::tests::"
+    },
+    {
+      "log": "core-contract-clippy.log",
+      "result": "pass",
+      "tests_passed": null,
+      "tests_ignored": null,
+      "test_seconds": null,
+      "log_sha256": "002954eb1740ead29a8f86246c0e5bd85f7498ea24eb057d22af0f8670f3c6a5",
+      "reproduction_command": "RUSTC_WRAPPER= cargo clippy --locked --offline --keep-going -p canic-core --lib --tests --all-features -- -D warnings"
     }
   ],
   "source_sha256": {
@@ -128,7 +146,12 @@
     "crates/canic-host/src/fleet_ensure/workflow/mod.rs": "cdff8f2420072dea9c0d584faac0d3d0da7f564000c7fd9e873cd35db578d494",
     "crates/canic-host/src/fleet_ensure/workflow/root_reinstall/mod.rs": "6a377509b62adc6461d7f518580badcf92a73ddfd37f86375b499e0fbb471c83",
     "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "45cb5eb0c97359c84c17f24757e1a0b781f9fbd9c1a819762567a6b5fb90ab71",
-    "crates/canic-tests/tests/native_agent_delegation.rs": "a5406d4d50ae59219a9e31ce48474dbf5adc9d3fef9563e5d7e68cd2128bf482"
+    "crates/canic-tests/tests/native_agent_delegation.rs": "a5406d4d50ae59219a9e31ce48474dbf5adc9d3fef9563e5d7e68cd2128bf482",
+    "crates/canic-core/src/config/schema/tests.rs": "736c8e5c74a406a7949c0616451e8c53a321b7e7b942825fa2b52933063caf33",
+    "crates/canic-core/src/ops/root_draining_reservation/tests.rs": "9354e9b956f447c2dbf341139d5919d7a5c7004bc6128e595d2ffa8b8e9a2ce4",
+    "crates/canic-core/src/replay_policy/role_command_manifest.rs": "874b96fcb74974c3ff592ec6366ec40ff66b2ed01a6c02098d9fb2a32569c6f4",
+    "crates/canic-core/src/replay_policy/tests/role_command.rs": "abfed59d025af468091da9f160ac9f971858aaddc60766f4c5ea7dd036946363",
+    "crates/canic-core/src/replay_policy/tests/cost.rs": "14cc4cc659dafe4c5a11646938009f781e6b385c0fe76d2f6eb3003d1901e3a1"
   },
   "source_changes_after_initial_closeout": [
     {
@@ -151,6 +174,41 @@
       "current_sha256": "a5406d4d50ae59219a9e31ce48474dbf5adc9d3fef9563e5d7e68cd2128bf482",
       "reason": "Drop the fresh PocketIC fixture after capturing the owned upgrade error to satisfy significant_drop_tightening; IC calls and typed assertion are unchanged.",
       "validating_log": "affected-package-clippy.log"
+    },
+    {
+      "path": "crates/canic-core/src/config/schema/tests.rs",
+      "previous_sha256": "f31b8afe5d8e22ccff83b765f0db19a7a3b5703664caa6126a4da45785de0cd7",
+      "current_sha256": "736c8e5c74a406a7949c0616451e8c53a321b7e7b942825fa2b52933063caf33",
+      "reason": "Validate the discovered config inventory without a fixed total.",
+      "validating_log": "core-contract-tests.log"
+    },
+    {
+      "path": "crates/canic-core/src/ops/root_draining_reservation/tests.rs",
+      "previous_sha256": "a4a8f9cb6dd5788f122570d10f13b2c5b71ccfb3b7d4a5aa3af0fc9f46fc61be",
+      "current_sha256": "9354e9b956f447c2dbf341139d5919d7a5c7004bc6128e595d2ffa8b8e9a2ce4",
+      "reason": "Refresh the current asset-recipient-bound hash vector and verify recipient sensitivity.",
+      "validating_log": "core-contract-tests.log"
+    },
+    {
+      "path": "crates/canic-core/src/replay_policy/role_command_manifest.rs",
+      "previous_sha256": "db085ce662200f7512636c560548c41f133297b12fab3fcea7d79fcb3641282f",
+      "current_sha256": "874b96fcb74974c3ff592ec6366ec40ff66b2ed01a6c02098d9fb2a32569c6f4",
+      "reason": "Declare the existing Coordinator Retire operation replay and value-transfer policy.",
+      "validating_log": "core-contract-tests.log"
+    },
+    {
+      "path": "crates/canic-core/src/replay_policy/tests/role_command.rs",
+      "previous_sha256": "a86fa5dbe954161112e3c25ae348c9282c81f169890365a866780bf04dd86656",
+      "current_sha256": "abfed59d025af468091da9f160ac9f971858aaddc60766f4c5ea7dd036946363",
+      "reason": "Require operation-ID replay ownership for Coordinator Retire.",
+      "validating_log": "core-contract-tests.log"
+    },
+    {
+      "path": "crates/canic-core/src/replay_policy/tests/cost.rs",
+      "previous_sha256": "a1478452f4a2bade829470fa5038493b277664bebe1a9cadc9c0b53acf540804",
+      "current_sha256": "14cc4cc659dafe4c5a11646938009f781e6b385c0fe76d2f6eb3003d1901e3a1",
+      "reason": "Verify the Coordinator retirement value-transfer guard declarations.",
+      "validating_log": "core-contract-tests.log"
     }
   ]
 }
