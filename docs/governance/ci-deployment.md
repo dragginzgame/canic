@@ -233,6 +233,21 @@ Validation is tiered:
 
 - Automated coding work runs only the smallest targeted format, test, lint, or
   compile commands that exercise the touched code and relevant invariant.
+- Before implementation closeout, account for every changed Rust target in the
+  accepted batch, including unit tests, integration tests, examples and feature-
+  gated fixtures. Linting a dependent package checks dependency libraries, not
+  those dependencies' test targets; a passing test run does not establish Clippy
+  coverage. Select each affected owning package/target explicitly and use the
+  release lint feature selection and `-- -D warnings`. Group compatible affected
+  packages in one invocation with `--keep-going` to collect independent failures;
+  use `--all-targets --all-features` for those packages when their affected target
+  set spans library and test surfaces. This remains package-scoped validation,
+  not authorization for workspace-wide gates.
+- After a validation failure, inspect the complete retained failure log, correct
+  all reported in-scope defects, and rerun the affected target set together.
+  Closeout evidence records package, target and feature selection for the final
+  source; do not infer lint coverage from dependency compilation or an earlier
+  source snapshot.
 - Human/CI batch validation may add wider package checks when cross-cutting
   behavior warrants them.
 - The maintainer-directed deployment/version/release flow chooses whether the

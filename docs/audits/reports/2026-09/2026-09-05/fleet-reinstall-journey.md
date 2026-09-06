@@ -52,6 +52,12 @@ cycle debit and one host install per infrastructure canister.
   the corrected test target passes with all features and warnings denied.
   Comparison behavior and runtime source are unchanged; existing behavioral
   evidence remains applicable.
+- [Combined test-target Clippy](artifacts/fleet-reinstall/affected-package-clippy.log):
+  all targets/features of `canic`, `canic-host` and `canic-tests` pass after
+  extracting JSON fixture setup and releasing the native delegation PocketIC
+  fixture after its last use. The
+  [JSON regression](artifacts/fleet-reinstall/json-report-test.log) passes;
+  product behavior and the generated reinstall fixture remain unchanged.
 
 The Root Ledger account remains at 1B cycles. The aggregate native balance of
 Coordinator, Root, Store and both pool assets is nonincreasing, with debit below

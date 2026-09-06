@@ -1,0 +1,9 @@
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 29.29s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-7b810495e97bfa53)
+
+running 1 test
+test fleet_ensure::json::tests::report_projects_store_chunk_as_bounded_local_content_reference ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 498 filtered out; finished in 0.00s
+

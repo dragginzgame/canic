@@ -412,21 +412,11 @@ Keep removals scoped to the module or concern under review.
 
 ## 14. Formatting and Checks
 
-During active development, run:
-
-```text
-cargo fmt --all
-```
-
-Before merge, use the commands required by
-[`ci-deployment.md`](../ci-deployment.md) for the touched surface. Common local
-checks include:
-
-```text
-make fmt-check
-make clippy
-make test
-```
+During implementation, format changed files and run targeted Clippy and behavior
+checks for their owning packages and targets. Follow the target and feature
+coverage rules in [`ci-deployment.md`](../ci-deployment.md); dependency-library
+compilation does not lint that dependency's tests. Full workspace checks remain
+part of the maintainer-directed release flow.
 
 Do not change Cargo package versions, workspace dependency versions, release
 script defaults, or install URLs during ordinary hygiene work.

@@ -2,7 +2,7 @@
   "observed_date": "2026-09-06",
   "scope": "CANIC-007 and CANIC-132\u2013138 correction closeout",
   "evidence_kind": "targeted working-tree qualification; not a governed release-validation receipt",
-  "closeout_changes": "Initial closeout changed documentation and evidence only; subsequent protocol-surface test correction spells HashSet::default() explicitly, with no behavior or contract change.",
+  "closeout_changes": "Initial closeout changed documentation and evidence only. Subsequent test-only lint corrections use explicit HashSet::default(), extract a JSON funding fixture and drop the PocketIC fixture after its last use. Runtime behavior and product contracts are unchanged; test-target lint coverage procedure is clarified.",
   "checks": [
     {
       "log": "host-tests.log",
@@ -66,6 +66,24 @@
       "test_seconds": null,
       "log_sha256": "deacf753e5c4878080753785a28f7d1524f1169c30e2de8379fc36c84fe400bc",
       "reproduction_command": "RUSTC_WRAPPER= cargo clippy --locked --offline -p canic --test protocol_surface --all-features -- -D warnings"
+    },
+    {
+      "log": "affected-package-clippy.log",
+      "result": "pass",
+      "tests_passed": null,
+      "tests_ignored": null,
+      "test_seconds": null,
+      "log_sha256": "23f88ff3409fc2d79e3c1f393154419c7601a896a241713efbbf9d1dde6bb95e",
+      "reproduction_command": "RUSTC_WRAPPER= cargo clippy --locked --offline --keep-going -p canic -p canic-host -p canic-tests --all-targets --all-features -- -D warnings"
+    },
+    {
+      "log": "json-report-test.log",
+      "result": "pass",
+      "tests_passed": 1,
+      "tests_ignored": 0,
+      "test_seconds": 0.0,
+      "log_sha256": "59ee172a7a841adfe6feccb9213e6d488cef290870d0752dea31005bc81aa71e",
+      "reproduction_command": "RUSTC_WRAPPER= cargo test --locked --offline -p canic-host --lib fleet_ensure::json::tests::report_projects_store_chunk_as_bounded_local_content_reference -- --exact"
     }
   ],
   "source_sha256": {
@@ -86,7 +104,7 @@
     "crates/canic-host/src/fleet_ensure/generate/tests.rs": "156394188382774f8639ee08a47172a7fc6264b660e528a4550bc7dc90f1e7f1",
     "crates/canic-host/src/fleet_ensure/inventory/mod.rs": "bf4b49d22e15ce51da21a940129a2ddc7abe4c55e41f70c708fde73a0f9047d0",
     "crates/canic-host/src/fleet_ensure/json/mod.rs": "b05fc737f26a81ed7acd8447789103c47a33074cbeadec61b73eee621f7c8291",
-    "crates/canic-host/src/fleet_ensure/json/tests.rs": "fa15dc70ef42466ff8f90b3422a540b8dcaad9e5754e2e97a024c7f99bb66330",
+    "crates/canic-host/src/fleet_ensure/json/tests.rs": "6a673a3bff272f7f6a134c27832b3c6956a1e28122b477386692b4651fd65176",
     "crates/canic-host/src/fleet_ensure/mod.rs": "4de177fcfd0b0690e05e61da12da037e55e1a332f142b2a262ba03834ff861b2",
     "crates/canic-host/src/fleet_ensure/model/mod.rs": "16fae438a692a156bec5633a1adb9c5c873b89d7ccdb8c7058fba1d94b0c00ba",
     "crates/canic-host/src/fleet_ensure/model/serialization/mod.rs": "0777a4191849799047cd928543e656476a8fd4126943cc838c7c77bf64ff1910",
@@ -109,7 +127,8 @@
     "crates/canic-host/src/fleet_ensure/workflow/continuation/tests.rs": "0a44f91d4d49841d4712ee08eae7614c525967372c8a4c5b83c97f063a4b9e80",
     "crates/canic-host/src/fleet_ensure/workflow/mod.rs": "cdff8f2420072dea9c0d584faac0d3d0da7f564000c7fd9e873cd35db578d494",
     "crates/canic-host/src/fleet_ensure/workflow/root_reinstall/mod.rs": "6a377509b62adc6461d7f518580badcf92a73ddfd37f86375b499e0fbb471c83",
-    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "45cb5eb0c97359c84c17f24757e1a0b781f9fbd9c1a819762567a6b5fb90ab71"
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "45cb5eb0c97359c84c17f24757e1a0b781f9fbd9c1a819762567a6b5fb90ab71",
+    "crates/canic-tests/tests/native_agent_delegation.rs": "a5406d4d50ae59219a9e31ce48474dbf5adc9d3fef9563e5d7e68cd2128bf482"
   },
   "source_changes_after_initial_closeout": [
     {
@@ -118,6 +137,20 @@
       "current_sha256": "a3016102b79df2d07d8245e0baca9d371a9ad46c6caaf6054dca58a57389184a",
       "reason": "Explicit HashSet::default() resolves default_trait_access without changing the Candid comparison.",
       "validating_log": "protocol-surface-clippy.log"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/json/tests.rs",
+      "previous_sha256": "fa15dc70ef42466ff8f90b3422a540b8dcaad9e5754e2e97a024c7f99bb66330",
+      "current_sha256": "6a673a3bff272f7f6a134c27832b3c6956a1e28122b477386692b4651fd65176",
+      "reason": "Extract unchanged funding-domain setup from the JSON assertion test to satisfy too_many_lines.",
+      "validating_log": "affected-package-clippy.log"
+    },
+    {
+      "path": "crates/canic-tests/tests/native_agent_delegation.rs",
+      "previous_sha256": "41f6ed57ccd7b8d75a2009eab9853a66f18a72dfe66bbdb8b0a12b7394e4e415",
+      "current_sha256": "a5406d4d50ae59219a9e31ce48474dbf5adc9d3fef9563e5d7e68cd2128bf482",
+      "reason": "Drop the fresh PocketIC fixture after capturing the owned upgrade error to satisfy significant_drop_tightening; IC calls and typed assertion are unchanged.",
+      "validating_log": "affected-package-clippy.log"
     }
   ]
 }

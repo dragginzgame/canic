@@ -8,6 +8,34 @@ use canic_control_plane::{
     ids::{TemplateId, TemplateVersion},
 };
 
+fn report_funding_domain() -> EstateFundingDomainPlan {
+    EstateFundingDomainPlan {
+        allocated_workloads: 1,
+        available_cycles: Some(u128::MAX - 2),
+        available_pool_slots: 2,
+        creation_amount_cycles: u128::MAX - 1,
+        creation_execution_margin_cycles: 1,
+        readiness_floor_cycles: u128::MAX - 3,
+        cycles_ledger: "um5iw-rqaaa-aaaaq-qaaba-cai".to_string(),
+        eligible_ready_pool_assets: 1,
+        initial_pool_assets: Vec::new(),
+        ledger_fee_cycles: 1,
+        management_creation_fee_cycles: 1,
+        maximum_creation_debit_cycles: u128::MAX,
+        maximum_creation_fee_cycles: 2,
+        maximum_funding_cycles: 2,
+        occupied_pool_assets: 2,
+        pending_creation_count: 0,
+        pending_creation: None,
+        planned_initial_workloads: 2,
+        pool_maximum_size: 4,
+        required_creation_count: 1,
+        root: "root-0".to_string(),
+        root_principal: Some("rrkah-fqaaa-aaaaa-aaaaq-cai".to_string()),
+        shortfall_cycles: 2,
+    }
+}
+
 #[test]
 fn report_projects_store_chunk_as_bounded_local_content_reference() {
     let bytes = vec![42; 64 * 1_024];
@@ -19,31 +47,7 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
             continuation: None,
             canisters: Vec::new(),
             conservation: CycleConservation {
-                estate_funding_domains: vec![EstateFundingDomainPlan {
-                    allocated_workloads: 1,
-                    available_cycles: Some(u128::MAX - 2),
-                    available_pool_slots: 2,
-                    creation_amount_cycles: u128::MAX - 1,
-                    creation_execution_margin_cycles: 1,
-                    readiness_floor_cycles: u128::MAX - 3,
-                    cycles_ledger: "um5iw-rqaaa-aaaaq-qaaba-cai".to_string(),
-                    eligible_ready_pool_assets: 1,
-                    initial_pool_assets: Vec::new(),
-                    ledger_fee_cycles: 1,
-                    management_creation_fee_cycles: 1,
-                    maximum_creation_debit_cycles: u128::MAX,
-                    maximum_creation_fee_cycles: 2,
-                    maximum_funding_cycles: 2,
-                    occupied_pool_assets: 2,
-                    pending_creation_count: 0,
-                    pending_creation: None,
-                    planned_initial_workloads: 2,
-                    pool_maximum_size: 4,
-                    required_creation_count: 1,
-                    root: "root-0".to_string(),
-                    root_principal: Some("rrkah-fqaaa-aaaaa-aaaaq-cai".to_string()),
-                    shortfall_cycles: 2,
-                }],
+                estate_funding_domains: vec![report_funding_domain()],
                 expected_post_operation_cycles: 0,
                 maximum_execution_burn_cycles: 0,
                 maximum_new_funding_cycles: 0,
