@@ -6481,24 +6481,20 @@ cycles = "80T"
     fn issue_current_protocol_step(
         pic: &PocketIc,
         step: &CompiledCurrentProtocolStep,
-        operator: Principal,
+        store_controller: Principal,
     ) {
+        // These fixtures use the default PocketIC controller for Root and Coordinator;
+        // Store calls require their separately installed controller.
         match &step.action {
             CurrentFleetProtocolAction::ObservePoolReadiness { .. } => {}
             CurrentFleetProtocolAction::MaintainPoolReadiness { .. } => {
-                root_command_as(
-                    pic,
-                    step.target,
-                    operator,
-                    RootCommandFragment::MaintainPool,
-                )
-                .expect("drive the current Root Ready reserve");
+                root_command(pic, step.target, RootCommandFragment::MaintainPool)
+                    .expect("drive the current Root Ready reserve");
             }
             CurrentFleetProtocolAction::ReconcilePoolAsset { request, .. } => {
-                root_command_as(
+                root_command(
                     pic,
                     step.target,
-                    operator,
                     RootCommandFragment::ImportPoolCanister(*request),
                 )
                 .expect("reconcile the exact retained pool asset");
@@ -6562,7 +6558,7 @@ cycles = "80T"
                 assert!(matches!(response, CoordinatorCommandResponse::JoinRoot(_)));
             }
             CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
-                store_prepare_as(pic, step.target, operator, request.clone())
+                store_prepare_as(pic, step.target, store_controller, request.clone())
                     .expect("prepare current Store chunk set");
             }
             CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
@@ -6594,7 +6590,7 @@ cycles = "80T"
                 let response: Result<(), Error> = pic
                     .update_candid_as(
                         step.target,
-                        operator,
+                        store_controller,
                         canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
                         (request.clone(),),
                     )
@@ -6602,7 +6598,7 @@ cycles = "80T"
                 response.expect("publish current Store chunk");
             }
             CurrentFleetProtocolAction::StageStoreManifest { request } => {
-                store_stage_manifest_as(pic, step.target, operator, request.clone())
+                store_stage_manifest_as(pic, step.target, store_controller, request.clone())
                     .expect("stage current Store manifest");
             }
         }
@@ -6612,10 +6608,10 @@ cycles = "80T"
     fn await_current_protocol_step(
         pic: &PocketIc,
         step: &CompiledCurrentProtocolStep,
-        operator: Principal,
+        store_controller: Principal,
     ) {
         for _ in 0..160 {
-            if current_protocol_step_is_terminal(pic, step, operator) {
+            if current_protocol_step_is_terminal(pic, step, store_controller) {
                 return;
             }
             pic.advance_time(Duration::from_secs(1));
@@ -6652,7 +6648,7 @@ cycles = "80T"
     fn current_protocol_step_is_terminal(
         pic: &PocketIc,
         step: &CompiledCurrentProtocolStep,
-        operator: Principal,
+        store_controller: Principal,
     ) -> bool {
         match &step.action {
             CurrentFleetProtocolAction::MaintainPoolReadiness {
@@ -6664,7 +6660,7 @@ cycles = "80T"
                 minimum_ready,
                 readiness_floor,
             } => {
-                let pool = root_pool_status_as(pic, step.target, operator);
+                let pool = root_pool_status(pic, step.target);
                 pool.pending_creation.is_none()
                     && pool
                         .entries
@@ -6679,7 +6675,7 @@ cycles = "80T"
             CurrentFleetProtocolAction::ReconcilePoolAsset {
                 request,
                 minimum_cycles,
-            } => root_pool_status_as(pic, step.target, operator)
+            } => root_pool_status(pic, step.target)
                 .entries
                 .iter()
                 .any(|asset| {
@@ -6740,7 +6736,7 @@ cycles = "80T"
                 let status = current_store_staging_status(
                     pic,
                     step.target,
-                    operator,
+                    store_controller,
                     &request.template_id,
                     &request.version,
                 );
@@ -6780,7 +6776,7 @@ cycles = "80T"
                 let status = current_store_staging_status(
                     pic,
                     step.target,
-                    operator,
+                    store_controller,
                     &request.template_id,
                     &request.version,
                 );
@@ -6794,7 +6790,7 @@ cycles = "80T"
                 let status = current_store_staging_status(
                     pic,
                     step.target,
-                    operator,
+                    store_controller,
                     &request.template_id,
                     &request.version,
                 );
