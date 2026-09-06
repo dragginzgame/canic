@@ -374,18 +374,25 @@ fn recover_entry_releases_stale_pending_when_provisional_child_is_missing() {
     )
     .expect("seed missing provisional child");
 
+    let recovery_started_at = IcOps::now_secs();
     let result = block_on(PlacementIndexWorkflow::recover_entry("projects", "alpha"))
         .expect("missing provisional child should still release stale key");
+    let recovery_finished_at = IcOps::now_secs();
 
+    let PlacementIndexRecoveryResponse::ReleasedStalePending {
+        owner_pid,
+        created_at,
+        provisional_pid,
+        released_at,
+    } = result
+    else {
+        panic!("missing provisional child must release the stale pending entry");
+    };
     assert_eq!(
-        result,
-        PlacementIndexRecoveryResponse::ReleasedStalePending {
-            owner_pid: p(7),
-            created_at: 1,
-            provisional_pid: Some(p(8)),
-            released_at: IcOps::now_secs(),
-        }
+        (owner_pid, created_at, provisional_pid),
+        (p(7), 1, Some(p(8)))
     );
+    assert!((recovery_started_at..=recovery_finished_at).contains(&released_at));
     assert_eq!(
         PlacementIndexRegistryOps::lookup_entry("projects", "alpha"),
         None

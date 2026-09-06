@@ -2,7 +2,7 @@
   "observed_date": "2026-09-06",
   "scope": "CANIC-007 and CANIC-132\u2013138 correction closeout",
   "evidence_kind": "targeted working-tree qualification; not a governed release-validation receipt",
-  "closeout_changes": "Initial closeout changed documentation and evidence only. Subsequent test-only lint corrections use explicit HashSet::default(), extract a JSON funding fixture and drop the PocketIC fixture after its last use. Runtime behavior and product contracts are unchanged; test-target lint coverage procedure is clarified. Subsequent core release-test corrections complete the Coordinator Retire replay-policy manifest, refresh the asset-recipient-bound hash vector and remove the fixed config inventory count; retirement execution and Candid remain unchanged.",
+  "closeout_changes": "Initial closeout changed documentation and evidence only. Subsequent test-only lint corrections use explicit HashSet::default(), extract a JSON funding fixture and drop the PocketIC fixture after its last use. Runtime behavior and product contracts are unchanged; test-target lint coverage procedure is clarified. Subsequent core release-test corrections complete the Coordinator Retire replay-policy manifest, refresh the asset-recipient-bound hash vector and remove the fixed config inventory count; retirement execution and Candid remain unchanged. A later test-only timing correction bounds the placement recovery timestamp by the operation start/end observations; production code and the shared test-lock policy are unchanged.",
   "checks": [
     {
       "log": "host-tests.log",
@@ -102,6 +102,24 @@
       "test_seconds": null,
       "log_sha256": "002954eb1740ead29a8f86246c0e5bd85f7498ea24eb057d22af0f8670f3c6a5",
       "reproduction_command": "RUSTC_WRAPPER= cargo clippy --locked --offline --keep-going -p canic-core --lib --tests --all-features -- -D warnings"
+    },
+    {
+      "log": "core-timing-tests.log",
+      "result": "pass",
+      "tests_passed": 64,
+      "tests_ignored": 0,
+      "test_seconds": 1.9,
+      "log_sha256": "f5881db8ae187f4fbc62fad76d0fe0985f9f76480693dffa5e452012bc45a88c",
+      "reproduction_command": "RUSTC_WRAPPER= cargo test --locked --offline -p canic-core --lib -- workflow::placement::index::tests:: workflow::runtime::auth:: workflow::runtime::intent::tests::"
+    },
+    {
+      "log": "core-timing-clippy.log",
+      "result": "pass",
+      "tests_passed": null,
+      "tests_ignored": null,
+      "test_seconds": null,
+      "log_sha256": "1671d382c458b8d8b42603524667f6f07f49aa7dacd75f86a9c7d4f6d9505aff",
+      "reproduction_command": "RUSTC_WRAPPER= cargo clippy --locked --offline --keep-going -p canic-core --lib --tests --all-features -- -D warnings"
     }
   ],
   "source_sha256": {
@@ -151,7 +169,8 @@
     "crates/canic-core/src/ops/root_draining_reservation/tests.rs": "9354e9b956f447c2dbf341139d5919d7a5c7004bc6128e595d2ffa8b8e9a2ce4",
     "crates/canic-core/src/replay_policy/role_command_manifest.rs": "874b96fcb74974c3ff592ec6366ec40ff66b2ed01a6c02098d9fb2a32569c6f4",
     "crates/canic-core/src/replay_policy/tests/role_command.rs": "abfed59d025af468091da9f160ac9f971858aaddc60766f4c5ea7dd036946363",
-    "crates/canic-core/src/replay_policy/tests/cost.rs": "14cc4cc659dafe4c5a11646938009f781e6b385c0fe76d2f6eb3003d1901e3a1"
+    "crates/canic-core/src/replay_policy/tests/cost.rs": "14cc4cc659dafe4c5a11646938009f781e6b385c0fe76d2f6eb3003d1901e3a1",
+    "crates/canic-core/src/workflow/placement/index/tests.rs": "437ef1544b30343a802bc1dd7a2379cf6fdf5993f8df03a5a02cdf7bf33c839d"
   },
   "source_changes_after_initial_closeout": [
     {
@@ -209,6 +228,13 @@
       "current_sha256": "14cc4cc659dafe4c5a11646938009f781e6b385c0fe76d2f6eb3003d1901e3a1",
       "reason": "Verify the Coordinator retirement value-transfer guard declarations.",
       "validating_log": "core-contract-tests.log"
+    },
+    {
+      "path": "crates/canic-core/src/workflow/placement/index/tests.rs",
+      "previous_sha256": "613761d252fed52e5f1cba975361c1af98302ee8df79aeee4e3b5a0c07efc75b",
+      "current_sha256": "437ef1544b30343a802bc1dd7a2379cf6fdf5993f8df03a5a02cdf7bf33c839d",
+      "reason": "Check the recovery timestamp within observed start/end bounds instead of requiring two wall-clock reads to occur in one second. Exact recovery authority and removal assertions remain.",
+      "validating_log": "core-timing-tests.log"
     }
   ]
 }
