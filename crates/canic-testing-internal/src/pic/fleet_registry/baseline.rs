@@ -4447,6 +4447,40 @@ exec icp "$@"
                 .all(|action| !matches!(action, EnsureAction::FleetProtocol { .. })),
             "literal-zero planning must finish infrastructure before protocol effects"
         );
+        if !autonomous_assets.is_empty() {
+            let desired = prepare_funding_infrastructure(
+                &pic,
+                &adapter_root,
+                &desired,
+                &planned.plan,
+                &mut platform,
+            );
+            progress_elapsed("funding infrastructure prepared", infrastructure_started_at);
+            assert_funded_autonomous_journey(AutonomousFundingJourney {
+                adapter_root: &adapter_root,
+                icp_wrapper: &icp_wrapper,
+                local_replica: &local_replica,
+                pic: &pic,
+                desired: &desired,
+                root,
+                operator,
+                cycles_ledger,
+                assets: &autonomous_assets,
+                imported: &pools,
+                repair_failed_reserve: failed_reserve,
+                readiness_floor,
+                operator_after_initial_creation: operator_balance
+                    - total_requested
+                    - u128::try_from(3 + pool_count).unwrap() * (ledger_fee + management_fee),
+            });
+            pic.stop_live();
+            progress_elapsed(
+                "funded autonomous production-adapter journey complete",
+                journey_started_at,
+            );
+            return;
+        }
+
         if !funded_import_repair {
             std::fs::write(
                 adapter_root.join("lost-reset-args.bin"),
@@ -4521,33 +4555,6 @@ exec icp "$@"
             "literal-zero infrastructure replay complete",
             infrastructure_started_at,
         );
-
-        if !autonomous_assets.is_empty() {
-            assert_funded_autonomous_journey(AutonomousFundingJourney {
-                adapter_root: &adapter_root,
-                icp_wrapper: &icp_wrapper,
-                local_replica: &local_replica,
-                pic: &pic,
-                desired: &desired,
-                initial_plan: &planned.plan,
-                root,
-                operator,
-                cycles_ledger,
-                assets: &autonomous_assets,
-                imported: &pools,
-                repair_failed_reserve: failed_reserve,
-                readiness_floor,
-                operator_after_initial_creation: operator_balance
-                    - total_requested
-                    - u128::try_from(3 + pool_count).unwrap() * (ledger_fee + management_fee),
-            });
-            pic.stop_live();
-            progress_elapsed(
-                "funded autonomous production-adapter journey complete",
-                journey_started_at,
-            );
-            return;
-        }
 
         let (protocol_terminal, repair_funding, withdrawals) = if funded_import_repair {
             let failed = root_command_as(
@@ -5454,7 +5461,6 @@ exec '{}' "$@"
         local_replica: &'a LocalReplicaTarget,
         pic: &'a PocketIc,
         desired: &'a DesiredFleet,
-        initial_plan: &'a FleetEnsurePlan,
         root: Principal,
         operator: Principal,
         cycles_ledger: Principal,
@@ -5463,6 +5469,124 @@ exec '{}' "$@"
         repair_failed_reserve: bool,
         readiness_floor: u128,
         operator_after_initial_creation: u128,
+    }
+
+    /// Prepare real canisters for funding proofs without replaying the fresh-deployment journey.
+    #[cfg(test)]
+    fn prepare_funding_infrastructure(
+        pic: &PocketIc,
+        adapter_root: &Path,
+        desired: &DesiredFleet,
+        plan: &FleetEnsurePlan,
+        platform: &mut IcpEnsurePlatform,
+    ) -> DesiredFleet {
+        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
+            adapter_root,
+            &desired.environment,
+            &desired.fleet,
+        );
+        let mut state = canic_host::fleet_ensure::ops::read_state(&paths, &desired.fleet).unwrap();
+        let actions = planned_actions(plan);
+        // Use the production Ledger adapter and init compiler, preserving exact debits and authority.
+        for action in actions
+            .iter()
+            .copied()
+            .filter(|action| matches!(action, EnsureAction::Create { .. }))
+        {
+            let outcome = platform
+                .apply(
+                    &plan.operation_id,
+                    action,
+                    &fixture_effect_intent(action),
+                    &state,
+                )
+                .expect("create prepared funding infrastructure through the Ledger");
+            state
+                .pending_principals
+                .insert(action.name().to_owned(), outcome.created_principal.unwrap());
+        }
+        for action in actions
+            .iter()
+            .copied()
+            .filter(|action| matches!(action, EnsureAction::Install { .. }))
+        {
+            platform
+                .apply(
+                    &plan.operation_id,
+                    action,
+                    &fixture_effect_intent(action),
+                    &state,
+                )
+                .expect("install exact production funding infrastructure");
+        }
+        for action in actions {
+            match action {
+                EnsureAction::Create { .. } | EnsureAction::Install { .. } => {}
+                EnsureAction::SetControllers {
+                    name,
+                    controllers,
+                    controller_canisters,
+                    ..
+                } => {
+                    let controllers = controllers
+                        .iter()
+                        .chain(
+                            controller_canisters
+                                .iter()
+                                .map(|name| &state.pending_principals[name]),
+                        )
+                        .map(|principal| Principal::from_text(principal).unwrap())
+                        .collect();
+                    pic.set_controllers(
+                        Principal::from_text(&state.pending_principals[name]).unwrap(),
+                        Some(Principal::from_text(&desired.operator).unwrap()),
+                        controllers,
+                    )
+                    .expect("set prepared pool controllers");
+                    let asset = Principal::from_text(&state.pending_principals[name]).unwrap();
+                    let response = root_command_as(
+                        pic,
+                        Principal::from_text(&state.pending_principals["root"]).unwrap(),
+                        Principal::from_text(&desired.operator).unwrap(),
+                        RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                            canister_id: asset,
+                        }),
+                    )
+                    .expect("prepare Ready import through the public Root protocol");
+                    assert!(
+                        matches!(response, RootCommandResponseFragment::ImportPoolCanister(
+                        PoolImportResponse::Imported { canister_id, .. }
+                    ) if canister_id == asset)
+                    );
+                }
+                _ => panic!("funding fixture setup accepts only fresh infrastructure actions"),
+            }
+        }
+        // No completed journal is manufactured: the funding proof plans from live observations.
+        let mut prepared = desired.clone();
+        prepared.bootstrap.as_mut().unwrap().fresh_estate = false;
+        for canister in &mut prepared.canisters {
+            canister.principal = Some(state.pending_principals[&canister.name].clone());
+        }
+        prepared
+    }
+
+    /// Start one real platform effect used to prepare a PocketIC fixture.
+    #[cfg(test)]
+    fn fixture_effect_intent(action: &EnsureAction) -> EffectRecord {
+        EffectRecord {
+            maintenance_attempts: 0,
+            action_sha256: action_sha256(action),
+            created_principal: None,
+            destination_post_cycles: None,
+            destination_pre_cycles: None,
+            post_cycles: None,
+            pre_cycles: None,
+            pre_canister_version: None,
+            progress_identity: None,
+            receipt: None,
+            state: EffectState::Intent,
+        }
     }
 
     #[cfg(test)]
@@ -5478,27 +5602,7 @@ exec '{}' "$@"
                 input.adapter_root,
             )
             .with_local_replica(input.local_replica.clone())
-            .with_observation_delay_bounds(
-                LITERAL_ZERO_OBSERVATION_DELAY,
-                LITERAL_ZERO_OBSERVATION_DELAY,
-            )
         };
-        let mut platform = new_platform(input.desired);
-        let original = fleet_ensure_workflow::apply(
-            input.adapter_root,
-            input.desired,
-            &desired_sha256(input.desired),
-            &input.desired.fleet,
-            &input.initial_plan.plan_sha256,
-            &mut platform,
-        );
-        assert!(
-            matches!(
-                original,
-                Err(EnsureWorkflowError::SuccessorReviewRequired { .. })
-            ),
-            "new estate debit requires a separate exact review: {original:?}"
-        );
         assert_eq!(
             ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
             Nat::from(input.operator_after_initial_creation)
@@ -5514,18 +5618,7 @@ exec '{}' "$@"
         );
         let state =
             canic_host::fleet_ensure::ops::read_state(&paths, &input.desired.fleet).unwrap();
-        let mut desired = input.desired.clone();
-        desired.bootstrap.as_mut().unwrap().fresh_estate = false;
-        for canister in &mut desired.canisters {
-            canister.principal = Some(
-                state
-                    .principals
-                    .get(&canister.name)
-                    .or_else(|| state.pending_principals.get(&canister.name))
-                    .unwrap()
-                    .clone(),
-            );
-        }
+        let desired = input.desired.clone();
         let source = desired_sha256(&desired);
         let mut platform = new_platform(&desired);
         let mut planned = fleet_ensure_workflow::plan(
@@ -5824,19 +5917,7 @@ exec '{}' "$@"
             ) {
                 continue;
             }
-            let mut record = EffectRecord {
-                maintenance_attempts: 0,
-                action_sha256: action_sha256(action),
-                created_principal: None,
-                destination_post_cycles: None,
-                destination_pre_cycles: None,
-                post_cycles: None,
-                pre_cycles: None,
-                pre_canister_version: None,
-                progress_identity: None,
-                receipt: None,
-                state: EffectState::Intent,
-            };
+            let mut record = fixture_effect_intent(action);
             let outcome = platform
                 .apply(&setup_plan.operation_id, action, &record, state)
                 .expect("execute current protocol fixture setup");
@@ -6013,7 +6094,6 @@ exec '{}' "$@"
             .unwrap(),
         )
         .unwrap();
-        std::fs::remove_file(input.adapter_root.join("lost-reset-response")).unwrap();
         let mut resumed = literal_zero_journey_platform(
             desired,
             input.icp_wrapper,
@@ -6113,7 +6193,7 @@ exec '{}' "$@"
                 .unwrap()
                 .lines()
                 .count(),
-            2
+            1
         );
         let ready_plan = fleet_ensure_workflow::plan(
             input.adapter_root,

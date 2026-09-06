@@ -1130,7 +1130,7 @@ fn pool_maintenance_attempt_bound_survives_lost_response_and_restart() {
         unreachable!("typed fixture protocol");
     };
     **current = CurrentFleetProtocolAction::MaintainPoolReadiness {
-        maximum_updates: 2,
+        maximum_updates: 4,
         minimum_ready: 1,
         readiness_floor: Cycles::new(1),
     };
@@ -1149,7 +1149,7 @@ fn pool_maintenance_attempt_bound_survives_lost_response_and_restart() {
         1_800_000_000_000_000_000,
         &mut fixture.platform,
     )
-    .expect("review maintenance with two calls maximum");
+    .expect("review maintenance with four calls maximum");
     // Exercise the workflow from its durable reviewed-journal boundary.
     // Root policy admission is covered independently by the policy tests.
     planned.plan.protocol_actions.push(action.clone());
@@ -1224,11 +1224,11 @@ fn pool_maintenance_attempt_bound_survives_lost_response_and_restart() {
         assert!(matches!(
             exhausted,
             Err(workflow::EnsureWorkflowError::PoolMaintenanceBound {
-                maximum_updates: 2,
+                maximum_updates: 4,
                 ..
             })
         ));
-        assert_eq!(resumed.mutations.get(&action_hash), Some(&1));
+        assert_eq!(resumed.mutations.get(&action_hash), Some(&3));
     }
     let journal = crate::fleet_ensure::ops::read_journal(&paths)
         .expect("read exhausted journal")
@@ -1240,9 +1240,14 @@ fn pool_maintenance_attempt_bound_survives_lost_response_and_restart() {
             .find(|effect| effect.action_sha256 == action_hash)
             .expect("maintenance effect")
             .maintenance_attempts,
-        2
+        4
     );
 
+    assert_eq!(
+        resumed.paced_observations,
+        vec![0, 1, 2],
+        "unchanged successful maintenance calls must retain backoff across retries"
+    );
     resumed.protocol_ready.insert("pool-readiness".to_string());
     let terminal = workflow::apply(
         &fixture.root,
@@ -1254,7 +1259,7 @@ fn pool_maintenance_attempt_bound_survives_lost_response_and_restart() {
     )
     .expect("terminal protected observation remains available at the attempt bound");
     assert!(terminal.terminal);
-    assert_eq!(resumed.mutations.get(&action_hash), Some(&1));
+    assert_eq!(resumed.mutations.get(&action_hash), Some(&3));
     fs::remove_dir_all(fixture.root).expect("remove maintenance fixture");
 }
 
