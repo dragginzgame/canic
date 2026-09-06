@@ -11,6 +11,7 @@ Supporting implementation evidence does not belong here.
 
 ## Current Topics
 
+- `canonical-fleet-subnet-root/`
 - `coordinator-workers/`
 - `cross-subnet-data-transport-groundwork/`
 - `declarative-authentication-profiles/`
@@ -26,6 +27,10 @@ Supporting implementation evidence does not belong here.
 - `operator-top-level-component-lifecycle/`
 - `product-frontend-delivery-handoff/`
 - `standalone-blob-service-extraction/`
+
+The [canonical Fleet Subnet Root crate](canonical-fleet-subnet-root/design.md)
+is a future priority slice for consideration after the current release work.
+Its release position remains unassigned.
 
 Move an idea to a top-level numbered directory only when it has a concrete
 need and owner, an accepted release position, a complete release-batch plan

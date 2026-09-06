@@ -5042,6 +5042,7 @@ for value in "$@"; do
   if [[ "$value" == canister ]]; then canister=true; fi
 done
 if "$canister"; then
+  unset ICP_ENVIRONMENT
   while (( $# )); do
     case "$1" in
       -e|--environment) shift 2 ;;
@@ -6156,6 +6157,7 @@ exec '{}' "$@"
 set -euo pipefail
 case " $* " in
   *" canister call "*)
+    unset ICP_ENVIRONMENT
     args=()
     while (( $# )); do
       case "$1" in
