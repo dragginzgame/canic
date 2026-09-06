@@ -6,6 +6,9 @@ Reviewed: 2026-09-06
 
 - Deferred and unnumbered. No investigation, implementation or release is
   authorized by this note.
+- Priority: one of the maintainer's two most pressing ideas, alongside
+  [canonical infrastructure crates](../canonical-fleet-subnet-root/design.md).
+  Its release position remains unassigned.
 - Retained need: separate application blob-storage semantics from Canic's
   infrastructure lifecycle responsibilities.
 - Canic owners: runtime/facade, host/CLI and testing owners for the eventual
@@ -104,6 +107,3 @@ Retain as a separation candidate, not an approved external-product build.
 The former numbered implementation plan and detailed speculative service
 schema are retired; Git history retains the earlier research. If no external
 owner or consumer emerges, reconsider the need before designing the service.
-
-[Optional encrypted backup archival](../optional-encrypted-canister-snapshot-archives/design.md)
-is independent and must not become a prerequisite for extraction.

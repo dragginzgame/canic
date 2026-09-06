@@ -122,8 +122,9 @@ single-threaded and ordered until a measured narrower concurrency policy is
 proven stable. After every serial suite the runner reports the shared server's
 current resident memory, resident high-water mark and thread count from the
 release-supported Linux process boundary. `make test-wasm` is the fast lane and
-runs only its classified release-surface integrations, never the PocketIC
-suites.
+runs only its classified release-surface integrations; it does not run workspace
+unit/bin tests or PocketIC. The complete and ordinary lanes retain the unit/bin
+coverage. `make test-runtime-fast` selects that same fast integration lane.
 The ordinary integration inventory is resolved into one multi-package Cargo invocation so
 its shared dependency graph is compiled once rather than once per owning
 package. Unit/lib/bin coverage and the internal fast harness remain separate
@@ -141,7 +142,9 @@ Plan-only inventory resolution still enumerates both tiers, and the explicit
 PocketIC-only mode remains independently runnable. In CI, one ignored governed
 `canic-testing-internal` harness calls every internal PocketIC case in explicit
 order inside one Rust process. Fleet deployment restore and autonomous Root
-removal are the first two cases; the harness reports each result immediately,
+removal are the first two cases. Short internal regressions run before the
+complete Fleet provisioning and recovery journeys, retaining every registered
+case and the same process-local caches. The harness reports each result immediately,
 prints the ten slowest cases, catches failures through the suite boundary and
 retains the process-local Fleet
 baseline and artifact owners. The restore proof uses that baseline, while the
@@ -184,9 +187,15 @@ Tests must keep plans, journals, identities and PocketIC state invocation-local;
 only immutable build products whose source, configuration, toolchain and output
 set are transactionally verified may cross invocations. Use `make clean-wasm`
 only for deliberate cache/storage maintenance, not as a routine response to a
-test failure. A focused PocketIC regression should run through the governed
-`targeted-pocketic` mode so it receives the pinned shared server and can reuse
-those artifacts.
+test failure. A focused PocketIC regression uses `make test-pocketic-case CASE=<selector>`.
+The selector is an exact internal Rust test path or a classified `canic-tests`
+integration target such as `native_agent_delegation`. This delegates to the
+existing `targeted-pocketic` runner, with the pinned shared server, private
+scratch, serial execution and reusable artifacts. An integration selector runs
+that target's tests; an internal Rust path selects one exact test. An omitted
+selector fails before creating scratch or starting Cargo. Use these focused
+commands while fixing failures; `make patch` and `make release-patch` remain
+complete release validation, not the default development feedback loop.
 
 ## Explicit Cargo Cleanup
 

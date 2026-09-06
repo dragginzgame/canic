@@ -1,18 +1,18 @@
 # Idea: Replay-Safe Estate Budget Replenishment
 
 Date: 2026-08-18
-Roadmap reconciled: 2026-08-30
+Reviewed: 2026-09-06
 
 ## Status
 
 - Classification: deferred, unnumbered idea. It is not a scheduled release or
   implementation authority.
-- Need: the 0.111 pre-funded estate model is sufficient for bounded
-  qualification but a continuously growing Fleet can exhaust the exact root
-  Cycles Ledger account.
-- Sequence: review only after the pre-funded 0.111 journey is qualified and
-  its real funding/cost evidence is accepted.
-- Separation: this is distinct from 0.108 Coordinator-backed root operating
+- Need: reviewed deployment funding is bounded, while continued growth may
+  eventually exhaust the exact Root estate Cycles Ledger account.
+- Sequence: reconsider after accepted bounded-estate qualification and real
+  depletion/cost evidence. Repeated reviewed plans remain the baseline; this
+  idea does not schedule autonomous funding or amend the estate roadmap.
+- Separation: this is distinct from existing Coordinator-backed Root operating
   funding and from every application/player economy.
 
 ## Decision Direction
@@ -31,8 +31,8 @@ for demand that arises after the terminal reviewed deployment plan. It must:
 5. expose pause, exhaustion, reserved, transferred and unresolved status;
 6. keep Coordinator treasury, root operating balance, estate Ledger balance,
    retained-asset cycles and application/player balances separate; and
-7. deny every player, game command or Galactic Credit path direct Canic
-   treasury authority.
+7. deny application commands and application balances direct Canic treasury
+   authority.
 
 An application may calculate or recommend an infrastructure allocation, but a
 separate operator/Fleet authority must admit and execute the deposit. The
@@ -41,9 +41,9 @@ into infrastructure authority.
 
 ## Required Evidence Before Promotion
 
-- completed 0.108 and 0.111 funding/accounting contracts;
-- measured estate depletion and replenishment need from the pre-funded v1
-  journey;
+- current Coordinator/Root funding and estate-accounting contracts;
+- measured estate depletion and an operational need beyond repeated reviewed
+  Fleet Ensure plans;
 - exact source authority and destination account derivation;
 - immutable per-root/Fleet limits and reserve policy;
 - Cycles Ledger duplicate/fee/`TooOld`/uncertainty contract;

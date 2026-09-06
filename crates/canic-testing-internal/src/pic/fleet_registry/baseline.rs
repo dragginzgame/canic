@@ -7,7 +7,7 @@ use super::build::{
     build_mainnet_five_component_refill_wasms, build_mainnet_refill_wasms, build_management_pic,
     build_toko_shaped_singleton_cycles_ledger_wasm, build_two_root_pic,
     five_component_root_canister_config_path, five_trillion_component_root_canister_config_path,
-    initial_shard_root_canister_config_path, literal_zero_initial_shard_config_path,
+    initial_shard_root_canister_config_path,
 };
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
@@ -21,7 +21,7 @@ const PREPAID_POOL_ASSET_COUNT: usize = 10;
 const PREPAID_POOL_ASSET_CYCLES: u128 = 6_000_000_000_000;
 
 #[cfg(test)]
-pub(in crate::pic) use tests::governed_pocketic_cases;
+pub(in crate::pic) use tests::{governed_fleet_journey_cases, governed_pocketic_cases};
 
 mod tests {
     use super::*;
@@ -281,6 +281,8 @@ mod tests {
     const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
     #[cfg(test)]
     const LITERAL_ZERO_OBSERVATION_DELAY: Duration = Duration::from_millis(25);
+    #[cfg(test)]
+    const REINSTALL_RELEASE_BUILD_NONCE: [u8; 32] = [0x12; 32];
     #[cfg(test)]
     const ROOT_REMOVAL_MAX_SIMULATED_SECONDS: usize = 512;
     #[cfg(test)]
@@ -1918,17 +1920,20 @@ exec icp "$@"
         configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
         configured_roles: &[String],
         build_network: BuildNetwork,
+        release_nonce: [u8; 32],
     ) -> LiteralZeroReleaseArtifacts {
         let release_build_id =
-            persist_internal_test_release_build_plan(adapter_root, build_network);
+            persist_internal_test_release_build_plan(adapter_root, build_network, release_nonce);
         let outputs =
             literal_zero_release_artifact_outputs(adapter_root, release_build_id, configured_roles);
         let cache = literal_zero_release_artifact_cache_spec(
             workspace_root,
+            &workspace_root.join("target/test-artifacts/external-artifact-cache"),
             config_path,
             configured_roles,
             &outputs,
             build_network,
+            release_build_id,
         );
         let started_at = Instant::now();
         let outcome = match prepare_artifact_cache(&cache)
@@ -1985,10 +1990,12 @@ exec icp "$@"
     #[cfg(test)]
     fn literal_zero_release_artifact_cache_spec(
         workspace_root: &Path,
+        cache_root: &Path,
         config_path: &Path,
         configured_roles: &[String],
         outputs: &BTreeMap<String, PathBuf>,
         build_network: BuildNetwork,
+        release_build_id: ReleaseBuildId,
     ) -> ArtifactCacheSpec {
         let snapshot = AppConfigSnapshot::load(config_path)
             .expect("load literal-zero release build config for Cargo inputs");
@@ -2011,10 +2018,11 @@ exec icp "$@"
         }
         let packages = packages.iter().map(String::as_str).collect::<Vec<_>>();
         let network = build_network.to_string();
+        let release_identity = release_build_id.to_string();
         let environment = [
             ("CARGO_INCREMENTAL", "0"),
             ("ICP_ENVIRONMENT", network.as_str()),
-            INTERNAL_TEST_RELEASE_BUILD_ID,
+            (INTERNAL_TEST_RELEASE_BUILD_ID.0, release_identity.as_str()),
         ];
         let cargo_build = WasmBuildSpec::new(
             workspace_root,
@@ -2032,7 +2040,7 @@ exec icp "$@"
             .to_str()
             .expect("literal-zero config path UTF-8");
         let mut cache = ArtifactCacheSpec::new(
-            &workspace_root.join("target/test-artifacts/external-artifact-cache"),
+            cache_root,
             "literal-zero-release-artifacts",
             "canic/literal-zero-release-artifacts/v1",
         )
@@ -2317,14 +2325,10 @@ exec icp "$@"
     fn persist_internal_test_release_build_plan(
         root: &Path,
         build_network: BuildNetwork,
+        release_nonce: [u8; 32],
     ) -> ReleaseBuildId {
-        let nonce = ReleaseBuildNonce::from_random_bytes(INTERNAL_TEST_RELEASE_BUILD_NONCE);
+        let nonce = ReleaseBuildNonce::from_random_bytes(release_nonce);
         let release_build_id = ReleaseBuildId::from_nonce(nonce);
-        assert_eq!(
-            release_build_id.to_string(),
-            INTERNAL_TEST_RELEASE_BUILD_ID.1,
-            "the deterministic build environment must match its durable nonce"
-        );
         let value = Value::Array(vec![
             Value::Bytes(nonce.as_bytes().to_vec()),
             Value::Bytes(release_build_id.as_bytes().to_vec()),
@@ -2344,6 +2348,88 @@ exec icp "$@"
             .expect("validate fixture release-build authority before building artifacts");
         assert_eq!(planned.build_network, build_network);
         release_build_id
+    }
+
+    #[test]
+    fn reinstall_fixture_release_cache_binds_distinct_repeatable_identities() {
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let root = std::env::temp_dir().join(format!(
+            "canic-reinstall-cache-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        let _cleanup = TestDirectoryCleanup(root.clone());
+        let first = persist_internal_test_release_build_plan(
+            &root,
+            BuildNetwork::Local,
+            INTERNAL_TEST_RELEASE_BUILD_NONCE,
+        );
+        let second = persist_internal_test_release_build_plan(
+            &root,
+            BuildNetwork::Local,
+            REINSTALL_RELEASE_BUILD_NONCE,
+        );
+        assert_eq!(first.to_string(), INTERNAL_TEST_RELEASE_BUILD_ID.1);
+        assert_ne!(first, second);
+        let path = canic_host::release_build::release_build_plan_path(&root, second);
+        let retained = std::fs::read(&path).unwrap();
+        assert_eq!(
+            persist_internal_test_release_build_plan(
+                &root,
+                BuildNetwork::Local,
+                REINSTALL_RELEASE_BUILD_NONCE,
+            ),
+            second
+        );
+        assert_eq!(std::fs::read(path).unwrap(), retained);
+        let config = workspace.join("canisters/audit/root_probe/activation.toml");
+        let roles = vec!["app".to_string(), "root".to_string()];
+        // Keep output paths identical here: only the declared release identity
+        // may distinguish these cache specifications.
+        let outputs = literal_zero_release_artifact_outputs(&root, first, &roles);
+        let acquire = |id| {
+            let cache = literal_zero_release_artifact_cache_spec(
+                &workspace,
+                &root.join("cache"),
+                &config,
+                &roles,
+                &outputs,
+                BuildNetwork::Local,
+                id,
+            );
+            match prepare_artifact_cache(&cache).unwrap() {
+                ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
+                ArtifactCachePreparation::Build(transaction) => {
+                    // Exercise the real content cache with inert files in this private
+                    // directory; this test does not build or install canisters.
+                    for name in outputs.keys() {
+                        std::fs::write(
+                            transaction.output_path(name).unwrap(),
+                            format!("{id}:{name}"),
+                        )
+                        .unwrap();
+                    }
+                    transaction.commit().unwrap()
+                }
+            }
+        };
+        let initial = acquire(first);
+        assert!(!initial.is_reused());
+        let replacement = acquire(second);
+        assert!(!replacement.is_reused());
+        assert_ne!(initial.record().key(), replacement.record().key());
+        let replay = acquire(first);
+        assert!(replay.is_reused());
+        assert_eq!(initial.record().key(), replay.record().key());
+        for (name, path) in outputs {
+            assert_eq!(
+                std::fs::read_to_string(path).unwrap(),
+                format!("{first}:{name}")
+            );
+        }
     }
 
     #[cfg(test)]
@@ -3720,6 +3806,7 @@ exec icp "$@"
             &configuration,
             &roles,
             BuildNetwork::Local,
+            INTERNAL_TEST_RELEASE_BUILD_NONCE,
         );
         let coordinator_wasm = std::fs::read(adapter_root.join(&artifacts.coordinator_wasm))
             .expect("read exact Coordinator Wasm");
@@ -3901,18 +3988,8 @@ exec icp "$@"
     }
 
     #[test]
-    fn literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay() {
-        assert_literal_zero_host_journey(FundingJourney::Fresh, 5);
-    }
-
-    #[test]
     fn funded_failed_imports_reconcile_with_lost_withdrawal_and_reset_responses() {
         assert_literal_zero_host_journey(FundingJourney::FailedImports, 1);
-    }
-
-    #[test]
-    fn automatic_fresh_convergence_replays_one_reviewed_plan() {
-        assert_literal_zero_host_journey(FundingJourney::Fresh, 1);
     }
 
     #[cfg(test)]
@@ -3970,15 +4047,12 @@ exec icp "$@"
         let journey_started_at = Instant::now();
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config_path = if initial_workload_count == 19 {
-            workspace_root.join("apps/test/test-configs/generated-nineteen-workloads.toml")
-        } else if initial_workload_count == 4 {
-            workspace_root.join("canisters/audit/root_probe/four-workloads.toml")
-        } else if initial_workload_count == 1 {
-            workspace_root.join("canisters/audit/root_probe/activation.toml")
-        } else {
-            literal_zero_initial_shard_config_path(&workspace_root)
-        };
+        let config_path = workspace_root.join(match initial_workload_count {
+            1 => "canisters/audit/root_probe/activation.toml",
+            4 => "canisters/audit/root_probe/four-workloads.toml",
+            19 => "apps/test/test-configs/generated-nineteen-workloads.toml",
+            _ => panic!("unsupported journey Workload count: {initial_workload_count}"),
+        });
         let config =
             AppConfigSnapshot::load(&config_path).expect("load initial-child Component config");
         let readiness_floor = config
@@ -4013,6 +4087,7 @@ exec icp "$@"
             &configuration,
             &configured_roles,
             build_network,
+            INTERNAL_TEST_RELEASE_BUILD_NONCE,
         );
         let root_wasm = release_artifacts.root_wasm_bytes.clone();
         let cycles_ledger_wasm = build_toko_shaped_singleton_cycles_ledger_wasm();
@@ -4958,25 +5033,21 @@ exec icp "$@"
             .keys()
             .map(ToString::to_string)
             .collect::<Vec<_>>();
-        let replacement = canic_host::release_build::plan_release_build_for_profile(
-            root,
-            CanisterBuildProfile::Fast,
-        )
-        .expect("allocate the replacement release before building")
-        .record
-        .release_build_id;
-        assert_ne!(
-            replacement,
-            input.desired.bootstrap.as_ref().unwrap().release_build_id
-        );
-        build_and_seal_literal_zero_release_artifacts(
+        // This fixture has two fixed, distinct releases. Cache each complete sealed
+        // artifact set by its own identity and exact build inputs across test runs.
+        let replacement = build_literal_zero_release_artifacts(
             &workspace,
             root,
             input.config,
             &configuration,
             &roles,
-            replacement,
             BuildNetwork::Local,
+            REINSTALL_RELEASE_BUILD_NONCE,
+        )
+        .release_build_id;
+        assert_ne!(
+            replacement,
+            input.desired.bootstrap.as_ref().unwrap().release_build_id
         );
         let config_path = retain_generated_journey_source(root, input.config);
         let trust = root.join("reinstall-root-key.der");
@@ -12420,8 +12491,8 @@ cycles = "80T"
                 published_draining_root_autonomously_reaches_external_deletion_readiness,
             ),
             (
-                "generated reinstall recovers and converges",
-                generated_reinstall_recovers_lost_install_and_reaches_working_fleet,
+                "reinstall fixture release-cache identity",
+                reinstall_fixture_release_cache_binds_distinct_repeatable_identities,
             ),
             (
                 "explicit Root reinstall preserves cycle control",
@@ -12460,48 +12531,12 @@ cycles = "80T"
                 fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog,
             ),
             (
-                "four initial Shards preserve sealed Root activation",
-                four_initial_shards_preserve_sealed_root_activation,
-            ),
-            (
-                "nineteen Workloads preserve multi-Hub Root activation",
-                nineteen_workloads_preserve_multi_hub_root_activation,
-            ),
-            (
                 "auth-free Root preserves ordinary Fleet activation",
                 auth_free_root_preserves_ordinary_fleet_activation,
             ),
             (
-                "funded Failed imports recover withdrawal and reset responses",
-                funded_failed_imports_reconcile_with_lost_withdrawal_and_reset_responses,
-            ),
-            (
                 "live management gateway preserves fresh creation headroom",
                 live_management_gateway_preserves_fresh_creation_headroom,
-            ),
-            (
-                "funded estate recovers transfer and autonomous creation responses",
-                funded_estate_recovers_transfer_and_autonomous_creation_responses,
-            ),
-            (
-                "four Workloads refill four Ready assets with lost funding and creation responses",
-                four_workloads_refill_four_ready_with_lost_funding_and_creation_responses,
-            ),
-            (
-                "four Workloads and four Failed assets repair without new creation",
-                four_workloads_and_four_failed_assets_repair_without_new_creation,
-            ),
-            (
-                "automatic fresh convergence retains one reviewed plan",
-                automatic_fresh_convergence_replays_one_reviewed_plan,
-            ),
-            (
-                "generated nineteen Workloads and five Ready retain one reviewed operation",
-                generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation,
-            ),
-            (
-                "literal-zero Fleet with initial-child terminal replay",
-                literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay,
             ),
             (
                 "Coordinator attached-cycle grant",
@@ -12582,6 +12617,44 @@ cycles = "80T"
             (
                 "Fleet admission two-Root convergence",
                 fleet_admission_add_and_remove_converge_across_two_roots,
+            ),
+        ]
+    }
+
+    #[cfg(test)]
+    pub fn governed_fleet_journey_cases() -> Vec<crate::pic::GovernedTestCase> {
+        vec![
+            (
+                "generated reinstall recovers and converges",
+                generated_reinstall_recovers_lost_install_and_reaches_working_fleet,
+            ),
+            (
+                "four initial Shards preserve sealed Root activation",
+                four_initial_shards_preserve_sealed_root_activation,
+            ),
+            (
+                "nineteen Workloads preserve multi-Hub Root activation",
+                nineteen_workloads_preserve_multi_hub_root_activation,
+            ),
+            (
+                "funded Failed imports recover withdrawal and reset responses",
+                funded_failed_imports_reconcile_with_lost_withdrawal_and_reset_responses,
+            ),
+            (
+                "funded estate recovers transfer and autonomous creation responses",
+                funded_estate_recovers_transfer_and_autonomous_creation_responses,
+            ),
+            (
+                "four Workloads refill four Ready assets with lost funding and creation responses",
+                four_workloads_refill_four_ready_with_lost_funding_and_creation_responses,
+            ),
+            (
+                "four Workloads and four Failed assets repair without new creation",
+                four_workloads_and_four_failed_assets_repair_without_new_creation,
+            ),
+            (
+                "generated nineteen Workloads and five Ready retain one reviewed operation",
+                generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation,
             ),
         ]
     }

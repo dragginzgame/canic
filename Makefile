@@ -13,7 +13,7 @@
         wasm-capability-size-report-gate wasm-crypto-closure-gate \
         dependency-risk-gate gitleaks-scan shellcheck \
         install install-dev install-hooks update-dev \
-        ensure-clean test-unit test-unit-fast test-ordinary test-pocketic workspace-test-inventory-gate \
+        ensure-clean test-unit test-unit-fast test-ordinary test-pocketic test-pocketic-case workspace-test-inventory-gate \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
         cloc
 
@@ -95,11 +95,12 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  test             Run workspace tests (PocketIC/Cargo only)"
-	@echo "  test-wasm        Run fast non-PocketIC tests for wasm iteration"
+	@echo "  test-wasm        Run only the classified fast release-surface integrations"
+	@echo "  test-pocketic-case CASE=...  Run one exact PocketIC test or integration target"
 	@echo "  test-auth        Run focused delegated-auth, role-attestation, and protocol auth gates"
 	@echo "  test-auth-chain-key  Run focused chain-key batch renewal gates"
 	@echo "  test-cli         Run focused CLI and public surface tests"
-	@echo "  test-runtime-fast  Run the fast deterministic runtime test lane"
+	@echo "  test-runtime-fast  Run the same fast release-surface integration lane"
 	@echo "  build            Build all crates"
 	@echo "  check            Run cargo check"
 	@echo "  check-invariants Run repository structure and governance invariants"
@@ -323,6 +324,7 @@ ci-preflight:
 		release-integrity-contract-gate \
 		audit-method-catalog-gate \
 		recovery-runbooks-gate \
+		validation-runner-gate \
 		workspace-test-inventory-gate \
 		wasm-capability-size-report-gate \
 		wasm-crypto-closure-gate
@@ -412,6 +414,13 @@ test-ordinary:
 test-pocketic:
 	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
 		bash scripts/ci/run-workspace-tests.sh pocketic
+
+# Export the selector as data rather than interpolating it into shell source.
+test-pocketic-case: export CANIC_POCKETIC_CASE = $(CASE)
+test-pocketic-case:
+	@test -n "$$CANIC_POCKETIC_CASE" || { echo 'usage: make test-pocketic-case CASE=<exact-test-or-integration-target>' >&2; exit 2; }
+	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+		bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$$CANIC_POCKETIC_CASE"
 
 test-unit-fast:
 	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \

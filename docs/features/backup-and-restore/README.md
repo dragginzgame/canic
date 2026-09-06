@@ -50,12 +50,11 @@ This safety claim depends on Fleet Ensure retaining that write order: publish a
 nonterminal journal before any effect-owned state and publish validated terminal
 state before the matching `Converged` journal.
 
-Optional encrypted remote snapshot archival is design work, not part of the
-current local backup contract. Product blob storage is a separate feature.
+Remote snapshot archival is outside the current local backup contract.
+Product blob storage is a separate feature.
 
 ## Start Here
 
 - [CLI backup and restore guide](../../../crates/canic-cli/README.md)
 - [Backup domain crate](../../../crates/canic-backup/README.md)
 - [Recovery and retry runbooks](../../operations/recovery-retry-runbooks.md)
-- [Optional archive idea](../../design/ideas/optional-encrypted-canister-snapshot-archives/design.md)

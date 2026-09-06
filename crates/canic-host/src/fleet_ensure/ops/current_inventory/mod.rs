@@ -4,6 +4,8 @@
 //! Does not own: topology decisions, convergence sequencing, or historical installation state.
 //! Boundary: exact terminal Registry, Root children, and current release artifacts are required.
 
+mod bounded_observations;
+
 use super::TerminalFleetInventory;
 use super::current_protocol::{
     CurrentProtocolError, operation_bytes, query_current_root_authorities, query_operation,
@@ -484,12 +486,19 @@ fn query_entries(
     let maximum_entries = maximum_inventory_entries(registry, config.component_topology())?;
     let descendant_bound = maximum_descendant_page(config.component_topology());
     while let Some(parent) = parents.pop_front() {
-        for child in query_all_children(
+        let children = query_all_children(
             icp,
             &parent.candid_path,
             parent.canister_id,
             parent.maximum_children,
-        )? {
+        )?;
+        if children.len() > maximum_entries.saturating_sub(entries.len()) {
+            return Err(inventory_error(format!(
+                "current Fleet exceeds authority-derived inventory bound {maximum_entries}"
+            )));
+        }
+        let mut pending = Vec::with_capacity(children.len());
+        for child in &children {
             if child.parent_pid != Some(parent.canister_id) || !seen.insert(child.pid) {
                 return Err(inventory_error(format!(
                     "Canister {} has conflicting current parent authority",
@@ -518,7 +527,7 @@ fn query_entries(
                 ))
             })?;
             let descendant = TerminalDescendantAuthority {
-                child: &child,
+                child,
                 component,
                 parent_role: &parent.role,
                 protocol,
@@ -533,6 +542,9 @@ fn query_entries(
                 workload.clone(),
                 "terminal Component has more than one Root allocation authority",
             )?;
+            pending.push((child, protocol));
+        }
+        let observations = bounded_observations::collect(&pending, |(child, protocol)| {
             let observed = inspect_root_controlled_canister(
                 icp,
                 &protocols.root.candid_path,
@@ -540,7 +552,10 @@ fn query_entries(
                 child.pid,
             )?;
             require_terminal_component_authority(parent.root, child.pid, &observed, protocol)?;
-            let entry = registry_entry(&child, protocol, observed.module_hash.as_deref())?;
+            Ok(observed)
+        })?;
+        for ((child, protocol), observed) in pending.into_iter().zip(observations) {
+            let entry = registry_entry(child, protocol, observed.module_hash.as_deref())?;
             insert_controlled_cycles(
                 &mut controlled_cycles_by_principal,
                 child.pid,
@@ -561,11 +576,6 @@ fn query_entries(
                 });
             }
             entries.push(entry);
-            if entries.len() > maximum_entries {
-                return Err(inventory_error(format!(
-                    "current Fleet exceeds authority-derived inventory bound {maximum_entries}"
-                )));
-            }
         }
     }
     validate_complete_workload_coverage(&component_workloads, &pool_workloads)?;
@@ -629,6 +639,7 @@ fn append_root_components(
     let maximum_workloads = maximum_workloads_from_result(result)?;
     let mut placements = BTreeSet::new();
     let mut component_counts_by_spec = BTreeMap::new();
+    let mut pending = Vec::new();
     for placement in &result.placements {
         if !placements.insert(placement.group_placement.clone()) {
             return Err(inventory_error(
@@ -722,50 +733,56 @@ fn append_root_components(
                 member,
                 protocol,
             )?;
-            let observed = inspect_root_controlled_canister(
-                icp,
-                &protocols.root.candid_path,
-                authority.root.fleet_subnet_root,
-                binding.canister_id,
-            )?;
-            require_terminal_component_authority(
-                authority.root.fleet_subnet_root,
-                binding.canister_id,
-                &observed,
-                protocol,
-            )?;
-            entries.push(RegistryEntry {
-                pid: binding.canister_id.to_text(),
-                role: Some(binding.role.to_string()),
-                parent_pid: Some(authority.root.fleet_subnet_root.to_text()),
-                module_hash: Some(protocol.installed_module_hash.clone()),
-                protocol_binding: Some(protocol.binding.clone()),
-            });
-            insert_controlled_cycles(
-                controlled_cycles_by_principal,
-                binding.canister_id,
-                observed_cycle_balance(&observed)?,
-            )?;
-            if protocol
-                .binding
-                .capabilities
-                .contains(&RoleCapabilityKey::ChildProvisioning)
-            {
-                parents.push_back(DescendantParent {
-                    canister_id: binding.canister_id,
-                    candid_path: protocol.candid_path.clone(),
-                    maximum_children: descendant_bound,
-                    release_set: *authority.active_release_set,
-                    role: binding.role.clone(),
-                    root: authority.root.fleet_subnet_root,
-                });
-            }
+            pending.push((binding, protocol));
         }
     }
     if component_ids.len() != usize::try_from(expected_count).unwrap_or(usize::MAX) {
         return Err(inventory_error(
             "Root Component result contains duplicate member identities",
         ));
+    }
+    let observations = bounded_observations::collect(&pending, |(binding, protocol)| {
+        let observed = inspect_root_controlled_canister(
+            icp,
+            &protocols.root.candid_path,
+            authority.root.fleet_subnet_root,
+            binding.canister_id,
+        )?;
+        require_terminal_component_authority(
+            authority.root.fleet_subnet_root,
+            binding.canister_id,
+            &observed,
+            protocol,
+        )?;
+        Ok(observed)
+    })?;
+    for ((binding, protocol), observed) in pending.into_iter().zip(observations) {
+        entries.push(RegistryEntry {
+            pid: binding.canister_id.to_text(),
+            role: Some(binding.role.to_string()),
+            parent_pid: Some(authority.root.fleet_subnet_root.to_text()),
+            module_hash: Some(protocol.installed_module_hash.clone()),
+            protocol_binding: Some(protocol.binding.clone()),
+        });
+        insert_controlled_cycles(
+            controlled_cycles_by_principal,
+            binding.canister_id,
+            observed_cycle_balance(&observed)?,
+        )?;
+        if protocol
+            .binding
+            .capabilities
+            .contains(&RoleCapabilityKey::ChildProvisioning)
+        {
+            parents.push_back(DescendantParent {
+                canister_id: binding.canister_id,
+                candid_path: protocol.candid_path.clone(),
+                maximum_children: descendant_bound,
+                release_set: *authority.active_release_set,
+                role: binding.role.clone(),
+                root: authority.root.fleet_subnet_root,
+            });
+        }
     }
     Ok(RootComponentSummary {
         component_bindings,

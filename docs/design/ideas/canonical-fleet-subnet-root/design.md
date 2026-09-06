@@ -6,8 +6,9 @@ Date: 2026-09-06
 
 - Classification: future priority slice, deferred and unnumbered. Recording
   this idea does not schedule a release or authorize implementation.
-- Priority: consider for the next suitable batch after the current release
-  validation and release work finishes. Placement must be reconciled with the
+- Priority: one of the maintainer's two most pressing ideas, alongside
+  [standalone blob extraction](../standalone-blob-service-extraction/design.md).
+  Consider after current release work; placement must be reconciled with the
   accepted roadmap before implementation starts.
 - Need: give Fleet Subnet Root the same canonical Canic-owned entrypoint
   packaging as Fleet Coordinator and Wasm Store, removing the former

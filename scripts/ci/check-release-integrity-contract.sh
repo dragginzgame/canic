@@ -204,6 +204,7 @@ for preflight_target in \
     release-integrity-contract-gate \
     audit-method-catalog-gate \
     recovery-runbooks-gate \
+    validation-runner-gate \
     workspace-test-inventory-gate; do
     rg -w "$preflight_target" <<<"$ci_preflight_recipe" >/dev/null ||
         fail "make ci-preflight omits $preflight_target"
@@ -488,16 +489,19 @@ rg --multiline 'require_ordinary_success_before_pocketic\nstart_owned_pocketic_s
     fail "the full workspace runner does not stop after ordinary failures before PocketIC"
 rg -F '"$HEAVY_BUILD_TARGETS_USED" -eq 0' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the PocketIC integration group does not preserve Wasm build freshness between suites"
-bash "$VALIDATION_RUNNER_TEST" >/dev/null ||
-    fail "validation runner executable failure-collection fixture failed"
 build_recipe="$(sed -n '/^build:/,/^$/p' "$MAKEFILE")"
 check_recipe="$(sed -n '/^check:/,/^$/p' "$MAKEFILE")"
 rg -F -- '--keep-going' <<<"$build_recipe" >/dev/null ||
     fail "make build does not continue across independent Cargo failures"
 rg -F -- '--keep-going' <<<"$check_recipe" >/dev/null ||
     fail "make check does not continue across independent Cargo failures"
-CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" fast >/dev/null ||
+fast_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" fast)" ||
     fail "the fast workspace test plan cannot be resolved"
+[[ "$(rg -c '^==> plan: cargo test ' <<<"$fast_test_plan")" -eq 1 ]] ||
+    fail "the fast lane must execute one combined integration invocation"
+if rg -- '(^==> plan:.*--(workspace|lib|bins)|pocketic-serial)' <<<"$fast_test_plan" >/dev/null; then
+    fail "the fast lane includes workspace units or PocketIC"
+fi
 CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
     fail "the full workspace test plan cannot be resolved"
 ordinary_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" ordinary)" ||
