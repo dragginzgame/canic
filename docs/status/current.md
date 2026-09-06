@@ -565,6 +565,13 @@ closeout: dependency-library checks did not lint the owning packages' tests.
 CI/deployment governance now requires explicit affected-target coverage and
 collection of independent failures with `--keep-going`. The governed release
 gate still needs to complete; this scoped pass is not a workspace validation.
+The subsequent `canic-core --lib` failures are also corrected: the reservation
+hash vector includes the current asset recipient, config validation discovers
+its inventory without a fixed count, and the Coordinator manifest declares
+`Retire` with its existing replay and value-transfer guards. All 32 affected
+core regressions and all-feature core library/test Clippy pass. Retirement
+execution and Candid are unchanged; the retained closeout check records include
+these final-source results.
 
 The maintainer's final contract is explicit pre-1.0 reinstall. Application state
 and former host records may be discarded while cycles and asset control remain

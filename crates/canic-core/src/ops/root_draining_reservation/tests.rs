@@ -20,12 +20,20 @@ fn reservation_hash_is_domain_separated_and_excludes_only_its_hash_field() {
         .expect("hash draining reservation");
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(hash),
-        "7b0d04974016a5d11af1e5ed7389d7c0d3e10b7423682c2f48a99b2847251922"
+        "5c97a41797c3f5d714d8a7aac4ed61280cc3d3320d8ec59fe153e31c7be9a999"
     );
     response.reservation_hash = [99; 32];
     assert_eq!(
         FleetSubnetRootDrainingReservationOps::content_hash(&response)
             .expect("rehash draining reservation"),
+        hash
+    );
+
+    let mut redirected = response.clone();
+    redirected.request.asset_recipient = Principal::from_slice(&[16; 29]);
+    assert_ne!(
+        FleetSubnetRootDrainingReservationOps::content_hash(&redirected)
+            .expect("hash redirected draining reservation"),
         hash
     );
 

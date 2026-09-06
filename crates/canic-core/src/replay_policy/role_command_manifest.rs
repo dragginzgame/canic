@@ -299,6 +299,13 @@ pub const COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &
         "ResumeAuthoritySnapshot",
         "authority_restore.resume_snapshot.v1",
     ),
+    replay_protected(
+        "Retire",
+        "fleet.retirement.ledger.transfer.v1",
+        CostClass::ValueTransfer,
+        Some(VALUE_TRANSFER_QUOTA_V1),
+        Some(VALUE_TRANSFER_RESERVE_V1),
+    ),
     response_idempotent("SetRootFunding", "fleet_root_funding.set_enabled.v1"),
     replay_protected(
         "StageFundingPolicyRotationRoot",

@@ -1,0 +1,40 @@
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 47.62s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-bf894a7a60416b47)
+
+running 32 tests
+test replay_policy::tests::cost::coordinator_retirement_declares_guarded_value_transfer ... ok
+test replay_policy::tests::cost::costed_manifest_entries_declare_guards ... ok
+test replay_policy::tests::cost::costed_role_command_entries_declare_guards ... ok
+test replay_policy::tests::cost::costed_root_capability_command_entries_declare_guards ... ok
+test replay_policy::tests::cost::root_release_publication_is_the_role_owned_durable_publish_command ... ok
+test ops::root_draining_reservation::tests::reservation_hash_is_domain_separated_and_excludes_only_its_hash_field ... ok
+test replay_policy::tests::cost::store_deletion_cycle_reclamation_is_guarded_and_convergent ... ok
+test replay_policy::tests::coverage::endpoint_manifest_entries_are_unique ... ok
+test replay_policy::tests::coverage::emitted_canic_update_endpoints_have_replay_policy_entries ... ok
+test replay_policy::tests::coverage::release_candidate_manifests_have_no_release_blockers ... ok
+test replay_policy::tests::coverage::intentionally_non_idempotent_entries_must_state_reason ... ok
+test replay_policy::tests::endpoint::common_role_command_dispatch_is_variant_manifest_owned ... ok
+test replay_policy::tests::coverage::remaining_release_blockers_are_explicit_endpoint_slices ... ok
+test replay_policy::tests::endpoint::store_byte_lanes_keep_their_direct_replay_contracts ... ok
+test replay_policy::tests::role_command::asynchronous_root_intents_are_replay_protected_by_operation_id ... ok
+test replay_policy::tests::role_command::coordinator_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::coordinator_long_running_intents_are_operation_replay_protected ... ok
+test replay_policy::tests::role_command::managed_admission_transitions_are_operation_replay_protected ... ok
+test replay_policy::tests::role_command::managed_auth_effects_own_exact_replay_contracts ... ok
+test replay_policy::tests::role_command::managed_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::managed_observability_does_not_acquire_mutation_replay_policy ... ok
+test replay_policy::tests::role_command::query_like_root_commands_do_not_acquire_mutation_replay_policy ... ok
+test replay_policy::tests::role_command::root_admission_transitions_are_operation_replay_protected ... ok
+test replay_policy::tests::role_command::root_capability_variant_delegates_to_its_nested_command_manifest ... ok
+test replay_policy::tests::role_command::root_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::store_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::store_effect_variants_preserve_cost_and_convergence ... ok
+test replay_policy::tests::root_capability::root_capability_acknowledgement_is_response_idempotent ... ok
+test replay_policy::tests::root_capability::root_capability_command_blockers_are_explicit ... ok
+test replay_policy::tests::root_capability::root_capability_command_variants_have_replay_policy_entries ... ok
+test replay_policy::tests::root_capability::root_capability_implemented_effect_commands_are_replay_protected ... ok
+test config::schema::tests::every_checked_in_canic_config_parses_and_validates ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 1212 filtered out; finished in 1.10s
+

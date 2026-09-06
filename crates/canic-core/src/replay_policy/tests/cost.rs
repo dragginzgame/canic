@@ -94,6 +94,18 @@ fn root_release_publication_is_the_role_owned_durable_publish_command() {
 }
 
 #[test]
+fn coordinator_retirement_declares_guarded_value_transfer() {
+    let entry = COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.variant == "Retire")
+        .expect("Coordinator retirement replay policy");
+
+    assert_eq!(entry.cost_class, CostClass::ValueTransfer);
+    assert_eq!(entry.quota_policy, Some(VALUE_TRANSFER_QUOTA_V1));
+    assert_eq!(entry.cycle_reserve_policy, Some(VALUE_TRANSFER_RESERVE_V1));
+}
+
+#[test]
 fn store_deletion_cycle_reclamation_is_guarded_and_convergent() {
     let entry = STORE_COMMAND_REPLAY_POLICY_MANIFEST
         .iter()

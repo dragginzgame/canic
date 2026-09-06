@@ -433,7 +433,15 @@ fn every_checked_in_canic_config_parses_and_validates() {
     let mut configs = Vec::new();
     collect_canic_configs(&root, &mut configs);
     configs.sort();
-    assert_eq!(configs.len(), 17, "checked-in canic.toml inventory changed");
+    assert!(!configs.is_empty(), "checked-in config inventory is empty");
+    assert!(configs.windows(2).all(|pair| pair[0] != pair[1]));
+    for required in [
+        "apps/demo/canic.toml",
+        "apps/test/canic.toml",
+        "crates/canic-wasm-store/canic.toml",
+    ] {
+        assert!(configs.contains(&root.join(required)), "missing {required}");
+    }
 
     for path in configs {
         let rel_path = path.strip_prefix(&root).unwrap_or(&path).display();

@@ -64,6 +64,18 @@ versioning and publication remain outstanding.
 | Optional follow-up | Complete Coordinator native evacuation/deletion and whole-Fleet terminal conservation, needed only for whole-Fleet deletion; CANIC-139 whole-release build reuse; further deployment-performance work. |
 | Separate accepted work | B1 footprint qualification and human acceptance retain their own tracker. This correction does not accept B1, close 0.110 or begin 0.111. |
 
+The subsequent release-test correction updates the reservation hash vector for
+the current `asset_recipient` field and verifies that redirecting the recipient
+changes the hash. Config discovery validates all discovered files, uniqueness
+and required fixtures without a fixed aggregate count. The Coordinator policy
+manifest now declares the existing `Retire` operation's replay and value-transfer
+guards; its workflow, persisted transfer and receipt contracts are unchanged.
+All [32 targeted core regressions](artifacts/fleet-reinstall/core-contract-tests.log)
+pass, and [core library/test Clippy](artifacts/fleet-reinstall/core-contract-clippy.log)
+passes with all features and warnings denied. These final-source checks resolve
+the three reported `canic-core --lib` failures; the complete release gate still
+needs to finish.
+
 ## Toko Miner adoption checks
 
 1. Pin the published Canic release, build a sealed current App release, and

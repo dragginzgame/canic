@@ -112,6 +112,7 @@ fn coordinator_long_running_intents_are_operation_replay_protected() {
         "ProvisionComponents",
         "RemoveRoot",
         "RequestRootFunding",
+        "Retire",
         "StageFundingPolicyRotationRoot",
     ] {
         let entry = command_entry(COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST, variant);
