@@ -60,6 +60,7 @@ const fn capability_view(capability: RoleCapabilityKey) -> Option<RoleCapability
         RoleCapabilityKey::RoleAttestationVerifier => RoleCapability::RoleAttestationVerifier,
         RoleCapabilityKey::Root => RoleCapability::Root,
         RoleCapabilityKey::RootControlPlane => RoleCapability::RootControlPlane,
+        RoleCapabilityKey::RootDelegation => RoleCapability::RootDelegation,
         RoleCapabilityKey::Runtime => RoleCapability::Runtime,
         RoleCapabilityKey::Scaling => RoleCapability::Scaling,
         RoleCapabilityKey::Sharding => RoleCapability::Sharding,

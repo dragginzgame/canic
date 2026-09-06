@@ -129,6 +129,7 @@ const fn role_capability_name(capability: RoleCapability) -> &'static str {
         RoleCapability::RoleAttestationVerifier => "RoleAttestationVerifier",
         RoleCapability::Root => "Root",
         RoleCapability::RootControlPlane => "RootControlPlane",
+        RoleCapability::RootDelegation => "RootDelegation",
         RoleCapability::Runtime => "Runtime",
         RoleCapability::Scaling => "Scaling",
         RoleCapability::Sharding => "Sharding",

@@ -1,0 +1,11 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.23s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-bf894a7a60416b47)
+
+running 4 tests
+test model::fleet_funding_policy::tests::fleet_capacity_binds_profiles_and_nonrenewing_caps ... ok
+test model::fleet_funding_policy::tests::preview_multi_subnet_profile_admits_the_bounded_staging_envelope ... ok
+test model::fleet_funding_policy::tests::root_policy_validation_rejects_each_threshold_boundary ... ok
+test model::fleet_funding_policy::tests::root_policy_rejects_invalid_nonrenewing_authority ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1239 filtered out; finished in 0.00s
+

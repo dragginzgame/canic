@@ -62,3 +62,19 @@ index 9f36a78f2..7ed085c98 100644
      assert!(compact.contains("::canic::__internal::cdk::query"));
      assert!(compact.contains("EndpointCallKind::QueryComposite"));
  }
+diff --git a/crates/canic-host/src/bootstrap_store/mod.rs b/crates/canic-host/src/bootstrap_store/mod.rs
+index ac420b523..32463ca55 100644
+--- a/crates/canic-host/src/bootstrap_store/mod.rs
++++ b/crates/canic-host/src/bootstrap_store/mod.rs
+@@ -600,6 +600,10 @@ fn resolve_wasm_store_candid(
+     resolve_infrastructure_candid(
+         WASM_STORE_ROLE,
+-        source.canonical_did_path.as_deref(),
++        // Audit accommodation: the declaration ablation intentionally changes
++        // generated Candid, so do not compare it with the production sidecar.
++        // This host-only branch cannot affect measured canister code. Retain
++        // the source-field read so warning-denied host compilation stays exact.
++        source.canonical_did_path.as_deref().filter(|_| false),
+         context.refresh_canonical_infrastructure_did,
+         Some(generated_candid),
+         &selected_wasm_path,

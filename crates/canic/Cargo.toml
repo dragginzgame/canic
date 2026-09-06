@@ -23,6 +23,7 @@ blob-storage-billing = ["blob-storage", "canic-core/blob-storage-billing"]
 sharding = ["canic-core/sharding"]
 auth-chain-key-ecdsa = ["canic-core/auth-chain-key-ecdsa"]
 auth-chain-key-root-sign = ["canic-core/auth-chain-key-root-sign"]
+auth-local-application-authorization = ["canic-core/auth-local-application-authorization"]
 auth-root-canister-sig-create = ["canic-core/auth-root-canister-sig-create"]
 auth-root-canister-sig-verify = ["canic-core/auth-root-canister-sig-verify"]
 auth-issuer-canister-sig-create = ["canic-core/auth-issuer-canister-sig-create"]
@@ -33,7 +34,7 @@ testing = ["dep:ic-testkit"]
 
 [dependencies]
 candid = { workspace = true }
-canic-control-plane = { workspace = true, optional = true }
+canic-control-plane = { workspace = true, default-features = false, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
 ic-cdk = { workspace = true }

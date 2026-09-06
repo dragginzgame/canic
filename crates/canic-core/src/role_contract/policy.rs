@@ -140,6 +140,9 @@ pub fn derive_role_capabilities(
     if declaration.kind == RoleDeclarationKind::Root {
         capabilities.insert(RoleCapabilityKey::Root);
         capabilities.insert(RoleCapabilityKey::RootControlPlane);
+        if config.auth.delegated_tokens.enabled && has_delegated_token_issuer(config) {
+            capabilities.insert(RoleCapabilityKey::RootDelegation);
+        }
     } else if config.role_uses_fleet_admission(role) == Some(true) {
         capabilities.insert(RoleCapabilityKey::FleetAdmissionProjection);
     }
@@ -242,19 +245,19 @@ fn requirements_for_capabilities(
 }
 
 fn requirements_for_declared_role(
-    config: &ConfigModel,
-    role: &CanisterRole,
+    _config: &ConfigModel,
+    _role: &CanisterRole,
     capabilities: &BTreeSet<RoleCapabilityKey>,
 ) -> Vec<RoleFeatureRequirement> {
     let mut requirements = requirements_for_capabilities(capabilities)
         .into_iter()
         .map(|requirement| (requirement.feature, requirement))
         .collect::<BTreeMap<_, _>>();
-    if role == &CanisterRole::ROOT && has_delegated_token_issuer(config) {
+    if capabilities.contains(&RoleCapabilityKey::RootDelegation) {
         requirements.insert(
             CanicFeatureKey::AuthChainKeyRootSign,
             RoleFeatureRequirement {
-                capability: RoleCapabilityKey::Root,
+                capability: RoleCapabilityKey::RootDelegation,
                 config_key: "auth.delegated_tokens",
                 feature: CanicFeatureKey::AuthChainKeyRootSign,
                 reason: "the Root signs chain-key delegation batches for configured delegated-token issuers",

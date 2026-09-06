@@ -68,6 +68,7 @@ fn root_draining_reservation(
 ) -> FleetSubnetRootDrainingReservationResponse {
     let mut response = FleetSubnetRootDrainingReservationResponse {
         request: FleetSubnetRootDrainingReservationRequest {
+            asset_recipient: registry.authority.binding.coordinator,
             operation_id,
             expected_registry: registry.clone(),
             expected_root: FleetSubnetRootEntry {
@@ -1062,6 +1063,50 @@ fn assert_root_store_deletion_is_exact(
     );
 }
 
+fn assert_root_ledger_transfer_is_durable(inventory: &RootFleetSubnetFinalInventoryView) {
+    let operation_id = [10; 32];
+    assert!(
+        ComponentRegistryOps::record_root_deletion_cycle_reclamation(
+            operation_id,
+            [36; 32],
+            90_000_000_000,
+            36,
+        )
+        .is_err()
+    );
+    assert!(ComponentRegistryOps::complete_root_ledger_transfer(operation_id, Some(7)).is_err());
+    for (balance, fee, timestamp) in [(10, 10, 35), (10, 0, 35), (100, 10, 34)] {
+        assert!(ComponentRegistryOps::begin_root_ledger_transfer(
+            operation_id, balance, fee, timestamp,
+        ).is_err());
+    }
+    let transfer = ComponentRegistryOps::begin_root_ledger_transfer(operation_id, 100, 10, 35)
+        .expect("persist exact Ledger request before dispatch");
+    assert_eq!(transfer.source, inventory.fleet_subnet_root);
+    assert_eq!(
+        transfer.destination,
+        inventory.registry.authority.binding.coordinator
+    );
+    restart_component_registry();
+    assert_eq!(
+        ComponentRegistryOps::begin_root_ledger_transfer(operation_id, 100, 10, 35)
+            .expect("reuse issued identity after restart"),
+        transfer
+    );
+    assert!(ComponentRegistryOps::begin_root_ledger_transfer(operation_id, 100, 11, 35).is_err());
+    assert!(ComponentRegistryOps::begin_root_ledger_transfer(operation_id, 100, 10, 36).is_err());
+    assert!(ComponentRegistryOps::complete_root_ledger_transfer(operation_id, None).is_err());
+    let completed = ComponentRegistryOps::complete_root_ledger_transfer(operation_id, Some(7))
+        .expect("record exact Ledger block");
+    restart_component_registry();
+    assert_eq!(
+        ComponentRegistryOps::complete_root_ledger_transfer(operation_id, Some(7))
+            .expect("adopt same block after restart"),
+        completed
+    );
+    assert!(ComponentRegistryOps::complete_root_ledger_transfer(operation_id, Some(8)).is_err());
+}
+
 fn assert_root_deletion_preparation_is_exact(
     inventory: &RootFleetSubnetFinalInventoryView,
     store_deletion: &RootFleetSubnetStoreDeletionView,
@@ -1102,6 +1147,8 @@ fn assert_root_deletion_preparation_is_exact(
         .expect("exact root deletion intent retry"),
         intent
     );
+
+    assert_root_ledger_transfer_is_durable(inventory);
 
     let intent = ComponentRegistryOps::record_root_deletion_cycle_reclamation(
         [10; 32],
@@ -4577,6 +4624,9 @@ fn assert_initial_inventory_receipt() {
         terminal
     );
     assert_child_reservation_preserves_membership_receipt();
+    let after_child_reservation = ComponentRegistryOps::validate_sealed_initial_inventory([40; 32])
+        .expect("same sealed top-level inventory survives a valid child reservation");
+    assert_eq!(after_child_reservation.receipt, terminal);
     ComponentRegistryOps::reserve_allocation(
         TopLevelComponentAllocationDecision {
             allocation_sequence: 2,

@@ -1,0 +1,47 @@
+   Compiling canic-cli v0.110.7 (/home/adam/projects/canic/crates/canic-cli)
+    Finished `test` profile [optimized + debuginfo] target(s) in 22.94s
+     Running unittests src/lib.rs (target/debug/deps/canic_cli-1d25bfc0c30ef15d)
+
+running 39 tests
+test medic::tests::aggregate_status_follows_report_contract ... ok
+test medic::tests::auth_renewal_medic_error_check_classifies_invalid_issuer ... ok
+test medic::tests::blob_storage_medic_error_check_classifies_target_errors ... ok
+test medic::tests::failed_medic_report_suppresses_cli_stderr ... ok
+test medic::tests::blob_storage_passive_detection_rejects_partial_or_unrelated_candid ... ok
+test medic::tests::fleet_environment_selection_prefers_explicit_environment ... ok
+test medic::tests::fleet_report_includes_effective_environment ... ok
+test medic::tests::icp_cli_error_check_distinguishes_missing_cli ... ok
+test medic::tests::icp_identity_session_cache_hint_is_informational ... ok
+test medic::tests::medic_cli_errors_map_to_designed_exit_codes ... ok
+test medic::tests::medic_subcommand_help_requests_are_not_targets ... ok
+test medic::tests::medic_usage_and_internal_errors_render_cli_stderr ... ok
+test medic::tests::orders_checks_by_category ... ok
+test medic::tests::medic_usage_includes_top_level_examples ... ok
+test medic::tests::parses_bare_workspace_medic_options ... ok
+test medic::tests::parses_fleet_auth_renewal_medic_target ... ok
+test medic::tests::parses_fleet_blob_storage_medic_target ... ok
+test medic::tests::parses_fleet_medic_options ... ok
+test medic::tests::rejects_removed_project_medic_subcommand ... ok
+test medic::tests::renders_auth_renewal_medic_summary ... ok
+test medic::tests::renders_blob_storage_medic_summary ... ok
+test medic::tests::renders_medic_ci_report_with_actionable_rows_and_consistent_counts ... ok
+test medic::tests::renders_medic_ci_report_without_failures ... ok
+test medic::tests::renders_medic_ci_state_audit_result ... ok
+test medic::tests::renders_medic_json_report ... ok
+test medic::tests::renders_medic_text_report ... ok
+test medic::tests::workspace_environment_selection_check_is_workspace_only ... ok
+test medic::tests::workspace_medic_summarizes_state_audit_status ... ok
+test medic::tests::wraps_unbroken_long_medic_report_fields ... ok
+test medic::tests::wraps_long_medic_report_fields ... ok
+test medic::tests::passive_blob_storage_hint_uses_local_candid_only ... ok
+test medic::tests::workspace_config_quality_checks_reject_workspace_canic_features ... ok
+test medic::tests::workspace_config_quality_checks_reject_package_feature_forwarding ... ok
+test medic::tests::workspace_config_quality_checks_fail_on_missing_or_mismatched_package_metadata ... ok
+test medic::tests::workspace_config_quality_checks_report_missing_required_canic_features ... ok
+test medic::tests::workspace_config_quality_checks_accept_required_canic_features ... ok
+test medic::tests::workspace_config_quality_checks_reject_surplus_crypto_features ... ok
+test medic::tests::workspace_config_quality_checks_validate_role_package_metadata ... ok
+test medic::tests::fleet_missing_points_to_current_ensure_plan ... ok
+
+test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 436 filtered out; finished in 32.60s
+

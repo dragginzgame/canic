@@ -1,0 +1,10 @@
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.7 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 44s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-bf68de2166ac2c23)
+
+running 1 test
+test ops::component_registry::tests::empty_root_final_inventory_is_exact_durable_and_response_idempotent ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 244 filtered out; finished in 0.33s
+

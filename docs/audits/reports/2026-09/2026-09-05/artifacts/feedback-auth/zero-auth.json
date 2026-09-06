@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "zero-auth",
+  "wasm_sha256": "956006f4c5680318f8c196cf0386c0a6cce7d1aeff38abf4633784bcb070719e",
+  "named_wasm_sha256": "51f3165bccefed185fc599bafbc6f025e6f6ca6a296a816025ec5c02495410d6",
+  "executable_sections_sha256": "6aef2d8518409fc4645fb5d5ee44e4aba60a20bd0d95660a7a02558396f5ee54",
+  "named_executable_sections_match": false,
+  "raw_bytes": 2186846,
+  "gzip_bytes": 790228,
+  "code_section_bytes": 1969643,
+  "data_section_bytes": 181030,
+  "defined_functions": 3685,
+  "named_items": 3980,
+  "state_symbols": {
+    "issuer": [],
+    "root_delegation": [],
+    "local_authorization": []
+  },
+  "linked_state_symbols": {
+    "issuer": [],
+    "root_delegation": [],
+    "local_authorization": []
+  },
+  "candid_sha256": "65fb929158a4cd28f31374d934130da62357650e0d530cc159ea9b174dd2e94e"
+}

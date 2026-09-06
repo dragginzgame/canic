@@ -9,7 +9,7 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     model::auth::{RootIssuerRenewalState, RootIssuerRenewalTemplate},
-    ops::storage::auth::{AuthStateOps, ChainKeyRootDelegationBatchStatus},
+    ops::storage::auth::{ChainKeyRootDelegationBatchStatus, RootDelegationStateOps},
 };
 
 #[derive(Clone)]
@@ -21,7 +21,7 @@ pub(super) fn due_chain_key_templates(
     now_ns: u64,
     required_issuer_pid: Option<Principal>,
 ) -> Vec<DueChainKeyTemplate> {
-    AuthStateOps::root_issuer_renewal_templates()
+    RootDelegationStateOps::root_issuer_renewal_templates()
         .into_iter()
         .filter(|template| template.enabled)
         .filter_map(|template| {
@@ -30,7 +30,7 @@ pub(super) fn due_chain_key_templates(
             }
             let template_fingerprint =
                 super::super::root_issuer_renewal::renewal_template_fingerprint(&template);
-            let state = AuthStateOps::root_issuer_renewal_state(template.issuer_pid);
+            let state = RootDelegationStateOps::root_issuer_renewal_state(template.issuer_pid);
             chain_key_template_due(now_ns, template_fingerprint, state.as_ref())
                 .then_some(DueChainKeyTemplate { template })
         })
@@ -63,14 +63,14 @@ pub(super) fn chain_key_template_due(
 }
 
 pub(super) fn enabled_template_count() -> usize {
-    AuthStateOps::root_issuer_renewal_templates()
+    RootDelegationStateOps::root_issuer_renewal_templates()
         .into_iter()
         .filter(|template| template.enabled)
         .count()
 }
 
 pub(super) fn pending_chain_key_root_delegation_batch_count(now_ns: u64) -> usize {
-    AuthStateOps::chain_key_root_delegation_batches()
+    RootDelegationStateOps::chain_key_root_delegation_batches()
         .into_iter()
         .filter(|batch| now_ns < batch.header.expires_at_ns)
         .filter(|batch| batch.status != ChainKeyRootDelegationBatchStatus::Installed)

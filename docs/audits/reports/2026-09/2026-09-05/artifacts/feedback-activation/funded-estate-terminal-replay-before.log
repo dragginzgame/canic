@@ -1,0 +1,82 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:39895/
+==> targeted canic-testing-internal PocketIC proof
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.29s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::funded_estate_recovers_transfer_and_autonomous_creation_responses ... [FLEET]      CACHE  literal-zero release artifacts (16)                   1.07s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.40s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET]      DONE   literal-zero infrastructure replay complete          1m 06s
+
+thread 'pic::fleet_registry::baseline::tests::funded_estate_recovers_transfer_and_autonomous_creation_responses' (30845) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:5199:10:
+effect-free funded estate replay: PlanIntegrity
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::funded_estate_recovers_transfer_and_autonomous_creation_responses
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 56 filtered out; finished in 219.26s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=422524 kB high_water=424384 kB threads=20
+==> targeted canic-testing-internal PocketIC proof failed in 219s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2026-09-05 18:20:35.476408640 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: wasm_store
+2026-09-05 18:20:35.476408640 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2026-09-05 18:20:44.568393069 UTC: [Canister pp254-cl777-77776-aaaaq-cai] 
+2026-09-05 18:20:44.568393069 UTC: [Canister pp254-cl777-77776-aaaaq-cai] 
+2026-09-05 18:20:44.568393069 UTC: [Canister pp254-cl777-77776-aaaaq-cai] 
+2026-09-05 18:20:44.568393069 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    ...     | [Init] 🔧 --------------------- canic v0.110.7 -----------------------
+2026-09-05 18:20:44.568393069 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: root (FleetSubnetRootInitArgs { authority: FleetSubnetRootAuthority { binding: FleetSubnetRootBinding { authority: FleetRegistryAuthority { binding: FleetCoordinatorBinding { fleet: FleetBinding { fleet: FleetKey { canonical_network_id: CanonicalNetworkId([64, 43, 54, 129, 69, 63, 185, 207, 163, 86, 182, 234, 122, 189, 226, 222, 83, 204, 76, 102, 92, 170, 244, 56, 83, 91, 221, 193, 225, 103, 159, 96]), fleet_id: FleetId([121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121]) }, app: AppId("standalone") }, coordinator_subnet: SubnetId(Principal { len: 29, bytes: [252, 208, 34, 207, 176, 120, 15, 154, 221, 144, 208, 9, 53, 60, 99, 35, 73, 138, 134, 143, 93, 56, 29, 88, 20, 159, 229, 159, 2] }), coordinator: Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } }, epoch: 1 }, placement_subnet: SubnetId(Principal { len: 29, bytes: [252, 208, 34, 207, 176, 120, 15, 154, 221, 144, 208, 9, 53, 60, 99, 35, 73, 138, 134, 143, 93, 56, 29, 88, 20, 159, 229, 159, 2] }), fleet_subnet_root: Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, component_admissions: [ComponentSpecAdmission { component_spec: ComponentSpecId("default"), spec_hash: [177, 195, 128, 142, 186, 136, 181, 94, 142, 250, 223, 188, 133, 130, 160, 193, 212, 170, 136, 99, 39, 254, 242, 84, 162, 188, 11, 241, 155, 8, 218, 161], maximum_root_instances: 1 }], component_topology_digest: ComponentTopologyDigest([111, 10, 224, 44, 212, 11, 183, 230, 155, 133, 235, 183, 223, 230, 16, 59, 253, 243, 85, 202, 177, 79, 219, 104, 181, 0, 6, 166, 196, 60, 61, 95]), limits: FleetSubnetRootLimits { maximum_component_instances: 4096, maximum_registry_bytes: 16777216, maximum_wasm_store_bytes: 536870912, canister_pool: FleetSubnetCanisterPoolConfig { minimum_size: 1, maximum_size: 2, canister_cycles: Cycles(5000000000000), creation_execution_margin: Cycles(1000000000000) }, cycles_funding: CyclesFundingBudget { window_secs: 3600, maximum_cycles: Cycles(1000000000000000) }, maximum_group_placements: 16 }, funding: FleetSubnetRootFundingAuthority { root_funding: FleetSubnetRootFundingPolicy { funding_profile: SingleSubnet, request_threshold: Cycles(10000000000000), target_balance: Cycles(30000000000000), cooldown_secs: 2592000, budget: CyclesFundingBudget { window_secs: 7776000, maximum_cycles: Cycles(30000000000000) }, maximum_automatic_grants: 4, maximum_automatic_cycles: Cycles(120000000000000) }, icp_refill: None } }, initial_release_set: FleetSubnetRootReleaseSet { release_build_id: ReleaseBuildId([164, 193, 40, 114, 132, 18, 241, 24, 55, 183, 156, 232, 86, 46, 49, 21, 69, 29, 179, 135, 225, 115, 97, 183, 155, 79, 21, 208, 44, 187, 54, 174]), manifest_digest: ReleaseSetDigest([224, 86, 150, 229, 43, 204, 75, 246, 173, 155, 178, 55, 52, 2, 183, 0, 152, 215, 200, 105, 11, 69, 117, 104, 234, 17, 51, 218, 38, 63, 0, 48]) }, expected_module_hash: [237, 134, 222, 205, 191, 66, 226, 165, 180, 5, 236, 178, 67, 0, 165, 167, 94, 216, 234, 51, 237, 144, 208, 104, 151, 79, 172, 134, 65, 110, 55, 138], wasm_store_authority: FleetSubnetWasmStoreAuthority { authority: FleetRegistryAuthority { binding: FleetCoordinatorBinding { fleet: FleetBinding { fleet: FleetKey { canonical_network_id: CanonicalNetworkId([64, 43, 54, 129, 69, 63, 185, 207, 163, 86, 182, 234, 122, 189, 226, 222, 83, 204, 76, 102, 92, 170, 244, 56, 83, 91, 221, 193, 225, 103, 159, 96]), fleet_id: FleetId([121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121]) }, app: AppId("standalone") }, coordinator_subnet: SubnetId(Principal { len: 29, bytes: [252, 208, 34, 207, 176, 120, 15, 154, 221, 144, 208, 9, 53, 60, 99, 35, 73, 138, 134, 143, 93, 56, 29, 88, 20, 159, 229, 159, 2] }), coordinator: Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } }, epoch: 1 }, placement_subnet: SubnetId(Principal { len: 29, bytes: [252, 208, 34, 207, 176, 120, 15, 154, 221, 144, 208, 9, 53, 60, 99, 35, 73, 138, 134, 143, 93, 56, 29, 88, 20, 159, 229, 159, 2] }), fleet_subnet_root: Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, wasm_store: Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, installation_controller: Principal { len: 29, bytes: [162, 198, 228, 81, 161, 112, 145, 248, 216, 60, 12, 16, 254, 162, 13, 169, 112, 28, 170, 250, 24, 22, 153, 1, 250, 199, 172, 93, 2] }, release_build_id: ReleaseBuildId([164, 193, 40, 114, 132, 18, 241, 24, 55, 183, 156, 232, 86, 46, 49, 21, 69, 29, 179, 135, 225, 115, 97, 183, 155, 79, 21, 208, 44, 187, 54, 174]), wasm_module_hash: [92, 41, 101, 191, 250, 92, 232, 255, 33, 215, 114, 128, 55, 207, 244, 249, 99, 81, 155, 30, 45, 125, 237, 90, 181, 136, 71, 36, 74, 98, 251, 29] } }, install_id: [112, 40, 162, 16, 15, 109, 16, 142, 82, 76, 42, 70, 199, 65, 72, 55, 52, 31, 177, 6, 204, 225, 236, 134, 162, 108, 122, 254, 61, 125, 119, 95], wasm_store_activation: FleetSubnetWasmStoreActivationAuthority { fleet: FleetBinding { fleet: FleetKey { canonical_network_id: CanonicalNetworkId([64, 43, 54, 129, 69, 63, 185, 207, 163, 86, 182, 234, 122, 189, 226, 222, 83, 204, 76, 102, 92, 170, 244, 56, 83, 91, 221, 193, 225, 103, 159, 96]), fleet_id: FleetId([121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121, 121]) }, app: AppId("standalone") }, operation_id: [77, 161, 246, 25, 23, 14, 103, 36, 56, 76, 211, 241, 22, 19, 129, 39, 129, 144, 204, 123, 213, 239, 125, 82, 76, 176, 26, 12, 202, 221, 25, 222], fleet_subnet_root: Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, wasm_store: Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, release_build_id: ReleaseBuildId([164, 193, 40, 114, 132, 18, 241, 24, 55, 183, 156, 232, 86, 46, 49, 21, 69, 29, 179, 135, 225, 115, 97, 183, 155, 79, 21, 208, 44, 187, 54, 174]), component_topology_digest: ComponentTopologyDigest([111, 10, 224, 44, 212, 11, 183, 230, 155, 133, 235, 183, 223, 230, 16, 59, 253, 243, 85, 202, 177, 79, 219, 104, 181, 0, 6, 166, 196, 60, 61, 95]), controllers: [Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, Principal { len: 29, bytes: [162, 198, 228, 81, 161, 112, 145, 248, 216, 60, 12, 16, 254, 162, 13, 169, 112, 28, 170, 250, 24, 22, 153, 1, 250, 199, 172, 93, 2] }], manifest_digest: ReleaseSetDigest([224, 86, 150, 229, 43, 204, 75, 246, 173, 155, 178, 55, 52, 2, 183, 0, 152, 215, 200, 105, 11, 69, 117, 104, 234, 17, 51, 218, 38, 63, 0, 48]) }, canister_pool_imports: [Principal { len: 10, bytes: [127, 255, 255, 255, 255, 192, 0, 3, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }] })
+2026-09-05 18:20:44.568393069 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2026-09-05 18:20:44.568393069 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    ...     | [Init] build network: ic
+2026-09-05 18:21:21.043302502 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: pbyqu-z3777-77776-aaabq-cai
+2026-09-05 18:22:44.273616555 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] ws: adopted sibling Store pgzwa-ud777-77776-aaaba-cai present
+2026-09-05 18:22:44.273616555 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Wasm] publication cost guard reserved command_kind=wasm_store.bootstrap_publish.v1 reservation_id=2 quota_subject=pp254-cl777-77776-aaaaq-cai payer=pp254-cl777-77776-aaaaq-cai
+2026-09-05 18:22:44.273616555 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Wasm] ws.transition kind=pin_publication_binding gen=1 at=1788632564 old_a=- old_d=- old_r=- new_a=pgzwa-ud777-77776-aaaba-cai new_d=- new_r=-
+2026-09-05 18:22:44.832040987 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] upload_chunk: pgzwa-ud777-77776-aaaba-cai (754.65 KB)
+2026-09-05 18:23:08.743252709 UTC: [Canister pbyqu-z3777-77776-aaabq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: app
+2026-09-05 18:23:08.743252709 UTC: [Canister pbyqu-z3777-77776-aaabq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2026-09-05 18:23:09.622331961 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] install_chunked_code: pbyqu-z3777-77776-aaabq-cai store=pgzwa-ud777-77776-aaaba-cai chunks=1
+2026-09-05 18:23:10.760451926 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[93, 128, 24, 152, 94, 162, 218, 86, 14, 218, 192, 98, 138, 82, 232, 160, 134, 246, 152, 214, 204, 134, 40, 27, 184, 1, 32, 188, 250, 10, 9, 209] phase=Provisioned activated_components=0/1 diagnostic=E140
+2026-09-05 18:23:12.015726861 UTC: [Canister pbyqu-z3777-77776-aaabq-cai] [34mINFO [0m|    app     | [Init] bootstrap (nonroot): init start
+2026-09-05 18:23:12.015726861 UTC: [Canister pbyqu-z3777-77776-aaabq-cai] [34mINFO [0m|    app     | [Init] bootstrap (nonroot): init complete
+2026-09-05 18:23:12.015726861 UTC: [Canister pbyqu-z3777-77776-aaabq-cai] [34mINFO [0m|    app     | [Init] canister marked READY
+2026-09-05 18:23:12.172573112 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[93, 128, 24, 152, 94, 162, 218, 86, 14, 218, 192, 98, 138, 82, 232, 160, 134, 246, 152, 214, 204, 134, 40, 27, 184, 1, 32, 188, 250, 10, 9, 209] phase=Published activated_components=0/1 diagnostic=E140
+2026-09-05 18:23:14.043297899 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2026-09-05 18:23:14.174424710 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Topology] try_get_current_subnet_pid: 753q6-ah42a-rm7md-yb6nn-3egqb-e2tyy-zdjgf-ind25-haovq-fe74w-pqe
+2026-09-05 18:23:14.174424710 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) prepared managed inventory for Fleet activation
+2026-09-05 18:23:14.174424710 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Sync] sync.state: root cascade start snapshot=[fs]
+2026-09-05 18:23:14.174424710 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m| wasm_store | [Sync] sync.state: non-root cascade start snapshot=[fs]
+2026-09-05 18:23:14.453777585 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2026-09-05 18:23:14.635662374 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Topology] try_get_current_subnet_pid: 753q6-ah42a-rm7md-yb6nn-3egqb-e2tyy-zdjgf-ind25-haovq-fe74w-pqe
+2026-09-05 18:23:14.635662374 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) complete
+2026-09-05 18:23:14.635662374 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [34mINFO [0m|    root    | [Init] canister marked READY
+2026-09-05 18:23:14.635662374 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init start
+2026-09-05 18:23:14.635662374 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init complete
+2026-09-05 18:23:14.635662374 UTC: [Canister pgzwa-ud777-77776-aaaba-cai] [34mINFO [0m| wasm_store | [Init] canister marked READY
+2026-09-05 18:23:21.651342600 UTC: [Canister pp254-cl777-77776-aaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: pu7bz-yt777-77776-aaaca-cai
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-05T18:20:08.985518Z  INFO pocket_ic_server: The PocketIC server is listening on port 39895
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  219s     FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 220s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.5fP48P

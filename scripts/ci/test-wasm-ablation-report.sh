@@ -77,7 +77,7 @@ printf '%s\n' "$LISTING" | rg -q $'^02\tb1-02-global-storage-registration\tready
 printf '%s\n' "$LISTING" | rg -q $'^03\tb1-03-activation-record-codecs\tready\tpatch\tcanonical$'
 printf '%s\n' "$LISTING" | rg -q $'^04\tb1-04-authorization-record-codecs\tready\tpatch\tcanonical,runtime_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^05\tb1-05-relevant-cbor-stub\tready\tpatch\tcanonical,runtime_probe,blob_storage_probe$'
-printf '%s\n' "$LISTING" | rg -q $'^06\tb1-06-unconditional-recovery-dispatch\tspecified\tpatch\tcanonical,runtime_probe$'
+printf '%s\n' "$LISTING" | rg -q $'^06\tb1-06-unconditional-recovery-dispatch\tready\tpatch\tcanonical,runtime_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^07\tb1-07-exact-role-capability-expansion\tplanned\tpatch\tcanonical$'
 printf '%s\n' "$LISTING" | rg -q $'^08\tb1-08-endpoint-candid-type-construction\tspecified\tpatch\tcanonical,runtime_probe,payload_limit_probe,blob_storage_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^09\tb1-09-candid-type-documentation\tplanned\tpatch\tcanonical,runtime_probe,payload_limit_probe,blob_storage_probe$'

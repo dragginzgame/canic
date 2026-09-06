@@ -61,14 +61,14 @@ type ComponentDeploymentLabel = record { key : text; value : text };
 type ComponentDeploymentLimits = record {
   maximum_descendants : nat32;
   maximum_registry_bytes : nat64;
-  spawn_grant_reductions : vec ComponentSpawnGrant;
+  spawn_grant_reductions : vec ComponentDeploymentSpawnGrantLimit;
 };
 // Canonical reduction-only declaration for one exact flattened member.
 type ComponentDeploymentMemberLimit = record {
   maximum_descendants : opt nat32;
   member : vec text;
   maximum_registry_bytes : opt nat64;
-  spawn_grants : vec ComponentSpawnGrant;
+  spawn_grants : vec ComponentDeploymentSpawnGrantLimit;
 };
 // Exact typed purpose resolved for one flattened deployment occurrence.
 type ComponentDeploymentPurpose = variant {
@@ -180,6 +180,8 @@ type ComponentProvisioningGrant = record {
 type ComponentSpawnGrant = record {
   child_role : text;
   maximum_instances_per_parent : nat32;
+  // Exact configured sharding/scaling children created before the parent may become ready.
+  initial_instances_per_parent : nat32;
   parent_role : text;
 };
 //
@@ -222,6 +224,7 @@ type CoordinatorCommand = variant {
   ActivateRegistry : FleetRegistryActivationRequest;
   SetRootFunding : SetCyclesFundingRequest;
   AcknowledgeRootSnapshot : FleetSubnetRootSnapshotAcknowledgementRequest;
+  Retire : FleetRetirementRequest;
   RequestRootFunding : FleetRootFundingRequest;
   BeginFundingPolicyRotation : FleetFundingPolicyRotationBeginRequest;
   ApplyFundingPolicyRotation : FleetFundingPolicyRotationApplyRequest;
@@ -239,6 +242,7 @@ type CoordinatorCommandResponse = variant {
   ActivateRegistry : FleetRegistryActivationResponse;
   SetRootFunding : SetStateResponse;
   AcknowledgeRootSnapshot : FleetSubnetRootSnapshotAcknowledgement;
+  Retire : FleetRetirementStatus;
   RequestRootFunding : FleetRootFundingResponse;
   PrepareRootDeletionExecution : FleetSubnetRootDeletionExecutionResponse;
   ResumeAuthoritySnapshot : AuthorityRestoreFenceStatusResponse;
@@ -277,6 +281,7 @@ type CoordinatorOperationStatusResponse = variant {
   Admission : FleetAdmissionOperationStatusResponse;
   FundingPolicyRotation : FleetFundingPolicyRotationStatusResponse;
   RootRemoval : CoordinatorRootRemovalOperationStatus;
+  Retirement : FleetRetirementStatus;
   ComponentProvisioning : FleetComponentProvisioningStatusResponse;
 };
 // Controller-only funding usage and operation state for one registered Root.
@@ -539,6 +544,7 @@ type FleetComponentProvisioningStatusResponse = record {
   operation : FleetComponentProvisioningOperation;
   accepted_root_count : nat32;
   current_root : opt FleetComponentProvisioningRootProgress;
+  estate_funding_required : opt RootEstateFundingRequired;
   current_publication : opt FleetComponentPublicationRootProgress;
   phase : FleetComponentProvisioningPhase;
   root_batch_count : nat32;
@@ -716,6 +722,20 @@ type FleetFundingProfile = variant {
 // Complete network-qualified Fleet identity.
 //
 type FleetKey = record { fleet_id : text; canonical_network_id : text };
+// Exact default-account transfer retained before a Fleet retirement Ledger call.
+type FleetLedgerTransferIntent = record {
+  fee : nat;
+  destination : principal;
+  source : principal;
+  memo : blob;
+  balance_before : nat;
+  created_at_time : nat64;
+};
+// Verified retirement transfer; an initially empty account has no Ledger block.
+type FleetLedgerTransferReceipt = record {
+  block_index : opt nat;
+  intent : FleetLedgerTransferIntent;
+};
 //
 // FleetRegistry
 //
@@ -775,6 +795,20 @@ type FleetRegistryVersion = record {
   content_hash : blob;
   authority : FleetRegistryAuthority;
   revision : nat64;
+};
+// Controller authority for returning a fully removed Fleet's Ledger balance.
+type FleetRetirementRequest = record {
+  destination : principal;
+  maximum_ledger_fee : nat;
+  operation_id : blob;
+  expected_registry : FleetRegistryVersion;
+};
+// Coordinator retirement progress retained until the operator deletes the Coordinator.
+type FleetRetirementStatus = record {
+  request : FleetRetirementRequest;
+  prepared_at_ns : nat64;
+  ledger_receipt : opt FleetLedgerTransferReceipt;
+  ledger_transfer : opt FleetLedgerTransferIntent;
 };
 // Root-authored exact receipt for one fresh or replayed grant acceptance.
 type FleetRootFundingAcceptanceReceipt = record {
@@ -885,6 +919,9 @@ type FleetSubnetCanisterPoolConfig = record {
   //
   // Recycled assets remain tracked even when their return temporarily exceeds this target.
   maximum_size : nat32;
+  // Native cycles retained above the Ready floor while a newly created asset is
+  // created, inspected, controller-checked, and admitted to the pool.
+  creation_execution_margin : nat;
   // Ready empty Canisters automatically maintained for the root.
   minimum_size : nat32;
   // Minimum retained balance required before a pool asset becomes Ready.
@@ -964,6 +1001,7 @@ type FleetSubnetRootDeletionReadinessIntentResponse = record {
 // Root-authenticated command recording its converged post-transfer cycle balance.
 type FleetSubnetRootDeletionReadinessRequest = record {
   expected_intent_hash : blob;
+  ledger_receipt : FleetLedgerTransferReceipt;
   operation_id : blob;
   observed_cycles_after_reclamation : nat;
   fleet_subnet_root : principal;
@@ -1015,6 +1053,7 @@ type FleetSubnetRootDrainingPublicationResponse = record {
 // Controller command serializing one root's Fleet-wide draining decision against placement.
 //
 type FleetSubnetRootDrainingReservationRequest = record {
+  asset_recipient : principal;
   operation_id : blob;
   expected_root : FleetSubnetRootEntry;
   expected_registry : FleetRegistryVersion;
@@ -1228,6 +1267,7 @@ type RoleCapability = variant {
   ChildProvisioning;
   DelegatedTokenIssuer;
   FleetAdmissionProjection;
+  RootDelegation;
   RoleAttestationSigner;
   WasmStore;
   DelegatedTokenVerifier;
@@ -1243,6 +1283,23 @@ type RoleOverviewResponse = record {
   role : text;
   bootstrap : BootstrapStatusResponse;
   protocol_profile_digest : blob;
+};
+// Exact durable funding pause for one Root-owned autonomous pool creation.
+type RootEstateFundingRequired = record {
+  retry_at_ns : nat64;
+  root : principal;
+  creation_amount : nat;
+  readiness_floor : nat;
+  operation_id : blob;
+  attempt_count : nat32;
+  available : nat;
+  shortfall : nat;
+  ledger_fee : nat;
+  required : nat;
+  execution_margin : nat;
+  management_creation_fee : nat;
+  last_attempt_at_ns : opt nat64;
+  cycles_ledger : principal;
 };
 // Explicit input for changing automatic cycles funding.
 type SetCyclesFundingRequest = record { enabled : bool };

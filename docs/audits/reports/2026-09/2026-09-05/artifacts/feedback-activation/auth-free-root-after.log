@@ -1,0 +1,45 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+==> compiler cache start: requests=391 hits=0 misses=208
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:33893/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.7 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic v0.110.7 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 41.02s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::auth_free_root_preserves_ordinary_fleet_activation ... [WASM]       SIZE   fleet_coordinator/candidate.wasm  code=3.88 MiB (4070557 B)  headroom=6.12 MiB (6415203 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2637919 B)  headroom=7.48 MiB (7847841 B)
+[WASM]       SIZE   app/candidate.wasm  code=2.53 MiB (2652007 B)  headroom=7.47 MiB (7833753 B)
+[WASM]       SIZE   root/candidate.wasm  code=7.58 MiB (7951069 B)  headroom=2.42 MiB (2534691 B)
+[FLEET]      DONE   literal-zero release artifacts (16)                  2m 10s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             1m 59s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 56.67s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 318.75s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=338792 kB high_water=354920 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 359s
+==> compiler cache delta: requests=45 hits=0 misses=24
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  359s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 360s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.42bji7

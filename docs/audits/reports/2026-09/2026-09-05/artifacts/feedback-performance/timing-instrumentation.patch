@@ -1,0 +1,60 @@
+--- a/crates/canic-host/src/fleet_ensure/ops/platform.rs
++++ b/crates/canic-host/src/fleet_ensure/ops/platform.rs
+@@ -939,6 +939,22 @@
+     ReinstallRecovery,
+ }
+ 
++// Temporary controlled-measurement instrumentation; removed after both runs.
++struct FleetMeasurementSpan {
++    kind: &'static str,
++    started: std::time::Instant,
++}
++
++impl Drop for FleetMeasurementSpan {
++    fn drop(&mut self) {
++        eprintln!(
++            "[FLEET-SPAN] kind={} elapsed_us={}",
++            self.kind,
++            self.started.elapsed().as_micros()
++        );
++    }
++}
++
+ impl IcpEnsurePlatform {
+     #[must_use]
+     pub fn new(desired: DesiredFleet, icp_executable: &str, root: &Path) -> Self {
+@@ -997,6 +1013,10 @@
+         &mut self,
+         observe: impl FnOnce(&mut Self) -> Result<T, IcpEnsurePlatformError>,
+     ) -> Result<T, IcpEnsurePlatformError> {
++        let _measurement = FleetMeasurementSpan {
++            kind: "fleet_observation",
++            started: std::time::Instant::now(),
++        };
+         self.observation_snapshot
+             .replace(Some(FleetObservationSnapshot::default()));
+         let result = observe(self);
+@@ -3208,6 +3228,23 @@
+         _record: &EffectRecord,
+         state: &FleetEnsureStateRecord,
+     ) -> Result<EffectOutcome, Self::Error> {
++        let kind = match action {
++            EnsureAction::Create { .. } => "create",
++            EnsureAction::FleetProtocol { action, .. } => match action.as_ref() {
++                crate::fleet_ensure::model::CurrentFleetProtocolAction::MaintainPoolReadiness {
++                    ..
++                } => "import_reconciliation",
++                crate::fleet_ensure::model::CurrentFleetProtocolAction::ProvisionComponents {
++                    ..
++                } => "workload_provisioning",
++                _ => "other_protocol",
++            },
++            _ => "other_effect",
++        };
++        let _measurement = FleetMeasurementSpan {
++            kind,
++            started: std::time::Instant::now(),
++        };
+         self.require_operator()?;
+         match action {
+             EnsureAction::Create {

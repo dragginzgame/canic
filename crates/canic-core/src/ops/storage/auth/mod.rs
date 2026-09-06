@@ -23,7 +23,7 @@ use crate::{
         RootIssuerPolicyRecordMapper, RootIssuerRenewalStateRecordMapper,
         RootIssuerRenewalTemplateRecordMapper,
     },
-    storage::stable::auth::AuthState,
+    storage::stable::auth::{DelegatedTokenIssuerState, RootDelegationState},
 };
 
 ///
@@ -83,17 +83,26 @@ pub struct ChainKeyRootDelegationBatch {
 }
 
 ///
-/// AuthStateOps
+/// LocalApplicationAuthorizationStateOps
 ///
-/// Storage-ops facade for local application sessions and auth issuer state.
+/// Storage-ops facade for local application sessions and replay fencing.
 ///
 
-pub struct AuthStateOps;
+pub struct LocalApplicationAuthorizationStateOps;
 
-impl AuthStateOps {
+/// Storage-ops facade for issuer-local installed delegation proof state.
+pub struct DelegatedTokenIssuerStateOps;
+
+impl DelegatedTokenIssuerStateOps {
+    /// Restore the selected issuer authority before runtime readiness.
+    #[cfg(feature = "auth-delegated-token-issuer-state")]
+    pub fn restore() {
+        DelegatedTokenIssuerState::restore();
+    }
+
     #[must_use]
     pub fn active_delegation_proof(now_ns: u64) -> Option<ActiveDelegationProof> {
-        let proof = AuthState::get_active_delegation_proof()
+        let proof = DelegatedTokenIssuerState::get_active_delegation_proof()
             .map(ActiveDelegationProofRecordMapper::record_to_dto)?;
         if now_ns < proof.not_before_ns || now_ns >= proof.expires_at_ns {
             return None;
@@ -103,91 +112,99 @@ impl AuthStateOps {
 
     #[must_use]
     pub fn active_delegation_proof_snapshot() -> Option<ActiveDelegationProof> {
-        AuthState::get_active_delegation_proof()
+        DelegatedTokenIssuerState::get_active_delegation_proof()
             .map(ActiveDelegationProofRecordMapper::record_to_dto)
     }
 
     pub fn set_active_delegation_proof(proof: ActiveDelegationProof) {
-        AuthState::set_active_delegation_proof(ActiveDelegationProofRecordMapper::dto_to_record(
-            proof,
-        ));
+        DelegatedTokenIssuerState::set_active_delegation_proof(
+            ActiveDelegationProofRecordMapper::dto_to_record(proof),
+        );
     }
 
     #[cfg(test)]
     pub fn clear_active_delegation_proof() {
-        AuthState::clear_active_delegation_proof();
+        DelegatedTokenIssuerState::clear_active_delegation_proof();
     }
+}
 
+/// Storage-ops facade for Root-owned delegation policy and renewal state.
+pub struct RootDelegationStateOps;
+
+impl RootDelegationStateOps {
     #[must_use]
     pub fn root_issuer_policy(issuer_pid: Principal) -> Option<RootIssuerPolicy> {
-        AuthState::get_root_issuer(issuer_pid).map(RootIssuerPolicyRecordMapper::record_to_policy)
+        RootDelegationState::get_root_issuer(issuer_pid)
+            .map(RootIssuerPolicyRecordMapper::record_to_policy)
     }
 
     #[must_use]
     pub fn root_issuer_policies() -> Vec<RootIssuerPolicy> {
-        AuthState::list_root_issuers()
+        RootDelegationState::list_root_issuers()
             .into_iter()
             .map(RootIssuerPolicyRecordMapper::record_to_policy)
             .collect()
     }
 
     pub fn upsert_root_issuer_policy(policy: RootIssuerPolicy) {
-        AuthState::upsert_root_issuer(RootIssuerPolicyRecordMapper::policy_to_record(policy));
+        RootDelegationState::upsert_root_issuer(RootIssuerPolicyRecordMapper::policy_to_record(
+            policy,
+        ));
     }
 
     #[must_use]
     pub fn delegated_auth_registry_epoch() -> u64 {
-        AuthState::delegated_auth_registry_epoch()
+        RootDelegationState::delegated_auth_registry_epoch()
     }
 
     pub fn advance_delegated_auth_registry_epoch() -> u64 {
-        AuthState::advance_delegated_auth_registry_epoch()
+        RootDelegationState::advance_delegated_auth_registry_epoch()
     }
 
     pub fn advance_delegated_auth_registry_epoch_at_least(min_epoch: u64) -> u64 {
-        AuthState::advance_delegated_auth_registry_epoch_at_least(min_epoch)
+        RootDelegationState::advance_delegated_auth_registry_epoch_at_least(min_epoch)
     }
 
     #[must_use]
     #[cfg(test)]
     pub fn delegated_auth_proof_epoch() -> u64 {
-        AuthState::delegated_auth_proof_epoch()
+        RootDelegationState::delegated_auth_proof_epoch()
     }
 
     pub fn advance_delegated_auth_proof_epoch_at_least(min_epoch: u64) -> u64 {
-        AuthState::advance_delegated_auth_proof_epoch_at_least(min_epoch)
+        RootDelegationState::advance_delegated_auth_proof_epoch_at_least(min_epoch)
     }
 
     #[must_use]
     pub fn root_issuer_renewal_template(
         issuer_pid: Principal,
     ) -> Option<RootIssuerRenewalTemplate> {
-        AuthState::get_root_issuer_renewal_template(issuer_pid)
+        RootDelegationState::get_root_issuer_renewal_template(issuer_pid)
             .map(RootIssuerRenewalTemplateRecordMapper::record_to_template)
     }
 
     #[must_use]
     pub fn root_issuer_renewal_templates() -> Vec<RootIssuerRenewalTemplate> {
-        AuthState::list_root_issuer_renewal_templates()
+        RootDelegationState::list_root_issuer_renewal_templates()
             .into_iter()
             .map(RootIssuerRenewalTemplateRecordMapper::record_to_template)
             .collect()
     }
 
     pub fn upsert_root_issuer_renewal_template(template: RootIssuerRenewalTemplate) {
-        AuthState::upsert_root_issuer_renewal_template(
+        RootDelegationState::upsert_root_issuer_renewal_template(
             RootIssuerRenewalTemplateRecordMapper::template_to_record(template),
         );
     }
 
     #[must_use]
     pub fn root_issuer_renewal_state(issuer_pid: Principal) -> Option<RootIssuerRenewalState> {
-        AuthState::get_root_issuer_renewal_state(issuer_pid)
+        RootDelegationState::get_root_issuer_renewal_state(issuer_pid)
             .map(RootIssuerRenewalStateRecordMapper::record_to_state)
     }
 
     pub fn upsert_root_issuer_renewal_state(state: RootIssuerRenewalState) {
-        AuthState::upsert_root_issuer_renewal_state(
+        RootDelegationState::upsert_root_issuer_renewal_state(
             RootIssuerRenewalStateRecordMapper::state_to_record(state),
         );
     }
@@ -196,26 +213,26 @@ impl AuthStateOps {
     pub fn chain_key_root_delegation_batch(
         batch_id: [u8; 32],
     ) -> Option<ChainKeyRootDelegationBatch> {
-        AuthState::get_chain_key_root_delegation_batch(batch_id)
+        RootDelegationState::get_chain_key_root_delegation_batch(batch_id)
             .map(ChainKeyRootDelegationBatchRecordMapper::record_to_batch)
     }
 
     #[must_use]
     pub fn chain_key_root_delegation_batches() -> Vec<ChainKeyRootDelegationBatch> {
-        AuthState::list_chain_key_root_delegation_batches()
+        RootDelegationState::list_chain_key_root_delegation_batches()
             .into_iter()
             .map(ChainKeyRootDelegationBatchRecordMapper::record_to_batch)
             .collect()
     }
 
     pub fn upsert_chain_key_root_delegation_batch(batch: ChainKeyRootDelegationBatch) {
-        AuthState::upsert_chain_key_root_delegation_batch(
+        RootDelegationState::upsert_chain_key_root_delegation_batch(
             ChainKeyRootDelegationBatchRecordMapper::batch_to_record(batch),
         );
     }
 
     pub fn prune_chain_key_root_delegation_batches(now_ns: u64) -> usize {
-        AuthState::prune_chain_key_root_delegation_batches(now_ns)
+        RootDelegationState::prune_chain_key_root_delegation_batches(now_ns)
     }
 }
 
@@ -225,6 +242,7 @@ impl AuthStateOps {
 
 #[cfg(test)]
 mod tests {
+    use super::RootDelegationStateOps;
     use super::*;
     use crate::{
         dto::auth::{
@@ -340,48 +358,63 @@ mod tests {
 
     #[test]
     fn active_delegation_proof_round_trips_and_filters_by_time() {
-        AuthStateOps::clear_active_delegation_proof();
+        DelegatedTokenIssuerStateOps::clear_active_delegation_proof();
         let proof = active_proof();
 
-        AuthStateOps::set_active_delegation_proof(proof.clone());
+        DelegatedTokenIssuerStateOps::set_active_delegation_proof(proof.clone());
 
-        assert_eq!(AuthStateOps::active_delegation_proof(19), None);
-        assert_eq!(AuthStateOps::active_delegation_proof(20), Some(proof));
-        assert!(AuthStateOps::active_delegation_proof(99).is_some());
-        assert_eq!(AuthStateOps::active_delegation_proof(100), None);
+        assert_eq!(
+            DelegatedTokenIssuerStateOps::active_delegation_proof(19),
+            None
+        );
+        assert_eq!(
+            DelegatedTokenIssuerStateOps::active_delegation_proof(20),
+            Some(proof)
+        );
+        assert!(DelegatedTokenIssuerStateOps::active_delegation_proof(99).is_some());
+        assert_eq!(
+            DelegatedTokenIssuerStateOps::active_delegation_proof(100),
+            None
+        );
 
-        AuthStateOps::clear_active_delegation_proof();
-        assert_eq!(AuthStateOps::active_delegation_proof(20), None);
+        DelegatedTokenIssuerStateOps::clear_active_delegation_proof();
+        assert_eq!(
+            DelegatedTokenIssuerStateOps::active_delegation_proof(20),
+            None
+        );
     }
 
     #[test]
     fn delegated_auth_proof_epoch_advances_monotonically_from_minimum() {
-        let before = AuthStateOps::delegated_auth_proof_epoch();
+        let before = RootDelegationStateOps::delegated_auth_proof_epoch();
         let minimum = before.saturating_add(5);
 
-        let first = AuthStateOps::advance_delegated_auth_proof_epoch_at_least(minimum);
-        let second = AuthStateOps::advance_delegated_auth_proof_epoch_at_least(1);
+        let first = RootDelegationStateOps::advance_delegated_auth_proof_epoch_at_least(minimum);
+        let second = RootDelegationStateOps::advance_delegated_auth_proof_epoch_at_least(1);
 
         assert_eq!(first, minimum);
         assert_eq!(second, first.saturating_add(1));
-        assert_eq!(AuthStateOps::delegated_auth_proof_epoch(), second);
+        assert_eq!(RootDelegationStateOps::delegated_auth_proof_epoch(), second);
     }
 
     #[test]
     fn delegated_auth_registry_epoch_advances_monotonically_to_floor() {
-        let before = AuthStateOps::delegated_auth_registry_epoch();
+        let before = RootDelegationStateOps::delegated_auth_registry_epoch();
         let minimum = before.saturating_add(5);
 
-        let first = AuthStateOps::advance_delegated_auth_registry_epoch_at_least(minimum);
-        let second = AuthStateOps::advance_delegated_auth_registry_epoch_at_least(1);
+        let first = RootDelegationStateOps::advance_delegated_auth_registry_epoch_at_least(minimum);
+        let second = RootDelegationStateOps::advance_delegated_auth_registry_epoch_at_least(1);
 
         assert_eq!(first, minimum);
         assert_eq!(second, first);
-        assert_eq!(AuthStateOps::delegated_auth_registry_epoch(), second);
+        assert_eq!(
+            RootDelegationStateOps::delegated_auth_registry_epoch(),
+            second
+        );
     }
 
     #[test]
-    fn root_issuer_policy_round_trips_through_auth_state() {
+    fn root_issuer_policy_round_trips_through_root_delegation_state() {
         let policy = RootIssuerPolicy {
             issuer_pid: p(31),
             enabled: true,
@@ -394,14 +427,17 @@ mod tests {
             refresh_after_ratio_bps: 8_000,
         };
 
-        AuthStateOps::upsert_root_issuer_policy(policy.clone());
+        RootDelegationStateOps::upsert_root_issuer_policy(policy.clone());
 
-        assert_eq!(AuthStateOps::root_issuer_policy(p(31)), Some(policy));
-        assert_eq!(AuthStateOps::root_issuer_policy(p(34)), None);
+        assert_eq!(
+            RootDelegationStateOps::root_issuer_policy(p(31)),
+            Some(policy)
+        );
+        assert_eq!(RootDelegationStateOps::root_issuer_policy(p(34)), None);
     }
 
     #[test]
-    fn root_issuer_renewal_template_round_trips_through_auth_state() {
+    fn root_issuer_renewal_template_round_trips_through_root_delegation_state() {
         let template = RootIssuerRenewalTemplate {
             issuer_pid: p(41),
             enabled: true,
@@ -413,17 +449,20 @@ mod tests {
             cert_ttl_ns: 120_000_000_000,
         };
 
-        AuthStateOps::upsert_root_issuer_renewal_template(template.clone());
+        RootDelegationStateOps::upsert_root_issuer_renewal_template(template.clone());
 
         assert_eq!(
-            AuthStateOps::root_issuer_renewal_template(p(41)),
+            RootDelegationStateOps::root_issuer_renewal_template(p(41)),
             Some(template)
         );
-        assert_eq!(AuthStateOps::root_issuer_renewal_template(p(42)), None);
+        assert_eq!(
+            RootDelegationStateOps::root_issuer_renewal_template(p(42)),
+            None
+        );
     }
 
     #[test]
-    fn root_issuer_renewal_state_round_trips_through_auth_state() {
+    fn root_issuer_renewal_state_round_trips_through_root_delegation_state() {
         let state = RootIssuerRenewalState {
             issuer_pid: p(51),
             template_fingerprint: [1; 32],
@@ -434,9 +473,15 @@ mod tests {
             updated_at_ns: 80,
         };
 
-        AuthStateOps::upsert_root_issuer_renewal_state(state.clone());
+        RootDelegationStateOps::upsert_root_issuer_renewal_state(state.clone());
 
-        assert_eq!(AuthStateOps::root_issuer_renewal_state(p(51)), Some(state));
-        assert_eq!(AuthStateOps::root_issuer_renewal_state(p(52)), None);
+        assert_eq!(
+            RootDelegationStateOps::root_issuer_renewal_state(p(51)),
+            Some(state)
+        );
+        assert_eq!(
+            RootDelegationStateOps::root_issuer_renewal_state(p(52)),
+            None
+        );
     }
 }

@@ -1,0 +1,8 @@
+Canic build:
+role: fleet_coordinator
+profile: debug
+environment: local
+build network: local
+workspace: /home/adam/projects/canic
+[WASM]       SIZE   fleet_coordinator/candidate.wasm  code=7.57 MiB (7941498 B)  headroom=2.43 MiB (2544262 B)
+/home/adam/projects/canic/.icp/local/canisters/fleet_coordinator/fleet_coordinator.wasm.gz

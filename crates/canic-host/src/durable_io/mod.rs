@@ -103,6 +103,24 @@ pub fn create_new_bytes_with_parents(path: &Path, bytes: &[u8]) -> io::Result<()
     commit_bytes(path, bytes, FileCommitMode::CreateNewWithParents)
 }
 
+/// Read a bounded regular file without following a final symlink.
+pub fn read_regular_bytes(path: &Path, maximum_bytes: usize) -> io::Result<Vec<u8>> {
+    match read_optional_regular_bytes_bounded(path, maximum_bytes) {
+        Ok(Some(bytes)) => Ok(bytes),
+        Ok(None) => Err(io::Error::from(io::ErrorKind::NotFound)),
+        Err(BoundedRegularFileReadError::Read(RegularFileReadError::Io(error))) => Err(error),
+        Err(error) => Err(io::Error::other(format!(
+            "invalid bounded regular file: {error:?}"
+        ))),
+    }
+}
+
+/// Hold an exclusive kernel lock on a durable regular file until the returned handle drops.
+pub fn lock_file(path: &Path) -> io::Result<fs::File> {
+    lock_regular_file_with_parents(path)
+        .map_err(|error| io::Error::other(format!("cannot lock regular file: {error:?}")))
+}
+
 /// Open and exclusively lock one durable regular no-follow file.
 ///
 /// The lock file and missing parent hierarchy are durably created first. The

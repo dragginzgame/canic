@@ -89,7 +89,7 @@ impl IcpCli {
         O: CandidType + DeserializeOwned,
     {
         let argument = candid::encode_one(input).map_err(IcpManagementCallError::CandidEncode)?;
-        let agent = self.management_agent()?;
+        let agent = self.authenticated_agent()?;
         let response = call_management_update(
             &LiveAgentUpdateBoundary { agent: &agent },
             effective_canister_id,
@@ -99,7 +99,10 @@ impl IcpCli {
         candid::decode_one(&response).map_err(IcpManagementCallError::CandidResponse)
     }
 
-    fn management_agent(&self) -> Result<Agent, IcpManagementCallError> {
+    /// Resolve an agent bound to the selected ICP environment and verified active identity.
+    ///
+    /// The caller owns reviewed effect authority and durable intent before using it.
+    pub fn authenticated_agent(&self) -> Result<Agent, IcpManagementCallError> {
         let environment = self
             .environment
             .as_deref()

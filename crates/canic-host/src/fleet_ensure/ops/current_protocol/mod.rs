@@ -4,6 +4,7 @@
 //! Does not own: journal sequencing, generic canister convergence, or historical recovery.
 //! Boundary: the reviewed action binds one exact Coordinator, Candid contract, Registry, and plan.
 
+mod fresh;
 #[cfg(test)]
 mod tests;
 
@@ -18,8 +19,9 @@ use crate::{
     },
     fleet_ensure::model::{
         CurrentFleetProtocolAction, DesiredCanisterKind, DesiredFleet, DesiredFleetProtocol,
-        DesiredPresence, EnsureAction, FleetEnsureStateRecord,
+        DesiredPresence, EnsureAction, EstatePoolAssetLifecycle, FleetEnsureStateRecord,
     },
+    fleet_ensure::policy::pool_maintenance_update_bound,
     icp::IcpCli,
     release_set::{
         AppConfigSnapshot, ApplicationArtifactEntry, ApplicationArtifactUnion,
@@ -88,6 +90,8 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
+pub(super) use fresh::compile as compile_fresh_protocol;
+
 const COMPONENT_PROVISIONING_ACTION: &str = "fleet-component-provisioning";
 const CURRENT_PROTOCOL_OPERATION_DOMAIN: &[u8] = b"canic.fleet-ensure.current-protocol.v1\0";
 const WASM_STORE_PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
@@ -153,6 +157,8 @@ pub struct CompiledCurrentProtocolStep {
 
 #[derive(CandidType)]
 enum RootCommandFragment {
+    MaintainPool,
+    ImportPoolCanister(canic_core::dto::pool::PoolCanisterRequest),
     AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
     BootstrapStore(RootStoreBootstrapRequest),
     PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
@@ -165,6 +171,8 @@ enum RootCommandFragment {
     reason = "the private decoder mirrors the exact Root command response wire"
 )]
 enum RootCommandResponseFragment {
+    MaintainPool(canic_core::dto::pool::PoolMaintenanceResponse),
+    ImportPoolCanister(canic_core::dto::pool::PoolImportResponse),
     OperationAccepted(OperationReceipt),
     PrepareComponentRegistry(RootComponentRegistryStatusResponse),
 }
@@ -175,6 +183,7 @@ enum RootCommandResponseFragment {
     reason = "the private encoder mirrors the exact Root status request wire"
 )]
 enum RootStatusRequestFragment {
+    Pool(canic_core::dto::pool::CanisterPoolStatusRequest),
     ComponentRegistry(RootComponentRegistryPreparationRequest),
     FleetAuthority,
     Operation(OperationStatusRequest),
@@ -186,6 +195,7 @@ enum RootStatusRequestFragment {
     reason = "the private decoder mirrors the exact Root status response wire"
 )]
 enum RootStatusResponseFragment {
+    Pool(canic_core::dto::pool::CanisterPoolResponse),
     ComponentRegistry(RootComponentRegistryStatusResponse),
     FleetAuthority(FleetSubnetRootAuthority),
     Operation(RootOperationStatusResponse),
@@ -356,69 +366,52 @@ pub(super) fn validate_component_pool_capacity(
     Ok(())
 }
 
-/// Validate one retained controller-preparation action from the superseded
-/// plan shape without granting it current protocol authority.
-///
-/// This is deliberately validation-only: the old action may be closed at a
-/// typed replan boundary, but it is never compiled into a new plan or replayed
-/// against a successor Root.
-pub(in crate::fleet_ensure) fn retained_store_control_request_is_exact(
+/// Compile reviewed reconciliation of exact retained Failed and PendingReset pool assets.
+pub(super) fn compile_pool_reconciliation(
     root: &Path,
     desired: &DesiredFleet,
-    operation_id: &str,
     state: &FleetEnsureStateRecord,
-    root_name: &str,
-    request: &FleetSubnetWasmStoreAdoptionRequest,
-) -> Result<bool, CurrentProtocolError> {
-    Ok(
-        expected_retained_store_control_request(root, desired, operation_id, state, root_name)?
-            .as_ref()
-            == Some(request),
-    )
-}
-
-fn expected_retained_store_control_request(
-    root: &Path,
-    desired: &DesiredFleet,
-    operation_id: &str,
-    state: &FleetEnsureStateRecord,
-    root_name: &str,
-) -> Result<Option<FleetSubnetWasmStoreAdoptionRequest>, CurrentProtocolError> {
-    let principals = desired
-        .canisters
-        .iter()
-        .filter_map(|canister| {
-            retained_principal(desired, state, &canister.name)
-                .map(|principal| (canister.name.clone(), principal))
-        })
-        .collect::<BTreeMap<_, _>>();
-    let operation_id = operation_bytes(operation_id)?;
-    let Some((_name, authority)) =
-        canic_init::compile_root_authorities(root, desired, &principals)?
-            .into_iter()
-            .find(|(name, _authority)| name == root_name)
-    else {
-        return Ok(None);
+    domains: &BTreeMap<String, crate::fleet_ensure::model::EstateFundingDomainObservation>,
+) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
+    let Some(intent) = &desired.protocol else {
+        return Ok(Vec::new());
     };
-    Ok(Some(FleetSubnetWasmStoreAdoptionRequest {
-        operation_id: derived_operation_id(
-            operation_id,
-            b"store-adoption",
-            authority.binding.fleet_subnet_root,
-        ),
-        authority: authority.wasm_store_authority,
-    }))
-}
-
-#[cfg(test)]
-pub(in crate::fleet_ensure) fn expected_retained_store_control_request_for_test(
-    root: &Path,
-    desired: &DesiredFleet,
-    operation_id: &str,
-    state: &FleetEnsureStateRecord,
-    root_name: &str,
-) -> Result<Option<FleetSubnetWasmStoreAdoptionRequest>, CurrentProtocolError> {
-    expected_retained_store_control_request(root, desired, operation_id, state, root_name)
+    let mut actions = Vec::new();
+    for domain in domains.values() {
+        let (Some(pool), Some(principal)) = (&domain.pool, &domain.root_principal) else {
+            continue;
+        };
+        for asset in &pool.assets {
+            if !matches!(
+                asset.lifecycle,
+                EstatePoolAssetLifecycle::PendingReset | EstatePoolAssetLifecycle::Failed
+            ) {
+                continue;
+            }
+            let target = Principal::from_text(principal)
+                .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
+            let canister_id = Principal::from_text(&asset.principal)
+                .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
+            let burn = desired_cycles(
+                "maximum_update_burn_cycles",
+                &desired.maximum_update_burn_cycles,
+            )?;
+            actions.push(bind_action(
+                root,
+                desired,
+                state,
+                intent,
+                CurrentFleetProtocolAction::ReconcilePoolAsset {
+                    request: canic_core::dto::pool::PoolCanisterRequest { canister_id },
+                    minimum_cycles: Cycles::new(pool.readiness_floor_cycles),
+                },
+                target,
+                format!("pool-reconcile-{}", asset.principal),
+                burn,
+            )?);
+        }
+    }
+    Ok(actions)
 }
 
 /// Compile the complete current Store, Registry, Root-mirror, and Component sequence.
@@ -519,6 +512,7 @@ fn bind_unapplied_actions(
     compiled: Vec<CompiledCurrentProtocolStep>,
     per_action_burn_cycles: u128,
 ) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
+    let mut provisioning_pending = false;
     compiled
         .into_iter()
         .map(|step| {
@@ -534,15 +528,31 @@ fn bind_unapplied_actions(
             )
         })
         .filter_map(|action| {
-            match action
-                .and_then(|action| observe(icp, root, &action).map(|observed| (action, observed)))
-            {
-                Ok((_action, observed)) if observed.applied => None,
-                Ok((action, _)) => Some(Ok(action)),
+            let action = match action {
+                Ok(action) => action,
+                Err(error) => return Some(Err(error)),
+            };
+            // Provisioning consumes Ready assets. Its following reserve observation
+            // must survive planning even when the reserve is currently full.
+            if provisioning_pending && is_pool_readiness_action(&action) {
+                return Some(Ok(action));
+            }
+            match observe(icp, root, &action) {
+                Ok(observed) if observed.applied => None,
+                Ok(_) => {
+                    provisioning_pending |= matches!(&action, EnsureAction::FleetProtocol { action, .. }
+                        if matches!(action.as_ref(), CurrentFleetProtocolAction::ProvisionComponents { .. }));
+                    Some(Ok(action))
+                }
                 Err(error) => Some(Err(error)),
             }
         })
         .collect()
+}
+
+fn is_pool_readiness_action(action: &EnsureAction) -> bool {
+    matches!(action, EnsureAction::FleetProtocol { action, .. }
+        if matches!(action.as_ref(), CurrentFleetProtocolAction::MaintainPoolReadiness { .. } | CurrentFleetProtocolAction::ObservePoolReadiness { .. }))
 }
 
 /// Compile the exact current Store, Registry, mirror and Component order without transport.
@@ -738,6 +748,45 @@ pub fn compile_current_protocol_sequence(
         name: COMPONENT_PROVISIONING_ACTION.to_string(),
         target: coordinator_principal,
     });
+    for authority in root_authorities {
+        let target = authority.binding.fleet_subnet_root;
+        let minimum_ready = authority.binding.limits.canister_pool.minimum_size;
+        let readiness_floor = authority
+            .binding
+            .limits
+            .canister_pool
+            .canister_cycles
+            .clone();
+        let action = if !desired
+            .bootstrap
+            .as_ref()
+            .is_some_and(|input| input.fresh_estate)
+            && authority
+                .binding
+                .authority
+                .binding
+                .fleet
+                .fleet
+                .canonical_network_id
+                == canic_core::ids::CanonicalNetworkId::ic_mainnet()
+        {
+            CurrentFleetProtocolAction::MaintainPoolReadiness {
+                maximum_updates: pool_maintenance_update_bound(minimum_ready),
+                minimum_ready,
+                readiness_floor,
+            }
+        } else {
+            CurrentFleetProtocolAction::ObservePoolReadiness {
+                minimum_ready,
+                readiness_floor,
+            }
+        };
+        actions.push(CompiledCurrentProtocolStep {
+            action,
+            name: format!("pool-readiness-{target}"),
+            target,
+        });
+    }
     Ok(actions)
 }
 
@@ -779,7 +828,8 @@ struct ComponentOperationAuthority<'a> {
 
 const fn current_protocol_stage(action: &CurrentFleetProtocolAction) -> u8 {
     match action {
-        CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
+        CurrentFleetProtocolAction::ReconcilePoolAsset { .. }
+        | CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
         | CurrentFleetProtocolAction::PublishStoreChunk { .. }
         | CurrentFleetProtocolAction::StageStoreManifest { .. }
         | CurrentFleetProtocolAction::AdoptStore { .. }
@@ -790,6 +840,8 @@ const fn current_protocol_stage(action: &CurrentFleetProtocolAction) -> u8 {
         CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => 4,
         CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => 5,
         CurrentFleetProtocolAction::ProvisionComponents { .. } => 6,
+        CurrentFleetProtocolAction::MaintainPoolReadiness { .. }
+        | CurrentFleetProtocolAction::ObservePoolReadiness { .. } => 7,
     }
 }
 
@@ -855,6 +907,15 @@ fn bind_action(
     name: String,
     maximum_execution_burn_cycles: u128,
 ) -> Result<EnsureAction, CurrentProtocolError> {
+    let maximum_execution_burn_cycles = match &action {
+        CurrentFleetProtocolAction::ObservePoolReadiness { .. } => 0,
+        CurrentFleetProtocolAction::MaintainPoolReadiness {
+            maximum_updates, ..
+        } => maximum_execution_burn_cycles
+            .checked_mul(u128::from(*maximum_updates))
+            .ok_or(CurrentProtocolError::ResponseMismatch)?,
+        _ => maximum_execution_burn_cycles,
+    };
     let target_kind = action.target_kind();
     let configured = desired
         .canisters
@@ -905,6 +966,57 @@ pub(super) fn observe(
 ) -> Result<EffectObservation, CurrentProtocolError> {
     let resolved = ResolvedProtocolAction::from_action(root, action)?;
     match resolved.action {
+        CurrentFleetProtocolAction::MaintainPoolReadiness {
+            minimum_ready,
+            readiness_floor,
+            ..
+        }
+        | CurrentFleetProtocolAction::ObservePoolReadiness {
+            minimum_ready,
+            readiness_floor,
+        } => observe_pool_readiness(icp, &resolved, *minimum_ready, readiness_floor.clone()),
+        CurrentFleetProtocolAction::ReconcilePoolAsset {
+            request,
+            minimum_cycles,
+        } => {
+            let mut start_after = None;
+            for _ in 0..crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS {
+                let response: RootStatusResponseFragment = query_with_candid(
+                    icp,
+                    &resolved.candid_path,
+                    resolved.target,
+                    protocol::CANIC_ROOT_STATUS,
+                    &RootStatusRequestFragment::Pool(
+                        canic_core::dto::pool::CanisterPoolStatusRequest {
+                            start_after,
+                            limit: 256,
+                        },
+                    ),
+                )?;
+                let RootStatusResponseFragment::Pool(page) = response else {
+                    return Err(CurrentProtocolError::ResponseMismatch);
+                };
+                if let Some(asset) = page
+                    .entries
+                    .iter()
+                    .find(|asset| asset.canister_id == request.canister_id)
+                {
+                    return observation(
+                        asset.status == canic_core::dto::pool::CanisterPoolAssetStatus::Ready
+                            && asset.cycles >= *minimum_cycles,
+                        asset,
+                    );
+                }
+                let Some(next) = page.next_start_after else {
+                    return Err(CurrentProtocolError::ResponseMismatch);
+                };
+                if start_after.is_some_and(|previous| next <= previous) {
+                    return Err(CurrentProtocolError::ResponseMismatch);
+                }
+                start_after = Some(next);
+            }
+            Err(CurrentProtocolError::ResponseMismatch)
+        }
         CurrentFleetProtocolAction::ActivateRegistry {
             expected_registry, ..
         }
@@ -1103,6 +1215,34 @@ pub(super) fn apply(
 ) -> Result<EffectOutcome, CurrentProtocolError> {
     let resolved = ResolvedProtocolAction::from_action(root, action)?;
     let receipt = match resolved.action {
+        CurrentFleetProtocolAction::ObservePoolReadiness { .. } => Vec::new(),
+        CurrentFleetProtocolAction::MaintainPoolReadiness { .. } => {
+            let response: RootCommandResponseFragment = call_with_candid(
+                icp,
+                &resolved.candid_path,
+                resolved.target,
+                protocol::CANIC_ROOT_COMMAND,
+                &RootCommandFragment::MaintainPool,
+            )?;
+            let RootCommandResponseFragment::MaintainPool(_) = response else {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            };
+            Vec::new()
+        }
+        CurrentFleetProtocolAction::ReconcilePoolAsset { request, .. } => {
+            let response: RootCommandResponseFragment = call_with_candid(
+                icp,
+                &resolved.candid_path,
+                resolved.target,
+                protocol::CANIC_ROOT_COMMAND,
+                &RootCommandFragment::ImportPoolCanister(*request),
+            )?;
+            if !matches!(response, RootCommandResponseFragment::ImportPoolCanister(canic_core::dto::pool::PoolImportResponse::Imported { canister_id }) if canister_id == request.canister_id)
+            {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            }
+            request.canister_id.as_slice().to_vec()
+        }
         CurrentFleetProtocolAction::ActivateRegistry {
             expected_version,
             request,
@@ -1281,6 +1421,73 @@ impl<'a> ResolvedProtocolAction<'a> {
             target,
         })
     }
+}
+
+fn observe_pool_readiness(
+    icp: &IcpCli,
+    resolved: &ResolvedProtocolAction<'_>,
+    minimum_ready: u32,
+    readiness_floor: Cycles,
+) -> Result<EffectObservation, CurrentProtocolError> {
+    let mut start_after = None;
+    let mut assets = Vec::new();
+    let mut identities = std::collections::BTreeSet::new();
+    for _ in 0..crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS {
+        let response: RootStatusResponseFragment = query_with_candid(
+            icp,
+            &resolved.candid_path,
+            resolved.target,
+            protocol::CANIC_ROOT_STATUS,
+            &RootStatusRequestFragment::Pool(canic_core::dto::pool::CanisterPoolStatusRequest {
+                start_after,
+                limit: 256,
+            }),
+        )?;
+        let RootStatusResponseFragment::Pool(page) = response else {
+            return Err(CurrentProtocolError::ResponseMismatch);
+        };
+        if page.config.minimum_size != minimum_ready
+            || page.config.canister_cycles != readiness_floor
+        {
+            return Err(CurrentProtocolError::ResponseMismatch);
+        }
+        for asset in page.entries {
+            if !identities.insert(asset.canister_id)
+                || identities.len() > crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS
+            {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            }
+            assets.push(asset);
+        }
+        if let Some(next) = page.next_start_after {
+            if start_after.is_some_and(|previous| next <= previous) {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            }
+            start_after = Some(next);
+            continue;
+        }
+        let ready = assets
+            .iter()
+            .filter(|asset| {
+                asset.status == canic_core::dto::pool::CanisterPoolAssetStatus::Ready
+                    && asset.cycles >= readiness_floor
+            })
+            .count();
+        let mut observed = observation(
+            ready >= minimum_ready as usize && page.pending_creation.is_none(),
+            &(assets, page.pending_creation),
+        )?;
+        if !observed.applied
+            && matches!(
+                resolved.action,
+                CurrentFleetProtocolAction::MaintainPoolReadiness { .. }
+            )
+        {
+            observed.retry = EffectRetry::ContinuePoolMaintenance;
+        }
+        return Ok(observed);
+    }
+    Err(CurrentProtocolError::ResponseMismatch)
 }
 
 fn observation<T: CandidType>(

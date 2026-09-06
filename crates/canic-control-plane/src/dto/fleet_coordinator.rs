@@ -76,16 +76,13 @@ pub enum CoordinatorCommand {
     RemoveRoot(FleetSubnetRootDrainingReservationRequest),
     RequestRootFunding(FleetRootFundingRequest),
     ResumeAuthoritySnapshot(AuthoritySnapshotRequest),
+    Retire(canic_core::dto::fleet_registry::FleetRetirementRequest),
     SetRootFunding(SetCyclesFundingRequest),
     StageFundingPolicyRotationRoot(FleetFundingPolicyRotationStageRootRequest),
 }
 
 /// Closed correlated success union for Fleet Coordinator commands.
 #[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the accepted Candid union keeps each existing command result as its direct payload"
-)]
 pub enum CoordinatorCommandResponse {
     AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgement),
     ActivateRegistry(FleetRegistryActivationResponse),
@@ -97,6 +94,7 @@ pub enum CoordinatorCommandResponse {
     PrepareRootDeletionExecution(FleetSubnetRootDeletionExecutionResponse),
     RequestRootFunding(FleetRootFundingResponse),
     ResumeAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
+    Retire(canic_core::dto::fleet_registry::FleetRetirementStatus),
     SetRootFunding(SetStateResponse<bool>),
 }
 
@@ -170,6 +168,7 @@ pub enum CoordinatorOperationStatusResponse {
     Admission(FleetAdmissionOperationStatusResponse),
     ComponentProvisioning(FleetComponentProvisioningStatusResponse),
     FundingPolicyRotation(FleetFundingPolicyRotationStatusResponse),
+    Retirement(canic_core::dto::fleet_registry::FleetRetirementStatus),
     RootRemoval(CoordinatorRootRemovalOperationStatus),
 }
 

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "label": "local-only",
+  "wasm_sha256": "9dcd2ee95d8f52bb73cf22b90e58d81b350bb5bf460bb03a5616797c87afd233",
+  "named_wasm_sha256": "91da0c7646d10642f7fa46d43dc9d525c524732f83e7843b79c2783e8f3463f8",
+  "executable_sections_sha256": "6d632c4b72cc0ac8eddf5b08cfdf6ed7585804dd96880cd91a732a975efc53bd",
+  "named_executable_sections_match": false,
+  "raw_bytes": 2478135,
+  "gzip_bytes": 882682,
+  "code_section_bytes": 2245259,
+  "data_section_bytes": 190479,
+  "defined_functions": 4196,
+  "named_items": 4519,
+  "state_symbols": {
+    "issuer": [],
+    "root_delegation": [],
+    "local_authorization": [
+      "<canic_core[14b9feb3a0be4fa1]::ops::storage::auth::LocalApplicationAuthorizationStateOps>::application_session",
+      "<canic_core[14b9feb3a0be4fa1]::ops::storage::auth::LocalApplicationAuthorizationStateOps>::application_session_occupancy",
+      "<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::LOCAL_APPLICATION_AUTHORIZATION_STATE::{closure#0} as core[9b3796e30d99ddb7]::ops::function::FnOnce<(core[9b3796e30d99ddb7]::option::Option<&mut core[9b3796e30d99ddb7]::option::Option<core[9b3796e30d99ddb7]::cell::RefCell<ic_stable_structures[9996614fcec25b22]::cell::Cell<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::records::LocalApplicationAuthorizationStateRecord, ic_stable_structures[9996614fcec25b22]::memory_manager::VirtualMemory<ic_stable_structures[9996614fcec25b22]::ic0_memory::Ic0StableMemory>>>>>,)>>::call_once",
+      "<core[9b3796e30d99ddb7]::iter::adapters::GenericShunt<core[9b3796e30d99ddb7]::iter::adapters::map::Map<alloc[a941a2cfab7efbc4]::vec::into_iter::IntoIter<usize>, <canic_core[14b9feb3a0be4fa1]::ops::storage::auth::LocalApplicationAuthorizationStateOps>::application_session_page::{closure#1}>, core[9b3796e30d99ddb7]::result::Result<core[9b3796e30d99ddb7]::convert::Infallible, canic_core[14b9feb3a0be4fa1]::ops::storage::auth::application_sessions::ApplicationSessionStateError>> as core[9b3796e30d99ddb7]::iter::traits::iterator::Iterator>::next",
+      "<ic_stable_structures[9996614fcec25b22]::cell::Cell<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::records::LocalApplicationAuthorizationStateRecord, ic_stable_structures[9996614fcec25b22]::memory_manager::VirtualMemory<ic_stable_structures[9996614fcec25b22]::ic0_memory::Ic0StableMemory>>>::flush_value",
+      "<ic_stable_structures[9996614fcec25b22]::cell::Cell<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::records::LocalApplicationAuthorizationStateRecord, ic_stable_structures[9996614fcec25b22]::memory_manager::VirtualMemory<ic_stable_structures[9996614fcec25b22]::ic0_memory::Ic0StableMemory>>>::new",
+      "core[9b3796e30d99ddb7]::ptr::drop_glue::<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::records::LocalApplicationAuthorizationStateData>"
+    ]
+  },
+  "linked_state_symbols": {
+    "issuer": [],
+    "root_delegation": [],
+    "local_authorization": [
+      "<&mut ciborium[91be003c53129eed]::de::Deserializer<&[u8]> as serde_core[acbac3b95aaea78]::de::Deserializer>::deserialize_map::<<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::records::LocalApplicationAuthorizationStateRecord as serde_core[acbac3b95aaea78]::de::Deserialize>::deserialize::__Visitor>",
+      "<canic_core[14b9feb3a0be4fa1]::ops::storage::auth::LocalApplicationAuthorizationStateOps>::application_session",
+      "<canic_core[14b9feb3a0be4fa1]::ops::storage::auth::LocalApplicationAuthorizationStateOps>::application_session_occupancy",
+      "<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::LOCAL_APPLICATION_AUTHORIZATION_STATE::{closure#0} as core[9b3796e30d99ddb7]::ops::function::FnOnce<(core[9b3796e30d99ddb7]::option::Option<&mut core[9b3796e30d99ddb7]::option::Option<core[9b3796e30d99ddb7]::cell::RefCell<ic_stable_structures[9996614fcec25b22]::cell::Cell<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::records::LocalApplicationAuthorizationStateRecord, ic_stable_structures[9996614fcec25b22]::memory_manager::VirtualMemory<ic_stable_structures[9996614fcec25b22]::ic0_memory::Ic0StableMemory>>>>>,)>>::call_once",
+      "<core[9b3796e30d99ddb7]::iter::adapters::GenericShunt<core[9b3796e30d99ddb7]::iter::adapters::map::Map<alloc[a941a2cfab7efbc4]::vec::into_iter::IntoIter<usize>, <canic_core[14b9feb3a0be4fa1]::ops::storage::auth::LocalApplicationAuthorizationStateOps>::application_session_page::{closure#1}>, core[9b3796e30d99ddb7]::result::Result<core[9b3796e30d99ddb7]::convert::Infallible, canic_core[14b9feb3a0be4fa1]::ops::storage::auth::application_sessions::ApplicationSessionStateError>> as core[9b3796e30d99ddb7]::iter::traits::iterator::Iterator>::next",
+      "<ic_stable_structures[9996614fcec25b22]::cell::Cell<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::records::LocalApplicationAuthorizationStateRecord, ic_stable_structures[9996614fcec25b22]::memory_manager::VirtualMemory<ic_stable_structures[9996614fcec25b22]::ic0_memory::Ic0StableMemory>>>::flush_value",
+      "<ic_stable_structures[9996614fcec25b22]::cell::Cell<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::records::LocalApplicationAuthorizationStateRecord, ic_stable_structures[9996614fcec25b22]::memory_manager::VirtualMemory<ic_stable_structures[9996614fcec25b22]::ic0_memory::Ic0StableMemory>>>::new",
+      "core[9b3796e30d99ddb7]::ptr::drop_glue::<canic_core[14b9feb3a0be4fa1]::storage::stable::auth::records::LocalApplicationAuthorizationStateData>"
+    ]
+  },
+  "candid_sha256": "cbc92f76b4540df30e3c83211459bb79f2c5efe9d0399a138d5d66b8fd4acd48"
+}

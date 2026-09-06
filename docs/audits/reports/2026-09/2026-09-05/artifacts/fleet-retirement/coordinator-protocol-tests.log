@@ -1,0 +1,14 @@
+   Compiling canic v0.110.7 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 05s
+     Running tests/protocol_surface.rs (target/debug/deps/protocol_surface-ceb99cdac1fb9db0)
+
+running 5 tests
+test fleet_coordinator_status_surface_is_profile_exact ... ok
+test fleet_coordinator_command_surface_is_profile_exact ... ok
+test fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_types ... ok
+test fleet_coordinator_canonical_did_parses ... ok
+test fleet_coordinator_retirement_types_match_rust ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.01s
+

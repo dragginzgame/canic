@@ -67,7 +67,9 @@ pub mod memory {
     }
 
     pub mod auth {
-        pub const AUTH_STATE_ID: u8 = 34;
+        pub const LOCAL_APPLICATION_AUTHORIZATION_STATE_ID: u8 = 34;
+        pub const DELEGATED_TOKEN_ISSUER_STATE_ID: u8 = 66;
+        pub const ROOT_DELEGATION_STATE_ID: u8 = 67;
     }
 
     pub mod replay {
@@ -134,7 +136,10 @@ pub mod memory {
 use memory::{
     application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
     async_job_recovery::ASYNC_JOB_RECOVERY_ID,
-    auth::AUTH_STATE_ID,
+    auth::{
+        DELEGATED_TOKEN_ISSUER_STATE_ID, LOCAL_APPLICATION_AUTHORIZATION_STATE_ID,
+        ROOT_DELEGATION_STATE_ID,
+    },
     authority_restore::AUTHORITY_RESTORE_FENCE_ID,
     blob_storage::{
         BLOB_STORAGE_BILLING_ID, BLOB_STORAGE_GATEWAY_PRINCIPALS_ID,
@@ -208,7 +213,11 @@ const CORE_RUNTIME_CHILDREN_IDS: &[MemoryId] = &[MemoryId::new(RUNTIME_CANISTER_
 const CORE_RUNTIME_BINDINGS_IDS: &[MemoryId] = &[MemoryId::new(RUNTIME_BINDINGS_ID)];
 const CORE_FLEET_STATE_IDS: &[MemoryId] = &[MemoryId::new(FLEET_STATE_ID)];
 const CORE_FLEET_ACTIVATION_IDS: &[MemoryId] = &[MemoryId::new(FLEET_ACTIVATION_ID)];
-const CORE_AUTH_STATE_IDS: &[MemoryId] = &[MemoryId::new(AUTH_STATE_ID)];
+const CORE_DELEGATED_TOKEN_ISSUER_STATE_IDS: &[MemoryId] =
+    &[MemoryId::new(DELEGATED_TOKEN_ISSUER_STATE_ID)];
+const CORE_LOCAL_APPLICATION_AUTHORIZATION_STATE_IDS: &[MemoryId] =
+    &[MemoryId::new(LOCAL_APPLICATION_AUTHORIZATION_STATE_ID)];
+const CORE_ROOT_DELEGATION_STATE_IDS: &[MemoryId] = &[MemoryId::new(ROOT_DELEGATION_STATE_ID)];
 const CORE_REPLAY_RECEIPTS_IDS: &[MemoryId] = &[MemoryId::new(REPLAY_RECEIPTS_ID)];
 const CORE_CYCLES_IDS: &[MemoryId] = &[
     MemoryId::new(CYCLES_TRACKER_ID),
@@ -345,9 +354,19 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         CORE_FLEET_ACTIVATION_IDS,
     ),
     definition(
-        StateAllocationKey::CoreAuthState,
+        StateAllocationKey::CoreLocalApplicationAuthorizationState,
         AllocationOwner::CanicCore,
-        CORE_AUTH_STATE_IDS,
+        CORE_LOCAL_APPLICATION_AUTHORIZATION_STATE_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreDelegatedTokenIssuerState,
+        AllocationOwner::CanicCore,
+        CORE_DELEGATED_TOKEN_ISSUER_STATE_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreRootDelegationState,
+        AllocationOwner::CanicCore,
+        CORE_ROOT_DELEGATION_STATE_IDS,
     ),
     definition(
         StateAllocationKey::CoreReplayReceipts,

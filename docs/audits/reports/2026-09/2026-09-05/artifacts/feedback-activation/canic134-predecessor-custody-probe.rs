@@ -1,0 +1,488 @@
+// Historical qualification overlay, compiled only inside immutable v0.110.6's
+// existing retirement test module. No predecessor production source is changed.
+use super::*;
+use canic_cycle_custody::dto::{
+    CustodyAsset, CustodyError, CustodyLedger, CustodyPlan, CustodyProgress, CustodyReceipt,
+    CustodyStatus,
+};
+use ic_management_canister_types::{CanisterInfoArgs, CanisterInfoResult, CanisterSettings};
+use ic_testkit::pocket_ic::common::rest::RawEffectivePrincipal;
+
+const ROOT_LEDGER: u128 = 5_000_000_000_000;
+const COORDINATOR_LEDGER: u128 = 3_000_000_000_000;
+const LEDGER_FEE: u128 = 100_000_000;
+const MAX_RETIREMENT_DEBIT: u128 = 5_000_000_000_000;
+const MAX_STORE_RESIDUAL: u128 = 500_000_000_000;
+
+pub(super) struct Capture {
+    root: Principal,
+    ledger: Principal,
+    operator: Principal,
+    assets: Vec<Principal>,
+    native: u128,
+    root_module: Vec<u8>,
+    coordinator_module: Vec<u8>,
+}
+
+#[derive(CandidType)]
+struct LedgerInit {
+    canister_ids: Vec<Principal>,
+    expected_root: Principal,
+    expected_subnet: Principal,
+    initial_balances: Option<Vec<AccountBalance>>,
+    withdrawal_fee: Option<Nat>,
+}
+
+#[derive(CandidType)]
+struct AccountBalance {
+    balance: Nat,
+    owner: Principal,
+}
+
+fn info(pic: &PocketIc, canister: Principal) -> CanisterInfoResult {
+    let bytes = pic
+        .query_call_with_effective_principal(
+            Principal::management_canister(),
+            RawEffectivePrincipal::CanisterId(canister.as_slice().to_vec()),
+            Principal::anonymous(),
+            "canister_info",
+            encode_one(CanisterInfoArgs {
+                canister_id: canister,
+                num_requested_changes: Some(1),
+            })
+            .unwrap(),
+        )
+        .expect("exact management history");
+    decode_one(&bytes).expect("typed management history")
+}
+
+fn balance(pic: &PocketIc, canister: Principal, controller: Principal) -> u128 {
+    if controller == operator() {
+        let status = pic
+            .canister_status(canister, Some(controller))
+            .expect("operator-owned infrastructure");
+        assert_eq!(status.reserved_cycles, Nat::from(0_u8));
+        u128::try_from(status.cycles.0).unwrap()
+    } else {
+        let status = inspect(pic, controller, canister);
+        assert_eq!(status.reserved_cycles, Nat::from(0_u8));
+        u128::try_from(status.cycles.0).unwrap()
+    }
+}
+
+fn inspect(pic: &PocketIc, root: Principal, canister_id: Principal) -> CanisterStatusResponse {
+    let response = root_command_as(
+        pic,
+        root,
+        operator(),
+        RootCommandFragment::InspectCanister(CanisterInspectionRequest { canister_id }),
+    )
+    .expect("operator obtains protected management status from genuine predecessor Root");
+    let RootCommandResponseFragment::InspectCanister(status) = response else {
+        panic!("historical Root inspection response correlation");
+    };
+    status
+}
+
+fn operator() -> Principal {
+    Principal::self_authenticating([0xe1; 32])
+}
+
+pub(super) fn coordinator_status(
+    pic: &PocketIc,
+    source: Principal,
+    request: CoordinatorStatusRequest,
+) -> Result<CoordinatorStatusResponse, Error> {
+    pic.query_candid_as(
+        source,
+        operator(),
+        canic::protocol::CANIC_STATUS,
+        (request,),
+    )
+    .expect("operator queries historical Coordinator")
+}
+
+pub(super) fn coordinator_command(
+    pic: &PocketIc,
+    source: Principal,
+    request: CoordinatorCommand,
+) -> Result<CoordinatorCommandResponse, Error> {
+    pic.update_candid_as(
+        source,
+        operator(),
+        canic::protocol::CANIC_COORDINATOR_COMMAND,
+        (request,),
+    )
+    .expect("operator commands historical Coordinator")
+}
+
+pub(super) fn root_status(
+    pic: &PocketIc,
+    source: Principal,
+    request: RootStatusRequestFragment,
+) -> Result<RootStatusResponseFragment, Error> {
+    pic.query_candid_as(
+        source,
+        operator(),
+        canic::protocol::CANIC_STATUS,
+        (request,),
+    )
+    .expect("operator queries historical Root")
+}
+
+pub(super) fn root_pool_status(pic: &PocketIc, source: Principal) -> CanisterPoolResponse {
+    root_pool_status_as(pic, source, operator())
+}
+
+pub(super) fn capture(fixture: &ActiveComponentRegistryFixture) -> Capture {
+    let pic = fixture.pic();
+    let operator = operator();
+    // Transfer the old test fixture to a named operator before the initial
+    // inventory. All qualified retirement commands then use that operator.
+    for source in [fixture.root, fixture.coordinator] {
+        pic.update_canister_settings(
+            source,
+            Some(Principal::anonymous()),
+            CanisterSettings {
+                controllers: Some(vec![operator]),
+                ..CanisterSettings::default()
+            },
+        )
+        .expect("initialize named fixture controller before qualification");
+    }
+    let pool = root_pool_status(pic, fixture.root);
+    assert!(pool.next_start_after.is_none());
+    assert_eq!(pool.entries.len(), pool.tracked as usize);
+    assert!(pool.pending_creation.is_none());
+    assert!(pool.pending_handoff.is_none());
+    assert_eq!(pool.completed_handoffs, 0);
+    assert_eq!(
+        pool.claimed + pool.recycling + pool.handing_off + pool.pending_reset,
+        0
+    );
+    assert!(pool.ready >= pool.config.minimum_size);
+    assert_eq!(crate::pic::root_funding_authority().icp_refill, None);
+    let assets = pool
+        .entries
+        .iter()
+        .filter(|entry| entry.canister_id != fixture.wasm_store)
+        .map(|entry| entry.canister_id)
+        .collect::<Vec<_>>();
+    assert_eq!(assets.len(), PREPAID_POOL_ASSET_COUNT);
+    assert!(assets.contains(&fixture.issuer.canister_id));
+    assert!(assets.contains(&fixture.verifier.canister_id));
+    let ledger = pic.create_canister_with_settings(Some(operator), None);
+    pic.add_cycles(ledger, 10_000_000_000_000);
+    // The ledger boundary fixture holds default accounts of the actual old owners.
+    // It is separate from the unmodified historical role modules and their wire protocol.
+    pic.install_canister(
+        ledger,
+        std::fs::read(std::env::var("CANIC134_LEDGER_WASM").unwrap()).unwrap(),
+        encode_one(LedgerInit {
+            canister_ids: vec![fixture.root],
+            expected_root: fixture.root,
+            expected_subnet: pic.get_subnet(fixture.root).unwrap(),
+            initial_balances: Some(vec![
+                AccountBalance {
+                    owner: fixture.root,
+                    balance: ROOT_LEDGER.into(),
+                },
+                AccountBalance {
+                    owner: fixture.coordinator,
+                    balance: COORDINATOR_LEDGER.into(),
+                },
+            ]),
+            withdrawal_fee: Some(LEDGER_FEE.into()),
+        })
+        .unwrap(),
+        Some(operator),
+    );
+    let native = balance(pic, fixture.root, operator)
+        + balance(pic, fixture.coordinator, operator)
+        + balance(pic, fixture.wasm_store, fixture.root)
+        + assets
+            .iter()
+            .map(|asset| balance(pic, *asset, fixture.root))
+            .sum::<u128>();
+    let capture = Capture {
+        root: fixture.root,
+        ledger,
+        operator,
+        assets,
+        native,
+        root_module: info(pic, fixture.root).module_hash.unwrap(),
+        coordinator_module: info(pic, fixture.coordinator).module_hash.unwrap(),
+    };
+    eprintln!(
+        "CANIC134 initial native={native}; Root Ledger={ROOT_LEDGER}; Coordinator Ledger={COORDINATOR_LEDGER}; pool={}",
+        capture.assets.len()
+    );
+    capture
+}
+
+fn custody(
+    pic: &PocketIc,
+    captured: &Capture,
+    source: Principal,
+    assets: &[Principal],
+    source_balance: u128,
+    operator_balance: u128,
+    operation: [u8; 32],
+) -> (CustodyPlan, CustodyReceipt) {
+    let reviewed_assets = assets
+        .iter()
+        .map(|asset| {
+            let status = inspect(pic, source, *asset);
+            let history = info(pic, *asset);
+            assert!(status.module_hash.is_none());
+            assert_eq!(status.reserved_cycles, Nat::from(0_u8));
+            CustodyAsset {
+                canister: *asset,
+                subnet: pic.get_subnet(*asset).unwrap(),
+                controllers: status.settings.controllers,
+                last_change_version: history.recent_changes.last().unwrap().canister_version,
+                change_count: history.total_num_changes,
+                initial_cycles: u128::try_from(status.cycles.0).unwrap(),
+                maximum_burn: 100_000_000_000,
+            }
+        })
+        .collect();
+    let before = pic
+        .canister_status(source, Some(captured.operator))
+        .unwrap();
+    let wasm = std::fs::read(std::env::var("CANIC134_CUSTODY_WASM").unwrap()).unwrap();
+    let plan = CustodyPlan {
+        operation,
+        release_build: [0xe2; 32],
+        source,
+        source_subnet: pic.get_subnet(source).unwrap(),
+        operator: captured.operator,
+        predecessor_module: before.module_hash.unwrap().try_into().unwrap(),
+        custody_module: canic_core::cdk::utils::hash::sha256_bytes(&wasm)
+            .try_into()
+            .unwrap(),
+        source_version_before_install: before.version,
+        source_changes_before_install: info(pic, source).total_num_changes,
+        initial_source_cycles: u128::try_from(before.cycles.0).unwrap(),
+        maximum_source_burn: 100_000_000_000,
+        assets: reviewed_assets,
+        ledger: CustodyLedger {
+            canister: captured.ledger,
+            source_balance,
+            operator_balance,
+            fee: LEDGER_FEE,
+            created_at_time: pic.get_time().as_nanos_since_unix_epoch(),
+        },
+    };
+    assert_eq!(
+        plan.predecessor_module.as_slice(),
+        if source == captured.root {
+            captured.root_module.as_slice()
+        } else {
+            captured.coordinator_module.as_slice()
+        }
+    );
+    pic.reinstall_canister(
+        source,
+        wasm.clone(),
+        encode_one(&plan).unwrap(),
+        Some(captured.operator),
+    )
+    .unwrap();
+    let installed: Result<CustodyStatus, CustodyError> = pic
+        .query_candid_as(
+            source,
+            captured.operator,
+            "canic_custody_status",
+            (operation,),
+        )
+        .unwrap();
+    assert_eq!(
+        installed.unwrap(),
+        CustodyStatus {
+            operation,
+            plan_sha256: canic_cycle_custody::plan_digest(&plan),
+            progress: CustodyProgress::Pending,
+        }
+    );
+    let installed_changes = info(pic, source).total_num_changes;
+    assert_eq!(installed_changes, plan.source_changes_before_install + 1);
+    // Drop the first progress result, then restore the same operation.
+    let _: Result<CustodyProgress, CustodyError> = pic
+        .update_candid_as(
+            source,
+            captured.operator,
+            "canic_custody_step",
+            (operation,),
+        )
+        .unwrap();
+    pic.upgrade_canister(
+        source,
+        wasm.clone(),
+        encode_one(()).unwrap(),
+        Some(captured.operator),
+    )
+    .unwrap();
+    let (): () = pic
+        .update_candid(captured.ledger, "lose_next_transfer_reply", ())
+        .unwrap();
+    let mut lost = 0;
+    let mut result = None;
+    for _ in 0..(assets.len() * 2 + 7) {
+        let progress: Result<CustodyProgress, CustodyError> = pic
+            .update_candid_as(
+                source,
+                captured.operator,
+                "canic_custody_step",
+                (operation,),
+            )
+            .unwrap();
+        match progress {
+            Ok(CustodyProgress::Pending) => {}
+            Ok(CustodyProgress::Complete(receipt)) => {
+                result = Some(receipt);
+                break;
+            }
+            Err(CustodyError::CallFailed) => {
+                lost += 1;
+                assert_eq!(lost, 1);
+                pic.upgrade_canister(
+                    source,
+                    wasm.clone(),
+                    encode_one(()).unwrap(),
+                    Some(captured.operator),
+                )
+                .unwrap();
+            }
+            other => panic!("custody failed: {other:?}"),
+        }
+    }
+    let receipt = result.expect("bounded custody completion");
+    assert_eq!(lost, 1);
+    assert_eq!(receipt.assets.len(), assets.len());
+    for asset in &receipt.assets {
+        let status = pic
+            .canister_status(asset.canister, Some(captured.operator))
+            .unwrap();
+        assert!(status.module_hash.is_none());
+        assert!(status.settings.controllers.contains(&captured.operator));
+        assert!(
+            !status
+                .settings
+                .controllers
+                .contains(&Principal::anonymous())
+        );
+    }
+    let replay: Result<CustodyProgress, CustodyError> = pic
+        .update_candid_as(
+            source,
+            captured.operator,
+            "canic_custody_step",
+            (operation,),
+        )
+        .unwrap();
+    assert_eq!(replay, Ok(CustodyProgress::Complete(receipt.clone())));
+    assert_eq!(info(pic, source).total_num_changes, installed_changes + 2);
+    (plan, receipt)
+}
+
+pub(super) fn finish(
+    fixture: &ActiveComponentRegistryFixture,
+    captured: Capture,
+    terminal: &canic_control_plane::dto::root::RootRemovalOperationStatus,
+) {
+    let pic = fixture.pic();
+    let deletion = terminal.store_deletion.as_ref().unwrap();
+    let residual = deletion.observed_cycles_after_reclamation;
+    assert!(residual <= MAX_STORE_RESIDUAL);
+    let pool = root_pool_status(pic, fixture.root);
+    assert_eq!(pool.tracked, 0);
+    assert_eq!(pool.completed_handoffs, captured.assets.len() as u64);
+    // The retired Root must remain executable for protected final inspection.
+    // This reviewed management setting conserves cycles and precedes any code replacement.
+    pic.update_canister_settings(
+        fixture.root,
+        Some(captured.operator),
+        CanisterSettings {
+            freezing_threshold: Some(Nat::from(0_u8)),
+            ..CanisterSettings::default()
+        },
+    )
+    .expect("reviewed post-retirement inspection reserve");
+    for asset in &captured.assets {
+        let status = inspect(pic, fixture.root, *asset);
+        assert!(status.module_hash.is_none());
+        let mut expected = vec![fixture.root, fixture.coordinator];
+        expected.sort();
+        let mut observed = status.settings.controllers;
+        observed.sort();
+        assert_eq!(observed, expected);
+    }
+    let after_retirement = balance(pic, fixture.root, captured.operator)
+        + balance(pic, fixture.coordinator, captured.operator)
+        + captured
+            .assets
+            .iter()
+            .map(|asset| balance(pic, *asset, fixture.root))
+            .sum::<u128>();
+    let retirement_debit = captured
+        .native
+        .checked_sub(after_retirement + residual)
+        .expect("retirement cannot mint unaccounted native cycles");
+    assert!(retirement_debit <= MAX_RETIREMENT_DEBIT);
+    let (root_plan, root) = custody(
+        pic,
+        &captured,
+        fixture.root,
+        &captured.assets,
+        ROOT_LEDGER,
+        0,
+        [0xe3; 32],
+    );
+    let (coordinator_plan, coordinator) = custody(
+        pic,
+        &captured,
+        fixture.coordinator,
+        &[],
+        COORDINATOR_LEDGER,
+        root.operator_ledger_balance,
+        [0xe4; 32],
+    );
+    let root_initial = root_plan.initial_source_cycles
+        + root_plan
+            .assets
+            .iter()
+            .map(|a| a.initial_cycles)
+            .sum::<u128>();
+    let custody_initial = root_initial + coordinator_plan.initial_source_cycles;
+    let custody_admission_debit = after_retirement.checked_sub(custody_initial).unwrap();
+    assert!(custody_admission_debit <= 100_000_000_000);
+    let final_native = root.source_cycles
+        + root.assets.iter().map(|a| a.cycles).sum::<u128>()
+        + coordinator.source_cycles;
+    let fees = root.ledger_fee + coordinator.ledger_fee;
+    let custody_debit = root.observed_native_burn + coordinator.observed_native_burn;
+    assert_eq!(
+        captured.native + ROOT_LEDGER + COORDINATOR_LEDGER,
+        final_native
+            + coordinator.operator_ledger_balance
+            + fees
+            + residual
+            + retirement_debit
+            + custody_admission_debit
+            + custody_debit
+    );
+    let transfers: u64 = pic
+        .query_candid(captured.ledger, "transfer_count", ())
+        .unwrap();
+    let creations: u64 = pic
+        .query_candid(captured.ledger, "request_count", ())
+        .unwrap();
+    assert_eq!(transfers, 2);
+    assert_eq!(creations, 0);
+    eprintln!(
+        "CANIC134 terminal native={final_native}; operator Ledger={}; fees={fees}; reviewed Store residual={residual}; retirement debit={retirement_debit}; admission debit={custody_admission_debit}; custody debit={custody_debit}; assets={}; transfers={transfers}; creations={creations}",
+        coordinator.operator_ledger_balance,
+        captured.assets.len()
+    );
+}

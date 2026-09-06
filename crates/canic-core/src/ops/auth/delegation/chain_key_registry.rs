@@ -21,7 +21,7 @@ use crate::{
             },
             issuer_canister_sig::issuer_canister_sig_seed_hash,
         },
-        storage::auth::AuthStateOps,
+        storage::auth::RootDelegationStateOps,
     },
 };
 
@@ -52,11 +52,11 @@ fn current_chain_key_delegated_auth_registry_snapshot(
     root_key_policy: &RootKeyPolicyV1,
 ) -> DelegatedAuthRegistrySnapshotV1 {
     let root_key_policy_hash = root_key_policy_hash(root_key_policy);
-    let mut issuer_policies = AuthStateOps::root_issuer_policies()
+    let mut issuer_policies = RootDelegationStateOps::root_issuer_policies()
         .into_iter()
         .map(|policy| {
             let renewal_template_hash =
-                AuthStateOps::root_issuer_renewal_template(policy.issuer_pid)
+                RootDelegationStateOps::root_issuer_renewal_template(policy.issuer_pid)
                     .map_or([0; 32], |template| renewal_template_fingerprint(&template));
             let issuer_proof_algorithm = IssuerProofAlgorithm::IcCanisterSignatureV1;
             let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
@@ -98,7 +98,7 @@ fn current_chain_key_delegated_auth_registry_snapshot(
     DelegatedAuthRegistrySnapshotV1 {
         schema_version: DELEGATED_AUTH_REGISTRY_SCHEMA_VERSION_V1,
         root_canister_id: root_key_policy.root_canister_id,
-        registry_epoch: AuthStateOps::delegated_auth_registry_epoch(),
+        registry_epoch: RootDelegationStateOps::delegated_auth_registry_epoch(),
         root_key_policy_hash,
         issuer_policies,
     }
@@ -221,17 +221,17 @@ mod tests {
     fn chain_key_registry_snapshot_hashes_current_policies_and_epoch() {
         let first = p(72);
         let second = p(71);
-        AuthStateOps::upsert_root_issuer_policy(policy(first));
-        AuthStateOps::upsert_root_issuer_policy(policy(second));
-        AuthStateOps::upsert_root_issuer_renewal_template(template(first));
-        AuthStateOps::advance_delegated_auth_registry_epoch();
+        RootDelegationStateOps::upsert_root_issuer_policy(policy(first));
+        RootDelegationStateOps::upsert_root_issuer_policy(policy(second));
+        RootDelegationStateOps::upsert_root_issuer_renewal_template(template(first));
+        RootDelegationStateOps::advance_delegated_auth_registry_epoch();
 
         let registry = current_chain_key_delegated_auth_registry(&root_key_policy())
             .expect("registry should hash");
 
         assert_eq!(
             registry.snapshot.registry_epoch,
-            AuthStateOps::delegated_auth_registry_epoch()
+            RootDelegationStateOps::delegated_auth_registry_epoch()
         );
         assert_eq!(registry.snapshot.issuer_policies.len(), 2);
         assert_eq!(

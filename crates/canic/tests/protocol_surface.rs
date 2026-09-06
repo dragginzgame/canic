@@ -724,6 +724,38 @@ fn fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_ty
 }
 
 #[test]
+fn fleet_coordinator_retirement_types_match_rust() {
+    fn assert_current_type<T: candid::CandidType>(name: &str) {
+        let did = read_text(
+            &workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did"),
+        );
+        let (mut env, _) = CandidSource::Text(&did)
+            .load()
+            .expect("parse canonical Coordinator Candid");
+        let canonical = env
+            .find_type(name)
+            .expect("canonical retirement type")
+            .clone();
+        let mut rust = TypeContainer::new();
+        let ty = rust.add::<T>();
+        let ty = env.merge_type(rust.env, ty);
+        candid::types::subtype::equal(&mut Default::default(), &env, &canonical, &ty)
+            .expect("canonical retirement type must equal the current Rust contract");
+    }
+    use canic::dto::fleet_registry::{
+        FleetRetirementStatus, FleetSubnetRootDeletionReadinessRequest,
+        FleetSubnetRootDrainingReservationRequest,
+    };
+    assert_current_type::<FleetSubnetRootDeletionReadinessRequest>(
+        "FleetSubnetRootDeletionReadinessRequest",
+    );
+    assert_current_type::<FleetSubnetRootDrainingReservationRequest>(
+        "FleetSubnetRootDrainingReservationRequest",
+    );
+    assert_current_type::<FleetRetirementStatus>("FleetRetirementStatus");
+}
+
+#[test]
 fn fleet_coordinator_command_surface_is_profile_exact() {
     let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
     let did = read_text(&did_path);
@@ -733,7 +765,7 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
         .and_then(|tail| tail.split("};").next())
         .expect("canonical Coordinator DID must declare CoordinatorCommand");
 
-    for variant in [
+    let expected = [
         "AcknowledgeRootSnapshot",
         "ActivateRegistry",
         "ApplyFundingPolicyRotation",
@@ -747,9 +779,11 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
         "RemoveRoot",
         "RequestRootFunding",
         "ResumeAuthoritySnapshot",
+        "Retire",
         "SetRootFunding",
         "StageFundingPolicyRotationRoot",
-    ] {
+    ];
+    for variant in expected {
         assert!(
             request.contains(variant),
             "CoordinatorCommand omits {variant}:\n{request}"
@@ -757,7 +791,7 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
     }
     assert_eq!(
         request.lines().filter(|line| line.contains(';')).count(),
-        15,
+        expected.len(),
         "CoordinatorCommand acquired an unreviewed variant:\n{request}"
     );
 }

@@ -280,6 +280,11 @@ pub fn accept_root_removal(input: RootRemovalRequest) -> Result<OperationReceipt
     };
     let operation_id = request.operation_id;
     if let Some(existing) = ComponentRegistryOps::root_draining_if_present(operation_id)? {
+        if existing.reservation_hash != input.reservation.reservation_hash
+            || existing.asset_recipient != input.reservation.request.asset_recipient
+        {
+            return Err(InternalError::conflict());
+        }
         exact_draining_retry(&request, existing)?;
         return Ok(OperationReceipt { operation_id });
     }
@@ -315,6 +320,17 @@ fn validate_root_draining_reservation(
     request: &FleetSubnetRootDrainingRequest,
     reservation: &FleetSubnetRootDrainingReservationResponse,
 ) -> Result<(), InternalError> {
+    let recipient = reservation.request.asset_recipient;
+    if [
+        Principal::anonymous(),
+        Principal::management_canister(),
+        IcOps::canister_self(),
+    ]
+    .contains(&recipient)
+        || CanisterPoolOps::contains_asset(recipient)
+    {
+        return Err(InternalError::invalid_input());
+    }
     let source_is_covered = ComponentRegistryOps::registry_covers_preparation(
         &reservation.request.expected_registry,
         &state.fleet_registry,
@@ -577,8 +593,9 @@ async fn advance_root_removal_once(operation_id: [u8; 32]) -> Result<bool, Inter
     }
 
     if let Some(canister_id) = CanisterPoolOps::handoff_candidate() {
-        let (authority, _) = crate::workflow::root_authority::validated_root_authority()?;
-        let recipient = authority.binding.authority.binding.coordinator;
+        let recipient = ComponentRegistryOps::root_draining_if_present(operation_id)?
+            .ok_or_else(InternalError::unavailable)?
+            .asset_recipient;
         let response = crate::workflow::canister_pool::admin(PoolAdminCommand::Handoff {
             canister_id,
             recipient,
@@ -978,6 +995,7 @@ pub async fn prepare_deletion(
         )?,
     };
 
+    let intent = crate::workflow::root_ledger_retirement::evacuate(intent).await?;
     let intent = if intent.coordinator_intent_hash.is_some() {
         intent
     } else {
@@ -1368,6 +1386,7 @@ const fn deletion_preparation_response(
     view: RootFleetSubnetDeletionPreparationView,
 ) -> FleetSubnetRootDeletionPreparationResponse {
     FleetSubnetRootDeletionPreparationResponse {
+        ledger_receipt: view.ledger_receipt,
         operation_id: view.operation_id,
         fleet_subnet_root: view.fleet_subnet_root,
         coordinator: view.coordinator,
@@ -1427,6 +1446,10 @@ fn root_deletion_readiness_request(
     intent: &RootFleetSubnetDeletionPreparationIntentView,
 ) -> Result<FleetSubnetRootDeletionReadinessRequest, InternalError> {
     Ok(FleetSubnetRootDeletionReadinessRequest {
+        ledger_receipt: intent
+            .ledger_receipt
+            .clone()
+            .ok_or_else(InternalError::unavailable)?,
         operation_id: intent.operation_id,
         fleet_subnet_root: IcOps::canister_self(),
         expected_intent_hash: intent
@@ -1547,7 +1570,7 @@ const fn transferable_root_deletion_cycles(
         .saturating_sub(call_cost)
 }
 
-fn reserve_root_deletion_cycle_reclamation(
+pub(super) fn reserve_root_deletion_cycle_reclamation(
     coordinator: candid::Principal,
     maximum_transfer: u128,
     retained_cycles: u128,
@@ -1569,7 +1592,7 @@ fn reserve_root_deletion_cycle_reclamation(
     .map_err(map_cost_guard_reserve_error)
 }
 
-fn settle_root_deletion_cycle_reclamation(
+pub(super) fn settle_root_deletion_cycle_reclamation(
     permit: &CostGuardPermit,
     result: Result<(), InternalError>,
 ) -> Result<(), InternalError> {

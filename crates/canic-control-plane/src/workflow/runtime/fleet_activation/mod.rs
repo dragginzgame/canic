@@ -41,9 +41,13 @@ pub async fn resume_root(
 ) -> Result<FleetActivationTransition, InternalError> {
     let current = FleetActivationWorkflow::status()?;
     if current.phase == FleetActivationPhase::Prepared {
-        component_registry::converge_root_activation_inventory(request.operation_id).await?;
+        component_registry::converge_root_activation_inventory(request.operation_id)
+            .await
+            .map_err(|error| activation_failure("component_inventory", error))?;
     }
-    let transition = FleetActivationWorkflow::resume_root(request).await?;
+    let transition = FleetActivationWorkflow::resume_root(request)
+        .await
+        .map_err(|error| activation_failure("store_and_root", error))?;
     if transition.status.phase != FleetActivationPhase::Active {
         return Err(InternalError::unavailable());
     }
@@ -54,4 +58,14 @@ pub async fn resume_root(
     }
     crate::workflow::canister_pool::start()?;
     Ok(transition)
+}
+
+fn activation_failure(stage: &'static str, error: InternalError) -> InternalError {
+    canic_core::log!(
+        canic_core::log::Topic::Fleet,
+        Error,
+        "Root activation resume failed stage={stage} diagnostic={}",
+        error.code()
+    );
+    error
 }

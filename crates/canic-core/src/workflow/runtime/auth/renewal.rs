@@ -57,12 +57,14 @@ impl RootIssuerRenewalWorkflow {
         TimerIdentity::try_new("canic", "auth_renewal", "run").map_err(Into::into)
     }
 
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(super) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
         with_owned_once(&RENEWAL_TIMER, |registration| {
             registration.identity().clone()
         })
     }
 
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(super) fn cancel_timer() -> Result<(), TimerError> {
         if let Some(result) = with_owned_once(&RENEWAL_TIMER, OnceRegistration::cancel)? {
             result?;
@@ -70,6 +72,7 @@ impl RootIssuerRenewalWorkflow {
         Ok(())
     }
 
+    #[cfg(any(test, feature = "auth-root-delegation-state"))]
     pub(super) fn recover_expired(now_ns: u64) -> bool {
         let owner = AsyncJobOwner::AuthRenewal;
         if !AsyncJobWorkflow::has_expired_attempt(owner, now_ns) {

@@ -36,8 +36,8 @@ use crate::{
             issuer_canister_sig::issuer_canister_sig_seed_hash,
         },
         storage::auth::{
-            AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
-            ChainKeyRootDelegationBatchStatus,
+            ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
+            ChainKeyRootDelegationBatchStatus, RootDelegationStateOps,
         },
     },
 };
@@ -183,7 +183,7 @@ pub struct ChainKeyRootDelegationBatchInstallPlan {
 pub(in crate::ops::auth) fn plan_due_chain_key_root_delegation_batch(
     input: PrepareDueChainKeyRootDelegationBatchInput<'_>,
 ) -> Result<ChainKeyRootDelegationBatchPreparation, InternalError> {
-    AuthStateOps::prune_chain_key_root_delegation_batches(input.now_ns);
+    RootDelegationStateOps::prune_chain_key_root_delegation_batches(input.now_ns);
     mark_stale_preinstall_chain_key_batches(input.registry_epoch, input.registry_hash);
 
     if let Some(batch) = reusable_in_flight_chain_key_batch(
@@ -261,8 +261,9 @@ pub(in crate::ops::auth) fn commit_chain_key_root_delegation_batch(
     approvals: Vec<ChainKeyRootDelegationIssuerApproval>,
 ) -> Result<PrepareDueChainKeyRootDelegationBatchResult, InternalError> {
     validate_issuer_approvals(&plan, &approvals)?;
-    let proof_epoch =
-        AuthStateOps::advance_delegated_auth_proof_epoch_at_least(plan.min_accepted_proof_epoch);
+    let proof_epoch = RootDelegationStateOps::advance_delegated_auth_proof_epoch_at_least(
+        plan.min_accepted_proof_epoch,
+    );
     let batch = build_chain_key_root_delegation_batch(&plan, &approvals, proof_epoch)?;
     let result = PrepareDueChainKeyRootDelegationBatchResult {
         batch_id: Some(batch.batch_id),
@@ -270,7 +271,7 @@ pub(in crate::ops::auth) fn commit_chain_key_root_delegation_batch(
         skipped_templates: plan.enabled_templates.saturating_sub(batch.issuers.len()),
         reused_in_flight: false,
     };
-    AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+    RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
     Ok(result)
 }
 
@@ -295,7 +296,7 @@ fn reusable_in_flight_chain_key_batch(
     registry_epoch: u64,
     registry_hash: [u8; 32],
 ) -> Option<ChainKeyRootDelegationBatch> {
-    let mut batches = AuthStateOps::chain_key_root_delegation_batches()
+    let mut batches = RootDelegationStateOps::chain_key_root_delegation_batches()
         .into_iter()
         .filter(|batch| now_ns < batch.header.expires_at_ns)
         .filter(|batch| batch_matches_registry(batch, registry_epoch, registry_hash))
@@ -368,13 +369,13 @@ pub(super) fn defer_retryable_chain_key_batch(
             .min(batch.header.expires_at_ns - 1)
             .max(now_ns),
     );
-    AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+    RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
     true
 }
 
 fn mark_stale_preinstall_chain_key_batches(registry_epoch: u64, registry_hash: [u8; 32]) -> usize {
     let mut stale_count = 0usize;
-    for mut batch in AuthStateOps::chain_key_root_delegation_batches() {
+    for mut batch in RootDelegationStateOps::chain_key_root_delegation_batches() {
         if batch.status == ChainKeyRootDelegationBatchStatus::Installed
             || batch_matches_registry(&batch, registry_epoch, registry_hash)
         {
@@ -383,7 +384,7 @@ fn mark_stale_preinstall_chain_key_batches(registry_epoch: u64, registry_hash: [
         batch.status = ChainKeyRootDelegationBatchStatus::FailedRetryable;
         batch.retry_after_ns = Some(batch.header.expires_at_ns);
         batch.failure = Some("stale registry epoch or hash".to_string());
-        AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+        RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
         stale_count += 1;
     }
     stale_count

@@ -4,6 +4,8 @@
 //! Does not own: stable conversion, endpoint authorization, or activation mutation.
 //! Boundary: the runtime role selects root-only projection before ops validates the record.
 
+#[cfg(any(test, feature = "auth-root-delegation-state"))]
+use crate::ops::storage::auth::RootDelegationStateOps;
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -32,7 +34,7 @@ use crate::{
         ic::IcOps,
         rpc::RpcOps,
         runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps},
-        storage::{StorageOpsError, auth::AuthStateOps, fleet_activation::FleetActivationOps},
+        storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
     protocol,
     view::fleet_activation::{
@@ -126,6 +128,7 @@ impl FleetActivationWorkflow {
         if current.phase == FleetActivationPhase::Active {
             return Ok(current);
         }
+        #[cfg(any(test, feature = "auth-root-delegation-state"))]
         require_empty_prepared_credential_authority()?;
 
         let root_pid = IcOps::canister_self();
@@ -668,9 +671,10 @@ fn validate_root_wasm_store_child_authority(
     Ok(())
 }
 
+#[cfg(any(test, feature = "auth-root-delegation-state"))]
 fn require_empty_prepared_credential_authority() -> Result<(), InternalError> {
-    if !AuthStateOps::root_issuer_policies().is_empty()
-        || !AuthStateOps::root_issuer_renewal_templates().is_empty()
+    if !RootDelegationStateOps::root_issuer_policies().is_empty()
+        || !RootDelegationStateOps::root_issuer_renewal_templates().is_empty()
     {
         return Err(InternalError::invariant());
     }

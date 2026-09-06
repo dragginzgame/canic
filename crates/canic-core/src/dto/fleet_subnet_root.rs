@@ -292,6 +292,7 @@ pub struct FleetSubnetRootDeletionPreparationStatusRequest {
 /// Durable proof that a removed root returned excess cycles and is ready for its executor.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDeletionPreparationResponse {
+    pub ledger_receipt: crate::dto::fleet_registry::FleetLedgerTransferReceipt,
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
     pub coordinator: Principal,
@@ -638,6 +639,17 @@ mod tests {
             intent_hash: [45; 32],
         };
         let readiness_request = FleetSubnetRootDeletionReadinessRequest {
+            ledger_receipt: crate::dto::fleet_registry::FleetLedgerTransferReceipt {
+                intent: crate::dto::fleet_registry::FleetLedgerTransferIntent {
+                    source: store_deletion.fleet_subnet_root,
+                    destination: intent.coordinator,
+                    balance_before: 100,
+                    fee: 10,
+                    created_at_time: 45,
+                    memo: store_deletion.operation_id,
+                },
+                block_index: Some(1),
+            },
             operation_id: store_deletion.operation_id,
             fleet_subnet_root: store_deletion.fleet_subnet_root,
             expected_intent_hash: intent.intent_hash,
@@ -661,6 +673,7 @@ mod tests {
         assert_root_deletion_execution_contract_round_trip(store_deletion, &readiness);
 
         let preparation = FleetSubnetRootDeletionPreparationResponse {
+            ledger_receipt: readiness_request.ledger_receipt.clone(),
             operation_id: store_deletion.operation_id,
             fleet_subnet_root: store_deletion.fleet_subnet_root,
             coordinator: intent.coordinator,

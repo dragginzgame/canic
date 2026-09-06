@@ -17,8 +17,9 @@ pub mod observability;
 mod root;
 pub mod timer;
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+use crate::ops::storage::auth::LocalApplicationAuthorizationStateOps;
 use crate::ops::storage::{
-    auth::AuthStateOps,
     icp_refill::IcpRefillStoreOps,
     intent::{IntentStoreOps, ReceiptBackedIntentOps},
 };
@@ -79,6 +80,7 @@ impl RuntimeWorkflow {
 
         // root-only services
         start_root_service("cycles", workflow::runtime::cycles::CycleWorkflow::start())?;
+        #[cfg(any(test, feature = "auth-root-delegation-state"))]
         start_root_service(
             "issuer_renewal",
             workflow::runtime::auth::RuntimeAuthWorkflow::reconcile_root_issuer_renewal(),
@@ -112,13 +114,20 @@ pub fn init_memory_registry_post_upgrade() -> Result<(), InternalError> {
 }
 
 pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
-    let application_session_restore_start = crate::perf::perf_counter();
-    AuthStateOps::restore_application_session_state().map_err(|_| InternalError::invariant())?;
-    crate::perf::record_checkpoint(
-        module_path!(),
-        "application_session_restore",
-        crate::perf::perf_counter().saturating_sub(application_session_restore_start),
-    );
+    #[cfg(feature = "auth-delegated-token-issuer-state")]
+    crate::ops::storage::auth::DelegatedTokenIssuerStateOps::restore();
+
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    {
+        let application_session_restore_start = crate::perf::perf_counter();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state()
+            .map_err(|_| InternalError::invariant())?;
+        crate::perf::record_checkpoint(
+            module_path!(),
+            "application_session_restore",
+            crate::perf::perf_counter().saturating_sub(application_session_restore_start),
+        );
+    }
     IntentStoreOps::rebuild_expiry_index()?;
     ReceiptBackedIntentOps::reconcile_receipt_indexes()?;
     let _receipt_capacity = ReceiptBackedIntentOps::receipt_capacity()?;

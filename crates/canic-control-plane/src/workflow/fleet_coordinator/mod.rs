@@ -4,6 +4,7 @@
 //! Does not own: stable encoding, canonical validation, root effects, or endpoint transport.
 //! Boundary: lifecycle and endpoint APIs delegate here after transport authentication.
 
+pub mod retirement;
 #[cfg(test)]
 mod tests;
 
@@ -821,6 +822,7 @@ async fn advance_coordinator_root_removal_once(
         CoordinatorOperationStatusResponse::RootRemoval(current) => current,
         CoordinatorOperationStatusResponse::Admission(_)
         | CoordinatorOperationStatusResponse::ComponentProvisioning(_)
+        | CoordinatorOperationStatusResponse::Retirement(_)
         | CoordinatorOperationStatusResponse::FundingPolicyRotation(_) => {
             return Err(InternalError::conflict());
         }

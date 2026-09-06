@@ -1,0 +1,43 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:40829/
+==> targeted canic-testing-internal PocketIC proof
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.29s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-8278b312dcbd5dba)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation ... [WASM]       SIZE   fleet_coordinator/candidate.wasm  code=3.88 MiB (4070557 B)  headroom=6.12 MiB (6415203 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2637573 B)  headroom=7.48 MiB (7848187 B)
+[WASM]       SIZE   app/candidate.wasm  code=2.30 MiB (2413526 B)  headroom=7.70 MiB (8072234 B)
+[WASM]       SIZE   scale_replica/candidate.wasm  code=2.31 MiB (2423740 B)  headroom=7.69 MiB (8062020 B)
+[WASM]       SIZE   scale_hub/candidate.wasm  code=2.77 MiB (2900042 B)  headroom=7.23 MiB (7585718 B)
+[WASM]       SIZE   user_hub/candidate.wasm  code=2.85 MiB (2985351 B)  headroom=7.15 MiB (7500409 B)
+[WASM]       SIZE   user_shard/candidate.wasm  code=3.13 MiB (3283548 B)  headroom=6.87 MiB (7202212 B)
+[WASM]       SIZE   root/candidate.wasm  code=8.30 MiB (8704350 B)  headroom=1.70 MiB (1781410 B)
+[FLEET]      DONE   literal-zero release artifacts (28)                  48.91s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       DONE   cycles_ledger_stub                                    2.90s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET]      DONE   literal-zero infrastructure replay complete          8m 00s
+[FLEET]      RUN    proving literal-zero terminal replay
+[FLEET]      DONE   literal-zero terminal replay complete                2m 58s
+[FLEET]      DONE   literal-zero production-adapter journey complete    18m 12s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1092.56s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=536292 kB high_water=1014476 kB threads=20
+==> targeted canic-testing-internal PocketIC proof done in 1093s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  1093s    PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 1094s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.wo7M9d

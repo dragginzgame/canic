@@ -1,4 +1,4 @@
-//! Exact Cycles Ledger boundary stub for root pool-refill PocketIC tests.
+//! Exact Cycles Ledger and NNS routing boundaries for Root pool-refill PocketIC tests.
 
 use candid::{CandidType, Deserialize, Nat, Principal};
 use ic_cdk::call::Call;
@@ -134,6 +134,16 @@ enum CreateCanisterError {
     },
 }
 
+#[derive(CandidType, Deserialize)]
+struct GetSubnetForCanisterRequest {
+    principal: Principal,
+}
+
+#[derive(CandidType)]
+struct GetSubnetForCanisterPayload {
+    subnet_id: Option<Principal>,
+}
+
 struct State {
     balances: BTreeMap<Principal, u128>,
     canister_ids: Vec<Principal>,
@@ -142,8 +152,11 @@ struct State {
     expected_subnet: Principal,
     pending_first_index: Option<usize>,
     requests: Vec<CreateCanisterArgs>,
+    creation_callers: Vec<Principal>,
     request_count: u64,
     transfers: Vec<TransferRecord>,
+    transfer_fee_override: Option<u128>,
+    lose_next_transfer_reply: bool,
     withdrawal_fee: u128,
     withdrawals: Vec<WithdrawalRecord>,
 }
@@ -156,10 +169,6 @@ thread_local! {
 
 #[ic_cdk::init]
 fn init(args: InitArgs) {
-    assert!(
-        !args.canister_ids.is_empty(),
-        "at least one result Canister is required"
-    );
     assert!(
         args.canister_ids.len() <= MAX_LANES,
         "the qualification stub supports at most {MAX_LANES} lanes"
@@ -201,8 +210,11 @@ fn init(args: InitArgs) {
             expected_subnet: args.expected_subnet,
             pending_first_index,
             requests: Vec::new(),
+            creation_callers: Vec::new(),
             request_count: 0,
             transfers: Vec::new(),
+            transfer_fee_override: None,
+            lose_next_transfer_reply: false,
             withdrawal_fee,
             withdrawals: Vec::new(),
         });
@@ -239,8 +251,45 @@ fn icrc1_fee() -> Nat {
     })
 }
 
+// Models a fee change between the host's final fee query and its transfer.
 #[ic_cdk::update]
+fn set_transfer_fee_override(fee: Option<Nat>) {
+    STATE.with_borrow_mut(|state| {
+        state
+            .as_mut()
+            .expect("initialized Ledger fixture")
+            .transfer_fee_override =
+            fee.map(|fee| u128::try_from(fee.0).expect("fixture fee fits u128"));
+    });
+}
+
+// Reject after committing one exact transfer to exercise uncertain-response reconciliation.
+#[ic_cdk::update]
+fn lose_next_transfer_reply() {
+    STATE.with_borrow_mut(|state| {
+        state
+            .as_mut()
+            .expect("initialized Ledger fixture")
+            .lose_next_transfer_reply = true;
+    });
+}
+
+#[ic_cdk::update(manual_reply = true)]
 fn icrc1_transfer(args: TransferArgs) -> Result<Nat, TransferError> {
+    let result = transfer(args);
+    let lose_reply = STATE.with_borrow_mut(|state| {
+        let state = state.as_mut().expect("initialized Ledger fixture");
+        result.is_ok() && std::mem::take(&mut state.lose_next_transfer_reply)
+    });
+    if lose_reply {
+        ic_cdk::api::msg_reject("qualification fixture lost the committed transfer reply");
+    } else {
+        ic_cdk::api::msg_reply(candid::encode_one(&result).expect("encode transfer response"));
+    }
+    result
+}
+
+fn transfer(args: TransferArgs) -> Result<Nat, TransferError> {
     let caller = ic_cdk::api::msg_caller();
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("Cycles Ledger stub is initialized");
@@ -259,7 +308,7 @@ fn icrc1_transfer(args: TransferArgs) -> Result<Nat, TransferError> {
                 message: "the qualification stub accepts only default accounts".to_string(),
             });
         }
-        let expected_fee = state.withdrawal_fee;
+        let expected_fee = state.transfer_fee_override.unwrap_or(state.withdrawal_fee);
         if args
             .fee
             .as_ref()
@@ -316,11 +365,15 @@ fn icrc1_transfer(args: TransferArgs) -> Result<Nat, TransferError> {
 #[ic_cdk::update]
 async fn withdraw(args: WithdrawArgs) -> Result<Nat, WithdrawError> {
     let caller = ic_cdk::api::msg_caller();
-    if args.from_subaccount.is_some() || args.to != caller {
-        return Err(WithdrawError::InvalidReceiver { receiver: args.to });
+    let receiver = args.to;
+    if args.from_subaccount.is_some() {
+        return Err(WithdrawError::InvalidReceiver { receiver });
     }
     let (amount, block_index) = STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("Cycles Ledger stub is initialized");
+        if receiver != caller && !state.canister_ids.contains(&receiver) {
+            return Err(WithdrawError::InvalidReceiver { receiver });
+        }
         if let Some(existing) = state
             .withdrawals
             .iter()
@@ -364,7 +417,7 @@ async fn withdraw(args: WithdrawArgs) -> Result<Nat, WithdrawError> {
     Call::bounded_wait(Principal::management_canister(), "deposit_cycles")
         .with_cycles(amount)
         .with_arg(CanisterIdRecord {
-            canister_id: caller,
+            canister_id: receiver,
         })
         .await
         .map_err(|error| WithdrawError::GenericError {
@@ -393,7 +446,15 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("Cycles Ledger stub is initialized");
         state.request_count = state.request_count.saturating_add(1);
-        if let Some(index) = state.requests.iter().position(|existing| existing == &args) {
+        let caller = ic_cdk::api::msg_caller();
+        if let Some(index) = state
+            .requests
+            .iter()
+            .enumerate()
+            .position(|(index, existing)| {
+                existing == &args && state.creation_callers[index] == caller
+            })
+        {
             return Err(CreateCanisterError::Duplicate {
                 duplicate_of: Nat::from(index + 1),
                 canister_id: Some(state.canister_ids[index]),
@@ -413,12 +474,16 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
         if let Some(available) = state.balances.get_mut(&ic_cdk::api::msg_caller()) {
             let amount = u128::try_from(args.amount.0.clone())
                 .map_err(|_| generic_error("creation amount exceeds u128"))?;
-            if *available < amount {
+            let debit = amount
+                .checked_add(state.withdrawal_fee)
+                .ok_or_else(|| generic_error("creation debit exceeds u128"))?;
+            if *available < debit {
                 return Err(generic_error("creation balance is insufficient"));
             }
-            *available -= amount;
+            *available -= debit;
         }
         state.requests.push(args);
+        state.creation_callers.push(caller);
         if state.pending_first_index == Some(index) {
             state.pending_first_index = None;
             return Err(CreateCanisterError::Duplicate {
@@ -430,6 +495,37 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
             block_id: Nat::from(index + 1),
             canister_id,
         })
+    })
+}
+
+// The fixture installs a separate instance at the canonical NNS Registry
+// identity. Unknown Principals never inherit the known fixture route.
+#[ic_cdk::query]
+fn get_subnet_for_canister(
+    request: GetSubnetForCanisterRequest,
+) -> Result<GetSubnetForCanisterPayload, String> {
+    STATE.with_borrow(|state| {
+        let state = state.as_ref().expect("routing fixture is initialized");
+        Ok(GetSubnetForCanisterPayload {
+            subnet_id: state
+                .canister_ids
+                .contains(&request.principal)
+                .then_some(state.expected_subnet),
+        })
+    })
+}
+
+#[ic_cdk::query]
+fn transfer_count() -> u64 {
+    STATE.with_borrow(|state| {
+        u64::try_from(
+            state
+                .as_ref()
+                .expect("Cycles Ledger stub is initialized")
+                .transfers
+                .len(),
+        )
+        .expect("bounded transfer history")
     })
 }
 

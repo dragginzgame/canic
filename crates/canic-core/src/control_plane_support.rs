@@ -21,6 +21,13 @@ pub mod format {
 }
 
 pub mod model {
+    pub mod fleet_funding_policy {
+        pub use crate::model::fleet_funding_policy::{
+            FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
+            validate_fleet_root_funding_capacity, validate_fleet_subnet_root_funding_authority,
+        };
+    }
+
     pub mod replay {
         pub use crate::model::replay::{CommandKind, ReplayCostGuardSettlement};
     }
@@ -124,6 +131,7 @@ pub mod ops {
             pub use crate::{
                 infra::ic::cycles_ledger::{
                     CyclesLedgerCreateCanisterError, CyclesLedgerCreateCanisterSuccess,
+                    CyclesLedgerTransferError,
                 },
                 ops::ic::cycles_ledger::CyclesLedgerOps,
             };

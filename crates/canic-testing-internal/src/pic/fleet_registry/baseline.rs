@@ -172,16 +172,17 @@ mod tests {
     #[cfg(test)]
     use canic_host::fleet_ensure::model::{
         CurrentFleetProtocolAction, DesiredComponentGroupPlacement, DesiredFleet,
-        DesiredFleetBootstrap, DesiredFleetBootstrapRoot, DesiredFleetProtocol, EnsureAction,
-        FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlan, FleetEnsureStateRecord,
+        DesiredFleetBootstrap, DesiredFleetBootstrapRoot, DesiredFleetProtocol, EffectRecord,
+        EffectState, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlan,
+        FleetEnsureStateRecord,
     };
     #[cfg(test)]
-    use canic_host::fleet_ensure::policy::EnsurePolicyError;
+    use canic_host::fleet_ensure::ops::{EnsurePlatform, action_sha256};
     #[cfg(test)]
     use canic_host::fleet_ensure::{
         CompiledCurrentComponentProvisioning, CompiledCurrentProtocolStep,
         CurrentComponentGroupPlacement, CurrentRegistryStage, EnsureWorkflowError,
-        IcpEnsurePlatform, compile_current_component_provisioning,
+        IcpEnsurePlatform, IcpEnsurePlatformError, compile_current_component_provisioning,
         compile_current_protocol_sequence, compile_current_registry_sequence,
         compile_current_registry_sequence_with_status, compile_current_store_sequence_from_union,
         workflow as fleet_ensure_workflow,
@@ -222,7 +223,7 @@ mod tests {
         time::{Duration, Instant},
     };
     #[cfg(test)]
-    use std::{collections::BTreeSet, path::PathBuf, process::Command};
+    use std::{collections::BTreeSet, path::PathBuf, process::Command, time::SystemTime};
 
     #[cfg(test)]
     use crate::pic::artifacts::{
@@ -329,6 +330,22 @@ mod tests {
         #[cfg(test)]
         ResumeAuthoritySnapshot(AuthoritySnapshotRequest),
         ResumeFleetActivation(FleetActivationResumeRequest),
+        SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
+    }
+
+    /// Exact host command type table used to inject loss at a binary request boundary.
+    #[cfg(test)]
+    #[derive(CandidType)]
+    #[expect(
+        dead_code,
+        reason = "Candid includes every host command variant in its type table"
+    )]
+    enum HostRootCommandFragment {
+        MaintainPool,
+        ImportPoolCanister(PoolCanisterRequest),
+        AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
+        BootstrapStore(RootStoreBootstrapRequest),
+        PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
         SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
     }
 
@@ -1312,6 +1329,18 @@ mod tests {
             pic.make_live(None).to_string()
         }
 
+        /// Return the exact issuer Wasm installed by this fixture.
+        ///
+        /// # Panics
+        /// Panics if the admitted issuer has no built artifact.
+        #[must_use]
+        pub fn issuer_wasm(&self) -> Vec<u8> {
+            build_test_component_wasms()
+                .get(&self.issuer.role)
+                .expect("fixture issuer artifact")
+                .clone()
+        }
+
         /// Return the exact configured verifier Wasm installed by this fixture.
         ///
         /// # Panics
@@ -1718,6 +1747,10 @@ mod tests {
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the isolated ICP transport script keeps its lost-response injection and mutation log together"
+    )]
     fn prepare_isolated_icp(root: &Path) -> (PathBuf, Principal, PathBuf) {
         let wrapper = root.join("icp-wrapper");
         let mutation_log = root.join("controller-mutations.log");
@@ -1730,6 +1763,63 @@ wrapper_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export XDG_CONFIG_HOME="$wrapper_root/xdg-config"
 export XDG_DATA_HOME="$wrapper_root/xdg-data"
 export DO_NOT_TRACK=1
+case " $* " in
+  *" canister call "*" icrc1_transfer "*)
+    if [ -f "$wrapper_root/lose-estate-funding-response" ]; then
+      icp "$@"
+      if [ ! -e "$wrapper_root/lost-estate-funding-response" ]; then
+        : > "$wrapper_root/lost-estate-funding-response"
+        exit 74
+      fi
+      exit 0
+    fi
+    ;;
+esac
+case " $* " in
+  *" canister call "*" withdraw "*)
+    if [ -f "$wrapper_root/lose-funding-response" ]; then
+      icp "$@"
+      printf '%s\n' withdrawal >> "$wrapper_root/funding-requests.log"
+      if [ ! -e "$wrapper_root/lost-funding-response" ]; then
+        : > "$wrapper_root/lost-funding-response"
+        exit 73
+      fi
+      exit 0
+    fi
+    ;;
+esac
+case " $* " in
+  *" canister call "*" canic_root_command "*)
+    previous=""
+    for argument in "$@"; do
+      if [ "$previous" = "--args-file" ] &&
+         [ -f "$wrapper_root/lost-reset-args.bin" ] &&
+         cmp -s "$argument" "$wrapper_root/lost-reset-args.bin"; then
+        icp "$@"
+        printf '%s\n' reset >> "$wrapper_root/reset-mutations.log"
+        if [ ! -e "$wrapper_root/lost-reset-response" ]; then
+          : > "$wrapper_root/lost-reset-response"
+          exit 72
+        fi
+        exit 0
+      fi
+      previous="$argument"
+    done
+    ;;
+esac
+case " $* " in
+  *" canister install "*)
+    if [ -f "$wrapper_root/lose-install-response" ]; then
+      icp "$@"
+      printf '%s\n' "$*" >> "$wrapper_root/reinstall-mutations.log"
+      if [ ! -e "$wrapper_root/lost-install-response" ]; then
+        : > "$wrapper_root/lost-install-response"
+        exit 75
+      fi
+      exit 0
+    fi
+    ;;
+esac
 case " $* " in
   *" canister settings update "*)
     icp "$@"
@@ -1827,8 +1917,10 @@ exec icp "$@"
         config_path: &Path,
         configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
         configured_roles: &[String],
+        build_network: BuildNetwork,
     ) -> LiteralZeroReleaseArtifacts {
-        let release_build_id = persist_internal_test_release_build_plan(adapter_root);
+        let release_build_id =
+            persist_internal_test_release_build_plan(adapter_root, build_network);
         let outputs =
             literal_zero_release_artifact_outputs(adapter_root, release_build_id, configured_roles);
         let cache = literal_zero_release_artifact_cache_spec(
@@ -1836,6 +1928,7 @@ exec icp "$@"
             config_path,
             configured_roles,
             &outputs,
+            build_network,
         );
         let started_at = Instant::now();
         let outcome = match prepare_artifact_cache(&cache)
@@ -1850,6 +1943,7 @@ exec icp "$@"
                     configuration,
                     configured_roles,
                     release_build_id,
+                    build_network,
                 );
                 for (name, path) in &outputs {
                     transaction
@@ -1894,6 +1988,7 @@ exec icp "$@"
         config_path: &Path,
         configured_roles: &[String],
         outputs: &BTreeMap<String, PathBuf>,
+        build_network: BuildNetwork,
     ) -> ArtifactCacheSpec {
         let snapshot = AppConfigSnapshot::load(config_path)
             .expect("load literal-zero release build config for Cargo inputs");
@@ -1915,9 +2010,10 @@ exec icp "$@"
             packages.insert(evidence.role_package_name);
         }
         let packages = packages.iter().map(String::as_str).collect::<Vec<_>>();
+        let network = build_network.to_string();
         let environment = [
             ("CARGO_INCREMENTAL", "0"),
-            ("ICP_ENVIRONMENT", "local"),
+            ("ICP_ENVIRONMENT", network.as_str()),
             INTERNAL_TEST_RELEASE_BUILD_ID,
         ];
         let cargo_build = WasmBuildSpec::new(
@@ -1944,7 +2040,7 @@ exec icp "$@"
         .with_arguments([
             "literal-zero-release-build",
             "fast",
-            "local",
+            network.as_str(),
             config_relative,
         ])
         .with_environment(environment)
@@ -2110,12 +2206,13 @@ exec icp "$@"
         configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
         configured_roles: &[String],
         release_build_id: ReleaseBuildId,
+        build_network: BuildNetwork,
     ) {
         let context = WorkspaceBuildContext {
             role: "root".to_string(),
             profile: CanisterBuildProfile::Fast,
-            environment: "local".to_string(),
-            build_network: BuildNetwork::Local,
+            environment: build_network.to_string(),
+            build_network,
             workspace_root: workspace_root.to_path_buf(),
             icp_root: adapter_root.to_path_buf(),
             config_path: config_path.to_path_buf(),
@@ -2217,7 +2314,10 @@ exec icp "$@"
     }
 
     #[cfg(test)]
-    fn persist_internal_test_release_build_plan(root: &Path) -> ReleaseBuildId {
+    fn persist_internal_test_release_build_plan(
+        root: &Path,
+        build_network: BuildNetwork,
+    ) -> ReleaseBuildId {
         let nonce = ReleaseBuildNonce::from_random_bytes(INTERNAL_TEST_RELEASE_BUILD_NONCE);
         let release_build_id = ReleaseBuildId::from_nonce(nonce);
         assert_eq!(
@@ -2230,7 +2330,7 @@ exec icp "$@"
             Value::Bytes(release_build_id.as_bytes().to_vec()),
             Value::Text(env!("CARGO_PKG_VERSION").to_string()),
             Value::Text("fast".to_string()),
-            Value::Text("local".to_string()),
+            Value::Text(build_network.to_string()),
             Value::Array(vec![Value::Integer(0.into())]),
         ]);
         let mut bytes = Vec::new();
@@ -2240,6 +2340,9 @@ exec icp "$@"
         std::fs::create_dir_all(path.parent().expect("release-build plan parent"))
             .expect("create release-build plan parent");
         std::fs::write(path, bytes).expect("write deterministic internal release-build plan");
+        let planned = canic_host::release_build::load_release_build_plan(root, release_build_id)
+            .expect("validate fixture release-build authority before building artifacts");
+        assert_eq!(planned.build_network, build_network);
         release_build_id
     }
 
@@ -2391,7 +2494,7 @@ exec icp "$@"
             "ledger_fee_cycles": "0",
             "management_creation_fee_cycles": "0",
             "material_cycle_threshold": "0",
-            "maximum_observation_burn_cycles": "2000000000000",
+            "maximum_observation_burn_cycles": "1000000000000",
             "maximum_stalled_observations": 64,
             "maximum_update_burn_cycles": "1000000000000",
             "operator": operator.to_text(),
@@ -3556,15 +3659,326 @@ exec icp "$@"
     }
 
     #[test]
+    fn four_initial_shards_preserve_sealed_root_activation() {
+        assert_initial_root_activation(
+            "apps/test/test-configs/literal-zero-initial-shard.toml",
+            1,
+            4,
+            5,
+        );
+    }
+
+    #[test]
+    fn nineteen_workloads_preserve_multi_hub_root_activation() {
+        assert_initial_root_activation(
+            "apps/test/test-configs/generated-nineteen-workloads.toml",
+            3,
+            16,
+            5,
+        );
+    }
+
+    #[test]
+    fn auth_free_root_preserves_ordinary_fleet_activation() {
+        assert_initial_root_activation("canisters/audit/root_probe/activation.toml", 1, 0, 1);
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the focused real-canister regression keeps exact initial-child activation and replay together"
+    )]
+    #[cfg(test)]
+    fn assert_initial_root_activation(
+        config_relative: &str,
+        components: u32,
+        descendants: u32,
+        ready: u32,
+    ) {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = workspace_root.join(config_relative);
+        let workload = components + descendants;
+        let pool_count = workload + ready;
+        let config = AppConfigSnapshot::load(&config_path).expect("load activation fixture config");
+        let configuration = config
+            .model()
+            .compile_component_deployment_configuration()
+            .expect("compile activation fixture deployment");
+        let roles = config
+            .model()
+            .roles
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let adapter_root = literal_zero_adapter_root(&workspace_root);
+        std::fs::create_dir_all(&adapter_root).expect("create artifact fixture root");
+        let _cleanup = TestDirectoryCleanup(adapter_root.clone());
+        let artifacts = build_literal_zero_release_artifacts(
+            &workspace_root,
+            &adapter_root,
+            &config_path,
+            &configuration,
+            &roles,
+            BuildNetwork::Local,
+        );
+        let coordinator_wasm = std::fs::read(adapter_root.join(&artifacts.coordinator_wasm))
+            .expect("read exact Coordinator Wasm");
+        let store_fixture = build_root_store_fixture_with_config_for_release(
+            &config_path,
+            &artifacts.component_wasms,
+            artifacts.release_build_id,
+        );
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
+            &pic,
+            artifacts.root_wasm_bytes,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                canister_pool_maximum_size: Some(pool_count),
+                canister_pool_minimum_size: Some(ready),
+                canister_pool_cycles: None,
+                coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &config_path,
+            |pic, root| {
+                let subnet = pic.get_subnet(root).expect("Root Subnet");
+                (0..pool_count)
+                    .map(|_| {
+                        let asset = pic.create_canister_on_subnet(None, None, subnet);
+                        pic.add_cycles(asset, PREPAID_POOL_ASSET_CYCLES);
+                        pic.set_controllers(asset, None, vec![root])
+                            .expect("Root-owned asset");
+                        asset
+                    })
+                    .collect()
+            },
+        );
+        reset_prepaid_pool_assets_for_count(
+            &pic,
+            fixture.root_id,
+            usize::try_from(pool_count).expect("bounded pool count"),
+        );
+        install_fixture_coordinator_with_config(
+            &pic,
+            coordinator,
+            coordinator_wasm,
+            &fixture,
+            &config_path,
+        );
+        let (joining_version, sync_request) =
+            join_and_synchronize_root(&pic, coordinator, &fixture);
+        let registry_request = activate_registry_and_prepare_component_registry(
+            &pic,
+            coordinator,
+            &fixture,
+            joining_version,
+            sync_request,
+        );
+        let CoordinatorStatusResponse::Registry(registry) =
+            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query active Registry")
+        else {
+            panic!("expected Registry response");
+        };
+        let operation_id = [0x72; 32];
+        let request = fixture_fresh_component_plan(config.model(), &registry, operation_id).request;
+        let CoordinatorCommandResponse::OperationAccepted(first) = coordinator_command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::ProvisionComponents(request.clone()),
+        )
+        .expect("provision the exact configured Component tree") else {
+            panic!("expected provisioning receipt");
+        };
+        let mut last = None;
+        let terminal = (0..240_u32.saturating_add(descendants.saturating_mul(32)))
+            .find_map(|_| {
+                let CoordinatorStatusResponse::Operation(
+                    CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+                ) = coordinator_status(
+                    &pic,
+                    coordinator,
+                    CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+                )
+                .expect("query initial Root activation")
+                else {
+                    panic!("expected provisioning status");
+                };
+                if status.runtimes_activated_at_ns.is_some()
+                    && status.runtime_activated_root_count == status.root_batch_count
+                {
+                    Some(status)
+                } else {
+                    last = Some(status);
+                    pic.advance_time(Duration::from_secs(1));
+                    pic.tick();
+                    None
+                }
+            })
+            .unwrap_or_else(|| {
+                report_canister_diagnostics_batch(
+                    &pic,
+                    [("Root".to_string(), fixture.root_id, Principal::anonymous())],
+                    "initial Root activation",
+                );
+                panic!("initial Root activation did not converge: {last:?}");
+            });
+        assert_eq!(terminal.component_count, components);
+        assert!(terminal.pending_root_failure.is_none());
+        let pool = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(
+            (pool.workload, pool.ready, pool.pending_reset, pool.failed),
+            (workload, ready, 0, 0)
+        );
+        let RootStatusResponseFragment::ComponentRegistry(registry) = root_status(
+            &pic,
+            fixture.root_id,
+            RootStatusRequestFragment::ComponentRegistry(registry_request),
+        )
+        .expect("query terminal Registry") else {
+            panic!("expected Component Registry status");
+        };
+        assert_eq!(registry.managed_descendants, descendants);
+        let CoordinatorCommandResponse::OperationAccepted(replay) = coordinator_command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::ProvisionComponents(request),
+        )
+        .expect("replay exact provisioning operation") else {
+            panic!("expected replayed provisioning receipt");
+        };
+        assert_eq!(replay, first);
+        assert_eq!(root_pool_status(&pic, fixture.root_id), pool);
+    }
+
+    #[test]
+    fn live_management_gateway_preserves_fresh_creation_headroom() {
+        let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let mut pic = build_management_pic();
+        let initial_time = pic.get_time();
+        let wall_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap();
+        assert!(
+            wall_time
+                .as_nanos()
+                .abs_diff(u128::from(initial_time.as_nanos_since_unix_epoch()))
+                < Duration::from_mins(1).as_nanos(),
+            "gateway fixtures must create assets near wall time: initial={initial_time:?}, wall={wall_time:?}"
+        );
+        let canister = pic
+            .create_canister_with_params(
+                None,
+                CreateCanisterParams {
+                    cycles: Some(PREPAID_POOL_ASSET_CYCLES),
+                    placement: Some(CreateCanisterPlacement::SubnetId(
+                        pic.topology().get_app_subnets()[0],
+                    )),
+                    ..CreateCanisterParams::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(pic.cycle_balance(canister), PREPAID_POOL_ASSET_CYCLES);
+        pic.make_live(None);
+        pic.canister_status(canister, None).unwrap();
+        let after = pic.cycle_balance(canister);
+        pic.stop_live();
+        assert!(
+            after >= PREPAID_POOL_ASSET_CYCLES - MAINNET_REFILL_EXECUTION_MARGIN,
+            "fresh creation lost its margin when the gateway started: before={PREPAID_POOL_ASSET_CYCLES}, after={after}, initial_time={initial_time:?}, live_time={:?}",
+            pic.get_time()
+        );
+    }
+
+    #[test]
+    fn literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay() {
+        assert_literal_zero_host_journey(FundingJourney::Fresh, 5);
+    }
+
+    #[test]
+    fn funded_failed_imports_reconcile_with_lost_withdrawal_and_reset_responses() {
+        assert_literal_zero_host_journey(FundingJourney::FailedImports, 1);
+    }
+
+    #[test]
+    fn automatic_fresh_convergence_replays_one_reviewed_plan() {
+        assert_literal_zero_host_journey(FundingJourney::Fresh, 1);
+    }
+
+    #[cfg(test)]
+    #[derive(Clone, Copy)]
+    enum FundingJourney {
+        Fresh,
+        Reinstall,
+        FailedImports,
+        Estate,
+        FailedReserve,
+    }
+
+    #[test]
+    fn funded_estate_recovers_transfer_and_autonomous_creation_responses() {
+        assert_literal_zero_host_journey(FundingJourney::Estate, 1);
+    }
+
+    #[test]
+    fn four_workloads_refill_four_ready_with_lost_funding_and_creation_responses() {
+        assert_literal_zero_host_journey(FundingJourney::Estate, 4);
+    }
+
+    #[test]
+    fn four_workloads_and_four_failed_assets_repair_without_new_creation() {
+        assert_literal_zero_host_journey(FundingJourney::FailedReserve, 4);
+    }
+
+    #[test]
+    fn generated_reinstall_recovers_lost_install_and_reaches_working_fleet() {
+        assert_literal_zero_host_journey(FundingJourney::Reinstall, 1);
+    }
+
+    #[test]
+    fn generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation() {
+        assert_literal_zero_host_journey(FundingJourney::Fresh, 19);
+    }
+
+    #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
         reason = "one governed control-plane journey keeps Prepared Root inspection, controller finalization, Component convergence, conservation and terminal replay together"
     )]
-    fn literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay() {
+    fn assert_literal_zero_host_journey(funding: FundingJourney, initial_workload_count: usize) {
+        let funded_import_repair = matches!(funding, FundingJourney::FailedImports);
+        let failed_reserve = matches!(funding, FundingJourney::FailedReserve);
+        let fund_estate = matches!(
+            funding,
+            FundingJourney::Estate | FundingJourney::FailedReserve
+        );
+        let build_network = if fund_estate {
+            BuildNetwork::Ic
+        } else {
+            BuildNetwork::Local
+        };
         let journey_started_at = Instant::now();
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config_path = literal_zero_initial_shard_config_path(&workspace_root);
+        let config_path = if initial_workload_count == 19 {
+            workspace_root.join("apps/test/test-configs/generated-nineteen-workloads.toml")
+        } else if initial_workload_count == 4 {
+            workspace_root.join("canisters/audit/root_probe/four-workloads.toml")
+        } else if initial_workload_count == 1 {
+            workspace_root.join("canisters/audit/root_probe/activation.toml")
+        } else {
+            literal_zero_initial_shard_config_path(&workspace_root)
+        };
         let config =
             AppConfigSnapshot::load(&config_path).expect("load initial-child Component config");
         let readiness_floor = config
@@ -3598,6 +4012,7 @@ exec icp "$@"
             &config_path,
             &configuration,
             &configured_roles,
+            build_network,
         );
         let root_wasm = release_artifacts.root_wasm_bytes.clone();
         let cycles_ledger_wasm = build_toko_shaped_singleton_cycles_ledger_wasm();
@@ -3614,14 +4029,40 @@ exec icp "$@"
             .first()
             .expect("one application Subnet");
 
-        let pool_count = 3_usize;
-        let initial_workload_count = 2_usize;
-        let pool_maximum_size = pool_count
-            .checked_add(initial_workload_count)
-            .expect("literal-zero pool capacity fits usize");
-        let pool_creation_funding = readiness_floor
-            .checked_add(3_000_000_000_000)
-            .expect("literal-zero pool funding fits u128");
+        let ready_count = match initial_workload_count {
+            1 | 4 => initial_workload_count,
+            _ => 5,
+        };
+        let pool_maximum_size = ready_count + initial_workload_count;
+        let pool_count = if fund_estate {
+            initial_workload_count
+        } else {
+            pool_maximum_size
+        };
+        let ledger_fee = if fund_estate {
+            MAINNET_REFILL_LEDGER_FEE
+        } else {
+            0
+        };
+        let management_fee = if fund_estate {
+            MAINNET_REFILL_MANAGEMENT_CREATION_FEE
+        } else {
+            0
+        };
+        let pool_creation_funding = if funded_import_repair {
+            // The repair starts from an intentionally underfunded import, with its
+            // original creation budget still sufficient for the reviewed controller work.
+            readiness_floor
+                .checked_sub(500_000_000_000)
+                .expect("fixture readiness floor")
+        } else if initial_workload_count == 19 {
+            canic_host::fleet_ensure::fresh_pool_creation_funding(readiness_floor)
+                .expect("generator-owned initial pool funding")
+        } else {
+            readiness_floor
+                .checked_add(3_000_000_000_000)
+                .expect("pool funding fits u128")
+        };
         let mut requested = vec![
             ("coordinator", COORDINATOR_INSTALL_CYCLES),
             ("root", ROOT_INSTALL_CYCLES),
@@ -3629,18 +4070,27 @@ exec icp "$@"
         ];
         requested.extend((0..pool_count).map(|_| ("pool", pool_creation_funding)));
         let create_result = |cycles, controllers: Vec<Principal>| {
-            pic.create_canister_with_params(
-                None,
-                CreateCanisterParams {
-                    cycles: Some(cycles),
-                    placement: Some(CreateCanisterPlacement::SubnetId(subnet)),
-                    settings: Some(CanisterSettings {
-                        controllers: Some(controllers),
-                        ..CanisterSettings::default()
-                    }),
-                },
-            )
-            .expect("prepare one deterministic Cycles Ledger result")
+            let canister = pic
+                .create_canister_with_params(
+                    None,
+                    CreateCanisterParams {
+                        cycles: Some(cycles),
+                        placement: Some(CreateCanisterPlacement::SubnetId(subnet)),
+                        settings: Some(CanisterSettings {
+                            controllers: Some(controllers),
+                            ..CanisterSettings::default()
+                        }),
+                    },
+                )
+                .expect("prepare one deterministic Cycles Ledger result");
+            if initial_workload_count == 19 {
+                assert_eq!(
+                    pic.cycle_balance(canister),
+                    cycles,
+                    "the Ledger result starts with its exact requested net balance"
+                );
+            }
+            canister
         };
         let coordinator = create_result(COORDINATOR_INSTALL_CYCLES, vec![operator]);
         let root = create_result(ROOT_INSTALL_CYCLES, vec![operator]);
@@ -3658,19 +4108,33 @@ exec icp "$@"
         let pools = (0..pool_count)
             .map(|_| create_result(pool_creation_funding, root_and_operator.clone()))
             .collect::<Vec<_>>();
+        let autonomous_assets = (0..if fund_estate { ready_count } else { 0 })
+            .map(|_| {
+                create_result(
+                    if failed_reserve {
+                        readiness_floor - 500_000_000_000
+                    } else {
+                        readiness_floor + MAINNET_REFILL_EXECUTION_MARGIN
+                    },
+                    vec![root],
+                )
+            })
+            .collect::<Vec<_>>();
         let placement = BootstrappedRootPlacement {
             canister_pool_maximum_size: Some(
                 u32::try_from(pool_maximum_size).expect("literal-zero pool maximum fits u32"),
             ),
             canister_pool_minimum_size: Some(
-                u32::try_from(pool_count).expect("literal-zero pool count fits u32"),
+                u32::try_from(ready_count).expect("literal-zero Ready reserve fits u32"),
             ),
             canister_pool_cycles: Some(Cycles::new(readiness_floor)),
             coordinator_subnet: Some(subnet),
             existing_root: Some(root),
             existing_wasm_store: Some(store),
             root_subnet: Some(subnet),
-            component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
+            component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(
+                if initial_workload_count == 4 { 4 } else { 1 },
+            )),
             fleet_id: Some(FleetId::from_generated_bytes([0x79; 32])),
             funding: None,
             coordinator_root_funding: None,
@@ -3692,7 +4156,6 @@ exec icp "$@"
             &mut installed.init_args,
             release_artifacts.release_build_id,
         );
-
         let admission = compile_fleet_admission_policy_template(
             vec![Principal::from_slice(&[1; 29])],
             Vec::new(),
@@ -3750,7 +4213,7 @@ exec icp "$@"
             root_candid: release_artifacts.root_candid.clone(),
             store_candid: release_artifacts.store_candid.clone(),
         };
-        let desired = literal_zero_fleet_desired(LiteralZeroFleetInput {
+        let mut desired = literal_zero_fleet_desired(LiteralZeroFleetInput {
             bootstrap,
             coordinator_wasm: Path::new(&release_artifacts.coordinator_wasm),
             cycles_ledger: Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
@@ -3758,19 +4221,50 @@ exec icp "$@"
             operator,
             pool_count,
             pool_creation_funding,
-            pool_minimum_cycles: readiness_floor,
+            pool_minimum_cycles: if funded_import_repair {
+                0
+            } else {
+                readiness_floor
+            },
             protocol,
             root_wasm: Path::new(&release_artifacts.root_wasm),
             store_wasm: Path::new(&release_artifacts.store_wasm),
             subnet,
         });
+        if fund_estate {
+            // The host transport remains explicitly local. The sealed Wasms and
+            // canonical Fleet identity select the real mainnet runtime contract.
+            assert_eq!(desired.environment, "local");
+            desired.ledger_fee_cycles = ledger_fee.to_string();
+            desired.management_creation_fee_cycles = management_fee.to_string();
+            assert_eq!(
+                desired.bootstrap.as_ref().unwrap().canonical_network_id,
+                canic_core::ids::CanonicalNetworkId::ic_mainnet()
+            );
+        }
         let cycles_ledger = Principal::from_text(&desired.cycles_ledger)
             .expect("literal-zero Cycles Ledger Principal");
         pic.create_canister_with_id(None, None, cycles_ledger)
             .expect("create canonical Cycles Ledger stub principal");
         let total_requested = requested.iter().map(|(_, cycles)| cycles).sum::<u128>();
         let operator_balance = 2_000_000_000_000_000_u128;
+        if funded_import_repair || failed_reserve {
+            pic.add_cycles(cycles_ledger, operator_balance);
+        }
         assert!(operator_balance > total_requested);
+        if fund_estate {
+            install_journey_registry(
+                &pic,
+                &cycles_ledger_wasm,
+                root,
+                subnet,
+                [coordinator, root, store]
+                    .into_iter()
+                    .chain(pools.iter().copied())
+                    .chain(autonomous_assets.iter().copied())
+                    .collect(),
+            );
+        }
         pic.install_canister(
             cycles_ledger,
             cycles_ledger_wasm,
@@ -3778,6 +4272,7 @@ exec icp "$@"
                 canister_ids: [coordinator, root, store]
                     .into_iter()
                     .chain(pools.iter().copied())
+                    .chain(autonomous_assets.iter().copied())
                     .collect(),
                 expected_controllers_by_index: Some(
                     [
@@ -3787,16 +4282,23 @@ exec icp "$@"
                     ]
                     .into_iter()
                     .chain((0..pool_count).map(|_| root_and_operator_wire.clone()))
+                    .chain(autonomous_assets.iter().map(|_| vec![root]))
                     .collect(),
                 ),
                 expected_root: root,
                 expected_subnet: subnet,
-                initial_balances: Some(vec![CyclesLedgerStubAccountBalance {
-                    balance: Nat::from(operator_balance),
-                    owner: operator,
-                }]),
-                pending_first_index: None,
-                withdrawal_fee: Some(Nat::from(0_u8)),
+                initial_balances: Some(vec![
+                    CyclesLedgerStubAccountBalance {
+                        balance: Nat::from(operator_balance),
+                        owner: operator,
+                    },
+                    CyclesLedgerStubAccountBalance {
+                        balance: Nat::from(0_u8),
+                        owner: root,
+                    },
+                ]),
+                pending_first_index: fund_estate.then_some(u64::try_from(3 + pool_count).unwrap()),
+                withdrawal_fee: Some(Nat::from(ledger_fee)),
             })
             .expect("encode literal-zero Cycles Ledger authority"),
             None,
@@ -3807,16 +4309,29 @@ exec icp "$@"
             root_key: hex_bytes(pic.root_key().expect("PocketIC local root key")),
             url: live_url.to_string(),
         };
+        let desired = if initial_workload_count == 19 {
+            generate_journey_desired(GeneratedJourneyInput {
+                root: &adapter_root,
+                config: &config_path,
+                icp_wrapper: &icp_wrapper,
+                local_replica: &local_replica,
+                operator,
+                subnet,
+                release_build_id: release_artifacts.release_build_id,
+                root_key: &pic.root_key().expect("PocketIC trust anchor"),
+                workload_count: initial_workload_count,
+                ready_count,
+            })
+        } else {
+            desired
+        };
         let desired_identity = desired_sha256(&desired);
-        let mut platform = IcpEnsurePlatform::new(
-            desired.clone(),
-            icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
+        let mut platform = literal_zero_journey_platform(
+            &desired,
+            &icp_wrapper,
             &adapter_root,
-        )
-        .with_local_replica(local_replica.clone())
-        .with_observation_delay_bounds(
-            LITERAL_ZERO_OBSERVATION_DELAY,
-            LITERAL_ZERO_OBSERVATION_DELAY,
+            local_replica.clone(),
+            initial_workload_count != 19,
         );
         let infrastructure_started_at = Instant::now();
         super::super::fixture::progress("planning literal-zero infrastructure");
@@ -3857,6 +4372,18 @@ exec icp "$@"
                 .all(|action| !matches!(action, EnsureAction::FleetProtocol { .. })),
             "literal-zero planning must finish infrastructure before protocol effects"
         );
+        if !funded_import_repair {
+            std::fs::write(
+                adapter_root.join("lost-reset-args.bin"),
+                encode_one(HostRootCommandFragment::ImportPoolCanister(
+                    PoolCanisterRequest {
+                        canister_id: pools[0],
+                    },
+                ))
+                .expect("encode exact automatic import"),
+            )
+            .expect("enable automatic reset response loss");
+        }
         let first = fleet_ensure_workflow::apply(
             &adapter_root,
             &desired,
@@ -3869,15 +4396,12 @@ exec icp "$@"
             matches!(first, Err(EnsureWorkflowError::Platform(_))),
             "the production wrapper must lose one controller-update response: {first:?}"
         );
-        let mut resumed_platform = IcpEnsurePlatform::new(
-            desired.clone(),
-            icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
+        let mut resumed_platform = literal_zero_journey_platform(
+            &desired,
+            &icp_wrapper,
             &adapter_root,
-        )
-        .with_local_replica(local_replica.clone())
-        .with_observation_delay_bounds(
-            LITERAL_ZERO_OBSERVATION_DELAY,
-            LITERAL_ZERO_OBSERVATION_DELAY,
+            local_replica.clone(),
+            initial_workload_count != 19,
         );
         let resumed = fleet_ensure_workflow::apply(
             &adapter_root,
@@ -3887,22 +4411,20 @@ exec icp "$@"
             &planned.plan.plan_sha256,
             &mut resumed_platform,
         );
-        match resumed {
-            Err(EnsureWorkflowError::ConvergenceDrift) => {}
-            Err(EnsureWorkflowError::Policy(EnsurePolicyError::EstatePoolCapacity {
-                allocated_workloads: 0,
-                available_slots: 2,
-                capacity_shortfall: 3,
-                eligible_ready_assets: 0,
-                maximum_size: 5,
-                occupied_assets: 3,
-                pending_creations: 0,
-                required_creation_count: 5,
-                ref root,
-            })) if root == "root" => {}
-            other => panic!(
-                "fresh-process adapter must preserve completed infrastructure and require a typed current-protocol replan boundary: {other:?}"
-            ),
+        if funded_import_repair {
+            assert!(
+                matches!(
+                    resumed,
+                    Err(EnsureWorkflowError::SuccessorReviewRequired { .. })
+                ),
+                "additional funding must require an exact new review: {resumed:?}"
+            );
+        } else {
+            assert!(
+                matches!(resumed, Err(EnsureWorkflowError::Platform(_))),
+                "automatic continuation must reach the lost reset response: {resumed:?}"
+            );
+            assert!(adapter_root.join("lost-reset-response").is_file());
         }
         assert_eq!(
             std::fs::read_to_string(&controller_mutation_log)
@@ -3925,41 +4447,230 @@ exec icp "$@"
             infrastructure_started_at,
         );
 
-        // Root pool maintenance is an internal same-operation owner, not a host effect.
-        reset_prepaid_pool_assets_for_count_as(&pic, root, operator, pool_count);
-        let RootCommandResponseFragment::MaintainPool(replayed_reset) =
-            root_command_as(&pic, root, operator, RootCommandFragment::MaintainPool)
-                .expect("replay lost pool reset response")
-        else {
-            panic!("Root returned a differently correlated pool response");
-        };
-        assert!(matches!(
-            replayed_reset,
-            PoolMaintenanceResponse::Maintained
-        ));
-        let mut protocol_platform = IcpEnsurePlatform::new(
-            desired.clone(),
-            icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
-            &adapter_root,
-        )
-        .with_local_replica(local_replica.clone())
-        .with_observation_delay_bounds(
-            LITERAL_ZERO_OBSERVATION_DELAY,
-            LITERAL_ZERO_OBSERVATION_DELAY,
-        );
-        let protocol_started_at = Instant::now();
-        super::super::fixture::progress("converging literal-zero control plane");
-        let protocol_plan = fleet_ensure_workflow::plan(
-            &adapter_root,
-            &desired,
-            &desired_identity,
-            &desired.fleet,
-            1_800_000_000_000_000_002,
-            &mut protocol_platform,
-        )
-        .expect("plan current control-plane protocol through production adapter");
-        let protocol_actions = planned_actions(&protocol_plan.plan);
-        assert!(
+        if !autonomous_assets.is_empty() {
+            assert_funded_autonomous_journey(AutonomousFundingJourney {
+                adapter_root: &adapter_root,
+                icp_wrapper: &icp_wrapper,
+                local_replica: &local_replica,
+                pic: &pic,
+                desired: &desired,
+                initial_plan: &planned.plan,
+                root,
+                operator,
+                cycles_ledger,
+                assets: &autonomous_assets,
+                imported: &pools,
+                repair_failed_reserve: failed_reserve,
+                readiness_floor,
+                operator_after_initial_creation: operator_balance
+                    - total_requested
+                    - u128::try_from(3 + pool_count).unwrap() * (ledger_fee + management_fee),
+            });
+            pic.stop_live();
+            progress_elapsed(
+                "funded autonomous production-adapter journey complete",
+                journey_started_at,
+            );
+            return;
+        }
+
+        let (protocol_terminal, repair_funding, withdrawals) = if funded_import_repair {
+            let failed = root_command_as(
+                &pic,
+                root,
+                operator,
+                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                    canister_id: pools[0],
+                }),
+            )
+            .expect("observe the real underfunded import failure before repair review");
+            assert!(
+                matches!(failed, RootCommandResponseFragment::ImportPoolCanister(
+                PoolImportResponse::ResetFailed { canister_id, .. }
+            ) if canister_id == pools[0])
+            );
+            let pool = root_pool_status_as(&pic, root, operator);
+            assert_eq!((pool.failed, pool.pending_reset, pool.ready), (1, 1, 0));
+            let repair_started_at = Instant::now();
+            let repair_plan = fleet_ensure_workflow::plan(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                1_800_000_000_000_000_001,
+                &mut resumed_platform,
+            )
+            .expect("plan every exact fresh import reset through the production host");
+            assert_eq!(repair_plan.plan.protocol_actions.iter().filter(|action| matches!(
+            action, EnsureAction::FleetProtocol { action, .. }
+                if matches!(action.as_ref(), CurrentFleetProtocolAction::ReconcilePoolAsset { .. })
+        )).count(), pool_count);
+            let funded_assets = planned_actions(&repair_plan.plan)
+                .into_iter()
+                .filter_map(|action| {
+                    if let EnsureAction::Fund {
+                        amount,
+                        principal,
+                        pool_root: Some(pool_root),
+                        ..
+                    } = action
+                    {
+                        assert_eq!(*pool_root, root.to_text());
+                        Some((principal.clone(), *amount))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<BTreeMap<_, _>>();
+            let repair_funding = funded_assets.values().sum::<u128>();
+            if funded_import_repair {
+                assert_eq!(
+                    funded_assets.keys().cloned().collect::<BTreeSet<_>>(),
+                    pools.iter().map(Principal::to_text).collect()
+                );
+                assert!(repair_funding > 0);
+                assert!(
+                    planned_actions(&repair_plan.plan)
+                        .iter()
+                        .all(|action| matches!(
+                            action,
+                            EnsureAction::Fund { .. } | EnsureAction::FleetProtocol { .. }
+                        ))
+                );
+                std::fs::write(adapter_root.join("lose-funding-response"), [])
+                    .expect("enable exact withdrawal response loss");
+                let native_before_funding = pic.cycle_balance(pools[0]);
+                let lost_funding = fleet_ensure_workflow::apply(
+                    &adapter_root,
+                    &desired,
+                    &desired_identity,
+                    &desired.fleet,
+                    &repair_plan.plan.plan_sha256,
+                    &mut resumed_platform,
+                );
+                assert!(
+                    matches!(lost_funding, Err(EnsureWorkflowError::Platform(_))),
+                    "lose one completed withdrawal reply: {lost_funding:?}"
+                );
+                let withdrawals: u64 = pic
+                    .query_candid(cycles_ledger, "withdrawal_count", ())
+                    .expect("query withdrawal receipts");
+                assert_eq!(withdrawals, 1);
+                let funded_ceiling = native_before_funding + funded_assets[&pools[0].to_text()];
+                let observed_after_funding = pic.cycle_balance(pools[0]);
+                let observation_burn = desired
+                    .maximum_observation_burn_cycles
+                    .parse::<Cycles>()
+                    .expect("reviewed observation burn")
+                    .to_u128();
+                assert!(observed_after_funding <= funded_ceiling);
+                assert!(funded_ceiling - observed_after_funding <= observation_burn);
+                assert!(observed_after_funding >= readiness_floor);
+                assert_eq!(
+                    ledger_account_balance(&pic, cycles_ledger, operator),
+                    Nat::from(
+                        operator_balance - total_requested - funded_assets[&pools[0].to_text()]
+                    )
+                );
+                resumed_platform = literal_zero_journey_platform(
+                    &desired,
+                    &icp_wrapper,
+                    &adapter_root,
+                    local_replica.clone(),
+                    initial_workload_count != 19,
+                );
+            } else {
+                assert_eq!(repair_funding, 0);
+            }
+            std::fs::write(
+                adapter_root.join("lost-reset-args.bin"),
+                encode_one(HostRootCommandFragment::ImportPoolCanister(
+                    PoolCanisterRequest {
+                        canister_id: pools[0],
+                    },
+                ))
+                .expect("encode exact reset fault boundary"),
+            )
+            .expect("retain the exact reset request for lost-response injection");
+            let lost_reset = fleet_ensure_workflow::apply(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                &repair_plan.plan.plan_sha256,
+                &mut resumed_platform,
+            );
+            assert!(
+                matches!(lost_reset, Err(EnsureWorkflowError::Platform(_))),
+                "lose exactly the first import reset reply: {lost_reset:?}"
+            );
+            let mut resumed_platform = literal_zero_journey_platform(
+                &desired,
+                &icp_wrapper,
+                &adapter_root,
+                local_replica.clone(),
+                initial_workload_count != 19,
+            );
+            let repaired = fleet_ensure_workflow::apply(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                &repair_plan.plan.plan_sha256,
+                &mut resumed_platform,
+            );
+            assert!(
+                matches!(repaired, Err(EnsureWorkflowError::ConvergenceDrift)),
+                "reconciled imports must expose the provisioning successor: {repaired:?}"
+            );
+            assert_eq!(
+                root_pool_status_as(&pic, root, operator).ready as usize,
+                pool_count
+            );
+            assert_eq!(
+                std::fs::read_to_string(adapter_root.join("reset-mutations.log"))
+                    .expect("read reset mutation log")
+                    .lines()
+                    .count(),
+                1,
+                "protected Ready status must prevent replaying a completed reset"
+            );
+            let withdrawals: u64 = pic
+                .query_candid(cycles_ledger, "withdrawal_count", ())
+                .expect("query repaired withdrawal receipts");
+            assert_eq!(
+                withdrawals,
+                if funded_import_repair {
+                    u64::try_from(pool_count).expect("pool count")
+                } else {
+                    0
+                }
+            );
+            assert_eq!(
+                ledger_account_balance(&pic, cycles_ledger, operator),
+                Nat::from(operator_balance - total_requested - repair_funding)
+            );
+            progress_elapsed("literal-zero imports reconciled by host", repair_started_at);
+            let mut protocol_platform = literal_zero_journey_platform(
+                &desired,
+                &icp_wrapper,
+                &adapter_root,
+                local_replica.clone(),
+                initial_workload_count != 19,
+            );
+            let protocol_started_at = Instant::now();
+            super::super::fixture::progress("converging literal-zero control plane");
+            let protocol_plan = fleet_ensure_workflow::plan(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                1_800_000_000_000_000_002,
+                &mut protocol_platform,
+            )
+            .expect("plan current control-plane protocol through production adapter");
+            let protocol_actions = planned_actions(&protocol_plan.plan);
+            assert!(
             protocol_actions
                 .iter()
                 .any(|action| matches!(
@@ -3969,18 +4680,92 @@ exec icp "$@"
                 )),
             "the governed production plan must include Component provisioning: {protocol_actions:#?}"
         );
-        let protocol_terminal = fleet_ensure_workflow::apply(
-            &adapter_root,
-            &desired,
-            &desired_identity,
-            &desired.fleet,
-            &protocol_plan.plan.plan_sha256,
-            &mut protocol_platform,
-        )
-        .expect("apply complete current protocol through production adapter");
-        assert!(protocol_terminal.terminal);
-        progress_elapsed("literal-zero control plane converged", protocol_started_at);
-
+            let protocol_terminal = fleet_ensure_workflow::apply(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                &protocol_plan.plan.plan_sha256,
+                &mut protocol_platform,
+            )
+            .unwrap_or_else(|error| {
+                eprintln!(
+                    "terminal pool: {:?}",
+                    root_pool_status_as(&pic, root, operator)
+                );
+                report_canister_diagnostics_batch(
+                    &pic,
+                    [
+                        ("Coordinator".to_string(), coordinator, operator),
+                        ("Root".to_string(), root, operator),
+                    ]
+                    .into_iter()
+                    .chain(
+                        pools
+                            .iter()
+                            .enumerate()
+                            .map(|(index, pool)| (format!("pool-{index}"), *pool, root)),
+                    ),
+                    "literal-zero production-host activation",
+                );
+                panic!("apply complete current protocol through production adapter: {error:?}");
+            });
+            assert!(protocol_terminal.terminal);
+            progress_elapsed("literal-zero control plane converged", protocol_started_at);
+            (protocol_terminal, repair_funding, withdrawals)
+        } else {
+            let mut platform = literal_zero_journey_platform(
+                &desired,
+                &icp_wrapper,
+                &adapter_root,
+                local_replica.clone(),
+                initial_workload_count != 19,
+            );
+            let completed = fleet_ensure_workflow::apply(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                &planned.plan.plan_sha256,
+                &mut platform,
+            )
+            .expect("resume the original reviewed plan through every automatic successor");
+            assert!(completed.terminal);
+            assert_eq!(completed.plan.plan_sha256, planned.plan.plan_sha256);
+            let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
+                &adapter_root,
+                &desired.environment,
+                &desired.fleet,
+            );
+            let journal = canic_host::fleet_ensure::ops::read_journal(&paths)
+                .expect("read automatic phase journal")
+                .expect("retained journal");
+            assert!(!journal.successor_phases.is_empty());
+            assert_eq!(journal.plan_sha256, planned.plan.plan_sha256);
+            assert!(
+                journal
+                    .successor_phases
+                    .iter()
+                    .all(|phase| phase.plan.as_ref().is_some_and(|plan| plan
+                        .canisters
+                        .iter()
+                        .all(|canister| canister.actions.is_empty())))
+            );
+            (completed, 0_u128, 0_u64)
+        };
+        assert!(protocol_terminal.actual_conservation.is_some());
+        assert_eq!(
+            std::fs::read_to_string(adapter_root.join("reset-mutations.log"))
+                .expect("completed reset log")
+                .lines()
+                .count(),
+            1,
+            "lost reset response must not repeat the completed reset"
+        );
+        let terminal_pool = root_pool_status_as(&pic, root, operator);
+        assert_eq!(terminal_pool.workload as usize, initial_workload_count);
+        assert_eq!(terminal_pool.ready as usize, ready_count);
+        assert!(terminal_pool.pending_creation.is_none());
         let terminal_pool_statuses = pools
             .iter()
             .map(|pool| {
@@ -3993,16 +4778,16 @@ exec icp "$@"
                 .iter()
                 .filter(|status| status.module_hash.is_some())
                 .count(),
-            2,
-            "two exact imported pool identities must become the top-level and initial-child Component Workloads"
+            initial_workload_count,
+            "exact imported pool identities must become the top-level and initial-child Component Workloads"
         );
         assert_eq!(
             terminal_pool_statuses
                 .iter()
                 .filter(|status| status.module_hash.is_none())
                 .count(),
-            1,
-            "one exact imported pool identity must remain a Ready module-free asset"
+            ready_count,
+            "the configured Ready reserve must remain after allocating every initial Workload"
         );
         for status in &terminal_pool_statuses {
             assert_eq!(status.settings.controllers, vec![root]);
@@ -4018,6 +4803,7 @@ exec icp "$@"
             .chain(pools.iter().copied())
             .map(|canister| pic.cycle_balance(canister))
             .sum::<u128>();
+        let requested_controlled_cycles = requested_controlled_cycles + repair_funding;
         let measured_execution_burn_cycles = requested_controlled_cycles
             .checked_sub(final_controlled_cycles)
             .expect("fresh estate cannot gain unreviewed controlled cycles");
@@ -4026,18 +4812,44 @@ exec icp "$@"
             requested_controlled_cycles
         );
 
-        let mut replay_platform = IcpEnsurePlatform::new(
-            desired.clone(),
-            icp_wrapper.to_str().expect("ICP wrapper path UTF-8"),
+        if matches!(funding, FundingJourney::Reinstall) {
+            assert_generated_reinstall_journey(ReinstallJourney {
+                adapter_root: &adapter_root,
+                config: &config_path,
+                icp_wrapper: &icp_wrapper,
+                local_replica: &local_replica,
+                pic: &pic,
+                desired: &desired,
+                coordinator,
+                root,
+                store,
+                pools: &pools,
+            });
+            pic.stop_live();
+            std::fs::remove_dir_all(&adapter_root).expect("remove completed reinstall fixture");
+            progress_elapsed("generated reinstall journey complete", journey_started_at);
+            return;
+        }
+        let mut replay_platform = literal_zero_journey_platform(
+            &desired,
+            &icp_wrapper,
             &adapter_root,
-        )
-        .with_local_replica(local_replica)
-        .with_observation_delay_bounds(
-            LITERAL_ZERO_OBSERVATION_DELAY,
-            LITERAL_ZERO_OBSERVATION_DELAY,
+            local_replica,
+            initial_workload_count != 19,
         );
         let replay_started_at = Instant::now();
         super::super::fixture::progress("proving literal-zero terminal replay");
+        let same_plan = fleet_ensure_workflow::apply(
+            &adapter_root,
+            &desired,
+            &desired_identity,
+            &desired.fleet,
+            &protocol_terminal.plan.plan_sha256,
+            &mut replay_platform,
+        )
+        .expect("effect-free replay of the completed plan");
+        assert!(same_plan.terminal);
+        assert_eq!(same_plan.effects_applied, 0);
         let replay_plan = fleet_ensure_workflow::plan(
             &adapter_root,
             &desired,
@@ -4067,7 +4879,20 @@ exec icp "$@"
             pool_count,
             "protocol convergence and terminal replay must not repeat controller effects"
         );
+        let replay_withdrawals: u64 = pic
+            .query_candid(cycles_ledger, "withdrawal_count", ())
+            .expect("query replayed withdrawal receipts");
+        assert_eq!(replay_withdrawals, withdrawals);
+        assert_eq!(
+            ledger_account_balance(&pic, cycles_ledger, operator),
+            Nat::from(operator_balance - requested_controlled_cycles)
+        );
+        assert_eq!(
+            ledger_account_balance(&pic, cycles_ledger, root),
+            Nat::from(0_u8)
+        );
         progress_elapsed("literal-zero terminal replay complete", replay_started_at);
+
         pic.stop_live();
         std::fs::remove_dir_all(adapter_root)
             .expect("remove literal-zero production-adapter fixture");
@@ -4075,6 +4900,1412 @@ exec icp "$@"
             "literal-zero production-adapter journey complete",
             journey_started_at,
         );
+    }
+
+    #[cfg(test)]
+    struct ReinstallJourney<'a> {
+        adapter_root: &'a Path,
+        config: &'a Path,
+        icp_wrapper: &'a Path,
+        local_replica: &'a LocalReplicaTarget,
+        pic: &'a PocketIc,
+        desired: &'a DesiredFleet,
+        coordinator: Principal,
+        root: Principal,
+        store: Principal,
+        pools: &'a [Principal],
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one real release transition retains reset, recovery, conservation and both replay boundaries"
+    )]
+    fn assert_generated_reinstall_journey(input: ReinstallJourney<'_>) {
+        let root = input.adapter_root;
+        let pic = input.pic;
+        let operator = Principal::from_text(&input.desired.operator).unwrap();
+        let subnet = *pic.topology().get_app_subnets().first().unwrap();
+        let ledger = Principal::from_text(&input.desired.cycles_ledger).unwrap();
+        let transfer: Result<Nat, QualificationIcrc1TransferError> = pic
+            .update_candid_as(
+                ledger,
+                operator,
+                "icrc1_transfer",
+                (QualificationIcrc1TransferArg {
+                    from_subaccount: None,
+                    to: QualificationIcrc1Account {
+                        owner: input.root,
+                        subaccount: None,
+                    },
+                    fee: Some(Nat::from(0_u8)),
+                    created_at_time: None,
+                    memo: None,
+                    amount: Nat::from(1_000_000_000_u128),
+                },),
+            )
+            .expect("fund the retained Root Ledger account");
+        transfer.expect("fixture Ledger funding");
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(input.config).unwrap();
+        let configuration = config
+            .model()
+            .compile_component_deployment_configuration()
+            .unwrap();
+        let roles = config
+            .model()
+            .roles
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let replacement = canic_host::release_build::plan_release_build_for_profile(
+            root,
+            CanisterBuildProfile::Fast,
+        )
+        .expect("allocate the replacement release before building")
+        .record
+        .release_build_id;
+        assert_ne!(
+            replacement,
+            input.desired.bootstrap.as_ref().unwrap().release_build_id
+        );
+        build_and_seal_literal_zero_release_artifacts(
+            &workspace,
+            root,
+            input.config,
+            &configuration,
+            &roles,
+            replacement,
+            BuildNetwork::Local,
+        );
+        let config_path = retain_generated_journey_source(root, input.config);
+        let trust = root.join("reinstall-root-key.der");
+        let root_key = pic.root_key().unwrap();
+        std::fs::write(&trust, &root_key).unwrap();
+        canic_host::network::enroll_network(canic_host::network::NetworkEnrollmentOptions {
+            workspace_root: root,
+            environment: "local",
+            root_key: &trust,
+            fingerprint: &canic_core::cdk::utils::hash::sha256_hex(&root_key),
+        })
+        .expect("enroll the exact reinstall network");
+        let source = root.join("reinstall-policy.toml");
+        let readiness = &input.desired.bootstrap.as_ref().unwrap().roots[0]
+            .limits
+            .canister_pool
+            .canister_cycles;
+        let policy = generated_journey_policy(operator, subnet, 1, 1)
+            .replace(
+                "component_admissions = { catalogue = 1, scaling = 1, users = 1 }",
+                "component_admissions = { default = 1 }",
+            )
+            .replace(
+                "canister_cycles = \"5T\"",
+                &format!("canister_cycles = \"{}\"", readiness.to_config_string()),
+            );
+        std::fs::write(&source, policy).unwrap();
+        let seed = root.join("reinstall-seed.toml");
+        let fleet_id = FleetId::from_generated_bytes([0xa4; 32]);
+        let pools = input
+            .pools
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        std::fs::write(
+            &seed,
+            format!(
+                r#"
+schema_version = 1
+fleet_id = "{fleet_id}"
+fresh_estate = false
+coordinator = "{}"
+cycles_ledger = "{ledger}"
+[[roots]]
+placement_subnet = "{subnet}"
+root = "{}"
+store = "{}"
+pool_imports = {pools:?}
+"#,
+                input.coordinator, input.root, input.store
+            ),
+        )
+        .unwrap();
+        let generator = root.join("reinstall-generator-icp");
+        std::fs::write(
+            &generator,
+            format!(
+                r#"#!/bin/bash
+set -euo pipefail
+args=()
+canister=false
+for value in "$@"; do
+  if [[ "$value" == canister ]]; then canister=true; fi
+done
+if "$canister"; then
+  while (( $# )); do
+    case "$1" in
+      -e|--environment) shift 2 ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  exec '{}' "${{args[@]}}" -n '{}' -k '{}'
+fi
+exec '{}' "$@"
+"#,
+                input.icp_wrapper.display(),
+                input.local_replica.url,
+                input.local_replica.root_key,
+                input.icp_wrapper.display()
+            ),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(&generator, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        // The new release needs no previous host journal or stable-state decoder.
+        let old_paths =
+            canic_host::fleet_ensure::ops::EnsurePaths::under(root, "local", &input.desired.fleet);
+        for path in [&old_paths.plan, &old_paths.journal, &old_paths.state] {
+            std::fs::remove_file(path).expect("discard prior release host records");
+        }
+        let request = canic_host::fleet_ensure::FleetGenerateRequest {
+            app_config: &config_path,
+            environment: "local",
+            fleet: &input.desired.fleet,
+            icp_executable: generator.to_str().unwrap(),
+            release_build_id: replacement,
+            root,
+            seed: &seed,
+            source: &source,
+        };
+        let generated = canic_host::fleet_ensure::generate_desired_fleet(&request)
+            .expect("generate from exact management authority before any reset");
+        assert_eq!(generated.observed_canisters, 2);
+        let desired = generated.desired;
+        let digest = desired_sha256(&desired);
+        let platform = || {
+            literal_zero_journey_platform(
+                &desired,
+                input.icp_wrapper,
+                root,
+                input.local_replica.clone(),
+                true,
+            )
+        };
+        let mut first_platform = platform();
+        let reviewed = fleet_ensure_workflow::plan(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            1_800_000_000_000_000_010,
+            &mut first_platform,
+        )
+        .expect("review the exact Root reinstall");
+        assert_eq!(
+            reviewed.plan.scope,
+            canic_host::fleet_ensure::model::FleetEnsurePlanScope::RootReinstallPrerequisite
+        );
+        assert_eq!(reviewed.plan.root_reinstall_bindings.len(), 1);
+        pic.set_controllers(
+            input.root,
+            Some(operator),
+            vec![operator, Principal::anonymous()],
+        )
+        .expect("introduce controller drift after review");
+        let refused = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut first_platform,
+        );
+        assert!(matches!(refused, Err(EnsureWorkflowError::Policy(
+            canic_host::fleet_ensure::policy::EnsurePolicyError::RootManagementAuthorityMismatch { .. }
+        ))), "foreign controller must reject before reset: {refused:?}");
+        assert!(!root.join("reinstall-mutations.log").exists());
+        assert!(
+            canic_host::fleet_ensure::ops::read_journal(&old_paths)
+                .unwrap()
+                .is_none()
+        );
+        pic.set_controllers(input.root, Some(operator), vec![operator])
+            .expect("restore the exact reviewed controller authority");
+        let native_before = [input.coordinator, input.root, input.store]
+            .into_iter()
+            .chain(input.pools.iter().copied())
+            .map(|id| pic.cycle_balance(id))
+            .sum::<u128>();
+        let root_version = pic
+            .canister_status(input.root, Some(operator))
+            .unwrap()
+            .version;
+        std::fs::write(root.join("lose-install-response"), b"once").unwrap();
+        let lost = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut first_platform,
+        );
+        assert!(
+            matches!(lost, Err(EnsureWorkflowError::Platform(_))),
+            "lost install response: {lost:?}"
+        );
+        assert!(root.join("lost-install-response").is_file());
+        let installed_version = pic
+            .canister_status(input.root, Some(operator))
+            .unwrap()
+            .version;
+        assert!(installed_version > root_version);
+        let mut recovered = platform();
+        let reset = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut recovered,
+        )
+        .expect("reconcile the issued reinstall");
+        assert!(reset.terminal);
+        assert!(
+            pic.canister_status(input.root, Some(operator))
+                .unwrap()
+                .version
+                >= installed_version
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("reinstall-mutations.log"))
+                .unwrap()
+                .lines()
+                .count(),
+            1
+        );
+        let replay = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut platform(),
+        )
+        .expect("effect-free reset replay");
+        assert_eq!(replay.effects_applied, 0);
+        assert_eq!(
+            ledger_account_balance(pic, ledger, input.root),
+            Nat::from(1_000_000_000_u128)
+        );
+        let full = fleet_ensure_workflow::plan(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            1_800_000_000_000_000_011,
+            &mut recovered,
+        )
+        .expect("review remaining current Fleet convergence");
+        assert_eq!(
+            full.plan.scope,
+            canic_host::fleet_ensure::model::FleetEnsurePlanScope::Full
+        );
+        assert!(full.plan.continuation.is_some());
+        let ready = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &full.plan.plan_sha256,
+            &mut recovered,
+        )
+        .expect("reconstruct a working Fleet through bounded Ensure continuation");
+        assert!(ready.terminal);
+        assert!(ready.actual_conservation.is_some());
+        let pool = root_pool_status_as(pic, input.root, operator);
+        assert_eq!(pool.workload, 1);
+        assert_eq!(pool.ready, 1);
+        assert_eq!(pool.pending_reset, 0);
+        let state = canic_host::fleet_ensure::ops::read_state(&old_paths, &desired.fleet).unwrap();
+        assert!(state.active_registry.is_some());
+        for asset in input.pools {
+            assert_eq!(
+                pic.canister_status(*asset, Some(input.root))
+                    .unwrap()
+                    .settings
+                    .controllers,
+                vec![input.root]
+            );
+        }
+        let mutations = std::fs::read_to_string(root.join("reinstall-mutations.log")).unwrap();
+        assert_eq!(mutations.lines().count(), 3);
+        let native_after = [input.coordinator, input.root, input.store]
+            .into_iter()
+            .chain(input.pools.iter().copied())
+            .map(|id| pic.cycle_balance(id))
+            .sum::<u128>();
+        assert!(native_before >= native_after);
+        assert!(native_before - native_after < 10_000_000_000_000);
+        assert_eq!(
+            ledger_account_balance(pic, ledger, input.root),
+            Nat::from(1_000_000_000_u128)
+        );
+        let same_plan = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &full.plan.plan_sha256,
+            &mut platform(),
+        )
+        .expect("original full plan replay");
+        assert_eq!(same_plan.effects_applied, 0);
+        let again = fleet_ensure_workflow::plan(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            1_800_000_000_000_000_012,
+            &mut platform(),
+        )
+        .expect("plan the completed replacement");
+        assert!(planned_actions(&again.plan).is_empty());
+        let replay = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &again.plan.plan_sha256,
+            &mut platform(),
+        )
+        .expect("newly planned effect-free replay");
+        assert_eq!(replay.effects_applied, 0);
+        assert_eq!(
+            std::fs::read_to_string(root.join("reinstall-mutations.log")).unwrap(),
+            mutations
+        );
+        super::super::fixture::progress(
+            "generated changed-release reinstall, recovery and replay complete",
+        );
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    struct JourneySubnetRequest {
+        principal: Principal,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Deserialize)]
+    struct JourneySubnetPayload {
+        subnet_id: Option<Principal>,
+    }
+
+    #[cfg(test)]
+    fn install_journey_registry(
+        pic: &PocketIc,
+        wasm: &[u8],
+        root: Principal,
+        subnet: Principal,
+        canisters: Vec<Principal>,
+    ) {
+        for canister in &canisters {
+            assert_eq!(pic.get_subnet(*canister), Some(subnet));
+        }
+        let registry = Principal::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
+        pic.create_canister_with_id(None, None, registry)
+            .expect("create canonical NNS routing boundary");
+        pic.install_canister(
+            registry,
+            wasm.to_vec(),
+            encode_one(CyclesLedgerStubInitArgs {
+                canister_ids: canisters,
+                expected_controllers_by_index: None,
+                expected_root: root,
+                expected_subnet: subnet,
+                initial_balances: None,
+                pending_first_index: None,
+                withdrawal_fee: None,
+            })
+            .unwrap(),
+            None,
+        );
+        let unknown: Result<JourneySubnetPayload, String> = pic
+            .query_candid(
+                registry,
+                "get_subnet_for_canister",
+                (JourneySubnetRequest {
+                    principal: Principal::from_slice(&[0x99; 29]),
+                },),
+            )
+            .expect("query unknown Principal routing");
+        assert!(unknown.unwrap().subnet_id.is_none());
+    }
+
+    #[cfg(test)]
+    fn literal_zero_journey_platform(
+        desired: &DesiredFleet,
+        wrapper: &Path,
+        root: &Path,
+        replica: LocalReplicaTarget,
+        accelerate_observations: bool,
+    ) -> IcpEnsurePlatform {
+        let platform = IcpEnsurePlatform::new(desired.clone(), wrapper.to_str().unwrap(), root)
+            .with_local_replica(replica)
+            .with_progress_handler(|progress| {
+                let unix_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("measurement clock follows Unix epoch")
+                    .as_millis();
+                eprintln!(
+                    "[FLEET-MEASURE] {}",
+                    serde_json::json!({"unix_ms": unix_ms, "progress": progress}),
+                );
+            });
+        if accelerate_observations {
+            platform.with_observation_delay_bounds(
+                LITERAL_ZERO_OBSERVATION_DELAY,
+                LITERAL_ZERO_OBSERVATION_DELAY,
+            )
+        } else {
+            platform
+        }
+    }
+
+    #[cfg(test)]
+    struct AutonomousFundingJourney<'a> {
+        adapter_root: &'a Path,
+        icp_wrapper: &'a Path,
+        local_replica: &'a LocalReplicaTarget,
+        pic: &'a PocketIc,
+        desired: &'a DesiredFleet,
+        initial_plan: &'a FleetEnsurePlan,
+        root: Principal,
+        operator: Principal,
+        cycles_ledger: Principal,
+        assets: &'a [Principal],
+        imported: &'a [Principal],
+        repair_failed_reserve: bool,
+        readiness_floor: u128,
+        operator_after_initial_creation: u128,
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one composed production journey binds lost transfer, autonomous creation, terminal conservation and replay"
+    )]
+    fn assert_funded_autonomous_journey(input: AutonomousFundingJourney<'_>) {
+        let new_platform = |desired: &DesiredFleet| {
+            IcpEnsurePlatform::new(
+                desired.clone(),
+                input.icp_wrapper.to_str().unwrap(),
+                input.adapter_root,
+            )
+            .with_local_replica(input.local_replica.clone())
+            .with_observation_delay_bounds(
+                LITERAL_ZERO_OBSERVATION_DELAY,
+                LITERAL_ZERO_OBSERVATION_DELAY,
+            )
+        };
+        let mut platform = new_platform(input.desired);
+        let original = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            input.desired,
+            &desired_sha256(input.desired),
+            &input.desired.fleet,
+            &input.initial_plan.plan_sha256,
+            &mut platform,
+        );
+        assert!(
+            matches!(
+                original,
+                Err(EnsureWorkflowError::SuccessorReviewRequired { .. })
+            ),
+            "new estate debit requires a separate exact review: {original:?}"
+        );
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
+            Nat::from(input.operator_after_initial_creation)
+        );
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.root),
+            Nat::from(0_u8)
+        );
+        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
+            input.adapter_root,
+            &input.desired.environment,
+            &input.desired.fleet,
+        );
+        let state =
+            canic_host::fleet_ensure::ops::read_state(&paths, &input.desired.fleet).unwrap();
+        let mut desired = input.desired.clone();
+        desired.bootstrap.as_mut().unwrap().fresh_estate = false;
+        for canister in &mut desired.canisters {
+            canister.principal = Some(
+                state
+                    .principals
+                    .get(&canister.name)
+                    .or_else(|| state.pending_principals.get(&canister.name))
+                    .unwrap()
+                    .clone(),
+            );
+        }
+        let source = desired_sha256(&desired);
+        let mut platform = new_platform(&desired);
+        let mut planned = fleet_ensure_workflow::plan(
+            input.adapter_root,
+            &desired,
+            &source,
+            &desired.fleet,
+            1_800_000_000_000_000_001,
+            &mut platform,
+        )
+        .expect("review exact estate funding and current protocol");
+        if input.imported.len() == 4 {
+            if input.repair_failed_reserve {
+                register_failed_reserve(&input);
+            }
+            establish_workloads_before_refill(&input, &planned.plan, &state, &mut platform);
+            if input.repair_failed_reserve {
+                assert_failed_reserve_journey(&input, &desired, &source, &mut platform);
+                return;
+            }
+            planned = fleet_ensure_workflow::plan(
+                input.adapter_root,
+                &desired,
+                &source,
+                &desired.fleet,
+                1_800_000_000_000_000_002,
+                &mut platform,
+            )
+            .expect("review refill from four real Workloads and no Ready reserve");
+        }
+        let creation_count = u128::try_from(input.assets.len()).unwrap();
+        let per_creation_funding = input.readiness_floor
+            + MAINNET_REFILL_EXECUTION_MARGIN
+            + MAINNET_REFILL_MANAGEMENT_CREATION_FEE
+            + MAINNET_REFILL_LEDGER_FEE;
+        let funding = creation_count * per_creation_funding;
+        let fund_actions = planned_actions(&planned.plan)
+            .into_iter()
+            .filter(|action| matches!(action, EnsureAction::FundEstate { .. }))
+            .count();
+        assert_eq!(fund_actions, 1);
+        assert_eq!(
+            planned.plan.conservation.maximum_operator_debit_cycles,
+            funding + MAINNET_REFILL_LEDGER_FEE
+        );
+        let domain = &planned.plan.conservation.estate_funding_domains[0];
+        assert_eq!(
+            domain.root_principal.as_deref(),
+            Some(input.root.to_text().as_str())
+        );
+        assert_eq!(
+            usize::try_from(domain.required_creation_count).unwrap(),
+            input.assets.len()
+        );
+        assert_eq!(domain.maximum_funding_cycles, funding);
+        let _: () = input
+            .pic
+            .update_candid(
+                input.cycles_ledger,
+                "set_transfer_fee_override",
+                (Some(Nat::from(MAINNET_REFILL_LEDGER_FEE * 2)),),
+            )
+            .unwrap();
+        let fee_rejection = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            &desired,
+            &source,
+            &desired.fleet,
+            &planned.plan.plan_sha256,
+            &mut platform,
+        );
+        assert!(
+            matches!(fee_rejection, Err(EnsureWorkflowError::Platform(
+            IcpEnsurePlatformError::LedgerTransferFeeChanged {
+                reviewed_fee_cycles: MAINNET_REFILL_LEDGER_FEE, expected_fee_cycles,
+            }
+        )) if expected_fee_cycles == MAINNET_REFILL_LEDGER_FEE * 2),
+            "a changed fee must reject before debit: {fee_rejection:?}"
+        );
+        let transfers: u64 = input
+            .pic
+            .query_candid(input.cycles_ledger, "transfer_count", ())
+            .unwrap();
+        assert_eq!(transfers, 0);
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
+            Nat::from(input.operator_after_initial_creation)
+        );
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.root),
+            Nat::from(0_u8)
+        );
+        let _: () = input
+            .pic
+            .update_candid(
+                input.cycles_ledger,
+                "set_transfer_fee_override",
+                (None::<Nat>,),
+            )
+            .unwrap();
+        std::fs::write(input.adapter_root.join("lose-estate-funding-response"), []).unwrap();
+        let lost = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            &desired,
+            &source,
+            &desired.fleet,
+            &planned.plan.plan_sha256,
+            &mut platform,
+        );
+        assert!(
+            matches!(lost, Err(EnsureWorkflowError::Platform(_))),
+            "lose exact completed transfer response: {lost:?}"
+        );
+        assert!(
+            input
+                .adapter_root
+                .join("lost-estate-funding-response")
+                .is_file(),
+            "the transfer must reach response-loss injection: {lost:?}"
+        );
+        let transfers: u64 = input
+            .pic
+            .query_candid(input.cycles_ledger, "transfer_count", ())
+            .unwrap();
+        assert_eq!(transfers, 1);
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
+            Nat::from(input.operator_after_initial_creation - funding - MAINNET_REFILL_LEDGER_FEE)
+        );
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.root),
+            Nat::from(funding)
+        );
+        let mut recovered = new_platform(&desired);
+        let completed = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            &desired,
+            &source,
+            &desired.fleet,
+            &planned.plan.plan_sha256,
+            &mut recovered,
+        )
+        .unwrap_or_else(|error| {
+            panic!(
+                "recover funding receipt and autonomous creation: {error:?}; pool: {:?}",
+                root_pool_status_as(input.pic, input.root, input.operator)
+            )
+        });
+        assert!(completed.terminal);
+        let actual = completed.actual_conservation.as_ref().unwrap();
+        assert_eq!(actual.estate_funding_cycles, funding);
+        assert_eq!(
+            actual.operator_debit_cycles,
+            funding + MAINNET_REFILL_LEDGER_FEE
+        );
+        assert_eq!(
+            actual.exact_estate_creation_fee_cycles,
+            creation_count * (MAINNET_REFILL_MANAGEMENT_CREATION_FEE + MAINNET_REFILL_LEDGER_FEE)
+        );
+        assert_eq!(
+            actual.observed_starting_cycles + actual.operator_debit_cycles,
+            actual.final_controlled_cycles
+                + actual.measured_execution_burn_cycles
+                + actual.exact_unavoidable_fee_cycles
+                + actual.exact_estate_creation_fee_cycles
+        );
+        let pool = root_pool_status_as(input.pic, input.root, input.operator);
+        assert_eq!(
+            (pool.workload, pool.ready, pool.failed, pool.pending_reset),
+            (
+                u32::try_from(input.imported.len()).unwrap(),
+                u32::try_from(input.assets.len()).unwrap(),
+                0,
+                0
+            )
+        );
+        assert!(pool.pending_creation.is_none());
+        for (index, asset) in input.assets.iter().enumerate() {
+            let created = pool
+                .entries
+                .iter()
+                .find(|entry| entry.canister_id == *asset)
+                .unwrap();
+            assert_eq!(created.origin, CanisterPoolAssetOrigin::Created);
+            let receipt = created.creation_receipt.as_ref().unwrap();
+            assert_eq!(
+                receipt.block_index,
+                u64::try_from(4 + input.imported.len() + index).unwrap()
+            );
+            assert_ne!(receipt.operation_id, [0; 32]);
+            assert_eq!(receipt.cycles_ledger, input.cycles_ledger);
+            assert_eq!(
+                receipt.ledger_amount.to_u128(),
+                per_creation_funding - MAINNET_REFILL_LEDGER_FEE
+            );
+            assert_eq!(receipt.ledger_fee.to_u128(), MAINNET_REFILL_LEDGER_FEE);
+            assert_eq!(
+                receipt.management_creation_fee.to_u128(),
+                MAINNET_REFILL_MANAGEMENT_CREATION_FEE
+            );
+            assert_eq!(receipt.readiness_floor.to_u128(), input.readiness_floor);
+            assert_eq!(
+                receipt.creation_execution_margin.to_u128(),
+                MAINNET_REFILL_EXECUTION_MARGIN
+            );
+            let first_balance = receipt.first_observed_cycles.as_ref().unwrap().to_u128();
+            assert!(
+                (input.readiness_floor..=input.readiness_floor + MAINNET_REFILL_EXECUTION_MARGIN)
+                    .contains(&first_balance)
+            );
+            assert!(created.cycles.to_u128() >= input.readiness_floor);
+        }
+        for principal in input.assets.iter().chain(input.imported).copied() {
+            let status = input
+                .pic
+                .canister_status(principal, Some(input.root))
+                .unwrap();
+            assert_eq!(status.settings.controllers, vec![input.root]);
+            assert!(status.cycles >= input.readiness_floor);
+        }
+        let requests: u64 = input
+            .pic
+            .query_candid(input.cycles_ledger, "request_count", ())
+            .unwrap();
+        assert_eq!(
+            requests,
+            u64::try_from(3 + input.imported.len() + input.assets.len() + 1).unwrap(),
+            "every host and Root creation once, with one exact Root creation attempted twice"
+        );
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.root),
+            Nat::from(0_u8)
+        );
+        let mut replay_platform = new_platform(&desired);
+        let replay = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            &desired,
+            &source,
+            &desired.fleet,
+            &planned.plan.plan_sha256,
+            &mut replay_platform,
+        )
+        .expect("effect-free funded estate replay");
+        assert!(replay.terminal);
+        assert_eq!(replay.effects_applied, 0);
+        let transfers: u64 = input
+            .pic
+            .query_candid(input.cycles_ledger, "transfer_count", ())
+            .unwrap();
+        let replay_requests: u64 = input
+            .pic
+            .query_candid(input.cycles_ledger, "request_count", ())
+            .unwrap();
+        assert_eq!((transfers, replay_requests), (1, requests));
+        let replay_pool = root_pool_status_as(input.pic, input.root, input.operator);
+        for asset in input.assets {
+            let before = pool
+                .entries
+                .iter()
+                .find(|entry| entry.canister_id == *asset)
+                .unwrap();
+            let after = replay_pool
+                .entries
+                .iter()
+                .find(|entry| entry.canister_id == *asset)
+                .unwrap();
+            assert_eq!(after.creation_receipt, before.creation_receipt);
+        }
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
+            Nat::from(input.operator_after_initial_creation - funding - MAINNET_REFILL_LEDGER_FEE)
+        );
+    }
+
+    /// Establish the refill fixture through current public protocol calls before its host review.
+    #[cfg(test)]
+    fn establish_workloads_before_refill(
+        input: &AutonomousFundingJourney<'_>,
+        setup_plan: &FleetEnsurePlan,
+        state: &FleetEnsureStateRecord,
+        platform: &mut IcpEnsurePlatform,
+    ) {
+        let started_at = Instant::now();
+        super::super::fixture::progress("establishing four Workloads before reserve funding");
+        for action in &setup_plan.protocol_actions {
+            let EnsureAction::FleetProtocol {
+                action: protocol, ..
+            } = action
+            else {
+                panic!("workload setup accepts only current protocol calls");
+            };
+            if matches!(
+                protocol.as_ref(),
+                CurrentFleetProtocolAction::MaintainPoolReadiness { .. }
+                    | CurrentFleetProtocolAction::ObservePoolReadiness { .. }
+            ) {
+                continue;
+            }
+            let mut record = EffectRecord {
+                maintenance_attempts: 0,
+                action_sha256: action_sha256(action),
+                created_principal: None,
+                destination_post_cycles: None,
+                destination_pre_cycles: None,
+                post_cycles: None,
+                pre_cycles: None,
+                pre_canister_version: None,
+                progress_identity: None,
+                receipt: None,
+                state: EffectState::Intent,
+            };
+            let outcome = platform
+                .apply(&setup_plan.operation_id, action, &record, state)
+                .expect("execute current protocol fixture setup");
+            record.receipt = outcome.receipt;
+            record.state = EffectState::Issued;
+            let completed = (0..120).any(|attempt| {
+                let observation = platform
+                    .observe_effect(&setup_plan.operation_id, action, &record, state)
+                    .expect("observe current protocol fixture setup");
+                if observation.applied {
+                    return true;
+                }
+                assert!(
+                    observation.estate_funding_required.is_none(),
+                    "prepaid Workloads need no new creation"
+                );
+                platform.pace_effect_observation(action, attempt);
+                false
+            });
+            assert!(
+                completed,
+                "current protocol workload setup must complete: {protocol:?}"
+            );
+        }
+        let pool = root_pool_status_as(input.pic, input.root, input.operator);
+        assert_eq!(
+            (pool.workload, pool.ready, pool.failed),
+            (4, 0, if input.repair_failed_reserve { 4 } else { 0 })
+        );
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.root),
+            Nat::from(0_u8)
+        );
+        let transfers: u64 = input
+            .pic
+            .query_candid(input.cycles_ledger, "transfer_count", ())
+            .unwrap();
+        assert_eq!(transfers, 0);
+        progress_elapsed("four Workloads active with no Ready reserve", started_at);
+    }
+
+    #[cfg(test)]
+    fn register_failed_reserve(input: &AutonomousFundingJourney<'_>) {
+        for asset in input.assets {
+            let response = root_command_as(
+                input.pic,
+                input.root,
+                input.operator,
+                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                    canister_id: *asset,
+                }),
+            )
+            .expect("import the existing underfunded reserve identity");
+            assert!(
+                matches!(response, RootCommandResponseFragment::ImportPoolCanister(
+                PoolImportResponse::ResetFailed { canister_id, .. }
+            ) if canister_id == *asset)
+            );
+        }
+        let pool = root_pool_status_as(input.pic, input.root, input.operator);
+        assert_eq!((pool.ready, pool.failed, pool.pending_reset), (4, 4, 0));
+        assert!(pool.pending_creation.is_none());
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one composed full-pool repair binds both lost replies, native conservation and effect-free replay"
+    )]
+    fn assert_failed_reserve_journey(
+        input: &AutonomousFundingJourney<'_>,
+        desired: &DesiredFleet,
+        source: &str,
+        platform: &mut IcpEnsurePlatform,
+    ) {
+        let counts = || {
+            let withdrawals: u64 = input
+                .pic
+                .query_candid(input.cycles_ledger, "withdrawal_count", ())
+                .unwrap();
+            let transfers: u64 = input
+                .pic
+                .query_candid(input.cycles_ledger, "transfer_count", ())
+                .unwrap();
+            let creates: u64 = input
+                .pic
+                .query_candid(input.cycles_ledger, "request_count", ())
+                .unwrap();
+            (withdrawals, transfers, creates)
+        };
+        let before = counts();
+        assert_eq!(before, (0, 0, 7));
+        let reviewed = fleet_ensure_workflow::plan(
+            input.adapter_root,
+            desired,
+            source,
+            &desired.fleet,
+            1_800_000_000_000_000_002,
+            platform,
+        )
+        .expect("review bounded repair of the complete eight-asset inventory");
+        let domain = &reviewed.plan.conservation.estate_funding_domains[0];
+        assert_eq!(
+            (
+                domain.allocated_workloads,
+                domain.occupied_pool_assets,
+                domain.eligible_ready_pool_assets,
+                domain.available_pool_slots
+            ),
+            (4, 8, 0, 0)
+        );
+        assert_eq!(domain.required_creation_count, 0);
+        assert_eq!(domain.maximum_funding_cycles, 0);
+        assert_eq!(domain.initial_pool_assets.len(), 8);
+        let mut funded = BTreeMap::new();
+        let mut resets = BTreeSet::new();
+        for action in planned_actions(&reviewed.plan) {
+            match action {
+                EnsureAction::Fund {
+                    principal,
+                    amount,
+                    pool_root: Some(root),
+                    ..
+                } => {
+                    assert_eq!(root, &input.root.to_text());
+                    assert!(funded.insert(principal.clone(), *amount).is_none());
+                }
+                EnsureAction::FleetProtocol { action, .. } => {
+                    let CurrentFleetProtocolAction::ReconcilePoolAsset { request, .. } =
+                        action.as_ref()
+                    else {
+                        panic!("full-pool repair must not provision or create assets");
+                    };
+                    assert!(resets.insert(request.canister_id.to_text()));
+                }
+                _ => panic!("only exact native funding and reset actions belong to this review"),
+            }
+        }
+        let expected: BTreeSet<_> = input.assets.iter().map(Principal::to_text).collect();
+        assert_eq!(funded.keys().cloned().collect::<BTreeSet<_>>(), expected);
+        assert_eq!(resets, expected);
+        let funding = funded.values().sum::<u128>();
+        let debit = funding + 4 * MAINNET_REFILL_LEDGER_FEE;
+        assert_eq!(
+            reviewed.plan.conservation.maximum_operator_debit_cycles,
+            debit
+        );
+        assert_eq!(
+            counts(),
+            before,
+            "planning cannot debit or create at full capacity"
+        );
+        std::fs::write(input.adapter_root.join("lose-funding-response"), []).unwrap();
+        let lost = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            desired,
+            source,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            platform,
+        );
+        assert!(
+            matches!(lost, Err(EnsureWorkflowError::Platform(_))),
+            "lose completed native withdrawal: {lost:?}"
+        );
+        assert_eq!(counts(), (1, 0, 7));
+        std::fs::write(
+            input.adapter_root.join("lost-reset-args.bin"),
+            encode_one(HostRootCommandFragment::ImportPoolCanister(
+                PoolCanisterRequest {
+                    canister_id: input.assets[0],
+                },
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        std::fs::remove_file(input.adapter_root.join("lost-reset-response")).unwrap();
+        let mut resumed = literal_zero_journey_platform(
+            desired,
+            input.icp_wrapper,
+            input.adapter_root,
+            input.local_replica.clone(),
+            true,
+        );
+        let lost = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            desired,
+            source,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut resumed,
+        );
+        assert!(
+            matches!(lost, Err(EnsureWorkflowError::Platform(_))),
+            "lose completed reserve reset: {lost:?}"
+        );
+        assert!(input.adapter_root.join("lost-reset-response").is_file());
+        let mut recovered = literal_zero_journey_platform(
+            desired,
+            input.icp_wrapper,
+            input.adapter_root,
+            input.local_replica.clone(),
+            true,
+        );
+        let terminal = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            desired,
+            source,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut recovered,
+        )
+        .expect("complete the exact four-Failed repair");
+        assert!(terminal.terminal);
+        let actual = terminal.actual_conservation.as_ref().unwrap();
+        assert_eq!(actual.operator_debit_cycles, debit);
+        assert_eq!(actual.estate_funding_cycles, 0);
+        assert_eq!(actual.exact_estate_creation_fee_cycles, 0);
+        assert_eq!(
+            actual.observed_starting_cycles + actual.operator_debit_cycles,
+            actual.final_controlled_cycles
+                + actual.measured_execution_burn_cycles
+                + actual.exact_unavoidable_fee_cycles
+                + actual.exact_estate_creation_fee_cycles
+        );
+        let pool = root_pool_status_as(input.pic, input.root, input.operator);
+        assert_eq!(
+            (pool.workload, pool.ready, pool.failed, pool.pending_reset),
+            (4, 4, 0, 0)
+        );
+        assert!(pool.pending_creation.is_none());
+        for asset in input.assets {
+            let entry = pool
+                .entries
+                .iter()
+                .find(|entry| entry.canister_id == *asset)
+                .unwrap();
+            assert_eq!(entry.origin, CanisterPoolAssetOrigin::Imported);
+            assert!(entry.creation_receipt.is_none());
+            let status = input.pic.canister_status(*asset, Some(input.root)).unwrap();
+            assert_eq!(status.settings.controllers, vec![input.root]);
+            assert!(status.cycles >= input.readiness_floor);
+        }
+        assert_eq!(counts(), (4, 0, 7));
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
+            Nat::from(input.operator_after_initial_creation - debit)
+        );
+        let mut replay_platform = literal_zero_journey_platform(
+            desired,
+            input.icp_wrapper,
+            input.adapter_root,
+            input.local_replica.clone(),
+            true,
+        );
+        let replay = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            desired,
+            source,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut replay_platform,
+        )
+        .expect("effect-free full-pool repair replay");
+        assert!(replay.terminal);
+        assert_eq!(replay.effects_applied, 0);
+        assert_eq!(counts(), (4, 0, 7));
+        assert_eq!(
+            ledger_account_balance(input.pic, input.cycles_ledger, input.root),
+            Nat::from(0_u8)
+        );
+        assert_eq!(
+            std::fs::read_to_string(input.adapter_root.join("reset-mutations.log"))
+                .unwrap()
+                .lines()
+                .count(),
+            2
+        );
+        let ready_plan = fleet_ensure_workflow::plan(
+            input.adapter_root,
+            desired,
+            source,
+            &desired.fleet,
+            1_800_000_000_000_000_003,
+            &mut replay_platform,
+        )
+        .expect("forecast the repaired Ready reserve from protected inventory");
+        assert!(planned_actions(&ready_plan.plan).is_empty());
+        let ready_domain = &ready_plan.plan.conservation.estate_funding_domains[0];
+        assert_eq!(ready_domain.eligible_ready_pool_assets, 4);
+        assert_eq!(ready_domain.required_creation_count, 0);
+        assert_eq!(ready_domain.shortfall_cycles, 0);
+        assert_eq!(counts(), (4, 0, 7));
+    }
+
+    #[cfg(test)]
+    struct GeneratedJourneyInput<'a> {
+        root: &'a Path,
+        config: &'a Path,
+        icp_wrapper: &'a Path,
+        local_replica: &'a LocalReplicaTarget,
+        operator: Principal,
+        subnet: Principal,
+        release_build_id: ReleaseBuildId,
+        root_key: &'a [u8],
+        workload_count: usize,
+        ready_count: usize,
+    }
+
+    #[cfg(test)]
+    fn retain_generated_journey_source(root: &Path, source_config: &Path) -> PathBuf {
+        // Keep package-relative paths bound to the same source tree used by the
+        // sealed artifacts. Copying only the TOML loses those paths at terminal
+        // protocol validation, after the paid deployment has already completed.
+        let source_directory = root.join("app-source");
+        let source_workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&source_workspace, &source_directory)
+            .expect("retain the unchanged App source layout in the isolated workspace");
+        let config = source_directory.join(
+            source_config
+                .strip_prefix(source_workspace)
+                .expect("the fixture App config belongs to the Canic workspace"),
+        );
+        let snapshot = AppConfigSnapshot::load(&config).expect("load the retained App source");
+        for role in snapshot.model().roles.keys() {
+            let package = canic_host::role_contract::validate_declared_role_package(
+                &config,
+                snapshot.model(),
+                role,
+                canic_host::role_contract::PackageValidationMode::Passive,
+            );
+            let canic_host::role_contract::RolePackageValidation::Supported(evidence) = package
+            else {
+                panic!("the generated fixture must retain declared package authority: {package:?}");
+            };
+            let contract = canic_host::role_contract::resolve_declared_role_package_contract(
+                snapshot.model(),
+                &evidence,
+            );
+            assert!(
+                matches!(
+                    contract,
+                    canic_core::role_contract::RoleContractResolution::Resolved { .. }
+                ),
+                "the generated fixture must retain role {} protocol authority: {contract:?}",
+                evidence.role
+            );
+        }
+        config
+    }
+
+    #[cfg(test)]
+    fn generate_journey_desired(input: GeneratedJourneyInput<'_>) -> DesiredFleet {
+        let root = input.root;
+        let config = retain_generated_journey_source(root, input.config);
+        let trust = root.join("pocket-ic-root-key.der");
+        std::fs::write(&trust, input.root_key).expect("retain PocketIC trust anchor");
+        canic_host::network::enroll_network(canic_host::network::NetworkEnrollmentOptions {
+            workspace_root: root,
+            environment: "local",
+            root_key: &trust,
+            fingerprint: &canic_core::cdk::utils::hash::sha256_hex(input.root_key),
+        })
+        .expect("enroll the exact generator network");
+        let source = root.join("fleet-policy.toml");
+        let seed = root.join("fleet-seed.toml");
+        let source_text = generated_journey_policy(
+            input.operator,
+            input.subnet,
+            input.workload_count,
+            input.ready_count,
+        );
+        std::fs::write(&source, source_text).expect("write reviewed generator policy");
+        canic_host::fleet_ensure::initialize_fresh_estate_seed(
+            &canic_host::fleet_ensure::FreshEstateSeedRequest {
+                cycles_ledger: "um5iw-rqaaa-aaaaq-qaaba-cai",
+                management_creation_fee_cycles: 0,
+                seed: &seed,
+                source: &source,
+            },
+        )
+        .expect("initialize the owned empty-estate seed");
+        // Only the transport route is adapted: generation still queries the real Ledger
+        // through ICP CLI and validates the isolated operator and enrolled network.
+        let generator_icp = root.join("generator-icp-wrapper");
+        let script = format!(
+            r#"#!/bin/bash
+set -euo pipefail
+case " $* " in
+  *" canister call "*)
+    args=()
+    while (( $# )); do
+      case "$1" in
+        -e|--environment) shift 2 ;;
+        *) args+=("$1"); shift ;;
+      esac
+    done
+    exec '{}' "${{args[@]}}" -n '{}' -k '{}' ;;
+  *) exec '{}' "$@" ;;
+esac
+"#,
+            input.icp_wrapper.display(),
+            input.local_replica.url,
+            input.local_replica.root_key,
+            input.icp_wrapper.display()
+        );
+        std::fs::write(&generator_icp, script).expect("write generator transport route");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(&generator_icp, std::fs::Permissions::from_mode(0o700))
+                .expect("enable generator transport route");
+        }
+        let request = canic_host::fleet_ensure::FleetGenerateRequest {
+            app_config: &config,
+            environment: "local",
+            fleet: "canic-121-literal-zero-estate",
+            icp_executable: generator_icp.to_str().expect("generator wrapper path"),
+            release_build_id: input.release_build_id,
+            root,
+            seed: &seed,
+            source: &source,
+        };
+        assert_generated_capacity_rejected(&request, input.workload_count, input.ready_count);
+        let generated = canic_host::fleet_ensure::generate_desired_fleet(&request)
+            .expect("generate the exact desired Fleet through the production boundary");
+        assert_eq!(generated.observed_canisters, 0);
+        assert_eq!(generated.observed_controlled_cycles, 0);
+        assert_eq!(
+            generated
+                .desired
+                .canisters
+                .iter()
+                .filter(|canister| canister.kind
+                    == canic_host::fleet_ensure::model::DesiredCanisterKind::Pool)
+                .count(),
+            input.workload_count + input.ready_count
+        );
+        generated.desired
+    }
+
+    #[cfg(test)]
+    fn assert_generated_capacity_rejected(
+        request: &canic_host::fleet_ensure::FleetGenerateRequest<'_>,
+        workloads: usize,
+        ready: usize,
+    ) {
+        let original = std::fs::read_to_string(request.source).expect("read reviewed policy");
+        let insufficient = original.replace(
+            &format!("maximum_size = {}", workloads + ready),
+            &format!("maximum_size = {workloads}"),
+        );
+        assert_ne!(insufficient, original);
+        std::fs::write(request.source, insufficient).expect("write capacity-negative policy");
+        let Err(error) = canic_host::fleet_ensure::generate_desired_fleet(request) else {
+            panic!("Workloads alone cannot satisfy the independent Ready reserve");
+        };
+        assert!(matches!(
+            error,
+            canic_host::fleet_ensure::FleetGenerateError::Policy(
+                canic_host::fleet_ensure::policy::EnsurePolicyError::TerminalPoolCapacity { .. }
+            )
+        ));
+        std::fs::write(request.source, original).expect("restore exact reviewed fixture policy");
+    }
+
+    #[cfg(test)]
+    fn generated_journey_policy(
+        operator: Principal,
+        subnet: Principal,
+        workloads: usize,
+        ready: usize,
+    ) -> String {
+        let capacity = workloads + ready;
+        format!(
+            r#"
+schema_version = 1
+funding_profile = "preview_multi_subnet"
+operator = "{operator}"
+
+[admission]
+principals = ["{operator}"]
+
+[coordinator.subnet]
+kind = "explicit"
+subnet = "{subnet}"
+acknowledge_fiduciary_cost = false
+
+[coordinator.creation_funding]
+kind = "cycles"
+cycles = "500T"
+
+[coordinator.root_funding]
+minimum_reserve_cycles = "210T"
+window_secs = 7776000
+maximum_cycles = "30T"
+maximum_automatic_grants = 2
+maximum_automatic_cycles = "60T"
+
+[[fleet_subnet_roots]]
+placement_subnet = "{subnet}"
+acknowledge_fiduciary_cost = false
+component_admissions = {{ catalogue = 1, scaling = 1, users = 1 }}
+
+[fleet_subnet_roots.component_group_placements]
+qualification = [0]
+
+[fleet_subnet_roots.canister_pool]
+minimum_size = {ready}
+maximum_size = {capacity}
+canister_cycles = "5T"
+
+[fleet_subnet_roots.root_funding]
+request_threshold = "10T"
+target_balance = "30T"
+cooldown_secs = 2592000
+window_secs = 7776000
+maximum_cycles = "30T"
+maximum_automatic_grants = 2
+maximum_automatic_cycles = "60T"
+
+[fleet_subnet_roots.limits]
+maximum_component_instances = {workloads}
+maximum_registry_bytes = 16777216
+maximum_wasm_store_bytes = 40000000
+maximum_group_placements = 1
+
+[fleet_subnet_roots.limits.cycles_funding]
+window_secs = 3600
+maximum_cycles = "100T"
+
+[fleet_subnet_roots.root_creation_funding]
+kind = "cycles"
+cycles = "80T"
+
+[fleet_subnet_roots.wasm_store_creation_funding]
+kind = "cycles"
+cycles = "80T"
+"#
+        )
     }
 
     #[cfg(test)]
@@ -4223,7 +6454,8 @@ exec icp "$@"
     #[cfg(test)]
     const fn current_protocol_test_stage(action: &CurrentFleetProtocolAction) -> u8 {
         match action {
-            CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
+            CurrentFleetProtocolAction::ReconcilePoolAsset { .. }
+            | CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
             | CurrentFleetProtocolAction::PublishStoreChunk { .. }
             | CurrentFleetProtocolAction::StageStoreManifest { .. }
             | CurrentFleetProtocolAction::AdoptStore { .. }
@@ -4234,6 +6466,8 @@ exec icp "$@"
             CurrentFleetProtocolAction::ActivateRegistryMirror { .. } => 4,
             CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => 5,
             CurrentFleetProtocolAction::ProvisionComponents { .. } => 6,
+            CurrentFleetProtocolAction::MaintainPoolReadiness { .. }
+            | CurrentFleetProtocolAction::ObservePoolReadiness { .. } => 7,
         }
     }
 
@@ -4248,6 +6482,25 @@ exec icp "$@"
         operator: Principal,
     ) {
         match &step.action {
+            CurrentFleetProtocolAction::ObservePoolReadiness { .. } => {}
+            CurrentFleetProtocolAction::MaintainPoolReadiness { .. } => {
+                root_command_as(
+                    pic,
+                    step.target,
+                    operator,
+                    RootCommandFragment::MaintainPool,
+                )
+                .expect("drive the current Root Ready reserve");
+            }
+            CurrentFleetProtocolAction::ReconcilePoolAsset { request, .. } => {
+                root_command_as(
+                    pic,
+                    step.target,
+                    operator,
+                    RootCommandFragment::ImportPoolCanister(*request),
+                )
+                .expect("reconcile the exact retained pool asset");
+            }
             CurrentFleetProtocolAction::ActivateRegistry { request, .. } => {
                 let response = coordinator_command(
                     pic,
@@ -4400,6 +6653,38 @@ exec icp "$@"
         operator: Principal,
     ) -> bool {
         match &step.action {
+            CurrentFleetProtocolAction::MaintainPoolReadiness {
+                minimum_ready,
+                readiness_floor,
+                ..
+            }
+            | CurrentFleetProtocolAction::ObservePoolReadiness {
+                minimum_ready,
+                readiness_floor,
+            } => {
+                let pool = root_pool_status_as(pic, step.target, operator);
+                pool.pending_creation.is_none()
+                    && pool
+                        .entries
+                        .iter()
+                        .filter(|asset| {
+                            asset.status == CanisterPoolAssetStatus::Ready
+                                && asset.cycles >= *readiness_floor
+                        })
+                        .count()
+                        >= *minimum_ready as usize
+            }
+            CurrentFleetProtocolAction::ReconcilePoolAsset {
+                request,
+                minimum_cycles,
+            } => root_pool_status_as(pic, step.target, operator)
+                .entries
+                .iter()
+                .any(|asset| {
+                    asset.canister_id == request.canister_id
+                        && asset.status == CanisterPoolAssetStatus::Ready
+                        && asset.cycles >= *minimum_cycles
+                }),
             CurrentFleetProtocolAction::ActivateRegistry {
                 expected_registry, ..
             }
@@ -5059,7 +7344,7 @@ exec icp "$@"
         });
         let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
             .expect("canonical ICP Ledger principal");
-        let before_icp = real_icp_balance(&fixture.pic, ledger, fixture.root);
+        let before_icp = ledger_account_balance(&fixture.pic, ledger, fixture.root);
         let before_cycles = fixture.pic.cycle_balance(fixture.root);
 
         let denied = await_root_funding(&fixture, |status| {
@@ -5080,7 +7365,7 @@ exec icp "$@"
         assert_eq!(after.automatic_icp_refills, 0);
         assert_eq!(after.automatic_icp_refill_e8s, 0);
         assert_eq!(
-            real_icp_balance(&fixture.pic, ledger, fixture.root),
+            ledger_account_balance(&fixture.pic, ledger, fixture.root),
             before_icp
         );
         assert!(fixture.pic.cycle_balance(fixture.root) <= before_cycles);
@@ -5096,7 +7381,7 @@ exec icp "$@"
         );
         let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
             .expect("canonical ICP Ledger principal");
-        let before_icp = real_icp_balance(&fixture.pic, ledger, fixture.root);
+        let before_icp = ledger_account_balance(&fixture.pic, ledger, fixture.root);
         let before_cycles = fixture.pic.cycle_balance(fixture.root);
 
         let denied = await_root_funding(&fixture, |status| {
@@ -5117,7 +7402,7 @@ exec icp "$@"
         assert_eq!(after.automatic_icp_refills, 0);
         assert_eq!(after.automatic_icp_refill_e8s, 0);
         assert_eq!(
-            real_icp_balance(&fixture.pic, ledger, fixture.root),
+            ledger_account_balance(&fixture.pic, ledger, fixture.root),
             before_icp
         );
         assert!(fixture.pic.cycle_balance(fixture.root) <= before_cycles);
@@ -5129,7 +7414,7 @@ exec icp "$@"
         let fixture = setup_system_icp_funding_journey(30_000_000_000_000);
         let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
             .expect("canonical ICP Ledger principal");
-        let before_icp = real_icp_balance(&fixture.pic, ledger, fixture.root);
+        let before_icp = ledger_account_balance(&fixture.pic, ledger, fixture.root);
         fixture
             .pic
             .stop_canister(fixture.coordinator, None)
@@ -5146,7 +7431,7 @@ exec icp "$@"
         assert_eq!(status.automatic_icp_refills, 0);
         assert_eq!(status.automatic_icp_refill_e8s, 0);
         assert_eq!(
-            real_icp_balance(&fixture.pic, ledger, fixture.root),
+            ledger_account_balance(&fixture.pic, ledger, fixture.root),
             before_icp
         );
 
@@ -5856,7 +8141,7 @@ exec icp "$@"
     }
 
     #[cfg(test)]
-    fn real_icp_balance(pic: &PocketIc, ledger: Principal, owner: Principal) -> Nat {
+    fn ledger_account_balance(pic: &PocketIc, ledger: Principal, owner: Principal) -> Nat {
         pic.query_candid(
             ledger,
             "icrc1_balance_of",
@@ -5865,7 +8150,7 @@ exec icp "$@"
                 subaccount: None,
             },),
         )
-        .expect("query production ICP Ledger balance")
+        .expect("query the exact ICRC-1 Ledger account balance")
     }
 
     #[cfg(test)]
@@ -7820,6 +10105,20 @@ exec icp "$@"
         // an exclusively owned instance so it cannot invalidate the warm
         // baseline used by reset-complete cases.
         let fixture = setup_fresh_active_component_registry();
+        let cycles_ledger = install_retirement_ledger(&fixture);
+        let operator = Principal::from_slice(&[0xe7; 29]);
+        let mut controllers = fixture
+            .pic()
+            .canister_status(fixture.coordinator, None)
+            .expect("Coordinator controllers")
+            .settings
+            .controllers;
+        controllers.push(operator);
+        fixture
+            .pic()
+            .set_controllers(fixture.coordinator, None, controllers)
+            .expect("reviewed retirement operator controls Coordinator");
+
         let CoordinatorStatusResponse::Registry(registry) = coordinator_status(
             fixture.pic(),
             fixture.coordinator,
@@ -7844,6 +10143,7 @@ exec icp "$@"
             .expect("target root in Coordinator Registry");
         let operation_id = [0xd1; 32];
         let request = FleetSubnetRootDrainingReservationRequest {
+            asset_recipient: operator,
             operation_id,
             expected_registry: version,
             expected_root,
@@ -7973,12 +10273,12 @@ exec icp "$@"
         for component in [&fixture.issuer, &fixture.verifier] {
             let handed_off = fixture
                 .pic()
-                .canister_status(component.canister_id, Some(fixture.coordinator))
-                .expect("Coordinator must control each handed-off Component canister");
+                .canister_status(component.canister_id, Some(operator))
+                .expect("operator must control each handed-off Component canister");
             assert_eq!(handed_off.module_hash, None);
             let mut controllers = handed_off.settings.controllers;
             controllers.sort();
-            let mut expected_controllers = vec![fixture.root, fixture.coordinator];
+            let mut expected_controllers = vec![fixture.root, operator];
             expected_controllers.sort();
             assert_eq!(controllers, expected_controllers);
         }
@@ -8004,9 +10304,349 @@ exec icp "$@"
         assert!(coordinator.draining.is_some());
         assert!(coordinator.removal.is_some());
         assert!(coordinator.readiness_intent.is_some());
-        assert!(coordinator.readiness.is_some());
+        let readiness = coordinator
+            .readiness
+            .expect("Coordinator retains Ledger receipt");
+        let ledger_receipt = &readiness.request.ledger_receipt;
+        assert_eq!(ledger_receipt.intent.source, fixture.root);
+        assert_eq!(ledger_receipt.intent.destination, fixture.coordinator);
+        assert_eq!(ledger_receipt.intent.balance_before, 1_000_000_000);
+        assert_eq!(ledger_receipt.intent.fee, 100_000_000);
+        assert!(ledger_receipt.block_index.is_some());
+        let transfers: u64 = fixture
+            .pic()
+            .query_candid(cycles_ledger, "transfer_count", ())
+            .expect("one transfer despite lost reply");
+        assert_eq!(transfers, 1);
+        assert_eq!(
+            ledger_account_balance(fixture.pic(), cycles_ledger, fixture.root),
+            Nat::from(0_u8)
+        );
+        assert_eq!(
+            ledger_account_balance(fixture.pic(), cycles_ledger, fixture.coordinator),
+            Nat::from(900_000_000_u128)
+        );
+        assert_eq!(
+            terminal
+                .deletion_preparation
+                .as_ref()
+                .expect("Root proof")
+                .ledger_receipt,
+            *ledger_receipt
+        );
+
         assert!(coordinator.execution.is_none());
         assert!(coordinator.completion.is_none());
+        finish_coordinator_retirement(&fixture, cycles_ledger, operator, readiness);
+    }
+
+    #[cfg(test)]
+    fn finish_coordinator_retirement(
+        fixture: &ActiveComponentRegistryFixture,
+        ledger: Principal,
+        operator: Principal,
+        readiness: canic_core::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
+    ) {
+        use canic_core::dto::fleet_registry::FleetRetirementRequest;
+        let pic = fixture.pic();
+        let CoordinatorStatusResponse::RegistryVersion(version) = coordinator_status(
+            pic,
+            fixture.coordinator,
+            CoordinatorStatusRequest::RegistryVersion,
+        )
+        .expect("removed Registry") else {
+            panic!("Registry version correlation");
+        };
+        let request = FleetRetirementRequest {
+            operation_id: [0xe8; 32],
+            expected_registry: version,
+            destination: operator,
+            maximum_ledger_fee: 100_000_000,
+        };
+        let call = |request| -> Result<CoordinatorCommandResponse, Error> {
+            pic.update_candid_as(
+                fixture.coordinator,
+                operator,
+                canic::protocol::CANIC_COORDINATOR_COMMAND,
+                (CoordinatorCommand::Retire(request),),
+            )
+            .expect("retirement transport")
+        };
+        let Err(premature) = call(request.clone()) else {
+            panic!("Root deletion must precede final Coordinator transfer");
+        };
+        assert_eq!(
+            premature.code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
+        delete_prepared_root(fixture, readiness);
+        let mut insufficient_fee = request.clone();
+        insufficient_fee.maximum_ledger_fee = 0;
+        let Err(rejected) = call(insufficient_fee) else {
+            panic!("the quoted fee exceeds reviewed authority");
+        };
+        assert_eq!(
+            rejected.code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
+        assert_eq!(
+            ledger_account_balance(pic, ledger, fixture.coordinator),
+            Nat::from(900_000_000_u128)
+        );
+        let (): () = pic
+            .update_candid(ledger, "lose_next_transfer_reply", ())
+            .expect("lose Coordinator transfer reply");
+        assert!(call(request.clone()).is_err());
+        assert_eq!(
+            ledger_account_balance(pic, ledger, fixture.coordinator),
+            Nat::from(0_u8)
+        );
+        let CoordinatorCommandResponse::Retire(completed) =
+            call(request.clone()).expect("reconcile exact transfer")
+        else {
+            panic!("retirement response correlation");
+        };
+        let receipt = completed
+            .ledger_receipt
+            .as_ref()
+            .expect("terminal Ledger receipt");
+        assert_eq!(receipt.intent.source, fixture.coordinator);
+        assert_eq!(receipt.intent.destination, operator);
+        assert_eq!(receipt.intent.balance_before, 900_000_000);
+        assert_eq!(receipt.intent.fee, 100_000_000);
+        assert_eq!(
+            ledger_account_balance(pic, ledger, operator),
+            Nat::from(800_000_000_u128)
+        );
+        let CoordinatorCommandResponse::Retire(replayed) =
+            call(request).expect("effect-free retirement replay")
+        else {
+            panic!("retirement replay correlation");
+        };
+        assert_eq!(replayed, completed);
+        let transfers: u64 = pic
+            .query_candid(ledger, "transfer_count", ())
+            .expect("exact transfer count");
+        assert_eq!(transfers, 2);
+        for component in [&fixture.issuer, &fixture.verifier] {
+            let status = pic
+                .canister_status(component.canister_id, Some(operator))
+                .expect("assets remain controlled after Root deletion");
+            assert!(status.settings.controllers.contains(&operator));
+            assert_eq!(status.module_hash, None);
+        }
+    }
+
+    #[cfg(test)]
+    fn delete_prepared_root(
+        fixture: &ActiveComponentRegistryFixture,
+        readiness: canic_core::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
+    ) {
+        use canic_core::dto::fleet_registry::{
+            FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
+        };
+        let pic = fixture.pic();
+        let status = pic
+            .canister_status(fixture.root, None)
+            .expect("exact Root deletion authority");
+        let mut controllers = status.settings.controllers;
+        controllers.sort();
+        let CoordinatorCommandResponse::PrepareRootDeletionExecution(execution) =
+            coordinator_command(
+                pic,
+                fixture.coordinator,
+                CoordinatorCommand::PrepareRootDeletionExecution(
+                    FleetSubnetRootDeletionExecutionRequest {
+                        operation_id: readiness.request.operation_id,
+                        fleet_subnet_root: fixture.root,
+                        expected_readiness_hash: readiness.readiness_hash,
+                        observed_module_hash: status
+                            .module_hash
+                            .expect("installed Root")
+                            .try_into()
+                            .expect("SHA-256"),
+                        observed_controllers: controllers,
+                        observed_cycles_after_reclamation: u128::try_from(status.cycles.0)
+                            .expect("native balance"),
+                        observed_reserved_cycles: u128::try_from(status.reserved_cycles.0)
+                            .expect("reserved cycles"),
+                        observed_idle_cycles_burned_per_day: u128::try_from(
+                            status.idle_cycles_burned_per_day.0,
+                        )
+                        .expect("idle burn"),
+                        observed_freezing_threshold_seconds: u128::try_from(
+                            status.settings.freezing_threshold.0,
+                        )
+                        .expect("freezing threshold"),
+                    },
+                ),
+            )
+            .expect("freeze Root deletion intent")
+        else {
+            panic!("execution response correlation");
+        };
+        pic.stop_canister(fixture.root, None)
+            .expect("stop reclaimed Root");
+        pic.delete_canister(fixture.root, None)
+            .expect("delete only reviewed Root residual");
+        let completion = FleetSubnetRootDeletionCompletionRequest {
+            operation_id: readiness.request.operation_id,
+            fleet_subnet_root: fixture.root,
+            expected_execution_hash: execution.execution_hash,
+            observed_absent_at_ns: pic.get_time().as_nanos_since_unix_epoch(),
+        };
+        coordinator_command(
+            pic,
+            fixture.coordinator,
+            CoordinatorCommand::CompleteRootDeletion(completion),
+        )
+        .expect("retain Root absence receipt");
+    }
+
+    #[test]
+    fn explicit_root_reinstall_retains_cycle_accounts_and_pool_control() {
+        let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_fresh_active_component_registry();
+        let ledger = install_retirement_ledger(&fixture);
+        let pic = fixture.pic();
+        let root_wasm = build_test_root_wasm();
+        let fresh = compile_reinstall_root_fixture(&fixture, &root_wasm);
+        let assets = std::iter::once(fixture.wasm_store)
+            .chain(fixture.pool_assets.iter().copied())
+            .collect::<Vec<_>>();
+        let mut controllers_before = BTreeMap::new();
+        let mut native_before = pic.cycle_balance(fixture.root);
+        for asset in &assets {
+            let status = pic
+                .canister_status(*asset, Some(fixture.root))
+                .expect("observe exact Root-controlled asset before reinstall");
+            assert!(status.settings.controllers.contains(&fixture.root));
+            controllers_before.insert(*asset, status.settings.controllers);
+            native_before += pic.cycle_balance(*asset);
+        }
+        let root_before = pic
+            .canister_status(fixture.root, None)
+            .expect("management Root authority");
+        pic.stop_canister(fixture.root, None)
+            .expect("settle Root calls before reinstall");
+        pic.reinstall_canister(
+            fixture.root,
+            root_wasm,
+            encode_one(&fresh.init_args).expect("current Root initializer"),
+            None,
+        )
+        .expect("explicit management reinstall without old runtime queries");
+        pic.start_canister(fixture.root, None)
+            .expect("start reinstalled Root");
+        pic.tick();
+        let root_after = pic
+            .canister_status(fixture.root, None)
+            .expect("reinstalled Root");
+        assert_eq!(
+            root_after.settings.controllers,
+            root_before.settings.controllers
+        );
+        assert!(root_after.version > root_before.version);
+        let RootStatusResponseFragment::FleetAuthority(authority) =
+            root_status(pic, fixture.root, RootStatusRequestFragment::FleetAuthority)
+                .expect("current authority after hard cut")
+        else {
+            panic!("Root authority response correlation");
+        };
+        assert_eq!(authority, fresh.init_args.authority);
+        let mut native_after = pic.cycle_balance(fixture.root);
+        for asset in &assets {
+            let status = pic
+                .canister_status(*asset, Some(fixture.root))
+                .expect("the reinstalled Root still controls every retained asset");
+            assert_eq!(status.settings.controllers, controllers_before[asset]);
+            native_after += pic.cycle_balance(*asset);
+        }
+        assert!(native_after <= native_before);
+        assert!(native_before - native_after <= 5_000_000_000_000);
+        assert_eq!(
+            ledger_account_balance(pic, ledger, fixture.root),
+            Nat::from(1_000_000_000_u128)
+        );
+        assert_eq!(
+            ledger_account_balance(pic, ledger, fixture.coordinator),
+            Nat::from(0_u128)
+        );
+        let transfers: u64 = pic
+            .query_candid(ledger, "transfer_count", ())
+            .expect("Ledger transfer count");
+        drop(fixture);
+        assert_eq!(transfers, 0);
+    }
+
+    #[cfg(test)]
+    fn compile_reinstall_root_fixture(
+        fixture: &ActiveComponentRegistryFixture,
+        root_wasm: &[u8],
+    ) -> InstalledRootFixture {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .unwrap();
+        prepare_current_root_fixture(
+            fixture.pic(),
+            root_wasm,
+            &build_test_wasm_store_wasm(),
+            fixture.coordinator,
+            fixture.root,
+            fixture.wasm_store,
+            Principal::from_slice(&[0x46; 29]),
+            build_root_store_fixture(),
+            &BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
+                canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
+                coordinator_subnet: None,
+                existing_root: Some(fixture.root),
+                existing_wasm_store: Some(fixture.wasm_store),
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: Some(FleetId::from_generated_bytes([0xe9; 32])),
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &root_canister_config_path(workspace),
+            fixture.pool_assets.clone(),
+        )
+    }
+
+    #[cfg(test)]
+    fn install_retirement_ledger(fixture: &ActiveComponentRegistryFixture) -> Principal {
+        let (_, wasm) = build_mainnet_refill_wasms();
+        let ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai").expect("canonical Ledger");
+        fixture
+            .pic()
+            .create_canister_with_id(None, None, ledger)
+            .expect("create retirement Ledger stub");
+        fixture.pic().add_cycles(ledger, 100_000_000_000_000);
+        fixture.pic().install_canister(
+            ledger,
+            wasm,
+            encode_one(CyclesLedgerStubInitArgs {
+                canister_ids: vec![],
+                expected_controllers_by_index: None,
+                expected_root: fixture.root,
+                expected_subnet: fixture.pic().get_subnet(fixture.root).expect("Root subnet"),
+                initial_balances: Some(vec![CyclesLedgerStubAccountBalance {
+                    owner: fixture.root,
+                    balance: Nat::from(1_000_000_000_u128),
+                }]),
+                pending_first_index: None,
+                withdrawal_fee: Some(Nat::from(100_000_000_u128)),
+            })
+            .expect("retirement Ledger init"),
+            None,
+        );
+        let (): () = fixture
+            .pic()
+            .update_candid(ledger, "lose_next_transfer_reply", ())
+            .expect("lose committed transfer reply");
+        ledger
     }
 
     /// Acquire one current Coordinator/root/Store fixture with active Registry-issued Components.
@@ -9782,6 +12422,14 @@ exec icp "$@"
                 published_draining_root_autonomously_reaches_external_deletion_readiness,
             ),
             (
+                "generated reinstall recovers and converges",
+                generated_reinstall_recovers_lost_install_and_reaches_working_fleet,
+            ),
+            (
+                "explicit Root reinstall preserves cycle control",
+                explicit_root_reinstall_retains_cycle_accounts_and_pool_control,
+            ),
+            (
                 "prepared mainnet Root automatic refill",
                 prepared_mainnet_root_automatically_refills_one_exact_pool_asset,
             ),
@@ -9812,6 +12460,46 @@ exec icp "$@"
             (
                 "fresh provisioning terminal runtime activation",
                 fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog,
+            ),
+            (
+                "four initial Shards preserve sealed Root activation",
+                four_initial_shards_preserve_sealed_root_activation,
+            ),
+            (
+                "nineteen Workloads preserve multi-Hub Root activation",
+                nineteen_workloads_preserve_multi_hub_root_activation,
+            ),
+            (
+                "auth-free Root preserves ordinary Fleet activation",
+                auth_free_root_preserves_ordinary_fleet_activation,
+            ),
+            (
+                "funded Failed imports recover withdrawal and reset responses",
+                funded_failed_imports_reconcile_with_lost_withdrawal_and_reset_responses,
+            ),
+            (
+                "live management gateway preserves fresh creation headroom",
+                live_management_gateway_preserves_fresh_creation_headroom,
+            ),
+            (
+                "funded estate recovers transfer and autonomous creation responses",
+                funded_estate_recovers_transfer_and_autonomous_creation_responses,
+            ),
+            (
+                "four Workloads refill four Ready assets with lost funding and creation responses",
+                four_workloads_refill_four_ready_with_lost_funding_and_creation_responses,
+            ),
+            (
+                "four Workloads and four Failed assets repair without new creation",
+                four_workloads_and_four_failed_assets_repair_without_new_creation,
+            ),
+            (
+                "automatic fresh convergence retains one reviewed plan",
+                automatic_fresh_convergence_replays_one_reviewed_plan,
+            ),
+            (
+                "generated nineteen Workloads and five Ready retain one reviewed operation",
+                generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation,
             ),
             (
                 "literal-zero Fleet with initial-child terminal replay",

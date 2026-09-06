@@ -1,0 +1,100 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:45247/
+==> targeted canic-tests PocketIC integration proof
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+   Compiling canic-tests v0.110.7 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `test` profile [optimized + debuginfo] target(s) in 36.04s
+     Running tests/native_agent_delegation.rs (target/debug/deps/native_agent_delegation-fd7f579e0c2c7c0c)
+
+running 7 tests
+test closed_local_authorization_denial_partition_is_bounded ... [FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             28.79s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.44s
+[FLEET]      RUN    finished PIC wasm build
+[FLEET]      DONE   root artifacts ready                                 31.03s
+[WASM]       DONE   Fleet Coordinator artifact                            4.57s
+[FLEET]      DONE   Coordinator artifact ready                            5.00s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       CACHE  delegation_issuer_stub                                0.43s
+[FLEET]      DONE   Store and Component artifacts ready                   1.47s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.23s
+[FLEET]      DONE   Root and Store installed                              3.98s
+[FLEET]      DONE   Coordinator installed                                 1.23s
+[FLEET]      DONE   Root joined and synchronized                          0.12s
+[FLEET]      DONE   Component Registry activated                          2.97s
+[FLEET]      DONE   fresh Fleet validated                                 0.01s
+[FLEET]      DONE   fresh Fleet setup complete                           46.04s
+[FLEET]      READY  active baseline (slot 0)                             46.12s
+0.105 B6 denial observations: [("anonymous", 59351), ("caller_mismatch", 58638), ("disabled", 59392), ("authority_unavailable", 59410), ("missing_session", 59409), ("expired", 59407), ("stale_authority", 62329), ("inadmissible_subject", 62338), ("missing_scope", 62827)]
+ok
+test fleet_admission_projection_is_durable_bounded_and_separate_from_application_sessions ... [FLEET]      READY  active baseline (slot 0)                              0.89s
+ok
+test local_application_authorization_lookup_is_bounded_at_one_and_median_state ... [FLEET]      READY  active baseline (slot 0)                              0.89s
+[FLEET]      READY  active baseline (slot 0)                              0.91s
+0.105 B6 lookup observations: [(1, 164901), (1024, 248928)]
+ok
+test maximum_application_session_resource_contract_is_bounded ... [FLEET]      READY  active baseline (slot 0)                              1.30s
+0.105 B6 maximum resource observation: auth_state_bytes=3994995 stable_memory_before=234946560 stable_memory_at_maximum=234946560 restore_instructions=1628017726 authorization_instructions=328957 cleanup_instructions=1515965736
+ok
+test multi_target_sessions_preserve_controller_separation_and_same_release_recovery ... [FLEET]      DONE   root artifacts ready                                  0.00s
+[FLEET]      DONE   Coordinator artifact ready                            0.00s
+[FLEET]      DONE   Store and Component artifacts ready                   0.14s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.17s
+[FLEET]      DONE   Root and Store installed                              4.02s
+[FLEET]      DONE   Coordinator installed                                 1.47s
+[FLEET]      DONE   Root joined and synchronized                          0.15s
+[FLEET]      DONE   Component Registry activated                          3.07s
+[FLEET]      DONE   fresh Fleet validated                                 0.01s
+[FLEET]      DONE   fresh Fleet setup complete                            9.03s
+ok
+test pem_backed_native_agent_prepares_retrieves_and_presents_delegated_token ... [FLEET]      DONE   root artifacts ready                                  0.00s
+[FLEET]      DONE   Coordinator artifact ready                            0.00s
+[FLEET]      DONE   Store and Component artifacts ready                   0.13s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.20s
+[FLEET]      DONE   Root and Store installed                              4.06s
+[FLEET]      DONE   Coordinator installed                                 1.27s
+[FLEET]      DONE   Root joined and synchronized                          0.13s
+[FLEET]      DONE   Component Registry activated                          3.05s
+[FLEET]      DONE   fresh Fleet validated                                 0.01s
+[FLEET]      DONE   fresh Fleet setup complete                            8.87s
+0.105 B6 establishment observation: warm_instructions=4714638 cold_instructions=474656779 cold_embedded_proof_instructions=469947918
+ok
+test selected_issuer_corruption_rejects_same_release_restore ... [FLEET]      DONE   root artifacts ready                                  0.00s
+[FLEET]      DONE   Coordinator artifact ready                            0.00s
+[FLEET]      DONE   Store and Component artifacts ready                   0.13s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.20s
+[FLEET]      DONE   Root and Store installed                              3.78s
+[FLEET]      DONE   Coordinator installed                                 1.31s
+[FLEET]      DONE   Root joined and synchronized                          0.13s
+[FLEET]      DONE   Component Registry activated                          2.87s
+[FLEET]      DONE   fresh Fleet validated                                 0.01s
+[FLEET]      DONE   fresh Fleet setup complete                            8.44s
+ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 126.04s
+
+==> shared PocketIC resources after targeted canic-tests PocketIC integration proof: rss=2148176 kB high_water=2944200 kB threads=186
+==> targeted canic-tests PocketIC integration proof done in 162s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  162s     PASS   targeted canic-tests PocketIC integration proof
+workspace runner wall time: 164s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.CO3EPm

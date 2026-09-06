@@ -200,6 +200,7 @@ pub struct FleetRegistryActivationResponse {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDrainingReservationRequest {
+    pub asset_recipient: Principal,
     pub operation_id: [u8; 32],
     pub expected_registry: FleetRegistryVersion,
     pub expected_root: FleetSubnetRootEntry,
@@ -281,6 +282,42 @@ pub struct FleetSubnetRootRemovalPublicationResponse {
     pub version: FleetRegistryVersion,
 }
 
+/// Exact default-account transfer retained before a Fleet retirement Ledger call.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetLedgerTransferIntent {
+    pub source: Principal,
+    pub destination: Principal,
+    pub balance_before: u128,
+    pub fee: u128,
+    pub created_at_time: u64,
+    pub memo: [u8; 32],
+}
+
+/// Verified retirement transfer; an initially empty account has no Ledger block.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetLedgerTransferReceipt {
+    pub intent: FleetLedgerTransferIntent,
+    pub block_index: Option<u128>,
+}
+
+/// Controller authority for returning a fully removed Fleet's Ledger balance.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetRetirementRequest {
+    pub operation_id: [u8; 32],
+    pub expected_registry: FleetRegistryVersion,
+    pub destination: Principal,
+    pub maximum_ledger_fee: u128,
+}
+
+/// Coordinator retirement progress retained until the operator deletes the Coordinator.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetRetirementStatus {
+    pub request: FleetRetirementRequest,
+    pub prepared_at_ns: u64,
+    pub ledger_transfer: Option<FleetLedgerTransferIntent>,
+    pub ledger_receipt: Option<FleetLedgerTransferReceipt>,
+}
+
 /// Root-authenticated command freezing its pre-transfer physical-deletion readiness authority.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDeletionReadinessIntentRequest {
@@ -308,6 +345,7 @@ pub struct FleetSubnetRootDeletionReadinessIntentResponse {
 /// Root-authenticated command recording its converged post-transfer cycle balance.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootDeletionReadinessRequest {
+    pub ledger_receipt: crate::dto::fleet_registry::FleetLedgerTransferReceipt,
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
     pub expected_intent_hash: [u8; 32],

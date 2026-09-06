@@ -2534,9 +2534,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.252.1"
+version = "0.253.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fc87e3e646bebb95f52db9e329b8f573fa0ddb92692ca898382281544e599a6"
+checksum = "ba664f2b007e4e690e544b02fe2c59a24b830683a5ed0b1061ee2bd3d366d9fb"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2552,9 +2552,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.252.1"
+version = "0.253.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d80fa72c903ed21633868ba39de3d23e35adc4dd6d5b11bf3a612f460afe485"
+checksum = "7ffd461b762780ec06a679b3eed79f713875012f05979ed4f01c7304e46e1081"
 dependencies = [
  "candid",
  "getrandom 0.4.3",
@@ -2577,18 +2577,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.252.1"
+version = "0.253.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4333870e446f52dd78bdc6b76c640eef1b057797deac3a732e30ec75cc90de8f"
+checksum = "941f41f98b6ca6ce8c293e9c82d254c58f7aefba1e5b94515d2235c45ace7cb3"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.252.1"
+version = "0.253.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68b5aa3826fdc054d2db6fb3f8ed0b97886a60a708a879defd0153290cb75b6c"
+checksum = "5345c7d23e6591087bbe3319955380bc3768c8162b4ef683f9854e4d9fcf2bef"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2608,9 +2608,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.252.1"
+version = "0.253.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76a06d323d9c96195eac12e20fd56ab5828d1e8b4185e9e4bbece04e6a2db948"
+checksum = "13f0857e453acdcec976ee5e7314141e7e158494cf688615754399199caebb1f"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2625,9 +2625,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.252.1"
+version = "0.253.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bc0660f4d1bfdc41723d7a09092c9ad6659503edc1963b419585980ed8f337f"
+checksum = "12c497386895f62a4ddaff091501680afb241555b07cb4c0fb7c62bdfdea086a"
 dependencies = [
  "candid",
  "derive_more",
@@ -2946,6 +2946,15 @@ name = "litemap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
+
+[[package]]
+name = "local_authorization_probe"
+version = "0.110.7"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
 
 [[package]]
 name = "lock_api"

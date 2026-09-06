@@ -6,9 +6,7 @@
 //! query or update operations.
 
 use crate::{
-    icp::{
-        IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response, response_bytes,
-    },
+    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     protocol_binding::ResolvedProtocolBinding,
 };
 use candid::{CandidType, Principal};
@@ -169,27 +167,6 @@ where
         input,
         ProtocolCallMode::Query,
     )
-}
-
-/// Query one method with binary arguments and retain its undecoded Candid response bytes.
-///
-/// This boundary is reserved for an explicitly selected, module-bound protocol projection whose
-/// response contract cannot be described by the current artifact's Candid sidecar.
-pub fn query_response_bytes<I>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &'static str,
-    input: &I,
-) -> Result<Vec<u8>, CanisterProtocolError>
-where
-    I: CandidType,
-{
-    let output = invoke_output(icp, None, canister, method, input, ProtocolCallMode::Query)?;
-    response_bytes(&output).map_err(|source| CanisterProtocolError::Response {
-        canister,
-        method,
-        source,
-    })
 }
 
 fn invoke_with_candid<I, O>(

@@ -64,6 +64,7 @@ pub struct RootComponentDirectoryRefreshPlanView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootFleetSubnetDrainingView {
+    pub asset_recipient: Principal,
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
     pub placement_subnet: SubnetId,
@@ -302,6 +303,8 @@ pub struct RootFleetSubnetDeletionPreparationAuthority {
 /// Read-only root-local authority frozen before returning cycles to the Coordinator.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootFleetSubnetDeletionPreparationIntentView {
+    pub ledger_transfer: Option<canic_core::dto::fleet_registry::FleetLedgerTransferIntent>,
+    pub ledger_receipt: Option<canic_core::dto::fleet_registry::FleetLedgerTransferReceipt>,
     pub operation_id: [u8; 32],
     pub coordinator: Principal,
     pub final_inventory_hash: [u8; 32],
@@ -320,6 +323,7 @@ pub struct RootFleetSubnetDeletionPreparationIntentView {
 /// Read-only local receipt proving the removed root is externally deletable.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootFleetSubnetDeletionPreparationView {
+    pub ledger_receipt: canic_core::dto::fleet_registry::FleetLedgerTransferReceipt,
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
     pub coordinator: Principal,

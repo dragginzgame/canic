@@ -1,0 +1,5 @@
+--enable-mutable-globals
+--enable-nontrapping-float-to-int
+--enable-bulk-memory
+--enable-sign-ext
+--enable-bulk-memory-opt

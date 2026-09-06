@@ -1,0 +1,58 @@
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.7 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.7 (/home/adam/projects/canic/crates/canic-cli)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 32s
+     Running unittests src/lib.rs (target/debug/deps/canic_cli-1d25bfc0c30ef15d)
+
+running 47 tests
+test backup::create::plan::tests::backup_plan_id_uses_fleet ... ok
+test backup::manifest::tests::manifest_usage_avoids_fleet_owned_backup_wording ... ok
+test backup::tests::options::usage::missing_backup_fleet_preserves_canonical_typed_error ... ok
+test backup::tests::options::usage::backup_create_usage_uses_fleet_target_wording ... ok
+test backup::render::inspect::tests::backup_inspect_report_json_uses_fleet_identity_field ... ok
+test cli::globals::tests::fleet_accepts_global_icp_and_environment ... ok
+test cycles::tests::cycles_report_json_uses_fleet_identity_field ... ok
+test cycles::funding::tests::funding_options_require_one_fleet_and_preserve_target_context ... ok
+test cycles::tests::cycles_usage_uses_fleet_wording ... ok
+test cycles::tests::missing_cycles_fleet_preserves_canonical_typed_error ... ok
+test backup::tests::status::json::backup_dry_run_status_json_uses_fleet_identity_field ... ok
+test cycles::wallet::tests::parses_compact_fleet_target_receiver ... ok
+test cycles::wallet::tests::parses_cycles_transfer_to_fleet_target ... ok
+test cycles::wallet::tests::resolves_compact_fleet_target_receiver ... ok
+test fleet::tests::ensure_defaults_to_current_fleet_document ... ok
+test fleet::tests::ensure_requires_canonical_apply_digest ... ok
+test fleet::tests::fleet_commands_are_current_generation_and_lexicographically_ordered ... ok
+test fleet::tests::generate_defaults_to_policy_seed_and_desired_paths ... ok
+test fleet::tests::generate_replace_requires_canonical_digest ... ok
+test fleet::tests::fresh_generation_requires_and_retains_exact_creation_fee_authority ... ok
+test fleet::tests::phase_progress_json_has_exact_operation_authority_and_numeric_counts ... ok
+test fleet::tests::text_report_formats_every_cycle_quantity_with_three_decimal_units ... ok
+test info_env::tests::usage_uses_fleet_wording ... ok
+test info_subnets::tests::parses_fleet_json_and_forwarded_global_options ... ok
+test inspect::tests::fleet_json_report_uses_fleet_identity ... ok
+test info_subnets::tests::text_output_contains_canonical_rows_and_exact_fleet_total ... ok
+test inspect::tests::rejects_broad_fleet_fanout ... ok
+test inspect::tests::parses_fleet_role_target ... ok
+test inspect::tests::usage_binds_fleet_inspection_to_terminal_current_ensure ... ok
+test inspect::tests::rejects_fleet_without_role ... ok
+test list::tests::missing_list_fleet_preserves_canonical_typed_error ... ok
+test list::tests::renders_list_output_with_fleet_title ... ok
+test medic::tests::fleet_environment_selection_prefers_explicit_environment ... ok
+test medic::tests::fleet_report_includes_effective_environment ... ok
+test medic::tests::parses_fleet_auth_renewal_medic_target ... ok
+test medic::tests::parses_fleet_blob_storage_medic_target ... ok
+test medic::tests::parses_fleet_medic_options ... ok
+test metrics::tests::metrics_report_json_uses_fleet_identity_field ... ok
+test metrics::tests::metrics_usage_uses_fleet_wording ... ok
+test metrics::tests::missing_metrics_fleet_preserves_canonical_typed_error ... ok
+test status::tests::fleet_status_uses_terminal_registry_app_binding ... ok
+test token::tests::parses_compact_fleet_target_receiver ... ok
+test token::tests::resolves_compact_fleet_target_receiver ... ok
+test fleet::tests::generated_desired_output_requires_exact_digest_for_replacement ... ok
+test fleet::tests::ensure_reopens_retained_reviewed_input_when_working_toml_is_missing ... ok
+test status::tests::terminal_ensure_is_the_status_fleet_source ... ok
+test medic::tests::fleet_missing_points_to_current_ensure_plan ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 428 filtered out; finished in 26.56s
+

@@ -346,6 +346,7 @@ pub(in crate::release_set) fn project_role_capabilities(
             | RoleCapabilityKey::ChildProvisioning
             | RoleCapabilityKey::Root
             | RoleCapabilityKey::RootControlPlane
+            | RoleCapabilityKey::RootDelegation
             | RoleCapabilityKey::Runtime
             | RoleCapabilityKey::WasmStore => {}
         }

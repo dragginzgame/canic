@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "predecessor_source_commit": "f1fd3c59f428c57e28a2d6469ee8326f744ed021",
+  "unchanged_tracked_inputs_verified": 3545,
+  "overlaid_tracked_paths": [
+    "Cargo.lock",
+    "crates/canic-host/src/fleet_ensure/workflow/mod.rs",
+    "crates/canic-testing-internal/Cargo.toml",
+    "crates/canic-testing-internal/src/lib.rs",
+    "crates/canic-testing-internal/src/pic/fleet_registry/build.rs"
+  ],
+  "overlay_boundary": "Host/test owner and derived dependency lock only; every predecessor canister source remains unchanged.",
+  "derived_lock_sha256": "8ea90b67c383cd40b497b9222a15c19fc461ff9edc1932563b7aeb147a7b56fe",
+  "current_custody_wasm_sha256": "2a54adab9ae8def4bd4dba18fb11897e443799a65f374b8b31ea43b6cd46a8d2",
+  "current_ledger_fixture_wasm_sha256": "4a6f21a7307d0ece2ca9aa9435fe06a984fb8abaf4a8d033224eec32fa3ae307",
+  "owner_sources_sha256": {
+    "crates/canic-cycle-custody/predecessor_owner/dto/mod.rs": "91daae8fd754cb322ee4117f4d621e7a89a4e7d81c66bca4636f8519747d8508",
+    "crates/canic-cycle-custody/predecessor_owner/host_verification.rs": "ad1b9f7f26ca8ad8dfa14f9532526e1ffb2abcbffa7ec5c38e325923827d99c7",
+    "crates/canic-cycle-custody/predecessor_owner/mod.rs": "26256f53ce2b2bd9d6de479e6cffa4b04244acb5dbd7419e98b5af6ac45333f6",
+    "crates/canic-cycle-custody/predecessor_owner/model/mod.rs": "0235523467f1ba2bfe41cd722efbf3d53ce2680cbb456576981cbc274a9a77e7",
+    "crates/canic-cycle-custody/predecessor_owner/ops/evidence/mod.rs": "082a42294b3873d37b5938348628318102ffc2550108344d1bdb282682741816",
+    "crates/canic-cycle-custody/predecessor_owner/ops/mod.rs": "edd8d4b16f95386408718d3fd8bd06b1cbe01a59eeb117104ae05c575ad55e55",
+    "crates/canic-cycle-custody/predecessor_owner/ops/platform/mod.rs": "af48bd4b1ce458ae6fe20c27ad0c320a25752e20a08b83a59540edba4e8ce3b6",
+    "crates/canic-cycle-custody/predecessor_owner/ops/settlement/mod.rs": "49cf55de1f2b00109ccb921000003891433bd79447bf4c3afa690b1403815bec",
+    "crates/canic-cycle-custody/predecessor_owner/ops/state/mod.rs": "e38d68e204a7bdbf5fa8cb686e0e8f8dea3716b2e1476a64a3274e057d4c1f86",
+    "crates/canic-cycle-custody/predecessor_owner/tests/mod.rs": "78e1806ad8ef35437d3897d37f5079040a7e6eea0d892458562206f4d7e8c647",
+    "crates/canic-cycle-custody/predecessor_owner/workflow/mod.rs": "04b31057fead9fc96b1066379eff8e878b5a09c6c3cc54cd1670411e1416f32b",
+    "scripts/dev/canic134-predecessor-owner.sh": "f7bbd84b6d80543cd5abd13c247f2a947c34e12f4eb409f902894905cd485b1f"
+  },
+  "proof": {
+    "case": "predecessor_retirement::tests::pinned_owner_retires_and_seals_genuine_predecessor",
+    "result": "passed",
+    "elapsed_seconds_including_cold_artifact_builds": 324.42,
+    "log": "canic134-pinned-owner-hardened-pocketic.log",
+    "log_sha256": "15a5978043d7cd0739d56d504c0abd9298933483a7c30d9beb6edc321f892d5b",
+    "assets": 10,
+    "final_native_cycles": 2019347485132995,
+    "operator_ledger_cycles": 7999800000000,
+    "ledger_fees": 200000000,
+    "retirement_debit": 10837168524,
+    "custody_debit": 92369698789,
+    "store_terminal_residual": 425891567021
+  },
+  "limitations": [
+    "RuntimeOnly fixture; outstanding retained Ensure effect settlement remains.",
+    "Finalized fixture manifest; replacement application artifacts and fresh Fleet continuation not qualified.",
+    "Custody recovery upgrades and complete operator runbook remain.",
+    "No live or downstream repository effects."
+  ],
+  "custody_sources_sha256": {
+    "crates/canic-cycle-custody/src/dto/mod.rs": "912436dc57d68bbe6db0e1a7f4073353f9ee95f06eea921694115d07930afc9a",
+    "crates/canic-cycle-custody/src/host/dto/mod.rs": "9e49b8e9291125a64c3a38b2bc3ee031858cefc545f89b9f9473919159c1dbb7",
+    "crates/canic-cycle-custody/src/host/dto/retirement/mod.rs": "39ba7d4e1cd1e8a6613b2e39a0a3a0d0b90885f184e5c707e8fdef05c8959ed9",
+    "crates/canic-cycle-custody/src/host/mod.rs": "833f2c8fc2602cd4283ccc87371756fe8f1a653eb03f68f0351367c9eeb5475f",
+    "crates/canic-cycle-custody/src/host/model/mod.rs": "2c8a7cddcee9ea7c7fc4f3c60ff7e191763c08d883f35cfa4bb6e126f5c801db",
+    "crates/canic-cycle-custody/src/host/model/retirement/mod.rs": "a435972f3ccc79fc67b617a4b4b328b1cc0814119328ee7c1ce1fb8ec675c75c",
+    "crates/canic-cycle-custody/src/host/ops/admission.rs": "601682263e6c8be64a9adf2d14afbbee9eb13ac5f156d441674f8e527401725e",
+    "crates/canic-cycle-custody/src/host/ops/mod.rs": "3e3a49aa8a9ff10e0023a49431a0ecfaff96a6439c34f8579195590f05792940",
+    "crates/canic-cycle-custody/src/host/ops/receipt.rs": "36a7009bc367b13f5802eb7b7bf26a037d6d5cfd221686f56244d4796db6bf7a",
+    "crates/canic-cycle-custody/src/host/workflow/mod.rs": "33d2838bbb98709b30efd30c0507263742a8a45eb2f78b3b286c50d9ab033759",
+    "crates/canic-cycle-custody/src/lib.rs": "05364411c5fd2ceef0d85bee513ac51533450f243e03b4bc132d7db96d718c0f",
+    "crates/canic-cycle-custody/src/model/mod.rs": "e5a0de8d13294c54c8da505c6d3e279962cd7bb3fc1e7a1d4e3ab9f2996b18fc",
+    "crates/canic-cycle-custody/src/model/tests/mod.rs": "72a9eb94ee23f3d244545b5aa293123cc165445efde526d3b391c34e77d9e440",
+    "crates/canic-cycle-custody/src/model/validation.rs": "d2017e3049688ee5d880060dfc313affc23fefa0fd3e283743467ea9b4d1ee20",
+    "crates/canic-cycle-custody/src/ops/history.rs": "16d723c9695ff76e75704d5e18e0a96344a678269465f8d9dfc014b47a7bf946",
+    "crates/canic-cycle-custody/src/ops/mod.rs": "fb4ab3bec668564d92b69d11b02f97b93bc86d6509d21d13cac1cb7c8c83d71b",
+    "crates/canic-cycle-custody/src/ops/state.rs": "1adcfc51f7f65a0714a90af1f16ec85b710619b4eadc0be49c94599fc7ed0494",
+    "crates/canic-cycle-custody/src/workflow/mod.rs": "fcfbb5b86e3d7b7b88e4a616febb2a749d9b8f8213236e74f2bc2398b760cc12"
+  }
+}

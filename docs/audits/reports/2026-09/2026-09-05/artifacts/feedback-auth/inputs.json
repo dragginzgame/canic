@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "sha256": {
+    ".tmp/auth-state-checkpoint/product/canisters/audit/toko_root_checkpoint/src/lib.rs": "d6eb7f4383ac886406eb4844f2628fd6bddc869415f772ae368ac06ede48e1dc",
+    ".tmp/auth-state-checkpoint/product/canisters/audit/toko_root_checkpoint/canic.toml": "c608be0c6d6832ff7b6dd06e6b4cce27ae168cfcf0dc5668363cb73ae39969bc",
+    ".tmp/auth-state-checkpoint/product/canisters/audit/toko_root_checkpoint/Cargo.toml": "9ae2a1c6c3e56d3b861bb2d502db49a09ad15c64062e2e3e4efb986453c860d5",
+    ".tmp/auth-state-checkpoint/product/canisters/audit/toko_root_checkpoint/build.rs": "30b890baeded3ed9bce1288a3ce1add9c4d10bb6014930d5d76ef1e75238eba8",
+    ".tmp/auth-state-checkpoint/product/Cargo.lock": "c1922b15298a315b5132d7a3cda85d5032041eae6a22c9a31646a68fc37d252f"
+  },
+  "config_adjustment": "Root package path only; all topology and auth settings unchanged"
+}

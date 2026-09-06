@@ -1,0 +1,36 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:37075/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.87s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation ... [FLEET]      CACHE  literal-zero release artifacts (28)                   1.16s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.40s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET]      DONE   literal-zero infrastructure replay complete          7m 41s
+[FLEET]      RUN    proving literal-zero terminal replay
+[FLEET]      DONE   literal-zero terminal replay complete                2m 46s
+[FLEET]      DONE   literal-zero production-adapter journey complete    16m 30s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 58 filtered out; finished in 990.33s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=550516 kB high_water=974512 kB threads=20
+==> targeted canic-testing-internal PocketIC proof done in 999s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  999s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 1000s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.r9Euxi

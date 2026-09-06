@@ -1,0 +1,144 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:46301/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cycle-custody v0.110.7 (/home/adam/projects/canic/crates/canic-cycle-custody)
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 49.82s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-8278b312dcbd5dba)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::literal_zero_fleet_with_initial_children_reaches_effect_free_terminal_replay ... [WASM]       SIZE   fleet_coordinator/candidate.wasm  code=3.88 MiB (4070557 B)  headroom=6.12 MiB (6415203 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2637574 B)  headroom=7.48 MiB (7848186 B)
+[WASM]       SIZE   user_hub/candidate.wasm  code=2.85 MiB (2984684 B)  headroom=7.15 MiB (7501076 B)
+[WASM]       SIZE   user_shard/candidate.wasm  code=3.13 MiB (3282885 B)  headroom=6.87 MiB (7202875 B)
+[WASM]       SIZE   root/candidate.wasm  code=8.30 MiB (8700081 B)  headroom=1.70 MiB (1785679 B)
+[FLEET]      DONE   literal-zero release artifacts (19)                  36.52s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.46s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET-SPAN] kind=fleet_observation elapsed_us=759273
+[FLEET-SPAN] kind=fleet_observation elapsed_us=740060
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"infrastructure","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":26,"state":{"kind":"advancing"}},"unix_ms":1788690411296}
+[FLEET-SPAN] kind=create elapsed_us=519820
+[FLEET-SPAN] kind=create elapsed_us=523125
+[FLEET-SPAN] kind=create elapsed_us=525231
+[FLEET-SPAN] kind=create elapsed_us=543170
+[FLEET-SPAN] kind=create elapsed_us=524672
+[FLEET-SPAN] kind=create elapsed_us=538969
+[FLEET-SPAN] kind=create elapsed_us=534610
+[FLEET-SPAN] kind=create elapsed_us=540941
+[FLEET-SPAN] kind=create elapsed_us=540293
+[FLEET-SPAN] kind=create elapsed_us=611329
+[FLEET-SPAN] kind=create elapsed_us=609288
+[FLEET-SPAN] kind=create elapsed_us=607609
+[FLEET-SPAN] kind=create elapsed_us=613665
+[FLEET-SPAN] kind=other_effect elapsed_us=3658416
+[FLEET-SPAN] kind=other_effect elapsed_us=2721940
+[FLEET-SPAN] kind=other_effect elapsed_us=6038571
+[FLEET-SPAN] kind=other_effect elapsed_us=640063
+[FLEET-MEASURE] {"progress":{"applied_effects":16,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"infrastructure","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":26,"state":{"kind":"advancing"}},"unix_ms":1788690467223}
+[FLEET-SPAN] kind=other_effect elapsed_us=641303
+[FLEET-SPAN] kind=other_effect elapsed_us=641353
+[FLEET-SPAN] kind=other_effect elapsed_us=642572
+[FLEET-SPAN] kind=other_effect elapsed_us=643924
+[FLEET-SPAN] kind=other_effect elapsed_us=643003
+[FLEET-SPAN] kind=other_effect elapsed_us=640149
+[FLEET-SPAN] kind=other_effect elapsed_us=644063
+[FLEET-SPAN] kind=other_effect elapsed_us=644263
+[FLEET-SPAN] kind=other_effect elapsed_us=655760
+[FLEET-MEASURE] {"progress":{"applied_effects":26,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"terminal_verification","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":26,"state":{"kind":"advancing"}},"unix_ms":1788690588937}
+[FLEET-SPAN] kind=fleet_observation elapsed_us=21184058
+[FLEET-MEASURE] {"progress":{"applied_effects":26,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"terminal_verification","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":36,"state":{"kind":"prerequisite_complete"}},"unix_ms":1788690615383}
+[FLEET-MEASURE] {"progress":{"applied_effects":26,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"import_reconciliation","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":36,"state":{"kind":"advancing"}},"unix_ms":1788690615384}
+[FLEET-SPAN] kind=fleet_observation elapsed_us=21186981
+[FLEET-SPAN] kind=other_protocol elapsed_us=1322341
+[FLEET]      DONE   literal-zero infrastructure replay complete          3m 50s
+[FLEET-MEASURE] {"progress":{"applied_effects":26,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"import_reconciliation","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":36,"state":{"kind":"advancing"}},"unix_ms":1788690639984}
+[FLEET-SPAN] kind=fleet_observation elapsed_us=19697015
+[FLEET-SPAN] kind=other_protocol elapsed_us=1313391
+[FLEET-SPAN] kind=other_protocol elapsed_us=1319858
+[FLEET-SPAN] kind=other_protocol elapsed_us=1312180
+[FLEET-SPAN] kind=other_protocol elapsed_us=1317941
+[FLEET-SPAN] kind=other_protocol elapsed_us=1400180
+[FLEET-SPAN] kind=other_protocol elapsed_us=1307996
+[FLEET-SPAN] kind=other_protocol elapsed_us=1315908
+[FLEET-SPAN] kind=other_protocol elapsed_us=1309447
+[FLEET-SPAN] kind=other_protocol elapsed_us=1316960
+[FLEET-MEASURE] {"progress":{"applied_effects":36,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"terminal_verification","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":36,"state":{"kind":"advancing"}},"unix_ms":1788690701546}
+[FLEET-SPAN] kind=fleet_observation elapsed_us=3853165
+[FLEET-MEASURE] {"progress":{"applied_effects":36,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"terminal_verification","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"prerequisite_complete"}},"unix_ms":1788690716622}
+[FLEET-MEASURE] {"progress":{"applied_effects":36,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"control_plane","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"advancing"}},"unix_ms":1788690716623}
+[FLEET-SPAN] kind=other_protocol elapsed_us=658802
+[FLEET-SPAN] kind=other_protocol elapsed_us=662898
+[FLEET-SPAN] kind=other_protocol elapsed_us=664208
+[FLEET-SPAN] kind=other_protocol elapsed_us=662999
+[FLEET-SPAN] kind=other_protocol elapsed_us=683174
+[FLEET-SPAN] kind=other_protocol elapsed_us=664136
+[FLEET-SPAN] kind=other_protocol elapsed_us=663365
+[FLEET-SPAN] kind=other_protocol elapsed_us=684573
+[FLEET-SPAN] kind=other_protocol elapsed_us=1092856
+[FLEET-SPAN] kind=other_protocol elapsed_us=1520751
+[FLEET-SPAN] kind=other_protocol elapsed_us=662980
+[FLEET-SPAN] kind=other_protocol elapsed_us=691004
+[FLEET-SPAN] kind=other_protocol elapsed_us=676271
+[FLEET-SPAN] kind=other_protocol elapsed_us=676966
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"advancing"}},"unix_ms":1788690774030}
+[FLEET-SPAN] kind=workload_provisioning elapsed_us=667944
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690778750}
+[FLEET-SPAN] kind=workload_provisioning elapsed_us=635289
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690782715}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690783981}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690785500}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690786616}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690787733}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690788952}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690790261}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690791573}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690792823}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690793943}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690795218}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690796364}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690797570}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690798892}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690800201}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690801427}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690802676}
+[FLEET-MEASURE] {"progress":{"applied_effects":51,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"workload_provisioning","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"awaiting_progress"}},"unix_ms":1788690803896}
+[FLEET-MEASURE] {"progress":{"applied_effects":52,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"pool_readiness","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"advancing"}},"unix_ms":1788690805078}
+[FLEET-MEASURE] {"progress":{"applied_effects":53,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"terminal_verification","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"advancing"}},"unix_ms":1788690807021}
+[FLEET-SPAN] kind=fleet_observation elapsed_us=3891728
+[FLEET-SPAN] kind=fleet_observation elapsed_us=3840679
+[FLEET-MEASURE] {"progress":{"applied_effects":53,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"complete","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"complete"}},"unix_ms":1788690833445}
+[FLEET]      RUN    proving literal-zero terminal replay
+[FLEET-SPAN] kind=fleet_observation elapsed_us=3944129
+[FLEET-SPAN] kind=fleet_observation elapsed_us=3815039
+[FLEET-MEASURE] {"progress":{"applied_effects":53,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"complete","plan_sha256":"4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb","reviewed_effects":53,"state":{"kind":"complete"}},"unix_ms":1788690860231}
+[FLEET-SPAN] kind=fleet_observation elapsed_us=3855029
+[FLEET-SPAN] kind=fleet_observation elapsed_us=3910965
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"terminal_verification","plan_sha256":"79a366bbfbc106e2e52607b8700a5df4f4002b4fa42a352f5410e899e2ccaabe","reviewed_effects":0,"state":{"kind":"advancing"}},"unix_ms":1788690906017}
+[FLEET-SPAN] kind=fleet_observation elapsed_us=3894814
+[FLEET-SPAN] kind=fleet_observation elapsed_us=3924567
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d","phase":"complete","plan_sha256":"79a366bbfbc106e2e52607b8700a5df4f4002b4fa42a352f5410e899e2ccaabe","reviewed_effects":0,"state":{"kind":"complete"}},"unix_ms":1788690932052}
+[FLEET]      DONE   literal-zero terminal replay complete                1m 38s
+[FLEET]      DONE   literal-zero production-adapter journey complete     9m 24s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 564.53s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=463668 kB high_water=471228 kB threads=20
+==> targeted canic-testing-internal PocketIC proof done in 615s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  615s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 615s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.Ld9Nyy

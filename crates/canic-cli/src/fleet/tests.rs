@@ -1,8 +1,14 @@
 use super::*;
 use crate::test_support::temp_dir;
-use canic_host::fleet_ensure::model::{
-    ActualCycleConservation, CanisterDisposition, CanisterPlan, CycleConservation, EnsureAction,
-    EstateFundingDomainPlan, FleetEnsurePlan, FleetEnsurePlanScope,
+use canic_host::fleet_ensure::{
+    model::{
+        ActualCycleConservation, CanisterDisposition, CanisterPlan, CanisterRuntimeStatus,
+        CycleConservation, DesiredFleet, DesiredFleetArtifacts, EnsureAction,
+        EstateFundingDomainPlan, FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
+        FleetEnsurePlanScope, FleetObservation, LiveCanister,
+    },
+    ops::{EnsurePaths, write_journal, write_plan},
+    policy::compile_plan,
 };
 use std::collections::BTreeMap;
 
@@ -100,15 +106,6 @@ fn ensure_requires_canonical_apply_digest() {
 
 #[test]
 fn ensure_reopens_retained_reviewed_input_when_working_toml_is_missing() {
-    use canic_host::fleet_ensure::{
-        model::{
-            CanisterRuntimeStatus, DesiredFleet, DesiredFleetArtifacts, FleetEnsureCompletion,
-            FleetEnsureJournalRecord, FleetObservation, LiveCanister,
-        },
-        ops::{EnsurePaths, write_journal, write_plan},
-        policy::compile_plan,
-    };
-
     let root = temp_dir("canic-cli-retained-desired");
     let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     let controller = "rdmx6-jaaaa-aaaaa-aaadq-cai";
@@ -175,6 +172,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
             estate_funding_required: None,
             effects: Vec::new(),
@@ -265,8 +263,10 @@ fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
         }),
         effects_applied: 1,
         plan: FleetEnsurePlan {
+            continuation: None,
             canisters: vec![CanisterPlan {
                 actions: vec![EnsureAction::Fund {
+                    pool_root: None,
                     amount: 1_000_000_000_000_000,
                     created_at_time: 1,
                     expected_post_cycles: 1_002_000_000_000,
@@ -323,6 +323,7 @@ fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
             plan_sha256: "plan".to_string(),
             planned_at_time: 1,
             protocol_actions: Vec::new(),
+            root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,
             schema_version: 1,
@@ -365,4 +366,26 @@ fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
              \nmeasured_conservation: 1.000Q + 1.500T - 500.000B - 2.000B = 1.001Q"
         )
     );
+}
+
+#[test]
+fn phase_progress_json_has_exact_operation_authority_and_numeric_counts() {
+    let progress = FleetEnsureProgress {
+        operation_id: "e1".repeat(32),
+        plan_sha256: "e2".repeat(32),
+        phase: FleetEnsurePhase::ImportReconciliation,
+        state: FleetEnsureProgressState::PrerequisiteComplete,
+        applied_effects: 17,
+        reviewed_effects: 22,
+    };
+    let value: serde_json::Value = serde_json::from_str(&render_progress(&progress, true))
+        .expect("one independently parseable progress event");
+    assert_eq!(value["event"], "fleet_ensure_progress");
+    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["progress"]["phase"], "import_reconciliation");
+    assert_eq!(value["progress"]["operation_id"], progress.operation_id);
+    assert_eq!(value["progress"]["plan_sha256"], progress.plan_sha256);
+    assert_eq!(value["progress"]["state"]["kind"], "prerequisite_complete");
+    assert_eq!(value["progress"]["applied_effects"], 17);
+    assert_eq!(value["progress"]["reviewed_effects"], 22);
 }

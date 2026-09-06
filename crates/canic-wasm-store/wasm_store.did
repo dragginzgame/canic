@@ -216,6 +216,7 @@ type RoleCapability = variant {
   ChildProvisioning;
   DelegatedTokenIssuer;
   FleetAdmissionProjection;
+  RootDelegation;
   RoleAttestationSigner;
   WasmStore;
   DelegatedTokenVerifier;

@@ -1,0 +1,40 @@
+{
+  "release_build_id": "d533efba711b8ec278a9891e284c8f1c08dba6f086cc69d10d0b75799333b880",
+  "manifest_sha256": "052bb1f9a033d9b09101fe5ba982dcaef9f278e3d10ab0f908f591a060cf55eb",
+  "evidence": "read-only byte and export verification; no runtime transition executed",
+  "roles": [
+    {
+      "role": "fleet_coordinator",
+      "release": "0.110.6",
+      "wasm_sha256": "b968dff5f230bb6d626b1b8cb419bc34fb8ab4fc80629709ca1e8ed0a4a2d6ae",
+      "wasm_gz_sha256": "13c83e2896480990e5c2fd255bc2434242a192b39d278b637b3d3391b24efa63",
+      "candid_sha256": "51fd22fd1e9c038d673fdabc6ea02881e12179199c73974f7d4637477e0d5c66",
+      "role_endpoints": [
+        "canister_query canic_status",
+        "canister_update canic_coordinator_command"
+      ]
+    },
+    {
+      "role": "root",
+      "release": "0.110.6",
+      "wasm_sha256": "f3ff9ed0c6f01d3a0d7f1951b500fec729a77ac0dcbd11b69896069fd775ae65",
+      "wasm_gz_sha256": "2dc18abd7f8fe71585ac192157d18b0df85cd87e22f0c57d339674db1da65c52",
+      "candid_sha256": "0034d5f42208bd252270555a04a86b0d8da0ae18f46666f5749bf11069effa24",
+      "role_endpoints": [
+        "canister_query canic_status",
+        "canister_update canic_root_command"
+      ]
+    },
+    {
+      "role": "wasm_store",
+      "release": "0.110.6",
+      "wasm_sha256": "bd41cd787b5956a29be3bfd7685c84adf90e46391b8998973f11d271a99294a7",
+      "wasm_gz_sha256": "f7390242ead7aef409bc682a4adaf0d814ca077c204f620007a9e369a72eb9ef",
+      "candid_sha256": "89e2f95c4ac284c099e95d2102df8995e0f5332c50a85e3f3d2ffed918e16fa6",
+      "role_endpoints": [
+        "canister_query canic_status",
+        "canister_update canic_command"
+      ]
+    }
+  ]
+}

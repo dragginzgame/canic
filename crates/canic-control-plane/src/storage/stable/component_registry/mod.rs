@@ -420,6 +420,8 @@ pub struct RootFleetSubnetStoreDeletionRecord {
 /// Durable authority frozen before a removed root returns cycles to its Coordinator.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootFleetSubnetDeletionPreparationIntentRecord {
+    pub ledger_transfer: Option<canic_core::dto::fleet_registry::FleetLedgerTransferIntent>,
+    pub ledger_receipt: Option<canic_core::dto::fleet_registry::FleetLedgerTransferReceipt>,
     pub operation_id: [u8; 32],
     pub coordinator: Principal,
     pub final_inventory_hash: [u8; 32],
@@ -438,6 +440,7 @@ pub struct RootFleetSubnetDeletionPreparationIntentRecord {
 /// Durable local proof that a removed root is ready for its external deletion executor.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootFleetSubnetDeletionPreparationRecord {
+    pub ledger_receipt: canic_core::dto::fleet_registry::FleetLedgerTransferReceipt,
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
     pub coordinator: Principal,
@@ -893,6 +896,29 @@ impl RootFleetSubnetDeletionPreparationIntentRecord {
         .all(|valid| valid)
     }
 
+    fn ledger_transfer_is_valid(&self, draining: &RootFleetSubnetDrainingRecord) -> bool {
+        let Some(transfer) = &self.ledger_transfer else {
+            return self.ledger_receipt.is_none() && self.coordinator_intent_hash.is_none();
+        };
+        let amount_is_valid = if transfer.balance_before == 0 {
+            transfer.fee == 0
+        } else {
+            transfer.balance_before > transfer.fee && transfer.fee > 0
+        };
+        let authority_is_valid = transfer.source == draining.fleet_subnet_root
+            && transfer.destination == self.coordinator
+            && transfer.memo == self.operation_id
+            && transfer.created_at_time >= self.prepared_at_ns;
+        let receipt_is_valid = match &self.ledger_receipt {
+            Some(receipt) => {
+                receipt.intent == *transfer
+                    && receipt.block_index.is_some() == (transfer.balance_before > 0)
+            }
+            None => self.coordinator_intent_hash.is_none(),
+        };
+        amount_is_valid && authority_is_valid && receipt_is_valid
+    }
+
     fn is_valid_for_current(&self, draining: &RootFleetSubnetDrainingRecord) -> bool {
         let Some(inventory) = draining.final_inventory.as_ref() else {
             return false;
@@ -929,6 +955,7 @@ impl RootFleetSubnetDeletionPreparationIntentRecord {
             ) == Some(self.retained_cycles_target),
             self.observed_reserved_cycles == 0,
             reclamation_is_valid,
+            self.ledger_transfer_is_valid(draining),
             self.prepared_at_ns >= deletion.completed_at_ns,
         ]
         .into_iter()
@@ -943,6 +970,7 @@ impl RootFleetSubnetDeletionPreparationRecord {
             return false;
         };
         [
+            Some(&self.ledger_receipt) == intent.ledger_receipt.as_ref(),
             self.operation_id == intent.operation_id,
             self.fleet_subnet_root == draining.fleet_subnet_root,
             self.coordinator == intent.coordinator,
@@ -3394,6 +3422,9 @@ impl RootComponentRegistryStore {
                 draining.store_deletion.is_some(),
                 draining.root_deletion_preparation_intent.is_none(),
                 draining.root_deletion_preparation.is_none(),
+                record.ledger_transfer.is_none(),
+                record.ledger_receipt.is_none(),
+                record.coordinator_intent_hash.is_none(),
                 record.is_valid_for_current(draining),
             ]
             .into_iter()
@@ -3405,6 +3436,61 @@ impl RootComponentRegistryStore {
             next.root_draining
                 .as_mut()
                 .expect("validated root draining authority")
+                .root_deletion_preparation_intent = Some(record);
+            state.current = Some(next);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
+    pub(crate) fn record_root_ledger_transfer(
+        expected: &RootComponentRegistryMetaRecord,
+        record: RootFleetSubnetDeletionPreparationIntentRecord,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentRegistryCommitError> {
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            let draining = current
+                .root_draining
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            let previous = draining
+                .root_deletion_preparation_intent
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            if previous == &record {
+                return Ok(RootComponentRegistryCommitOutcome::Existing);
+            }
+            let request_is_retained = previous
+                .ledger_transfer
+                .as_ref()
+                .is_none_or(|request| Some(request) == record.ledger_transfer.as_ref());
+            let transition_is_exact = [
+                current == expected,
+                previous.has_same_preparation_authority(&record),
+                previous.coordinator_intent_hash.is_none(),
+                record.coordinator_intent_hash.is_none(),
+                record.observed_cycles_after_reclamation.is_none(),
+                record.cycles_reclaimed_at_ns.is_none(),
+                previous.ledger_receipt.is_none(),
+                request_is_retained,
+                record.ledger_receipt.is_none() || previous.ledger_transfer.is_some(),
+                record.ledger_transfer.is_some(),
+                draining.root_deletion_preparation.is_none(),
+                record.is_valid_for_current(draining),
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if !transition_is_exact {
+                return Err(RootComponentRegistryCommitError::ConflictingState);
+            }
+            let mut next = current.clone();
+            next.root_draining
+                .as_mut()
+                .expect("validated draining authority")
                 .root_deletion_preparation_intent = Some(record);
             state.current = Some(next);
             cell.set(state);
@@ -3435,6 +3521,9 @@ impl RootComponentRegistryStore {
             let transition_is_exact = [
                 current == expected,
                 previous.has_same_preparation_authority(&record),
+                previous.ledger_transfer == record.ledger_transfer,
+                previous.ledger_receipt == record.ledger_receipt,
+                record.ledger_receipt.is_some(),
                 previous.coordinator_intent_hash.is_none(),
                 previous.observed_cycles_after_reclamation.is_none(),
                 previous.cycles_reclaimed_at_ns.is_none(),

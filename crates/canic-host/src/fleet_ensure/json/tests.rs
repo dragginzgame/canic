@@ -16,6 +16,7 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
         actual_conservation: None,
         effects_applied: 0,
         plan: FleetEnsurePlan {
+            continuation: None,
             canisters: Vec::new(),
             conservation: CycleConservation {
                 estate_funding_domains: vec![EstateFundingDomainPlan {
@@ -73,6 +74,7 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
                 name: "publish-app-chunk-3".to_string(),
                 principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
             }],
+            root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,
             schema_version: FLEET_ENSURE_SCHEMA_VERSION,
@@ -83,6 +85,15 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
     };
 
     let projection = report_json_value(&report).expect("project bounded Fleet report");
+    for field in [
+        "continuation",
+        "root_start_authority",
+        "reviewed_desired",
+        "terminal_inventory_operation_id",
+    ] {
+        assert_eq!(projection["plan"].get(field), Some(&Value::Null));
+    }
+    assert_eq!(projection["plan"]["scope"], "full");
     let request = &projection["plan"]["protocol_actions"][0]["action"]["request"];
     assert!(request.get("bytes").is_none());
     assert_eq!(request["bytes_sha256"], bytes_sha256);
@@ -109,5 +120,33 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
     assert_eq!(
         report_json_value(&without_chunks).expect("project report without Store chunks"),
         to_value(&without_chunks).expect("encode ordinary report without Store chunks")
+    );
+}
+
+#[test]
+fn current_funding_action_emits_explicit_cycle_bounds() {
+    let action = EnsureAction::Fund {
+        pool_root: None,
+        amount: 1,
+        created_at_time: 1,
+        expected_post_cycles: 0,
+        funding_deficit_cycles: 0,
+        funding_margin_cycles: 0,
+        ledger: "ledger".into(),
+        name: "funding".into(),
+        principal: "target".into(),
+    };
+    let document = to_value(&action).unwrap();
+    assert_eq!(document.get("pool_root"), Some(&Value::Null));
+    for field in [
+        "expected_post_cycles",
+        "funding_deficit_cycles",
+        "funding_margin_cycles",
+    ] {
+        assert_eq!(document[field], "0");
+    }
+    assert_eq!(
+        serde_json::from_value::<EnsureAction>(document).unwrap(),
+        action
     );
 }

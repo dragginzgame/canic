@@ -7,6 +7,8 @@ use ic_testkit::artifacts::{
 use ic_testkit::pic::{PocketIc, PocketIcBuilder};
 #[cfg(test)]
 use ic_testkit::pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig};
+#[cfg(test)]
+use std::time::SystemTime;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -262,7 +264,10 @@ pub(super) fn build_pic() -> PocketIc {
 pub(super) fn build_management_pic() -> PocketIc {
     progress("starting management-agent PocketIC instance");
     let pic = start_pocket_ic(
+        // The HTTP gateway advances to wall time. Create funded assets on that
+        // clock so starting the gateway cannot charge years of artificial idle burn.
         PocketIcBuilder::new()
+            .with_initial_time(SystemTime::now().into())
             .with_nns_subnet()
             .with_ii_subnet()
             .with_application_subnet(),

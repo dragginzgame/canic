@@ -15,8 +15,8 @@ use crate::{
     },
     model::auth::{ChainKeyRootDelegationInstallFailure, RootIssuerRenewalState},
     ops::storage::auth::{
-        AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
-        ChainKeyRootDelegationBatchStatus,
+        ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
+        ChainKeyRootDelegationBatchStatus, RootDelegationStateOps,
     },
 };
 
@@ -26,7 +26,7 @@ pub(super) fn signed_chain_key_delegation_proof_for_issuer(
     registry_epoch: u64,
     registry_hash: [u8; 32],
 ) -> Option<RootDelegationProofBatchProof> {
-    let mut batches = AuthStateOps::chain_key_root_delegation_batches()
+    let mut batches = RootDelegationStateOps::chain_key_root_delegation_batches()
         .into_iter()
         .filter(|batch| now_ns < batch.header.expires_at_ns)
         .filter(|batch| super::batch_matches_registry(batch, registry_epoch, registry_hash))
@@ -89,7 +89,7 @@ pub(super) fn materialize_chain_key_delegation_proof(
 pub(in crate::ops::auth) fn start_next_chain_key_root_delegation_batch_install(
     now_ns: u64,
 ) -> Result<Option<ChainKeyRootDelegationBatchInstallPlan>, InternalError> {
-    AuthStateOps::prune_chain_key_root_delegation_batches(now_ns);
+    RootDelegationStateOps::prune_chain_key_root_delegation_batches(now_ns);
     let Some(batch) = next_chain_key_batch_for_install(now_ns) else {
         return Ok(None);
     };
@@ -100,8 +100,8 @@ pub(super) fn start_chain_key_root_delegation_batch_install(
     batch_id: [u8; 32],
     now_ns: u64,
 ) -> Result<Option<ChainKeyRootDelegationBatchInstallPlan>, InternalError> {
-    AuthStateOps::prune_chain_key_root_delegation_batches(now_ns);
-    let Some(mut batch) = AuthStateOps::chain_key_root_delegation_batch(batch_id) else {
+    RootDelegationStateOps::prune_chain_key_root_delegation_batches(now_ns);
+    let Some(mut batch) = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id) else {
         return Ok(None);
     };
     if now_ns >= batch.header.expires_at_ns
@@ -128,14 +128,14 @@ pub(super) fn start_chain_key_root_delegation_batch_install(
     if proofs.is_empty() {
         batch.status = ChainKeyRootDelegationBatchStatus::Installed;
         batch.installed_at_ns.get_or_insert(now_ns);
-        AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+        RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
         return Ok(None);
     }
 
     if batch.status == ChainKeyRootDelegationBatchStatus::Signed {
         batch.status = ChainKeyRootDelegationBatchStatus::Installing;
         batch.install_started_at_ns = Some(now_ns);
-        AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+        RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
     }
 
     Ok(Some(ChainKeyRootDelegationBatchInstallPlan {
@@ -150,7 +150,7 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_success(
     cert_hash: [u8; 32],
     now_ns: u64,
 ) -> bool {
-    let Some(mut batch) = AuthStateOps::chain_key_root_delegation_batch(batch_id) else {
+    let Some(mut batch) = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id) else {
         return false;
     };
     if !matches!(
@@ -194,7 +194,7 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_success(
         batch.installed_at_ns = Some(now_ns);
         batch.failure = None;
     }
-    AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+    RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
     true
 }
 
@@ -204,7 +204,7 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_failure(
     cert_hash: [u8; 32],
     failure: ChainKeyRootDelegationInstallFailure,
 ) -> bool {
-    let Some(mut batch) = AuthStateOps::chain_key_root_delegation_batch(batch_id) else {
+    let Some(mut batch) = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id) else {
         return false;
     };
     if !matches!(
@@ -227,12 +227,12 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_failure(
     let reason = format!("{failure:?}");
     batch.issuers[index].last_failure = Some(reason.clone());
     batch.failure = Some(reason);
-    AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+    RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
     true
 }
 
 fn next_chain_key_batch_for_install(now_ns: u64) -> Option<ChainKeyRootDelegationBatch> {
-    let mut batches = AuthStateOps::chain_key_root_delegation_batches()
+    let mut batches = RootDelegationStateOps::chain_key_root_delegation_batches()
         .into_iter()
         .filter(|batch| now_ns < batch.header.expires_at_ns)
         .filter(|batch| {
@@ -256,15 +256,15 @@ fn upsert_chain_key_issuer_installed_state(
     issuer: &ChainKeyRootDelegationBatchIssuer,
     now_ns: u64,
 ) {
-    let template_fingerprint = AuthStateOps::root_issuer_renewal_template(issuer.issuer_pid)
-        .map_or_else(
+    let template_fingerprint =
+        RootDelegationStateOps::root_issuer_renewal_template(issuer.issuer_pid).map_or_else(
             || {
-                AuthStateOps::root_issuer_renewal_state(issuer.issuer_pid)
+                RootDelegationStateOps::root_issuer_renewal_state(issuer.issuer_pid)
                     .map_or([0; 32], |state| state.template_fingerprint)
             },
             |template| renewal_template_fingerprint(&template),
         );
-    AuthStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
+    RootDelegationStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
         issuer_pid: issuer.issuer_pid,
         template_fingerprint,
         last_installed_cert_hash: Some(issuer.cert_hash),

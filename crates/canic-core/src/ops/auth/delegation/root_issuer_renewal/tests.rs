@@ -10,8 +10,8 @@ use crate::{
     ids::CanisterRole,
     model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalState},
     ops::storage::auth::{
-        AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
-        ChainKeyRootDelegationBatchStatus,
+        ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
+        ChainKeyRootDelegationBatchStatus, RootDelegationStateOps,
     },
 };
 
@@ -161,11 +161,11 @@ fn disabled_root_issuer_renewal_template_can_be_staged_without_policy() {
 #[test]
 fn disabling_root_issuer_renewal_template_records_disabled_state() {
     let issuer_pid = p(84);
-    AuthStateOps::upsert_root_issuer_policy(policy(issuer_pid));
+    RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer_pid));
     let active_template = root_issuer_renewal_template_from_request(upsert_request(issuer_pid));
-    AuthStateOps::upsert_root_issuer_renewal_template(active_template.clone());
+    RootDelegationStateOps::upsert_root_issuer_renewal_template(active_template.clone());
     let active_fingerprint = renewal_template_fingerprint(&active_template);
-    AuthStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
+    RootDelegationStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
         issuer_pid,
         template_fingerprint: active_fingerprint,
         last_installed_cert_hash: None,
@@ -181,7 +181,7 @@ fn disabling_root_issuer_renewal_template_records_disabled_state() {
     let response = commit_root_issuer_renewal_template(template, 90);
 
     assert!(!response.template.enabled);
-    let state = AuthStateOps::root_issuer_renewal_state(issuer_pid)
+    let state = RootDelegationStateOps::root_issuer_renewal_state(issuer_pid)
         .expect("issuer renewal state should remain observable");
     assert_eq!(state.next_attempt_after_ns, 90);
     assert_eq!(state.updated_at_ns, 90);
@@ -200,7 +200,7 @@ fn root_issuer_renewal_status_reports_root_owned_state() {
         next_attempt_after_ns: 90,
         updated_at_ns: 80,
     };
-    AuthStateOps::upsert_root_issuer_renewal_state(state);
+    RootDelegationStateOps::upsert_root_issuer_renewal_state(state);
 
     let status = root_issuer_renewal_status(RootIssuerRenewalStatusRequest { issuer_pid });
 
@@ -219,7 +219,7 @@ fn root_issuer_renewal_status_reports_root_owned_state() {
 fn root_issuer_renewal_status_projects_latest_chain_key_batch() {
     let issuer_pid = p(88);
     let installed_issuer_pid = p(89);
-    AuthStateOps::upsert_chain_key_root_delegation_batch(renewal_batch(
+    RootDelegationStateOps::upsert_chain_key_root_delegation_batch(renewal_batch(
         [4; 32], issuer_pid, [5; 32],
     ));
     let mut latest = renewal_batch([6; 32], issuer_pid, [7; 32]);
@@ -231,7 +231,7 @@ fn root_issuer_renewal_status_projects_latest_chain_key_batch() {
     latest.issuers.push(installed_issuer);
     latest.retry_after_ns = Some(300);
     latest.failure = Some("CallFailed".to_string());
-    AuthStateOps::upsert_chain_key_root_delegation_batch(latest);
+    RootDelegationStateOps::upsert_chain_key_root_delegation_batch(latest);
 
     let status = root_issuer_renewal_status(RootIssuerRenewalStatusRequest { issuer_pid });
     let latest = status
@@ -289,8 +289,8 @@ fn active_proof_authority_requires_exact_installed_registry_identity() {
     let issuer_pid = p(91);
     let template = root_issuer_renewal_template_from_request(upsert_request(issuer_pid));
     let fingerprint = renewal_template_fingerprint(&template);
-    AuthStateOps::upsert_root_issuer_renewal_template(template);
-    AuthStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
+    RootDelegationStateOps::upsert_root_issuer_renewal_template(template);
+    RootDelegationStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
         issuer_pid,
         template_fingerprint: fingerprint,
         last_installed_cert_hash: Some([12; 32]),
@@ -301,7 +301,7 @@ fn active_proof_authority_requires_exact_installed_registry_identity() {
     });
     let mut batch = renewal_batch([11; 32], issuer_pid, [12; 32]);
     batch.issuers[0].installed_at_ns = Some(40);
-    AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+    RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
 
     assert!(active_root_issuer_proof_matches_registry(
         issuer_pid, [12; 32], 100, 1, [44; 32]

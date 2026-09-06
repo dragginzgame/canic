@@ -1,0 +1,43 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:45497/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.76s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::live_management_gateway_preserves_fresh_creation_headroom ... [FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+
+thread 'pic::fleet_registry::baseline::tests::live_management_gateway_preserves_fresh_creation_headroom' (28372) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:3856:9:
+gateway fixtures must create assets near wall time: initial=1620328630000000003, wall=1788632346.458980818s
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::live_management_gateway_preserves_fresh_creation_headroom
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 56 filtered out; finished in 0.16s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=238080 kB high_water=238080 kB threads=19
+==> targeted canic-testing-internal PocketIC proof failed in 10s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-05T18:18:56.448659Z  INFO pocket_ic_server: The PocketIC server is listening on port 45497
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  10s      FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 11s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.gERmeb

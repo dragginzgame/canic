@@ -33,7 +33,7 @@ fn root_contract() -> ResolvedRoleContract {
         StateAllocationKey::CoreRuntimeChildren,
         StateAllocationKey::CoreRuntimeBindings,
         StateAllocationKey::CoreFleetState,
-        StateAllocationKey::CoreAuthState,
+        StateAllocationKey::CoreRootDelegationState,
         StateAllocationKey::CoreReplayReceipts,
         StateAllocationKey::CoreCycles,
         StateAllocationKey::CoreRuntimeLog,

@@ -1,0 +1,27 @@
+[package]
+name = "local_authorization_probe"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[package.metadata.cargo-machete]
+ignored = ["candid", "ic-cdk"]
+
+[package.metadata.canic]
+app = "local_authorization_probe"
+role = "app"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true, features = ["auth-local-application-authorization"] }
+ic-cdk = { workspace = true }
+
+[build-dependencies]
+canic = { workspace = true, features = [] }
+
+[lints]
+workspace = true

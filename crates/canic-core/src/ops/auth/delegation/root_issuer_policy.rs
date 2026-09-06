@@ -10,12 +10,12 @@ use crate::{
     },
     ids::FleetKey,
     model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy},
-    ops::storage::auth::AuthStateOps,
+    ops::storage::auth::RootDelegationStateOps,
 };
 
 pub(super) fn commit_root_issuer_policy(policy: RootIssuerPolicy) -> RootIssuerPolicyResponse {
-    AuthStateOps::upsert_root_issuer_policy(policy.clone());
-    AuthStateOps::advance_delegated_auth_registry_epoch();
+    RootDelegationStateOps::upsert_root_issuer_policy(policy.clone());
+    RootDelegationStateOps::advance_delegated_auth_registry_epoch();
 
     RootIssuerPolicyResponse {
         issuer: root_issuer_policy_view(&policy),

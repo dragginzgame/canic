@@ -1,0 +1,957 @@
+{
+  "candidate": {
+    "complete": true,
+    "log_sha256": "1ee346fb6b1a31dd2f8714795a8fa742d21abcb8010b2579fba384fcf949dfb2",
+    "test_seconds": 564.53,
+    "apply_to_readiness_seconds": 422.149,
+    "apply_through_both_replays_seconds": 520.756,
+    "replay_window_seconds": 98.607,
+    "outside_apply_replay_window_seconds": 43.774,
+    "maximum_applied_effects": 53,
+    "initial_phase_wall_seconds": {
+      "infrastructure": 177.641,
+      "terminal_verification": 67.94800000000001,
+      "import_reconciliation": 86.162,
+      "control_plane": 57.407,
+      "workload_provisioning": 31.047999999999995,
+      "pool_readiness": 1.943
+    },
+    "span_totals": {
+      "fleet_observation": {
+        "calls": 14,
+        "seconds": 98.497502
+      },
+      "create": {
+        "calls": 13,
+        "seconds": 7.232722000000001
+      },
+      "other_effect": {
+        "calls": 13,
+        "seconds": 18.85538
+      },
+      "import_protocol_calls": {
+        "calls": 10,
+        "seconds": 13.236202
+      },
+      "other_protocol": {
+        "calls": 14,
+        "seconds": 10.664983
+      },
+      "workload_provisioning": {
+        "calls": 2,
+        "seconds": 1.303233
+      }
+    },
+    "phase_events": [
+      {
+        "progress": {
+          "applied_effects": 0,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "infrastructure",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 26,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690411296
+      },
+      {
+        "progress": {
+          "applied_effects": 16,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "infrastructure",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 26,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690467223
+      },
+      {
+        "progress": {
+          "applied_effects": 26,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "terminal_verification",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 26,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690588937
+      },
+      {
+        "progress": {
+          "applied_effects": 26,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "terminal_verification",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 36,
+          "state": {
+            "kind": "prerequisite_complete"
+          }
+        },
+        "unix_ms": 1788690615383
+      },
+      {
+        "progress": {
+          "applied_effects": 26,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "import_reconciliation",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 36,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690615384
+      },
+      {
+        "progress": {
+          "applied_effects": 26,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "import_reconciliation",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 36,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690639984
+      },
+      {
+        "progress": {
+          "applied_effects": 36,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "terminal_verification",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 36,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690701546
+      },
+      {
+        "progress": {
+          "applied_effects": 36,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "terminal_verification",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "prerequisite_complete"
+          }
+        },
+        "unix_ms": 1788690716622
+      },
+      {
+        "progress": {
+          "applied_effects": 36,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "control_plane",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690716623
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690774030
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690778750
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690782715
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690783981
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690785500
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690786616
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690787733
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690788952
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690790261
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690791573
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690792823
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690793943
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690795218
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690796364
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690797570
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690798892
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690800201
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690801427
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690802676
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "workload_provisioning",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788690803896
+      },
+      {
+        "progress": {
+          "applied_effects": 52,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "pool_readiness",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690805078
+      },
+      {
+        "progress": {
+          "applied_effects": 53,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "terminal_verification",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690807021
+      },
+      {
+        "progress": {
+          "applied_effects": 53,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "complete",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "complete"
+          }
+        },
+        "unix_ms": 1788690833445
+      },
+      {
+        "progress": {
+          "applied_effects": 53,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "complete",
+          "plan_sha256": "4882ec5a814d30c37a924f6a86b205f6536318c0e922611925851e31b923f5eb",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "complete"
+          }
+        },
+        "unix_ms": 1788690860231
+      },
+      {
+        "progress": {
+          "applied_effects": 0,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "terminal_verification",
+          "plan_sha256": "79a366bbfbc106e2e52607b8700a5df4f4002b4fa42a352f5410e899e2ccaabe",
+          "reviewed_effects": 0,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788690906017
+      },
+      {
+        "progress": {
+          "applied_effects": 0,
+          "operation_id": "9c37710ea134595da024d4cdfcd623b412b4fea8a165ac481a3421dddaad218d",
+          "phase": "complete",
+          "plan_sha256": "79a366bbfbc106e2e52607b8700a5df4f4002b4fa42a352f5410e899e2ccaabe",
+          "reviewed_effects": 0,
+          "state": {
+            "kind": "complete"
+          }
+        },
+        "unix_ms": 1788690932052
+      }
+    ]
+  },
+  "baseline": {
+    "complete": true,
+    "log_sha256": "dfb0938aa11a35c8d9480d6c8cb730126e0458c489a6d2e1ed78bf1a4a742a66",
+    "test_seconds": 826.02,
+    "apply_to_readiness_seconds": 585.206,
+    "apply_through_both_replays_seconds": 782.796,
+    "replay_window_seconds": 197.59,
+    "outside_apply_replay_window_seconds": 43.224,
+    "maximum_applied_effects": 53,
+    "initial_phase_wall_seconds": {
+      "infrastructure": 172.024,
+      "terminal_verification": 147.968,
+      "import_reconciliation": 167.81900000000002,
+      "control_plane": 63.638,
+      "workload_provisioning": 31.480000000000008,
+      "pool_readiness": 2.277
+    },
+    "span_totals": {
+      "fleet_observation": {
+        "calls": 14,
+        "seconds": 339.304053
+      },
+      "create": {
+        "calls": 13,
+        "seconds": 6.949829
+      },
+      "other_effect": {
+        "calls": 13,
+        "seconds": 18.899755999999996
+      },
+      "import_protocol_calls": {
+        "calls": 10,
+        "seconds": 14.112566999999999
+      },
+      "other_protocol": {
+        "calls": 14,
+        "seconds": 11.443595000000002
+      },
+      "workload_provisioning": {
+        "calls": 2,
+        "seconds": 1.385574
+      }
+    },
+    "phase_events": [
+      {
+        "progress": {
+          "applied_effects": 0,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "infrastructure",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 26,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691066064
+      },
+      {
+        "progress": {
+          "applied_effects": 16,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "infrastructure",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 26,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691119778
+      },
+      {
+        "progress": {
+          "applied_effects": 26,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "terminal_verification",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 26,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691238088
+      },
+      {
+        "progress": {
+          "applied_effects": 26,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "terminal_verification",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 36,
+          "state": {
+            "kind": "prerequisite_complete"
+          }
+        },
+        "unix_ms": 1788691295460
+      },
+      {
+        "progress": {
+          "applied_effects": 26,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "import_reconciliation",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 36,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691295460
+      },
+      {
+        "progress": {
+          "applied_effects": 26,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "import_reconciliation",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 36,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691363862
+      },
+      {
+        "progress": {
+          "applied_effects": 36,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "terminal_verification",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 36,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691463279
+      },
+      {
+        "progress": {
+          "applied_effects": 36,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "terminal_verification",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "prerequisite_complete"
+          }
+        },
+        "unix_ms": 1788691495673
+      },
+      {
+        "progress": {
+          "applied_effects": 36,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "control_plane",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691495674
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691559312
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691564446
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691571804
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691573109
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691574478
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691575779
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691577172
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691578524
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691579839
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691581191
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691582572
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691584027
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691585388
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691586822
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691588163
+      },
+      {
+        "progress": {
+          "applied_effects": 51,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "workload_provisioning",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "awaiting_progress"
+          }
+        },
+        "unix_ms": 1788691589480
+      },
+      {
+        "progress": {
+          "applied_effects": 52,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "pool_readiness",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691590792
+      },
+      {
+        "progress": {
+          "applied_effects": 53,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "terminal_verification",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691593069
+      },
+      {
+        "progress": {
+          "applied_effects": 53,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "complete",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "complete"
+          }
+        },
+        "unix_ms": 1788691651270
+      },
+      {
+        "progress": {
+          "applied_effects": 53,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "complete",
+          "plan_sha256": "17483b35d7c09aceb10fb27f1c50394b7aaf6c7204aad9e50709e98a38574a0e",
+          "reviewed_effects": 53,
+          "state": {
+            "kind": "complete"
+          }
+        },
+        "unix_ms": 1788691710864
+      },
+      {
+        "progress": {
+          "applied_effects": 0,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "terminal_verification",
+          "plan_sha256": "9b044cfb07b32a4624f6392addb80160cdde3cc6f64cbdff985a5632c6b52488",
+          "reviewed_effects": 0,
+          "state": {
+            "kind": "advancing"
+          }
+        },
+        "unix_ms": 1788691791564
+      },
+      {
+        "progress": {
+          "applied_effects": 0,
+          "operation_id": "c20597d1ed69568bd990bd81d871fcc7605ecf60f957ee17016c76d20dd206cd",
+          "phase": "complete",
+          "plan_sha256": "9b044cfb07b32a4624f6392addb80160cdde3cc6f64cbdff985a5632c6b52488",
+          "reviewed_effects": 0,
+          "state": {
+            "kind": "complete"
+          }
+        },
+        "unix_ms": 1788691848860
+      }
+    ]
+  },
+  "reductions_percent": {
+    "apply_to_readiness_seconds": 27.863179803351297,
+    "apply_through_both_replays_seconds": 33.47487723493733,
+    "test_seconds": 31.65661848381395
+  }
+}

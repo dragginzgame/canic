@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "label": "toko-after",
+  "wasm_sha256": "7eae9317bbb2f4ac2c78c2706929c5dbe0a34eb57ea126f11367c90a39684a49",
+  "named_wasm_sha256": "5a4d081cbe76548b03a85e75d9ad9e3e12d102af34d681b3f420a2bd09ccee2c",
+  "executable_sections_sha256": "bea2a7b11c535e0436cd3c012238905262bbf8f37275dd451948b870a4984c31",
+  "named_executable_sections_match": false,
+  "raw_bytes": 6549390,
+  "gzip_bytes": 2316213,
+  "code_section_bytes": 6133620,
+  "data_section_bytes": 315596,
+  "defined_functions": 8813,
+  "named_items": 9261,
+  "state_symbols": {
+    "issuer": [],
+    "root_delegation": [],
+    "local_authorization": []
+  },
+  "linked_state_symbols": {
+    "issuer": [],
+    "root_delegation": [],
+    "local_authorization": []
+  },
+  "candid_sha256": "1dfc97f488f91db748bd07088af2cd973f6f3a6739422c9f30ed25d3c4cb626b"
+}

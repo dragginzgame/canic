@@ -12,7 +12,7 @@
     )
 )]
 
-use super::{AuthState, AuthStateOps};
+use super::LocalApplicationAuthorizationStateOps;
 use crate::{
     cdk::types::Principal,
     model::auth::application_authorization::{
@@ -26,8 +26,9 @@ use crate::{
     },
     ops::runtime::metrics::auth::record_application_session_generation_invalidation,
     storage::stable::auth::{
-        LocalApplicationAuthorityBindingRecord, LocalApplicationAuthorizationStateData,
-        LocalApplicationReplayRecord, LocalApplicationSessionRecord,
+        LocalApplicationAuthorityBindingRecord, LocalApplicationAuthorizationState,
+        LocalApplicationAuthorizationStateData, LocalApplicationReplayRecord,
+        LocalApplicationSessionRecord,
     },
 };
 use std::{
@@ -167,11 +168,11 @@ pub enum ApplicationSessionStateError {
     InvalidAuthorityBinding,
 }
 
-impl AuthStateOps {
+impl LocalApplicationAuthorizationStateOps {
     /// Validate canonical records and synchronously reconstruct every derived index.
     pub fn restore_application_session_state()
     -> Result<ApplicationSessionRestoreStats, ApplicationSessionStateError> {
-        let state = AuthState::application_authorization_state();
+        let state = LocalApplicationAuthorizationState::application_authorization_state();
         let (indexes, restore_report) = build_indexes(&state)?;
         install_indexes(indexes);
         Ok(restore_report)
@@ -180,13 +181,13 @@ impl AuthStateOps {
     /// Return the current target-local application authority generation.
     #[must_use]
     pub fn application_authority_generation() -> u64 {
-        AuthState::application_authority_generation()
+        LocalApplicationAuthorizationState::application_authority_generation()
     }
 
     /// Return the current locally persisted application authority binding.
     pub fn application_authority_binding()
     -> Result<Option<LocalApplicationAuthorityBinding>, ApplicationSessionStateError> {
-        AuthState::application_authorization_state()
+        LocalApplicationAuthorizationState::application_authorization_state()
             .authority_binding
             .as_ref()
             .map(authority_binding_from_record)
@@ -197,7 +198,7 @@ impl AuthStateOps {
     pub fn set_application_authority_binding(
         current: LocalApplicationAuthorityBinding,
     ) -> Result<(), ApplicationSessionStateError> {
-        let mut state = AuthState::application_authorization_state();
+        let mut state = LocalApplicationAuthorizationState::application_authorization_state();
         state.authority_binding = Some(authority_binding_to_record(&current));
         commit_validated_state(state)
     }
@@ -206,7 +207,7 @@ impl AuthStateOps {
     pub fn advance_application_authority_binding_generation(
         current: LocalApplicationAuthorityBinding,
     ) -> Result<(), ApplicationSessionStateError> {
-        let mut state = AuthState::application_authorization_state();
+        let mut state = LocalApplicationAuthorizationState::application_authorization_state();
         state.authority_generation = state
             .authority_generation
             .checked_add(1)
@@ -225,7 +226,7 @@ impl AuthStateOps {
         let Some(index) = index else {
             return Ok(None);
         };
-        let record = AuthState::application_session_record(index)
+        let record = LocalApplicationAuthorizationState::application_session_record(index)
             .ok_or(ApplicationSessionStateError::InvalidSessionRecord)?;
         let session = session_from_record(&record)?;
         if session.transport_caller() != caller {
@@ -257,7 +258,7 @@ impl AuthStateOps {
         let entries = selected
             .into_iter()
             .map(|index| {
-                let record = AuthState::application_session_record(index)
+                let record = LocalApplicationAuthorizationState::application_session_record(index)
                     .ok_or(ApplicationSessionStateError::InvalidSessionRecord)?;
                 session_from_record(&record)
             })
@@ -277,14 +278,14 @@ impl AuthStateOps {
             with_indexes(|indexes| indexes.session_by_caller.get(&caller).copied())?;
         if let Some(session_index) = session_index {
             let session = session_from_record(
-                &AuthState::application_session_record(session_index)
+                &LocalApplicationAuthorizationState::application_session_record(session_index)
                     .ok_or(ApplicationSessionStateError::InvalidSessionRecord)?,
             )?;
             if session.proof_fingerprint() == proof_fingerprint {
                 let exact = session.authenticated_subject() == subject
                     && session.establishment_request_hash() == establishment_request_hash
                     && session.authority_generation()
-                        == AuthState::application_authority_generation()
+                        == LocalApplicationAuthorizationState::application_authority_generation()
                     && now_ns < session.expires_at_ns();
                 return if exact {
                     Ok(ApplicationReplayResolution::ExactActive(Box::new(session)))
@@ -305,7 +306,7 @@ impl AuthStateOps {
         };
 
         let replay = replay_from_record(
-            &AuthState::application_replay_record(replay_index)
+            &LocalApplicationAuthorizationState::application_replay_record(replay_index)
                 .ok_or(ApplicationSessionStateError::InvalidReplayRecord)?,
         )?;
         if replay.transport_caller() != caller || replay.authenticated_subject() != subject {
@@ -341,7 +342,7 @@ impl AuthStateOps {
         replay: LocalApplicationReplay,
     ) -> Result<ApplicationSessionCommitResult, ApplicationSessionStateError> {
         require_exact_binding(&session, &replay)?;
-        let mut state = AuthState::application_authorization_state();
+        let mut state = LocalApplicationAuthorizationState::application_authorization_state();
         if session.authority_generation() != state.authority_generation
             || replay.authority_generation() != state.authority_generation
         {
@@ -401,7 +402,7 @@ impl AuthStateOps {
         let Some(index) = index else {
             return Ok(false);
         };
-        let mut state = AuthState::application_authorization_state();
+        let mut state = LocalApplicationAuthorizationState::application_authorization_state();
         state.sessions.remove(index);
         commit_validated_state(state)?;
         Ok(true)
@@ -411,7 +412,7 @@ impl AuthStateOps {
     pub fn cleanup_application_sessions(
         now_ns: u64,
     ) -> Result<ApplicationSessionCleanupResult, ApplicationSessionStateError> {
-        let mut state = AuthState::application_authorization_state();
+        let mut state = LocalApplicationAuthorizationState::application_authorization_state();
         let mut remaining = MAX_APPLICATION_SESSION_CLEANUP_REMOVALS;
         let sessions_before = state.sessions.len();
         state.sessions.retain(|session| {
@@ -442,7 +443,7 @@ impl AuthStateOps {
     /// Return the earliest retained session or replay expiry for native cleanup custody.
     #[must_use]
     pub fn application_session_cleanup_due_at_ns() -> Option<u64> {
-        let state = AuthState::application_authorization_state();
+        let state = LocalApplicationAuthorizationState::application_authorization_state();
         state
             .sessions
             .iter()
@@ -487,7 +488,7 @@ fn commit_validated_state(
     state: LocalApplicationAuthorizationStateData,
 ) -> Result<(), ApplicationSessionStateError> {
     let (indexes, _stats) = build_indexes(&state)?;
-    AuthState::replace_application_authorization_state(state);
+    LocalApplicationAuthorizationState::replace_application_authorization_state(state);
     install_indexes(indexes);
     Ok(())
 }
@@ -834,16 +835,20 @@ fn estimate_index_bytes(indexes: &ApplicationSessionIndexes) -> usize {
 
 /// Test-only owner for resetting and restoring application authorization state.
 #[cfg(test)]
-pub struct ApplicationSessionTestStateGuard(crate::storage::stable::auth::AuthStateData);
+pub struct ApplicationSessionTestStateGuard(
+    crate::storage::stable::auth::LocalApplicationAuthorizationStateData,
+);
 
 #[cfg(test)]
 impl ApplicationSessionTestStateGuard {
     /// Replace application authorization state with one empty current-format value.
     pub fn empty() -> Self {
-        let original = AuthState::export();
-        AuthState::import(crate::storage::stable::auth::AuthStateData::default());
+        let original = LocalApplicationAuthorizationState::export();
+        LocalApplicationAuthorizationState::import(
+            crate::storage::stable::auth::LocalApplicationAuthorizationStateData::default(),
+        );
         invalidate_indexes();
-        AuthStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
         Self(original)
     }
 
@@ -858,7 +863,7 @@ impl ApplicationSessionTestStateGuard {
         caller: Principal,
         remove_at_ns: u64,
     ) {
-        AuthState::replace_application_authorization_state(
+        LocalApplicationAuthorizationState::replace_application_authorization_state(
             LocalApplicationAuthorizationStateData {
                 replays: vec![LocalApplicationReplayRecord {
                     proof_fingerprint,
@@ -871,16 +876,16 @@ impl ApplicationSessionTestStateGuard {
             },
         );
         invalidate_indexes();
-        AuthStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
     }
 }
 
 #[cfg(test)]
 impl Drop for ApplicationSessionTestStateGuard {
     fn drop(&mut self) {
-        AuthState::import(self.0.clone());
+        LocalApplicationAuthorizationState::import(self.0.clone());
         invalidate_indexes();
-        AuthStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
     }
 }
 
@@ -895,27 +900,29 @@ mod tests {
     use crate::{
         ids::CanisterRole,
         model::auth::application_authorization::ApplicationScope,
-        storage::stable::auth::AuthStateData,
+        storage::stable::auth::LocalApplicationAuthorizationStateData,
         test::{seams, support::fleet_key},
     };
 
-    struct StateGuard(AuthStateData);
+    struct StateGuard(LocalApplicationAuthorizationStateData);
 
     impl StateGuard {
         fn empty() -> Self {
-            let original = AuthState::export();
-            AuthState::import(AuthStateData::default());
+            let original = LocalApplicationAuthorizationState::export();
+            LocalApplicationAuthorizationState::import(
+                LocalApplicationAuthorizationStateData::default(),
+            );
             invalidate_indexes();
-            AuthStateOps::restore_application_session_state().unwrap();
+            LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
             Self(original)
         }
     }
 
     impl Drop for StateGuard {
         fn drop(&mut self) {
-            AuthState::import(self.0.clone());
+            LocalApplicationAuthorizationState::import(self.0.clone());
             invalidate_indexes();
-            AuthStateOps::restore_application_session_state().unwrap();
+            LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
         }
     }
 
@@ -990,67 +997,103 @@ mod tests {
         let _state = StateGuard::empty();
         let current = session(1, 2, 3, 10);
         assert_eq!(
-            AuthStateOps::commit_application_session(current.clone(), replay(1, 2, 70)),
+            LocalApplicationAuthorizationStateOps::commit_application_session(
+                current.clone(),
+                replay(1, 2, 70)
+            ),
             Ok(ApplicationSessionCommitResult::Created)
         );
 
         assert_eq!(
-            AuthStateOps::application_session(p(1)),
+            LocalApplicationAuthorizationStateOps::application_session(p(1)),
             Ok(Some(current.clone()))
         );
         assert_eq!(
-            AuthStateOps::resolve_application_replay([2; 32], p(1), p(1), [3; 32], 80),
+            LocalApplicationAuthorizationStateOps::resolve_application_replay(
+                [2; 32],
+                p(1),
+                p(1),
+                [3; 32],
+                80
+            ),
             Ok(ApplicationReplayResolution::ExactActive(Box::new(
                 current.clone()
             )))
         );
         assert_eq!(
-            AuthStateOps::cleanup_application_sessions(80),
+            LocalApplicationAuthorizationStateOps::cleanup_application_sessions(80),
             Ok(ApplicationSessionCleanupResult {
                 sessions_removed: 0,
                 replays_removed: 1,
             })
         );
         assert_eq!(
-            AuthStateOps::application_session_cleanup_due_at_ns(),
+            LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns(),
             Some(current.expires_at_ns())
         );
         invalidate_indexes();
         assert_eq!(
-            AuthStateOps::restore_application_session_state()
+            LocalApplicationAuthorizationStateOps::restore_application_session_state()
                 .map(|report| (report.sessions, report.replays)),
             Ok((1, 0))
         );
         assert_eq!(
-            AuthStateOps::application_session(p(1)),
+            LocalApplicationAuthorizationStateOps::application_session(p(1)),
             Ok(Some(current.clone()))
         );
         assert_eq!(
-            AuthStateOps::resolve_application_replay([2; 32], p(1), p(1), [3; 32], 80),
+            LocalApplicationAuthorizationStateOps::resolve_application_replay(
+                [2; 32],
+                p(1),
+                p(1),
+                [3; 32],
+                80
+            ),
             Ok(ApplicationReplayResolution::ExactActive(Box::new(
                 current.clone()
             )))
         );
         assert_eq!(
-            AuthStateOps::cleanup_application_sessions(current.expires_at_ns()),
+            LocalApplicationAuthorizationStateOps::cleanup_application_sessions(
+                current.expires_at_ns()
+            ),
             Ok(ApplicationSessionCleanupResult {
                 sessions_removed: 1,
                 replays_removed: 0,
             })
         );
-        assert_eq!(AuthStateOps::application_session_cleanup_due_at_ns(), None);
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns(),
+            None
+        );
     }
 
     #[test]
     fn clear_retains_the_consumed_proof_tombstone() {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
-        AuthStateOps::commit_application_session(session(1, 2, 3, 10), replay(1, 2, 70)).unwrap();
+        LocalApplicationAuthorizationStateOps::commit_application_session(
+            session(1, 2, 3, 10),
+            replay(1, 2, 70),
+        )
+        .unwrap();
 
-        assert_eq!(AuthStateOps::clear_application_session(p(1)), Ok(true));
-        assert_eq!(AuthStateOps::application_session(p(1)), Ok(None));
         assert_eq!(
-            AuthStateOps::resolve_application_replay([2; 32], p(1), p(1), [3; 32], 20),
+            LocalApplicationAuthorizationStateOps::clear_application_session(p(1)),
+            Ok(true)
+        );
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_session(p(1)),
+            Ok(None)
+        );
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::resolve_application_replay(
+                [2; 32],
+                p(1),
+                p(1),
+                [3; 32],
+                20
+            ),
             Ok(ApplicationReplayResolution::Conflict)
         );
     }
@@ -1059,22 +1102,35 @@ mod tests {
     fn different_proof_atomically_replaces_without_erasing_old_replay() {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
-        AuthStateOps::commit_application_session(session(1, 2, 3, 10), replay(1, 2, 70)).unwrap();
+        LocalApplicationAuthorizationStateOps::commit_application_session(
+            session(1, 2, 3, 10),
+            replay(1, 2, 70),
+        )
+        .unwrap();
         let replacement = session(1, 4, 5, 20);
         assert_eq!(
-            AuthStateOps::commit_application_session(replacement.clone(), replay(1, 4, 80)),
+            LocalApplicationAuthorizationStateOps::commit_application_session(
+                replacement.clone(),
+                replay(1, 4, 80)
+            ),
             Ok(ApplicationSessionCommitResult::Replaced)
         );
         assert_eq!(
-            AuthStateOps::application_session(p(1)),
+            LocalApplicationAuthorizationStateOps::application_session(p(1)),
             Ok(Some(replacement))
         );
         assert_eq!(
-            AuthStateOps::resolve_application_replay([2; 32], p(1), p(1), [3; 32], 30),
+            LocalApplicationAuthorizationStateOps::resolve_application_replay(
+                [2; 32],
+                p(1),
+                p(1),
+                [3; 32],
+                30
+            ),
             Ok(ApplicationReplayResolution::Conflict)
         );
         assert_eq!(
-            AuthStateOps::application_session_occupancy(p(1))
+            LocalApplicationAuthorizationStateOps::application_session_occupancy(p(1))
                 .unwrap()
                 .replay_global,
             2
@@ -1086,16 +1142,24 @@ mod tests {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
         let current = session(1, 2, 3, 10);
-        AuthStateOps::commit_application_session(current.clone(), replay(1, 2, 70)).unwrap();
+        LocalApplicationAuthorizationStateOps::commit_application_session(
+            current.clone(),
+            replay(1, 2, 70),
+        )
+        .unwrap();
         invalidate_indexes();
         assert_eq!(
-            AuthStateOps::application_session(p(1)),
+            LocalApplicationAuthorizationStateOps::application_session(p(1)),
             Err(ApplicationSessionStateError::IndexesUnavailable)
         );
-        let stats = AuthStateOps::restore_application_session_state().unwrap();
+        let stats =
+            LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
         assert_eq!(stats.sessions, 1);
         assert_eq!(stats.replays, 1);
-        assert_eq!(AuthStateOps::application_session(p(1)), Ok(Some(current)));
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_session(p(1)),
+            Ok(Some(current))
+        );
     }
 
     #[test]
@@ -1103,26 +1167,26 @@ mod tests {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
         for caller in [3, 1, 2] {
-            AuthStateOps::commit_application_session(
+            LocalApplicationAuthorizationStateOps::commit_application_session(
                 session(caller, caller, caller, 10),
                 replay(caller, caller, 70),
             )
             .unwrap();
         }
 
-        let page = AuthStateOps::application_session_page(1, 2).unwrap();
+        let page = LocalApplicationAuthorizationStateOps::application_session_page(1, 2).unwrap();
         assert_eq!(page.total, 3);
         assert_eq!(page.entries.len(), 2);
         assert_eq!(page.entries[0].transport_caller(), p(2));
         assert_eq!(page.entries[1].transport_caller(), p(3));
         assert_eq!(
-            AuthStateOps::application_session_occupancy(p(1))
+            LocalApplicationAuthorizationStateOps::application_session_occupancy(p(1))
                 .unwrap()
                 .active_global,
             3
         );
 
-        let empty = AuthStateOps::application_session_page(0, 0).unwrap();
+        let empty = LocalApplicationAuthorizationStateOps::application_session_page(0, 0).unwrap();
         assert_eq!(empty.total, 3);
         assert!(empty.entries.is_empty());
     }
@@ -1131,26 +1195,52 @@ mod tests {
     fn authority_binding_mutations_preserve_or_advance_generation_explicitly() {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
-        AuthStateOps::commit_application_session(session(1, 2, 3, 10), replay(1, 2, 70)).unwrap();
+        LocalApplicationAuthorizationStateOps::commit_application_session(
+            session(1, 2, 3, 10),
+            replay(1, 2, 70),
+        )
+        .unwrap();
         let original = binding(&["app:read", "app:write"], 900);
-        assert_eq!(AuthStateOps::application_authority_binding(), Ok(None));
-        AuthStateOps::set_application_authority_binding(original.clone()).unwrap();
         assert_eq!(
-            AuthStateOps::application_authority_binding(),
+            LocalApplicationAuthorizationStateOps::application_authority_binding(),
+            Ok(None)
+        );
+        LocalApplicationAuthorizationStateOps::set_application_authority_binding(original.clone())
+            .unwrap();
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_authority_binding(),
             Ok(Some(original))
         );
-        assert_eq!(AuthStateOps::application_authority_generation(), 0);
-        let narrowed = binding(&["app:read"], 900);
-        AuthStateOps::advance_application_authority_binding_generation(narrowed.clone()).unwrap();
         assert_eq!(
-            AuthStateOps::application_authority_binding(),
+            LocalApplicationAuthorizationStateOps::application_authority_generation(),
+            0
+        );
+        let narrowed = binding(&["app:read"], 900);
+        LocalApplicationAuthorizationStateOps::advance_application_authority_binding_generation(
+            narrowed.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_authority_binding(),
             Ok(Some(narrowed.clone()))
         );
-        assert_eq!(AuthStateOps::application_authority_generation(), 1);
-        AuthStateOps::set_application_authority_binding(narrowed).unwrap();
-        assert_eq!(AuthStateOps::application_authority_generation(), 1);
         assert_eq!(
-            AuthStateOps::resolve_application_replay([2; 32], p(1), p(1), [3; 32], 20),
+            LocalApplicationAuthorizationStateOps::application_authority_generation(),
+            1
+        );
+        LocalApplicationAuthorizationStateOps::set_application_authority_binding(narrowed).unwrap();
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_authority_generation(),
+            1
+        );
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::resolve_application_replay(
+                [2; 32],
+                p(1),
+                p(1),
+                [3; 32],
+                20
+            ),
             Ok(ApplicationReplayResolution::Conflict)
         );
     }
@@ -1160,7 +1250,7 @@ mod tests {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
         let original = binding(&["app:read", "app:write"], 900);
-        AuthState::replace_application_authorization_state(
+        LocalApplicationAuthorizationState::replace_application_authorization_state(
             LocalApplicationAuthorizationStateData {
                 authority_generation: u64::MAX,
                 authority_binding: Some(authority_binding_to_record(&original)),
@@ -1168,16 +1258,15 @@ mod tests {
             },
         );
         invalidate_indexes();
-        AuthStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
 
         assert_eq!(
-            AuthStateOps::advance_application_authority_binding_generation(binding(
-                &["app:read"],
-                900,
-            )),
+            LocalApplicationAuthorizationStateOps::advance_application_authority_binding_generation(
+                binding(&["app:read"], 900,)
+            ),
             Err(ApplicationSessionStateError::AuthorityGenerationExhausted)
         );
-        let retained = AuthState::application_authorization_state();
+        let retained = LocalApplicationAuthorizationState::application_authorization_state();
         assert_eq!(retained.authority_generation, u64::MAX);
         assert_eq!(
             retained.authority_binding,
@@ -1193,7 +1282,7 @@ mod tests {
         let replay = replay_to_record(replay(1, 2, 70));
         let mut noncanonical = session_record.clone();
         noncanonical.scopes = vec!["app:write".to_string(), "app:read".to_string()];
-        AuthState::replace_application_authorization_state(
+        LocalApplicationAuthorizationState::replace_application_authorization_state(
             LocalApplicationAuthorizationStateData {
                 sessions: vec![noncanonical],
                 replays: vec![replay],
@@ -1203,11 +1292,11 @@ mod tests {
         );
         invalidate_indexes();
         assert_eq!(
-            AuthStateOps::restore_application_session_state(),
+            LocalApplicationAuthorizationStateOps::restore_application_session_state(),
             Err(ApplicationSessionStateError::InvalidSessionRecord)
         );
 
-        AuthState::replace_application_authorization_state(
+        LocalApplicationAuthorizationState::replace_application_authorization_state(
             LocalApplicationAuthorizationStateData {
                 sessions: vec![session_record.clone(), session_record],
                 replays: vec![replay],
@@ -1217,11 +1306,11 @@ mod tests {
         );
         invalidate_indexes();
         assert_eq!(
-            AuthStateOps::restore_application_session_state(),
+            LocalApplicationAuthorizationStateOps::restore_application_session_state(),
             Err(ApplicationSessionStateError::DuplicateCaller)
         );
 
-        AuthState::replace_application_authorization_state(
+        LocalApplicationAuthorizationState::replace_application_authorization_state(
             LocalApplicationAuthorizationStateData {
                 sessions: vec![
                     session_to_record(&session(1, 2, 3, 10)),
@@ -1234,7 +1323,7 @@ mod tests {
         );
         invalidate_indexes();
         assert_eq!(
-            AuthStateOps::restore_application_session_state(),
+            LocalApplicationAuthorizationStateOps::restore_application_session_state(),
             Err(ApplicationSessionStateError::DuplicateProofFingerprint)
         );
     }
@@ -1256,19 +1345,19 @@ mod tests {
                 remove_at_ns: 10,
             });
         }
-        AuthState::replace_application_authorization_state(state);
+        LocalApplicationAuthorizationState::replace_application_authorization_state(state);
         invalidate_indexes();
-        AuthStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
 
         assert_eq!(
-            AuthStateOps::cleanup_application_sessions(10).unwrap(),
+            LocalApplicationAuthorizationStateOps::cleanup_application_sessions(10).unwrap(),
             ApplicationSessionCleanupResult {
                 sessions_removed: 0,
                 replays_removed: 128,
             }
         );
         assert_eq!(
-            AuthStateOps::application_session_occupancy(p(1))
+            LocalApplicationAuthorizationStateOps::application_session_occupancy(p(1))
                 .unwrap()
                 .replay_global,
             1
@@ -1293,16 +1382,23 @@ mod tests {
                 remove_at_ns: 100,
             });
         }
-        AuthState::replace_application_authorization_state(state);
+        LocalApplicationAuthorizationState::replace_application_authorization_state(state);
         invalidate_indexes();
-        AuthStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
 
         assert_eq!(
-            AuthStateOps::commit_application_session(session(1, 9, 8, 10), replay(1, 9, 70)),
+            LocalApplicationAuthorizationStateOps::commit_application_session(
+                session(1, 9, 8, 10),
+                replay(1, 9, 70)
+            ),
             Err(ApplicationSessionStateError::ReplaySubjectCapacity)
         );
-        assert_eq!(AuthStateOps::application_session(p(1)), Ok(Some(retained)));
-        let capacity = AuthStateOps::application_session_occupancy(p(1)).unwrap();
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_session(p(1)),
+            Ok(Some(retained))
+        );
+        let capacity =
+            LocalApplicationAuthorizationStateOps::application_session_occupancy(p(1)).unwrap();
         assert_eq!(capacity.replay_global, 256);
         assert_eq!(capacity.replay_for_subject, 256);
     }
@@ -1312,7 +1408,7 @@ mod tests {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
         let invalid_session = session_to_record(&session(1, 2, 3, 10));
-        AuthState::replace_application_authorization_state(
+        LocalApplicationAuthorizationState::replace_application_authorization_state(
             LocalApplicationAuthorizationStateData {
                 sessions: vec![invalid_session; MAX_ACTIVE_APPLICATION_SESSIONS + 1],
                 ..LocalApplicationAuthorizationStateData::default()
@@ -1320,11 +1416,11 @@ mod tests {
         );
         invalidate_indexes();
         assert_eq!(
-            AuthStateOps::restore_application_session_state(),
+            LocalApplicationAuthorizationStateOps::restore_application_session_state(),
             Err(ApplicationSessionStateError::ActiveGlobalCapacity)
         );
 
-        AuthState::replace_application_authorization_state(
+        LocalApplicationAuthorizationState::replace_application_authorization_state(
             LocalApplicationAuthorizationStateData {
                 replays: vec![
                     replay_to_record(replay(1, 2, 70));
@@ -1335,7 +1431,7 @@ mod tests {
         );
         invalidate_indexes();
         assert_eq!(
-            AuthStateOps::restore_application_session_state(),
+            LocalApplicationAuthorizationStateOps::restore_application_session_state(),
             Err(ApplicationSessionStateError::ReplayGlobalCapacity)
         );
     }
@@ -1368,7 +1464,7 @@ mod tests {
                 remove_at_ns: 60_000_000_001,
             })
             .collect();
-        AuthState::replace_application_authorization_state(
+        LocalApplicationAuthorizationState::replace_application_authorization_state(
             LocalApplicationAuthorizationStateData {
                 sessions,
                 replays,
@@ -1384,7 +1480,8 @@ mod tests {
         );
         invalidate_indexes();
 
-        let stats = AuthStateOps::restore_application_session_state().unwrap();
+        let stats =
+            LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
         assert_eq!(stats.sessions, MAX_ACTIVE_APPLICATION_SESSIONS);
         assert_eq!(stats.replays, MAX_APPLICATION_REPLAY_RECORDS);
         assert_eq!(stats.session_subjects, MAX_ACTIVE_APPLICATION_SESSIONS);

@@ -1,0 +1,11 @@
+--- a/crates/canic-host/src/fleet_ensure/ops/platform.rs
++++ b/crates/canic-host/src/fleet_ensure/ops/platform.rs
+@@ -1018,7 +1018,7 @@
+             started: std::time::Instant::now(),
+         };
+         self.observation_snapshot
+-            .replace(Some(FleetObservationSnapshot::default()));
++            .replace(None);
+         let result = observe(self);
+         self.observation_snapshot.take();
+         result

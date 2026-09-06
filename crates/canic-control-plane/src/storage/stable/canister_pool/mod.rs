@@ -138,7 +138,7 @@ impl CanisterPoolHandoffReceiptRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "CanisterPoolHandoffReceiptRecord";
 }
 
-impl_storable_bounded!(CanisterPoolHandoffReceiptRecord, 64, false);
+impl_storable_bounded!(CanisterPoolHandoffReceiptRecord, 128, false);
 
 /// Canonical snapshot identity for terminal pool handoff receipts.
 pub struct CanisterPoolHandoffReceiptData;
@@ -398,22 +398,27 @@ mod tests {
         assert_eq!(maximum_principal().to_bytes().len(), 29);
         assert_eq!(canister_principal().to_bytes().len(), 10);
         assert_eq!(handoff_receipt.to_bytes().len(), 47);
-        assert!(handoff_receipt.to_bytes().len() <= 64);
+        assert!(handoff_receipt.to_bytes().len() <= 128);
     }
 
     #[test]
-    fn q6_handoff_receipt_bound_does_not_cover_every_principal_value() {
+    fn handoff_receipt_persists_maximum_principal_and_timestamp() {
         let structurally_maximal = CanisterPoolHandoffReceiptRecord {
             recipient: maximum_principal(),
             completed_at_ns: u64::MAX,
         };
 
         assert_eq!(structurally_maximal.to_bytes().len(), 67);
-        assert!(structurally_maximal.to_bytes().len() > 64);
+        let mut receipts = StableBtreeMap::init(DefaultMemoryImpl::default());
+        receipts.insert(maximum_principal(), structurally_maximal);
+        assert_eq!(
+            receipts.get(&maximum_principal()),
+            Some(structurally_maximal)
+        );
         assert!(matches!(
             CanisterPoolHandoffReceiptRecord::BOUND,
             Bound::Bounded {
-                max_size: 64,
+                max_size: 128,
                 is_fixed_size: false,
             }
         ));

@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "review_kind": "read-only Fleet source and retained-artifact review",
+  "release_anchor": "v0.110.7",
+  "source_commit_full": "2cd3588b639f467e4f536461fcc7cec60af5719e",
+  "source_tree_hash": "c3d3a1bbb94d6748663b3ea8bc44044a5d040d7c",
+  "product_tree_hash": "5f1e5017e03139feb1a6f3c53d0f091b3d71f0882befd9c55afe4555cb26d34f",
+  "product_tree_scope": "committed HEAD only; working overlay separately fingerprinted",
+  "clean_worktree": false,
+  "cargo_lock_hash": "38350a5cb279cd02d795209c38ea43a158b1c1661b68ef491412130076f610b1",
+  "rust_toolchain": "repository pin 1.97.1; compiler not invoked",
+  "target_triple": "wasm32-unknown-unknown (retained artifacts only)",
+  "feature_set": "existing role-selected builds; no feature matrix executed",
+  "audit_method_id": "CANIC-DUPLICATION-001",
+  "audit_method_version": "1",
+  "audit_method_fingerprint": "c4b2b2828f551a5419de394d442ecb04932900d7b15665177a3c8529ee340262",
+  "audit_script_hashes": {},
+  "external_tool_versions": {
+    "git": "2.43.0",
+    "ripgrep": "15.2.0",
+    "python": "3.12.3"
+  },
+  "fixture_or_seed": "retained Toko Miner build 2727bc5436519db3c58114680a6d443bb33e6f5e80e1a59e974d52d95eb4cd87; code-traced five-workload/five-Ready fixture",
+  "environment_class": "local read-only source and retained-state inspection; no canister calls",
+  "started_at": "not_recorded: initial source reading preceded fingerprint capture",
+  "completed_at": "2026-09-05T15:18:11.694958+00:00",
+  "run_result": "partial",
+  "result_validity": "valid",
+  "verification_scope": "source findings and retained bytes only; formal full-method and execution coverage remain partial",
+  "reviewer": "Codex; single reviewer",
+  "second_review": "not performed; no P0/P1 acceptance or closeout claimed",
+  "command_manifest": [
+    {
+      "command": "git rev-parse HEAD / HEAD^{tree}; git status --porcelain; rg --files; rg -n; sed; cat",
+      "working_directory": "Canic and read-only sibling toko-miner",
+      "exit_code": 0,
+      "stdout_path": "not_retained",
+      "stderr_path": "not_retained",
+      "note": "exploratory nonexistent-path searches returned 2 and were corrected; they are not passing checks"
+    },
+    {
+      "command": "bash scripts/ci/audit-product-tree-hash.sh HEAD",
+      "working_directory": "Canic",
+      "exit_code": 0,
+      "stdout_path": "not_retained",
+      "stderr_path": "not_retained"
+    },
+    {
+      "command": "Python stdlib: parse retained plan/journal and artifact manifests; SHA-256 raw/gzip bytes; assert gzip decompression equals raw Wasm",
+      "working_directory": "Canic; read-only toko-miner inputs",
+      "exit_code": 0,
+      "stdout_path": "not_retained",
+      "stderr_path": "not_retained"
+    }
+  ],
+  "retention_class": "primary Markdown plus one compact input fingerprint manifest",
+  "redactions_applied": "no credentials, live balances, operator Principals or raw environment retained",
+  "captured_at": "2026-09-05T15:14:59.932919+00:00",
+  "algorithm": "sha256 of ordered UTF-8 path TAB sha256 LF rows",
+  "reviewed_inputs_sha256": "a1c858e38ed2294af6ca7a316d1a3009a5f4dd36f10f52ccc2825e9eb6cf63b4",
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "38350a5cb279cd02d795209c38ea43a158b1c1661b68ef491412130076f610b1"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha256": "24a5037a8f0a264369ef37bb46e019ade6c524beaead1c28f77a429f856a066b"
+    },
+    {
+      "path": "crates/canic-cli/src/build.rs",
+      "sha256": "47384e2bf1d8746985193e43ecfb35adfc76575ab827f0c0b1f9e3d02d92ba37"
+    },
+    {
+      "path": "crates/canic-cli/src/fleet/mod.rs",
+      "sha256": "2dd510d7df6ba9c964c0a604e86133f585d1bd4be953ddf6b934eb6414d56cdb"
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/artifact.rs",
+      "sha256": "eeba8d537c57b40933a078efeb29f9ca60bf5a3bf300fe234570a59cab0b0a32"
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/context.rs",
+      "sha256": "ad13ada1538e3ddd1f4ef54a0cca74f83aa8b833dc3f15d54124f1d2b618139b"
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/cache.rs",
+      "sha256": "8832774f45a09873bed4634c2a9bcf108ba7fbfe1cfb2cb572d956166377fcb6"
+    },
+    {
+      "path": "crates/canic-host/src/release_build/mod.rs",
+      "sha256": "171a90125ae44872b026d17bbebad46542c122a1e0d33985235cc5644dfc86e5"
+    },
+    {
+      "path": "crates/canic-host/src/build_provenance/source.rs",
+      "sha256": "22722b73de14eb54ae0ef4a1b04c0684a7a10f0b9a47617f56959efa3d53bb40"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/generate/mod.rs",
+      "sha256": "f792a643598c024fb08e85b1f919783221169cc09e93601086a76b1dad9a4c8f"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/policy/mod.rs",
+      "sha256": "ddb0080c1ea87bbd0f2497c37dd01c909075fb8ec8885a730cb8dd9d3a05d7bb"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/workflow/mod.rs",
+      "sha256": "4f10189522cdbb2a3d33554c20e1a82593e57833ea56c744d8f60e2b070a4da7"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/platform.rs",
+      "sha256": "0e223d9f4a9db58e9597ab158270b0b65e7aeb4f56d5ac31a33bb6d773660aa6"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/current_protocol/mod.rs",
+      "sha256": "e39a7d8290cbac6a0741c467e161fe3dfecc1e1da014aa13e433a343b0b89ce5"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/current_inventory/mod.rs",
+      "sha256": "095cb1702de9d6743a02fe666a35f98c0070b9fc048e26c684b5c790a89fa953"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/dto/progress/mod.rs",
+      "sha256": "16158a360f0efbef9ddfccd219550a4261a1684a2d1a57eb68c51bc38476da19"
+    },
+    {
+      "path": "crates/canic-core/src/model/fleet_activation/mod.rs",
+      "sha256": "345b8007601c1e032ef7d77b151fbf9c1db1726bc5caba0764d5db746d89720b"
+    },
+    {
+      "path": "crates/canic-core/src/ops/storage/fleet_activation/mod.rs",
+      "sha256": "ade3888969425db3f677484349c691f01948625e08a970d73c2647f7d7d32025"
+    },
+    {
+      "path": "crates/canic-core/src/workflow/placement/sharding/bootstrap.rs",
+      "sha256": "47e2956c1e03accbffb41f32a1d6a0c8bde7f69f68559c86dc80600aeefbd32e"
+    },
+    {
+      "path": "crates/canic-control-plane/src/workflow/component_provisioning.rs",
+      "sha256": "d1ab45551dc23aea63488411dae9de6128281408fa23e8707b5de4cf08f914c3"
+    },
+    {
+      "path": "crates/canic-control-plane/src/workflow/component_registry/mod.rs",
+      "sha256": "4764d3496cb876be0367de603599aad522fc82662f8d8059bf1f840d2d157117"
+    },
+    {
+      "path": "crates/canic-control-plane/src/workflow/canister_pool/refill.rs",
+      "sha256": "46f54db9d46cac3f665ac3e8a4de0cf3af353036288428aabb6f2f267e1bb623"
+    },
+    {
+      "path": "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs",
+      "sha256": "73a969fb9f1b6f1f702f948e1f24b2c77838b02ffdceb6af54a9eeaaf6c923dc"
+    },
+    {
+      "path": "crates/canic/src/macros/start.rs",
+      "sha256": "6ee2ec89099b638a7df1c34aedc203fbf1b0202b52816f11fac1eb1c6f2a8461"
+    },
+    {
+      "path": "crates/canic/src/macros/endpoints/fleet_coordinator.rs",
+      "sha256": "d2b955ce47c052b20ec710134b37ed82d408db316aebdd3563c61e84ee77a76b"
+    },
+    {
+      "path": "scripts/ci/check-release-integrity-contract.sh",
+      "sha256": "8bcde9eb46932ea5b1432cefdf4333aa80ca854133c1fe8482623af8470bc6fd"
+    },
+    {
+      "path": "docs/status/current.md",
+      "sha256": "1969b66c167efd2faba9b8a223bffd58e46eac8ac743dabc38990d60f922e864"
+    },
+    {
+      "path": "docs/audits/recurring/system/dry-consolidation.md",
+      "sha256": "c4b2b2828f551a5419de394d442ecb04932900d7b15665177a3c8529ee340262"
+    },
+    {
+      "path": "docs/audits/recurring/system/layer-violations.md",
+      "sha256": "a4c71532e85f3ea0c5f1802478b15f444d78eae3540dc35b96b77b04231503bc"
+    },
+    {
+      "path": "../toko-miner/Cargo.lock",
+      "sha256": "87ce725b6b58ff941c96903d2f74e61c5031152471a0b5acbd53905f34a6e5ca"
+    },
+    {
+      "path": "../toko-miner/apps/toko_miner/canic.toml",
+      "sha256": "8b7faa77f8257bdb083349ce56b52129c295cb11d97b56ffe5f724182700fad1"
+    },
+    {
+      "path": "../toko-miner/deployments/toko-miner-staging-001.toml",
+      "sha256": "96c2e2f3d7fd5be02070ef33faf2ea76c097f898022542aee738502bb0a70ebc"
+    },
+    {
+      "path": "../toko-miner/scripts/dev/local-dev.sh",
+      "sha256": "269ae376a9ca57fed6c8422c753d19d6996c4999dd6c7e6896cd9043814fbc59"
+    },
+    {
+      "path": "../toko-miner/scripts/dev/local-fleet-policy.sh",
+      "sha256": "f09373db853e9f854852240cd52b8c73b7e444407baab8d4f228fcc4af224615"
+    },
+    {
+      "path": "../toko-miner/apps/toko_miner/game_shard/src/startup.rs",
+      "sha256": "a2b8136ee0713f1547a1a0aa526577603331173fef29d8f7b6a328ec52d38c77"
+    },
+    {
+      "path": "../toko-miner/docs/upstream/canic.md",
+      "sha256": "05f6ebdf149a2364bacfb693ca872349c373e4cea24eafac887409e3fa3c16cf"
+    },
+    {
+      "path": "../toko-miner/.canic/fleet-ensure/toko_miner/toko-miner-local/plan.json",
+      "sha256": "1ce43860b4c464c1cb3d406f984dd0df5140aa1a85cfe38f04449ca2ceefe339"
+    },
+    {
+      "path": "../toko-miner/.canic/fleet-ensure/toko_miner/toko-miner-local/journal.json",
+      "sha256": "8fb088efe5adee0fc0921da96ef0b464b31923b6d572b08024f4e6cc32ffb883"
+    }
+  ],
+  "completion_recheck": {
+    "changed_inputs": [
+      "docs/status/current.md"
+    ],
+    "unchanged_input_count": 37,
+    "current_status_sha256": "e96f971b754627679a8973983448920b96c290006e8e186ec60cfbfa27582f9e",
+    "disposition": "reread updated handoff; incorporated latest focused activation evidence; complete journey still unrun"
+  }
+}

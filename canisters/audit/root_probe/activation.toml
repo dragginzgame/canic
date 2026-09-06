@@ -1,0 +1,27 @@
+[app]
+name = "standalone"
+
+[roles.root]
+kind = "root"
+package = "."
+
+[roles.app]
+kind = "canister"
+package = "../leaf_probe"
+
+[auth.delegated_tokens]
+enabled = false
+
+[component_specs.default]
+component_role = "app"
+maximum_instances = 1
+
+[component_groups.qualification.components.default]
+component_spec = "default"
+
+[component_group_deployments.qualification]
+component_group = "qualification"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1

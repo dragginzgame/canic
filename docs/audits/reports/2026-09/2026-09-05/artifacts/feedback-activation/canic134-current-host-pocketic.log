@@ -1,0 +1,28 @@
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:36061/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-cycle-custody v0.110.7 (/home/adam/projects/canic/crates/canic-cycle-custody)
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 19.18s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-8278b312dcbd5dba)
+
+running 1 test
+test pic::cycle_custody::host_owner::custody_host_recovers_settings_install_and_progress_replies ...     Finished `fast` profile [optimized] target(s) in 0.29s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 10.71s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=263444 kB high_water=266956 kB threads=20
+==> targeted canic-testing-internal PocketIC proof done in 30s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  30s      PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 31s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.9clyXt

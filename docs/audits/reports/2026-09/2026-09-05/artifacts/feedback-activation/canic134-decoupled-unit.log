@@ -1,0 +1,16 @@
+   Compiling ic-management-canister-types v0.8.0
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.7 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cycle-custody v0.110.7 (/home/adam/projects/canic/crates/canic-cycle-custody)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 27s
+     Running unittests src/lib.rs (target/debug/deps/canic_cycle_custody-e5b1e518df00c06b)
+
+running 4 tests
+test model::tests::custody_refuses_missing_artifact_or_ambiguous_source_authority ... ok
+test model::tests::custody_requires_unique_assets_and_source_control ... ok
+test model::tests::ledger_fee_and_whole_estate_totals_are_checked_before_admission ... ok
+test model::tests::observed_native_debit_accepts_the_bound_and_rejects_minting_or_excess ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

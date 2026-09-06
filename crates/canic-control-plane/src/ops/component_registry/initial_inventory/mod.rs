@@ -6,8 +6,8 @@
 
 use super::{
     CompleteInitialInventory, ComponentRegistryOps, RootComponentInitialInventoryHashEntry,
-    RootComponentInitialInventoryPlan, exact_active_partition, initial_inventory_record_to_view,
-    map_allocation_commit_error, validate_partition_record,
+    RootComponentInitialInventoryPlan, initial_inventory_record_to_view,
+    map_allocation_commit_error, validate_active_partition, validate_partition_record,
 };
 use crate::{
     storage::stable::component_registry::{
@@ -216,9 +216,13 @@ fn initial_inventory_hash_entry(
     {
         return Err(InternalError::unavailable());
     }
-    let active = exact_active_partition(record, commitment, membership)?;
+    let current = RootComponentRegistryStore::partition(record.component)
+        .ok_or_else(InternalError::invariant)?;
+    let active = validate_active_partition(record, commitment, membership, &current)?;
     validate_partition_record(&active)?;
-    let partition_bytes = active.encoded_bytes;
+    // The seal binds immutable top-level membership. Charged storage belongs to
+    // the validated current partition, which may include later initial children.
+    let partition_bytes = current.encoded_bytes;
     Ok((
         RootComponentInitialInventoryHashEntry {
             operation_id: record.operation_id,
