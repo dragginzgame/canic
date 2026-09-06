@@ -43,6 +43,13 @@ Rust code slices add targeted formatting, check/Clippy, and tests for the
 changed package and behavior. Direct Cargo commands use `--locked` when
 supported. Unexplained lockfile churn is a blocker.
 
+Implementation closeout reconciles those checks against every affected Rust
+target in the batch, following the
+[target and feature coverage rules](../governance/ci-deployment.md). Record the
+explicit owning packages, targets and features checked; passing dependency
+compilation or behavioral tests alone does not establish test-target lint
+coverage. Collect independent lint failures in the same scoped pass.
+
 Full release validation, not ordinary slice validation, includes:
 
 ```text

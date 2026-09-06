@@ -247,6 +247,7 @@ fn selected_issuer_corruption_rejects_same_release_restore() {
             Some(fixture.root),
         )
         .expect_err("selected issuer corruption must fail synchronous restoration");
+    drop(fixture);
     assert_eq!(
         error.error_code,
         ic_testkit::pic::ErrorCode::CanisterCalledTrap

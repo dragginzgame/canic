@@ -39,6 +39,19 @@ versioning and publication remain outstanding.
   correction in the conformance test passes
   [targeted all-feature Clippy](artifacts/fleet-reinstall/protocol-surface-clippy.log).
   Its comparison behavior is unchanged; no PocketIC rerun is required.
+  The subsequent release attempt exposed two additional test-target lints:
+  oversized JSON fixture setup and late PocketIC fixture disposal. Both are
+  corrected without changing assertions or IC calls.
+  [Combined affected-package Clippy](artifacts/fleet-reinstall/affected-package-clippy.log)
+  passes for all targets/features of `canic`, `canic-host` and `canic-tests`,
+  with warnings denied and `--keep-going`.
+  The [changed JSON regression](artifacts/fleet-reinstall/json-report-test.log)
+  also passes. The fixture-disposal-only edit does not require repeating the
+  existing PocketIC behavior proof. Earlier Clippy selection had checked
+  dependency libraries without their test targets; the
+  [validation procedure](../../../../governance/ci-deployment.md) now requires
+  explicit affected-target coverage before closeout. The full release gate
+  remains outstanding.
   [Check records and selected source digests](artifacts/fleet-reinstall/checks.json)
   bind the retained logs and capture the reviewed source for subsequent changes;
   they are not an immutable release-validation receipt.

@@ -555,9 +555,16 @@ propagation blocker remains identified within its final accepted scope.
 The next boundary is the maintainer-approved governed release flow; no version,
 Git publication, broad validation, deployment or 0.111 action is inferred.
 Package versions remain 0.110.7 and the complete open changelog draft is 0.110.8.
-Initial closeout changed only documentation and evidence. A subsequent test-only
-Clippy correction spells `HashSet::default()` explicitly in `protocol_surface`;
-targeted all-feature Clippy passes. Runtime behavior and contracts are unchanged.
+Initial closeout changed only documentation and evidence. Subsequent test-only
+Clippy corrections use explicit `HashSet::default()`, extract JSON funding
+fixture setup and release a PocketIC fixture after its last use. Combined
+all-target/all-feature Clippy passes for `canic`, `canic-host` and `canic-tests`;
+the changed JSON regression passes. Runtime behavior and contracts are unchanged.
+The release attempt exposed missing test-target lint coverage in the earlier
+closeout: dependency-library checks did not lint the owning packages' tests.
+CI/deployment governance now requires explicit affected-target coverage and
+collection of independent failures with `--keep-going`. The governed release
+gate still needs to complete; this scoped pass is not a workspace validation.
 
 The maintainer's final contract is explicit pre-1.0 reinstall. Application state
 and former host records may be discarded while cycles and asset control remain
