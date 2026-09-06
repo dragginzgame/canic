@@ -1,0 +1,72 @@
+   Compiling canic-core v0.110.7 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 58.92s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-bf894a7a60416b47)
+
+running 64 tests
+test workflow::runtime::auth::prepare::admission::tests::role_attestation_subject_accepts_exact_component_binding ... ok
+test workflow::runtime::auth::prepare::admission::tests::role_attestation_subject_accepts_exact_component_child_binding ... ok
+test workflow::runtime::auth::prepare::admission::tests::role_attestation_subject_rejects_caller_or_role_drift ... ok
+test workflow::runtime::auth::prepare::admission::tests::role_attestation_subject_rejects_placement_subnet_drift ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_lazy_repair_does_not_call_root_when_prepare_succeeds ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_lazy_repair_does_not_run_for_non_repairable_errors ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_lazy_repair_retries_once_after_stale_material ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_lazy_repair_returns_pending_without_second_prepare_attempt ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_lazy_repair_revalidates_replay_owner_before_retry ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_prepare_payload_hash_binds_authoritative_payload ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_prepare_payload_hash_binds_ext ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_prepare_payload_hash_ignores_metadata ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_public_prepare_accepts_login_scopes_before_replay ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_public_prepare_rejects_privileged_self_grants_before_replay ... ok
+test workflow::runtime::auth::prepare::tests::delegated_token_replay_metadata_rejects_missing_or_invalid_ttl ... ok
+test workflow::runtime::auth::provisioning::tests::explicit_provisioning_preserves_issuer_application_error ... ok
+test workflow::runtime::auth::provisioning::tests::explicit_provisioning_transport_failure_is_typed_as_unavailable ... ok
+test workflow::runtime::auth::provisioning::tests::install_chain_key_batch_empty_request_is_noop ... ok
+test workflow::runtime::auth::provisioning::tests::renewal_install_failures_preserve_exact_and_public_causes ... ok
+test workflow::runtime::auth::renewal::tests::retry_backoff_is_bounded_and_proof_aware ... ok
+test workflow::runtime::auth::renewal::tests::retry_deadline_overflow_is_explicit ... ok
+test workflow::runtime::auth::renewal::tests::work_count_overflow_is_an_invariant_failure ... ok
+test workflow::runtime::auth::tests::issuer_nonroot_requires_issuer_canister_signature_create ... ok
+test workflow::runtime::auth::tests::default_nonroot_does_not_require_auth_proof_verifier_support ... ok
+test workflow::runtime::auth::tests::role_attestation_cache_nonroot_requires_only_root_proof_verifier_support ... ok
+test workflow::runtime::auth::tests::auth_material_nonroot_requires_the_matching_verifier_support ... ok
+test workflow::runtime::auth::tests::root_does_not_require_auth_crypto_without_auth_roles ... ok
+test workflow::runtime::auth::tests::root_does_not_require_canister_signature_proofs_for_delegated_issuer_when_enabled ... ok
+test workflow::runtime::auth::tests::role_attestation_cache_startup_requires_root_canister_signature_verify_feature ... ok
+test workflow::runtime::auth::tests::runtime_auth_workflow_type_exists_for_runtime_ownership ... ok
+test workflow::runtime::auth::tests::root_ignores_delegated_issuer_when_delegated_tokens_disabled ... ok
+test workflow::runtime::auth::tests::verifier_only_nonroot_requires_chain_key_root_and_issuer_proof_verifier_support ... ok
+test workflow::runtime::auth::tests::root_requires_canister_signature_proofs_for_role_attestation_cache_when_delegated_tokens_disabled ... ok
+test workflow::runtime::auth::prepare::replay::tests::role_attestation_response_commit_retry_promotes_staged_response ... ok
+test workflow::runtime::auth::prepare::replay::tests::delegated_token_response_commit_retry_promotes_staged_response ... ok
+test workflow::runtime::auth::provisioning::tests::install_chain_key_batch_broadcasts_proofs_to_issuers ... ok
+test workflow::runtime::auth::root_issuer::tests::renewal_template_admission_precedes_mutation_and_timer_reconciliation ... ok
+test workflow::runtime::auth::root_issuer::tests::root_issuer_policy_mutation_precedes_timer_reconciliation ... ok
+test workflow::runtime::auth::root_issuer::tests::disabling_last_template_still_reconciles_timer_to_idle ... ok
+test workflow::runtime::auth::root_issuer::tests::renewal_template_rejections_preserve_state_and_skip_timer_reconciliation ... ok
+test workflow::runtime::auth::root_issuer::tests::root_issuer_policy_rejections_preserve_policy_and_registry_epoch ... ok
+test workflow::runtime::auth::root_issuer::tests::root_issuer_policy_upsert_accepts_and_advances_registry_epoch ... ok
+test workflow::placement::index::tests::bind_instance_persists_assignment_for_matching_direct_child ... ok
+test workflow::placement::index::tests::bind_instance_rejects_non_child_pid ... ok
+test workflow::placement::index::tests::classify_entry_marks_invalid_provisional_child_for_cleanup ... ok
+test workflow::placement::index::tests::bind_instance_rejects_role_mismatch ... ok
+test workflow::placement::index::tests::classify_entry_marks_stale_pending_without_provisional_for_resume ... ok
+test workflow::placement::index::tests::classify_entry_returns_none_for_missing_key ... ok
+test workflow::placement::index::tests::recover_entry_releases_stale_pending_when_provisional_child_is_missing ... ok
+test workflow::placement::index::tests::recover_entry_repairs_valid_stale_provisional_child ... ok
+test workflow::placement::index::tests::resolve_or_create_repairs_stale_pending_with_valid_provisional_child ... ok
+test workflow::placement::index::tests::resolve_or_create_returns_existing_bound_entry_without_create ... ok
+test workflow::placement::index::tests::resolve_or_create_returns_fresh_pending_entry_without_create ... ok
+test workflow::placement::index::tests::stale_pending_without_provisional_child_remains_claimed_for_exact_resume ... ok
+test workflow::runtime::auth::renewal::tests::timer_failure_records_the_exact_diagnostic_in_recent_failures ... ok
+test workflow::runtime::auth::tests::application_authority_reconciliation_composes_policy_and_storage_mutation ... ok
+test workflow::runtime::intent::tests::application_and_local_cleanup_share_one_exact_batch_budget ... ok
+test workflow::runtime::intent::tests::application_session_expiry_uses_the_existing_intent_cleanup_owner ... ok
+test workflow::runtime::intent::tests::cleanup_due_work_is_bounded_and_continues_until_the_expiry_index_is_empty ... ok
+test workflow::runtime::intent::tests::cleanup_failure_preserves_the_due_intent_and_exact_expiry_entry ... ok
+test workflow::runtime::intent::tests::consumer_begin_rejects_canic_owned_resource_namespace ... ok
+test workflow::runtime::intent::tests::consumer_cannot_commit_or_rollback_canic_owned_local_intent ... ok
+test workflow::runtime::intent::tests::consumer_receipt_namespace_remains_available_outside_canic_prefix ... ok
+test workflow::runtime::intent::tests::consumer_receipt_operations_cannot_observe_or_settle_canic_owned_intent ... ok
+
+test result: ok. 64 passed; 0 failed; 0 ignored; 0 measured; 1180 filtered out; finished in 1.90s
+

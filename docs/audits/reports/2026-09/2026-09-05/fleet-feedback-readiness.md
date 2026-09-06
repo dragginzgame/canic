@@ -76,6 +76,14 @@ passes with all features and warnings denied. These final-source checks resolve
 the three reported `canic-core --lib` failures; the complete release gate still
 needs to finish.
 
+A later test-only correction removes a wall-clock second-boundary race in the
+placement-index recovery assertion. The first panic poisoned the shared seam
+lock, causing eleven secondary failures. The test now checks the returned time
+against observed start/end bounds and retains exact asset and removal checks.
+All [64 affected placement/auth/intent tests](artifacts/fleet-reinstall/core-timing-tests.log)
+and [all-feature core library/test Clippy](artifacts/fleet-reinstall/core-timing-clippy.log)
+pass. Production source and the shared test-lock policy are unchanged.
+
 ## Toko Miner adoption checks
 
 1. Pin the published Canic release, build a sealed current App release, and

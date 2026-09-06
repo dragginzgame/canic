@@ -572,6 +572,12 @@ its inventory without a fixed count, and the Coordinator manifest declares
 core regressions and all-feature core library/test Clippy pass. Retirement
 execution and Candid are unchanged; the retained closeout check records include
 these final-source results.
+A later placement-index test failure came from comparing separate clock reads
+across a second boundary; eleven subsequent failures were poisoned-lock fallout.
+The test now bounds the returned release time by the recovery start/end times
+while retaining exact authority and removal assertions. All 64 affected
+placement/auth/intent tests and all-feature core library/test Clippy pass.
+Production source and the seam-lock policy are unchanged.
 
 The maintainer's final contract is explicit pre-1.0 reinstall. Application state
 and former host records may be discarded while cycles and asset control remain
