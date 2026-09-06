@@ -555,8 +555,9 @@ propagation blocker remains identified within its final accepted scope.
 The next boundary is the maintainer-approved governed release flow; no version,
 Git publication, broad validation, deployment or 0.111 action is inferred.
 Package versions remain 0.110.7 and the complete open changelog draft is 0.110.8.
-No runtime, host, CLI, DTO, Candid or fixture source changed during closeout;
-only documentation and evidence were updated.
+Initial closeout changed only documentation and evidence. A subsequent test-only
+Clippy correction spells `HashSet::default()` explicitly in `protocol_surface`;
+targeted all-feature Clippy passes. Runtime behavior and contracts are unchanged.
 
 The maintainer's final contract is explicit pre-1.0 reinstall. Application state
 and former host records may be discarded while cycles and asset control remain
