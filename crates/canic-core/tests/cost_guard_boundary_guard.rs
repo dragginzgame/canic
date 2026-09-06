@@ -5,6 +5,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use syn::{FnArg, ImplItem, Item, Type};
 
 #[test]
 fn production_cost_guard_call_sites_match_reviewed_inventory() {
@@ -102,15 +103,48 @@ fn icp_refill_value_transfer_adapters_require_cost_guard_permit() {
 }
 
 #[test]
-fn cycles_ledger_creation_adapter_requires_cost_guard_permit() {
+fn cycles_ledger_paid_adapters_require_cost_guard_permit() {
     let ledger_ops = source_root().join("ops/ic/cycles_ledger.rs");
     let contents = fs::read_to_string(&ledger_ops).expect("read Cycles Ledger ops");
+    let syntax = syn::parse_file(&contents).expect("parse Cycles Ledger ops");
+    let ledger = syntax
+        .items
+        .iter()
+        .find_map(|item| {
+            let Item::Impl(implementation) = item else {
+                return None;
+            };
+            let Type::Path(self_type) = implementation.self_ty.as_ref() else {
+                return None;
+            };
+            self_type
+                .path
+                .is_ident("CyclesLedgerOps")
+                .then_some(implementation)
+        })
+        .expect("CyclesLedgerOps implementation");
 
-    assert_eq!(
-        contents.matches("_permit: &CostGuardPermit").count(),
-        1,
-        "the Cycles Ledger paid-creation adapter must require CostGuardPermit"
-    );
+    for name in ["create_canister", "transfer"] {
+        let method = ledger
+            .items
+            .iter()
+            .find_map(|item| match item {
+                ImplItem::Fn(method) if method.sig.ident == name => Some(method),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("missing CyclesLedgerOps::{name}"));
+        let Some(FnArg::Typed(argument)) = method.sig.inputs.first() else {
+            panic!("CyclesLedgerOps::{name} must require a cost-guard permit");
+        };
+        let Type::Reference(reference) = argument.ty.as_ref() else {
+            panic!("CyclesLedgerOps::{name} must borrow its cost-guard permit");
+        };
+        assert!(matches!(
+            reference.elem.as_ref(),
+            Type::Path(ty) if ty.path.is_ident("CostGuardPermit")
+        ));
+        assert!(reference.mutability.is_none());
+    }
 }
 
 #[test]

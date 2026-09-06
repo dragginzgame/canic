@@ -43,6 +43,7 @@ not selected through a facade feature.
 | `sharding` | No | Sharding placement, storage, metrics, and lifecycle support from `canic-core`. |
 | `auth-chain-key-ecdsa` | No | Chain-key ECDSA validation and cryptographic support used by delegated-auth proof flows. |
 | `auth-chain-key-root-sign` | No | Root-managed chain-key delegation-batch signing; also enables `auth-chain-key-ecdsa`. |
+| `auth-local-application-authorization` | No | Local application session and replay-fence storage, synchronous restoration, and expiry cleanup. |
 | `auth-root-canister-sig-create` | No | Root canister-signature proof creation for role attestation. |
 | `auth-root-canister-sig-verify` | No | Root canister-signature proof verification for role attestation. |
 | `auth-issuer-canister-sig-create` | No | Issuer canister-signature token-proof creation. |

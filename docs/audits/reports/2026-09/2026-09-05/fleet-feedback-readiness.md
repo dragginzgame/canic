@@ -84,6 +84,17 @@ All [64 affected placement/auth/intent tests](artifacts/fleet-reinstall/core-tim
 and [all-feature core library/test Clippy](artifacts/fleet-reinstall/core-timing-clippy.log)
 pass. Production source and the shared test-lock policy are unchanged.
 
+The subsequent feature-documentation and Ledger cost-guard failures are also
+corrected. The facade README documents the current opt-in local application
+authorization feature. The guard inspects `create_canister` and `transfer`
+signatures for mandatory `&CostGuardPermit` arguments instead of counting
+permit spellings across their shared file. Both
+[affected integration targets](artifacts/fleet-reinstall/integration-contract-tests.log)
+pass (14 tests), and the changed
+[cost-guard target passes all-feature Clippy](artifacts/fleet-reinstall/cost-guard-clippy.log).
+The broader Clippy attempt was interrupted by removal of shared Cargo artifacts;
+the focused retry passed. Runtime and package manifests are unchanged.
+
 ## Toko Miner adoption checks
 
 1. Pin the published Canic release, build a sealed current App release, and

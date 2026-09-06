@@ -578,6 +578,13 @@ The test now bounds the returned release time by the recovery start/end times
 while retaining exact authority and removal assertions. All 64 affected
 placement/auth/intent tests and all-feature core library/test Clippy pass.
 Production source and the seam-lock policy are unchanged.
+The subsequent ordinary-integration failures are corrected: the facade README
+documents `auth-local-application-authorization`, and the Ledger cost guard
+checks each named paid adapter's mandatory permit type through Rust syntax
+instead of counting permit spellings across the file. Both affected targets
+pass (14 tests); all-feature Clippy passes for the changed cost-guard target.
+Runtime and package manifests are unchanged. The broader Clippy attempt lost
+dependency artifacts when `target/` disappeared; the focused retry passed.
 
 The maintainer's final contract is explicit pre-1.0 reinstall. Application state
 and former host records may be discarded while cycles and asset control remain
