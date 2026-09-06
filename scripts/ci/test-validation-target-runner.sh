@@ -11,6 +11,8 @@ printf '%s\n' \
     '.PHONY: pass mutate-runner fail-coded fail-one fail-two fail-after-caught-panic' \
     'pass:' \
     $'\t@echo pass-marker' \
+    $'\t@echo "test api::error::tests::public_error_is_preserved_without_remap ... ok"' \
+    $'\t@echo "test ops::auth::error::tests::optional_case ... ignored"' \
     'mutate-runner:' \
     $'\t@printf "for broken do\\n" > scripts/ci/run-validation-targets.sh' \
     $'\t@echo mutation-marker' \
@@ -23,6 +25,7 @@ printf '%s\n' \
     $'\t@exit 7' \
     'fail-two:' \
     $'\t@echo "error: second-live-error-marker"' \
+    $'\t@echo "error[E0425]: coded-error-marker"' \
     $'\t@echo second-failure-marker' \
     $'\t@exit 9' \
     'fail-after-caught-panic:' \
@@ -52,6 +55,9 @@ CANIC_VALIDATION_FAILURE_LOG_DIR="$FIXTURE/failure-logs" \
 }
 for expected in \
     'pass-marker' \
+    'test api::error::tests::public_error_is_preserved_without_remap ... ok' \
+    'test ops::auth::error::tests::optional_case ... ignored' \
+    '[ERR:fail-two] error[E0425]: coded-error-marker' \
     'mutation-marker' \
     '[ERR:fail-coded] [CANIC-TEST:E001] [SUITE] FAIL stable-failure-event' \
     'first-failure-marker' \
@@ -76,6 +82,10 @@ for expected in \
         exit 1
     }
 done
+if rg '^\[ERR:pass\]' "$FIXTURE/output.log" >/dev/null; then
+    echo "validation target runner test failed: passing/ignored error-module tests were highlighted" >&2
+    exit 1
+fi
 if rg -F "[ERR:fail-after-caught-panic] thread 'caught-test' panicked at" \
     "$FIXTURE/output.log" >/dev/null; then
     echo "validation target runner test failed: caught panic was highlighted" >&2
