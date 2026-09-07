@@ -151,7 +151,7 @@ pub fn print_help_or_version(
 pub fn print_nested_help(args: &[OsString], mut command: Command) -> bool {
     let mut path = command
         .get_bin_name()
-        .unwrap_or(command.get_name())
+        .unwrap_or_else(|| command.get_name())
         .to_string();
     for arg in args {
         if is_help_arg(arg) {

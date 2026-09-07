@@ -78,6 +78,14 @@ historical evidence, not accepted parser surfaces.
 
 ## Validation And Limits
 
+The subsequent release Clippy pass identified two redundant `pub(crate)`
+re-exports inside private backup modules and an eager help-name fallback.
+Both re-exports now use `pub` within the private modules, and the fallback
+uses `unwrap_or_else`. Package-scoped Clippy passes with
+`cargo clippy --locked --keep-going -p canic-cli --all-targets --all-features -- -D warnings`;
+formatting checks pass for all three changed Rust files. This lint correction
+does not rerun the long PocketIC journeys or establish complete release validation.
+
 Targeted CLI regression and help checks are recorded after completion below.
 This is a command-surface and source-ownership audit, not fresh qualification
 of every paid/live operation. No deployment, broad validation, publication or
