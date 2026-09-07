@@ -5,6 +5,24 @@ use std::process::Command;
 const MAX_HELP_EXAMPLES: usize = 3;
 
 #[test]
+fn no_arguments_prints_help_successfully() {
+    let bare = Command::new(env!("CARGO_BIN_EXE_canic"))
+        .output()
+        .expect("run bare canic");
+    let help = Command::new(env!("CARGO_BIN_EXE_canic"))
+        .arg("--help")
+        .output()
+        .expect("run canic help");
+
+    assert!(bare.status.success());
+    assert!(help.status.success());
+    assert!(bare.stderr.is_empty());
+    assert!(help.stderr.is_empty());
+    assert!(!bare.stdout.is_empty());
+    assert_eq!(bare.stdout, help.stdout);
+}
+
+#[test]
 fn command_help_is_ordered_and_concise() {
     check_command_group(&[]);
 }
@@ -17,9 +35,10 @@ fn check_command_group(path: &[String]) {
     );
 
     let help = command_help(path);
-    if !help_usage_matches(path, &help) {
-        return;
-    }
+    assert!(
+        help_usage_matches(path, &help),
+        "help belongs to another command: {path:?}\n{help}"
+    );
 
     let examples = example_commands(&help);
     assert!(
@@ -79,6 +98,11 @@ fn command_help(path: &[String]) -> String {
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "help failed for {path:?}: {text}");
+    assert!(
+        output.stderr.is_empty(),
+        "help wrote to stderr for {path:?}: {text}"
     );
     strip_ansi(&text)
 }

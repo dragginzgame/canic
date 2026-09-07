@@ -33,7 +33,7 @@ fn renderer_distinguishes_current_and_unknown_codes() {
 #[test]
 fn help_is_concise_and_uses_both_supported_input_forms() {
     let text = usage();
-    assert!(text.contains("Usage: diagnostic <code>"));
+    assert!(text.contains("Usage: canic diagnostic <code>"));
     assert!(text.contains("canic diagnostic E123"));
     assert!(text.contains("canic diagnostic 123"));
 }

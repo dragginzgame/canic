@@ -28,18 +28,14 @@ use enforce::{
 };
 use io::{
     RestorePrepareReport, create_or_adopt_prepare_documents, default_restore_apply_journal_path,
-    default_restore_plan_path, read_manifest_source, read_mapping, read_plan,
-    restore_apply_backup_dir, restore_apply_plan_path, restore_prepare_backup_dir,
+    default_restore_plan_path, read_manifest_source, read_mapping, restore_prepare_backup_dir,
     restore_run_journal_path, restore_status_journal_path, verify_backup_layout_if_required,
-    verify_prepared_journal_backup_root, write_apply_dry_run, write_apply_journal_if_requested,
-    write_plan, write_prepare_report, write_restore_run, write_restore_status,
+    verify_prepared_journal_backup_root, write_plan, write_prepare_report, write_restore_run,
+    write_restore_status,
 };
 
 pub use error::RestoreCommandError;
-use options::{
-    RestoreApplyOptions, RestorePlanOptions, RestorePrepareOptions, RestoreRunOptions,
-    RestoreStatusOptions,
-};
+use options::{RestorePlanOptions, RestorePrepareOptions, RestoreRunOptions, RestoreStatusOptions};
 
 pub fn run<I>(args: I) -> Result<(), RestoreCommandError>
 where
@@ -54,16 +50,6 @@ where
         .map_err(|_| RestoreCommandError::Usage(usage()))?;
 
     match command.as_str() {
-        "apply" => {
-            if print_help_or_version(&args, apply_usage, version_text()) {
-                return Ok(());
-            }
-            let options = RestoreApplyOptions::parse(args)?;
-            let dry_run = restore_apply_dry_run(&options)?;
-            write_apply_dry_run(&options, &dry_run)?;
-            write_apply_journal_if_requested(&options, &dry_run)?;
-            Ok(())
-        }
         "plan" => {
             if print_help_or_version(&args, plan_usage, version_text()) {
                 return Ok(());
@@ -169,18 +155,6 @@ fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, RestoreComm
     RestorePlanner::plan(&manifest, mapping.as_ref()).map_err(RestoreCommandError::from)
 }
 
-fn restore_apply_dry_run(
-    options: &RestoreApplyOptions,
-) -> Result<RestoreApplyDryRun, RestoreCommandError> {
-    let plan = read_plan(&restore_apply_plan_path(options)?)?;
-    if let Some(backup_dir) = restore_apply_backup_dir(options)? {
-        return RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &backup_dir)
-            .map_err(RestoreCommandError::from);
-    }
-
-    Ok(RestoreApplyDryRun::from_plan(&plan)?)
-}
-
 fn restore_run_dry_run(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
@@ -283,10 +257,6 @@ fn plan_usage() -> String {
     render_usage(options::restore_plan_command)
 }
 
-fn apply_usage() -> String {
-    render_usage(options::restore_apply_command)
-}
-
 fn prepare_usage() -> String {
     render_usage(options::restore_prepare_command)
 }
@@ -302,13 +272,8 @@ fn status_usage() -> String {
 fn restore_command() -> ClapCommand {
     ClapCommand::new("restore")
         .bin_name("canic restore")
-        .about("Plan, apply, and run snapshot restores")
+        .about("Plan, prepare, and run snapshot restores")
         .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("apply")
-                .about("Render restore operations and optionally write an apply journal")
-                .disable_help_flag(true),
-        ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("plan")
                 .about("Build a no-mutation restore plan")

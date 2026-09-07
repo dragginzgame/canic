@@ -326,24 +326,6 @@ fn run_restore_prepare_rejects_progressed_journal_without_replacing_it() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure prepared backup references fail with an operator action, not raw IO.
-#[test]
-fn prepared_plan_path_reports_prepare_action_when_missing() {
-    let root = temp_dir("canic-cli-restore-missing-plan");
-    let path = root.join("restore-plan.json");
-
-    let err = require_prepared_plan_path("1", path.clone()).expect_err("missing plan rejects");
-
-    fs::remove_dir_all(root).ok();
-    std::assert_matches!(
-        err,
-        RestoreCommandError::PreparedPlanMissing {
-            backup_ref,
-            path: missing_path,
-        } if backup_ref == "1" && missing_path == path.display().to_string()
-    );
-}
-
 // Ensure prepared runner references fail with an operator action, not raw IO.
 #[test]
 fn prepared_journal_path_reports_prepare_action_when_missing() {

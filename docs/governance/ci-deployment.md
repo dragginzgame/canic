@@ -125,6 +125,12 @@ release-supported Linux process boundary. `make test-wasm` is the fast lane and
 runs only its classified release-surface integrations; it does not run workspace
 unit/bin tests or PocketIC. The complete and ordinary lanes retain the unit/bin
 coverage. `make test-runtime-fast` selects that same fast integration lane.
+Fleet tests use synthetic, application-neutral topologies sized to exercise
+the relevant contract. A complete generated journey owns fresh provisioning,
+interruption and replay; focused recovery tests prepare their real canister
+preconditions without repeating that entire journey. Application deployment
+sizes belong in downstream qualification. Capacity arithmetic and rejection
+boundaries remain covered independently of expensive deployment cardinality.
 The ordinary integration inventory is resolved into one multi-package Cargo invocation so
 its shared dependency graph is compiled once rather than once per owning
 package. Unit/lib/bin coverage and the internal fast harness remain separate
@@ -155,6 +161,9 @@ recovery locally attributable while avoiding three cold process-local Fleet
 baselines. The PocketIC lane clears transient heavy Wasm targets once before
 its integration-suite group and once at
 invocation cleanup; it retains Cargo freshness between the ordered suites.
+The ignored instruction-audit target shares the runtime Cargo invocation for
+compile coverage. Only its explicit audit runner executes the audit; release
+validation does not report it as a separately completed PocketIC audit.
 CI may run the ordinary and PocketIC lanes in separate jobs; it must not
 parallelize the PocketIC suites themselves without replacing this measured
 policy. Cheap source/governance preflight and security jobs gate the Rust checks
@@ -192,7 +201,9 @@ The selector is an exact internal Rust test path or a classified `canic-tests`
 integration target such as `native_agent_delegation`. This delegates to the
 existing `targeted-pocketic` runner, with the pinned shared server, private
 scratch, serial execution and reusable artifacts. An integration selector runs
-that target's tests; an internal Rust path selects one exact test. An omitted
+that target's tests; an internal Rust path selects one exact test. The exact-path
+selector verifies its registered test identity before execution and rejects a
+zero-test match. An omitted
 selector fails before creating scratch or starting Cargo. Use these focused
 commands while fixing failures; `make patch` and `make release-patch` remain
 complete release validation, not the default development feedback loop.

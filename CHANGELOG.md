@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.9` uses smaller application-neutral Fleet proofs, removes repeated
+  recovery setup and a no-op audit invocation, rejects empty exact test selections,
+  shows help when `canic` is run without a command, hard-cuts redundant restore
+  preparation, and corrects backup selection and command help.
 - `0.110.8` makes authorization state capability-owned, advances Fleet launch
   and recovery corrections, qualifies reviewed Fleet reinstall and accounts for
   Ledger transfers before deletion, qualifies IcyDB 0.253.0 lifecycle composition and

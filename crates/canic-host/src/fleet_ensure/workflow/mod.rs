@@ -4507,7 +4507,7 @@ mod tests {
     }
 
     #[test]
-    fn toko_fresh_fleet_alternate_desired_cannot_clear_completed_reinstall_evidence() {
+    fn fresh_fleet_alternate_desired_cannot_clear_completed_reinstall_evidence() {
         let (state, journal) = retained_evidence();
         assert!(retained_reinstall_desired_conflict(
             &state,
@@ -4565,7 +4565,7 @@ mod tests {
     }
 
     #[test]
-    fn toko_fresh_fleet_idle_cycle_duplicate_requires_exact_balance() {
+    fn fresh_fleet_idle_cycle_duplicate_requires_exact_balance() {
         use crate::fleet_ensure::model::RootOwnedCanisterLifecycle;
 
         let additional = BTreeMap::from([("controlled-principal".to_string(), 100)]);

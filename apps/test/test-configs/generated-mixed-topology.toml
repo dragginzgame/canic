@@ -1,3 +1,4 @@
+# Minimal synthetic topology: one standalone Component and two Hubs, each with one child.
 [app]
 name = "test"
 init_mode = "enabled"
@@ -58,15 +59,15 @@ maximum_instances = 1
 
 [component_specs.scaling.scaling.pools.scales]
 canister_role = "scale_replica"
-policy.initial_workers = 8
-policy.max_workers = 8
-policy.min_workers = 8
+policy.initial_workers = 1
+policy.max_workers = 1
+policy.min_workers = 1
 
 [component_specs.scaling.children.scale_replica]
 kind = "replica"
 
 [component_specs.scaling.spawn_grants.scale_hub.scale_replica]
-maximum_instances_per_parent = 8
+maximum_instances_per_parent = 1
 
 [component_specs.users]
 component_role = "user_hub"
@@ -75,8 +76,8 @@ maximum_instances = 1
 [component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
-policy.initial_shards = 8
-policy.max_shards = 8
+policy.initial_shards = 1
+policy.max_shards = 1
 
 [component_specs.users.children.user_shard]
 kind = "shard"
@@ -87,7 +88,7 @@ delegated_token_verifier = true
 role_attestation_cache = true
 
 [component_specs.users.spawn_grants.user_hub.user_shard]
-maximum_instances_per_parent = 8
+maximum_instances_per_parent = 1
 
 [component_groups.qualification.components.catalogue]
 component_spec = "catalogue"

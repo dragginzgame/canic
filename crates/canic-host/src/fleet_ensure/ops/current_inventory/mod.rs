@@ -2768,7 +2768,7 @@ mod tests {
     }
 
     #[test]
-    fn toko_fresh_fleet_application_candid_comes_from_immutable_artifact_path() {
+    fn fresh_fleet_application_candid_comes_from_immutable_artifact_path() {
         let root = crate::test_support::temp_dir("terminal-artifact-candid");
         let artifact_parent = root.join(".icp/release/artifacts/managed_component");
         fs::create_dir_all(&artifact_parent).expect("create immutable artifact directory");
@@ -2783,7 +2783,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn toko_fresh_fleet_protocol_candid_rejects_final_symlink() {
+    fn fresh_fleet_protocol_candid_rejects_final_symlink() {
         use std::os::unix::fs::symlink;
 
         let root = crate::test_support::temp_dir("terminal-protocol-sidecar-link");

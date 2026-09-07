@@ -314,6 +314,20 @@ run_test() {
         return
     fi
     local started_at="$SECONDS"
+    if [[ "$MODE" = "targeted-pocketic" && "$TARGETED_POCKETIC_TEST" == *::* ]]; then
+        local listing selected
+        echo "==> verifying exact test identity (listing only)"
+        listing="$(cargo test --locked "${cargo_args[@]}" -- "${libtest_args[@]}" --list)" || {
+            echo "cannot list the selected PocketIC test: $TARGETED_POCKETIC_TEST" >&2
+            return 1
+        }
+        selected="$(awk -v expected="$TARGETED_POCKETIC_TEST: test" \
+            '$0 == expected { count++ } END { print count + 0 }' <<<"$listing")"
+        if [[ "$selected" -ne 1 ]]; then
+            echo "exact PocketIC selector must resolve to one test; found $selected: $TARGETED_POCKETIC_TEST" >&2
+            return 1
+        fi
+    fi
     local status=0
     case "$execution" in
         parallel)
@@ -368,7 +382,7 @@ run_serial_pocketic_test() {
 
 is_governed_canic_host_pocketic_test() {
     [[ "$TARGETED_POCKETIC_TEST" = \
-        'fleet_ensure::tests::governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects' ]]
+        'fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects' ]]
 }
 
 run_inventory_tests() {
@@ -660,10 +674,10 @@ run_serial_pocketic_test \
 # PocketIC-backed integration suites.
 # Receipt, timer and lifecycle use the same internal-test build environment and
 # target directory, so clear once before the group and retain Cargo freshness
-# across the remaining binaries.
+# across the remaining binaries. The ignored instruction-audit target shares
+# this invocation for compile coverage; its explicit audit runner owns execution.
 run_pic_inventory_tests "canic-tests runtime PocketIC suite" runtime
 run_pic_inventory_tests "canic-tests blob-storage PocketIC suite" blob-storage
 run_pic_inventory_tests "canic-tests payload-limit PocketIC suite" payload-limits
-run_pic_inventory_tests "canic-tests instruction-audit PocketIC suite" instruction-audit
 
 finish_test_run

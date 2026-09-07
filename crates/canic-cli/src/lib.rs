@@ -191,7 +191,10 @@ pub fn run<I>(args: I) -> Result<(), CliError>
 where
     I: IntoIterator<Item = OsString>,
 {
-    let args = args.into_iter().collect::<Vec<_>>();
+    let mut args = args.into_iter().collect::<Vec<_>>();
+    if args.is_empty() {
+        args.push(OsString::from("--help"));
+    }
     if let Some(option) = misplaced_global_option(&args) {
         let error = top_level_command().error(
             ErrorKind::UnknownArgument,

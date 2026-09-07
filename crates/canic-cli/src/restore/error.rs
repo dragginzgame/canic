@@ -25,11 +25,6 @@ pub enum RestoreCommandError {
     RequireVerifiedNeedsBackupDir,
 
     #[error(
-        "restore backup reference {backup_ref} has no prepared plan at {path}; run `canic restore prepare {backup_ref}` first"
-    )]
-    PreparedPlanMissing { backup_ref: String, path: String },
-
-    #[error(
         "restore backup reference {backup_ref} has no prepared apply journal at {path}; run `canic restore prepare {backup_ref}` first"
     )]
     PreparedJournalMissing { backup_ref: String, path: String },
@@ -214,11 +209,8 @@ pub enum RestoreCommandError {
     #[error(transparent)]
     Persistence(#[from] PersistenceError),
 
-    #[error("backup reference {reference} was not found")]
-    BackupReferenceNotFound { reference: String },
-
-    #[error("backup reference {reference} is ambiguous")]
-    BackupReferenceAmbiguous { reference: String },
+    #[error(transparent)]
+    BackupReference(#[from] crate::backup::BackupCommandError),
 
     #[error(transparent)]
     RestorePlan(#[from] RestorePlanError),

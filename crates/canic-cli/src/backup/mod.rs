@@ -37,6 +37,7 @@ use options::{
 };
 use prune::backup_prune;
 use reference::backup_list;
+pub(crate) use reference::resolve_backup_reference;
 #[cfg(test)]
 use reference::resolve_backup_reference_in;
 use render::{

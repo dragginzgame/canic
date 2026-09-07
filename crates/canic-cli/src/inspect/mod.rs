@@ -546,6 +546,7 @@ fn command() -> ClapCommand {
 
 fn canister_command() -> ClapCommand {
     ClapCommand::new("canister")
+        .bin_name("canic inspect canister")
         .about("Inspect one explicit canister principal")
         .disable_help_flag(true)
         .arg(
@@ -561,6 +562,7 @@ fn canister_command() -> ClapCommand {
 
 fn fleet_command() -> ClapCommand {
     ClapCommand::new("fleet")
+        .bin_name("canic inspect fleet")
         .about("Inspect one role in a terminal current Fleet")
         .disable_help_flag(true)
         .arg(

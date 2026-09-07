@@ -4244,7 +4244,7 @@ fn tampered_reviewed_plan_fails_before_any_effect() {
     clippy::too_many_lines,
     reason = "one governed journey keeps literal-zero planning, lost-Create resume, convergence and second-run proof together"
 )]
-fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
+fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects() {
     use ic_testkit::pic::PocketIcBuilder;
     use ic_testkit::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 
@@ -4691,15 +4691,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
     root_desired.initial_cycles = "1000000000000".to_string();
     root_desired.minimum_cycles = "500000000000".to_string();
     canisters.push(root_desired);
-    for role in [
-        "coordinator",
-        "store",
-        "discovery",
-        "projects",
-        "project_registry",
-        "market",
-        "users",
-    ] {
+    for role in ["coordinator", "service"] {
         let mut canister = desired_canister(role, None, false, &wasm, None);
         canister.kind = if role == "coordinator" {
             DesiredCanisterKind::Coordinator
@@ -4716,7 +4708,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         canisters,
         cycles_ledger: LEDGER.to_string(),
         environment: "local".to_string(),
-        fleet: "toko-shaped".to_string(),
+        fleet: "synthetic".to_string(),
         ledger_fee_cycles: "0".to_string(),
         management_creation_fee_cycles: "0".to_string(),
         material_cycle_threshold: "1000000".to_string(),
@@ -4726,17 +4718,9 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         operator: CONTROLLER.to_string(),
         protocol: None,
         protocol_steps: [
-            ("store-bootstrap", "store"),
-            ("registry-join", "coordinator"),
-            ("registry-activation", "coordinator"),
-            ("root-registry-sync", "root"),
-            ("admission-projection", "root"),
-            ("activate-discovery", "discovery"),
-            ("activate-projects", "projects"),
-            ("activate-project-registry", "project_registry"),
-            ("activate-market", "market"),
-            ("activate-users", "users"),
-            ("fleet-catalog-publication", "coordinator"),
+            ("prepare-coordinator", "coordinator"),
+            ("prepare-root", "root"),
+            ("activate-service", "service"),
         ]
         .into_iter()
         .map(|(name, canister)| protocol_step_for(&root, name, canister))
@@ -4760,7 +4744,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         &root,
         &desired,
         &source,
-        "toko-shaped",
+        "synthetic",
         1_800_000_000_000_000_000,
         &mut platform,
     )
@@ -4776,13 +4760,13 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
             &root,
             &desired,
             &source,
-            "toko-shaped",
+            "synthetic",
             &planned.plan.plan_sha256,
             &mut platform,
         ),
         Err(workflow::EnsureWorkflowError::Platform(_))
     ));
-    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&root, "local", "toko-shaped");
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&root, "local", "synthetic");
     let interrupted = crate::fleet_ensure::ops::read_journal(&paths)
         .expect("read interrupted zero-estate journal")
         .expect("interrupted zero-estate journal");
@@ -4817,7 +4801,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         &root,
         &desired,
         &source,
-        "toko-shaped",
+        "synthetic",
         &planned.plan.plan_sha256,
         &mut restarted,
     )
@@ -4831,7 +4815,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         &root,
         &desired,
         &source,
-        "toko-shaped",
+        "synthetic",
         1_800_000_000_000_000_100,
         &mut restarted,
     )
@@ -4848,7 +4832,7 @@ fn governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects() {
         &root,
         &desired,
         &source,
-        "toko-shaped",
+        "synthetic",
         &second.plan.plan_sha256,
         &mut restarted,
     )

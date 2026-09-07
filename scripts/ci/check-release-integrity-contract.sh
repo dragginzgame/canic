@@ -469,12 +469,12 @@ test_is_ignored() {
     ' "$source_file"
 }
 governed_host_pocketic_tests=(
-    'fleet_ensure::tests::governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects'
+    'fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects'
 )
 test_is_ignored \
     "$FLEET_ENSURE_TESTS" \
-    'governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects' ||
-    fail "the Toko-shaped Fleet Ensure PocketIC proof is not excluded from ordinary tests"
+    'governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects' ||
+    fail "the fresh-estate Fleet Ensure PocketIC proof is not excluded from ordinary tests"
 for governed_test in "${governed_host_pocketic_tests[@]}"; do
     governed_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" targeted-pocketic "$governed_test")" ||
         fail "the targeted canic-host PocketIC plan cannot resolve $governed_test"

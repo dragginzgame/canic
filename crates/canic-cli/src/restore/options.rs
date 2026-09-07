@@ -9,7 +9,7 @@ use crate::{
 use clap::{ArgGroup, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};
 
-use super::{RestoreCommandError, apply_usage, plan_usage, prepare_usage, run_usage, status_usage};
+use super::{RestoreCommandError, plan_usage, prepare_usage, run_usage, status_usage};
 
 const BACKUP_REF: &str = "backup-ref";
 const RESTORE_PLAN_HELP_AFTER: &str = "\
@@ -20,10 +20,6 @@ const RESTORE_PREPARE_HELP_AFTER: &str = "\
 Examples:
   canic restore prepare 1 --require-verified --require-restore-ready
   canic restore prepare 1 --mapping restore-map.json";
-const RESTORE_APPLY_HELP_AFTER: &str = "\
-Examples:
-  canic restore apply 1 --dry-run
-  canic restore apply --plan restore-plan.json --backup-dir backups/deployment-test-YYYYMMDD-HHMMSS --dry-run";
 const RESTORE_RUN_HELP_AFTER: &str = "\
 Examples:
   canic restore run 1 --dry-run
@@ -156,63 +152,6 @@ pub(super) fn restore_prepare_command() -> ClapCommand {
         .arg(flag_arg("require-verified").long("require-verified"))
         .arg(flag_arg("require-restore-ready").long("require-restore-ready"))
         .after_help(RESTORE_PREPARE_HELP_AFTER)
-}
-
-///
-/// RestoreApplyOptions
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct RestoreApplyOptions {
-    pub(super) backup_ref: Option<String>,
-    pub(super) plan: Option<PathBuf>,
-    pub(super) backup_dir: Option<PathBuf>,
-    pub(super) out: Option<PathBuf>,
-    pub(super) journal_out: Option<PathBuf>,
-    pub(super) dry_run: bool,
-}
-
-impl RestoreApplyOptions {
-    pub(super) fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(restore_apply_command(), args)
-            .map_err(|_| RestoreCommandError::Usage(apply_usage()))?;
-
-        Ok(Self {
-            backup_ref: string_option(&matches, BACKUP_REF),
-            plan: path_option(&matches, "plan"),
-            backup_dir: path_option(&matches, "backup-dir"),
-            out: path_option(&matches, "out"),
-            journal_out: path_option(&matches, "journal-out"),
-            dry_run: matches.get_flag("dry-run"),
-        })
-    }
-}
-
-pub(super) fn restore_apply_command() -> ClapCommand {
-    ClapCommand::new("apply")
-        .bin_name("canic restore apply")
-        .about("Render restore operations and optionally write an apply journal")
-        .disable_help_flag(true)
-        .group(
-            ArgGroup::new("plan-source")
-                .args([BACKUP_REF, "plan"])
-                .required(true)
-                .multiple(false),
-        )
-        .arg(value_arg(BACKUP_REF).value_name(BACKUP_REF))
-        .arg(value_arg("plan").long("plan").value_name("file"))
-        .arg(value_arg("backup-dir").long("backup-dir").value_name("dir"))
-        .arg(value_arg("out").long("out").value_name("file"))
-        .arg(
-            value_arg("journal-out")
-                .long("journal-out")
-                .value_name("file"),
-        )
-        .arg(flag_arg("dry-run").long("dry-run").required(true))
-        .after_help(RESTORE_APPLY_HELP_AFTER)
 }
 
 ///

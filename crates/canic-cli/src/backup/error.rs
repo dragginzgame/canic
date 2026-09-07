@@ -38,7 +38,9 @@ pub enum BackupCommandError {
     #[error("backup reference {reference} was not found under backups; run `canic backup list`")]
     BackupReferenceNotFound { reference: String },
 
-    #[error("backup reference {reference} is ambiguous under backups; use `--dir <dir>`")]
+    #[error(
+        "backup reference {reference} is ambiguous under backups; select an explicit backup directory"
+    )]
     BackupReferenceAmbiguous { reference: String },
 
     #[error("manifest: {0}")]
