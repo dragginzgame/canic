@@ -139,6 +139,7 @@ fn estate_seed_retains_explicit_fleet_id_independent_from_operator() {
         r#"
 schema_version = 1
 fleet_id = "{fleet_id}"
+management_creation_fee_cycles = "500B"
 coordinator = "{coordinator}"
 roots = []
 "#
@@ -146,6 +147,37 @@ roots = []
     .expect("estate seed with retained Fleet ID");
 
     assert_eq!(seed.fleet_id.to_string(), fleet_id);
+}
+
+#[test]
+fn estate_creation_fee_is_required_and_uses_compact_cycle_units() {
+    let operator = Principal::from_slice(&[31]).to_text();
+    let subnet = Principal::from_slice(&[32]).to_text();
+    let source = multi_component_source(&operator, &subnet, &subnet);
+    let valid = retained_estate_seed_toml(
+        "a4".repeat(32).parse().expect("Fleet ID"),
+        &Principal::from_slice(&[33]).to_text(),
+        &subnet,
+        &Principal::from_slice(&[34]).to_text(),
+        &Principal::from_slice(&[35]).to_text(),
+        [
+            &Principal::from_slice(&[36]).to_text(),
+            &Principal::from_slice(&[37]).to_text(),
+        ],
+    );
+    let missing = valid.replace("management_creation_fee_cycles = \"500B\"\n", "");
+    assert!(toml::from_str::<EstateSeed>(&missing).is_err());
+    for fee in ["0B", "500B", "1T"] {
+        let seed: EstateSeed = toml::from_str(&valid.replace("500B", fee)).unwrap();
+        validate_identity_seed(&source, &seed).expect("explicit current creation fee");
+    }
+    for fee in ["", "500000000000", "-500B"] {
+        let seed: EstateSeed = toml::from_str(&valid.replace("500B", fee)).unwrap();
+        assert!(matches!(
+            validate_identity_seed(&source, &seed),
+            Err(FleetGenerateError::SeedTopology(_))
+        ));
+    }
 }
 
 #[test]
@@ -163,7 +195,7 @@ fn retained_pool_imports_above_root_initialisation_maximum_reject_during_generat
         coordinator: Principal::from_slice(&[35]).to_text(),
         treasury: None,
         cycles_ledger: mainnet_cycles_ledger(),
-        management_creation_fee_cycles: None,
+        management_creation_fee_cycles: "500B".to_string(),
         roots: vec![RootSeed {
             placement_subnet: placement,
             root: root.clone(),
@@ -195,7 +227,7 @@ fn treasury_adoption_requires_one_observed_seeded_identity() {
         coordinator: Principal::from_slice(&[3]).to_text(),
         treasury: None,
         cycles_ledger: mainnet_cycles_ledger(),
-        management_creation_fee_cycles: None,
+        management_creation_fee_cycles: "500B".to_string(),
         roots: Vec::new(),
     };
     let observed = BTreeMap::<String, ObservedCanister>::new();
@@ -401,6 +433,7 @@ fn separate_treasury_seed_carries_exact_placement() {
         r#"
 schema_version = 1
 fleet_id = "{fleet_id}"
+management_creation_fee_cycles = "500B"
 coordinator = "{coordinator}"
 roots = []
 
@@ -493,6 +526,7 @@ cycles = "10T"
         r#"
 schema_version = 1
 fleet_id = "{}"
+management_creation_fee_cycles = "500B"
 coordinator = "{principal}"
 
 [[roots]]
@@ -696,7 +730,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         coordinator: coordinator.clone(),
         treasury: None,
         cycles_ledger: mainnet_cycles_ledger(),
-        management_creation_fee_cycles: None,
+        management_creation_fee_cycles: "500B".to_string(),
         roots: vec![RootSeed {
             placement_subnet: placement.clone(),
             root: fleet_root.clone(),
@@ -910,7 +944,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         "both paid pool assets remain explicitly retained"
     );
     assert_eq!(desired.ledger_fee_cycles, "0.1B");
-    assert_eq!(desired.management_creation_fee_cycles, "0B");
+    assert_eq!(desired.management_creation_fee_cycles, "500B");
+    assert_generated_retained_growth_fee(&root, &desired, &observed, &pool_one);
     assert_eq!(desired.material_cycle_threshold, "0.001B");
     assert_eq!(desired.maximum_observation_burn_cycles, "1T");
     assert_eq!(desired.maximum_update_burn_cycles, "1T");
@@ -994,7 +1029,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             seed: &invalid_fresh_seed_path,
             source: &source_path,
         }),
-        Err(FleetGenerateError::FreshSeedConflict(_))
+        Err(FleetGenerateError::SeedTopology(_))
     ));
     assert!(
         fresh
@@ -1350,6 +1385,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     write_journal(
         &fresh_apply_paths,
         &FleetEnsureJournalRecord {
+            funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
             estate_funding_required: None,
@@ -1636,6 +1672,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     write_journal(
         &retained_paths,
         &FleetEnsureJournalRecord {
+            funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
             estate_funding_required: None,
@@ -2992,6 +3029,45 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     fs::remove_dir_all(root).expect("remove retained journey root");
 }
 
+fn assert_generated_retained_growth_fee(
+    root: &Path,
+    generated: &DesiredFleet,
+    observed: &BTreeMap<String, ObservedCanister>,
+    workload: &str,
+) {
+    let mut desired = generated.clone();
+    desired.fleet = "retained-growth-fee".to_string();
+    let mut platform = RetainedEnsurePlatform::new(&desired, observed, workload)
+        .with_terminal_observation_protocol();
+    platform.estate_funding_balance_cycles = 0;
+    for canister in &desired.canisters {
+        if let Some(wasm) = &canister.wasm {
+            let live = platform
+                .live
+                .get_mut(canister.principal.as_ref().unwrap())
+                .unwrap();
+            live.module_sha256 = Some(sha256_hex(&fs::read(root.join(wasm)).unwrap()));
+            live.status = CanisterRuntimeStatus::Running;
+        }
+    }
+    let planned = workflow::plan(
+        root,
+        &desired,
+        &sha256_hex(&serde_json::to_vec(&desired).unwrap()),
+        &desired.fleet,
+        1_800_000_000_000_000_000,
+        &mut platform,
+    )
+    .expect("forecast paid growth from generated retained authority before any effect");
+    let domain = &planned.plan.conservation.estate_funding_domains[0];
+    assert_eq!(domain.required_creation_count, 1);
+    assert_eq!(domain.management_creation_fee_cycles, 500_000_000_000);
+    assert_eq!(domain.creation_amount_cycles, 6_500_000_000_000);
+    assert_eq!(domain.maximum_creation_fee_cycles, 500_100_000_000);
+    assert_eq!(domain.maximum_funding_cycles, 6_500_100_000_000);
+    assert_eq!(platform.mutations, 0);
+}
+
 struct RetainedEnsurePlatform {
     desired: DesiredFleet,
     estate_funding_balance_cycles: u128,
@@ -3912,6 +3988,7 @@ fn retained_estate_seed_toml(
         r#"
 schema_version = 1
 fleet_id = "{fleet_id}"
+management_creation_fee_cycles = "500B"
 coordinator = "{coordinator}"
 cycles_ledger = "{}"
 

@@ -4,6 +4,8 @@ mod baseline;
 mod build;
 mod fixture;
 #[cfg(test)]
+mod growth;
+#[cfg(test)]
 mod role_attestation;
 
 pub use baseline::{

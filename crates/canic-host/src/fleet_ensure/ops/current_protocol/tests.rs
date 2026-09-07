@@ -450,6 +450,34 @@ fn assert_retry_timestamp_is_not_durable_progress(
         shortfall: Cycles::new(110),
     };
     let mut funding_pause = status.clone();
+    let mut pending = canic_core::dto::pool::CanisterPoolCreation {
+        attempt_count: funding.attempt_count,
+        operation_id: funding.operation_id,
+        cycles_ledger: funding.cycles_ledger,
+        placement_subnet: principal(11),
+        root: funding.root,
+        ledger_amount: funding.creation_amount.clone(),
+        ledger_fee: funding.ledger_fee.clone(),
+        readiness_floor: funding.readiness_floor.clone(),
+        creation_execution_margin: funding.execution_margin.clone(),
+        management_creation_fee: funding.management_creation_fee.clone(),
+        created_at_time_ns: 1,
+        last_attempt_at_ns: funding.last_attempt_at_ns,
+        progress: canic_core::dto::pool::CanisterPoolCreationProgress::WaitingForFunding {
+            available: funding.available.clone(),
+            attempt_count: funding.attempt_count,
+            last_attempt_at_ns: funding.last_attempt_at_ns,
+            observed_at_ns: 11,
+            required: funding.required.clone(),
+            retry_at_ns: funding.retry_at_ns,
+            shortfall: funding.shortfall.clone(),
+        },
+    };
+    assert_eq!(pool_funding_required(&pending), Some(funding.clone()));
+    pending.progress = canic_core::dto::pool::CanisterPoolCreationProgress::Intent {
+        uncertain_result: true,
+    };
+    assert!(pool_funding_required(&pending).is_none());
     funding_pause.phase = FleetComponentProvisioningPhase::ProvisioningRoots;
     funding_pause.estate_funding_required = Some(funding.clone());
     let observation = component_provisioning_observation(false, &funding_pause)

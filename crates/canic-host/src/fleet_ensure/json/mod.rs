@@ -35,6 +35,7 @@ pub fn report_json_value(report: &FleetEnsureReport) -> Result<Value, serde_json
         &report.actual_conservation,
     )?;
     insert_serialized(&mut projection, "effects_applied", &report.effects_applied)?;
+    insert_serialized(&mut projection, "funding_review", &report.funding_review)?;
     projection.insert("plan".to_string(), plan_json_value(&report.plan)?);
     insert_serialized(&mut projection, "terminal", &report.terminal)?;
     Ok(Value::Object(projection))

@@ -2732,8 +2732,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     }
                     Err(error) => return Err(error.into()),
                 };
-                retry = observation.retry;
-                (observation.applied, observation.progress_identity)
+                return Ok(observation);
             }
             EnsureAction::Protocol { .. } => {
                 let observation = protocol::observe(

@@ -5,6 +5,9 @@
 //! Boundary: persists exact intent before each ops effect and reconciles it before any retry.
 
 mod continuation;
+mod funding;
+#[cfg(test)]
+mod funding_tests;
 mod root_reinstall;
 
 use crate::fleet_ensure::{
@@ -57,7 +60,7 @@ pub struct FreshPoolCreationUnderfundedError {
 /// Exact reviewed Root-account funding prerequisite that blocks protocol mutation.
 #[derive(Debug, ThisError)]
 #[error(
-    "Root {root} Cycles Ledger account {root_principal} on {cycles_ledger} has {available_cycles} cycles; {required_creation_count} autonomous creations require at most {maximum_creation_debit_cycles} cycles ({creation_amount_cycles} gross amount containing {readiness_floor_cycles} readiness floor, {management_creation_fee_cycles} management creation fee and {creation_execution_margin_cycles} execution margin, plus {ledger_fee_cycles} Ledger fee each; total reviewed fees {maximum_creation_fee_cycles}), shortfall {shortfall_cycles}; pending_creation={pending_creation_operation_id:?} attempts={attempt_count:?} last_attempt_at_ns={last_attempt_at_ns:?} retry_at_ns={retry_at_ns:?}; preserve this operation and obtain a newly reviewed Fleet ensure plan for the exact shortfall; do not fund the account out of band"
+    "Root {root} Cycles Ledger account {root_principal} on {cycles_ledger} has {available_cycles} cycles; {required_creation_count} autonomous creations require at most {maximum_creation_debit_cycles} cycles ({creation_amount_cycles} gross amount containing {readiness_floor_cycles} readiness floor, {management_creation_fee_cycles} management creation fee and {creation_execution_margin_cycles} execution margin, plus {ledger_fee_cycles} Ledger fee each; total reviewed fees {maximum_creation_fee_cycles}), shortfall {shortfall_cycles}; pending_creation={pending_creation_operation_id:?} attempts={attempt_count:?} last_attempt_at_ns={last_attempt_at_ns:?} retry_at_ns={retry_at_ns:?}; preserve this operation, repeat Fleet ensure without --apply and review funding_review, then apply its review_sha256 for the exact shortfall; do not fund the account out of band"
 )]
 pub struct EstateFundingRequiredError {
     pub attempt_count: Option<u32>,
@@ -270,13 +273,34 @@ where
     validate_path_identity(desired, requested_fleet)?;
     let paths = EnsurePaths::under(root, &desired.environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
-    if let Some(journal) = read_journal(&paths)?
+    if let Some(mut journal) = read_journal(&paths)?
         && journal.completion == FleetEnsureCompletion::InProgress
     {
         let retained = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
         let state = read_state(&paths, requested_fleet)?;
         verify_journal(&journal, &retained, requested_fleet, &state)?;
+        if journal.estate_funding_required.is_some() {
+            if let Some(reviewed) = retained.reviewed_desired.as_deref() {
+                platform
+                    .bind_reviewed_desired(reviewed.desired())
+                    .map_err(EnsureWorkflowError::Platform)?;
+            } else if retained.desired_sha256 != desired_sha256 {
+                return Err(EnsureWorkflowError::RetainedDesiredUnavailable {
+                    actual: desired_sha256.to_string(),
+                    expected: retained.desired_sha256.clone(),
+                });
+            }
+        }
+        let funding_review = funding::prepare(
+            &paths,
+            &retained,
+            &mut journal,
+            &state,
+            created_at_time,
+            platform,
+        )?;
         return Ok(FleetEnsureReport {
+            funding_review,
             actual_conservation: None,
             effects_applied: applied_count(&journal),
             plan: retained,
@@ -316,6 +340,7 @@ where
         })? {
             write_plan(&paths, &plan)?;
             return Ok(FleetEnsureReport {
+                funding_review: None,
                 actual_conservation: None,
                 effects_applied: 0,
                 plan,
@@ -335,6 +360,7 @@ where
         )? {
             write_plan(&paths, &plan)?;
             return Ok(FleetEnsureReport {
+                funding_review: None,
                 actual_conservation: None,
                 effects_applied: 0,
                 plan,
@@ -407,6 +433,7 @@ where
     bind_terminal_inventory_operation(&mut plan, terminal_inventory_operation_id);
     write_plan(&paths, &plan)?;
     Ok(FleetEnsureReport {
+        funding_review: None,
         actual_conservation: None,
         effects_applied: 0,
         plan,
@@ -651,14 +678,18 @@ where
     let paths = EnsurePaths::under(root, &desired.environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
     let retained_plan = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
-    if retained_plan.plan_sha256 != reviewed_plan_sha256 {
+    let retained_journal = read_journal(&paths)?;
+    if retained_plan.plan_sha256 != reviewed_plan_sha256
+        && !retained_journal
+            .as_ref()
+            .is_some_and(|journal| funding::accepts(&retained_plan, journal, reviewed_plan_sha256))
+    {
         return Err(EnsureWorkflowError::PlanDigestMismatch {
             actual: retained_plan.plan_sha256,
             expected: reviewed_plan_sha256.to_string(),
         });
     }
     let mut state = read_state(&paths, requested_fleet)?;
-    let retained_journal = read_journal(&paths)?;
     let in_progress = retained_journal
         .as_ref()
         .is_some_and(|journal| journal.completion == FleetEnsureCompletion::InProgress);
@@ -713,6 +744,7 @@ where
             FleetEnsureProgressState::PrerequisiteComplete,
         );
         return Ok(FleetEnsureReport {
+            funding_review: None,
             actual_conservation: Some(actual),
             effects_applied: 0,
             plan: retained_plan,
@@ -738,6 +770,7 @@ where
             FleetEnsurePhase::Complete,
         );
         return Ok(FleetEnsureReport {
+            funding_review: None,
             actual_conservation: Some(actual),
             effects_applied: 0,
             plan: retained_plan,
@@ -763,6 +796,7 @@ where
             FleetEnsureProgressState::PrerequisiteComplete,
         );
         return Ok(FleetEnsureReport {
+            funding_review: None,
             actual_conservation: None,
             effects_applied: applied_count(journal),
             plan: retained_plan,
@@ -785,6 +819,7 @@ where
                 &state,
             )?;
             let journal = FleetEnsureJournalRecord {
+                funding_reviews: Vec::new(),
                 successor_phases: Vec::new(),
                 completion: FleetEnsureCompletion::InProgress,
                 estate_funding_required: None,
@@ -814,6 +849,21 @@ where
         }
     };
 
+    funding::resume(
+        &paths,
+        &retained_plan,
+        &mut journal,
+        &state,
+        reviewed_plan_sha256,
+        platform,
+    )?;
+    if journal
+        .estate_funding_required
+        .as_ref()
+        .is_some_and(|pause| funding::covered(&journal, pause))
+    {
+        retain_estate_funding_pause(&paths, &mut journal, None)?;
+    }
     let mut terminal_state;
     loop {
         let execution_actions = continuation::actions(&retained_plan, &journal)
@@ -843,8 +893,9 @@ where
                     let funding_observation = platform
                         .observe(&journal.operation_id, &state)
                         .map_err(EnsureWorkflowError::Platform)?;
+                    let funded_plan = funding_plan(&retained_plan, &journal)?;
                     let required =
-                        estate_funding_requirement(&retained_plan, &state, &funding_observation)?;
+                        estate_funding_requirement(&funded_plan, &state, &funding_observation)?;
                     retain_estate_funding_pause(&paths, &mut journal, required.as_ref())?;
                     if let Some(required) = required {
                         report_progress_state(
@@ -952,7 +1003,9 @@ where
                     } else {
                         None
                     };
-                    if let Some(required) = protocol_funding_required.as_ref() {
+                    if let Some(required) = protocol_funding_required.as_ref()
+                        && !funding::covered(&journal, required)
+                    {
                         retain_estate_funding_pause(&paths, &mut journal, Some(required))?;
                         report_progress_state(
                             platform,
@@ -1274,6 +1327,7 @@ where
                 FleetEnsureProgressState::PrerequisiteComplete,
             );
             return Ok(FleetEnsureReport {
+                funding_review: None,
                 actual_conservation: Some(actual),
                 effects_applied: applied_count(&journal),
                 plan: retained_plan,
@@ -1299,6 +1353,7 @@ where
                 FleetEnsureProgressState::PrerequisiteComplete,
             );
             return Ok(FleetEnsureReport {
+                funding_review: None,
                 actual_conservation: Some(actual_conservation),
                 effects_applied: applied_count(&journal),
                 plan: retained_plan,
@@ -1479,6 +1534,7 @@ where
         FleetEnsurePhase::Complete,
     );
     Ok(FleetEnsureReport {
+        funding_review: None,
         actual_conservation: Some(actual_conservation),
         effects_applied: applied_count(&journal),
         plan: retained_plan,
@@ -1532,7 +1588,12 @@ fn report_progress_state<P: EnsurePlatform>(
         plan_sha256: plan.plan_sha256.clone(),
         phase,
         applied_effects: applied_count(journal),
-        reviewed_effects: continuation::actions(plan, journal).len(),
+        reviewed_effects: continuation::actions(plan, journal).len()
+            + journal
+                .funding_reviews
+                .iter()
+                .filter(|review| review.effect.is_some())
+                .count(),
     });
 }
 
@@ -2663,6 +2724,38 @@ where
     Ok(())
 }
 
+fn funding_plan<'a, E: std::error::Error + 'static>(
+    plan: &'a FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+) -> Result<std::borrow::Cow<'a, FleetEnsurePlan>, EnsureWorkflowError<E>> {
+    if journal.funding_reviews.is_empty() {
+        return Ok(std::borrow::Cow::Borrowed(plan));
+    }
+    let mut funded = plan.clone();
+    let (amount, fee) = funding::totals::<E>(journal, None)?;
+    let conservation = &mut funded.conservation;
+    conservation.maximum_operator_debit_cycles = conservation
+        .maximum_operator_debit_cycles
+        .checked_add(amount)
+        .and_then(|n| n.checked_add(fee))
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    conservation.maximum_new_funding_cycles = conservation
+        .maximum_new_funding_cycles
+        .checked_add(amount)
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    conservation.maximum_unavoidable_fee_cycles = conservation
+        .maximum_unavoidable_fee_cycles
+        .checked_add(fee)
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    for domain in &mut conservation.estate_funding_domains {
+        domain.maximum_funding_cycles = domain
+            .maximum_funding_cycles
+            .checked_add(funding::totals::<E>(journal, Some(&domain.root))?.0)
+            .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    }
+    Ok(std::borrow::Cow::Owned(funded))
+}
+
 fn verify_terminal_conservation<E>(
     plan: &FleetEnsurePlan,
     journal: &FleetEnsureJournalRecord,
@@ -2672,6 +2765,8 @@ fn verify_terminal_conservation<E>(
 where
     E: std::error::Error + 'static,
 {
+    let funded = funding_plan(plan, journal)?;
+    let conservation = &funded.conservation;
     let final_controlled_cycles = controlled_cycles(terminal)?;
     let operator_debit_cycles = journal
         .initial_operator_cycles
@@ -2681,23 +2776,23 @@ where
                 "operator balance increased during apply; review a new plan".to_string(),
             )
         })?;
-    if operator_debit_cycles > plan.conservation.maximum_operator_debit_cycles {
+    if operator_debit_cycles > conservation.maximum_operator_debit_cycles {
         return Err(EnsureWorkflowError::Conservation(format!(
             "operator debit {operator_debit_cycles} exceeded reviewed maximum {}",
-            plan.conservation.maximum_operator_debit_cycles
+            conservation.maximum_operator_debit_cycles
         )));
     }
     let received_new_funding_cycles = operator_debit_cycles
-        .checked_sub(plan.conservation.maximum_unavoidable_fee_cycles)
+        .checked_sub(conservation.maximum_unavoidable_fee_cycles)
         .ok_or_else(|| {
             EnsureWorkflowError::Conservation(
                 "operator debit was below the exact reviewed fee total".to_string(),
             )
         })?;
-    if received_new_funding_cycles > plan.conservation.maximum_new_funding_cycles {
+    if received_new_funding_cycles > conservation.maximum_new_funding_cycles {
         return Err(EnsureWorkflowError::Conservation(format!(
             "received funding {received_new_funding_cycles} exceeded reviewed maximum {}",
-            plan.conservation.maximum_new_funding_cycles
+            conservation.maximum_new_funding_cycles
         )));
     }
     let (estate_funding_cycles, exact_estate_creation_fee_cycles) =
@@ -2725,16 +2820,16 @@ where
                     .to_string(),
             )
         })?;
-    if measured_execution_burn_cycles > plan.conservation.maximum_execution_burn_cycles {
+    if measured_execution_burn_cycles > conservation.maximum_execution_burn_cycles {
         return Err(EnsureWorkflowError::Conservation(format!(
             "measured execution burn {measured_execution_burn_cycles} exceeded reviewed maximum {}",
-            plan.conservation.maximum_execution_burn_cycles
+            conservation.maximum_execution_burn_cycles
         )));
     }
     Ok(ActualCycleConservation {
         estate_funding_cycles,
         exact_estate_creation_fee_cycles,
-        exact_unavoidable_fee_cycles: plan.conservation.maximum_unavoidable_fee_cycles,
+        exact_unavoidable_fee_cycles: conservation.maximum_unavoidable_fee_cycles,
         final_controlled_cycles,
         measured_execution_burn_cycles,
         observed_starting_cycles: journal.initial_controlled_cycles,
@@ -2792,6 +2887,19 @@ where
         return Err(EnsureWorkflowError::JournalIntegrity);
     }
 
+    estate_creation_costs(state, terminal, domain)
+}
+
+fn estate_creation_costs<E: std::error::Error + 'static>(
+    state: &FleetEnsureStateRecord,
+    observation: &FleetObservation,
+    domain: &EstateFundingDomainPlan,
+) -> Result<(u128, u128), EnsureWorkflowError<E>> {
+    let pool = observation
+        .estate_funding_domains
+        .get(&domain.root)
+        .and_then(|domain| domain.pool.as_ref())
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
     let initial = resolved_initial_pool_assets(domain, state)?;
     let terminal_principals = pool
         .assets
@@ -2988,7 +3096,9 @@ where
                 terminal,
                 domain,
             )?;
-            let funding = applied_estate_funding_for_domain(plan, journal, state, domain)?;
+            let funding = applied_estate_funding_for_domain(plan, journal, state, domain)?
+                .checked_add(funding::totals::<E>(journal, Some(&domain.root))?.0)
+                .ok_or(EnsureWorkflowError::JournalIntegrity)?;
             let expected_terminal_balance = initial
                 .checked_add(funding)
                 .and_then(|available| available.checked_sub(creation_debit))
@@ -3038,7 +3148,7 @@ where
         .flat_map(|canister| &canister.actions)
         .find(|action| matches!(action, EnsureAction::FundEstate { .. }));
     let Some(action) = action else {
-        return if domain.shortfall_cycles == 0 {
+        return if domain.maximum_funding_cycles == 0 {
             Ok(0)
         } else {
             Err(EnsureWorkflowError::JournalIntegrity)
@@ -3159,6 +3269,7 @@ where
     {
         return Err(EnsureWorkflowError::JournalIntegrity);
     }
+    funding::verify(plan, journal, state)?;
     continuation::verify_records(plan, journal)?;
     let actions = continuation::actions(plan, journal);
     let effect_count_matches = journal.effects.len() <= actions.len();
@@ -3211,6 +3322,15 @@ fn estate_funding_pause_is_exact(
     let Some(required) = journal.estate_funding_required.as_ref() else {
         return true;
     };
+    journal.completion == FleetEnsureCompletion::InProgress
+        && estate_funding_record_is_exact(required, plan, state)
+}
+
+fn estate_funding_record_is_exact(
+    required: &EstateFundingRequiredRecord,
+    plan: &FleetEnsurePlan,
+    state: &FleetEnsureStateRecord,
+) -> bool {
     let Some(reviewed) = plan
         .conservation
         .estate_funding_domains
@@ -3219,9 +3339,8 @@ fn estate_funding_pause_is_exact(
     else {
         return false;
     };
-    let operation_authority_is_exact = journal.completion == FleetEnsureCompletion::InProgress
-        && required.operation_id == plan.operation_id
-        && required.plan_sha256 == plan.plan_sha256;
+    let operation_authority_is_exact =
+        required.operation_id == plan.operation_id && required.plan_sha256 == plan.plan_sha256;
     let funding_authority_is_exact =
         EstateFundingPauseAuthority::from(required) == EstateFundingPauseAuthority::from(reviewed);
     let root_authority_is_exact =
@@ -3642,6 +3761,12 @@ fn applied_count(journal: &FleetEnsureJournalRecord) -> u32 {
         journal
             .effects
             .iter()
+            .chain(
+                journal
+                    .funding_reviews
+                    .iter()
+                    .filter_map(|review| review.effect.as_ref()),
+            )
             .filter(|effect| matches!(effect.state, EffectState::Applied))
             .count(),
     )
@@ -3808,7 +3933,7 @@ mod tests {
         }
     }
 
-    fn retained_evidence() -> (FleetEnsureStateRecord, FleetEnsureJournalRecord) {
+    pub(super) fn retained_evidence() -> (FleetEnsureStateRecord, FleetEnsureJournalRecord) {
         let state = FleetEnsureStateRecord {
             active_registry: None,
             completed_reinstall_action_sha256: BTreeMap::from([(
@@ -3825,6 +3950,7 @@ mod tests {
             topology: BTreeMap::new(),
         };
         let journal = FleetEnsureJournalRecord {
+            funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::ReplanRequired,
             estate_funding_required: None,
@@ -3853,7 +3979,7 @@ mod tests {
         (state, journal)
     }
 
-    fn estate_funding_plan() -> FleetEnsurePlan {
+    pub(super) fn estate_funding_plan() -> FleetEnsurePlan {
         FleetEnsurePlan {
             continuation: None,
             canisters: Vec::new(),
@@ -3908,7 +4034,7 @@ mod tests {
         }
     }
 
-    fn estate_funding_observation(balance_cycles: Option<u128>) -> FleetObservation {
+    pub(super) fn estate_funding_observation(balance_cycles: Option<u128>) -> FleetObservation {
         FleetObservation {
             additional_controlled_cycles: BTreeMap::new(),
             canisters: BTreeMap::new(),

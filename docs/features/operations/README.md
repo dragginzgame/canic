@@ -26,6 +26,8 @@ canic fleet ensure staging
 
 Add `--fresh --management-creation-fee-cycles <exact-fee>` to generation when
 the selected environment has no retained estate seed or live Fleet canister.
+Retained seeds must also declare `management_creation_fee_cycles` explicitly
+for future pool growth; generation never defaults this fee to zero.
 
 ## Boundary
 
