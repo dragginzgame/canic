@@ -18,7 +18,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   shows help when `canic` is run without a command, hard-cuts redundant restore
   preparation, corrects backup selection and command help, and carries explicit
   creation fees into retained-estate growth plans (`CANIC-140`) and resumes
-  funding pauses through an exact additional review (`CANIC-142`).
+  funding pauses through an exact additional review (`CANIC-142`), checking live
+  Ledger balances before reporting retained funding pauses.
 - `0.110.8` makes authorization state capability-owned, advances Fleet launch
   and recovery corrections, qualifies reviewed Fleet reinstall and accounts for
   Ledger transfers before deletion, qualifies IcyDB 0.253.0 lifecycle composition and

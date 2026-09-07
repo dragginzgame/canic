@@ -83,6 +83,37 @@ for release approval with the 0.110.9 changelog draft. Package versions remain
 0.110.8. No broad validation, Git publication, version transaction or downstream
 mutation was performed.
 
+## Retained funding-status correction
+
+The subsequent maintainer validation exposed a false funding pause in the
+four-Workload refill case. The transfer had completed, but Root still reported
+the zero balance retained by its earlier `WaitingForFunding` attempt. Root's
+existing funding retry interval is 60 seconds; that status is not a fresh Ledger
+observation. Preserving the previously dropped pause made this race visible.
+
+The production adapter now checks the exact configured Root and Ledger and
+queries the current account balance before reporting a funding pause. A funded
+account continues ordinary bounded protocol reconciliation; an underfunded
+account reports its current balance and shortfall. This does not mark the
+creation complete, change its identity, reset progress backoff or issue another
+transfer. The small underforecast proof had not exercised this already-funded
+retained status; the existing four-Workload case remains its runtime regression.
+
+The focused host regression passes for zero, partial, exact and excess funding
+and rejects changed Root/Ledger identities. Warning-denied all-target/all-feature
+host Clippy passes. Logs: `/tmp/canic-142-stale-funding-host.log` and
+`/tmp/canic-142-stale-funding-clippy.log`.
+
+The exact previously failing four-Workload refill case passes on the final source
+in 225.83s (264s runner, including compilation). It retains fee rejection,
+one transfer despite response loss, autonomous creation response recovery,
+four Ready assets, exact conservation and effect-free terminal replay. Log:
+`/tmp/canic-142-stale-funding-pocketic.log`. Formatting and diff checks pass.
+The accepted batch is ready for release approval again, with its existing
+0.110.9 changelog draft updated. This is focused qualification; the interrupted
+maintainer release suite was not restarted, and its remaining cases were not
+executed by this correction run. CANIC-141 remains deferred.
+
 The operator guide and open changelog describe the review command. Publication,
 adoption and downstream mainnet qualification remain separate. Toko Miner must
 adopt the published correction, preserve the current same-release operation if
