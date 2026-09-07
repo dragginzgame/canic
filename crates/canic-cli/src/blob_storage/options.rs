@@ -151,7 +151,7 @@ fn common_options(matches: &clap::ArgMatches) -> CommonOptions {
     }
 }
 
-fn blob_storage_command() -> ClapCommand {
+pub(super) fn blob_storage_command() -> ClapCommand {
     ClapCommand::new(COMMAND_NAME)
         .bin_name("canic blob-storage")
         .disable_help_flag(true)

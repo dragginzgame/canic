@@ -11,5 +11,6 @@ mod timestamp;
 
 pub(super) use list::backup_list;
 pub(super) use resolve::resolve_backup_dir;
+pub(crate) use resolve::resolve_backup_reference;
 #[cfg(test)]
 pub(super) use resolve::resolve_backup_reference_in;

@@ -14,8 +14,8 @@ use std::fs;
 #[test]
 fn backup_reference_resolves_rows_and_backup_ids() {
     let root = temp_dir("canic-cli-backup-reference");
-    let first = root.join("deployment-demo-20260507-120000");
-    let second = root.join("deployment-demo-20260507-130000");
+    let first = root.join("z-older");
+    let second = root.join("a-newer");
 
     BackupLayout::new(first.clone())
         .publish_manifest(&valid_manifest_with("backup-old", "2026-05-07T12:00:00Z"))
@@ -27,6 +27,10 @@ fn backup_reference_resolves_rows_and_backup_ids() {
     let by_row = resolve_backup_reference_in(&root, "1").expect("resolve row");
     let by_id = resolve_backup_reference_in(&root, "backup-old").expect("resolve id");
     let missing = resolve_backup_reference_in(&root, "99").expect_err("missing row rejects");
+    for reference in ["", "0", "184467440737095516160"] {
+        let error = resolve_backup_reference_in(&root, reference).expect_err("invalid row rejects");
+        std::assert_matches!(error, BackupCommandError::BackupReferenceNotFound { .. });
+    }
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(by_row, second);

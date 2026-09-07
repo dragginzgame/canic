@@ -4532,7 +4532,7 @@ mod tests {
     }
 
     #[test]
-    fn toko_fresh_fleet_create_responses_retain_the_exact_requested_balance() {
+    fn fresh_fleet_create_responses_retain_the_exact_requested_balance() {
         let canister = Principal::from_slice(&[9; 29]);
         let canister_text = canister.to_text();
         for (response, receipt) in [

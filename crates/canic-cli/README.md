@@ -1,5 +1,8 @@
 # canic-cli
 
+Running `canic` without arguments prints top-level help and exits successfully,
+just like `canic --help`.
+
 `canic-cli` publishes the `canic` operator binary. The maintained command
 families are:
 
@@ -27,16 +30,16 @@ token
 toolchain
 ```
 
-Commands removed by the pre-1.0 hard cut have no aliases or fallback parser.
-In particular, the former `canic install` fresh-install mode, deployment-plan,
-adoption, retained recovery, retained Root repair, and recovery-bundle modes
-are not accepted. Current
 Authority-bearing Fleet commands read only a terminal `fleet ensure` inventory
-and its exact Registry protocol bindings; they do not consult a former install
-cache. This includes `info subnets`, which requires a complete agreeing live
+and its exact Registry protocol bindings. This includes `info subnets`, which
+requires a complete agreeing live
 Coordinator Registry and Root-summary snapshot. `cycles funding` is protected
-current status only. Its former
-install-plan-owned policy-rotation flags are not retained.
+current status only.
+
+Snapshot restoration uses `restore plan` for offline review, `restore prepare`
+to validate artifacts and create or adopt the plan and journal, `restore run`
+to preview or execute journaled operations, and `restore status` to inspect
+progress. Backup references use the same row ordering as `backup list`.
 
 ## Install
 

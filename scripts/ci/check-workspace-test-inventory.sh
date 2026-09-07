@@ -45,7 +45,7 @@ while IFS=$'\t' read -r package target release_lane execution suite extra; do
         parallel/ordinary)
             parallel_count=$((parallel_count + 1))
             ;;
-        pocketic-serial/runtime | pocketic-serial/blob-storage | pocketic-serial/payload-limits | pocketic-serial/instruction-audit)
+        pocketic-serial/runtime | pocketic-serial/blob-storage | pocketic-serial/payload-limits)
             [ "$package" = "canic-tests" ] ||
                 fail "PocketIC target must belong to canic-tests: $key"
             pocketic_count=$((pocketic_count + 1))

@@ -62,6 +62,7 @@ where
 
 fn diagnostic_command() -> Command {
     Command::new("diagnostic")
+        .bin_name("canic diagnostic")
         .about("Look up one compact Canic diagnostic code")
         .after_help(DIAGNOSTIC_HELP_AFTER)
         .arg(

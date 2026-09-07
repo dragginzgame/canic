@@ -53,7 +53,7 @@ placement.minimum_distinct_roots = 2
 "#;
 
 #[test]
-fn toko_fresh_fleet_registry_prepare_classifies_typed_unavailable_status() {
+fn fresh_fleet_registry_prepare_classifies_typed_unavailable_status() {
     let error = CanisterProtocolError::Response {
         canister: Principal::anonymous(),
         method: protocol::CANIC_ROOT_STATUS,
@@ -193,7 +193,7 @@ fn live_root_authority_compiles_one_deterministic_registry_sequence() {
 }
 
 #[test]
-fn toko_fresh_fleet_generated_store_controllers_resolve_exact_principals() {
+fn fresh_fleet_generated_store_controllers_resolve_exact_principals() {
     let config = parse_config_model(CONFIG).expect("valid Component deployment config");
     let topology = config
         .compile_component_topology()
@@ -554,7 +554,7 @@ fn current_desired_state_rejects_component_demand_above_pool_target() {
     clippy::too_many_lines,
     reason = "one fixture binds application catalog bootstrap and deterministic replay"
 )]
-fn toko_fresh_fleet_store_bootstrap_is_deterministic() {
+fn fresh_fleet_store_bootstrap_is_deterministic() {
     let root = crate::test_support::temp_dir("current-store-sequence");
     let release = crate::release_build::plan_release_build(&root).expect("plan release build");
     let release_build_id = release.record.release_build_id;

@@ -45,11 +45,9 @@ fn restore_usage_lists_command_family() {
 #[test]
 fn restore_leaf_usage_lists_row_reference_examples() {
     let prepare = prepare_usage();
-    let apply = apply_usage();
     let status = status_usage();
 
     assert!(prepare.contains("canic restore prepare 1"));
-    assert!(apply.contains("canic restore apply 1 --dry-run"));
     assert!(status.contains("canic restore status 1 --require-ready"));
     assert!(status.contains("canic restore status 1 --require-complete"));
 }
@@ -123,48 +121,6 @@ fn parses_restore_prepare_options() {
     );
     assert!(options.require_verified);
     assert!(options.require_restore_ready);
-}
-
-// Ensure restore apply options require the explicit dry-run mode.
-#[test]
-fn parses_restore_apply_dry_run_options() {
-    let options = RestoreApplyOptions::parse([
-        OsString::from("--plan"),
-        OsString::from("restore-plan.json"),
-        OsString::from("--backup-dir"),
-        OsString::from("backups/run"),
-        OsString::from("--dry-run"),
-        OsString::from("--out"),
-        OsString::from("restore-apply-dry-run.json"),
-        OsString::from("--journal-out"),
-        OsString::from("restore-apply-journal.json"),
-    ])
-    .expect("parse apply options");
-
-    assert_eq!(options.backup_ref, None);
-    assert_eq!(options.plan, Some(PathBuf::from("restore-plan.json")));
-    assert_eq!(options.backup_dir, Some(PathBuf::from("backups/run")));
-    assert_eq!(
-        options.out,
-        Some(PathBuf::from("restore-apply-dry-run.json"))
-    );
-    assert_eq!(
-        options.journal_out,
-        Some(PathBuf::from("restore-apply-journal.json"))
-    );
-    assert!(options.dry_run);
-}
-
-// Ensure restore apply can use a prepared backup layout reference.
-#[test]
-fn parses_restore_apply_backup_ref_options() {
-    let options = RestoreApplyOptions::parse([OsString::from("1"), OsString::from("--dry-run")])
-        .expect("parse apply backup ref options");
-
-    assert_eq!(options.backup_ref.as_deref(), Some("1"));
-    assert_eq!(options.plan, None);
-    assert_eq!(options.backup_dir, None);
-    assert!(options.dry_run);
 }
 
 // Ensure restore run options parse the native runner dry-run command.
@@ -288,18 +244,6 @@ fn parses_restore_status_backup_ref_options() {
     assert!(options.require_ready);
     assert!(options.require_complete);
     assert!(options.require_no_attention);
-}
-
-// Ensure restore apply only renders no-mutation operation plans.
-#[test]
-fn restore_apply_requires_dry_run() {
-    let err = RestoreApplyOptions::parse([
-        OsString::from("--plan"),
-        OsString::from("restore-plan.json"),
-    ])
-    .expect_err("apply without dry-run should fail");
-
-    std::assert_matches!(err, RestoreCommandError::Usage(_));
 }
 
 // Ensure restore run requires an explicit execution mode.

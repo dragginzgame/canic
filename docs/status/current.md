@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 
 ## Purpose
 
@@ -25,12 +25,34 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.110.7` at
-`2cd3588b639f467e4f536461fcc7cec60af5719e`. Its governed marker records the
+Current development begins from published `v0.110.8` at
+`3e8c84cbd4e271d0d97ed2669524b008fcac7c73`. Its governed marker records the
 validated pre-version source below; immutable details are in
 [the 0.110 changelog](../changelog/0.110.md). Post-release work is retained
-under `Unreleased` until it forms a coherent batch. Source-development truth
+in the open changelog draft until it forms a coherent batch. Source-development truth
 comes from Git and the working tree.
+
+## Active Test Throughput Batch
+
+The maintainer authorized auditing and refining tests after publishing 0.110.8,
+then requested application-neutral fixtures. The open 0.110.9 draft covers
+smaller synthetic Fleet proofs, removal of repeated recovery setup, runner
+consolidation and exact-selector validation. Package versions remain 0.110.8.
+The [test throughput audit](../audits/reports/2026-09/2026-09-07/test-throughput-audit.md)
+owns coverage and focused evidence. This test-throughput batch is complete
+and ready to push within its scope: generated mixed-topology recovery/replay
+passes in 9m00s, prepared Failed-import repair in 4m24s, and generated reinstall
+in 7m24s. The smaller host proof, generator and catalogue regressions,
+protocol-inventory/changelog tests, affected-target Clippy, formatting and
+invalid-selector check pass. Full release duration remains unmeasured. No broad
+gate, version change, Git publication or deployment is inferred. The earlier
+0.110.8 implementation handoff below is retained as historical context.
+
+The maintainer also requested a CLI command audit. Its
+[ownership and cleanup report](../audits/reports/2026-09/2026-09-07/cli-command-audit.md)
+records the `restore apply` hard cut, shared backup selection and help fixes.
+These changes extend the open patch draft; they do not complete the independent
+test-throughput qualification above.
 
 ## Maintained 0.109 Contract
 
@@ -547,7 +569,7 @@ order is validation manifest, Ensure test platform, Component transition kernel,
 CLI/path utilities and controller-set normalization. Store-local GC ownership
 and an await-safe Root validation-context pilot remain deferred inputs.
 
-## Next Authorized Action
+## Historical 0.110.8 Validation Follow-up
 
 The accepted `CANIC-007` and `CANIC-132`–`CANIC-138` correction batch is
 implemented, with release validation still pending after the fixture

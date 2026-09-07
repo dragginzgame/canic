@@ -1,19 +1,18 @@
-use crate::output;
+use crate::{backup::resolve_backup_reference, output};
 use canic_backup::{
     manifest::DeploymentBackupManifest,
     persistence::BackupLayout,
     restore::{
         RestoreApplyDryRun, RestoreApplyJournal, RestoreMapping, RestorePlan, RestoreRunResponse,
-        create_or_adopt_restore_apply_journal, create_or_adopt_restore_plan,
-        write_restore_apply_journal, write_restore_plan,
+        create_or_adopt_restore_apply_journal, create_or_adopt_restore_plan, write_restore_plan,
     },
 };
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 use super::{
-    RestoreApplyOptions, RestoreCommandError, RestorePlanOptions, RestorePrepareOptions,
-    RestoreRunOptions, RestoreStatusOptions,
+    RestoreCommandError, RestorePlanOptions, RestorePrepareOptions, RestoreRunOptions,
+    RestoreStatusOptions,
 };
 
 const RESTORE_PLAN_FILE: &str = "restore-plan.json";
@@ -76,79 +75,12 @@ fn restore_plan_backup_dir(
     restore_backup_dir(options.backup_ref.as_deref(), options.backup_dir.as_deref())
 }
 
-fn resolve_backup_reference(reference: &str) -> Result<PathBuf, RestoreCommandError> {
-    let root = Path::new("backups");
-    let mut entries = if root.is_dir() {
-        std::fs::read_dir(root)?
-            .map(|entry| entry.map(|entry| entry.path()))
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .filter(|path| path.is_dir())
-            .filter_map(|path| {
-                BackupLayout::new(path.clone())
-                    .read_manifest()
-                    .ok()
-                    .map(|manifest| (manifest.backup_id, path))
-            })
-            .collect::<Vec<_>>()
-    } else {
-        Vec::new()
-    };
-    entries.sort_by(|left, right| right.1.cmp(&left.1));
-    if reference.bytes().all(|byte| byte.is_ascii_digit()) {
-        let index = reference.parse::<usize>().unwrap_or_default();
-        return entries
-            .get(index.saturating_sub(1))
-            .map(|(_, path)| path.clone())
-            .ok_or_else(|| RestoreCommandError::BackupReferenceNotFound {
-                reference: reference.to_string(),
-            });
-    }
-    let mut matches = entries
-        .into_iter()
-        .filter(|(backup_id, _)| backup_id == reference)
-        .map(|(_, path)| path)
-        .collect::<Vec<_>>();
-    match matches.len() {
-        0 => Err(RestoreCommandError::BackupReferenceNotFound {
-            reference: reference.to_string(),
-        }),
-        1 => Ok(matches.remove(0)),
-        _ => Err(RestoreCommandError::BackupReferenceAmbiguous {
-            reference: reference.to_string(),
-        }),
-    }
-}
-
 pub(super) fn restore_prepare_backup_dir(
     options: &RestorePrepareOptions,
 ) -> Result<PathBuf, RestoreCommandError> {
     restore_backup_dir(options.backup_ref.as_deref(), options.backup_dir.as_deref())?.ok_or(
         RestoreCommandError::MissingOption("backup-ref or --backup-dir"),
     )
-}
-
-pub(super) fn restore_apply_plan_path(
-    options: &RestoreApplyOptions,
-) -> Result<PathBuf, RestoreCommandError> {
-    if let Some(plan) = &options.plan {
-        return Ok(plan.clone());
-    }
-    let backup_dir = restore_backup_dir(options.backup_ref.as_deref(), None)?
-        .ok_or(RestoreCommandError::MissingOption("backup-ref or --plan"))?;
-    require_prepared_plan_path(
-        options.backup_ref.as_deref().unwrap_or_default(),
-        default_restore_plan_path(&backup_dir),
-    )
-}
-
-pub(super) fn restore_apply_backup_dir(
-    options: &RestoreApplyOptions,
-) -> Result<Option<PathBuf>, RestoreCommandError> {
-    if let Some(backup_dir) = &options.backup_dir {
-        return Ok(Some(backup_dir.clone()));
-    }
-    restore_backup_dir(options.backup_ref.as_deref(), None)
 }
 
 pub(super) fn restore_run_journal_path(
@@ -201,20 +133,6 @@ fn restore_journal_path(
     )
 }
 
-pub(super) fn require_prepared_plan_path(
-    backup_ref: &str,
-    path: PathBuf,
-) -> Result<PathBuf, RestoreCommandError> {
-    if !path.is_file() {
-        return Err(RestoreCommandError::PreparedPlanMissing {
-            backup_ref: backup_ref.to_string(),
-            path: path.display().to_string(),
-        });
-    }
-
-    Ok(path)
-}
-
 pub(super) fn require_prepared_journal_path(
     backup_ref: &str,
     path: PathBuf,
@@ -260,7 +178,10 @@ fn restore_backup_dir(
     if let Some(backup_dir) = backup_dir {
         return Ok(Some(backup_dir.to_path_buf()));
     }
-    backup_ref.map(resolve_backup_reference).transpose()
+    backup_ref
+        .map(resolve_backup_reference)
+        .transpose()
+        .map_err(RestoreCommandError::from)
 }
 
 // Read and decode a backup manifest from disk.
@@ -271,13 +192,6 @@ fn read_manifest(path: &Path) -> Result<DeploymentBackupManifest, RestoreCommand
 // Read and decode an optional source-to-target restore mapping from disk.
 pub(super) fn read_mapping(path: &Path) -> Result<RestoreMapping, RestoreCommandError> {
     output::read_json_file::<RestoreMapping, RestoreCommandError>(path)
-}
-
-// Read and decode a restore plan from disk.
-pub(super) fn read_plan(path: &Path) -> Result<RestorePlan, RestoreCommandError> {
-    let plan = output::read_json_file::<RestorePlan, RestoreCommandError>(path)?;
-    plan.validate()?;
-    Ok(plan)
 }
 
 fn read_apply_journal(path: &Path) -> Result<RestoreApplyJournal, RestoreCommandError> {
@@ -321,28 +235,6 @@ pub(super) fn write_plan(
         return Ok(());
     }
     output::write_pretty_json(None, plan)
-}
-
-// Write the computed apply dry-run to stdout or a requested output file.
-pub(super) fn write_apply_dry_run(
-    options: &RestoreApplyOptions,
-    dry_run: &RestoreApplyDryRun,
-) -> Result<(), RestoreCommandError> {
-    output::write_pretty_json(options.out.as_deref(), dry_run)
-}
-
-// Write the initial apply journal when the caller requests one.
-pub(super) fn write_apply_journal_if_requested(
-    options: &RestoreApplyOptions,
-    dry_run: &RestoreApplyDryRun,
-) -> Result<(), RestoreCommandError> {
-    let Some(path) = &options.journal_out else {
-        return Ok(());
-    };
-
-    let journal = RestoreApplyJournal::from_dry_run(dry_run)?;
-    write_restore_apply_journal(path, &journal)?;
-    Ok(())
 }
 
 // Write the restore runner response to stdout or a requested output file.

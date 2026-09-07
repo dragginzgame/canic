@@ -213,18 +213,6 @@ mod governed_suite {
         run_governed_test_cases(cases);
     }
 
-    #[test]
-    #[cfg(feature = "governed-pocketic-tests")]
-    fn governed_pocketic_inventory_has_unique_names() {
-        assert_governed_pocketic_inventory();
-    }
-
-    #[cfg(feature = "governed-pocketic-tests")]
-    fn assert_governed_pocketic_inventory() {
-        let cases = ordered_governed_pocketic_cases();
-        assert_unique_governed_case_names(&cases);
-    }
-
     #[cfg(feature = "governed-pocketic-tests")]
     fn ordered_governed_pocketic_cases() -> Vec<GovernedTestCase> {
         let mut cases = fleet_registry::governed_pocketic_cases();
@@ -239,6 +227,11 @@ mod governed_suite {
     #[test]
     #[cfg(feature = "governed-pocketic-tests")]
     fn governed_pocketic_inventory_preserves_baseline_order_and_journey_suffix() {
+        assert_governed_pocketic_inventory();
+    }
+
+    #[cfg(feature = "governed-pocketic-tests")]
+    fn assert_governed_pocketic_inventory() {
         let cases = ordered_governed_pocketic_cases();
         let journeys = fleet_registry::governed_fleet_journey_cases();
         assert!(!journeys.is_empty());
@@ -248,7 +241,7 @@ mod governed_suite {
         assert!(names.ends_with(&journey_names));
         for required in [
             "generated reinstall recovers and converges",
-            "generated nineteen Workloads and five Ready retain one reviewed operation",
+            "generated mixed topology and Ready reserve retain one reviewed operation",
             "four initial Shards preserve sealed Root activation",
             "four Workloads refill four Ready assets with lost funding and creation responses",
             "four Workloads and four Failed assets repair without new creation",

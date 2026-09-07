@@ -30,8 +30,6 @@ const REQUIRED_COMMON_GATEWAY_METHOD_FIELDS: &[&str] = &[
     "Production-vs-local differences",
 ];
 
-const TOKO_SOURCE_COMMIT_SHA: &str = "abcdef0123456789abcdef0123456789abcdef01";
-
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -160,20 +158,6 @@ fn blob_storage_feature_name() -> String {
     format!("blob-{}", "storage")
 }
 
-fn complete_inventory_with_toko_section(toko_section: &str) -> String {
-    let mut inventory =
-        "# Blob Storage Gateway Protocol Inventory\n\nStatus: **Complete**\n".to_string();
-    for suffix in REQUIRED_METHODS {
-        let method = gateway_method_name(suffix);
-        let method_section = complete_gateway_method_section(suffix);
-        write!(&mut inventory, "\n### `{method}`\n\n{method_section}")
-            .expect("writing to String should not fail");
-    }
-    inventory.push_str("\n## Interoperability Notes\n\n### Toko\n\n");
-    inventory.push_str(toko_section);
-    inventory
-}
-
 fn complete_inventory_missing_method(omitted_suffix: &str) -> String {
     let mut inventory =
         "# Blob Storage Gateway Protocol Inventory\n\nStatus: **Complete**\n".to_string();
@@ -186,12 +170,10 @@ fn complete_inventory_missing_method(omitted_suffix: &str) -> String {
         write!(&mut inventory, "\n### `{method}`\n\n{method_section}")
             .expect("writing to String should not fail");
     }
-    inventory.push_str("\n## Interoperability Notes\n\n### Toko\n\n");
-    inventory.push_str(&complete_toko_section());
     inventory
 }
 
-fn complete_inventory_without_toko_section() -> String {
+fn complete_inventory() -> String {
     let mut inventory =
         "# Blob Storage Gateway Protocol Inventory\n\nStatus: **Complete**\n".to_string();
     for suffix in REQUIRED_METHODS {
@@ -218,23 +200,7 @@ fn complete_inventory_with_method_section(method_suffix: &str, method_section: &
                 .expect("writing to String should not fail");
         }
     }
-    inventory.push_str("\n## Interoperability Notes\n\n### Toko\n\n");
-    inventory.push_str(&complete_toko_section());
     inventory
-}
-
-fn complete_toko_section() -> String {
-    let blob_root_hash = format!("{}{}{}", "Blob", "Root", "Hash");
-    format!(
-        "\
-Status: **Complete**
-
-- Local source identifier: sibling checkout ../toko
-- Source commit SHA: {TOKO_SOURCE_COMMIT_SHA}
-- Mapping from Toko blob identity into Canic `{blob_root_hash}`: accepted empty-state adoption path
-- Migration/read-through strategy: no existing state migration required for this release
-"
-    )
 }
 
 fn complete_gateway_method_section(method_suffix: &str) -> String {
@@ -755,95 +721,10 @@ fn complete_inventory_rejects_missing_method_section() {
 }
 
 #[test]
-fn complete_inventory_rejects_unresolved_toko_fields() {
-    let root = create_temp_workspace("blob-gate-complete-tbd");
-    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    fs::write(
-        &inventory,
-        complete_inventory_with_toko_section("Status: **Complete**\n\n- Mapping: TBD\n"),
-    )
-    .expect("inventory should be written");
-
-    let output = run_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "gate should reject unresolved Toko fields in a Complete inventory"
-    );
-    assert!(text.contains("Toko interoperability notes still have TBD fields"));
-}
-
-#[test]
-fn complete_inventory_rejects_missing_toko_evidence_fields() {
-    let root = create_temp_workspace("blob-gate-complete-toko-missing-field");
-    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    fs::write(
-        &inventory,
-        complete_inventory_with_toko_section("Status: **Complete**\n\n- Mapping accepted.\n"),
-    )
-    .expect("inventory should be written");
-
-    let output = run_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "gate should reject Toko interoperability notes without required evidence fields"
-    );
-    assert!(text.contains("Toko interoperability notes missing required field"));
-}
-
-#[test]
-fn complete_inventory_rejects_invalid_toko_source_commit_sha() {
-    let root = create_temp_workspace("blob-gate-complete-toko-sha");
-    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    let toko_section = complete_toko_section().replace(
-        &format!("- Source commit SHA: {TOKO_SOURCE_COMMIT_SHA}"),
-        "- Source commit SHA: not-a-sha",
-    );
-    fs::write(
-        &inventory,
-        complete_inventory_with_toko_section(&toko_section),
-    )
-    .expect("inventory should be written");
-
-    let output = run_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "gate should reject invalid Toko source commit SHA"
-    );
-    assert!(text.contains("Toko interoperability notes have invalid source commit SHA"));
-}
-
-#[test]
-fn complete_inventory_rejects_missing_toko_section() {
-    let root = create_temp_workspace("blob-gate-missing-toko");
-    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    fs::write(&inventory, complete_inventory_without_toko_section())
-        .expect("inventory should be written");
-
-    let output = run_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "gate should reject a Complete inventory without Toko interoperability notes"
-    );
-    assert!(text.contains("missing Toko interoperability section"));
-}
-
-#[test]
 fn complete_inventory_allows_resolved_inventory() {
     let root = create_temp_workspace("blob-gate-complete");
     let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    fs::write(
-        &inventory,
-        complete_inventory_with_toko_section(&complete_toko_section()),
-    )
-    .expect("inventory should be written");
+    fs::write(&inventory, complete_inventory()).expect("inventory should be written");
 
     let output = run_gate(&root, &inventory);
 

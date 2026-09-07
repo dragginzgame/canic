@@ -17,7 +17,7 @@ use crate::{
         },
         defaults::{default_icp, local_environment},
         globals::{internal_environment_arg, internal_icp_arg},
-        help::print_help_or_version,
+        help::{print_help_or_version, print_nested_help},
     },
     support::candid::registry_entry_candid_path,
     version_text,
@@ -188,6 +188,9 @@ where
 {
     let args = args.into_iter().collect::<Vec<_>>();
     if print_help_or_version(&args, usage, version_text()) {
+        return Ok(());
+    }
+    if print_nested_help(&args, auth_command()) {
         return Ok(());
     }
 

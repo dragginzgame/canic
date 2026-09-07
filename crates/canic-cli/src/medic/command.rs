@@ -153,7 +153,15 @@ where
         return Ok(());
     }
     if medic_subcommand_help_requested(&args) {
-        println!("{}", usage());
+        let mut command = medic_command();
+        command.build();
+        let fleet = command
+            .find_subcommand_mut(FLEET_COMMAND)
+            .expect("registered fleet command");
+        println!(
+            "{}",
+            fleet.clone().bin_name("canic medic fleet").render_help()
+        );
         return Ok(());
     }
 

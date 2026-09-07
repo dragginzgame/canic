@@ -167,7 +167,7 @@ reason, and target environment.
 ```text
 bash scripts/ci/run-with-test-scratch.sh \
   bash scripts/ci/run-workspace-tests.sh targeted-pocketic \
-  fleet_ensure::tests::governed_pocketic_toko_shaped_estate_converges_then_has_zero_effects
+  fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects
 ```
 
 This governed PocketIC journey is current desired-state qualification evidence.

@@ -31,7 +31,7 @@ use crate::{
         render::{render_action_result, render_dry_run_command, render_status_result},
         target::resolve_blob_storage_call_target,
     },
-    cli::help::print_help_or_version,
+    cli::help::{print_help_or_version, print_nested_help},
     version_text,
 };
 use canic_core::protocol::{
@@ -204,6 +204,9 @@ where
 {
     let args = args.into_iter().collect::<Vec<_>>();
     if print_help_or_version(&args, options::usage, version_text()) {
+        return Ok(());
+    }
+    if print_nested_help(&args, options::blob_storage_command()) {
         return Ok(());
     }
 

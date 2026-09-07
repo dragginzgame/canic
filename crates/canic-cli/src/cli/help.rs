@@ -1,6 +1,6 @@
 //! Module: canic_cli::cli::help
 //!
-//! Responsibility: render top-level CLI help and detect help/version requests.
+//! Responsibility: render the CLI catalog and route help/version requests.
 //! Does not own: command execution, command-specific help text, or global option forwarding.
 //! Boundary: defines the top-level command catalog shared by help and dispatch.
 
@@ -37,7 +37,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "backup",
-        about: "Plan, inspect, and verify backups",
+        about: "Create, inspect, and verify backups",
     },
     CommandSpec {
         name: "blob-storage",
@@ -143,6 +143,31 @@ pub fn print_help_or_version(
     if first_arg_is_version(args) {
         println!("{version_text}");
         return true;
+    }
+    false
+}
+
+/// Print help for an exact nested command before parsing its required operands.
+pub fn print_nested_help(args: &[OsString], mut command: Command) -> bool {
+    let mut path = command
+        .get_bin_name()
+        .unwrap_or(command.get_name())
+        .to_string();
+    for arg in args {
+        if is_help_arg(arg) {
+            println!("{}", command.bin_name(path).render_help());
+            return true;
+        }
+        let Some(child) = command
+            .get_subcommands()
+            .find(|child| Some(child.get_name()) == arg.to_str())
+            .cloned()
+        else {
+            return false;
+        };
+        path.push(' ');
+        path.push_str(child.get_name());
+        command = child;
     }
     false
 }

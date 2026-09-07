@@ -156,7 +156,10 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
             Some("start" | "status" | "stop")
         ),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
-        "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
+        "restore" => matches!(
+            tail.first().and_then(|arg| arg.to_str()),
+            Some("run" | "status")
+        ),
         _ => false,
     }
 }
@@ -169,7 +172,10 @@ fn command_accepts_global_environment(command: &str, tail: &[OsString]) -> bool 
         "auth" => auth_leaf_accepts_globals(tail),
         "info" => info_leaf_accepts_globals(tail),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
-        "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
+        "restore" => matches!(
+            tail.first().and_then(|arg| arg.to_str()),
+            Some("run" | "status")
+        ),
         _ => false,
     }
 }
@@ -265,6 +271,23 @@ mod tests {
                 OsString::from("local"),
             ]
         );
+    }
+
+    #[test]
+    fn restore_runner_and_status_accept_global_icp_and_environment() {
+        for leaf in ["run", "status"] {
+            let mut tail = vec![OsString::from(leaf), OsString::from("1")];
+            apply_global_icp("restore", &mut tail, Some("/opt/icp".to_string()));
+            apply_global_environment("restore", &mut tail, Some("staging".to_string()));
+            assert_eq!(
+                tail_option_value(&tail, INTERNAL_ICP_OPTION),
+                Some("/opt/icp")
+            );
+            assert_eq!(
+                tail_option_value(&tail, INTERNAL_ENVIRONMENT_OPTION),
+                Some("staging")
+            );
+        }
     }
 
     #[test]

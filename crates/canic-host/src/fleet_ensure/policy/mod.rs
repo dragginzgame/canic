@@ -3844,7 +3844,7 @@ mod tests {
     }
 
     #[test]
-    fn toko_fresh_fleet_descendant_capacity_does_not_multiply_terminal_proof() {
+    fn fresh_fleet_descendant_capacity_does_not_multiply_terminal_proof() {
         for maximum_descendants in [0, 1, 10_000, u32::MAX] {
             assert_eq!(
                 terminal_initial_component_observation_count(maximum_descendants),

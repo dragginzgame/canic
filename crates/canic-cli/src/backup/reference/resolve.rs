@@ -38,9 +38,11 @@ pub(in crate::backup) fn resolve_backup_reference_in(
     })?;
 
     if reference.bytes().all(|byte| byte.is_ascii_digit()) {
-        let index = reference.parse::<usize>().unwrap_or(0);
-        return entries
-            .get(index.saturating_sub(1))
+        return reference
+            .parse::<usize>()
+            .ok()
+            .and_then(|index| index.checked_sub(1))
+            .and_then(|index| entries.get(index))
             .map(|entry| entry.dir.clone())
             .ok_or_else(|| BackupCommandError::BackupReferenceNotFound {
                 reference: reference.to_string(),

@@ -51,10 +51,9 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::{collections::BTreeSet, fs, io, io::Write as _};
 
 #[test]
-fn fresh_pool_creation_funding_preserves_toko_shaped_readiness_floor() {
+fn fresh_pool_creation_funding_preserves_configured_readiness_floor() {
     assert_eq!(
-        fresh_pool_creation_funding(1_900_000_000_000)
-            .expect("compile Toko-shaped fresh pool funding"),
+        fresh_pool_creation_funding(1_900_000_000_000).expect("compile fresh pool funding"),
         4_900_000_000_000
     );
 }
@@ -85,14 +84,14 @@ maximum_instances = 2
 [component_specs.hubs.sharding.pools.shards]
 canister_role = "shard"
 policy.capacity = 100
-policy.initial_shards = 8
-policy.max_shards = 8
+policy.initial_shards = 3
+policy.max_shards = 3
 
 [component_specs.hubs.children.shard]
 kind = "shard"
 
 [component_specs.hubs.spawn_grants.hub.shard]
-maximum_instances_per_parent = 8
+maximum_instances_per_parent = 3
 
 [component_groups.app.components.first_hub]
 component_spec = "hubs"
@@ -103,13 +102,13 @@ component_spec = "hubs"
     );
     let mut source = multi_component_source("operator", "coordinator", "root");
     let root_source = &mut source.fleet_subnet_roots[0];
-    root_source.canister_pool.minimum_size = 5;
-    root_source.canister_pool.maximum_size = 24;
-    for (initial_shards, expected_supply) in [(8, 24), (1, 10)] {
+    root_source.canister_pool.minimum_size = 2;
+    root_source.canister_pool.maximum_size = 11;
+    for (initial_shards, expected_supply) in [(3, 11), (1, 7)] {
         fs::write(
             &config_path,
             configuration.replace(
-                "policy.initial_shards = 8",
+                "policy.initial_shards = 3",
                 &format!("policy.initial_shards = {initial_shards}"),
             ),
         )
@@ -121,14 +120,14 @@ component_spec = "hubs"
             fresh_root_pool_count(root_source, &compiled).expect("complete fresh pool supply"),
             expected_supply
         );
-        root_source.canister_pool.maximum_size = 5;
+        root_source.canister_pool.maximum_size = 2;
         assert!(matches!(
             fresh_root_pool_count(root_source, &compiled),
             Err(FleetGenerateError::Policy(
                 crate::fleet_ensure::policy::EnsurePolicyError::TerminalPoolCapacity { .. }
             ))
         ));
-        root_source.canister_pool.maximum_size = 24;
+        root_source.canister_pool.maximum_size = 11;
     }
 }
 

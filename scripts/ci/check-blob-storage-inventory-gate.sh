@@ -21,13 +21,6 @@ required_common_method_fields=(
     "Unauthorized behavior"
     "Production-vs-local differences"
 )
-blob_root_hash_toko_field="Mapping from Toko blob identity into Canic \`BlobRootHash\`"
-required_toko_fields=(
-    "Local source identifier"
-    "Source commit SHA"
-    "$blob_root_hash_toko_field"
-    "Migration/read-through strategy"
-)
 
 require_command() {
     local command_name="$1"
@@ -166,55 +159,9 @@ if [[ "$status" == "Complete" ]]; then
         validate_method_specific_fields "$method" "$section"
     }
 
-    validate_complete_toko_section() {
-        local section
-
-        section="$(
-            awk '
-                $0 == "### Toko" { in_section = 1; print; next }
-                in_section && /^## / { exit }
-                in_section { print }
-            ' "$inventory"
-        )"
-
-        if [[ -z "$section" ]]; then
-            echo "blob-storage inventory missing Toko interoperability section" >&2
-            failed=1
-            return
-        fi
-
-        if ! grep -q "^Status: \*\*Complete\*\*$" <<<"$section"; then
-            echo "blob-storage Toko interoperability notes are not complete" >&2
-            failed=1
-        fi
-
-        if grep -q "TBD" <<<"$section"; then
-            echo "blob-storage Toko interoperability notes still have TBD fields" >&2
-            failed=1
-        fi
-
-        for field in "${required_toko_fields[@]}"; do
-            if ! grep -Eq "^- ${field}: .+$" <<<"$section"; then
-                echo "blob-storage Toko interoperability notes missing required field: $field" >&2
-                failed=1
-            fi
-        done
-
-        if grep -Eiq "^- [^:]+: *(TODO|unknown|unresolved|missing source|placeholder|source-backed evidence)([[:space:].,;]|$)" <<<"$section"; then
-            echo "blob-storage Toko interoperability notes still have placeholder evidence" >&2
-            failed=1
-        fi
-
-        if ! grep -Eq "^- Source commit SHA: [0-9a-fA-F]{40}([0-9a-fA-F]{24})?$" <<<"$section"; then
-            echo "blob-storage Toko interoperability notes have invalid source commit SHA" >&2
-            failed=1
-        fi
-    }
-
     for method in "${required_methods[@]}"; do
         validate_complete_method_section "$method"
     done
-    validate_complete_toko_section
 
     if (( failed != 0 )); then
         echo "blob-storage inventory is marked Complete but required evidence is incomplete" >&2

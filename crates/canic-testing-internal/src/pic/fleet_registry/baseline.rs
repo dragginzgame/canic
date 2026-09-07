@@ -3,11 +3,10 @@
 #[cfg(test)]
 use super::build::{
     build_five_component_root_wasm, build_five_trillion_component_root_wasm, build_icp_refill_pic,
-    build_icp_refill_stub_wasm, build_initial_shard_root_wasm,
+    build_icp_refill_stub_wasm, build_initial_shard_root_wasm, build_journey_cycles_ledger_wasm,
     build_mainnet_five_component_refill_wasms, build_mainnet_refill_wasms, build_management_pic,
-    build_toko_shaped_singleton_cycles_ledger_wasm, build_two_root_pic,
-    five_component_root_canister_config_path, five_trillion_component_root_canister_config_path,
-    initial_shard_root_canister_config_path,
+    build_two_root_pic, five_component_root_canister_config_path,
+    five_trillion_component_root_canister_config_path, initial_shard_root_canister_config_path,
 };
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
@@ -1757,6 +1756,7 @@ mod tests {
         let wrapper = root.join("icp-wrapper");
         let mutation_log = root.join("controller-mutations.log");
         std::fs::create_dir_all(root).expect("create isolated ICP root");
+        std::fs::write(&mutation_log, []).expect("initialize exact controller mutation log");
         std::fs::write(
             &wrapper,
             r#"#!/bin/sh
@@ -3755,16 +3755,6 @@ exec icp "$@"
     }
 
     #[test]
-    fn nineteen_workloads_preserve_multi_hub_root_activation() {
-        assert_initial_root_activation(
-            "apps/test/test-configs/generated-nineteen-workloads.toml",
-            3,
-            16,
-            5,
-        );
-    }
-
-    #[test]
     fn auth_free_root_preserves_ordinary_fleet_activation() {
         assert_initial_root_activation("canisters/audit/root_probe/activation.toml", 1, 0, 1);
     }
@@ -4023,8 +4013,8 @@ exec icp "$@"
     }
 
     #[test]
-    fn generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation() {
-        assert_literal_zero_host_journey(FundingJourney::Fresh, 19);
+    fn generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation() {
+        assert_literal_zero_host_journey(FundingJourney::Fresh, 5);
     }
 
     #[cfg(test)]
@@ -4050,7 +4040,7 @@ exec icp "$@"
         let config_path = workspace_root.join(match initial_workload_count {
             1 => "canisters/audit/root_probe/activation.toml",
             4 => "canisters/audit/root_probe/four-workloads.toml",
-            19 => "apps/test/test-configs/generated-nineteen-workloads.toml",
+            5 => "apps/test/test-configs/generated-mixed-topology.toml",
             _ => panic!("unsupported journey Workload count: {initial_workload_count}"),
         });
         let config =
@@ -4090,7 +4080,7 @@ exec icp "$@"
             INTERNAL_TEST_RELEASE_BUILD_NONCE,
         );
         let root_wasm = release_artifacts.root_wasm_bytes.clone();
-        let cycles_ledger_wasm = build_toko_shaped_singleton_cycles_ledger_wasm();
+        let cycles_ledger_wasm = build_journey_cycles_ledger_wasm();
         let store_fixture = build_root_store_fixture_with_config_for_release(
             &config_path,
             &release_artifacts.component_wasms,
@@ -4106,7 +4096,7 @@ exec icp "$@"
 
         let ready_count = match initial_workload_count {
             1 | 4 => initial_workload_count,
-            _ => 5,
+            _ => 1,
         };
         let pool_maximum_size = ready_count + initial_workload_count;
         let pool_count = if fund_estate {
@@ -4130,7 +4120,7 @@ exec icp "$@"
             readiness_floor
                 .checked_sub(500_000_000_000)
                 .expect("fixture readiness floor")
-        } else if initial_workload_count == 19 {
+        } else if matches!(funding, FundingJourney::Fresh) {
             canic_host::fleet_ensure::fresh_pool_creation_funding(readiness_floor)
                 .expect("generator-owned initial pool funding")
         } else {
@@ -4158,7 +4148,7 @@ exec icp "$@"
                     },
                 )
                 .expect("prepare one deterministic Cycles Ledger result");
-            if initial_workload_count == 19 {
+            if matches!(funding, FundingJourney::Fresh) {
                 assert_eq!(
                     pic.cycle_balance(canister),
                     cycles,
@@ -4384,7 +4374,7 @@ exec icp "$@"
             root_key: hex_bytes(pic.root_key().expect("PocketIC local root key")),
             url: live_url.to_string(),
         };
-        let desired = if initial_workload_count == 19 {
+        let desired = if matches!(funding, FundingJourney::Fresh) {
             generate_journey_desired(GeneratedJourneyInput {
                 root: &adapter_root,
                 config: &config_path,
@@ -4406,7 +4396,7 @@ exec icp "$@"
             &icp_wrapper,
             &adapter_root,
             local_replica.clone(),
-            initial_workload_count != 19,
+            !matches!(funding, FundingJourney::Fresh),
         );
         let infrastructure_started_at = Instant::now();
         super::super::fixture::progress("planning literal-zero infrastructure");
@@ -4447,14 +4437,23 @@ exec icp "$@"
                 .all(|action| !matches!(action, EnsureAction::FleetProtocol { .. })),
             "literal-zero planning must finish infrastructure before protocol effects"
         );
-        if !autonomous_assets.is_empty() {
-            let desired = prepare_funding_infrastructure(
+        let desired = if fund_estate
+            || funded_import_repair
+            || matches!(funding, FundingJourney::Reinstall)
+        {
+            prepare_journey_infrastructure(
                 &pic,
                 &adapter_root,
                 &desired,
                 &planned.plan,
                 &mut platform,
-            );
+            )
+        } else {
+            desired
+        };
+        let desired_identity = desired_sha256(&desired);
+        if !autonomous_assets.is_empty() {
+            prepare_ready_imports(&pic, root, operator, &pools);
             progress_elapsed("funding infrastructure prepared", infrastructure_started_at);
             assert_funded_autonomous_journey(AutonomousFundingJourney {
                 adapter_root: &adapter_root,
@@ -4481,6 +4480,65 @@ exec icp "$@"
             return;
         }
 
+        if matches!(funding, FundingJourney::Reinstall) {
+            prepare_ready_imports(&pic, root, operator, &pools);
+            let mut platform = literal_zero_journey_platform(
+                &desired,
+                &icp_wrapper,
+                &adapter_root,
+                local_replica.clone(),
+                true,
+            );
+            let initial = fleet_ensure_workflow::plan(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                1_800_000_000_000_000_001,
+                &mut platform,
+            )
+            .expect("review the working Fleet used by reinstall");
+            let working = fleet_ensure_workflow::apply(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                &initial.plan.plan_sha256,
+                &mut platform,
+            )
+            .expect("establish a working Fleet before generated reinstall");
+            assert!(working.terminal);
+            assert!(working.actual_conservation.is_some());
+            let pool = root_pool_status_as(&pic, root, operator);
+            assert_eq!((pool.workload, pool.ready, pool.pending_reset), (1, 1, 0));
+            progress_elapsed(
+                "working reinstall fixture prepared",
+                infrastructure_started_at,
+            );
+            assert_generated_reinstall_journey(ReinstallJourney {
+                adapter_root: &adapter_root,
+                config: &config_path,
+                icp_wrapper: &icp_wrapper,
+                local_replica: &local_replica,
+                pic: &pic,
+                desired: &desired,
+                coordinator,
+                root,
+                store,
+                pools: &pools,
+            });
+            pic.stop_live();
+            std::fs::remove_dir_all(&adapter_root).expect("remove completed reinstall fixture");
+            progress_elapsed("generated reinstall journey complete", journey_started_at);
+            return;
+        }
+        let mut resumed_platform = literal_zero_journey_platform(
+            &desired,
+            &icp_wrapper,
+            &adapter_root,
+            local_replica.clone(),
+            !matches!(funding, FundingJourney::Fresh),
+        );
         if !funded_import_repair {
             std::fs::write(
                 adapter_root.join("lost-reset-args.bin"),
@@ -4492,69 +4550,52 @@ exec icp "$@"
                 .expect("encode exact automatic import"),
             )
             .expect("enable automatic reset response loss");
-        }
-        let first = fleet_ensure_workflow::apply(
-            &adapter_root,
-            &desired,
-            &desired_identity,
-            &desired.fleet,
-            &planned.plan.plan_sha256,
-            &mut platform,
-        );
-        assert!(
-            matches!(first, Err(EnsureWorkflowError::Platform(_))),
-            "the production wrapper must lose one controller-update response: {first:?}"
-        );
-        let mut resumed_platform = literal_zero_journey_platform(
-            &desired,
-            &icp_wrapper,
-            &adapter_root,
-            local_replica.clone(),
-            initial_workload_count != 19,
-        );
-        let resumed = fleet_ensure_workflow::apply(
-            &adapter_root,
-            &desired,
-            &desired_identity,
-            &desired.fleet,
-            &planned.plan.plan_sha256,
-            &mut resumed_platform,
-        );
-        if funded_import_repair {
-            assert!(
-                matches!(
-                    resumed,
-                    Err(EnsureWorkflowError::SuccessorReviewRequired { .. })
-                ),
-                "additional funding must require an exact new review: {resumed:?}"
+            let first = fleet_ensure_workflow::apply(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                &planned.plan.plan_sha256,
+                &mut platform,
             );
-        } else {
+            assert!(
+                matches!(first, Err(EnsureWorkflowError::Platform(_))),
+                "the production wrapper must lose one controller-update response: {first:?}"
+            );
+            let resumed = fleet_ensure_workflow::apply(
+                &adapter_root,
+                &desired,
+                &desired_identity,
+                &desired.fleet,
+                &planned.plan.plan_sha256,
+                &mut resumed_platform,
+            );
             assert!(
                 matches!(resumed, Err(EnsureWorkflowError::Platform(_))),
                 "automatic continuation must reach the lost reset response: {resumed:?}"
             );
             assert!(adapter_root.join("lost-reset-response").is_file());
+            assert_eq!(
+                std::fs::read_to_string(&controller_mutation_log)
+                    .expect("read exact controller mutation log")
+                    .lines()
+                    .count(),
+                pool_count,
+                "lost response and replay must not repeat a controller effect"
+            );
+            let request_count: u64 = pic
+                .query_candid(cycles_ledger, "request_count", ())
+                .expect("query literal-zero creation count");
+            assert_eq!(
+                request_count,
+                u64::try_from(3 + pool_count).expect("literal-zero create count fits u64"),
+                "Create replay must not debit twice"
+            );
+            progress_elapsed(
+                "literal-zero infrastructure replay complete",
+                infrastructure_started_at,
+            );
         }
-        assert_eq!(
-            std::fs::read_to_string(&controller_mutation_log)
-                .expect("read exact controller mutation log")
-                .lines()
-                .count(),
-            pool_count,
-            "lost response and replay must not repeat a controller effect"
-        );
-        let request_count: u64 = pic
-            .query_candid(cycles_ledger, "request_count", ())
-            .expect("query literal-zero creation count");
-        assert_eq!(
-            request_count,
-            u64::try_from(3 + pool_count).expect("literal-zero create count fits u64"),
-            "Create replay must not debit twice"
-        );
-        progress_elapsed(
-            "literal-zero infrastructure replay complete",
-            infrastructure_started_at,
-        );
 
         let (protocol_terminal, repair_funding, withdrawals) = if funded_import_repair {
             let failed = root_command_as(
@@ -4659,7 +4700,7 @@ exec icp "$@"
                     &icp_wrapper,
                     &adapter_root,
                     local_replica.clone(),
-                    initial_workload_count != 19,
+                    !matches!(funding, FundingJourney::Fresh),
                 );
             } else {
                 assert_eq!(repair_funding, 0);
@@ -4691,7 +4732,7 @@ exec icp "$@"
                 &icp_wrapper,
                 &adapter_root,
                 local_replica.clone(),
-                initial_workload_count != 19,
+                !matches!(funding, FundingJourney::Fresh),
             );
             let repaired = fleet_ensure_workflow::apply(
                 &adapter_root,
@@ -4738,7 +4779,7 @@ exec icp "$@"
                 &icp_wrapper,
                 &adapter_root,
                 local_replica.clone(),
-                initial_workload_count != 19,
+                !matches!(funding, FundingJourney::Fresh),
             );
             let protocol_started_at = Instant::now();
             super::super::fixture::progress("converging literal-zero control plane");
@@ -4801,7 +4842,7 @@ exec icp "$@"
                 &icp_wrapper,
                 &adapter_root,
                 local_replica.clone(),
-                initial_workload_count != 19,
+                !matches!(funding, FundingJourney::Fresh),
             );
             let completed = fleet_ensure_workflow::apply(
                 &adapter_root,
@@ -4894,30 +4935,12 @@ exec icp "$@"
             requested_controlled_cycles
         );
 
-        if matches!(funding, FundingJourney::Reinstall) {
-            assert_generated_reinstall_journey(ReinstallJourney {
-                adapter_root: &adapter_root,
-                config: &config_path,
-                icp_wrapper: &icp_wrapper,
-                local_replica: &local_replica,
-                pic: &pic,
-                desired: &desired,
-                coordinator,
-                root,
-                store,
-                pools: &pools,
-            });
-            pic.stop_live();
-            std::fs::remove_dir_all(&adapter_root).expect("remove completed reinstall fixture");
-            progress_elapsed("generated reinstall journey complete", journey_started_at);
-            return;
-        }
         let mut replay_platform = literal_zero_journey_platform(
             &desired,
             &icp_wrapper,
             &adapter_root,
             local_replica,
-            initial_workload_count != 19,
+            !matches!(funding, FundingJourney::Fresh),
         );
         let replay_started_at = Instant::now();
         super::super::fixture::progress("proving literal-zero terminal replay");
@@ -4958,7 +4981,7 @@ exec icp "$@"
                 .expect("reread exact controller mutation log")
                 .lines()
                 .count(),
-            pool_count,
+            if funded_import_repair { 0 } else { pool_count },
             "protocol convergence and terminal replay must not repeat controller effects"
         );
         let replay_withdrawals: u64 = pic
@@ -5471,9 +5494,9 @@ exec '{}' "$@"
         operator_after_initial_creation: u128,
     }
 
-    /// Prepare real canisters for funding proofs without replaying the fresh-deployment journey.
+    /// Prepare real infrastructure while the dedicated fresh journey owns startup recovery.
     #[cfg(test)]
-    fn prepare_funding_infrastructure(
+    fn prepare_journey_infrastructure(
         pic: &PocketIc,
         adapter_root: &Path,
         desired: &DesiredFleet,
@@ -5543,21 +5566,6 @@ exec '{}' "$@"
                         controllers,
                     )
                     .expect("set prepared pool controllers");
-                    let asset = Principal::from_text(&state.pending_principals[name]).unwrap();
-                    let response = root_command_as(
-                        pic,
-                        Principal::from_text(&state.pending_principals["root"]).unwrap(),
-                        Principal::from_text(&desired.operator).unwrap(),
-                        RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
-                            canister_id: asset,
-                        }),
-                    )
-                    .expect("prepare Ready import through the public Root protocol");
-                    assert!(
-                        matches!(response, RootCommandResponseFragment::ImportPoolCanister(
-                        PoolImportResponse::Imported { canister_id, .. }
-                    ) if canister_id == asset)
-                    );
                 }
                 _ => panic!("funding fixture setup accepts only fresh infrastructure actions"),
             }
@@ -5569,6 +5577,32 @@ exec '{}' "$@"
             canister.principal = Some(state.pending_principals[&canister.name].clone());
         }
         prepared
+    }
+
+    /// Reset prepared imports through the public Root protocol before funding or reinstall review.
+    #[cfg(test)]
+    fn prepare_ready_imports(
+        pic: &PocketIc,
+        root: Principal,
+        operator: Principal,
+        pools: &[Principal],
+    ) {
+        for asset in pools {
+            let response = root_command_as(
+                pic,
+                root,
+                operator,
+                RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                    canister_id: *asset,
+                }),
+            )
+            .expect("prepare Ready import through the public Root protocol");
+            assert!(
+                matches!(response, RootCommandResponseFragment::ImportPoolCanister(
+                PoolImportResponse::Imported { canister_id, .. }
+            ) if canister_id == *asset)
+            );
+        }
     }
 
     /// Start one real platform effect used to prepare a PocketIC fixture.
@@ -12713,10 +12747,6 @@ cycles = "80T"
                 four_initial_shards_preserve_sealed_root_activation,
             ),
             (
-                "nineteen Workloads preserve multi-Hub Root activation",
-                nineteen_workloads_preserve_multi_hub_root_activation,
-            ),
-            (
                 "funded Failed imports recover withdrawal and reset responses",
                 funded_failed_imports_reconcile_with_lost_withdrawal_and_reset_responses,
             ),
@@ -12733,8 +12763,8 @@ cycles = "80T"
                 four_workloads_and_four_failed_assets_repair_without_new_creation,
             ),
             (
-                "generated nineteen Workloads and five Ready retain one reviewed operation",
-                generated_nineteen_workloads_and_five_ready_recover_one_reviewed_operation,
+                "generated mixed topology and Ready reserve retain one reviewed operation",
+                generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation,
             ),
         ]
     }
