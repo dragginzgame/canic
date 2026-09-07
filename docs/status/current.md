@@ -106,6 +106,18 @@ remains deferred; no version, publication or downstream deployment was made. The
 [funding-resume report](../audits/reports/2026-09/2026-09-07/canic-142-reviewed-funding.md)
 records the injected recovery fixture and downstream qualification boundary.
 
+The subsequent maintainer validation found a stale zero-balance funding pause
+in the four-Workload refill case after its transfer had already completed.
+The adapter now refreshes the exact Root Ledger balance before reporting a
+pause, retaining ordinary bounded reconciliation when the account is funded.
+The focused host regression and scoped all-target/all-feature Clippy pass.
+The exact affected PocketIC case passes on the final source in 225.83s (264s
+runner), including lost responses, four Ready assets, exact conservation and
+effect-free replay. Formatting and diff checks pass. The accepted batch is
+ready for release approval again and the existing changelog draft is updated.
+The interrupted full release suite was not restarted. The funding-resume report
+above records the cause, correction and focused evidence.
+
 ## Maintained 0.109 Contract
 
 Fleet admission retains one Coordinator-owned canonical policy, one Root-owned

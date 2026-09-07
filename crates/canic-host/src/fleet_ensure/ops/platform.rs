@@ -1031,6 +1031,35 @@ impl IcpEnsurePlatform {
         ledger_fee_cycles(balance)
     }
 
+    fn refresh_estate_funding_observation(
+        &self,
+        observation: &mut EffectObservation,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<(), IcpEnsurePlatformError> {
+        let Some(required) = observation.estate_funding_required.as_mut() else {
+            return Ok(());
+        };
+        let root = required.root.to_text();
+        let known_root = self.desired.canisters.iter().any(|canister| {
+            canister.kind == DesiredCanisterKind::Root
+                && self.current_principal(state, &canister.name) == Some(root.as_str())
+        });
+        if !known_root || required.cycles_ledger.to_text() != self.desired.cycles_ledger {
+            return Err(current_protocol::CurrentProtocolError::ResponseMismatch.into());
+        }
+        // Root retains the balance from its last creation attempt until its next
+        // retry. A completed host transfer can therefore precede this status.
+        let available = self.cycles_ledger_balance(&root)?;
+        let debit = required.required.to_u128();
+        if available >= debit {
+            observation.estate_funding_required = None;
+        } else {
+            required.available = Cycles::new(available);
+            required.shortfall = Cycles::new(debit - available);
+        }
+        Ok(())
+    }
+
     fn require_current_pool_policy(
         &self,
         domains: &BTreeMap<String, EstateFundingDomainObservation>,
@@ -2713,7 +2742,8 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 action: current_action,
                 ..
             } => {
-                let observation = match current_protocol::observe(&self.icp, &self.root, action) {
+                let mut observation = match current_protocol::observe(&self.icp, &self.root, action)
+                {
                     Ok(observation) => observation,
                     Err(error)
                         if matches!(
@@ -2732,6 +2762,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     }
                     Err(error) => return Err(error.into()),
                 };
+                self.refresh_estate_funding_observation(&mut observation, state)?;
                 return Ok(observation);
             }
             EnsureAction::Protocol { .. } => {
@@ -3699,6 +3730,95 @@ const fn rejection_code_name(code: RejectionCode) -> &'static str {
 mod tests {
     use super::*;
     use canic_core::dto::pool::CanisterPoolAssetStatus;
+
+    #[cfg(unix)]
+    #[test]
+    fn funding_pause_uses_fresh_ledger_balance_without_completing_protocol_work() {
+        let mut fixture = ProtocolOwnersFixture::new();
+        let root = Principal::from_slice(&[1]);
+        let ledger = Principal::from_slice(&[2]);
+        fixture.platform.desired.cycles_ledger = ledger.to_text();
+        fixture.platform.desired.canisters[1].principal = Some(root.to_text());
+        std::fs::write(
+            fixture.root.join("icp"),
+            format!(
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.3.0'; exit 0; fi\ncat '{}'/balance.json\n",
+                fixture.root.display(),
+            ),
+        )
+        .unwrap();
+        let pause = canic_core::dto::component_provisioning::RootEstateFundingRequired {
+            available: Cycles::new(0),
+            attempt_count: 0,
+            creation_amount: Cycles::new(100),
+            cycles_ledger: ledger,
+            execution_margin: Cycles::new(10),
+            last_attempt_at_ns: None,
+            ledger_fee: Cycles::new(1),
+            management_creation_fee: Cycles::new(20),
+            operation_id: [1; 32],
+            readiness_floor: Cycles::new(70),
+            required: Cycles::new(101),
+            retry_at_ns: 60,
+            root,
+            shortfall: Cycles::new(101),
+        };
+        for available in [0_u128, 40, 101, 404] {
+            std::fs::write(
+                fixture.root.join("balance.json"),
+                serde_json::json!({
+                    "response_bytes": hex_bytes(candid::encode_one(Nat::from(available)).unwrap()),
+                })
+                .to_string(),
+            )
+            .unwrap();
+            let mut observed = EffectObservation {
+                applied: false,
+                estate_funding_required: Some(pause.clone()),
+                post_cycles: None,
+                progress_identity: "pending-creation".to_string(),
+                retry: EffectRetry::ContinuePoolMaintenance,
+            };
+            fixture
+                .platform
+                .refresh_estate_funding_observation(&mut observed, &fixture.state)
+                .unwrap();
+            assert!(!observed.applied);
+            assert_eq!(observed.retry, EffectRetry::ContinuePoolMaintenance);
+            assert_eq!(observed.progress_identity, "pending-creation");
+            let expected = (available < 101).then(|| {
+                let mut expected = pause.clone();
+                expected.available = Cycles::new(available);
+                expected.shortfall = Cycles::new(101 - available);
+                expected
+            });
+            assert_eq!(observed.estate_funding_required, expected);
+        }
+        for (root, ledger) in [
+            (Principal::anonymous(), ledger),
+            (root, Principal::anonymous()),
+        ] {
+            let mut changed = pause.clone();
+            changed.root = root;
+            changed.cycles_ledger = ledger;
+            let mut observed = EffectObservation {
+                applied: false,
+                estate_funding_required: Some(changed),
+                post_cycles: None,
+                progress_identity: String::new(),
+                retry: EffectRetry::None,
+            };
+            assert!(matches!(
+                fixture
+                    .platform
+                    .refresh_estate_funding_observation(&mut observed, &fixture.state),
+                Err(IcpEnsurePlatformError::CurrentProtocol(
+                    current_protocol::CurrentProtocolError::ResponseMismatch
+                ))
+            ));
+        }
+        std::fs::remove_dir_all(&fixture.root).unwrap();
+    }
 
     #[test]
     fn completed_withdrawal_outside_bounds_fails_without_endless_observation() {
