@@ -35,5 +35,9 @@ ic-testkit = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+[dev-dependencies]
+ic-query = { workspace = true }
+toml = { workspace = true }
+
 [lints]
 workspace = true

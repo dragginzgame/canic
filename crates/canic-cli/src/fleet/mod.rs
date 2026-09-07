@@ -52,7 +52,8 @@ Examples:
   canic fleet generate staging --app-config apps/demo/canic.toml --release-build <sha256>
 
 Planning is read-only. Review `plan_sha256`, then repeat the command with
-`--apply <plan_sha256>`. Historical install and recovery state is not read.";
+`--apply <plan_sha256>`. A funding pause adds a separate funding review digest
+for the exact additional transfer.";
 const DEFAULT_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 
 /// CLI failure for current Fleet convergence.
@@ -289,7 +290,7 @@ fn generate_command() -> Command {
             value_arg("management-creation-fee-cycles")
                 .long("management-creation-fee-cycles")
                 .value_name("CYCLES")
-                .help("Exact per-canister management creation fee such as 500B; required with --fresh"),
+                .help("Exact creation fee such as 500B; required with --fresh, otherwise read from the seed"),
         )
         .arg(
             value_arg("output")
@@ -334,7 +335,7 @@ fn ensure_command() -> Command {
                 .long("apply")
                 .value_name("PLAN_SHA256")
                 .value_parser(parse_digest)
-                .help("Apply exactly the retained reviewed plan"),
+                .help("Apply the exact retained plan or funding review digest"),
         )
         .arg(
             value_arg("desired")
@@ -625,6 +626,22 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
     ];
     append_estate_funding_domains(&mut lines, conservation);
     append_canister_summaries(&mut lines, report);
+    if let Some(review) = &report.funding_review {
+        lines.extend([
+            format!("funding_review_sha256: {}", review.review_sha256),
+            format!("funding_root: {}", review.pause.root_principal),
+            format!("funding_ledger: {}", review.pause.cycles_ledger),
+            format!(
+                "additional_funding_cycles: {}",
+                format_cycles(review.pause.shortfall_cycles)
+            ),
+            format!(
+                "additional_ledger_fee_cycles: {}",
+                format_cycles(review.pause.ledger_fee_cycles)
+            ),
+            format!("funding_apply: --apply {}", review.review_sha256),
+        ]);
+    }
     lines.push(format!(
         "conservation_equation: {} + {} - {} - {} - {} = {}",
         format_cycles(conservation.observed_controlled_cycles),

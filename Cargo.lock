@@ -615,9 +615,11 @@ dependencies = [
  "canic-host",
  "ciborium",
  "flate2",
+ "ic-query",
  "ic-testkit",
  "serde",
  "serde_json",
+ "toml 1.1.5+spec-1.1.0",
 ]
 
 [[package]]

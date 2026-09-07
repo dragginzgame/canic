@@ -29,6 +29,7 @@ schema_version = 1
 fleet_id = "<retained-live-fleet-id>"
 coordinator = "<retained-coordinator-principal>"
 cycles_ledger = "um5iw-rqaaa-aaaaq-qaaba-cai"
+management_creation_fee_cycles = "500B" # exact fee for future creations on the reviewed subnets
 
 # Optional; omit to adopt the Coordinator as treasury.
 [treasury]
@@ -60,7 +61,8 @@ canic fleet generate staging \
 The generator does not infer Principals from release metadata, project
 mappings, removed install plans, or canister ancestry. Release authority
 supplies exact Wasm, Candid, artifact identities and typed infrastructure init
-contracts. The seed supplies identities only. Canic then verifies the active
+contracts. The seed supplies retained identities and the exact fee for future
+canister creation. Canic then verifies the active
 operator, controller and role relationships, Registry-backed placement,
 protected Root pool inventory and exact cycle balances before publishing
 `fleets/<fleet>.toml`. A Root-owned Store or pool asset is resolved through the
@@ -121,9 +123,16 @@ or globally search for a retained identity. Missing, foreign, duplicate,
 unseeded or conflicting identities and unexpected co-controllers fail closed.
 If an exact retained identity is no longer observable, planning rejects instead
 of creating a substitute. The generator queries the configured Cycles Ledger's
-current fee and binds it into the desired document. Retained generation has
-zero management creation-fee authority; fresh generation uses only its explicit
-seeded fee. Observation and update burn values are distinct conservative
+current fee and binds it into the desired document. Every seed must explicitly
+declare `management_creation_fee_cycles` in compact `B`, `T` or `Q` units for
+the reviewed target subnets, including retained estates that need more capacity.
+There is no implicit zero: use `0B` only when it is the exact applicable fee.
+The fee applies to future creations, not already-paid retained assets. Planning
+adds the readiness floor, execution margin and management fee per new asset,
+then accounts for the separate Ledger fee. A changed fee changes the generated
+authority and requires reviewing the new plan; do not edit generated desired
+state or compensate with an unreviewed Ledger credit.
+Observation and update burn values are distinct conservative
 ceilings checked against measured terminal conservation, not assumed fees.
 On IC mainnet, every Fiduciary placement must carry an exact
 `acknowledge_fiduciary_cost = true`; non-Fiduciary placements must not claim
@@ -207,9 +216,10 @@ insufficient remaining burn budget returns a typed new-review requirement.
 Review the resulting current plan before authorizing that additional work.
 Progress events distinguish advancing, awaiting progress, prerequisite
 completion, funding required, new review required and complete convergence.
-JSON progress remains on stderr; the final report is on stdout. The larger
-generator-to-runtime and retained-estate recovery qualification is still in
-progress in the open correction batch.
+JSON progress remains on stderr; the final report is on stdout. Dated
+[reinstall evidence](../../audits/reports/2026-09/2026-09-05/fleet-reinstall-journey.md)
+and the [combined paid-growth proof](../../audits/reports/2026-09/2026-09-07/canic-140-retained-creation-fee.md)
+record the completed focused qualification and its downstream acceptance limits.
 
 The management creation fee is explicit because it is network/Subnet economic
 authority and cannot be inferred from release metadata. Zero is appropriate
@@ -240,12 +250,23 @@ transfer intent before debit, uses one stable Cycles Ledger duplicate identity,
 adopts an exact duplicate receipt after a lost response and re-observes both
 the source debit and Root-account credit. Apply then queries the account again
 before protocol work. An unexpected remaining deficit persists a typed
-`EstateFundingRequired` pause and issues no protocol command; obtain and review
-a new plan rather than funding the account outside Canic. Repeating apply while
-the balance is unchanged performs no remote effect and does not rotate the
-operation or its creation identities. A lower balance, funding above the
-reviewed maximum, changed Root or Ledger, or missing account observation also
-requires a newly reviewed plan rather than an inferred correction.
+`EstateFundingRequired` pause and issues no new protocol command. Repeat the same
+`canic fleet ensure` command without `--apply`. Its report retains the original
+plan and adds `funding_review`: review the exact Root, Ledger, shortfall, fee and
+pending creation identity, then repeat the command with
+`--apply <funding_review.review_sha256>`. Text output labels that digest
+`funding_review_sha256`. The original plan digest alone cannot approve another
+debit. Do not credit the account outside Canic or discard the journal.
+
+The additional transfer uses the existing Ledger adapter and remains inside the
+same operation. Once its intent is persisted, interruption recovery retains its
+timestamp, account, amount and duplicate receipt, including when the Root has
+already consumed the credit for its pending creation. Original protocol effects
+and creation receipts remain authoritative. Planning performs no remote mutation.
+Changed account or fee authority, uncertain pending creation, unexplained Ledger
+loss or funding above the reviewed bounds fails before a new debit. Terminal
+verification still reconciles every credit and exact creation debit; the funding
+review does not increase creation limits or excuse an unexplained balance change.
 
 Every autonomous pool creation retains its exact Ledger block, operation,
 amount, Ledger fee, management creation fee, readiness floor, execution margin
@@ -283,7 +304,7 @@ treasury = "treasury" # logical name of one controlled canister below
 operator = "<operator-principal>"
 cycles_ledger = "<cycles-ledger-principal>"
 ledger_fee_cycles = "0.1B" # generated from the live Ledger
-management_creation_fee_cycles = "0B" # retained; fresh uses its seeded exact fee
+management_creation_fee_cycles = "500B" # exact future creation fee from the seed
 material_cycle_threshold = "0.001B"
 maximum_observation_burn_cycles = "1T"
 maximum_update_burn_cycles = "1T"

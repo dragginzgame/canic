@@ -1145,6 +1145,7 @@ pub struct FleetEnsureTopologyRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureJournalRecord {
+    pub funding_reviews: Vec<EstateFundingReviewRecord>,
     pub successor_phases: Vec<FleetEnsureSuccessorPhaseRecord>,
     pub completion: FleetEnsureCompletion,
     #[serde(deserialize_with = "serialization::required_option")]
@@ -1202,10 +1203,23 @@ pub enum FleetEnsureSuccessorReviewReason {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct FleetEnsureReport {
+    pub funding_review: Option<EstateFundingReviewRecord>,
     pub actual_conservation: Option<ActualCycleConservation>,
     pub effects_applied: u32,
     pub plan: FleetEnsurePlan,
     pub terminal: bool,
+}
+
+/// Exact additional transfer reviewed within an existing Fleet operation.
+/// The nullable effect is the durable approval boundary; planning never sets it.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EstateFundingReviewRecord {
+    pub action: EnsureAction,
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub effect: Option<EffectRecord>,
+    pub pause: EstateFundingRequiredRecord,
+    pub review_sha256: String,
 }
 
 mod u128_text {

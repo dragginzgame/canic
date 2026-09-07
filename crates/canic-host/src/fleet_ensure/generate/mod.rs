@@ -403,8 +403,7 @@ struct EstateSeed {
     treasury: Option<TreasurySeed>,
     #[serde(default = "mainnet_cycles_ledger")]
     cycles_ledger: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    management_creation_fee_cycles: Option<String>,
+    management_creation_fee_cycles: String,
     roots: Vec<RootSeed>,
 }
 
@@ -568,7 +567,7 @@ fn fresh_seed(
         coordinator: "coordinator".to_string(),
         treasury: None,
         cycles_ledger: cycles_ledger.to_string(),
-        management_creation_fee_cycles: Some(config_cycles(management_creation_fee_cycles)),
+        management_creation_fee_cycles: config_cycles(management_creation_fee_cycles),
         roots,
     })
 }
@@ -1210,13 +1209,8 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         environment: input.request.environment.to_string(),
         fleet: input.request.fleet.to_string(),
         ledger_fee_cycles: config_cycles(input.ledger_fee_cycles),
-        // Retained seeds bind paid canisters to observed Principals and carry no creation fee.
-        // Fresh seeds retain their explicit fee before any generated Principal exists.
-        management_creation_fee_cycles: input
-            .seed
-            .management_creation_fee_cycles
-            .clone()
-            .unwrap_or_else(|| config_cycles(0)),
+        // This fee binds future creation, including growth after retaining paid identities.
+        management_creation_fee_cycles: input.seed.management_creation_fee_cycles.clone(),
         material_cycle_threshold: config_cycles(GENERATED_RETAINED_MATERIAL_CYCLE_THRESHOLD),
         maximum_observation_burn_cycles: config_cycles(
             GENERATED_RETAINED_MAXIMUM_OBSERVATION_BURN_CYCLES,
@@ -1861,34 +1855,20 @@ fn validate_identity_seed(
     source: &FleetSource,
     seed: &EstateSeed,
 ) -> Result<(), FleetGenerateError> {
+    let fee = Cycles::from_human_config_str(&seed.management_creation_fee_cycles)
+        .map_err(|_| {
+            FleetGenerateError::SeedTopology(
+                "estate seed management creation fee must use B, T, or Q units".to_string(),
+            )
+        })?
+        .to_u128();
     if seed.fresh_estate {
-        let fee = seed
-            .management_creation_fee_cycles
-            .as_deref()
-            .ok_or_else(|| {
-                FleetGenerateError::FreshSeedConflict(
-                    "fresh estate seed is missing its exact management creation fee".to_string(),
-                )
-            })?;
-        let fee = Cycles::from_human_config_str(fee)
-            .map_err(|_| {
-                FleetGenerateError::FreshSeedConflict(
-                    "fresh estate seed management creation fee must use B, T, or Q units"
-                        .to_string(),
-                )
-            })?
-            .to_u128();
         let expected = fresh_seed(source, seed.fleet_id, &seed.cycles_ledger, fee)?;
         if seed == &expected {
             return Ok(());
         }
         return Err(FleetGenerateError::FreshSeedConflict(
             "fresh estate seed differs from current protected topology".to_string(),
-        ));
-    }
-    if seed.management_creation_fee_cycles.is_some() {
-        return Err(FleetGenerateError::SeedTopology(
-            "retained estate seed must not declare fresh creation fee authority".to_string(),
         ));
     }
     let mut identities = BTreeSet::new();

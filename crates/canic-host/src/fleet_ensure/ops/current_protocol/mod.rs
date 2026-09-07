@@ -1473,10 +1473,15 @@ fn observe_pool_readiness(
                     && asset.cycles >= readiness_floor
             })
             .count();
+        let funding_required = page
+            .pending_creation
+            .as_ref()
+            .and_then(pool_funding_required);
         let mut observed = observation(
             ready >= minimum_ready as usize && page.pending_creation.is_none(),
             &(assets, page.pending_creation),
         )?;
+        observed.estate_funding_required = funding_required;
         if !observed.applied
             && matches!(
                 resolved.action,
@@ -1488,6 +1493,42 @@ fn observe_pool_readiness(
         return Ok(observed);
     }
     Err(CurrentProtocolError::ResponseMismatch)
+}
+
+/// Project the same Root-owned funding pause during explicit reserve maintenance.
+fn pool_funding_required(
+    creation: &canic_core::dto::pool::CanisterPoolCreation,
+) -> Option<canic_core::dto::component_provisioning::RootEstateFundingRequired> {
+    let canic_core::dto::pool::CanisterPoolCreationProgress::WaitingForFunding {
+        available,
+        attempt_count,
+        last_attempt_at_ns,
+        required,
+        retry_at_ns,
+        shortfall,
+        ..
+    } = &creation.progress
+    else {
+        return None;
+    };
+    Some(
+        canic_core::dto::component_provisioning::RootEstateFundingRequired {
+            available: available.clone(),
+            attempt_count: *attempt_count,
+            creation_amount: creation.ledger_amount.clone(),
+            cycles_ledger: creation.cycles_ledger,
+            execution_margin: creation.creation_execution_margin.clone(),
+            last_attempt_at_ns: *last_attempt_at_ns,
+            ledger_fee: creation.ledger_fee.clone(),
+            management_creation_fee: creation.management_creation_fee.clone(),
+            operation_id: creation.operation_id,
+            readiness_floor: creation.readiness_floor.clone(),
+            required: required.clone(),
+            retry_at_ns: *retry_at_ns,
+            root: creation.root,
+            shortfall: shortfall.clone(),
+        },
+    )
 }
 
 fn observation<T: CandidType>(

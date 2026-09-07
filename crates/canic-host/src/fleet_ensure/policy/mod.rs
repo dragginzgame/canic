@@ -3437,7 +3437,13 @@ pub(crate) fn operation_id(desired_sha256: &str, environment: &str, fleet: &str)
     canic_core::cdk::utils::hash::hex_bytes(hasher.finalize())
 }
 
-pub(crate) fn expected_plan_sha256(plan: &FleetEnsurePlan) -> String {
+/// Recompute the canonical review identity of a current Fleet plan.
+/// This does not persist or authorize the plan.
+///
+/// # Panics
+/// Panics if a maintained plan field cannot be encoded by its canonical JSON serializer.
+#[must_use]
+pub fn expected_plan_sha256(plan: &FleetEnsurePlan) -> String {
     let mut canonical = plan.clone();
     canonical.plan_sha256.clear();
     let bytes = super::json::to_vec(&canonical).expect("Fleet ensure plan is JSON serializable");

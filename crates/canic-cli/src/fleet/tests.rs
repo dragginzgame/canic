@@ -172,6 +172,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
             estate_funding_required: None,
@@ -251,6 +252,7 @@ fn generate_replace_requires_canonical_digest() {
 
 fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
     FleetEnsureReport {
+        funding_review: None,
         actual_conservation: Some(ActualCycleConservation {
             estate_funding_cycles: 10_000_000_000_000,
             exact_estate_creation_fee_cycles: 500_000_000_000,

@@ -3990,11 +3990,17 @@ exec icp "$@"
         FailedImports,
         Estate,
         FailedReserve,
+        FundingPause,
     }
 
     #[test]
     fn funded_estate_recovers_transfer_and_autonomous_creation_responses() {
         assert_literal_zero_host_journey(FundingJourney::Estate, 1);
+    }
+
+    #[test]
+    fn issued_creation_funding_pause_resumes_reviewed_transfer() {
+        assert_literal_zero_host_journey(FundingJourney::FundingPause, 1);
     }
 
     #[test]
@@ -4027,7 +4033,7 @@ exec icp "$@"
         let failed_reserve = matches!(funding, FundingJourney::FailedReserve);
         let fund_estate = matches!(
             funding,
-            FundingJourney::Estate | FundingJourney::FailedReserve
+            FundingJourney::Estate | FundingJourney::FailedReserve | FundingJourney::FundingPause
         );
         let build_network = if fund_estate {
             BuildNetwork::Ic
@@ -4173,7 +4179,11 @@ exec icp "$@"
         let pools = (0..pool_count)
             .map(|_| create_result(pool_creation_funding, root_and_operator.clone()))
             .collect::<Vec<_>>();
-        let autonomous_assets = (0..if fund_estate { ready_count } else { 0 })
+        let autonomous_assets = (0..if fund_estate {
+            pool_maximum_size - pool_count
+        } else {
+            0
+        })
             .map(|_| {
                 create_result(
                     if failed_reserve {
@@ -4454,10 +4464,27 @@ exec icp "$@"
         let desired_identity = desired_sha256(&desired);
         if !autonomous_assets.is_empty() {
             prepare_ready_imports(&pic, root, operator, &pools);
+            let desired = if initial_workload_count == 1 {
+                let config = retain_generated_journey_source(&adapter_root, &config_path);
+                super::super::growth::generate(
+                    &adapter_root,
+                    &config,
+                    &icp_wrapper,
+                    &local_replica,
+                    &desired,
+                )
+            } else {
+                desired
+            };
+            let funding_icp = if initial_workload_count == 1 {
+                adapter_root.join("growth-generator-icp")
+            } else {
+                icp_wrapper
+            };
             progress_elapsed("funding infrastructure prepared", infrastructure_started_at);
             assert_funded_autonomous_journey(AutonomousFundingJourney {
                 adapter_root: &adapter_root,
-                icp_wrapper: &icp_wrapper,
+                icp_wrapper: &funding_icp,
                 local_replica: &local_replica,
                 pic: &pic,
                 desired: &desired,
@@ -4467,6 +4494,7 @@ exec icp "$@"
                 assets: &autonomous_assets,
                 imported: &pools,
                 repair_failed_reserve: failed_reserve,
+                funding_pause: matches!(funding, FundingJourney::FundingPause),
                 readiness_floor,
                 operator_after_initial_creation: operator_balance
                     - total_requested
@@ -5119,6 +5147,7 @@ exec icp "$@"
 schema_version = 1
 fleet_id = "{fleet_id}"
 fresh_estate = false
+management_creation_fee_cycles = "0B"
 coordinator = "{}"
 cycles_ledger = "{ledger}"
 [[roots]]
@@ -5490,6 +5519,7 @@ exec '{}' "$@"
         assets: &'a [Principal],
         imported: &'a [Principal],
         repair_failed_reserve: bool,
+        funding_pause: bool,
         readiness_floor: u128,
         operator_after_initial_creation: u128,
     }
@@ -5623,6 +5653,90 @@ exec '{}' "$@"
         }
     }
 
+    /// Inject a retained underforecast without inventing paid receipts or completed effects.
+    /// Every protocol effect below reaches the real adapter; the funding deficit is fixture input.
+    #[cfg(test)]
+    fn retain_issued_underfunded_fixture(
+        input: &AutonomousFundingJourney<'_>,
+        plan: &mut FleetEnsurePlan,
+        state: &canic_host::fleet_ensure::model::FleetEnsureStateRecord,
+        platform: &mut IcpEnsurePlatform,
+    ) {
+        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
+            input.adapter_root,
+            &plan.environment,
+            &plan.fleet,
+        );
+        for canister in &mut plan.canisters {
+            canister
+                .actions
+                .retain(|action| !matches!(action, EnsureAction::FundEstate { .. }));
+        }
+        plan.conservation.maximum_operator_debit_cycles = 0;
+        plan.conservation.maximum_new_funding_cycles = 0;
+        plan.conservation.maximum_unavoidable_fee_cycles = 0;
+        for domain in &mut plan.conservation.estate_funding_domains {
+            domain.maximum_funding_cycles = 0;
+        }
+        plan.plan_sha256 = canic_host::fleet_ensure::policy::expected_plan_sha256(plan);
+        canic_host::fleet_ensure::ops::write_plan(&paths, plan).unwrap();
+        let mut journal = canic_host::fleet_ensure::model::FleetEnsureJournalRecord {
+            funding_reviews: Vec::new(),
+            successor_phases: Vec::new(),
+            completion: canic_host::fleet_ensure::model::FleetEnsureCompletion::InProgress,
+            estate_funding_required: None,
+            effects: Vec::new(),
+            fleet: plan.fleet.clone(),
+            initial_controlled_cycles: plan.conservation.observed_controlled_cycles,
+            initial_estate_funding_cycles_by_root: plan
+                .conservation
+                .estate_funding_domains
+                .iter()
+                .map(|domain| (domain.root.clone(), domain.available_cycles.unwrap()))
+                .collect(),
+            initial_operator_cycles: input.operator_after_initial_creation,
+            operation_id: plan.operation_id.clone(),
+            plan_sha256: plan.plan_sha256.clone(),
+            schema_version: 1,
+            stalled_observations: 0,
+        };
+        for action in planned_actions(plan) {
+            let mut effect = fixture_effect_intent(action);
+            effect.pre_cycles = platform.action_cycles(action, state).unwrap();
+            effect.destination_pre_cycles =
+                platform.action_destination_cycles(action, state).unwrap();
+            journal.effects.push(effect.clone());
+            canic_host::fleet_ensure::ops::write_journal(&paths, &journal).unwrap();
+            let outcome = platform
+                .apply(&plan.operation_id, action, &effect, state)
+                .unwrap();
+            effect.receipt = outcome.receipt;
+            effect.post_cycles = outcome.post_cycles;
+            effect.state = EffectState::Issued;
+            let is_provisioning = matches!(action, EnsureAction::FleetProtocol { action, .. }
+                if matches!(action.as_ref(), CurrentFleetProtocolAction::ProvisionComponents { .. }));
+            if !is_provisioning {
+                for attempt in 0..64 {
+                    let observed = platform
+                        .observe_effect(&plan.operation_id, action, &effect, state)
+                        .unwrap();
+                    if observed.applied {
+                        effect.state = EffectState::Applied;
+                        break;
+                    }
+                    platform.pace_effect_observation(action, attempt);
+                }
+                assert_eq!(effect.state, EffectState::Applied);
+            }
+            *journal.effects.last_mut().unwrap() = effect;
+            canic_host::fleet_ensure::ops::write_journal(&paths, &journal).unwrap();
+            if is_provisioning {
+                return;
+            }
+        }
+        panic!("fixture must retain a real issued provisioning effect");
+    }
+
     #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
@@ -5708,6 +5822,54 @@ exec '{}' "$@"
             input.assets.len()
         );
         assert_eq!(domain.maximum_funding_cycles, funding);
+        let reviewed_digest = if input.funding_pause {
+            retain_issued_underfunded_fixture(&input, &mut planned.plan, &state, &mut platform);
+            let paused = fleet_ensure_workflow::apply(
+                input.adapter_root,
+                &desired,
+                &source,
+                &desired.fleet,
+                &planned.plan.plan_sha256,
+                &mut platform,
+            );
+            assert!(
+                matches!(paused, Err(EnsureWorkflowError::EstateFundingRequired(_))),
+                "issued Root creation must pause: {paused:?}"
+            );
+            let journal = canic_host::fleet_ensure::ops::read_journal(&paths)
+                .unwrap()
+                .unwrap();
+            assert!(
+                journal
+                    .estate_funding_required
+                    .as_ref()
+                    .unwrap()
+                    .pending_creation_operation_id
+                    .is_some()
+            );
+            let report = fleet_ensure_workflow::plan(
+                input.adapter_root,
+                &desired,
+                &source,
+                &desired.fleet,
+                1_800_000_000_000_000_099,
+                &mut platform,
+            )
+            .expect("ordinary planning exposes exact funding review");
+            assert_eq!(report.plan.plan_sha256, planned.plan.plan_sha256);
+            let review = report.funding_review.unwrap();
+            assert_eq!(review.pause.shortfall_cycles, funding);
+            assert_eq!(
+                canic_host::fleet_ensure::ops::read_journal(&paths)
+                    .unwrap()
+                    .unwrap()
+                    .effects,
+                journal.effects
+            );
+            review.review_sha256
+        } else {
+            planned.plan.plan_sha256.clone()
+        };
         let _: () = input
             .pic
             .update_candid(
@@ -5721,7 +5883,7 @@ exec '{}' "$@"
             &desired,
             &source,
             &desired.fleet,
-            &planned.plan.plan_sha256,
+            &reviewed_digest,
             &mut platform,
         );
         assert!(
@@ -5759,7 +5921,7 @@ exec '{}' "$@"
             &desired,
             &source,
             &desired.fleet,
-            &planned.plan.plan_sha256,
+            &reviewed_digest,
             &mut platform,
         );
         assert!(
@@ -5782,17 +5944,19 @@ exec '{}' "$@"
             ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
             Nat::from(input.operator_after_initial_creation - funding - MAINNET_REFILL_LEDGER_FEE)
         );
-        assert_eq!(
-            ledger_account_balance(input.pic, input.cycles_ledger, input.root),
-            Nat::from(funding)
-        );
+        if !input.funding_pause {
+            assert_eq!(
+                ledger_account_balance(input.pic, input.cycles_ledger, input.root),
+                Nat::from(funding)
+            );
+        }
         let mut recovered = new_platform(&desired);
         let completed = fleet_ensure_workflow::apply(
             input.adapter_root,
             &desired,
             &source,
             &desired.fleet,
-            &planned.plan.plan_sha256,
+            &reviewed_digest,
             &mut recovered,
         )
         .unwrap_or_else(|error| {
@@ -5830,6 +5994,25 @@ exec '{}' "$@"
             )
         );
         assert!(pool.pending_creation.is_none());
+        if input.funding_pause {
+            let journal = canic_host::fleet_ensure::ops::read_journal(&paths)
+                .unwrap()
+                .unwrap();
+            let pending = journal.funding_reviews[0]
+                .pause
+                .pending_creation_operation_id
+                .as_ref()
+                .unwrap();
+            assert!(
+                pool.entries
+                    .iter()
+                    .filter_map(|entry| entry.creation_receipt.as_ref())
+                    .any(
+                        |receipt| canic_core::cdk::utils::hash::hex_bytes(receipt.operation_id)
+                            == *pending
+                    )
+            );
+        }
         for (index, asset) in input.assets.iter().enumerate() {
             let created = pool
                 .entries
@@ -12753,6 +12936,10 @@ cycles = "80T"
             (
                 "funded estate recovers transfer and autonomous creation responses",
                 funded_estate_recovers_transfer_and_autonomous_creation_responses,
+            ),
+            (
+                "issued creation funding pause resumes reviewed transfer",
+                issued_creation_funding_pause_resumes_reviewed_transfer,
             ),
             (
                 "four Workloads refill four Ready assets with lost funding and creation responses",

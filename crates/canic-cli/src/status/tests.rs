@@ -347,6 +347,7 @@ fn retain_terminal_fleet(root: &Path, environment: &str, fleet_name: &str) {
     write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::Converged,
             estate_funding_required: None,

@@ -41,6 +41,7 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
     let bytes = vec![42; 64 * 1_024];
     let bytes_sha256 = sha256_hex(&bytes);
     let report = FleetEnsureReport {
+        funding_review: None,
         actual_conservation: None,
         effects_applied: 0,
         plan: FleetEnsurePlan {

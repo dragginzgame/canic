@@ -54,6 +54,58 @@ records the `restore apply` hard cut, shared backup selection and help fixes.
 These changes extend the open patch draft; they do not complete the independent
 test-throughput qualification above.
 
+## CANIC-140 Retained Creation Fee
+
+The maintainer requested the confirmed Toko Miner retained-growth fee correction.
+Every current estate seed now requires explicit `management_creation_fee_cycles`
+in compact units. Generation carries the fee into future creation funding;
+the retained-only rejection and implicit zero are removed. Already-paid assets
+remain retained without another creation charge. The open 0.110.9 draft,
+operator guide and CLI help include the contract.
+
+All 20 generator regressions pass, including a generated retained-growth plan
+with exact nonzero creation/Ledger fees before any mutation. The existing small
+paid-growth PocketIC proof passes in 181.20s (218s runner), covering lost funding
+and creation replies, conservation and effect-free replay. All-target,
+all-feature warning-denied Clippy passes for the changed host, CLI and internal
+fixture packages, and both CLI help regressions pass. The [correction report](../audits/reports/2026-09/2026-09-07/canic-140-retained-creation-fee.md)
+distinguishes host generation evidence from runtime and downstream qualification.
+
+The subsequent CANIC-140 qualification follow-up now feeds the production
+generator's output directly into the existing small paid-growth PocketIC case.
+The combined journey passes in 118.47s (127s runner), including nonzero fee
+authority, lost transfer/creation replies, conservation and terminal replay.
+It retains IC-built runtime authority while all network effects stay inside
+the local fixture. No application-specific or duplicate long test is added.
+
+The Canic source correction is complete within the accepted batch. It does not
+close the downstream mainnet qualification: Toko Miner must adopt the published
+correction, supply the exact fee in its retained seed, regenerate and review its
+plan, then validate complete growth and terminal application behavior. No sibling
+edit, broad validation, version change, publication or live deployment was made.
+
+The maintainer selected resumable reviewed funding for CANIC-142 and explicitly
+deferred CANIC-141. The host now retains an exact additional funding review
+inside the existing operation, without replacing its original plan or issued
+protocol effects. Planning exposes `funding_review.review_sha256`; applying that
+digest approves only the recorded shortfall and Ledger fee. A retained intent
+survives response loss with the same transfer identity. Terminal conservation
+includes the additional funding and fee while retaining exact creation receipts.
+The current journal schema is hard-cut in place. The focused real-adapter
+funding-pause journey passes in 190.30s (221s runner), including fee rejection,
+lost transfer/creation replies, preserved pending identity, complete readiness,
+cycle conservation and effect-free replay. Root maintenance and the outer ICP
+adapter now preserve the typed pause instead of dropping it. The 147 selected
+Fleet host tests, 10 Fleet CLI tests and registration check pass. Four focused
+funding regressions cover the final authority cleanup and reject a completed
+operation's funding review against a later plan. All-target/all-feature
+warning-denied Clippy passes for host, CLI and internal fixtures; formatting and
+diff checks pass. The accepted open batch, including CANIC-140 and CANIC-142, is
+ready for release approval, with the 0.110.9 changelog draft ready. CANIC-141
+remains deferred; no version, publication or downstream deployment was made. The
+[funding-resume report](../audits/reports/2026-09/2026-09-07/canic-142-reviewed-funding.md)
+records the injected recovery fixture and downstream qualification boundary.
+
 ## Maintained 0.109 Contract
 
 Fleet admission retains one Coordinator-owned canonical policy, one Root-owned

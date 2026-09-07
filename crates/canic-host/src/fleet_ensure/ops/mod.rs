@@ -8,6 +8,7 @@ mod canic_init;
 pub(super) mod continuation;
 mod current_inventory;
 pub(super) mod current_protocol;
+pub(super) mod funding;
 mod plan_content;
 mod platform;
 mod protocol;
