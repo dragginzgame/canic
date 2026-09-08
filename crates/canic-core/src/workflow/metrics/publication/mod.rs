@@ -31,9 +31,76 @@ impl PublicMetricsWorkflow {
             return Ok(());
         }
         let now = IcOps::now_nanos();
+        Self::sample_selected(families, now)
+    }
+
+    fn sample_selected(
+        families: std::collections::BTreeSet<crate::domain::public_metrics::PublicMetricFamily>,
+        now: u64,
+    ) -> Result<(), InternalError> {
+        let mut failure = None;
         for family in families {
-            PublicMetricsOps::sample_family(family, now)?;
+            if let Err(error) = PublicMetricsOps::sample_family(family, now) {
+                failure.get_or_insert(error);
+            }
         }
-        Ok(())
+        failure.map_or(Ok(()), Err)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        domain::public_metrics::PublicMetricFamily,
+        model::public_metrics::{PublicMetricSample, PublicMetricsCache},
+    };
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn rejected_performance_does_not_starve_selected_occupancy() {
+        crate::perf::reset();
+        let performance = PublicMetricFamily::Performance;
+        PublicMetricsCache::replace(
+            performance,
+            10,
+            vec![PublicMetricSample {
+                name: "prior".into(),
+                canister_id: None,
+                value: 7,
+                unit: "instructions".into(),
+            }],
+        )
+        .unwrap();
+        crate::perf::record_checkpoint(&"a".repeat(128), "accepted_checkpoint", 42);
+        let result = PublicMetricsWorkflow::sample_selected(
+            BTreeSet::from([performance, PublicMetricFamily::ShardOccupancy]),
+            20,
+        );
+        assert_eq!(
+            result.unwrap_err().code(),
+            crate::diagnostics::codes::REQUEST_INVALID
+        );
+        let retained = PublicMetricsCache::snapshot(performance).unwrap();
+        assert_eq!(retained.sampled_at_ns, 10);
+        assert_eq!(retained.metrics[0].value, 7);
+        assert_eq!(
+            PublicMetricsCache::snapshot(PublicMetricFamily::ShardOccupancy)
+                .unwrap()
+                .sampled_at_ns,
+            20
+        );
+        crate::perf::reset();
+        PublicMetricsWorkflow::sample_selected(BTreeSet::from([performance]), 30).unwrap();
+        assert_eq!(
+            PublicMetricsCache::snapshot(performance)
+                .unwrap()
+                .sampled_at_ns,
+            30
+        );
     }
 }

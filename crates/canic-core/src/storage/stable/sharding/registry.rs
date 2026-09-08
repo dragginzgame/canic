@@ -116,6 +116,20 @@ impl ShardingRegistry {
         }
     }
 
+    /// Read a Principal-ordered prefix without exporting the complete registry.
+    pub(crate) fn bounded_entries(limit: usize) -> Vec<ShardingRegistryEntryRecord> {
+        Self::with(|core| {
+            core.registry
+                .iter()
+                .take(limit)
+                .map(|row| ShardingRegistryEntryRecord {
+                    pid: *row.key(),
+                    entry: row.value(),
+                })
+                .collect()
+        })
+    }
+
     /// Export all partition-key assignments.
     #[must_use]
     pub(crate) fn export_assignments() -> ShardingAssignmentsData {

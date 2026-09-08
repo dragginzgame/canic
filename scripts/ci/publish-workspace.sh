@@ -36,12 +36,6 @@ if [ -n "$PUBLISH_FROM" ]; then
     fi
 fi
 
-# Fails before any publish attempt if an explicitly publishable workspace crate
-# depends at runtime or build time on a local crate marked `publish = false`.
-validate_publish_manifest_boundary() {
-    cargo test --locked -p canic --test workspace_manifest publishable_members_do_not_depend_on_unpublished_workspace_members
-}
-
 # Returns success once crates.io reports the expected version for a crate.
 registry_has_version() {
     local crate="$1"
@@ -71,9 +65,29 @@ wait_for_registry_version() {
 }
 
 version="$(bash "$VERSION_READER")"
+LOG_ROOT="${CANIC_PUBLICATION_LOG_DIR:-$ROOT_DIR/target/publication-runs}"
+mkdir -p "$LOG_ROOT"
+LOG_DIR="$(mktemp -d "$LOG_ROOT/$(date -u +%Y%m%dT%H%M%SZ)-$$.XXXXXX")"
+TIMING_INDEX=0
+declare -A observed_packages=()
+printf 'stage\texit_code\tseconds\tlog\n' >"$LOG_DIR/timings.tsv"
+printf 'Publication logs and timings: %s\n' "$LOG_DIR"
+trap 'printf "Retained publication logs and timings: %s\n" "$LOG_DIR"' EXIT
 
-bash "$ROOT_DIR/scripts/ci/check-release-candidate.sh"
-validate_publish_manifest_boundary
+run_publication_step() {
+    local label="$1"
+    shift
+    local start="$SECONDS"
+    local status=0
+    local log="$LOG_DIR/$TIMING_INDEX-$label.log"
+    TIMING_INDEX=$((TIMING_INDEX + 1))
+    "$@" 2>&1 | tee "$log" || status=$?
+    printf '%s\t%s\t%s\t%s\n' "$label" "$status" "$((SECONDS - start))" "$log" >>"$LOG_DIR/timings.tsv"
+    return "$status"
+}
+
+run_publication_step release-candidate bash "$ROOT_DIR/scripts/ci/check-release-candidate.sh"
+run_publication_step manifest-boundary bash "$ROOT_DIR/scripts/ci/check-publish-manifest-boundary.sh"
 
 started=0
 if [ -z "$PUBLISH_FROM" ]; then
@@ -88,7 +102,8 @@ for crate in "${PUBLISH_ORDER[@]}"; do
         started=1
     fi
 
-    if registry_has_version "$crate" "$version"; then
+    if run_publication_step "lookup-$crate" registry_has_version "$crate" "$version"; then
+        observed_packages["$crate"]=1
         echo "Skipping $crate $version (already on crates.io)"
         continue
     fi
@@ -102,17 +117,23 @@ for crate in "${PUBLISH_ORDER[@]}"; do
         publish_args+=(--dry-run)
     fi
 
-    cargo "${publish_args[@]}"
+    run_publication_step "publish-$crate" cargo "${publish_args[@]}"
 
     if [ "$PUBLISH_DRY_RUN" != "1" ]; then
-        wait_for_registry_version "$crate" "$version"
+        run_publication_step "propagation-$crate" wait_for_registry_version "$crate" "$version"
+        observed_packages["$crate"]=1
     fi
 done
 
 if [ "$PUBLISH_DRY_RUN" != "1" ]; then
     missing_packages=()
     for crate in "${PUBLISH_ORDER[@]}"; do
-        if ! registry_has_version "$crate" "$version"; then
+        # Exact package versions observed in this invocation need no second
+        # lookup. PUBLISH_FROM predecessors still require their own observation.
+        if [[ "${observed_packages[$crate]:-0}" == 1 ]]; then
+            continue
+        fi
+        if ! run_publication_step "verify-$crate" registry_has_version "$crate" "$version"; then
             missing_packages+=("$crate")
         fi
     done

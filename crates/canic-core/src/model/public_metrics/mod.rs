@@ -42,8 +42,11 @@ impl PublicMetricsCache {
     pub fn replace(
         family: PublicMetricFamily,
         sampled_at_ns: u64,
-        mut metrics: Vec<PublicMetricSample>,
+        metrics: impl IntoIterator<Item = PublicMetricSample>,
     ) -> Result<(), crate::InternalError> {
+        let mut metrics: Vec<_> = metrics.into_iter().take(MAX_PUBLIC_METRICS + 1).collect();
+        let truncated = metrics.len() > MAX_PUBLIC_METRICS;
+        metrics.truncate(MAX_PUBLIC_METRICS);
         if metrics.iter().any(|row| {
             row.name.is_empty()
                 || row.unit.is_empty()
@@ -53,8 +56,6 @@ impl PublicMetricsCache {
             return Err(crate::InternalError::invalid_input());
         }
         metrics.sort_by(|a, b| a.name.cmp(&b.name).then(a.canister_id.cmp(&b.canister_id)));
-        let truncated = metrics.len() > MAX_PUBLIC_METRICS;
-        metrics.truncate(MAX_PUBLIC_METRICS);
         SNAPSHOTS.with_borrow_mut(|cache| {
             cache.insert(
                 family,

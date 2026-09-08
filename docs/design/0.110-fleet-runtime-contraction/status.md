@@ -1,5 +1,23 @@
 # Canic 0.110 Implementation Status
 
+## PM1: Bounded Public Sampling
+
+Complete and ready for release approval after maintainer-pushed 0.110.10.
+CANIC-148 corrects optional public
+collection through bounded owner projections, independently attempted families
+and unchanged cycle-tracking ownership. Includes native bound/identity/failure
+regressions, a small IC sampling-cost and cycle-tracking proof, documentation
+and the open 0.110.11 changelog. No history task or new scheduler. CANIC-147
+is a separate capability request awaiting contract acceptance; CANIC-141 remains
+deferred. Native regressions (112 all-feature, 10 default), 17 storage/timer guards,
+affected-target Clippy and seven PocketIC cases pass. The focused PocketIC runner
+took 96 seconds including artifact rebuilds. Sampling 256 versus 4,096 recorded
+checkpoints took 4,449,546 versus 4,647,992 instructions. The
+[sampling handoff](../../audits/reports/2026-09/2026-09-08/public-sampling-bounds.md)
+records bounds, evidence and downstream qualification. Package versions remain
+0.110.10; the open 0.110.11 changelog is ready. Release execution remains
+maintainer-selected.
+
 ## RF1: Retained Fleet Feedback
 
 Ready for release approval, selected by the maintainer after CR1 on 2026-09-07. Extends the open

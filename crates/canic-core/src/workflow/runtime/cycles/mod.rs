@@ -720,7 +720,7 @@ impl CycleWorkflow {
     fn record_observation(sample: &CycleBalanceSample) {
         CycleTrackerOps::record(sample.timestamp_secs, sample.cycles.clone());
         Self::purge_history(sample.timestamp_secs);
-        // Optional telemetry cannot interrupt funding safety; readers retain a stale sample on failure.
+        // Optional collection has bounded owner reads; family errors preserve prior samples and do not change funding decisions.
         let _ = crate::workflow::metrics::publication::PublicMetricsWorkflow::sample();
     }
 

@@ -4,11 +4,11 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
-    static CYCLES_TOPUP_METRICS: RefCell<HashMap<CyclesTopupMetricKey, u64>> =
-        RefCell::new(HashMap::new());
+    static CYCLES_TOPUP_METRICS: RefCell<BTreeMap<CyclesTopupMetricKey, u64>> =
+        const { RefCell::new(BTreeMap::new()) };
 }
 
 ///
@@ -17,7 +17,7 @@ thread_local! {
 /// Auto top-up metric dimension used by public metrics projection.
 ///
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum CyclesTopupMetricKey {
     AboveThreshold,
@@ -51,6 +51,17 @@ impl CyclesTopupMetricKey {
 pub struct CyclesTopupMetrics;
 
 impl CyclesTopupMetrics {
+    /// Read a deterministic bounded prefix for optional public sampling.
+    pub(crate) fn bounded_snapshot(limit: usize) -> Vec<(CyclesTopupMetricKey, u64)> {
+        CYCLES_TOPUP_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .take(limit)
+                .map(|(key, count)| (*key, *count))
+                .collect()
+        })
+    }
+
     // Record one auto-top-up decision or outcome.
     fn increment(key: CyclesTopupMetricKey) {
         CYCLES_TOPUP_METRICS.with_borrow_mut(|counts| {
@@ -99,7 +110,7 @@ impl CyclesTopupMetrics {
 
     #[cfg(test)]
     pub fn reset() {
-        CYCLES_TOPUP_METRICS.with_borrow_mut(HashMap::clear);
+        CYCLES_TOPUP_METRICS.with_borrow_mut(BTreeMap::clear);
     }
 }
 
@@ -111,7 +122,7 @@ impl CyclesTopupMetrics {
 mod tests {
     use super::*;
 
-    fn snapshot_map() -> HashMap<CyclesTopupMetricKey, u64> {
+    fn snapshot_map() -> BTreeMap<CyclesTopupMetricKey, u64> {
         CyclesTopupMetrics::snapshot().into_iter().collect()
     }
 

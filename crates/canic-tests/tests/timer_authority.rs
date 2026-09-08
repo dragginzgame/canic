@@ -133,6 +133,116 @@ fn public_snapshots_preserve_observer_authority() {
     assert_eq!(stale.metrics.entries, snapshot.metrics.entries);
 }
 
+#[derive(CandidType, Deserialize)]
+struct PublicSamplingProbe {
+    sample_instructions: u64,
+    sample: Result<(), Error>,
+    cycle_tracking: Result<(), Error>,
+}
+
+#[test]
+fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_tracking() {
+    use canic::dto::public_status::{
+        PublicMetricFamily, PublicMetricsRequest, PublicSnapshotState,
+    };
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister = fixture.install_runtime_probe_canister();
+    let query = |family| {
+        let response: Result<PublicStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
+            canister,
+            fixture.root,
+            protocol::CANIC_PUBLIC_STATUS,
+            (PublicStatusRequest::Metrics(PublicMetricsRequest {
+                family,
+                page: PageRequest {
+                    limit: 1000,
+                    offset: 0,
+                },
+            }),),
+        );
+        let PublicStatusResponse::Metrics(snapshot) = response.expect("public cache") else {
+            panic!("metrics response")
+        };
+        snapshot
+    };
+    let baseline: Result<PublicSamplingProbe, Error> = fixture
+        .pic
+        .update_candid(
+            canister,
+            "qualify_public_metrics_sampling",
+            (256_u16, false),
+        )
+        .unwrap();
+    let baseline = baseline.expect("authorized fixture sampling");
+    baseline.sample.unwrap();
+    baseline.cycle_tracking.unwrap();
+    let full: Result<PublicSamplingProbe, Error> = fixture
+        .pic
+        .update_candid(
+            canister,
+            "qualify_public_metrics_sampling",
+            (4096_u16, false),
+        )
+        .unwrap();
+    let full = full.expect("authorized fixture sampling");
+    full.sample.unwrap();
+    full.cycle_tracking.unwrap();
+    println!(
+        "public sampling instructions: 256 checkpoints={}, 4096 checkpoints={}",
+        baseline.sample_instructions, full.sample_instructions
+    );
+    assert!(
+        full.sample_instructions < 20_000_000,
+        "bounded public sampling instruction budget"
+    );
+    assert!(
+        full.sample_instructions <= baseline.sample_instructions.saturating_mul(2),
+        "sampling cost must remain bounded beyond the retained-series ceiling"
+    );
+    let performance = query(PublicMetricFamily::Performance);
+    assert!(performance.truncated);
+    assert_eq!(performance.metrics.entries.len(), 256);
+    fixture.pic.advance_time(Duration::from_secs(301));
+    let rejected: Result<PublicSamplingProbe, Error> = fixture
+        .pic
+        .update_candid(canister, "qualify_public_metrics_sampling", (0_u16, true))
+        .unwrap();
+    let rejected = rejected.expect("authorized fixture sampling");
+    assert!(
+        matches!(rejected.sample, Err(error) if error.code() == canic::diagnostics::codes::REQUEST_INVALID.raw_code())
+    );
+    rejected
+        .cycle_tracking
+        .expect("optional family rejection must preserve cycle tracking");
+    let retained = query(PublicMetricFamily::Performance);
+    assert_eq!(retained.sampled_at_ns, performance.sampled_at_ns);
+    assert_eq!(retained.metrics.entries, performance.metrics.entries);
+    assert_eq!(retained.state, PublicSnapshotState::Stale);
+    let occupancy = query(PublicMetricFamily::ShardOccupancy);
+    assert_eq!(occupancy.state, PublicSnapshotState::Fresh);
+    assert!(occupancy.sampled_at_ns > performance.sampled_at_ns);
+    let history: Result<RoleStatusResponse, Error> = fixture
+        .pic
+        .query_candid(
+            canister,
+            protocol::CANIC_OBSERVABILITY,
+            (RoleStatusRequest::CycleHistory(PageRequest {
+                limit: 100,
+                offset: 0,
+            }),),
+        )
+        .unwrap();
+    let RoleStatusResponse::CycleHistory(history) = history.unwrap() else {
+        panic!("cycle history response")
+    };
+    assert!(
+        history
+            .entries
+            .iter()
+            .any(|entry| entry.timestamp_secs > performance.sampled_at_ns.unwrap() / 1_000_000_000)
+    );
+}
+
 #[test]
 fn exact_cycles_and_runtime_metrics_require_controller() {
     let fixture = install_lifecycle_boundary_fixture();

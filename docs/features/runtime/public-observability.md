@@ -97,6 +97,30 @@ Caches carry no authority and may be rebuilt after restoration. Until sampled,
 an enabled family reports `Unavailable`. A rejected replacement leaves the
 previous snapshot intact; its original sample time remains visible.
 
+Sampling attempts every selected family even if one fails, then returns the first
+family error in selector order. Failed families retain their original timestamps
+and become stale normally; successful families still refresh. Optional sampling
+errors do not change cycle-tracking or funding decisions.
+
+Collection bounds apply before formatting and sorting. Operations read at most
+257 entries from each of four counter owners and each of the three ICP-refill
+aggregate indexes. Each target entry yields at most two refill rows. Performance
+reads at most 129 recorded counters plus the upstream timer inventory, capped by
+ic-timers at 64 registrations with bounded identities; it builds no intent or
+timer-diagnostic projection. Occupancy reads at most 129 bounded shard records
+and no assignment keys. These ordered prefixes are independent of insertion
+order. Performance and occupancy emit two public rows per input; a sentinel row
+signals truncation. Each family retains the first 256 selected rows and sorts
+that bounded selection by name and canister dimension for reads.
+
+The complete public series name, including family prefix and suffix, must fit
+128 bytes. Oversized checkpoint/role labels remain valid internal instrumentation
+but reject that family's public sample without cloning unbounded text. The
+application publisher processes only its first 257 supplied rows, retaining up
+to 256; applications remain responsible for bounding their own collection and
+input construction and disposal. No new sampling task or historical retention
+is provided.
+
 ## Adoption
 
 A consuming frontend should label public status as Public and detailed

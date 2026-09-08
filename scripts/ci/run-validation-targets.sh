@@ -21,10 +21,13 @@ if [[ "${CANIC_VALIDATION_RUNNER_SNAPSHOT_PATH:-}" != "$RUNNER_SOURCE" ]]; then
     exit "$snapshot_status"
 fi
 
-LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-validation.XXXXXX")"
-trap 'rm -rf "$LOG_DIR"' EXIT
 FAILURE_LOG_ROOT="${CANIC_VALIDATION_FAILURE_LOG_DIR:-$ROOT/target/validation-failures}"
 FAILURE_RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+RUN_LOG_ROOT="${CANIC_VALIDATION_LOG_DIR:-$ROOT/target/validation-runs}"
+mkdir -p "$RUN_LOG_ROOT"
+LOG_DIR="$(mktemp -d "$RUN_LOG_ROOT/$FAILURE_RUN_ID.XXXXXX")"
+printf 'target\tresult\tseconds\tlog\n' >"$LOG_DIR/timings.tsv"
+printf 'Validation logs and timings: %s\n' "$LOG_DIR"
 
 RUNNER_DEPTH="${CANIC_VALIDATION_RUNNER_DEPTH:-0}"
 export CANIC_VALIDATION_RUNNER_DEPTH="$((RUNNER_DEPTH + 1))"
@@ -222,6 +225,7 @@ for target in "$@"; do
     elapsed_seconds+=("$elapsed")
     logs+=("$log")
     retained_logs+=("$retained_log")
+    printf '%s\t%s\t%s\t%s\n' "$target" "$result" "$elapsed" "$log" >>"$LOG_DIR/timings.tsv"
     if [[ "${GITHUB_ACTIONS:-}" == "true" && "$RUNNER_DEPTH" == "0" ]]; then
         printf '::endgroup::\n'
     fi
@@ -241,6 +245,7 @@ for index in "${!targets[@]}"; do
 done
 
 write_github_summary
+printf 'Retained validation logs and timings: %s\n' "$LOG_DIR"
 
 if [[ ${#failed_targets[@]} -ne 0 ]]; then
     highlighted_failure_log="$(persist_highlighted_failure_log)"

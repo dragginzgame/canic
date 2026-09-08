@@ -363,6 +363,9 @@ recovery-runbooks-gate:
 
 release-integrity-contract-gate:
 	bash scripts/ci/check-release-integrity-contract.sh
+	bash scripts/ci/check-publish-manifest-boundary.sh
+	bash scripts/ci/test-publish-manifest-boundary.sh
+	bash scripts/ci/test-publish-workspace.sh
 
 release-validation-matrix-gate:
 	bash scripts/ci/check-release-validation-matrix.sh
