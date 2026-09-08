@@ -150,11 +150,11 @@ example `../../canic.toml`.
 
 ## Fleet Subnet Root
 
-Declare `[roles.root]` with `kind = "root"` and omit `package`. Canic builds
-`canic-fleet-root` from the selected App configuration and its required
+Declare `[roles.root]` with `kind = "root"` and omit `package`. The host generates
+Root from the selected App configuration and its required
 capabilities. There is no application Root crate, lifecycle hook or custom
-endpoint surface. The Coordinator and `canic-fleet-wasm-store` are also
-Canic-owned infrastructure.
+endpoint surface. Coordinator and Store also use host-generated
+entrypoint packages against the exact Canic dependency.
 
 Build the configured Root with `canic build example root`. Its artifact binds
 the exact configuration, capabilities and release identity. Fleet Ensure owns

@@ -17,11 +17,13 @@ Evidence envelopes are designed for transport and comparison in CI. They
 preserve the underlying report and its input fingerprints without claiming
 that a deployment mutation happened.
 
-Fleet infrastructure uses `canic-fleet-coordinator`, `canic-fleet-root` and
-`canic-fleet-wasm-store`. Root builds bind the exact App configuration and
-required capabilities. The host materializes the canonical Root entrypoint and
-an exact dependency manifest, including for packaged consumers without a Root
-source package. It validates that Cargo graph before finalizing the artifact.
+The host generates thin Cargo packages for Root, Coordinator and Store under
+`.canic/generated/` beside the selected configuration. All three bind the exact
+Canic dependency and use unpublished build packages. Root selects configured
+capabilities, Store compiles its configuration, and Coordinator remains
+independent of App configuration. Cargo graphs are validated before artifact
+finalization. Canonical Coordinator/Store Candid ships in `canic/candid`; Root
+Candid follows its configured capabilities.
 
 ## Boundary
 

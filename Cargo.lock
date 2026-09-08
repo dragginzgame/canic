@@ -555,33 +555,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-fleet-coordinator"
-version = "0.110.9"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "canic-fleet-root"
-version = "0.110.9"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "canic-fleet-wasm-store"
-version = "0.110.9"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
 name = "canic-host"
 version = "0.110.9"
 dependencies = [

@@ -8,10 +8,9 @@
 //! resolved manifest or blocking role-contract findings.
 
 use crate::role_contract::{
-    PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation,
-    materialize_state_manifest, resolve_built_in_wasm_store_contract,
+    PackageValidationMode, RolePackageValidation, materialize_state_manifest,
     resolve_canonical_root_contract, resolve_declared_role_package_contract,
-    resolve_host_generated_fleet_coordinator_contract, validate_built_in_wasm_store_package,
+    resolve_host_generated_fleet_coordinator_contract, resolve_host_generated_wasm_store_contract,
     validate_declared_role_package,
 };
 use canic_core::{
@@ -39,12 +38,11 @@ pub enum StateManifestResolution {
 
 #[must_use]
 pub fn resolve_workspace_state_manifest(
-    workspace_root: &Path,
+    _workspace_root: &Path,
     config_paths: &[PathBuf],
     role_filter: Option<&str>,
 ) -> StateManifestResolution {
     let mut contracts = BTreeMap::<String, ResolvedRoleContract>::new();
-    let mut evidence = Vec::<RoleCargoGraphEvidence>::new();
     let mut errors = Vec::new();
     let mut matched_declared_role = false;
 
@@ -90,7 +88,6 @@ pub fn resolve_workspace_state_manifest(
                     RolePackageValidation::Supported(package_evidence) => {
                         let resolution =
                             resolve_declared_role_package_contract(&config, &package_evidence);
-                        evidence.push(package_evidence);
                         collect_contract(role, resolution, &mut contracts, &mut errors);
                     }
                     RolePackageValidation::Unsupported(finding) => errors.push(finding),
@@ -118,23 +115,12 @@ pub fn resolve_workspace_state_manifest(
     }
 
     if role_filter.is_none() || role_filter == Some(CanisterRole::WASM_STORE.as_str()) {
-        match existing_built_in_wasm_store_manifest(workspace_root, &evidence) {
-            Some(manifest_path) => match validate_built_in_wasm_store_package(
-                &manifest_path,
-                PackageValidationMode::Passive,
-            ) {
-                RolePackageValidation::Supported(package_evidence) => collect_contract(
-                    &CanisterRole::WASM_STORE,
-                    resolve_built_in_wasm_store_contract(&package_evidence),
-                    &mut contracts,
-                    &mut errors,
-                ),
-                RolePackageValidation::Unsupported(finding) => errors.push(finding),
-            },
-            None => errors.push(RoleContractFinding::BuiltInPackageUnavailable {
-                role: canic_core::role_contract::BuiltInRoleKind::WasmStore,
-            }),
-        }
+        collect_contract(
+            &CanisterRole::WASM_STORE,
+            resolve_host_generated_wasm_store_contract(),
+            &mut contracts,
+            &mut errors,
+        );
     }
 
     if !errors.is_empty() {
@@ -173,34 +159,4 @@ fn collect_contract(
             }
         }
     }
-}
-
-fn existing_built_in_wasm_store_manifest(
-    workspace_root: &Path,
-    evidence: &[RoleCargoGraphEvidence],
-) -> Option<PathBuf> {
-    for candidate in [
-        workspace_root.join("crates/canic-fleet-wasm-store/Cargo.toml"),
-        workspace_root.join(".icp/local/generated/canic-fleet-wasm-store/Cargo.toml"),
-    ] {
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-
-    for package in evidence {
-        let canic_root = package.canic_manifest_path.parent()?;
-        let sibling_root = canic_root.parent()?;
-        for candidate in [
-            sibling_root.join("canic-fleet-wasm-store/Cargo.toml"),
-            sibling_root
-                .join(format!("canic-fleet-wasm-store-{}", package.canic_version))
-                .join("Cargo.toml"),
-        ] {
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-    }
-    None
 }

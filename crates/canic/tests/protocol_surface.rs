@@ -253,8 +253,8 @@ fn public_error_contract_is_the_compact_nat16_hard_cut() {
     ));
 
     for relative_path in [
-        "crates/canic-fleet-coordinator/fleet_coordinator.did",
-        "crates/canic-fleet-wasm-store/wasm_store.did",
+        "crates/canic/candid/fleet_coordinator.did",
+        "crates/canic/candid/wasm_store.did",
     ] {
         let did_path = workspace_root().join(relative_path);
         let did = read_text(&did_path);
@@ -305,7 +305,7 @@ fn cycles_preflight_contract_preserves_caller_continuation_values() {
         "cycles response must not expose the parent balance:\n{response_env}"
     );
 
-    let relative_path = "crates/canic-fleet-wasm-store/wasm_store.did";
+    let relative_path = "crates/canic/candid/wasm_store.did";
     let did = read_text(&workspace_root().join(relative_path));
     for field in [
         "approved_cycles : nat",
@@ -490,7 +490,7 @@ fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {
 
 #[test]
 fn wasm_store_exposes_cycle_history_through_observability() {
-    let did_path = workspace_root().join("crates/canic-fleet-wasm-store/wasm_store.did");
+    let did_path = workspace_root().join("crates/canic/candid/wasm_store.did");
     let did = read_text(&did_path);
 
     assert!(
@@ -509,7 +509,7 @@ fn wasm_store_exposes_cycle_history_through_observability() {
 
 #[test]
 fn wasm_store_excludes_default_memory_diagnostics() {
-    let did_path = workspace_root().join("crates/canic-fleet-wasm-store/wasm_store.did");
+    let did_path = workspace_root().join("crates/canic/candid/wasm_store.did");
     let did = read_text(&did_path);
 
     assert!(
@@ -527,7 +527,7 @@ fn wasm_store_excludes_default_memory_diagnostics() {
 
 #[test]
 fn wasm_store_canonical_did_parses() {
-    let did_path = workspace_root().join("crates/canic-fleet-wasm-store/wasm_store.did");
+    let did_path = workspace_root().join("crates/canic/candid/wasm_store.did");
     let did = read_text(&did_path);
     assert!(
         did.contains("type FleetKey = record {")
@@ -592,7 +592,7 @@ fn wasm_store_canonical_did_parses() {
 
 #[test]
 fn canonical_store_exposes_public_and_protected_reads() {
-    let did = read_text(&workspace_root().join("crates/canic-fleet-wasm-store/wasm_store.did"));
+    let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));
     let (env, actor) = CandidSource::Text(&did).load().unwrap();
     let service = env.as_service(actor.as_ref().unwrap()).unwrap();
     for method in [
@@ -607,7 +607,7 @@ fn canonical_store_exposes_public_and_protected_reads() {
 
 #[test]
 fn fleet_coordinator_canonical_did_parses() {
-    let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
+    let did_path = workspace_root().join("crates/canic/candid/fleet_coordinator.did");
     let did = read_text(&did_path);
     let (env, actor) = CandidSource::Text(&did)
         .load()
@@ -637,8 +637,7 @@ fn fleet_coordinator_canonical_did_parses() {
 
 #[test]
 fn fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_types() {
-    let did =
-        read_text(&workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did"));
+    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
     for declaration in [
         "type FleetAdmissionMutationAction = variant {",
         "type FleetAdmissionMutationRequest = record {",
@@ -705,9 +704,7 @@ fn fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_ty
 #[test]
 fn fleet_coordinator_retirement_types_match_rust() {
     fn assert_current_type<T: candid::CandidType>(name: &str) {
-        let did = read_text(
-            &workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did"),
-        );
+        let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
         let (mut env, _) = CandidSource::Text(&did)
             .load()
             .expect("parse canonical Coordinator Candid");
@@ -736,7 +733,7 @@ fn fleet_coordinator_retirement_types_match_rust() {
 
 #[test]
 fn fleet_coordinator_command_surface_is_profile_exact() {
-    let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
+    let did_path = workspace_root().join("crates/canic/candid/fleet_coordinator.did");
     let did = read_text(&did_path);
     let request = did
         .split("type CoordinatorCommand = variant {")
@@ -816,7 +813,7 @@ fn infrastructure_read_contracts_match_their_authority_owners() {
             StoreObservabilityResponse, StoreStatusRequest, StoreStatusResponse,
         },
     };
-    let coordinator = "crates/canic-fleet-coordinator/fleet_coordinator.did";
+    let coordinator = "crates/canic/candid/fleet_coordinator.did";
     assert_contract::<CoordinatorObservabilityRequest, CoordinatorObservabilityResponse>(
         coordinator,
         canic::protocol::CANIC_OBSERVABILITY,
@@ -829,7 +826,7 @@ fn infrastructure_read_contracts_match_their_authority_owners() {
         coordinator,
         canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
     );
-    let store = "crates/canic-fleet-wasm-store/wasm_store.did";
+    let store = "crates/canic/candid/wasm_store.did";
     assert_contract::<StoreStatusRequest, StoreStatusResponse>(
         store,
         canic::protocol::CANIC_WASM_STORE_STATUS,

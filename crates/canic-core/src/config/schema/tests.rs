@@ -434,11 +434,7 @@ fn every_checked_in_canic_config_parses_and_validates() {
     configs.sort();
     assert!(!configs.is_empty(), "checked-in config inventory is empty");
     assert!(configs.windows(2).all(|pair| pair[0] != pair[1]));
-    for required in [
-        "apps/demo/canic.toml",
-        "apps/test/canic.toml",
-        "crates/canic-fleet-wasm-store/canic.toml",
-    ] {
+    for required in ["apps/demo/canic.toml", "apps/test/canic.toml"] {
         assert!(configs.contains(&root.join(required)), "missing {required}");
     }
 

@@ -86,8 +86,9 @@ with this file, the code is wrong.
 
 ## Ownership
 - Runtime/facade: `canic`, `canic-core`, `canic-macros`.
-- Canister control plane/infrastructure: `canic-control-plane`,
-  `canic-fleet-coordinator`, `canic-fleet-root`, `canic-fleet-wasm-store`.
+- Canister control plane: `canic-control-plane`. Fleet artifact entrypoints and
+  their generated Cargo packages are owned by `canic-host`; canonical Candid
+  ships with `canic`.
 - Host/operator: `canic-cli`, `canic-host`, `canic-backup`.
 - Testing: sibling `ic-testkit`, `canic-testing-internal`, `canic-tests`.
 - `scripts/dev/*` are intentional maintainer helpers, not stale CLI leftovers.

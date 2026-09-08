@@ -1,8 +1,10 @@
 use super::*;
+use crate::fleet_package::dependency_patch_table;
 use crate::role_contract::{
     RolePackageValidation, resolve_declared_role_package_contract, validate_declared_role_package,
 };
 use canic_core::{bootstrap::parse_config_model, role_contract::RoleContractResolution};
+use std::fs;
 
 fn entrypoint_calls(source: &str) -> Vec<String> {
     let file = syn::parse_file(source).unwrap();
@@ -40,10 +42,7 @@ fn standalone_consumer_build_resolves_root_without_an_existing_lockfile() {
         "dependencies": {"canic": {"path": canic_manifest.parent().unwrap(), "default-features": false}},
     });
     let mut manifest = toml::to_string(&toml::Value::try_from(document).unwrap()).unwrap();
-    manifest.push_str(
-        &generated_wasm_store_wrapper_patch_table(&canic_manifest, env!("CARGO_PKG_VERSION"))
-            .unwrap(),
-    );
+    manifest.push_str(&dependency_patch_table(&canic_manifest, env!("CARGO_PKG_VERSION")).unwrap());
     fs::write(scratch.join("Cargo.toml"), manifest).unwrap();
     let source = "[app]\nname = 'consumer'\n[roles.root]\nkind = 'root'\n[auth.delegated_tokens]\nenabled = false\n";
     let config_path = scratch.join("canic.toml");
@@ -112,9 +111,7 @@ fn canonical_root_build_selects_exact_configuration_capabilities() {
                 )
                 .unwrap()
             ),
-            entrypoint_calls(
-                &fs::read_to_string(workspace.join("crates/canic-fleet-root/src/lib.rs")).unwrap()
-            )
+            ["canic::start_fleet_root", "canic::finish"]
         );
     }
     fs::remove_dir_all(scratch).unwrap();

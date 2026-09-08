@@ -262,11 +262,11 @@ fn root_release_cargo_build_spec(
         .into_iter()
         .map(|lifecycle| (lifecycle.role, lifecycle.package))
         .collect::<BTreeMap<_, _>>();
-    let mut packages = BTreeSet::from([
-        "canic-host".to_string(),
-        "canic-fleet-wasm-store".to_string(),
-    ]);
+    let mut packages = BTreeSet::from(["canic-host".to_string(), "canic".to_string()]);
     for role in spec.release_roles.iter().copied() {
+        if role == "root" {
+            continue;
+        }
         packages.insert(
             role_packages
                 .get(role)

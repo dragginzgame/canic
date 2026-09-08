@@ -1989,11 +1989,7 @@ exec icp "$@"
     ) -> ArtifactCacheSpec {
         let snapshot = AppConfigSnapshot::load(config_path)
             .expect("load literal-zero release build config for Cargo inputs");
-        let mut packages = BTreeSet::from([
-            "canic-fleet-coordinator".to_string(),
-            "canic-host".to_string(),
-            "canic-fleet-wasm-store".to_string(),
-        ]);
+        let mut packages = BTreeSet::from(["canic".to_string(), "canic-host".to_string()]);
         for role in configured_roles {
             let role = CanisterRole::from(role.clone());
             if role.is_root() {

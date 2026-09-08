@@ -5,13 +5,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const CANIC_MANAGED_RUNTIME_CRATES: &[&str] = &[
-    "canic",
-    "canic-core",
-    "canic-control-plane",
-    "canic-macros",
-    "canic-fleet-wasm-store",
-];
+const CANIC_MANAGED_RUNTIME_CRATES: &[&str] =
+    &["canic", "canic-core", "canic-control-plane", "canic-macros"];
 
 #[test]
 fn canic_managed_runtime_code_uses_managed_explicit_stable_keys() {

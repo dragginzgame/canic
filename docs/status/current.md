@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Purpose
 
@@ -30,6 +30,28 @@ validated pre-version source below; immutable details are in
 [the 0.110 changelog](../changelog/0.110.md). Post-release work is retained
 in the open changelog draft until it forms a coherent batch. Source-development truth
 comes from Git and the working tree.
+
+## Active Generated Fleet Build Batch
+
+The maintainer selected one host-generated package path for Root, Coordinator
+and Store, removing their separately published entrypoint packages. This extends
+the open 0.110.10 draft. Shared runtime owners remain in Canic; canonical
+Coordinator/Store Candid ships in `canic/candid`. Package generation, publication
+inventory, passive reports, fixture/package qualification and active docs are
+complete. All three artifacts pass the isolated packaged-source proof. The
+Prepared Root initial-Shard case passes terminal membership and replay in
+425.19s including cold builds (489s runner). The 92 focused host tests, 42
+protocol tests, seven workspace checks, configuration/storage guards, affected
+Clippy configurations, crypto closure, shell and formatting checks pass. The
+[generated-build handoff](../audits/reports/2026-09/2026-09-08/generated-fleet-artifacts.md)
+records exact scope and evidence.
+
+The expanded canonical Root, retained Fleet, read-surface and generated-build
+batch is ready for release approval. The open 0.110.10 changelog is ready;
+package versions remain 0.110.9. The maintainer-selected release gate/publication
+and downstream adoption/live qualification remain. CANIC-141 stays deferred.
+No version change, publication, deployment or sibling edit was made. The
+preceding reports retain evidence for their recorded source boundaries.
 
 ## Active Read-Surface Separation Batch
 

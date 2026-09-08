@@ -545,7 +545,8 @@ mod tests {
 
     #[test]
     fn exact_built_in_resolution_materializes_runtime_template_and_gc_allocations() {
-        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let workspace = crate::test_support::temp_dir("passive-store-contract");
+        assert!(!workspace.exists());
         let resolution = resolve_workspace_state_manifest(&workspace, &[], Some("wasm_store"));
         let StateManifestResolution::Resolved {
             manifest,
@@ -555,6 +556,7 @@ mod tests {
             panic!("built-in wasm_store contract should resolve")
         };
 
+        assert!(!workspace.exists());
         assert_eq!(contracts.len(), 1);
         let mut ids = manifest.roles[0]
             .state
