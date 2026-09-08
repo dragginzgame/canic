@@ -7,33 +7,59 @@
 use crate::{
     InternalError,
     config::{Config, RoleRuntimeConfig},
-    domain::{public_metrics::PublicMetricFamily, runtime::HealthStatus},
+    domain::public_metrics::PublicMetricFamily,
     dto::{
         metrics::MetricValue,
         page::{Page, PageRequest},
         public_status::{
-            PublicHealth, PublicMetric, PublicMetricsRequest, PublicMetricsSnapshot,
-            PublicSnapshotState,
+            PublicCounterDelta, PublicHealth, PublicHealthStatus, PublicHistoryPoint,
+            PublicHistoryRequest, PublicHistorySnapshot, PublicMetric, PublicMetricKind,
+            PublicMetricsRequest, PublicMetricsSnapshot, PublicSnapshotState,
         },
     },
     model::public_metrics::{
-        MAX_PUBLIC_METRIC_TEXT_BYTES, MAX_PUBLIC_METRICS, PUBLIC_METRICS_STALE_AFTER_NS,
-        PublicMetricSample, PublicMetricsCache,
+        MAX_HISTORY_BYTES, MAX_HISTORY_SERIES, MAX_PUBLIC_METRIC_TEXT_BYTES, MAX_PUBLIC_METRICS,
+        PUBLIC_HISTORY_RETENTION_NS, PUBLIC_HISTORY_SLOTS, PUBLIC_METRICS_CADENCE_NS,
+        PUBLIC_METRICS_STALE_AFTER_NS, PublicHistoryCache, PublicMetricSample, PublicMetricsCache,
     },
     ops::{
         ic::IcOps,
         runtime::{env::EnvOps, metrics},
     },
 };
-use std::collections::BTreeSet;
+use std::{cell::Cell, collections::BTreeSet};
+
+thread_local! {
+    static APPLICATION_SAMPLER: Cell<Option<ApplicationMetricsSampler>> = const { Cell::new(None) };
+}
 
 #[cfg(feature = "sharding")]
 use crate::ops::storage::placement::sharding::ShardingRegistryOps;
+
+/// One synchronous aggregate provider composed by application lifecycle code.
+/// The provider owns bounded source collection; Canic owns the timer and history.
+#[derive(Clone, Copy)]
+pub struct ApplicationMetricsSampler {
+    collect: fn() -> Result<Vec<PublicMetric>, crate::dto::error::Error>,
+}
+
+impl ApplicationMetricsSampler {
+    /// Wrap a provider that reads bounded counters and preserves source time and reset windows.
+    #[must_use]
+    pub const fn new(collect: fn() -> Result<Vec<PublicMetric>, crate::dto::error::Error>) -> Self {
+        Self { collect }
+    }
+}
 
 /// Local sampling and public snapshot projection under immutable publication configuration.
 pub struct PublicMetricsOps;
 
 impl PublicMetricsOps {
+    /// Install the sole synchronous composition callback, with no timer or database ownership.
+    pub fn set_application_sampler(sample: Option<ApplicationMetricsSampler>) {
+        APPLICATION_SAMPLER.set(sample);
+    }
+
     #[must_use]
     pub fn enabled() -> BTreeSet<PublicMetricFamily> {
         RoleRuntimeConfig::try_get()
@@ -52,7 +78,7 @@ impl PublicMetricsOps {
         PublicHealth {
             canister_id: IcOps::canister_self(),
             role: EnvOps::canister_role().ok().map(|role| role.to_string()),
-            health: HealthStatus::Healthy,
+            health: PublicHealthStatus::Responding,
             observed_at_ns: now,
         }
     }
@@ -92,6 +118,8 @@ impl PublicMetricsOps {
                     canister_id: row.canister_id,
                     value: row.value,
                     unit: row.unit,
+                    observed_at_ns: row.observed_at_ns,
+                    kind: row.kind,
                 })
                 .collect()
         });
@@ -105,6 +133,100 @@ impl PublicMetricsOps {
         }
     }
 
+    /// Expire heap history from the update-side timer, never from a public query.
+    pub fn expire_history(now_ns: u64) {
+        PublicHistoryCache::expire(now_ns);
+    }
+
+    /// Read one bounded cached series without invoking any producer.
+    #[must_use]
+    pub fn history(request: PublicHistoryRequest) -> PublicHistorySnapshot {
+        let mut snapshot = Self::project_history(request, &Self::enabled(), IcOps::now_nanos());
+        snapshot.canister_version = ic_cdk::api::canister_version();
+        snapshot
+    }
+
+    fn project_history(
+        request: PublicHistoryRequest,
+        enabled: &BTreeSet<PublicMetricFamily>,
+        now_ns: u64,
+    ) -> PublicHistorySnapshot {
+        let selected = enabled.contains(&request.family);
+        let valid_name = request.name.len() <= MAX_PUBLIC_METRIC_TEXT_BYTES;
+        let series = (selected && valid_name)
+            .then(|| PublicHistoryCache::series(request.family, request.name, request.canister_id))
+            .flatten();
+        let slot = now_ns / PUBLIC_METRICS_CADENCE_NS;
+        let mut points: Vec<_> = series.as_ref().map_or_else(Vec::new, |series| {
+            series
+                .slots
+                .iter()
+                .filter(|point| {
+                    point.slot <= slot && slot - point.slot < PUBLIC_HISTORY_SLOTS as u64
+                })
+                .copied()
+                .collect()
+        });
+        points.sort_by_key(|point| point.slot);
+        let state = if !selected {
+            PublicSnapshotState::Disabled
+        } else if let Some(point) = points.last() {
+            if now_ns.saturating_sub(point.observed_at_ns) > PUBLIC_METRICS_STALE_AFTER_NS {
+                PublicSnapshotState::Stale
+            } else {
+                PublicSnapshotState::Fresh
+            }
+        } else {
+            PublicSnapshotState::Unavailable
+        };
+        let coverage_start_ns = points
+            .first()
+            .map(|point| point.slot * PUBLIC_METRICS_CADENCE_NS);
+        let total = points.len() as u64;
+        let entries = points
+            .iter()
+            .enumerate()
+            .map(|(index, point)| {
+                let delta = index
+                    .checked_sub(1)
+                    .and_then(|previous| counter_delta(&points[previous], point));
+                PublicHistoryPoint {
+                    delta,
+                    slot_start_ns: point.slot * PUBLIC_METRICS_CADENCE_NS,
+                    observed_at_ns: point.observed_at_ns,
+                    value: point.value,
+                    kind: point.kind,
+                }
+            })
+            .skip(usize::try_from(request.page.offset.min(total)).unwrap_or(PUBLIC_HISTORY_SLOTS))
+            .take(
+                usize::try_from(request.page.limit.min(PUBLIC_HISTORY_SLOTS as u64))
+                    .unwrap_or(PUBLIC_HISTORY_SLOTS),
+            )
+            .collect();
+        PublicHistorySnapshot {
+            state,
+            unit: series.map(|series| series.unit),
+            heap_started_at_ns: selected
+                .then(PublicHistoryCache::heap_started_at_ns)
+                .flatten(),
+            canister_version: 0,
+            coverage_start_ns,
+            cadence_ns: PUBLIC_METRICS_CADENCE_NS,
+            retention_ns: PUBLIC_HISTORY_RETENTION_NS,
+            stale_after_ns: PUBLIC_METRICS_STALE_AFTER_NS,
+            truncated: selected && PublicHistoryCache::truncated(),
+            series_limit: MAX_HISTORY_SERIES as u64,
+            byte_limit: MAX_HISTORY_BYTES as u64,
+            reserved_bytes: if selected {
+                PublicHistoryCache::reserved_bytes() as u64
+            } else {
+                0
+            },
+            points: Page { entries, total },
+        }
+    }
+
     pub fn record_application(metrics: Vec<PublicMetric>) -> Result<(), InternalError> {
         if !Self::enabled().contains(&PublicMetricFamily::Application) {
             return Ok(());
@@ -114,25 +236,84 @@ impl PublicMetricsOps {
             canister_id: row.canister_id,
             value: row.value,
             unit: row.unit,
+            observed_at_ns: row.observed_at_ns,
+            kind: row.kind,
         });
         PublicMetricsCache::replace(PublicMetricFamily::Application, IcOps::now_nanos(), rows)
     }
 
     pub fn sample_family(family: PublicMetricFamily, now: u64) -> Result<(), InternalError> {
-        let rows = match family {
-            PublicMetricFamily::Application => return Ok(()),
+        let mut rows = match family {
+            PublicMetricFamily::Application => {
+                if let Some(sample) = APPLICATION_SAMPLER.get() {
+                    let metrics = (sample.collect)().map_err(|_| InternalError::invalid_input())?;
+                    return Self::record_application(metrics);
+                }
+                return Ok(());
+            }
             PublicMetricFamily::Cycles => vec![PublicMetricSample {
                 name: "balance".into(),
                 canister_id: Some(IcOps::canister_self()),
                 value: IcOps::canister_cycle_balance().to_u128(),
                 unit: "cycles".into(),
+                observed_at_ns: 0,
+                kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
             }],
             PublicMetricFamily::Operations => operation_metrics()?,
             PublicMetricFamily::Performance => performance_metrics()?,
             PublicMetricFamily::ShardOccupancy => shard_metrics(),
         };
+        for row in &mut rows {
+            row.observed_at_ns = now;
+            // Timers expose lifetime summaries without a per-registration reset identity.
+            // Keep these raw observations out of counter delta/rate calculations.
+            let counter = (family == PublicMetricFamily::Operations
+                && !row.name.starts_with("cycles_funding.icp_refill."))
+                || (family == PublicMetricFamily::Performance
+                    && !row.name.starts_with("perf.timer."));
+            if counter {
+                row.kind = PublicMetricKind::Counter {
+                    window_id: 0,
+                    saturated: if matches!(row.unit.as_str(), "cycles" | "icp_e8s") {
+                        row.value == u128::MAX
+                    } else {
+                        row.value == u128::from(u64::MAX)
+                    },
+                };
+            }
+        }
         PublicMetricsCache::replace(family, now, rows)
     }
+}
+
+fn counter_delta(
+    previous: &crate::model::public_metrics::PublicHistorySample,
+    current: &crate::model::public_metrics::PublicHistorySample,
+) -> Option<PublicCounterDelta> {
+    let PublicMetricKind::Counter {
+        window_id,
+        saturated: false,
+    } = previous.kind
+    else {
+        return None;
+    };
+    if current.kind
+        != (PublicMetricKind::Counter {
+            window_id,
+            saturated: false,
+        })
+        || previous.slot.checked_add(1) != Some(current.slot)
+    {
+        return None;
+    }
+    let elapsed_ns = current
+        .observed_at_ns
+        .checked_sub(previous.observed_at_ns)
+        .filter(|elapsed| *elapsed > 0)?;
+    Some(PublicCounterDelta {
+        amount: current.value.checked_sub(previous.value)?,
+        elapsed_ns,
+    })
 }
 
 fn page(rows: Vec<PublicMetric>, request: PageRequest) -> Page<PublicMetric> {
@@ -179,12 +360,16 @@ fn operation_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
                     canister_id: row.principal,
                     value: u128::from(value),
                     unit: "count".into(),
+                    observed_at_ns: 0,
+                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                 }],
                 MetricValue::U128(value) => vec![PublicMetricSample {
                     name,
                     canister_id: row.principal,
                     value,
                     unit: amount_unit.into(),
+                    observed_at_ns: 0,
+                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                 }],
                 MetricValue::CountAndU64 { count, value_u64 } => vec![
                     PublicMetricSample {
@@ -192,12 +377,16 @@ fn operation_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
                         canister_id: row.principal,
                         value: u128::from(count),
                         unit: "count".into(),
+                        observed_at_ns: 0,
+                        kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                     },
                     PublicMetricSample {
                         name,
                         canister_id: row.principal,
                         value: u128::from(value_u64),
                         unit: "value".into(),
+                        observed_at_ns: 0,
+                        kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                     },
                 ],
             })
@@ -221,12 +410,16 @@ fn performance_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
                     canister_id: None,
                     value: u128::from(count),
                     unit: "count".into(),
+                    observed_at_ns: 0,
+                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                 },
                 PublicMetricSample {
                     name,
                     canister_id: None,
                     value: u128::from(value_u64),
                     unit: "instructions".into(),
+                    observed_at_ns: 0,
+                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                 },
             ])
         })
@@ -245,12 +438,16 @@ fn shard_metrics() -> Vec<PublicMetricSample> {
                     canister_id: Some(row.pid),
                     value: u128::from(row.entry.count),
                     unit: "assignments".into(),
+                    observed_at_ns: 0,
+                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                 },
                 PublicMetricSample {
                     name: format!("{}.capacity", row.entry.pool),
                     canister_id: Some(row.pid),
                     value: u128::from(row.entry.capacity),
                     unit: "assignments".into(),
+                    observed_at_ns: 0,
+                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                 },
             ]
         })
@@ -280,19 +477,36 @@ mod tests {
             },
         }
     }
+    fn publish(
+        family: PublicMetricFamily,
+        now: u64,
+        rows: impl IntoIterator<Item = PublicMetricSample>,
+    ) -> Result<(), InternalError> {
+        PublicMetricsCache::replace(
+            family,
+            now,
+            rows.into_iter().map(|mut row| {
+                row.observed_at_ns = now;
+                row
+            }),
+        )
+    }
+
     fn sample(value: u128) -> PublicMetricSample {
         PublicMetricSample {
             name: format!("assigned.{value:04}"),
             canister_id: None,
             value,
             unit: "assignments".into(),
+            observed_at_ns: 0,
+            kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
         }
     }
 
     #[test]
     fn publication_is_disabled_even_when_a_cached_snapshot_exists() {
         let family = PublicMetricFamily::Cycles;
-        PublicMetricsCache::replace(family, 10, vec![sample(7)]).unwrap();
+        publish(family, 10, vec![sample(7)]).unwrap();
         let result = PublicMetricsOps::project(request(family), &BTreeSet::new(), 10);
         assert_eq!(result.state, PublicSnapshotState::Disabled);
         assert_eq!(result.sampled_at_ns, None);
@@ -305,7 +519,7 @@ mod tests {
         let enabled = BTreeSet::from([family]);
         let missing = PublicMetricsOps::project(request(family), &enabled, 10);
         assert_eq!(missing.state, PublicSnapshotState::Unavailable);
-        PublicMetricsCache::replace(family, 10, vec![sample(3)]).unwrap();
+        publish(family, 10, vec![sample(3)]).unwrap();
         let fresh = PublicMetricsOps::project(request(family), &enabled, 10);
         assert_eq!(fresh.state, PublicSnapshotState::Fresh);
         let stale = PublicMetricsOps::project(
@@ -326,7 +540,7 @@ mod tests {
     fn publication_selection_is_exact_and_pages_are_bounded() {
         let family = PublicMetricFamily::ShardOccupancy;
         let enabled = BTreeSet::from([family]);
-        PublicMetricsCache::replace(
+        publish(
             family,
             20,
             (0..=MAX_PUBLIC_METRICS).map(|v| sample(v as u128)),
@@ -367,13 +581,17 @@ mod tests {
                     name: "demo.assigned".into(),
                     canister_id: Some(shard),
                     value: 2,
-                    unit: "assignments".into()
+                    unit: "assignments".into(),
+                    observed_at_ns: 10,
+                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                 },
                 PublicMetric {
                     name: "demo.capacity".into(),
                     canister_id: Some(shard),
                     value: 4,
-                    unit: "assignments".into()
+                    unit: "assignments".into(),
+                    observed_at_ns: 10,
+                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                 },
             ]
         );
@@ -390,13 +608,11 @@ mod tests {
     #[test]
     fn rejected_sample_preserves_previous_snapshot() {
         let family = PublicMetricFamily::Application;
-        PublicMetricsCache::replace(family, 10, vec![sample(1)]).unwrap();
+        publish(family, 10, vec![sample(1)]).unwrap();
         let mut invalid = sample(2);
         invalid.name.clear();
         assert_eq!(
-            PublicMetricsCache::replace(family, 20, vec![invalid])
-                .unwrap_err()
-                .code(),
+            publish(family, 20, vec![invalid]).unwrap_err().code(),
             crate::diagnostics::codes::REQUEST_INVALID
         );
         assert_eq!(
@@ -407,7 +623,7 @@ mod tests {
     #[test]
     fn cache_consumes_only_one_bounded_prefix_and_reports_truncation() {
         let consumed = std::cell::Cell::new(0);
-        PublicMetricsCache::replace(
+        publish(
             PublicMetricFamily::Application,
             10,
             (0..).map(|value| {
@@ -443,7 +659,13 @@ mod tests {
         }
         PublicMetricsOps::sample_family(family, 20).unwrap();
         let second = PublicMetricsOps::project(request(family), &BTreeSet::from([family]), 20);
-        assert_eq!(first.metrics.entries, second.metrics.entries);
+        for (first, second) in first.metrics.entries.iter().zip(&second.metrics.entries) {
+            assert_eq!(first.name, second.name);
+            assert_eq!(first.value, second.value);
+            assert_eq!(first.kind, second.kind);
+            assert_eq!(first.observed_at_ns, 10);
+            assert_eq!(second.observed_at_ns, 20);
+        }
         crate::perf::reset();
     }
 
@@ -465,5 +687,132 @@ mod tests {
         assert!(snapshot.truncated);
         assert_eq!(snapshot.metrics.len(), MAX_PUBLIC_METRICS);
         ShardingRegistryOps::clear_for_test();
+    }
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+
+    #[test]
+    fn history_reads_bound_pages_hide_disabled_data_and_expire_without_mutation() {
+        let family = PublicMetricFamily::Cycles;
+        for slot in [1, 2, 5] {
+            PublicMetricsCache::replace(
+                family,
+                slot * PUBLIC_METRICS_CADENCE_NS,
+                [PublicMetricSample {
+                    name: "balance".into(),
+                    canister_id: None,
+                    value: slot.into(),
+                    unit: "cycles".into(),
+                    observed_at_ns: slot * PUBLIC_METRICS_CADENCE_NS,
+                    kind: PublicMetricKind::Gauge,
+                }],
+            )
+            .unwrap();
+        }
+        let request = PublicHistoryRequest {
+            family,
+            name: "balance".into(),
+            canister_id: None,
+            page: PageRequest {
+                offset: 1,
+                limit: u64::MAX,
+            },
+        };
+        let enabled = BTreeSet::from([family]);
+        let view = PublicMetricsOps::project_history(
+            request.clone(),
+            &enabled,
+            5 * PUBLIC_METRICS_CADENCE_NS,
+        );
+        assert_eq!(view.points.total, 3);
+        assert_eq!(
+            view.points
+                .entries
+                .iter()
+                .map(|point| point.value)
+                .collect::<Vec<_>>(),
+            [2, 5]
+        );
+        assert_eq!(view.coverage_start_ns, Some(PUBLIC_METRICS_CADENCE_NS));
+        let disabled = PublicMetricsOps::project_history(
+            request.clone(),
+            &BTreeSet::new(),
+            5 * PUBLIC_METRICS_CADENCE_NS,
+        );
+        assert_eq!(disabled.state, PublicSnapshotState::Disabled);
+        assert!(disabled.points.entries.is_empty());
+        assert_eq!(disabled.reserved_bytes, 0);
+        let expired =
+            PublicMetricsOps::project_history(request, &enabled, 400 * PUBLIC_METRICS_CADENCE_NS);
+        assert_eq!(expired.state, PublicSnapshotState::Unavailable);
+        assert!(expired.points.entries.is_empty());
+        assert_eq!(expired.reserved_bytes, view.reserved_bytes);
+        assert_eq!(
+            PublicMetricsCache::snapshot(family).unwrap().sampled_at_ns,
+            5 * PUBLIC_METRICS_CADENCE_NS
+        );
+    }
+}
+
+#[cfg(test)]
+mod counter_tests {
+    use super::*;
+    use crate::model::public_metrics::PublicHistorySample;
+
+    #[test]
+    fn public_metrics_counter_deltas_require_adjacent_unsaturated_same_window_observations() {
+        let first = PublicHistorySample {
+            slot: 1,
+            observed_at_ns: 10,
+            value: 7,
+            kind: PublicMetricKind::Counter {
+                window_id: 4,
+                saturated: false,
+            },
+        };
+        let second = PublicHistorySample {
+            slot: 2,
+            observed_at_ns: 20,
+            value: 12,
+            ..first
+        };
+        assert_eq!(
+            counter_delta(&first, &second),
+            Some(PublicCounterDelta {
+                amount: 5,
+                elapsed_ns: 10
+            })
+        );
+        for incompatible in [
+            PublicHistorySample {
+                kind: PublicMetricKind::Gauge,
+                ..second
+            },
+            PublicHistorySample {
+                kind: PublicMetricKind::Counter {
+                    window_id: 5,
+                    saturated: false,
+                },
+                ..second
+            },
+            PublicHistorySample {
+                kind: PublicMetricKind::Counter {
+                    window_id: 4,
+                    saturated: true,
+                },
+                ..second
+            },
+            PublicHistorySample { slot: 3, ..second },
+            PublicHistorySample {
+                observed_at_ns: 10,
+                ..second
+            },
+            PublicHistorySample { value: 1, ..second },
+        ] {
+            assert_eq!(counter_delta(&first, &incompatible), None);
+        }
     }
 }

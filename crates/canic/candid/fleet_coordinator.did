@@ -1232,10 +1232,6 @@ type FleetSubnetRootSnapshotAcknowledgementRequest = record {
 // Lifecycle state of one Fleet Subnet Root in the Fleet Registry snapshot.
 //
 type FleetSubnetRootStatus = variant { Joining; Draining; Active; Removed };
-//
-// HealthStatus
-//
-type HealthStatus = variant { unhealthy; healthy; degraded; unknown };
 type ObservabilityRequest = variant {
   RootAcknowledgements;
   Admission : FleetAdmissionStatusRequest;
@@ -1256,13 +1252,15 @@ type ObservabilityResponse = variant {
 type OperationReceipt = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec principal };
 type PageRequest = record { offset : nat64; limit : nat64 };
-// Minimal local identity and health without diagnostic checks or failure details.
+// Local identity and responsiveness without diagnostic checks or Fleet readiness.
 type PublicHealth = record {
   role : opt text;
   observed_at_ns : nat64;
   canister_id : principal;
-  health : HealthStatus;
+  health : PublicHealthStatus;
 };
+// Public query responsiveness; no runtime diagnostics or Fleet readiness assessment.
+type PublicHealthStatus = variant { responding };
 type PublicStatusRequest = variant { Overview; Health };
 type PublicStatusResponse = variant {
   Overview : RoleOverviewResponse;

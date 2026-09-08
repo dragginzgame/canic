@@ -603,9 +603,6 @@ fn workspace_root() -> PathBuf {
 // Tests
 // -----------------------------------------------------------------------------
 
-#[cfg(test)]
-pub(super) use fast_tests::governed_fast_cases;
-
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 pub(super) use tests::governed_pocketic_cases;
 
@@ -646,13 +643,6 @@ mod fast_tests {
                 .and_then(|projection| projection.digest())
                 .expect("lifecycle Component topology projection")
         );
-    }
-
-    pub fn governed_fast_cases() -> Vec<crate::pic::GovernedTestCase> {
-        vec![(
-            "lifecycle embedded Component Spec",
-            init_payload_component_spec_matches_embedded_canister_config,
-        )]
     }
 }
 

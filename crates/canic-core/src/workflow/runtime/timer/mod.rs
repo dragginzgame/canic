@@ -139,6 +139,7 @@ impl TimerAuthorityWorkflow {
             runtime::auth::RuntimeAuthWorkflow::claimed_root_issuer_renewal_timer_identity()?,
             runtime::intent::IntentCleanupWorkflow::claimed_timer_identity()?,
             runtime::log::LogRetentionWorkflow::claimed_timer_identity()?,
+            crate::workflow::metrics::publication::timer::PublicSamplingTimer::claimed_timer_identity()?,
             runtime::cycles::CycleWorkflow::claimed_timer_identity()?,
             PlacementAcknowledgementWorkflow::claimed_timer_identity()?,
             claimed_core_recovery_watchdog_identity()?,
@@ -177,6 +178,7 @@ impl TimerAuthorityWorkflow {
         runtime::auth::RuntimeAuthWorkflow::cancel_root_issuer_renewal_timer()?;
         runtime::intent::IntentCleanupWorkflow::cancel_timer()?;
         runtime::log::LogRetentionWorkflow::cancel_timer()?;
+        crate::workflow::metrics::publication::timer::PublicSamplingTimer::cancel_timer()?;
         runtime::cycles::CycleWorkflow::cancel_timer()?;
         PlacementAcknowledgementWorkflow::cancel_timer()?;
         cancel_core_recovery_watchdog()?;
@@ -499,11 +501,11 @@ mod tests {
                 .expect("placement acknowledgement identity"),
             recovery_watchdog_identity().expect("recovery watchdog identity"),
             canister_pool_timer_identity().expect("canister pool identity"),
-        ]
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-
-        assert_eq!(identities.len(), 7);
+            crate::workflow::metrics::publication::timer::PublicSamplingTimer::timer_identity()
+                .expect("public sampling identity"),
+        ];
+        let unique = identities.iter().collect::<BTreeSet<_>>();
+        assert_eq!(unique.len(), identities.len());
         assert!(
             identities
                 .iter()

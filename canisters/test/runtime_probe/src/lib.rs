@@ -13,6 +13,7 @@ use std::{
 };
 
 thread_local! {
+    static REJECT_APPLICATION_SAMPLE: Cell<bool> = const { Cell::new(false) };
     static TIMER_ONCE_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
     static TIMER_INTERVAL_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
     static TIMER_CANCELLED_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
@@ -284,6 +285,8 @@ async fn sample_public_metrics() -> Result<(), canic::Error> {
             canister_id: Some(ic_cdk::api::canister_self()),
             value: 7,
             unit: "assignments".to_string(),
+            observed_at_ns: ic_cdk::api::time(),
+            kind: canic::dto::public_status::PublicMetricKind::Gauge,
         },
     ])
 }
@@ -319,6 +322,42 @@ async fn qualify_public_metrics_sampling(
         sample,
         cycle_tracking,
     })
+}
+
+/// Select a bounded local measurement participant for the sampling fixture.
+#[canic_update(requires(caller::is_controller()))]
+async fn configure_public_sampler(reject: bool) -> Result<(), Error> {
+    REJECT_APPLICATION_SAMPLE.set(reject);
+    canic::api::public_status::PublicStatusApi::set_application_sampler(Some(
+        canic::api::public_status::ApplicationMetricsSampler::new(sample_application_counters),
+    ));
+    Ok(())
+}
+
+fn sample_application_counters() -> Result<Vec<canic::dto::public_status::PublicMetric>, Error> {
+    if REJECT_APPLICATION_SAMPLE.get() {
+        return Err(Error::from_registered(
+            canic::diagnostics::codes::REQUEST_INVALID,
+        ));
+    }
+    Ok(vec![canic::dto::public_status::PublicMetric {
+        name: "timer_completions".into(),
+        canister_id: Some(ic_cdk::api::canister_self()),
+        value: TIMER_INTERVAL_EXECUTIONS.get().into(),
+        unit: "count".into(),
+        observed_at_ns: ic_cdk::api::time(),
+        kind: canic::dto::public_status::PublicMetricKind::Counter {
+            window_id: 0,
+            saturated: TIMER_INTERVAL_EXECUTIONS.get() == u64::MAX,
+        },
+    }])
+}
+
+/// Exercise the existing volatile suspension fence without creating a timer owner.
+#[canic_update(requires(caller::is_controller()))]
+async fn suspend_public_sampler_fixture() -> Result<(), Error> {
+    canic::__internal::core::api::timer::TimerApi::restore_snapshot_suspension(true);
+    Ok(())
 }
 
 canic::finish!();

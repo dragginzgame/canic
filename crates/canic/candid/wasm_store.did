@@ -187,10 +187,6 @@ type FleetSubnetWasmStoreInitArgs = record {
   install_id : blob;
   authority : FleetSubnetWasmStoreAuthority;
 };
-//
-// HealthStatus
-//
-type HealthStatus = variant { unhealthy; healthy; degraded; unknown };
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -214,15 +210,19 @@ type OperationStatusRequest = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec CycleTrackerEntry };
 type PageRequest = record { offset : nat64; limit : nat64 };
 type Page_1 = record { total : nat64; entries : vec PublicMetric };
-// Minimal local identity and health without diagnostic checks or failure details.
+// Local identity and responsiveness without diagnostic checks or Fleet readiness.
 type PublicHealth = record {
   role : opt text;
   observed_at_ns : nat64;
   canister_id : principal;
-  health : HealthStatus;
+  health : PublicHealthStatus;
 };
+// Public query responsiveness; no runtime diagnostics or Fleet readiness assessment.
+type PublicHealthStatus = variant { responding };
 // An explicitly named aggregate value with an optional canister dimension.
 type PublicMetric = record {
+  observed_at_ns : nat64;
+  kind : PublicMetricKind;
   value : nat;
   name : text;
   unit : text;
@@ -237,6 +237,38 @@ type PublicMetricFamily = variant {
   shard_occupancy;
 };
 // Select a published aggregate family and one bounded page.
+type PublicMetricKind = variant {
+  Gauge;
+  Counter : record { window_id : nat64; saturated : bool };
+};
+type PublicHistoryRequest = record {
+  family : PublicMetricFamily;
+  name : text;
+  canister_id : opt principal;
+  page : PageRequest;
+};
+type PublicHistoryPoint = record {
+  delta : opt record { amount : nat; elapsed_ns : nat64 };
+  slot_start_ns : nat64;
+  observed_at_ns : nat64;
+  value : nat;
+  kind : PublicMetricKind;
+};
+type PublicHistorySnapshot = record {
+  state : PublicSnapshotState;
+  unit : opt text;
+  heap_started_at_ns : opt nat64;
+  canister_version : nat64;
+  coverage_start_ns : opt nat64;
+  cadence_ns : nat64;
+  retention_ns : nat64;
+  stale_after_ns : nat64;
+  truncated : bool;
+  series_limit : nat64;
+  byte_limit : nat64;
+  reserved_bytes : nat64;
+  points : record { entries : vec PublicHistoryPoint; total : nat64 };
+};
 type PublicMetricsRequest = record {
   page : PageRequest;
   family : PublicMetricFamily;
@@ -253,11 +285,13 @@ type PublicMetricsSnapshot = record {
 // Availability is data, independent of caller identity.
 type PublicSnapshotState = variant { Stale; Disabled; Fresh; Unavailable };
 type PublicStatusRequest = variant {
+  History : PublicHistoryRequest;
   Overview;
   Health;
   Metrics : PublicMetricsRequest;
 };
 type PublicStatusResponse = variant {
+  History : PublicHistorySnapshot;
   Overview : RoleOverviewResponse;
   Health : PublicHealth;
   Metrics : PublicMetricsSnapshot;

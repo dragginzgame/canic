@@ -1,13 +1,21 @@
 //! Module: workflow::metrics::publication
 //!
 //! Responsibility: sample explicitly selected families and expose public cache projections.
-//! Does not own: authorization, timer registration, or snapshot records.
+//! Does not own: authorization or snapshot records.
 //! Boundary: trusted local updates sample; public queries only project cached values.
+
+pub mod timer;
 
 use crate::{
     InternalError,
-    dto::public_status::{PublicHealth, PublicMetric, PublicMetricsRequest, PublicMetricsSnapshot},
-    ops::{ic::IcOps, runtime::public_metrics::PublicMetricsOps},
+    dto::public_status::{
+        PublicHealth, PublicHistoryRequest, PublicHistorySnapshot, PublicMetric,
+        PublicMetricsRequest, PublicMetricsSnapshot,
+    },
+    ops::{
+        ic::IcOps,
+        runtime::public_metrics::{ApplicationMetricsSampler, PublicMetricsOps},
+    },
 };
 
 /// Public snapshot reads and explicit update-side publication.
@@ -22,6 +30,13 @@ impl PublicMetricsWorkflow {
     pub fn read(request: PublicMetricsRequest) -> PublicMetricsSnapshot {
         PublicMetricsOps::read(request)
     }
+    #[must_use]
+    pub fn history(request: PublicHistoryRequest) -> PublicHistorySnapshot {
+        PublicMetricsOps::history(request)
+    }
+    pub fn set_application_sampler(sample: Option<ApplicationMetricsSampler>) {
+        PublicMetricsOps::set_application_sampler(sample);
+    }
     pub fn record_application(metrics: Vec<PublicMetric>) -> Result<(), InternalError> {
         PublicMetricsOps::record_application(metrics)
     }
@@ -30,8 +45,16 @@ impl PublicMetricsWorkflow {
         if families.is_empty() {
             return Ok(());
         }
+        let start = crate::perf::perf_counter();
         let now = IcOps::now_nanos();
-        Self::sample_selected(families, now)
+        PublicMetricsOps::expire_history(now);
+        let result = Self::sample_selected(families, now);
+        crate::perf::record_checkpoint(
+            "canic",
+            "public_metrics_sample",
+            crate::perf::perf_counter().saturating_sub(start),
+        );
+        result
     }
 
     fn sample_selected(
@@ -73,6 +96,8 @@ mod tests {
                 canister_id: None,
                 value: 7,
                 unit: "instructions".into(),
+                observed_at_ns: 10,
+                kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
             }],
         )
         .unwrap();

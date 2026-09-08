@@ -55,6 +55,7 @@ impl RuntimeWorkflow {
     pub fn start_all() -> Result<(), InternalError> {
         workflow::runtime::log::LogRetentionWorkflow::start()?;
         workflow::runtime::intent::IntentCleanupWorkflow::start()?;
+        workflow::metrics::publication::timer::PublicSamplingTimer::start()?;
         Ok(())
     }
 
@@ -76,6 +77,11 @@ impl RuntimeWorkflow {
         start_root_service(
             "intent_cleanup",
             workflow::runtime::intent::IntentCleanupWorkflow::start(),
+        )?;
+
+        start_root_service(
+            "public_metrics",
+            workflow::metrics::publication::timer::PublicSamplingTimer::start(),
         )?;
 
         // root-only services
