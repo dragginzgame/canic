@@ -81,7 +81,6 @@ mod tests {
 
                 [roles.root]
                 kind = "root"
-                package = "../root"
             "#,
         )
         .expect("minimal root config parses");

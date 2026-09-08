@@ -48,6 +48,9 @@ records exact scope and evidence.
 The release-preflight audit catalog failure is corrected: five method scopes
 and versioned fingerprints now follow generated Fleet ownership. Targeted
 catalog and document checks pass; runtime/build sources are unchanged.
+The subsequent unit-test failures are corrected in fixture inputs and exact
+expected outputs, including standalone Cargo workspace isolation inside deployment
+scratch. All 32 selected regressions pass; production behavior is unchanged.
 
 The expanded canonical Root, retained Fleet, read-surface and generated-build
 batch is ready for release approval. The open 0.110.10 changelog is ready;
