@@ -11,10 +11,6 @@ GENERATED_PACKAGE_ROOT="$GENERATED_TOOL_ROOT/package-root"
 GENERATED_DOWNSTREAM_ROOT="$TMP_ROOT/downstream-generated"
 GENERATED_TESTING_ROOT="$TMP_ROOT/testing-consumer-generated"
 GENERATED_TARGET_DIR="$TMP_ROOT/cargo-target-generated"
-CANONICAL_TOOL_ROOT="$TMP_ROOT/tool-root-canonical"
-CANONICAL_PACKAGE_ROOT="$CANONICAL_TOOL_ROOT/package-root"
-CANONICAL_DOWNSTREAM_ROOT="$TMP_ROOT/downstream-canonical"
-CANONICAL_TARGET_DIR="$TMP_ROOT/cargo-target-canonical"
 PROOF_HOME="$TMP_ROOT/home"
 PROOF_TMPDIR="$TMP_ROOT/tmp"
 VERSION="$(
@@ -48,13 +44,6 @@ ensure_packaged_crate() {
                 --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" >/dev/null
             ;;
-        canic-fleet-root|canic-fleet-wasm-store)
-            cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
-                --config "patch.crates-io.canic.path=\"$ROOT/crates/canic\"" \
-                --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
-                --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" \
-                --config "patch.crates-io.canic-macros.path=\"$ROOT/crates/canic-macros\"" >/dev/null
-            ;;
         *)
             cargo package --locked -p "$crate_name" --allow-dirty --no-verify >/dev/null
             ;;
@@ -86,7 +75,6 @@ prepare_lockfile() {
 
 populate_isolated_package_root() {
     local package_root="$1"
-    local include_wasm_store="$2"
 
     mkdir -p "$package_root"
 
@@ -106,14 +94,7 @@ populate_isolated_package_root() {
         tar -xzf "$crate_archive" -C "$package_root"
     done
 
-    if [ "$include_wasm_store" = "yes" ]; then
-        crate_archive="$PACKAGE_STAGING_ROOT/canic-fleet-wasm-store-$VERSION.crate"
-        [ -f "$crate_archive" ] || {
-            echo "expected packaged crate archive at $crate_archive" >&2
-            exit 1
-        }
-        tar -xzf "$crate_archive" -C "$package_root"
-    fi
+
 }
 
 prepare_tool_root() {
@@ -124,7 +105,6 @@ prepare_tool_root() {
     cat > "$tool_root/Cargo.toml" <<EOF
 [workspace]
 members = ["package-root/canic-host-$VERSION"]
-exclude = ["package-root/canic-fleet-wasm-store-$VERSION"]
 resolver = "2"
 
 [patch.crates-io]
@@ -407,10 +387,7 @@ run_probe() {
     local downstream_root="$3"
     local target_dir="$4"
     local role="${5:-wasm_store}"
-    local config_path="$downstream_root/apps/canic.toml"
-    if [ "$role" = root ]; then
-        config_path="$downstream_root/canic.toml"
-    fi
+    local config_path="$downstream_root/canic.toml"
 
     mkdir -p "$PROOF_HOME" "$target_dir" "$PROOF_TMPDIR"
     assert_packaged_tool_root "$tool_root" "$package_root"
@@ -428,140 +405,42 @@ run_probe() {
     )
 }
 
-assert_wasm_store_artifacts() {
-    local scenario="$1"
-    local downstream_root="$2"
-    local wasm_path="$downstream_root/.icp/local/canisters/wasm_store/wasm_store.wasm"
-    local wasm_gz_path="$downstream_root/.icp/local/canisters/wasm_store/wasm_store.wasm.gz"
-    local did_path="$downstream_root/.icp/local/canisters/wasm_store/wasm_store.did"
-    local profile_path="$downstream_root/.icp/local/canisters/wasm_store/.build-profile"
-
-    [ -s "$wasm_path" ] || {
-        echo "expected built $scenario wasm_store artifact at $wasm_path" >&2
-        exit 1
-    }
-    [ -s "$wasm_gz_path" ] || {
-        echo "expected built $scenario wasm_store gzip artifact at $wasm_gz_path" >&2
-        exit 1
-    }
-    [ -s "$did_path" ] || {
-        echo "expected built $scenario wasm_store candid artifact at $did_path" >&2
-        exit 1
-    }
-    grep -qx 'fast' "$profile_path" || {
-        echo "expected $scenario wasm_store probe to build the fast profile" >&2
-        exit 1
-    }
-}
-
-assert_generated_probe_outputs() {
-    local package_root="$1"
-    local downstream_root="$2"
-    local wrapper_manifest="$downstream_root/.icp/local/generated/canic-fleet-wasm-store/Cargo.toml"
-
-    [ ! -d "$package_root/canic-fleet-wasm-store-$VERSION" ] || {
-        echo "expected isolated package root to exclude canic-fleet-wasm-store so the generated wrapper path is exercised" >&2
-        exit 1
-    }
-    [ -f "$wrapper_manifest" ] || {
-        echo "expected generated wasm_store wrapper at $wrapper_manifest" >&2
-        exit 1
-    }
-    assert_wasm_store_artifacts "generated wrapper" "$downstream_root"
-
-    grep -Fq '[patch.crates-io]' "$wrapper_manifest" || {
-        echo "expected generated wrapper to patch sibling packaged Canic crates" >&2
-        exit 1
-    }
-    cargo metadata --locked --no-deps --format-version=1 --manifest-path "$wrapper_manifest" |
-        jq -e '
-            any(
-                .packages[]
-                | select(.name == "canic-generated-wasm-store")
-                | .dependencies[];
-                .name == "canic"
-                    and .kind == null
-                    and .features == ["wasm-store-canister"]
-            )
-        ' >/dev/null || {
-        echo "expected generated wrapper to enable exactly the maintained Canic runtime features" >&2
-        exit 1
-    }
-    grep -Fq '[profile.fast]' "$wrapper_manifest" || {
-        echo "expected generated wrapper to define the Canic fast profile" >&2
-        exit 1
-    }
-    grep -Fq '[profile.release]' "$wrapper_manifest" || {
-        echo "expected generated wrapper to define the Canic release profile" >&2
-        exit 1
-    }
-    grep -Fq "$package_root/canic-$VERSION" "$wrapper_manifest" || {
-        echo "expected generated wrapper to depend on packaged canic source" >&2
-        exit 1
-    }
-    grep -Fq "$package_root/canic-control-plane-$VERSION" "$wrapper_manifest" || {
-        echo "expected generated wrapper to patch packaged canic-control-plane source" >&2
-        exit 1
-    }
-    grep -Fq "$package_root/canic-core-$VERSION" "$wrapper_manifest" || {
-        echo "expected generated wrapper to patch packaged canic-core source" >&2
-        exit 1
-    }
-    grep -Fq "$package_root/canic-macros-$VERSION" "$wrapper_manifest" || {
-        echo "expected generated wrapper to patch packaged canic-macros source" >&2
-        exit 1
-    }
-    if grep -Fq "$ROOT/crates" "$wrapper_manifest"; then
-        echo "generated wasm_store wrapper must not use repository crate paths" >&2
-        exit 1
-    fi
-}
-
-assert_canonical_probe_outputs() {
-    local package_root="$1"
-    local downstream_root="$2"
-    local wrapper_manifest="$downstream_root/.icp/local/generated/canic-fleet-wasm-store/Cargo.toml"
-
-    [ -d "$package_root/canic-fleet-wasm-store-$VERSION" ] || {
-        echo "expected isolated package root to include canonical canic-fleet-wasm-store" >&2
-        exit 1
-    }
-    [ ! -f "$wrapper_manifest" ] || {
-        echo "expected canonical canic-fleet-wasm-store source instead of generated wrapper" >&2
-        exit 1
-    }
-    assert_wasm_store_artifacts "canonical canic-fleet-wasm-store" "$downstream_root"
-}
-
-assert_root_probe_outputs() {
+assert_fleet_probe_outputs() {
     local downstream_root="$1"
     local package_root="$2"
-    local manifest="$downstream_root/.canic/generated/canic-fleet-root/Cargo.toml"
-    local artifacts="$downstream_root/.icp/local/canisters/root"
+    local role="$3"
+    local feature="$4"
+    local package="$5"
+    local manifest="$downstream_root/.canic/generated/$package/Cargo.toml"
+    local artifacts="$downstream_root/.icp/local/canisters/$role"
     for extension in wasm wasm.gz did; do
-        test -s "$artifacts/root.$extension"
+        test -s "$artifacts/$role.$extension"
     done
-    test ! -d "$downstream_root/root"
-    test ! -d "$package_root/canic-fleet-root-$VERSION"
     cargo metadata --locked --offline --no-deps --format-version=1 --manifest-path "$manifest" |
-        jq -e --arg path "$package_root/canic-$VERSION" '
-            .packages[] | select(.name == "canic-fleet-root") |
-            .dependencies[] | select(.name == "canic" and .kind == null) |
-            .path == $path and .uses_default_features == false and .features == ["control-plane"]
+        jq -e --arg path "$package_root/canic-$VERSION" --arg package "$package" \
+            --arg version "$VERSION" --arg feature "$feature" '
+            .packages[] | select(.name == $package) |
+            .version == $version and .publish == [] and
+            any(.dependencies[];
+                .name == "canic" and .kind == null and .path == $path and
+                .uses_default_features == false and .features == [$feature])
         ' >/dev/null
     if grep -Fq "$ROOT/crates" "$manifest"; then
-        echo "canonical Root must depend on isolated packaged source" >&2
+        echo "generated Fleet packages must depend on isolated packaged source" >&2
         exit 1
     fi
-    echo "packaged canonical Root builds without application Root source"
+    if [ "$role" != root ]; then
+        cmp "$package_root/canic-$VERSION/candid/$role.did" "$artifacts/$role.did"
+    fi
+    echo "packaged generated $role artifact passed"
 }
-
 
 main() {
     local scope="${1:-all}"
+    local role feature package
     case "$scope" in
-        all|root) ;;
-        *) echo "usage: $0 [all|root]" >&2; exit 2 ;;
+        all|fleet|root) ;;
+        *) echo "usage: $0 [all|fleet|root]" >&2; exit 2 ;;
     esac
     ensure_packaged_crate canic-backup
     ensure_packaged_crate canic-control-plane
@@ -569,46 +448,37 @@ main() {
     ensure_packaged_crate canic-macros
     ensure_packaged_crate canic-host
     ensure_packaged_crate canic
-    ensure_packaged_crate canic-fleet-root
-    if [ "$scope" = all ]; then
-        ensure_packaged_crate canic-fleet-wasm-store
-    fi
 
-    populate_isolated_package_root "$GENERATED_PACKAGE_ROOT" no
+    populate_isolated_package_root "$GENERATED_PACKAGE_ROOT"
     prepare_tool_root "$GENERATED_TOOL_ROOT"
     prepare_downstream_root "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_PACKAGE_ROOT"
-    if [ "$scope" = root ]; then
-        prepare_lockfile "$GENERATED_TOOL_ROOT"
-        prepare_lockfile "$GENERATED_DOWNSTREAM_ROOT" wasm32-unknown-unknown
-        run_probe "$GENERATED_TOOL_ROOT" "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR" root
-        assert_root_probe_outputs "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_PACKAGE_ROOT"
-        return
-    fi
-    prepare_testing_consumer "$GENERATED_TESTING_ROOT" "$GENERATED_PACKAGE_ROOT"
     prepare_lockfile "$GENERATED_TOOL_ROOT"
     prepare_lockfile "$GENERATED_DOWNSTREAM_ROOT" wasm32-unknown-unknown
-    prepare_lockfile "$GENERATED_TESTING_ROOT"
-    enable_and_resolve_packaged_testing_consumer \
-        "$GENERATED_TESTING_ROOT" \
-        "$GENERATED_PACKAGE_ROOT" \
-        "$GENERATED_TARGET_DIR"
-    run_packaged_canister_probe "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR"
-    run_packaged_testing_consumer "$GENERATED_TESTING_ROOT" "$GENERATED_TARGET_DIR"
-    run_probe "$GENERATED_TOOL_ROOT" "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR"
-    assert_generated_probe_outputs "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT"
-    run_probe "$GENERATED_TOOL_ROOT" "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR" root
-    assert_root_probe_outputs "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_PACKAGE_ROOT"
-
-    populate_isolated_package_root "$CANONICAL_PACKAGE_ROOT" yes
-    prepare_packaged_canic_patch_config "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_PACKAGE_ROOT"
-    prepare_tool_root "$CANONICAL_TOOL_ROOT"
-    prepare_downstream_root "$CANONICAL_DOWNSTREAM_ROOT" "$CANONICAL_PACKAGE_ROOT"
-    prepare_lockfile "$CANONICAL_TOOL_ROOT"
-    prepare_lockfile "$CANONICAL_DOWNSTREAM_ROOT" wasm32-unknown-unknown
-    run_probe "$CANONICAL_TOOL_ROOT" "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_DOWNSTREAM_ROOT" "$CANONICAL_TARGET_DIR"
-    assert_canonical_probe_outputs "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_DOWNSTREAM_ROOT"
-
-    echo "packaged downstream Canister, managed-App testing and wasm_store probe passed"
+    if [ "$scope" = root ]; then
+        run_probe "$GENERATED_TOOL_ROOT" "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR" root
+        assert_fleet_probe_outputs "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_PACKAGE_ROOT" root control-plane canic-fleet-root
+        return
+    fi
+    if [ "$scope" = all ]; then
+        prepare_testing_consumer "$GENERATED_TESTING_ROOT" "$GENERATED_PACKAGE_ROOT"
+        prepare_lockfile "$GENERATED_TESTING_ROOT"
+        enable_and_resolve_packaged_testing_consumer \
+            "$GENERATED_TESTING_ROOT" \
+            "$GENERATED_PACKAGE_ROOT" \
+            "$GENERATED_TARGET_DIR"
+        run_packaged_canister_probe "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR"
+        run_packaged_testing_consumer "$GENERATED_TESTING_ROOT" "$GENERATED_TARGET_DIR"
+    fi
+    for role in fleet_coordinator root wasm_store; do
+        run_probe "$GENERATED_TOOL_ROOT" "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR" "$role"
+        case "$role" in
+            fleet_coordinator) feature=fleet-coordinator-canister; package=canic-fleet-coordinator ;;
+            root) feature=control-plane; package=canic-fleet-root ;;
+            wasm_store) feature=wasm-store-canister; package=canic-fleet-wasm-store ;;
+        esac
+        assert_fleet_probe_outputs "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_PACKAGE_ROOT" "$role" "$feature" "$package"
+    done
+    echo "packaged generated Fleet artifact proof passed"
 }
 
 main "$@"

@@ -10,8 +10,7 @@ types and helpers explicitly.
 This crate exists to hold the shared control-plane runtime pieces used by:
 
 - the `canic` facade when `control-plane` is enabled
-- the canonical `canic-fleet-coordinator` crate
-- the canonical `canic-fleet-wasm-store` crate
+- host-generated Coordinator, Root and Store canisters
 - internal root/bootstrap orchestration support
 
 ## Feature Contract
@@ -25,17 +24,16 @@ supports the complete Coordinator/root/store control-plane contract.
 | `root-control-plane` | Yes | Root-side runtime, workflow, view, bootstrap, publication, and template-management support without Store-canister endpoints. |
 | `wasm-store-canister` | Yes | Store-side template upload, manifest, chunking, garbage-collection, and install APIs without the root runtime/workflow modules. |
 
-Downstream roots should normally select the `canic` facade's `control-plane`
-feature instead of depending on this crate directly. The canonical standalone
-`wasm_store` package may use:
+The host selects role features through the `canic` facade. A direct consumer
+of Store implementation types may select:
 
 ```toml
 canic-control-plane = { version = "<version>", default-features = false, features = ["wasm-store-canister"] }
 ```
 
-The canonical Fleet Coordinator package and its generated fallback select only
-`fleet-coordinator-canister`; neither compiles App configuration or root runtime
-behavior.
+The generated Fleet Coordinator package selects only
+`fleet-coordinator-canister`; it does not compile App configuration or Root
+runtime behavior.
 
 Selecting `root-control-plane` with default features disabled compiles only the
 root-side contract. Select `wasm-store-canister` independently for the sibling

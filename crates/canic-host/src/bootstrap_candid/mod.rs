@@ -3,7 +3,7 @@
 //! Responsibility: resolve canonical Candid for Canic-owned infrastructure canisters.
 //! Does not own: endpoint definitions, Wasm compilation, or App-owned Candid artifacts.
 //! Boundary: copies checked-in contracts for ordinary builds and extracts only on explicit refresh
-//! or when a generated fallback has no canonical source contract.
+//! against the exact selected Canic package.
 
 use crate::{canister_build::extract_candid_bytes, durable_io::write_bytes};
 use std::{fs, path::Path};
@@ -11,33 +11,21 @@ use std::{fs, path::Path};
 /// Resolve one infrastructure canister's Candid bytes before artifact publication.
 pub fn resolve_infrastructure_candid(
     role: &str,
-    canonical_did_path: Option<&Path>,
+    canonical_did_path: &Path,
     refresh_canonical_did: bool,
     generated_candid: Option<&[u8]>,
     debug_wasm_path: &Path,
     build_debug_wasm: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    if let Some(canonical_did_path) = canonical_did_path {
-        if canonical_did_path.is_file() && !refresh_canonical_did {
-            return Ok(fs::read(canonical_did_path)?);
-        }
-        if !refresh_canonical_did {
-            return Err(format!(
-                "canonical {role} Candid file is missing: {}",
-                canonical_did_path.display()
-            )
-            .into());
-        }
-    } else {
-        if refresh_canonical_did {
-            return Err(format!(
-                "cannot refresh canonical {role} Candid without the canonical source package"
-            )
-            .into());
-        }
-        return generated_candid.map(<[u8]>::to_vec).ok_or_else(|| {
-            format!("generated {role} source omitted its compiled Candid declaration").into()
-        });
+    if canonical_did_path.is_file() && !refresh_canonical_did {
+        return Ok(fs::read(canonical_did_path)?);
+    }
+    if !refresh_canonical_did {
+        return Err(format!(
+            "canonical {role} Candid file is missing: {}",
+            canonical_did_path.display()
+        )
+        .into());
     }
 
     let candid = if let Some(generated_candid) = generated_candid {
@@ -47,9 +35,7 @@ pub fn resolve_infrastructure_candid(
         extract_candid_bytes(debug_wasm_path)?
     };
 
-    if let Some(canonical_did_path) = canonical_did_path {
-        write_bytes(canonical_did_path, &candid)?;
-    }
+    write_bytes(canonical_did_path, &candid)?;
     Ok(candid)
 }
 
@@ -67,7 +53,7 @@ mod tests {
 
         let candid = resolve_infrastructure_candid(
             "test_role",
-            Some(&canonical),
+            &canonical,
             false,
             None,
             &root.join("missing.wasm"),
@@ -87,7 +73,7 @@ mod tests {
 
         let error = resolve_infrastructure_candid(
             "test_role",
-            Some(&canonical),
+            &canonical,
             false,
             None,
             &root.join("missing.wasm"),
@@ -112,7 +98,7 @@ mod tests {
         let compiled = b"service : { canic_public_status : () -> () query }\n";
         let candid = resolve_infrastructure_candid(
             "test_role",
-            Some(&canonical),
+            &canonical,
             true,
             Some(compiled),
             &root.join("runtime-without-candid.wasm"),
@@ -122,23 +108,5 @@ mod tests {
         assert_eq!(candid, compiled);
         assert_eq!(fs::read(&canonical).unwrap(), compiled);
         fs::remove_dir_all(root).expect("clean temp dir");
-    }
-
-    #[test]
-    fn generated_source_reuses_the_compiled_declaration_without_runtime_extraction() {
-        let root = temp_dir("canic-bootstrap-candid-generated");
-        let compiled = b"service : {}\n";
-
-        let candid = resolve_infrastructure_candid(
-            "test_role",
-            None,
-            false,
-            Some(compiled),
-            &root.join("runtime-without-candid.wasm"),
-            || panic!("generated source already supplied the compiled declaration"),
-        )
-        .expect("reuse generated declaration");
-
-        assert_eq!(candid, compiled);
     }
 }

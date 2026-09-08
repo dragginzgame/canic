@@ -8,7 +8,10 @@ use std::path::{Path, PathBuf};
 
 use super::{
     CanicPicExt, CanicWasmBuildProfile,
-    artifacts::{INTERNAL_TEST_RELEASE_BUILD_ID, build_internal_test_wasm_canisters_with_env},
+    artifacts::{
+        INTERNAL_TEST_RELEASE_BUILD_ID, build_generated_fleet_wasm,
+        build_internal_test_wasm_canisters_with_env,
+    },
     install_standalone_canister, start_pocket_ic,
 };
 
@@ -43,10 +46,11 @@ pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProb
     ensure_probe_wasm_ready(&workspace_root, &target_dir, "root_probe", profile);
 
     let root_wasm = read_wasm(&target_dir, "root_probe", profile.target_dir_name());
-    let wasm_store_wasm = read_wasm(
-        &target_dir,
-        "canister_wasm_store",
-        profile.target_dir_name(),
+    let wasm_store_wasm = build_generated_fleet_wasm(
+        &workspace_root,
+        &workspace_root.join("canisters/audit/root_probe/canic.toml"),
+        "wasm_store",
+        profile,
     );
     let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let canister_id = pic
@@ -79,7 +83,7 @@ fn ensure_probe_wasm_ready(
     build_internal_test_wasm_canisters_with_env(
         workspace_root,
         target_dir,
-        &[crate_name, "canic-fleet-wasm-store"],
+        &[crate_name],
         profile,
         &build_env,
     );

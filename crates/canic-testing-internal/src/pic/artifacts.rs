@@ -1,19 +1,17 @@
 use canic_core::ids::BuildNetwork;
-#[cfg(feature = "pocketic-fixtures")]
 use canic_host::role_contract::{PackageValidationMode, RolePackageValidation};
 use ic_testkit::artifacts::{
-    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, LabeledWasmBuildSpec,
+    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, ArtifactCacheSpec, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
     SharedIncrementalTargetPrunePolicy, WasmBuildBatchConfig, WasmBuildBatchProgressEvent,
     WasmBuildBatchReport, WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildProgressPhase,
     WasmBuildSpec, build_wasm_canisters_cached_batch_with_config_and_progress,
-};
-#[cfg(feature = "pocketic-fixtures")]
-use ic_testkit::artifacts::{
-    ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
     resolve_cargo_build_inputs,
 };
 #[cfg(feature = "pocketic-fixtures")]
+use ic_testkit::artifacts::{
+    ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache,
+};
 use std::fs;
 #[cfg(feature = "pocketic-fixtures")]
 use std::sync::OnceLock;
@@ -34,7 +32,6 @@ const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
 
 /// Bind external artifact reuse to the actual configured canonical Root Cargo graph.
-#[cfg(feature = "pocketic-fixtures")]
 pub(super) fn with_canonical_root_cargo_inputs(
     cache: ArtifactCacheSpec,
     config_path: &Path,
@@ -137,6 +134,35 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
     .clone()
 }
 
+/// Build a generated Fleet artifact through the production host owner.
+pub(super) fn build_generated_fleet_wasm(
+    workspace: &Path,
+    config: &Path,
+    role: &str,
+    profile: CanicWasmBuildProfile,
+) -> Vec<u8> {
+    let context = canic_host::canister_build::WorkspaceBuildContext {
+        role: role.to_string(),
+        profile: profile.target_dir_name().parse().expect("build profile"),
+        environment: "local".to_string(),
+        build_network: BuildNetwork::Local,
+        workspace_root: workspace.to_path_buf(),
+        icp_root: workspace.to_path_buf(),
+        config_path: config.to_path_buf(),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: Some(
+            INTERNAL_TEST_RELEASE_BUILD_ID
+                .1
+                .parse()
+                .expect("fixture release ID"),
+        ),
+    };
+    let output = canic_host::canister_build::build_workspace_canister_artifact(&context)
+        .expect("build generated Fleet artifact");
+    fs::read(output.wasm_path).expect("read generated Fleet Wasm")
+}
+
 /// Reusable Cargo target for host-driven test artifact builds.
 #[must_use]
 #[cfg(any(test, feature = "pocketic-fixtures"))]
@@ -165,7 +191,7 @@ fn canonical_fleet_coordinator_cache_spec(
     let cargo_build = WasmBuildSpec::new(
         workspace_root,
         target_dir,
-        &["canic-fleet-coordinator", "canic-host"],
+        &["canic", "canic-host"],
         CanicWasmBuildProfile::Fast.target_dir_name(),
     )
     .with_cargo_profile_args(["--profile", "fast", "--locked"])
@@ -195,7 +221,7 @@ fn canonical_fleet_coordinator_cache_spec(
     .with_input("icp-config", &workspace_root.join("icp.yaml"))
     .with_input(
         "canonical-candid",
-        &workspace_root.join("crates/canic-fleet-coordinator/fleet_coordinator.did"),
+        &workspace_root.join("crates/canic/candid/fleet_coordinator.did"),
     )
     .with_cargo_build_inputs("coordinator-cargo", &cargo_build, &cargo_inputs)
     .with_output("fleet_coordinator", artifact_path)

@@ -695,11 +695,10 @@ fn build_only_canic_path_does_not_enter_the_runtime_graph() {
 
 #[test]
 fn internal_pocketic_packages_are_validated_before_the_marker_is_granted() {
-    const CANONICAL_ROLE_PACKAGES: [&str; 9] = [
+    const CANONICAL_ROLE_PACKAGES: &[&str] = &[
         "canister_app",
         "canister_index_child",
         "canister_index_hub",
-        "canic-fleet-root",
         "canister_scale",
         "canister_scale_hub",
         "canister_test",
@@ -711,7 +710,7 @@ fn internal_pocketic_packages_are_validated_before_the_marker_is_granted() {
     let lockfile = workspace.join("Cargo.lock");
     let lockfile_before = fs::read(&lockfile).expect("read workspace lockfile");
 
-    validate_internal_test_wasm_packages(&workspace, &CANONICAL_ROLE_PACKAGES)
+    validate_internal_test_wasm_packages(&workspace, CANONICAL_ROLE_PACKAGES)
         .expect("canonical internal PocketIC package validation");
 
     assert_eq!(
@@ -933,25 +932,6 @@ fn assert_unpublished_package_under(
             .lines()
             .any(|line| line.trim() == "publish = false"),
         "test-only package `{package_name}` must remain unpublished"
-    );
-}
-
-#[test]
-fn built_in_wasm_store_uses_the_canonical_role_graph_contract() {
-    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let validation = validate_built_in_wasm_store_package(
-        &workspace.join("crates/canic-fleet-wasm-store/Cargo.toml"),
-        PackageValidationMode::LockedBuild,
-    );
-    let RolePackageValidation::Supported(evidence) = validation else {
-        panic!("unexpected built-in validation: {validation:?}");
-    };
-
-    assert_eq!(evidence.role, CanisterRole::WASM_STORE);
-    assert!(!evidence.default_features_enabled);
-    assert_eq!(
-        evidence.direct_features,
-        BTreeSet::from([CanicFeatureKey::WasmStoreCanister])
     );
 }
 

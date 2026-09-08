@@ -62,8 +62,8 @@ Component topology is present.
 - `kind = "root" | "canister"` – package role class. Only `[roles.root]` may
   use `root`.
 - `package: string` – required non-empty path for application roles, relative
-  to this `canic.toml`. Root must omit this field: Canic builds its canonical
-  `canic-fleet-root` package with the selected configuration and capabilities.
+  to this `canic.toml`. Root must omit this field: the host generates its build package with the
+  selected configuration and capabilities.
 - `fleet_admission: bool` – optional, default `false`. `true` enrolls every
   managed instance of this non-Root role in the Fleet admission participant
   set and gives it the local projection plus protected admission surfaces.

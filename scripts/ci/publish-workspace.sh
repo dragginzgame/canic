@@ -18,11 +18,8 @@ PUBLISH_ORDER=(
     canic-control-plane
     canic-macros
     canic
-    canic-fleet-coordinator
-    canic-fleet-root
     canic-host
     canic-cli
-    canic-fleet-wasm-store
 )
 
 if [ -n "$PUBLISH_FROM" ]; then

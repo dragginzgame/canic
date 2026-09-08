@@ -109,6 +109,14 @@ pub(crate) fn resolve_host_generated_fleet_coordinator_contract() -> RoleContrac
         default_features_enabled: false,
     })
 }
+#[must_use]
+pub(crate) fn resolve_host_generated_wasm_store_contract() -> RoleContractResolution {
+    resolve_role_contract(RoleContractInput {
+        source: RoleContractSource::BuiltIn(BuiltInRoleKind::WasmStore),
+        declared_features: BTreeSet::from([CanicFeatureKey::WasmStoreCanister]),
+        default_features_enabled: false,
+    })
+}
 
 #[must_use]
 pub fn resolve_built_in_wasm_store_contract(

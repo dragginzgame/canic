@@ -160,7 +160,6 @@ fn source_roots() -> Vec<PathBuf> {
         workspace.join("crates/canic-core/src"),
         workspace.join("crates/canic-control-plane/src"),
         workspace.join("crates/canic-host/src"),
-        workspace.join("crates/canic-fleet-wasm-store/src"),
     ]
 }
 

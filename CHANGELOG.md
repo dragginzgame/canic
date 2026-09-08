@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.10` makes Fleet Subnet Root Canic-owned: a breaking hard cut removes
-  application Root packages and hooks, builds Root automatically and renames
-  the Store package to `canic-fleet-wasm-store`. It also fixes retained Fleet
+- `0.110.10` hard-cuts application Root packages/hooks and separate Fleet
+  entrypoint crates: the host generates Root, Coordinator and Store build
+  packages from the exact Canic dependency. It also fixes retained Fleet
   funding, restart and initial-child activation waits, and separates public
   status from protected observability with opt-in cached aggregate metrics.
 - `0.110.9` uses smaller application-neutral Fleet proofs, removes repeated

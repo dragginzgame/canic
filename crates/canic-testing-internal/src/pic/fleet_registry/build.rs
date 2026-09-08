@@ -28,8 +28,6 @@ use super::fixture::{progress, progress_ready};
 
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
 #[cfg(test)]
-const INITIAL_SHARD_ROOT_CANISTER_PACKAGE: &str = "canic-fleet-root";
-#[cfg(test)]
 const CYCLES_LEDGER_STUB_PACKAGE: &str = "cycles_ledger_stub";
 #[cfg(test)]
 const ICP_REFILL_STUB_PACKAGE: &str = "icp_refill_stub";
@@ -41,7 +39,7 @@ static MAINNET_FIVE_COMPONENT_REFILL_BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
 static FIVE_COMPONENT_BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
-static INITIAL_SHARD_BUILD_ONCE: Once = Once::new();
+static INITIAL_SHARD_WASM: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
 #[cfg(test)]
 static FIVE_TRILLION_COMPONENT_BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
@@ -145,22 +143,16 @@ pub(super) fn build_initial_shard_root_wasm() -> Vec<u8> {
     let _serial_guard = CANISTER_BUILD_SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let target_dir = test_target_dir(&workspace_root).join("initial-shard");
-    INITIAL_SHARD_BUILD_ONCE.call_once_force(|_| {
-        let config_path = initial_shard_root_canister_config_path(&workspace_root);
-        let canonical_config_env = (
-            canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
-            config_path.to_str().expect("config path UTF-8"),
-        );
-        build_internal_test_wasm_canisters_with_env(
-            &workspace_root,
-            &target_dir,
-            &[INITIAL_SHARD_ROOT_CANISTER_PACKAGE],
-            CanicWasmBuildProfile::Fast,
-            &[canonical_config_env],
-        );
-    });
-    read_built_wasm(&target_dir, INITIAL_SHARD_ROOT_CANISTER_PACKAGE)
+    INITIAL_SHARD_WASM
+        .get_or_init(|| {
+            crate::pic::artifacts::build_generated_fleet_wasm(
+                &workspace_root,
+                &initial_shard_root_canister_config_path(&workspace_root),
+                "root",
+                CanicWasmBuildProfile::Fast,
+            )
+        })
+        .clone()
 }
 
 /// Build the one-Component Root whose retained recovery demand is exactly 5T.
@@ -352,7 +344,7 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
     let cargo_build = WasmBuildSpec::new(
         workspace_root,
         target_dir,
-        &["canic-host", "canic-fleet-wasm-store"],
+        &["canic", "canic-host"],
         CanicWasmBuildProfile::Fast.target_dir_name(),
     )
     .with_cargo_profile_args(["--profile", "fast", "--locked"])

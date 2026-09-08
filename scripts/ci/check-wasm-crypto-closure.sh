@@ -6,10 +6,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 CANONICAL_PACKAGE_PROFILES=(
-    canic-fleet-coordinator:none
-    canic-fleet-root:none
+    canic/fleet-coordinator-canister:none
+    canic/control-plane:none
     delegation_root_stub:root-sign
-    canic-fleet-wasm-store:none
+    canic/wasm-store-canister:none
     canister_app:none
     canister_index_child:none
     canister_index_hub:none
@@ -23,12 +23,17 @@ CRYPTO_PACKAGES='^(base16ct|block-buffer|const-oid|crypto-bigint|crypto-common|d
 SIGNATURE_PACKAGES='^(crypto-bigint|ecdsa|elliptic-curve|hmac|ic-canister-sig-creation|ic-certification|ic-signature-verification|ic-verify-bls-signature|ic_bls12_381|k256|pairing|rfc6979|signature)$'
 
 package_tree() {
+    local selection="$1"
+    local args=(--package "${selection%%/*}")
+    if [[ "$selection" == */* ]]; then
+        args+=(--no-default-features --features "${selection#*/}")
+    fi
     cargo tree \
         --locked \
         --offline \
         --target wasm32-unknown-unknown \
         --edges normal \
-        --package "$1" \
+        "${args[@]}" \
         --prefix none \
         --format '{p}'
 }

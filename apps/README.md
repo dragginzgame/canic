@@ -5,21 +5,15 @@ when it has a `canic.toml` that describes an App topology and should be
 discoverable by `canic app list` and usable through commands that take the
 App name as a positional argument.
 
-The built-in `fleet_coordinator` and `wasm_store` roles are not sourced from
-this directory. Their canonical canister crates live at
-`crates/canic-fleet-coordinator/` and `crates/canic-fleet-wasm-store/` so downstreams
-build the same infrastructure from published Canic sources instead of carrying
-local built-in role crates. The local build helper discovers matching canonical
-sources from the resolved `canic` package automatically. Each App still owns
-its configuration-compiled Fleet Subnet Root under its own directory.
+Root, Coordinator and Store are Canic-owned infrastructure. The host generates
+one thin Cargo package per role from the selected Canic dependency. Apps own
+configuration and application canisters; they do not provide Fleet entrypoint
+crates. Root generation selects the exact configured capabilities.
 
 ## Layout
 
 - `test/` – local reference topology wired through `icp.yaml` and used by CI
   wasm/audit workflows.
-  - `root/` – Fleet Subnet Root package (`canic::start!` with package metadata
-    `app = "test"` and `role = "root"`) used to build the root infrastructure
-    artifact and runtime endpoint bundle.
   - `app/` – minimal application canister used as a placeholder service.
   - `index_hub/` + `index_child/` – indexed placement with children allocated
     on demand by the Hub.
@@ -30,7 +24,6 @@ its configuration-compiled Fleet Subnet Root under its own directory.
   - `canic.toml` – shared test topology referenced by each reference canister `build.rs`.
   - `test-configs/` – config fixtures used by local checks.
 - `demo/` – small Component and sharding App for source/build experiments.
-  - `root/` – Fleet Subnet Root package for the demo topology.
   - `app/` – simple Component role.
   - `user_hub/` + `user_shard/` – local sharding walkthrough roles with
     human-readable planning, assignment, and shard inspection endpoints.

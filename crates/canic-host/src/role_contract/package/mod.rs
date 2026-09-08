@@ -293,11 +293,10 @@ pub fn validate_internal_test_wasm_packages(
         let validation = if role.is_root() {
             let internal_source = package
                 .manifest_path
-                .starts_with(normalized_manifest_path(workspace_root).join("canisters"))
-                || package.name == crate::canonical_root::PACKAGE;
+                .starts_with(normalized_manifest_path(workspace_root).join("canisters"));
             if !internal_source {
                 return Err(unsupported_finding(
-                    "Root fixtures must be Canic-owned infrastructure or internal canisters",
+                    "Root fixtures must be internal canisters",
                 ));
             }
             validate_package_manifest(
