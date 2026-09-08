@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-DEPENDENCY-001`
-- Method version: `2`
+- Method version: `3`
 - Disposition: `revise`
 - Owner: Cargo dependency/feature graph, advisories, licenses, and lockfile
   integrity; `CANIC-PUBLISH-001` owns shipped package contract
@@ -354,10 +354,14 @@ Use this map for top-level ownership and package judgment:
 | `crates/canic-control-plane`           | root/store control-plane runtime            |
 | `crates/canic-host`                    | host-side build/install/deployment support  |
 | `crates/canic-macros`                  | proc-macro support for the public facade    |
-| `crates/canic-fleet-wasm-store`              | canonical publishable `wasm_store` canister |
 | `crates/canic-testing-internal`        | Canic-only internal test harnesses          |
 | `crates/canic-tests`                   | integration test entrypoints                |
 | sibling `../ic-testkit`                | public generic PocketIC/test infrastructure |
+
+Fleet Root, Coordinator and Store entrypoints are unpublished packages generated
+by `canic-host`; inspect that owner and the runtime implementations in Canic
+and `canic-control-plane`.
+
 | `fleets/**`                            | config-defined operator fleets              |
 | `canisters/test/**`                    | internal correctness/integration fixtures   |
 | `canisters/audit/**`                   | internal audit/perf probe canisters         |

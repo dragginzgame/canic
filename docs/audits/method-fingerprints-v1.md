@@ -28,26 +28,31 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-AUTH-REPLAY-001` | `2` | `743b9fcc18e37be029e12fa9db2a5fa5ffb8d4258c484739a5b0e73e43632b6d` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` |
 | `CANIC-AUTH-SUBJECT-001` | `1` | `8af2c270ba89aae9715e6047afa908b1812865c5949f0f1da6441539fdee4475` | `docs/audits/recurring/invariants/subject-caller-binding.md` |
 | `CANIC-AUTH-TRUST-001` | `2` | `150d075dd9749d6c2b849837ce422753fa1a438a8656e50eac0370f555e769c5` | `docs/audits/recurring/invariants/token-trust-chain.md` |
-| `CANIC-LIFECYCLE-001` | `3` | `f35101e6f877dadcba678d2b2db5695b3ffdecd23d6f6eb4e737200b2b1bf405` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
+| `CANIC-LIFECYCLE-001` | `4` | `1e5cf3dbc8efe09b69fb8a8722cae85b5cbcb40547c747388cbef6165a955b4f` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
 | `CANIC-BUILD-INTEGRITY-001` | `2` | `e75c8fdc54f090bd901482f50c88e2b6272830d1425f24d7165904c1b206a94b` | `docs/audits/recurring/system/build-integrity.md` |
 | `CANIC-CAPABILITY-SURFACE-001` | `2` | `91e61f3385882d108b8541e31715b1ee1e126299f7ad64890c979043a9d7c759` | `docs/audits/recurring/system/capability-surface.md` |
 | `CANIC-CHANGE-FRICTION-001` | `3` | `c23af3f87879a3223893b11ef4568340789a291d4c98b33f83d7fab5efa67cda` | `docs/audits/recurring/system/change-friction.md` |
 | `CANIC-COMPLEXITY-001` | `3` | `4e20ddfbf9b33e5cc9ca2b6535aaeab0b5f30ffbf053b06b55f4d9a3c0831a2a` | `docs/audits/recurring/system/complexity-accretion.md` |
-| `CANIC-DEPENDENCY-001` | `2` | `ad7b459667545ec5b3adfd33a614803e2c11fa77a28af873392a1d3344333f6f` | `docs/audits/recurring/system/dependency-hygiene.md` |
+| `CANIC-DEPENDENCY-001` | `3` | `e0e4474467664e46a56243ccf41c5b29b9786a0052a9ccf9117e499226384d40` | `docs/audits/recurring/system/dependency-hygiene.md` |
 | `CANIC-DUPLICATION-001` | `1` | `c4b2b2828f551a5419de394d442ecb04932900d7b15665177a3c8529ee340262` | `docs/audits/recurring/system/dry-consolidation.md` |
 | `CANIC-INSTRUCTION-001` | `3` | `515dbe0d4957dd4705f3e21ce88cca1a34b8c4cc86ccd34483479abedf5c2ab8` | `docs/audits/recurring/system/instruction-footprint.md` |
 | `CANIC-LAYERING-001` | `2` | `a4c71532e85f3ea0c5f1802478b15f444d78eae3540dc35b96b77b04231503bc` | `docs/audits/recurring/system/layer-violations.md` |
-| `CANIC-STRUCTURE-001` | `1` | `ca370a2c910c4d9d3755af74099c6d5715086d8b1ff226c29a40c77c5ee9f58e` | `docs/audits/recurring/system/module-structure.md` |
-| `CANIC-PUBLISH-001` | `1` | `8e2eff6ac0c60c9903cd68f6354f7536636a987fd437306e851643464bdef884` | `docs/audits/recurring/system/publish-surface.md` |
+| `CANIC-STRUCTURE-001` | `2` | `d8ad8f06492d8a37e4f9b9632b83714b4a88125989d44ed7e825e93c2957dd49` | `docs/audits/recurring/system/module-structure.md` |
+| `CANIC-PUBLISH-001` | `2` | `5c6f38395c02454e861115c6a06638944d7841b331f1758c247601b69675e341` | `docs/audits/recurring/system/publish-surface.md` |
 | `CANIC-RELEASE-INTEGRITY-001` | `1` | `3f6b87b30a3c1f9c80803a8be5d45292e73217d260ea435a956bd05f10d63438` | `docs/audits/recurring/system/release-integrity.md` |
 | `CANIC-AUTH-ORDERING-001` | `1` | `2619b50394d35381cb2be0d124868f8249218bf41591fad2713730e20f266b87` | `docs/audits/recurring/system/security-boundary-ordering.md` |
 | `CANIC-WASM-001` | `6` | `0c8487a989dadaae03cba0437545a2ea236274607622ff3d74623696c1ebe797` | `docs/audits/recurring/system/wasm-footprint.md` |
-| `CANIC-MODULE-SURFACE-001` | `2.0` | `404a359b4448ea7288055f0444e3178ae972f4eb7e1a0814aa693ce67df59030` | `docs/audits/modular/module-surface-hardening.md` |
+| `CANIC-MODULE-SURFACE-001` | `2.1` | `e3cb15bba0909fff96075206d6a4780b2a74f31a98c95ebd143023d0e73e9835` | `docs/audits/modular/module-surface-hardening.md` |
 
 ## Superseded Definition Identities
 
 | Audit ID | Version | SHA-256 | Definition | Superseded by |
 | --- | --- | --- | --- | --- |
+| `CANIC-MODULE-SURFACE-001` | `2.0` | `404a359b4448ea7288055f0444e3178ae972f4eb7e1a0814aa693ce67df59030` | `docs/audits/modular/module-surface-hardening.md` | `CANIC-MODULE-SURFACE-001/v2.1` |
+| `CANIC-PUBLISH-001` | `1` | `8e2eff6ac0c60c9903cd68f6354f7536636a987fd437306e851643464bdef884` | `docs/audits/recurring/system/publish-surface.md` | `CANIC-PUBLISH-001/v2` |
+| `CANIC-STRUCTURE-001` | `1` | `ca370a2c910c4d9d3755af74099c6d5715086d8b1ff226c29a40c77c5ee9f58e` | `docs/audits/recurring/system/module-structure.md` | `CANIC-STRUCTURE-001/v2` |
+| `CANIC-DEPENDENCY-001` | `2` | `ad7b459667545ec5b3adfd33a614803e2c11fa77a28af873392a1d3344333f6f` | `docs/audits/recurring/system/dependency-hygiene.md` | `CANIC-DEPENDENCY-001/v3` |
+| `CANIC-LIFECYCLE-001` | `3` | `f35101e6f877dadcba678d2b2db5695b3ffdecd23d6f6eb4e737200b2b1bf405` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` | `CANIC-LIFECYCLE-001/v4` |
 | `CANIC-WASM-001` | `5` | `a51d17f9e744bf6452005e543ba6f6e77a3c2257d385aa2ad58f1acad2439c19` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v6` |
 | `CANIC-WASM-001` | `4` | `85dd9bd380f0c7b8efe1a50ab574f144ca86ce9c71a24406b29a708ff522e3f5` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v5` |
 | `CANIC-CHANGE-FRICTION-001` | `2` | `5f4377f00907f36f59388f797f210bdfed9398832f983529cdccd4bd747d2ab6` | `docs/audits/recurring/system/change-friction.md` | `CANIC-CHANGE-FRICTION-001/v3` |
@@ -98,7 +103,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
 | `0eb8e77d81af93338dcc6051255ddfcf71790dfacd67edb5ec4eae64e9ef393d` | `docs/audits/META-AUDIT.md` |
-| `bbbbfb20e9384e8c928727d8b3feb038f938e03ea9e26822a853fd4d19337e77` | `docs/audits/METHODS.md` |
+| `8ecdb1446b595a2acaade58ea6eabc3e1392aa4949cd180646551d39d83cf99b` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |

@@ -80,3 +80,32 @@ The [packaged proof guide](../../../../operations/0.56-packaged-wasm-store.md)
 describes artifact-only qualification. Application readiness, dashboard
 integration and live performance remain downstream validation responsibilities.
 CANIC-141 remains deferred.
+
+## Release Preflight Correction
+
+The maintainer's 2026-09-08 preflight rejected the audit catalog. The parent
+`check-invariants` failure is the same child failure, not a separate runtime
+failure. Reviewing every active definition found five stale fingerprints from
+canonical Root/package changes, including scopes still naming removed Fleet
+crates. This is an `audit_method_defect` in the maintained audit inputs.
+
+The corrected methods are Lifecycle 4, Dependency 3, Structure 2, Publish 2
+and Module Surface 2.1. Their catalog entries and active SHA-256 identities now
+agree; superseded identities remain recorded. Scopes follow the host-generated
+entrypoints and shared runtime owners. Package checks select the maintained
+published roster. The lifecycle scan includes `start_fleet_root!` and the
+actual host generation directories.
+
+No audit result using the changed definitions was established by this batch;
+the qualification table above records targeted tests and builds, not scored
+runs of these methods. Historical reports retain their exact method identity.
+Any result claiming the old fingerprint for a changed definition has
+`result_validity: invalid`; this correction supplies no comparable baseline or
+current-product audit result. A future method comparison must rerun both
+snapshots under the corrected method, or report non-comparability when the
+original baseline cannot be reproduced.
+
+The audit catalog and current-document semantics guards and diff hygiene pass.
+Runtime/build sources are unchanged, so their prior targeted evidence remains
+applicable. The full release gate was not rerun; the batch remains ready for
+release approval with the corrected open changelog.
