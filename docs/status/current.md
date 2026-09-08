@@ -51,6 +51,10 @@ catalog and document checks pass; runtime/build sources are unchanged.
 The subsequent unit-test failures are corrected in fixture inputs and exact
 expected outputs, including standalone Cargo workspace isolation inside deployment
 scratch. All 32 selected regressions pass; production behavior is unchanged.
+The subsequent protocol-test import failure is also corrected: role-specific
+read-contract tests match facade feature gates. Isolated default, Coordinator,
+Store and Root selections and changed-target all-feature Clippy pass. Targeted
+qualification now explicitly covers those feature and scratch boundaries.
 
 The expanded canonical Root, retained Fleet, read-surface and generated-build
 batch is ready for release approval. The open 0.110.10 changelog is ready;
