@@ -46,6 +46,10 @@ CANIC-147 public history to the open 0.110.12 batch. Nineteen final native cases
 eight timer-focused PocketIC cases, canonical Candid equality and focused Clippy
 pass. The complete Canic source batch and changelog draft are ready for release
 approval. Downstream CANIC-148 producer qualification remains separate and open.
+The subsequent maintainer validation found one stale timer-owner inventory entry
+for CANIC-147. The exact owner is now registered in the guard; all 15 focused
+timer-inventory tests pass. That validation skipped serial PocketIC at the
+ordinary-test barrier; the earlier focused timer qualification remains separate.
 No new full-release duration is established; the serial
 PocketIC tier remains the largest cost. No version, Git publication, deployment
 or broad validation command was run.
