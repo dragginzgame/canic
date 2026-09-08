@@ -762,6 +762,7 @@ fn native_registration_owners() -> BTreeSet<String> {
     [
         "canisters/test/runtime_probe/src/lib.rs",
         "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+        "crates/canic-core/src/workflow/metrics/publication/timer/mod.rs",
         "crates/canic-core/src/workflow/placement/acknowledgement.rs",
         "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
         "crates/canic-core/src/workflow/runtime/cycles/mod.rs",

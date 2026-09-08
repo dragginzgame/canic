@@ -39,6 +39,24 @@ CANIC-148's actual Toko Miner producer qualification remains open and must prece
 publication. This downstream gap does not block releasing the opt-in Canic
 capability.
 
+## Timer inventory correction
+
+The subsequent maintainer validation exposed one omitted propagation check:
+`timer_registration_custody_is_closed` still listed the timer owners from before
+CANIC-147. Its exact-set comparison correctly detected the new public sampling
+owner. The inventory now includes
+`crates/canic-core/src/workflow/metrics/publication/timer/mod.rs`; the guard still
+rejects any unreviewed registration or action owner. Runtime code is unchanged.
+The original focused qualification should also have selected
+`cargo test --locked -p canic-core --test timer_inventory_guard` when adding the
+timer. The retained 435-second maintainer run reported this as its sole failing
+target and skipped serial PocketIC. The focused correction log is
+`/tmp/canic147-timer-inventory-test.log`: all 15 tests pass, including the exact
+registration/action inventory comparison and raw-provider boundary checks.
+Warnings-denied Clippy for that integration target also passes; its log is
+`/tmp/canic147-timer-inventory-clippy.log`. No broad suite was rerun for this
+test-only correction.
+
 ## Public health clarification
 
 Public `Health` now returns `PublicHealthStatus::Responding` (`responding` on
