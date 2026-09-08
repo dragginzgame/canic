@@ -57,7 +57,31 @@ Warnings-denied Clippy for that integration target also passes; its log is
 `/tmp/canic147-timer-inventory-clippy.log`. No broad suite was rerun for this
 test-only correction.
 
-## Public health clarification
+## Canonical artifact correction
+
+The later maintainer PocketIC run reached the shared Store build and failed before
+Fleet assertions: the hand-edited history declaration was structurally equivalent
+but did not match the compiled Candid bytes used by the protocol profile. The
+earlier structural tests were insufficient evidence for artifact readiness.
+Both interfaces were refreshed through the existing host generator. Store now
+contains the exact generated declaration, including named history types and page
+type ordering. Coordinator regeneration produced no diff. Both ordinary builds
+then passed with refresh disabled; the Store exact-byte authority check remains
+intact. Runtime source and Fleet recovery behavior are unchanged.
+
+Build evidence uses the same local fixture configuration, `fast` profile and
+fixed internal test release identity as the failing suite. Logs:
+
+- `/tmp/canic147-store-candid-refresh.log`
+- `/tmp/canic147-coordinator-candid-refresh.log`
+- `/tmp/canic147-store-candid-ordinary.log`
+- `/tmp/canic147-coordinator-candid-ordinary.log`
+
+Both focused health/history Candid regression tests pass, retained at
+`/tmp/canic147-candid-regenerated-test.log`. The affected build boundary was
+qualified directly; the interrupted full PocketIC run was not repeated.
+
+## Public health contract
 
 Public `Health` now returns `PublicHealthStatus::Responding` (`responding` on
 the wire). Answering a query does not prove runtime health, authority restoration

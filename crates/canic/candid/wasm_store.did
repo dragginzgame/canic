@@ -209,7 +209,10 @@ type OperationReceipt = record { operation_id : blob };
 type OperationStatusRequest = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec CycleTrackerEntry };
 type PageRequest = record { offset : nat64; limit : nat64 };
-type Page_1 = record { total : nat64; entries : vec PublicMetric };
+type Page_1 = record { total : nat64; entries : vec PublicHistoryPoint };
+type Page_2 = record { total : nat64; entries : vec PublicMetric };
+// Comparable cumulative-counter movement across adjacent slots in the same window.
+type PublicCounterDelta = record { elapsed_ns : nat64; amount : nat };
 // Local identity and responsiveness without diagnostic checks or Fleet readiness.
 type PublicHealth = record {
   role : opt text;
@@ -219,12 +222,43 @@ type PublicHealth = record {
 };
 // Public query responsiveness; no runtime diagnostics or Fleet readiness assessment.
 type PublicHealthStatus = variant { responding };
+// One actual observation, never an interpolated or replayed sample.
+type PublicHistoryPoint = record {
+  value : nat;
+  kind : PublicMetricKind;
+  observed_at_ns : nat64;
+  slot_start_ns : nat64;
+  delta : opt PublicCounterDelta;
+};
+// Select one exact cached series; points are ordered by five-minute slot.
+type PublicHistoryRequest = record {
+  name : text;
+  page : PageRequest;
+  canister_id : opt principal;
+  family : PublicMetricFamily;
+};
+// Heap-only chart coverage. Missing slots are gaps, including across suspension.
+type PublicHistorySnapshot = record {
+  retention_ns : nat64;
+  byte_limit : nat64;
+  heap_started_at_ns : opt nat64;
+  canister_version : nat64;
+  series_limit : nat64;
+  cadence_ns : nat64;
+  truncated : bool;
+  unit : opt text;
+  state : PublicSnapshotState;
+  stale_after_ns : nat64;
+  coverage_start_ns : opt nat64;
+  points : Page_1;
+  reserved_bytes : nat64;
+};
 // An explicitly named aggregate value with an optional canister dimension.
 type PublicMetric = record {
-  observed_at_ns : nat64;
-  kind : PublicMetricKind;
   value : nat;
+  kind : PublicMetricKind;
   name : text;
+  observed_at_ns : nat64;
   unit : text;
   canister_id : opt principal;
 };
@@ -236,46 +270,19 @@ type PublicMetricFamily = variant {
   operations;
   shard_occupancy;
 };
-// Select a published aggregate family and one bounded page.
+// Interpretation of a sampled value. Counter windows must change on every reset.
 type PublicMetricKind = variant {
   Gauge;
   Counter : record { window_id : nat64; saturated : bool };
 };
-type PublicHistoryRequest = record {
-  family : PublicMetricFamily;
-  name : text;
-  canister_id : opt principal;
-  page : PageRequest;
-};
-type PublicHistoryPoint = record {
-  delta : opt record { amount : nat; elapsed_ns : nat64 };
-  slot_start_ns : nat64;
-  observed_at_ns : nat64;
-  value : nat;
-  kind : PublicMetricKind;
-};
-type PublicHistorySnapshot = record {
-  state : PublicSnapshotState;
-  unit : opt text;
-  heap_started_at_ns : opt nat64;
-  canister_version : nat64;
-  coverage_start_ns : opt nat64;
-  cadence_ns : nat64;
-  retention_ns : nat64;
-  stale_after_ns : nat64;
-  truncated : bool;
-  series_limit : nat64;
-  byte_limit : nat64;
-  reserved_bytes : nat64;
-  points : record { entries : vec PublicHistoryPoint; total : nat64 };
-};
+// Select a published aggregate family and one bounded page.
 type PublicMetricsRequest = record {
   page : PageRequest;
   family : PublicMetricFamily;
 };
 // One cached aggregate snapshot. Reading it never refreshes it.
 type PublicMetricsSnapshot = record {
-  metrics : Page_1;
+  metrics : Page_2;
   sampled_at_ns : opt nat64;
   truncated : bool;
   state : PublicSnapshotState;
@@ -285,14 +292,14 @@ type PublicMetricsSnapshot = record {
 // Availability is data, independent of caller identity.
 type PublicSnapshotState = variant { Stale; Disabled; Fresh; Unavailable };
 type PublicStatusRequest = variant {
-  History : PublicHistoryRequest;
   Overview;
+  History : PublicHistoryRequest;
   Health;
   Metrics : PublicMetricsRequest;
 };
 type PublicStatusResponse = variant {
-  History : PublicHistorySnapshot;
   Overview : RoleOverviewResponse;
+  History : PublicHistorySnapshot;
   Health : PublicHealth;
   Metrics : PublicMetricsSnapshot;
 };

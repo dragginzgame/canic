@@ -51,6 +51,12 @@ diagnostics, authority restoration or Fleet readiness. Present it as
 Fleet convergence evidence for readiness decisions. Regenerate bindings for the
 current public enum; protected diagnostic health retains its own contract.
 
+Canonical Store and Coordinator Candid must be generated with the host's
+`build_artifact --refresh-canonical-did` flow after changing shared public DTOs or
+endpoint macros. Structural Candid equality does not establish the exact bytes
+used by protocol-profile hashing. After refreshing, build the affected artifacts
+without the refresh flag to verify the ordinary materialization path as well.
+
 ## Optional Public Metrics
 
 One top-level setting in `canic.toml` selects the public aggregate families
