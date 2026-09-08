@@ -8,7 +8,7 @@
 //! Instrumentation modules are layer-neutral and may be used anywhere.
 
 use crate::ids::{EndpointCall, EndpointCallKind};
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
     /// Last snapshot used by the `perf!` macro.
@@ -20,7 +20,7 @@ thread_local! {
     pub static PERF_LAST: RefCell<u64> = const { RefCell::new(0) };
 
     /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
-    static PERF_TABLE: RefCell<HashMap<PerfKey, PerfSlot>> = RefCell::new(HashMap::new());
+    static PERF_TABLE: RefCell<BTreeMap<PerfKey, PerfSlot>> = const { RefCell::new(BTreeMap::new()) };
 
     /// Stack of active endpoint scopes for exclusive instruction accounting.
     /// This is independent of `PERF_LAST`, which is only used by `perf!` checkpoints.
@@ -213,6 +213,36 @@ pub fn entries() -> Vec<PerfEntry> {
 
         out.sort_by(|a, b| a.key.cmp(&b.key));
         out
+    })
+}
+
+/// Read a key-ordered prefix without cloning arbitrarily large checkpoint labels.
+pub(crate) fn bounded_entries(limit: usize) -> Result<Vec<PerfEntry>, crate::InternalError> {
+    PERF_TABLE.with_borrow(|table| {
+        table
+            .iter()
+            .take(limit)
+            .map(|(key, slot)| {
+                let valid = match key {
+                    PerfKey::Endpoint { name, .. } => {
+                        name.len() <= crate::model::public_metrics::MAX_PUBLIC_METRIC_TEXT_BYTES
+                    }
+                    PerfKey::Checkpoint { scope, label } => {
+                        scope.len() <= crate::model::public_metrics::MAX_PUBLIC_METRIC_TEXT_BYTES
+                            && label.len()
+                                <= crate::model::public_metrics::MAX_PUBLIC_METRIC_TEXT_BYTES
+                    }
+                };
+                if !valid {
+                    return Err(crate::InternalError::invalid_input());
+                }
+                Ok(PerfEntry {
+                    key: key.clone(),
+                    count: slot.count,
+                    total_instructions: slot.total_instructions,
+                })
+            })
+            .collect()
     })
 }
 

@@ -306,6 +306,11 @@ impl ShardingRegistryOps {
         ShardingRegistry::entries_for_pool(pool)
     }
 
+    /// Read bounded occupancy inputs without reading assignments.
+    pub(crate) fn bounded_registry_entries(limit: usize) -> Vec<ShardingRegistryEntryRecord> {
+        ShardingRegistry::bounded_entries(limit)
+    }
+
     /// Export all shard entries.
     #[must_use]
     pub fn registry_data() -> ShardingRegistryData {

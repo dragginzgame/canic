@@ -232,7 +232,7 @@ fn cycles_funding_snapshot_map() -> HashMap<
     ),
     u128,
 > {
-    CyclesFundingMetrics::snapshot()
+    CyclesFundingMetrics::bounded_snapshot(usize::MAX)
         .into_iter()
         .map(|(metric, child, reason, cycles)| ((metric, child, reason), cycles))
         .collect()

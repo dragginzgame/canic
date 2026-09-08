@@ -25,11 +25,48 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from maintainer-pushed `v0.110.9`. Its governed marker records the
+Current development begins from maintainer-pushed `v0.110.10`. Its governed marker records the
 validated pre-version source below; immutable details are in
 [the 0.110 changelog](../changelog/0.110.md). Post-release work is retained
 in the open changelog draft until it forms a coherent batch. Source-development truth
 comes from Git and the working tree.
+
+## Active Release Turnaround Correction
+
+The maintainer reported 67m20.980s for `make release-patch && make publish`
+and authorized speed improvements. The open 0.110.11 batch now also replaces
+publication's Rust manifest test with a shared locked offline metadata guard,
+reuses registry observations within one invocation, and retains successful
+validation/publication logs and stage timings. Script regressions and the six
+remaining Rust manifest tests pass, as do affected-target Clippy, shell lint,
+release-integrity and document checks. The shared manifest check took 0.06s.
+The combined 0.110.11 batch and changelog are ready for release approval;
+package versions remain 0.110.10. The
+[turnaround handoff](../audits/reports/2026-09/2026-09-08/release-turnaround.md)
+records the scope and remaining measurement work. Fleet journeys retain their
+existing assertions and serial isolation.
+The prior successful full-run log was discarded, so the exact 67-minute
+breakdown and end-to-end savings remain unmeasured.
+
+## Active Public Sampling Correction
+
+The maintainer reports 0.110.10 pushed and requested refreshed Toko Miner
+feedback. CANIC-143/144/146 are adopted or available downstream. CANIC-148 is
+the next correction batch: bounded owner projections, deterministic truncation,
+family failure isolation and cycle-tracking qualification. Implementation,
+propagation and targeted qualification are complete. The open 0.110.11 draft
+is ready for release approval; package versions remain 0.110.10. The
+[sampling handoff](../audits/reports/2026-09/2026-09-08/public-sampling-bounds.md)
+records 112 all-feature and 10 default native passes, 17 storage/timer guards,
+affected-target Clippy and seven PocketIC passes (96-second runner including
+artifact rebuilds). Sampling cost was 4,449,546 instructions at 256 checkpoints
+and 4,647,992 at 4,096; rejected optional performance sampling preserved cycle
+tracking and independent occupancy refresh. The maintainer-selected release
+gate/publication and downstream adoption qualification remain.
+CANIC-147 periodic chart history is the separate capability request awaiting
+contract acceptance. CANIC-141 remains deferred. Sibling
+repositories remain read-only; no version or publication action is implied.
+The following sections retain the preceding release's implementation evidence.
 
 ## Active Generated Fleet Build Batch
 

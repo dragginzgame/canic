@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.11` bounds optional public metric collection and isolates failed
+  families while preserving cycle tracking and prior sample timestamps.
+  It also removes publication's manifest-test compilation and repeated registry
+  lookups, and retains validation/publication timings.
 - `0.110.10` hard-cuts application Root packages/hooks and separate Fleet
   entrypoint crates: the host generates Root, Coordinator and Store build
   packages from the exact Canic dependency. It also fixes retained Fleet

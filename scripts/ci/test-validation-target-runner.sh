@@ -42,6 +42,7 @@ printf '%s\n' \
 
 status=0
 CANIC_VALIDATION_FAILURE_LOG_DIR="$FIXTURE/failure-logs" \
+    CANIC_VALIDATION_LOG_DIR="$FIXTURE/target/validation-runs" \
     CANIC_VALIDATION_ROOT="$FIXTURE" \
     CANIC_VALIDATION_RUNNER_DEPTH=0 \
     CANIC_VALIDATION_RUNNER_SNAPSHOT_PATH='' \
@@ -126,5 +127,28 @@ if rg -F "[ERR:fail-after-caught-panic] thread 'caught-test' panicked at" \
     echo "validation target runner test failed: highlighted log includes caught panic" >&2
     exit 1
 fi
+
+timings="$(rg --files "$FIXTURE/target/validation-runs" | rg '/timings.tsv$')"
+awk -F '\t' '
+    NR == 1 { if ($0 != "target\tresult\tseconds\tlog") exit 1; next }
+    $3 !~ /^[0-9]+$/ { exit 1 }
+    $1 == "pass" && $2 == "PASS" { passed = 1 }
+    $1 == "fail-two" && $2 == "FAIL" { failed = 1 }
+    END { if (!passed || !failed) exit 1 }
+' "$timings"
+pass_log="$(awk -F '\t' '$1 == "pass" { print $4 }' "$timings")"
+rg -F 'pass-marker' "$pass_log" >/dev/null
+
+# Successful runs retain raw logs without replacing the latest failure evidence.
+cp "$FIXTURE/failure-logs/latest.log" "$FIXTURE/prior-failure.log"
+cp "$ROOT/scripts/ci/run-validation-targets.sh" "$FIXTURE/scripts/ci/"
+CANIC_VALIDATION_FAILURE_LOG_DIR="$FIXTURE/failure-logs" \
+    CANIC_VALIDATION_LOG_DIR="$FIXTURE/success-logs" \
+    CANIC_VALIDATION_ROOT="$FIXTURE" \
+    bash "$FIXTURE/scripts/ci/run-validation-targets.sh" pass >"$FIXTURE/success.log" 2>&1
+success_timings="$(rg --files "$FIXTURE/success-logs" | rg '/timings.tsv$')"
+success_log="$(awk -F '\t' '$1 == "pass" && $2 == "PASS" { print $4 }' "$success_timings")"
+rg -F 'pass-marker' "$success_log" >/dev/null
+cmp "$FIXTURE/prior-failure.log" "$FIXTURE/failure-logs/latest.log"
 
 echo "validation target runner test passed"

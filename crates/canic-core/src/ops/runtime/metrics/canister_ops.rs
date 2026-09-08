@@ -5,7 +5,7 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use crate::ids::CanisterRole;
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::BTreeMap};
 
 pub use crate::domain::metrics::{
     CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
@@ -15,8 +15,8 @@ const UNSCOPED_ROLE_LABEL: &str = "unscoped";
 const UNKNOWN_ROLE_LABEL: &str = "unknown";
 
 thread_local! {
-    static CANISTER_OPS_METRICS: RefCell<HashMap<CanisterOpsMetricKey, u64>> =
-        RefCell::new(HashMap::new());
+    static CANISTER_OPS_METRICS: RefCell<BTreeMap<CanisterOpsMetricKey, u64>> =
+        const { RefCell::new(BTreeMap::new()) };
 }
 
 ///
@@ -25,7 +25,7 @@ thread_local! {
 /// Composite key for one low-cardinality canister operation counter.
 ///
 
-#[derive(Clone, Eq, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CanisterOpsMetricKey {
     pub operation: CanisterOpsMetricOperation,
     pub role: String,
@@ -42,6 +42,24 @@ pub struct CanisterOpsMetricKey {
 pub struct CanisterOpsMetrics;
 
 impl CanisterOpsMetrics {
+    /// Read a deterministic bounded prefix for optional public sampling.
+    pub(crate) fn bounded_snapshot(
+        limit: usize,
+    ) -> Result<Vec<(CanisterOpsMetricKey, u64)>, crate::InternalError> {
+        CANISTER_OPS_METRICS.with_borrow(|counts| {
+            if counts.keys().take(limit).any(|key| {
+                key.role.len() > crate::model::public_metrics::MAX_PUBLIC_METRIC_TEXT_BYTES
+            }) {
+                return Err(crate::InternalError::invalid_input());
+            }
+            Ok(counts
+                .iter()
+                .take(limit)
+                .map(|(key, count)| (key.clone(), *count))
+                .collect())
+        })
+    }
+
     /// Record one canister operation event for a concrete role label.
     pub fn record(
         operation: CanisterOpsMetricOperation,
@@ -101,7 +119,7 @@ impl CanisterOpsMetrics {
     /// Test-only helper: clear all canister operation metrics.
     #[cfg(test)]
     pub fn reset() {
-        CANISTER_OPS_METRICS.with_borrow_mut(HashMap::clear);
+        CANISTER_OPS_METRICS.with_borrow_mut(BTreeMap::clear);
     }
 }
 
@@ -114,7 +132,7 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> HashMap<CanisterOpsMetricKey, u64> {
+    fn snapshot_map() -> BTreeMap<CanisterOpsMetricKey, u64> {
         CanisterOpsMetrics::snapshot().into_iter().collect()
     }
 

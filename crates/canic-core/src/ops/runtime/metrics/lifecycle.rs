@@ -4,15 +4,15 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::BTreeMap};
 
 pub use crate::domain::metrics::{
     LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricStage,
 };
 
 thread_local! {
-    static LIFECYCLE_METRICS: RefCell<HashMap<LifecycleMetricKey, u64>> =
-        RefCell::new(HashMap::new());
+    static LIFECYCLE_METRICS: RefCell<BTreeMap<LifecycleMetricKey, u64>> =
+        const { RefCell::new(BTreeMap::new()) };
 }
 
 ///
@@ -21,7 +21,7 @@ thread_local! {
 /// Composite key for one low-cardinality lifecycle counter.
 ///
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct LifecycleMetricKey {
     pub phase: LifecycleMetricPhase,
     pub role: LifecycleMetricRole,
@@ -38,6 +38,17 @@ pub struct LifecycleMetricKey {
 pub struct LifecycleMetrics;
 
 impl LifecycleMetrics {
+    /// Read a deterministic bounded prefix for optional public sampling.
+    pub(crate) fn bounded_snapshot(limit: usize) -> Vec<(LifecycleMetricKey, u64)> {
+        LIFECYCLE_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .take(limit)
+                .map(|(key, count)| (*key, *count))
+                .collect()
+        })
+    }
+
     /// Record one lifecycle stage event.
     pub fn record(
         phase: LifecycleMetricPhase,
@@ -69,6 +80,6 @@ impl LifecycleMetrics {
     /// Test-only helper: clear all lifecycle metrics.
     #[cfg(test)]
     pub fn reset() {
-        LIFECYCLE_METRICS.with_borrow_mut(HashMap::clear);
+        LIFECYCLE_METRICS.with_borrow_mut(BTreeMap::clear);
     }
 }

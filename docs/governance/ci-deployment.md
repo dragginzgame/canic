@@ -33,6 +33,14 @@ contend for the same build graph. Complete failed-target logs are retained under
 `target/validation-failures/`; the terminal summary repeats bounded failure
 detail and the exact failed target list.
 
+Every validation target also retains its raw output and a `timings.tsv` record
+under a unique `target/validation-runs/` directory, including successful runs.
+Records distinguish target, result, elapsed seconds and log path. The log path
+is printed before work begins, so interrupted output remains discoverable;
+an interrupted target may have a partial log without a completed timing row.
+Nested validation barriers have separate directories. These logs are diagnostic
+evidence, not reusable release-validation receipts.
+
 ## Command Authority
 
 An unambiguous maintainer instruction in the current conversation authorizes
@@ -455,6 +463,23 @@ Publishing first re-runs the release-candidate guard, then verifies that every
 crate in the governed publish order exposes the same workspace version before
 declaring the package set available. A successful subset or library/CLI split
 is never reported as a complete Canic release.
+
+The publication manifest boundary is shared with the cheap release-integrity
+gate and reads locked offline Cargo metadata without compiling a Rust test.
+It checks normal/build dependencies, including renamed, optional and
+target-specific dependencies, against unpublished local workspace members.
+Development-only dependencies remain outside that publication boundary.
+An exact registry version already observed during the current publish invocation
+does not need another lookup. Packages skipped by `PUBLISH_FROM` still require
+observation before the complete set is declared available. These observations
+are invocation-local and do not authorize a later run.
+
+Publication retains individual preflight, registry lookup, package verification/
+upload and propagation logs with elapsed seconds and exit codes under
+`target/publication-runs/`. A lookup miss before publication is expected and is
+distinguished from a failed publish step by its stage name. Both commands print
+their timing directories automatically. `make clean` removes these diagnostics
+with the other Cargo artifacts; normal release/publish commands retain them.
 
 Tags are immutable.
 

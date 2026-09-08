@@ -5,11 +5,11 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use crate::cdk::types::Principal;
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
-    static CYCLES_FUNDING_METRICS: RefCell<HashMap<CyclesFundingMetricStorageKey, u128>> =
-        RefCell::new(HashMap::new());
+    static CYCLES_FUNDING_METRICS: RefCell<BTreeMap<CyclesFundingMetricStorageKey, u128>> =
+        const { RefCell::new(BTreeMap::new()) };
 }
 
 ///
@@ -18,7 +18,7 @@ thread_local! {
 /// Cycles funding metric dimension used by public metrics projection.
 ///
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum CyclesFundingMetricKey {
     DeniedGlobalKillSwitch,
@@ -51,7 +51,7 @@ impl CyclesFundingMetricKey {
 /// Bounded cycles funding denial reason dimension used by public metrics projection.
 ///
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum CyclesFundingDeniedReason {
     ChildNotFound,
@@ -87,7 +87,7 @@ impl CyclesFundingDeniedReason {
 /// Reason and metric dimensions are fixed enums.
 ///
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct CyclesFundingMetricStorageKey {
     metric: CyclesFundingMetricKey,
     child_principal: Option<Principal>,
@@ -190,22 +190,26 @@ impl CyclesFundingMetrics {
     }
 
     #[must_use]
-    pub fn snapshot() -> Vec<(
+    pub(crate) fn bounded_snapshot(
+        limit: usize,
+    ) -> Vec<(
         CyclesFundingMetricKey,
         Option<Principal>,
         Option<CyclesFundingDeniedReason>,
         u128,
     )> {
-        CYCLES_FUNDING_METRICS
-            .with_borrow(std::clone::Clone::clone)
-            .into_iter()
-            .map(|(key, cycles)| (key.metric, key.child_principal, key.reason, cycles))
-            .collect()
+        CYCLES_FUNDING_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .take(limit)
+                .map(|(key, cycles)| (key.metric, key.child_principal, key.reason, *cycles))
+                .collect()
+        })
     }
 
     #[cfg(test)]
     pub fn reset() {
-        CYCLES_FUNDING_METRICS.with_borrow_mut(HashMap::clear);
+        CYCLES_FUNDING_METRICS.with_borrow_mut(BTreeMap::clear);
     }
 }
 
@@ -230,7 +234,7 @@ mod tests {
         ),
         u128,
     > {
-        CyclesFundingMetrics::snapshot()
+        CyclesFundingMetrics::bounded_snapshot(usize::MAX)
             .into_iter()
             .map(|(metric, child_principal, reason, cycles)| {
                 ((metric, child_principal, reason), cycles)

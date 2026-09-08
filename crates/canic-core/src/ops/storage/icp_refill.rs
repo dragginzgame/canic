@@ -904,11 +904,12 @@ impl IcpRefillDerivedIndex {
         }
     }
 
-    fn metric_snapshot(&self) -> IcpRefillMetricSnapshot {
+    fn metric_snapshot(&self, limit: usize) -> IcpRefillMetricSnapshot {
         IcpRefillMetricSnapshot {
             statuses: self
                 .status_counts
                 .iter()
+                .take(limit)
                 .map(
                     |((trigger, status, error_code), count)| IcpRefillMetricStatusCount {
                         trigger: (*trigger).into(),
@@ -921,6 +922,7 @@ impl IcpRefillDerivedIndex {
             errors: self
                 .error_counts
                 .iter()
+                .take(limit)
                 .map(|(error_code, count)| IcpRefillMetricErrorCount {
                     error_code: *error_code,
                     count: *count,
@@ -929,6 +931,7 @@ impl IcpRefillDerivedIndex {
             targets: self
                 .target_totals
                 .iter()
+                .take(limit)
                 .map(|(target_canister, totals)| IcpRefillMetricTargetTotal {
                     target_canister: *target_canister,
                     amount_e8s: totals.amount_e8s,
@@ -1023,7 +1026,12 @@ impl IcpRefillRecordOps {
     }
 
     pub fn metric_snapshot() -> IcpRefillMetricSnapshot {
-        ICP_REFILL_DERIVED_INDEX.with_borrow(IcpRefillDerivedIndex::metric_snapshot)
+        Self::bounded_metric_snapshot(usize::MAX)
+    }
+
+    /// Bound each aggregate index before optional public projection.
+    pub(crate) fn bounded_metric_snapshot(limit: usize) -> IcpRefillMetricSnapshot {
+        ICP_REFILL_DERIVED_INDEX.with_borrow(|index| index.metric_snapshot(limit))
     }
 
     #[must_use]

@@ -288,4 +288,37 @@ async fn sample_public_metrics() -> Result<(), canic::Error> {
     ])
 }
 
+/// Bounded fixture evidence for optional sampling and ordinary cycle tracking.
+#[derive(candid::CandidType)]
+struct PublicSamplingProbe {
+    sample_instructions: u64,
+    sample: Result<(), canic::Error>,
+    cycle_tracking: Result<(), canic::Error>,
+}
+
+/// Exercise production sampling after a bounded amount of synthetic instrumentation.
+#[canic_update(requires(caller::is_controller()))]
+async fn qualify_public_metrics_sampling(
+    checkpoints: u16,
+    reject_family: bool,
+) -> Result<PublicSamplingProbe, canic::Error> {
+    for index in 0..checkpoints.min(4096) {
+        canic::api::ops::perf::record_checkpoint("zz_sample", &format!("checkpoint_{index:04}"), 7);
+    }
+    if reject_family {
+        canic::api::ops::perf::record_checkpoint(&"a".repeat(128), "accepted_label", 7);
+    }
+    let start = ic_cdk::api::performance_counter(0);
+    let sample = canic::api::public_status::PublicStatusApi::sample_metrics();
+    let sample_instructions = ic_cdk::api::performance_counter(0).saturating_sub(start);
+    // This internal fixture qualifies the existing cycle owner without exposing a new App API.
+    let cycle_tracking =
+        canic::__internal::core::api::runtime::root_funding::RootFundingTimerApi::reconcile();
+    Ok(PublicSamplingProbe {
+        sample_instructions,
+        sample,
+        cycle_tracking,
+    })
+}
+
 canic::finish!();

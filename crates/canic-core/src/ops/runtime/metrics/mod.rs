@@ -72,6 +72,52 @@ pub fn core_entries() -> Vec<MetricEntry> {
     entries
 }
 
+/// Project at most `limit` inputs from each operation owner before formatting.
+pub(super) fn bounded_core_entries(limit: usize) -> Result<Vec<MetricEntry>, crate::InternalError> {
+    let mut rows = prefix_entries(
+        "lifecycle",
+        lifecycle_entries_from(LifecycleMetrics::bounded_snapshot(limit)),
+    );
+    rows.extend(prefix_entries(
+        "canister_ops",
+        canister_ops_entries_from(CanisterOpsMetrics::bounded_snapshot(limit)?),
+    ));
+    rows.extend(prefix_entries(
+        "cycles_funding",
+        cycles_funding_entries_from(limit),
+    ));
+    if EnvOps::is_root() {
+        rows.extend(prefix_entries(
+            "cycles_funding",
+            icp_refill::entries_from_snapshot(
+                &crate::ops::storage::icp_refill::IcpRefillRecordOps::bounded_metric_snapshot(
+                    limit,
+                ),
+            ),
+        ));
+    }
+    rows.extend(prefix_entries(
+        "cycles_topup",
+        cycles_topup_entries_from(CyclesTopupMetrics::bounded_snapshot(limit)),
+    ));
+    Ok(rows)
+}
+
+/// Sample performance directly; the upstream timer registry admits at most 64 timers.
+pub(super) fn bounded_performance_entries(
+    limit: usize,
+) -> Result<Vec<MetricEntry>, crate::InternalError> {
+    let counters = perf::bounded_entries(limit)?;
+    let timers = ic_timers::timer_inventory().ok();
+    Ok(prefix_entries(
+        "perf",
+        perf_entries_from(
+            counters,
+            timers.as_ref().map_or(&[], |inventory| inventory.timers()),
+        ),
+    ))
+}
+
 #[must_use]
 pub fn placement_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("cascade", cascade_entries());
@@ -314,7 +360,13 @@ fn cascade_entries() -> Vec<MetricEntry> {
 /// Project canister operation counters into the unified public metrics row shape.
 #[must_use]
 fn canister_ops_entries() -> Vec<MetricEntry> {
-    CanisterOpsMetrics::snapshot()
+    canister_ops_entries_from(CanisterOpsMetrics::snapshot())
+}
+
+fn canister_ops_entries_from(
+    snapshot: Vec<(canister_ops::CanisterOpsMetricKey, u64)>,
+) -> Vec<MetricEntry> {
+    snapshot
         .into_iter()
         .map(|(key, count)| MetricEntry {
             labels: vec![
@@ -350,7 +402,11 @@ fn wasm_store_entries() -> Vec<MetricEntry> {
 /// Project lifecycle counters into the unified public metrics row shape.
 #[must_use]
 fn lifecycle_entries() -> Vec<MetricEntry> {
-    LifecycleMetrics::snapshot()
+    lifecycle_entries_from(LifecycleMetrics::snapshot())
+}
+
+fn lifecycle_entries_from(snapshot: Vec<(lifecycle::LifecycleMetricKey, u64)>) -> Vec<MetricEntry> {
+    snapshot
         .into_iter()
         .map(|(key, count)| MetricEntry {
             labels: vec![
@@ -474,7 +530,15 @@ fn root_capability_entries() -> Vec<MetricEntry> {
 /// Project cycles-funding counters into the unified public metrics row shape.
 #[must_use]
 fn cycles_funding_entries() -> Vec<MetricEntry> {
-    let mut entries = CyclesFundingMetrics::snapshot()
+    let mut entries = cycles_funding_entries_from(usize::MAX);
+    if EnvOps::is_root() {
+        entries.extend(icp_refill_entries());
+    }
+    entries
+}
+
+fn cycles_funding_entries_from(limit: usize) -> Vec<MetricEntry> {
+    CyclesFundingMetrics::bounded_snapshot(limit)
         .into_iter()
         .map(|(metric, child_principal, reason, cycles)| MetricEntry {
             labels: reason.map_or_else(
@@ -489,17 +553,19 @@ fn cycles_funding_entries() -> Vec<MetricEntry> {
             principal: child_principal,
             value: MetricValue::U128(cycles),
         })
-        .collect::<Vec<_>>();
-    if EnvOps::is_root() {
-        entries.extend(icp_refill_entries());
-    }
-    entries
+        .collect()
 }
 
 /// Project auto-top-up decision counters into the unified public metrics row shape.
 #[must_use]
 fn cycles_topup_entries() -> Vec<MetricEntry> {
-    CyclesTopupMetrics::snapshot()
+    cycles_topup_entries_from(CyclesTopupMetrics::snapshot())
+}
+
+fn cycles_topup_entries_from(
+    snapshot: Vec<(cycles_topup::CyclesTopupMetricKey, u64)>,
+) -> Vec<MetricEntry> {
+    snapshot
         .into_iter()
         .map(|(metric, count)| MetricEntry {
             labels: vec![metric.metric_label().to_string()],
@@ -518,7 +584,14 @@ fn icp_refill_entries() -> Vec<MetricEntry> {
 /// Project perf counters into the unified public metrics row shape.
 #[must_use]
 fn perf_entries(timer_snapshots: &[ic_timers::TimerSnapshot]) -> Vec<MetricEntry> {
-    let mut entries = perf::entries()
+    perf_entries_from(perf::entries(), timer_snapshots)
+}
+
+fn perf_entries_from(
+    snapshot: Vec<perf::PerfEntry>,
+    timer_snapshots: &[ic_timers::TimerSnapshot],
+) -> Vec<MetricEntry> {
+    let mut entries = snapshot
         .into_iter()
         .map(|entry| {
             let labels = match entry.key {
