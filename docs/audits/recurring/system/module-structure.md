@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-STRUCTURE-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
 - Owner: crate/module topology, visibility, facade containment, and layout
 - Kind/profile: structural invariant plus comparable `trend`
@@ -257,10 +257,14 @@ Use this crate map for top-level ownership and boundary assessment:
 | `crates/canic-control-plane`           | root/store control-plane runtime support     |
 | `crates/canic-host`                    | host-side build/install/deployment support   |
 | `crates/canic-macros`                  | proc-macro support for the public facade     |
-| `crates/canic-fleet-wasm-store`              | canonical publishable `wasm_store` canister  |
 | `crates/canic-testing-internal`        | Canic-only internal test harnesses           |
 | `crates/canic-tests`                   | integration test entrypoints                 |
 | sibling `../ic-testkit`                | public generic PocketIC/test infrastructure  |
+
+Fleet Root, Coordinator and Store entrypoints are unpublished packages generated
+by `canic-host`; inspect that owner and the runtime implementations in Canic
+and `canic-control-plane`.
+
 | `fleets/**`                            | config-defined operator fleets               |
 | `canisters/test/**`                    | internal correctness/integration fixtures    |
 | `canisters/audit/**`                   | internal audit/perf probe canisters          |
@@ -353,7 +357,6 @@ Default audit scope:
 * `crates/canic-control-plane`
 * `crates/canic-host`
 * `crates/canic-macros`
-* `crates/canic-fleet-wasm-store`
 * `crates/canic-testing-internal`
 * `crates/canic-tests`
 * sibling `../ic-testkit` when present
@@ -389,7 +392,6 @@ Public-facing crates to scan by default:
 * `crates/canic-control-plane`
 * `crates/canic-host`
 * `crates/canic-macros`
-* `crates/canic-fleet-wasm-store`
 * sibling `../ic-testkit` when present
 * any other crate intentionally published or externally consumed in this run
 

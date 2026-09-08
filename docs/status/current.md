@@ -45,6 +45,9 @@ protocol tests, seven workspace checks, configuration/storage guards, affected
 Clippy configurations, crypto closure, shell and formatting checks pass. The
 [generated-build handoff](../audits/reports/2026-09/2026-09-08/generated-fleet-artifacts.md)
 records exact scope and evidence.
+The release-preflight audit catalog failure is corrected: five method scopes
+and versioned fingerprints now follow generated Fleet ownership. Targeted
+catalog and document checks pass; runtime/build sources are unchanged.
 
 The expanded canonical Root, retained Fleet, read-surface and generated-build
 batch is ready for release approval. The open 0.110.10 changelog is ready;

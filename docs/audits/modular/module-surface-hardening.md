@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-MODULE-SURFACE-001`
-- Method version: `2.0`
+- Method version: `2.1`
 - Disposition: `manual_only`
 - Owner: requested module-level reachability, exposure, deletion pressure, and
   runtime-shape review
@@ -22,7 +22,7 @@ generated-boundary support, or retained helper layers need current authority
 review.
 
 `canic-core` is the default first target. Facade, CDK, macros, control-plane,
-wasm-store, host, CLI, backup, testkit, and canister crates are in scope only
+host, CLI, backup, testkit, and canister crates are in scope only
 where they own reachable runtime surface, generated-code wiring, deployment
 truth, persisted formats, operator output, or code whose retention keeps
 complexity alive.
@@ -47,8 +47,12 @@ Historical name: **Module Code Hygiene / Redundancy**.
 Recommended slug for new reports: `module-surface-hardening`.
 
 Old reports using `code-hygiene` remain valid historical reports, but they are
-non-comparable with `MSH-2.0` unless the authority, generated-boundary,
+non-comparable with `MSH-2.1` unless the authority, generated-boundary,
 hot-path, and wasm regression gates are backfilled.
+
+Method `MSH-2.1` updates the package scope for host-generated Fleet artifacts;
+inspect their entrypoint generation under `canic-host` and their shared runtime
+owners. Runtime-shape and deletion criteria are unchanged.
 
 ## Audit Tier
 
@@ -149,7 +153,6 @@ Default in-scope roots:
 * `crates/canic/src`
 * `crates/canic-macros/src`
 * `crates/canic-control-plane/src`
-* `crates/canic-fleet-wasm-store/src`
 * `crates/canic-host/src`
 * `crates/canic-cli/src`
 * `crates/canic-backup/src`
@@ -179,7 +182,7 @@ production dead surface`.
 
 Include this manifest in each report:
 
-* `method_version = MSH-2.0`
+* `method_version = MSH-2.1`
 * `surface_taxonomy = ST-1`
 * `authority_taxonomy = AT-1`
 * `deletion_confidence_model = DC-1`
@@ -191,7 +194,7 @@ Include this manifest in each report:
 Mark the run `non-comparable` if any manifest item changes, if in-scope roots
 change, or if test/generated-code inclusion rules change.
 
-`MSH-2.0` supersedes the retired modular code-hygiene audit. It keeps the
+`MSH-2.0` superseded the retired modular code-hygiene audit. It keeps the
 deletion-pressure standard and adds two release-quality gates:
 
 * cleanup in hot or wasm-sensitive code must include an optimization-risk
@@ -230,7 +233,7 @@ Then ask the deletion-pressure follow-up:
 > Is that failure desirable because the caller is stale, test-only,
 > generated-only, overexposed, or preserving old vocabulary?
 
-Then ask the MSH-2.0 runtime-shape follow-up:
+Then ask the runtime-shape follow-up:
 
 > Would the simpler shape add allocation, cloning, formatting, dynamic dispatch,
 > generic monomorphization, or wasm size/instruction risk in a hot path?
@@ -438,7 +441,7 @@ Capture:
 
 | Field [M/C] | Value |
 | ---- | ---- |
-| `method_version` | `MSH-2.0` |
+| `method_version` | `MSH-2.1` |
 | `baseline_report` | path or `N/A` |
 | `comparability_status` | `comparable` / `non-comparable` |
 | `code_snapshot` | git short SHA or `N/A` |

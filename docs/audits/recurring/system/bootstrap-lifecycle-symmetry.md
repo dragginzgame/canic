@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-LIFECYCLE-001`
-- Method version: `3`
+- Method version: `4`
 - Disposition: `revise`
 - Owner: lifecycle restoration and bootstrap boundary
 - Kind/profile: architecture invariant / `invariant` plus named manual review
@@ -67,7 +67,7 @@ Drift in lifecycle startup structure can introduce:
 
 * lifecycle/startup changes
 * macro hook changes
-* package-metadata role dispatch changes in `canic::build!` or `canic::start!`
+* canonical Fleet entrypoint generation or lifecycle macro changes
 * runtime restore/import changes
 * timer/bootstrap workflow changes
 * init/post-upgrade refactors
@@ -154,7 +154,7 @@ Record all of the following in the result file:
 * audited paths
 * baseline report path
 * code snapshot identifier
-* method tag: `CANIC-LIFECYCLE-001/v3`
+* method tag: `CANIC-LIFECYCLE-001/v4`
 * comparability status: `comparable` | `partially comparable` | `not comparable`
 
 ### Comparability Rules
@@ -292,7 +292,9 @@ rg -n 'lifecycle|post_upgrade|init|bootstrap|Timer' \
 #### Root fixture coverage
 
 ```bash
-rg -n 'start!\(|start_local!\(|start_wasm_store!\(|init = \{' canisters crates/canic-tests crates/canic-fleet-wasm-store -g '*.rs'
+rg -n 'start!\(|start_fleet_root!\(|start_local!\(|start_wasm_store!\(|init = \{' \
+  canisters crates/canic-tests crates/canic-host/src/canonical_root \
+  crates/canic-host/src/bootstrap_store crates/canic-host/src/bootstrap_coordinator -g '*.rs'
 ```
 
 ---
