@@ -130,3 +130,26 @@ host, including every reported failure and the related peer/manifest/CBOR
 checks. The run uses the deployment scratch wrapper, not only system temporary
 storage. Log: `/tmp/canic-hard-cut-fixture-tests.log`. No PocketIC or full
 workspace suite was run. The corrections extend the open 0.110.10 batch.
+
+## Protocol Test Feature Qualification Correction
+
+The ordinary integration runner compiled `protocol_surface` without the
+optional Canic infrastructure features. Its combined read-contract test imported
+Coordinator and Store facade DTOs unconditionally. The earlier all-feature
+qualification masked those missing test gates; it did not establish ordinary
+integration compile coverage. No public DTO feature gate needed widening.
+
+The shared Candid assertion helper now serves separate Coordinator and Store
+tests. Each test uses exactly its facade DTO's feature condition. Package-isolated
+runs through the deployment scratch wrapper pass with default features (34 tests),
+Coordinator only (35), Store only (35), and Root control plane only (35).
+Warning-denied Clippy passes for the changed `protocol_surface` target with all
+features. Logs: `/tmp/canic-protocol-{default,coordinator,store,root,clippy}.log`.
+
+CI/deployment governance now explicitly requires the ordinary runner feature
+selection and directly affected role selections for changed feature-gated
+imports/tests, plus deployment scratch for Cargo consumer fixtures. These are
+narrow implementation checks, not another full release suite. Formatting and
+document checks pass. Production sources and package versions are unchanged;
+the corrected open batch remains ready for release approval, with completion
+of the maintainer's release gate still outstanding.

@@ -772,8 +772,14 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
     );
 }
 
-#[test]
-fn infrastructure_read_contracts_match_their_authority_owners() {
+#[cfg(any(
+    feature = "fleet-coordinator-canister",
+    feature = "control-plane",
+    feature = "wasm-store-canister"
+))]
+mod infrastructure_read_contracts {
+    use super::*;
+
     fn assert_contract<Q: candid::CandidType, R: candid::CandidType>(path: &str, method: &str) {
         let did = read_text(&workspace_root().join(path));
         let (mut env, actor) = CandidSource::Text(&did)
@@ -802,43 +808,53 @@ fn infrastructure_read_contracts_match_their_authority_owners() {
                 .expect("read contract matches its current authority owner");
         }
     }
-    use canic::dto::{
-        fleet_coordinator::{
+
+    #[cfg(feature = "fleet-coordinator-canister")]
+    #[test]
+    fn coordinator_reads_match_their_authority_owner() {
+        use canic::dto::fleet_coordinator::{
             CoordinatorObservabilityRequest, CoordinatorObservabilityResponse,
             CoordinatorOperationReadRequest, CoordinatorOperationReadResponse,
             CoordinatorRegistryRequest, CoordinatorRegistryResponse,
-        },
-        template::{
+        };
+
+        let coordinator = "crates/canic/candid/fleet_coordinator.did";
+        assert_contract::<CoordinatorObservabilityRequest, CoordinatorObservabilityResponse>(
+            coordinator,
+            canic::protocol::CANIC_OBSERVABILITY,
+        );
+        assert_contract::<CoordinatorRegistryRequest, CoordinatorRegistryResponse>(
+            coordinator,
+            canic::protocol::CANIC_COORDINATOR_REGISTRY,
+        );
+        assert_contract::<CoordinatorOperationReadRequest, CoordinatorOperationReadResponse>(
+            coordinator,
+            canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
+        );
+    }
+
+    #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
+    #[test]
+    fn store_reads_match_their_authority_owner() {
+        use canic::dto::template::{
             StoreCatalogRequest, StoreCatalogResponse, StoreObservabilityRequest,
             StoreObservabilityResponse, StoreStatusRequest, StoreStatusResponse,
-        },
-    };
-    let coordinator = "crates/canic/candid/fleet_coordinator.did";
-    assert_contract::<CoordinatorObservabilityRequest, CoordinatorObservabilityResponse>(
-        coordinator,
-        canic::protocol::CANIC_OBSERVABILITY,
-    );
-    assert_contract::<CoordinatorRegistryRequest, CoordinatorRegistryResponse>(
-        coordinator,
-        canic::protocol::CANIC_COORDINATOR_REGISTRY,
-    );
-    assert_contract::<CoordinatorOperationReadRequest, CoordinatorOperationReadResponse>(
-        coordinator,
-        canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
-    );
-    let store = "crates/canic/candid/wasm_store.did";
-    assert_contract::<StoreStatusRequest, StoreStatusResponse>(
-        store,
-        canic::protocol::CANIC_WASM_STORE_STATUS,
-    );
-    assert_contract::<StoreCatalogRequest, StoreCatalogResponse>(
-        store,
-        canic::protocol::CANIC_WASM_STORE_CATALOG,
-    );
-    assert_contract::<StoreObservabilityRequest, StoreObservabilityResponse>(
-        store,
-        canic::protocol::CANIC_OBSERVABILITY,
-    );
+        };
+
+        let store = "crates/canic/candid/wasm_store.did";
+        assert_contract::<StoreStatusRequest, StoreStatusResponse>(
+            store,
+            canic::protocol::CANIC_WASM_STORE_STATUS,
+        );
+        assert_contract::<StoreCatalogRequest, StoreCatalogResponse>(
+            store,
+            canic::protocol::CANIC_WASM_STORE_CATALOG,
+        );
+        assert_contract::<StoreObservabilityRequest, StoreObservabilityResponse>(
+            store,
+            canic::protocol::CANIC_OBSERVABILITY,
+        );
+    }
 }
 
 #[test]

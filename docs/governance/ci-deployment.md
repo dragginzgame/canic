@@ -263,6 +263,12 @@ Validation is tiered:
   use `--all-targets --all-features` for those packages when their affected target
   set spans library and test surfaces. This remains package-scoped validation,
   not authorization for workspace-wide gates.
+- For changed feature-gated imports or tests, also compile/run the affected
+  target in package isolation with its ordinary runner feature selection and
+  each directly affected role selection. `--all-features` and workspace feature
+  unification can hide missing gates; they do not replace those narrow checks.
+  Use the governed scratch wrapper when fixtures create Cargo consumers, so
+  repository-local workspace discovery is covered before deployment validation.
 - After a validation failure, inspect the complete retained failure log, correct
   all reported in-scope defects, and rerun the affected target set together.
   Closeout evidence records package, target and feature selection for the final
