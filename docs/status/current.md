@@ -1019,4 +1019,5 @@ not begin B2 until the maintainer accepts the complete B1 baseline.
 
 
 
-<!-- canic-release-validation: version=0.110.11 source=3ca0a18bfbe3c6c6065274d40febda0b604b0612 date=2026-09-08 gate=complete -->
+
+<!-- canic-release-validation: version=0.110.12 source=ae3f972ee9196c1a43b5e338fd9084b8564a29f8 date=2026-09-08 gate=complete -->
