@@ -222,7 +222,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     #[test]
-    fn typed_client_uses_only_store_command_status_and_byte_lanes() {
+    fn typed_client_uses_only_store_command_catalog_and_byte_lanes() {
         let all = WasmStoreInternalClient::ENDPOINTS
             .iter()
             .copied()
@@ -234,7 +234,7 @@ mod tests {
                 "canic_wasm_store_command",
                 "canic_wasm_store_chunk",
                 "canic_wasm_store_publish_chunk",
-                "canic_wasm_store_status",
+                "canic_wasm_store_catalog",
             ])
         );
         assert_eq!(

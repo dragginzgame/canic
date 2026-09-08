@@ -39,6 +39,7 @@ fn standalone_consumer_build_resolves_root_without_an_existing_lockfile() {
         .unwrap();
     let document = serde_json::json!({
         "package": {"name": "root-consumer", "version": "0.0.0", "edition": "2024"},
+        "workspace": {},
         "dependencies": {"canic": {"path": canic_manifest.parent().unwrap(), "default-features": false}},
     });
     let mut manifest = toml::to_string(&toml::Value::try_from(document).unwrap()).unwrap();

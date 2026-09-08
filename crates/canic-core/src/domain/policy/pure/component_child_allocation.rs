@@ -391,7 +391,6 @@ mod tests {
         name = "toko"
 
         [roles.root]
-        package = "root"
         kind = "root"
 
         [roles.project_hub]

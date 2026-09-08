@@ -146,7 +146,7 @@ fn compiler_derives_one_canonical_entry_per_infrastructure_role() {
     assert_eq!(manifest.digest().expect("manifest digest"), expected_digest);
     assert_eq!(
         canic_core::cdk::utils::hash::hex_bytes(expected_digest),
-        "ead80ae4eb586bdb12f42f534570099959aae144508baada3c2c77584e069e93",
+        "a47c776c52fed66e694c863993064f3f1e4b210153db4a33d24a99576af9815f",
     );
 }
 

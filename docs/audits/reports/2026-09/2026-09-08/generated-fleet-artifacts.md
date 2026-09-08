@@ -109,3 +109,24 @@ The audit catalog and current-document semantics guards and diff hygiene pass.
 Runtime/build sources are unchanged, so their prior targeted evidence remains
 applicable. The full release gate was not rerun; the batch remains ready for
 release approval with the corrected open changelog.
+
+## Deployment Unit-Test Fixture Correction
+
+The next maintainer test run reported 20 failures across four library targets.
+Three metrics/allocation fixture definitions still supplied a Root package;
+the Store client inventory and replica-query wire bytes named removed read
+methods; the infrastructure manifest's pinned hash still described its prior
+Store package label. The standalone consumer fixture also inherited the outer
+workspace when the deployment runner placed it under repository scratch.
+
+The fixtures now use the maintained Root configuration and read contracts,
+retain exact wire-byte and manifest-digest assertions, and give the standalone
+consumer its own empty Cargo workspace. A source scan also corrected the same
+Root package field in the related Fleet peer fixture. Production behavior is
+unchanged.
+
+All 32 selected library regressions pass across Canic, control plane, core and
+host, including every reported failure and the related peer/manifest/CBOR
+checks. The run uses the deployment scratch wrapper, not only system temporary
+storage. Log: `/tmp/canic-hard-cut-fixture-tests.log`. No PocketIC or full
+workspace suite was run. The corrections extend the open 0.110.10 batch.
