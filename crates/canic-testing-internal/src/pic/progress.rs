@@ -27,12 +27,15 @@ pub(super) enum ProgressStatus {
     Done,
     Fail,
     Info,
-    #[cfg(test)]
+    #[cfg(all(test, feature = "governed-pocketic-tests"))]
     Pass,
-    #[cfg(feature = "pocketic-fixtures")]
+    #[cfg(all(
+        feature = "pocketic-fixtures",
+        any(not(test), feature = "governed-pocketic-tests")
+    ))]
     Ready,
     Run,
-    #[cfg(test)]
+    #[cfg(all(test, feature = "governed-pocketic-tests"))]
     Slow,
     Wait,
     Warn,
@@ -45,12 +48,15 @@ impl ProgressStatus {
             Self::Done => "DONE",
             Self::Fail => "FAIL",
             Self::Info => "INFO",
-            #[cfg(test)]
+            #[cfg(all(test, feature = "governed-pocketic-tests"))]
             Self::Pass => "PASS",
-            #[cfg(feature = "pocketic-fixtures")]
+            #[cfg(all(
+                feature = "pocketic-fixtures",
+                any(not(test), feature = "governed-pocketic-tests")
+            ))]
             Self::Ready => "READY",
             Self::Run => "RUN",
-            #[cfg(test)]
+            #[cfg(all(test, feature = "governed-pocketic-tests"))]
             Self::Slow => "SLOW",
             Self::Wait => "WAIT",
             Self::Warn => "WARN",
@@ -60,14 +66,17 @@ impl ProgressStatus {
     const fn color(self) -> &'static str {
         match self {
             Self::Cache | Self::Done => GREEN,
-            #[cfg(feature = "pocketic-fixtures")]
+            #[cfg(all(
+                feature = "pocketic-fixtures",
+                any(not(test), feature = "governed-pocketic-tests")
+            ))]
             Self::Ready => GREEN,
-            #[cfg(test)]
+            #[cfg(all(test, feature = "governed-pocketic-tests"))]
             Self::Pass => GREEN,
             Self::Fail => RED,
             Self::Run => BOLD_CYAN,
             Self::Wait | Self::Warn => YELLOW,
-            #[cfg(test)]
+            #[cfg(all(test, feature = "governed-pocketic-tests"))]
             Self::Slow => YELLOW,
             Self::Info => DIM,
         }
@@ -173,7 +182,7 @@ fn color_enabled() -> bool {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod tests {
     use super::*;
 

@@ -695,7 +695,10 @@ fn fetch_root_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, Cand
     }
 }
 
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub(super) fn install_root_args_with_release_set_digest_and_coordinator(
     input: ManagedRootInstallInput<'_>,
 ) -> Result<Vec<u8>, Error> {
@@ -903,24 +906,36 @@ fn workspace_root() -> PathBuf {
 }
 
 /// Exact read transport used by Coordinator fixtures after endpoint separation.
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub(super) trait CoordinatorRead: candid::CandidType {
     type Response: candid::CandidType + for<'de> serde::Deserialize<'de>;
     const METHOD: &'static str;
 }
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 impl CoordinatorRead
     for canic_control_plane::dto::fleet_coordinator::CoordinatorObservabilityRequest
 {
     type Response = canic_control_plane::dto::fleet_coordinator::CoordinatorObservabilityResponse;
     const METHOD: &'static str = canic::protocol::CANIC_OBSERVABILITY;
 }
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 impl CoordinatorRead for canic_control_plane::dto::fleet_coordinator::CoordinatorRegistryRequest {
     type Response = canic_control_plane::dto::fleet_coordinator::CoordinatorRegistryResponse;
     const METHOD: &'static str = canic::protocol::CANIC_COORDINATOR_REGISTRY;
 }
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 impl CoordinatorRead
     for canic_control_plane::dto::fleet_coordinator::CoordinatorOperationReadRequest
 {

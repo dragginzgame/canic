@@ -207,8 +207,8 @@ mod tests {
     #[cfg(test)]
     use canic_host::{
         canister_build::{
-            CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext,
-            build_workspace_canister_artifact, build_workspace_configured_canister_artifacts,
+            CanisterArtifactBuildOutput, CanisterArtifactBuilder, CanisterBuildProfile,
+            WorkspaceBuildContext,
         },
         release_build::finalize_release_build_from_manifest,
         role_contract::{
@@ -2224,15 +2224,20 @@ exec icp "$@"
             refresh_canonical_infrastructure_did: false,
             release_build_id: Some(release_build_id),
         };
-        let coordinator = build_workspace_canister_artifact(
-            &context.with_role(CanicInfrastructureRole::FleetCoordinator.as_str()),
-        )
-        .expect("build literal-zero Coordinator artifact");
-        let store = build_workspace_canister_artifact(
-            &context.with_role(CanicInfrastructureRole::WasmStore.as_str()),
-        )
-        .expect("build literal-zero Store artifact");
-        let configured = build_workspace_configured_canister_artifacts(&context, configured_roles)
+        let builder = CanisterArtifactBuilder::for_profile(context.profile)
+            .expect("preflight literal-zero artifact toolchain");
+        let coordinator = builder
+            .build_workspace_canister_artifact(
+                &context.with_role(CanicInfrastructureRole::FleetCoordinator.as_str()),
+            )
+            .expect("build literal-zero Coordinator artifact");
+        let store = builder
+            .build_workspace_canister_artifact(
+                &context.with_role(CanicInfrastructureRole::WasmStore.as_str()),
+            )
+            .expect("build literal-zero Store artifact");
+        let configured = builder
+            .build_workspace_configured_canister_artifacts(&context, configured_roles)
             .expect("build literal-zero Root and Component artifacts");
         let root = configured
             .iter()

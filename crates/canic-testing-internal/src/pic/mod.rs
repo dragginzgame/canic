@@ -1,6 +1,9 @@
 //! Repo-only PocketIC fixtures layered on top of `ic-testkit`.
 
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 use canic_core::{
     cdk::candid::Principal,
     ids::{FleetAdmissionPolicy, FleetBinding, FleetCoordinatorRootFundingPolicy},
@@ -15,9 +18,9 @@ use canic_core::{
         FleetSubnetRootFundingPolicy,
     },
 };
-#[cfg(all(test, feature = "pocketic-fixtures"))]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 use std::sync::{Mutex, MutexGuard, PoisonError};
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 use std::{collections::BTreeSet, panic::AssertUnwindSafe, time::Instant};
 
 mod artifacts;
@@ -26,17 +29,20 @@ mod canic;
 mod delegation;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod fleet_coordinator;
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 mod fleet_registry;
 mod lifecycle;
 mod progress;
 mod root;
 mod startup;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 type GovernedTestCase = (&'static str, fn());
 
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 const TARGET_GOVERNED_CASE_ENV: &str = "CANIC_TARGET_GOVERNED_CASE";
 
 pub use artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
@@ -53,7 +59,10 @@ pub use delegation::{
     create_user_shard, issue_delegated_token_from_active_proof,
     issue_delegated_token_from_active_proof_with_request_nonce, role_grant,
 };
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub use fleet_registry::{
     ActiveComponentRegistryFixture, setup_active_component_registry,
     setup_fresh_active_component_registry,
@@ -73,7 +82,10 @@ pub use startup::start_pocket_ic;
 
 pub(super) const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 200_000_000_000_000;
 
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub(crate) const fn coordinator_root_funding_policy() -> FleetCoordinatorRootFundingPolicy {
     FleetCoordinatorRootFundingPolicy {
         funding_profile: FleetFundingProfile::SingleSubnet,
@@ -105,7 +117,10 @@ pub(crate) const fn root_funding_authority() -> FleetSubnetRootFundingAuthority 
     }
 }
 
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub(crate) fn fleet_admission_policy(fleet: FleetBinding) -> FleetAdmissionPolicy {
     let template =
         compile_fleet_admission_policy_template(vec![Principal::from_slice(&[1; 29])], Vec::new())
@@ -113,18 +128,18 @@ pub(crate) fn fleet_admission_policy(fleet: FleetBinding) -> FleetAdmissionPolic
     bind_initial_fleet_admission_policy(fleet, &template).expect("PocketIC Fleet admission policy")
 }
 
-#[cfg(all(test, feature = "pocketic-fixtures"))]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 static PIC_UNIT_TEST_SERIAL: Mutex<()> = Mutex::new(());
 
 // Serialize the crate-local PocketIC unit journeys before they build artifacts or start a server.
-#[cfg(all(test, feature = "pocketic-fixtures"))]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 fn acquire_pic_unit_test_serial_guard() -> MutexGuard<'static, ()> {
     PIC_UNIT_TEST_SERIAL
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
     if let Some(target) = std::env::var_os(TARGET_GOVERNED_CASE_ENV) {
         let target = target
@@ -189,22 +204,11 @@ fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
 // Governed runner entry points
 // -----------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod governed_suite {
     use super::*;
 
     #[test]
-    #[ignore = "the workspace runner executes this fast tier explicitly"]
-    fn governed_fast_internal_suite() {
-        let mut cases = artifacts::governed_fast_cases();
-        cases.extend(lifecycle::governed_fast_cases());
-        cases.extend(root::governed_fast_cases());
-        assert_unique_governed_case_names(&cases);
-        run_governed_test_cases(cases);
-    }
-
-    #[test]
-    #[cfg(feature = "governed-pocketic-tests")]
     #[ignore = "the workspace runner supplies one shared PocketIC server and serial process"]
     fn governed_serial_pocketic_suite() {
         assert_governed_pocketic_inventory();
@@ -213,7 +217,6 @@ mod governed_suite {
         run_governed_test_cases(cases);
     }
 
-    #[cfg(feature = "governed-pocketic-tests")]
     fn ordered_governed_pocketic_cases() -> Vec<GovernedTestCase> {
         let mut cases = fleet_registry::governed_pocketic_cases();
         cases.extend(fleet_coordinator::governed_pocketic_cases());
@@ -225,12 +228,10 @@ mod governed_suite {
     }
 
     #[test]
-    #[cfg(feature = "governed-pocketic-tests")]
     fn governed_pocketic_inventory_preserves_baseline_order_and_journey_suffix() {
         assert_governed_pocketic_inventory();
     }
 
-    #[cfg(feature = "governed-pocketic-tests")]
     fn assert_governed_pocketic_inventory() {
         let cases = ordered_governed_pocketic_cases();
         let journeys = fleet_registry::governed_fleet_journey_cases();

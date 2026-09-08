@@ -23,3 +23,10 @@ pub enum PublicMetricFamily {
     #[serde(rename = "shard_occupancy")]
     ShardOccupancy,
 }
+
+/// Interpretation of a sampled value. Counter windows must change on every reset.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PublicMetricKind {
+    Gauge,
+    Counter { window_id: u64, saturated: bool },
+}

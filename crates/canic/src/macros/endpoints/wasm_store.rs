@@ -187,6 +187,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         pub enum PublicStatusRequest {
             Health,
             Metrics(::canic::dto::public_status::PublicMetricsRequest),
+            History(::canic::dto::public_status::PublicHistoryRequest),
             Overview,
         }
         #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
@@ -194,6 +195,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         pub enum PublicStatusResponse {
             Health(::canic::dto::public_status::PublicHealth),
             Metrics(::canic::dto::public_status::PublicMetricsSnapshot),
+            History(::canic::dto::public_status::PublicHistorySnapshot),
             Overview(::canic::dto::role::RoleOverviewResponse),
         }
         #[$crate::canic_query(public)]
@@ -204,6 +206,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 PublicStatusRequest::Health => Ok(PublicStatusResponse::Health(
                     ::canic::__internal::core::api::public_status::PublicStatusApi::health(),
                 )),
+                PublicStatusRequest::History(request) => Ok(PublicStatusResponse::History(::canic::__internal::core::api::public_status::PublicStatusApi::history(request))),
                 PublicStatusRequest::Metrics(request) => Ok(PublicStatusResponse::Metrics(
                     ::canic::__internal::core::api::public_status::PublicStatusApi::metrics(request),
                 )),

@@ -1774,3 +1774,37 @@ fn missing_finish_marker_stays_actionable() {
         "missing-finish marker should read like a compiler-error hint"
     );
 }
+
+#[test]
+fn public_history_canonical_types_match_rust() {
+    fn check<T: candid::CandidType>(name: &str) {
+        let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));
+        let (mut env, _) = CandidSource::Text(&did)
+            .load()
+            .expect("canonical Store Candid");
+        let canonical = env.find_type(name).unwrap().clone();
+        let mut rust = TypeContainer::new();
+        let ty = rust.add::<T>();
+        let ty = env.merge_type(rust.env, ty);
+        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
+            .expect("canonical public metrics type equals current Rust contract");
+    }
+    use canic::dto::public_status::{PublicHistoryRequest, PublicHistorySnapshot, PublicMetric};
+    check::<PublicMetric>("PublicMetric");
+    check::<PublicHistoryRequest>("PublicHistoryRequest");
+    check::<PublicHistorySnapshot>("PublicHistorySnapshot");
+}
+
+#[test]
+fn public_health_canonical_types_match_rust() {
+    for file in ["fleet_coordinator.did", "wasm_store.did"] {
+        let did = read_text(&workspace_root().join("crates/canic/candid").join(file));
+        let (mut env, _) = CandidSource::Text(&did).load().expect("canonical Candid");
+        let canonical = env.find_type("PublicHealth").unwrap().clone();
+        let mut rust = TypeContainer::new();
+        let ty = rust.add::<canic::dto::public_status::PublicHealth>();
+        let ty = env.merge_type(rust.env, ty);
+        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
+            .expect("canonical public health equals current Rust contract");
+    }
+}

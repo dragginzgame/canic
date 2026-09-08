@@ -720,8 +720,6 @@ impl CycleWorkflow {
     fn record_observation(sample: &CycleBalanceSample) {
         CycleTrackerOps::record(sample.timestamp_secs, sample.cycles.clone());
         Self::purge_history(sample.timestamp_secs);
-        // Optional collection has bounded owner reads; family errors preserve prior samples and do not change funding decisions.
-        let _ = crate::workflow::metrics::publication::PublicMetricsWorkflow::sample();
     }
 
     fn purge_history(now_secs: u64) {

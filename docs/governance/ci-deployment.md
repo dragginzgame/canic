@@ -141,8 +141,10 @@ sizes belong in downstream qualification. Capacity arithmetic and rejection
 boundaries remain covered independently of expensive deployment cardinality.
 The ordinary integration inventory is resolved into one multi-package Cargo invocation so
 its shared dependency graph is compiled once rather than once per owning
-package. Unit/lib/bin coverage and the internal fast harness remain separate
-where their target and fixture contracts differ. Timing output calls this
+package. Pure internal fixture tests join workspace unit/lib/bin coverage in
+the same Cargo invocation. The internal library test binary excludes the
+stateful Fleet catalogue unless its governed PocketIC feature is selected;
+normal fixture-library consumers retain their configured fixture surface. Timing output calls this
 `libtest-parallel` to distinguish parallelism inside one Cargo invocation from
 concurrent suite execution. When Make selects `sccache`, the runner reports
 request/hit/miss deltas, retains the server through the complete two-hour test
@@ -164,7 +166,7 @@ retains the process-local Fleet
 baseline and artifact owners. The restore proof uses that baseline, while the
 destructive Root-removal case uses an exclusive fresh instance because canister
 deletion is outside the snapshot-reset contract. The matching pure internal
-cases run in the ordinary tier before PocketIC. This keeps stateful deployment
+cases run once through ordinary libtest discovery before PocketIC. This keeps stateful deployment
 recovery locally attributable while avoiding three cold process-local Fleet
 baselines. The PocketIC lane clears transient heavy Wasm targets once before
 its integration-suite group and once at

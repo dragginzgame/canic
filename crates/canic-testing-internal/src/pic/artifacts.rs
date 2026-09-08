@@ -8,12 +8,18 @@ use ic_testkit::artifacts::{
     WasmBuildSpec, build_wasm_canisters_cached_batch_with_config_and_progress,
     resolve_cargo_build_inputs,
 };
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 use ic_testkit::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache,
 };
 use std::fs;
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 use std::sync::OnceLock;
 use std::{
     path::{Path, PathBuf},
@@ -72,14 +78,17 @@ pub(super) const INTERNAL_TEST_RELEASE_BUILD_ID: (&str, &str) = (
     canic_core::ids::RELEASE_BUILD_ID_ENV,
     "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae",
 );
-#[cfg(all(test, feature = "pocketic-fixtures"))]
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 pub(super) const INTERNAL_TEST_RELEASE_BUILD_NONCE: [u8; 32] = [0x11; 32];
 pub(super) const INTERNAL_TEST_PROTOCOL_PROFILE_DIGEST: (&str, &str) = (
     canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV,
     "0404040404040404040404040404040404040404040404040404040404040404",
 );
 
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> Vec<u8> {
     static WASM: OnceLock<Vec<u8>> = OnceLock::new();
     WASM.get_or_init(|| {
@@ -176,7 +185,10 @@ pub(super) fn preflight_governed_shared_artifacts() {
     let _ = build_canonical_fleet_coordinator_wasm(&workspace_root);
 }
 
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 fn canonical_fleet_coordinator_cache_spec(
     workspace_root: &Path,
     target_dir: &Path,
@@ -231,7 +243,10 @@ fn canonical_fleet_coordinator_cache_spec(
     )
 }
 
-#[cfg(feature = "pocketic-fixtures")]
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 fn run_canonical_fleet_coordinator_build(
     workspace_root: &Path,
     target_dir: &Path,
@@ -640,9 +655,6 @@ fn build_ci_wasm_artifacts_script(workspace_root: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-pub(super) use tests::governed_fast_cases;
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -708,26 +720,5 @@ mod tests {
             maintenance.failure_mode(),
             SharedIncrementalTargetMaintenanceFailureMode::BestEffort
         );
-    }
-
-    pub fn governed_fast_cases() -> Vec<crate::pic::GovernedTestCase> {
-        vec![
-            (
-                "artifact canonical build config input",
-                canonical_build_config_is_an_explicit_artifact_input,
-            ),
-            (
-                "artifact host-driven shared target",
-                host_driven_artifacts_share_the_pocketic_cargo_target,
-            ),
-            (
-                "artifact shared target network",
-                shared_wasm_target_uses_effective_network,
-            ),
-            (
-                "artifact shared target retention",
-                shared_wasm_target_retention_is_bounded,
-            ),
-        ]
     }
 }

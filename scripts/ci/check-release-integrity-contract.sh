@@ -506,12 +506,14 @@ CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
     fail "the full workspace test plan cannot be resolved"
 ordinary_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" ordinary)" ||
     fail "the ordinary workspace test plan cannot be resolved"
-rg -F -- '-p canic-testing-internal --no-default-features --lib pic::governed_suite::governed_fast_internal_suite' \
-    <<<"$ordinary_test_plan" >/dev/null ||
-    fail "the fast internal tier still compiles the governed PocketIC fixture catalogue"
+rg -F -- '--workspace --lib --bins' <<<"$ordinary_test_plan" >/dev/null ||
+    fail "ordinary library tests must share the workspace compile graph"
+if rg -- '^==> plan:.*(--exclude|governed-pocketic-tests|--ignored)' <<<"$ordinary_test_plan" >/dev/null; then
+    fail "the ordinary workspace plan excludes library coverage or enables stateful tests"
+fi
 ordinary_cargo_invocations="$(rg -c '^==> plan: cargo test ' <<<"$ordinary_test_plan")"
-[[ "$ordinary_cargo_invocations" -gt 0 && "$ordinary_cargo_invocations" -le 3 ]] ||
-    fail "the ordinary workspace plan must compile through at most three Cargo invocations"
+[[ "$ordinary_cargo_invocations" -gt 0 && "$ordinary_cargo_invocations" -le 2 ]] ||
+    fail "the ordinary workspace plan must compile through at most two Cargo invocations"
 ordinary_inventory_count="$(awk -F '\t' 'NR > 1 && $4 == "parallel" && $5 == "ordinary" { count++ } END { print count + 0 }' "$WORKSPACE_TEST_INVENTORY")"
 ordinary_package_count="$(awk -F '\t' 'NR > 1 && $4 == "parallel" && $5 == "ordinary" { print $1 }' "$WORKSPACE_TEST_INVENTORY" | sort -u | wc -l)"
 rg -F "==> combined inventory: $ordinary_inventory_count targets across $ordinary_package_count packages" \

@@ -1,0 +1,406 @@
+//! Module: model::public_metrics::history
+//!
+//! Responsibility: retain a bounded heap ring per admitted public series.
+//! Does not own: producers, schedules, DTO conversion, or query authorization.
+//! Boundary: only validated observations enter history; reads never refresh it.
+
+use crate::{
+    cdk::types::Principal,
+    domain::public_metrics::{PublicMetricFamily, PublicMetricKind},
+    model::public_metrics::{PUBLIC_METRICS_CADENCE_NS, PublicMetricSample},
+};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, VecDeque, btree_map::Entry},
+    mem::size_of,
+};
+
+/// Fixed slots per series: twenty-four hours at a five-minute cadence.
+pub const PUBLIC_HISTORY_SLOTS: usize = 288;
+/// Total series across all selected families in one canister.
+pub const MAX_HISTORY_SERIES: usize = 256;
+/// Maximum conservatively accounted history storage, including unused ring slots.
+pub const MAX_HISTORY_BYTES: usize = 8 * 1024 * 1024;
+
+/// An actual observation in a sampling slot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PublicHistorySample {
+    pub slot: u64,
+    pub observed_at_ns: u64,
+    pub value: u128,
+    pub kind: PublicMetricKind,
+}
+
+/// One exact retained series, with fixed ring storage and bounded labels.
+#[derive(Clone, Debug)]
+pub struct PublicHistorySeries {
+    pub unit: String,
+    pub slots: VecDeque<PublicHistorySample>,
+    pub latest_observed_at_ns: u64,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct SeriesKey {
+    family: PublicMetricFamily,
+    name: String,
+    canister_id: Option<Principal>,
+}
+
+#[derive(Default)]
+struct History {
+    series: BTreeMap<SeriesKey, PublicHistorySeries>,
+    heap_started_at_ns: Option<u64>,
+    reserved_bytes: usize,
+    truncated: bool,
+    last_expired_slot: Option<u64>,
+}
+
+thread_local! {
+    static HISTORY: RefCell<History> = RefCell::default();
+}
+
+/// Heap-only retention owner; restart naturally creates an empty history epoch.
+pub struct PublicHistoryCache;
+
+impl PublicHistoryCache {
+    /// Evict whole expired series, bounded by the total admitted series cap.
+    pub fn expire(now_ns: u64) {
+        HISTORY.with_borrow_mut(|history| {
+            history.heap_started_at_ns.get_or_insert(now_ns);
+            let slot = now_ns / PUBLIC_METRICS_CADENCE_NS;
+            if history
+                .last_expired_slot
+                .is_some_and(|previous| previous >= slot)
+            {
+                return;
+            }
+            history.last_expired_slot = Some(slot);
+            history.series.retain(|_, series| {
+                let latest_slot = series.latest_observed_at_ns / PUBLIC_METRICS_CADENCE_NS;
+                slot.saturating_sub(latest_slot) < PUBLIC_HISTORY_SLOTS as u64
+            });
+            history.reserved_bytes = history
+                .series
+                .iter()
+                .map(|(key, series)| reservation(key, &series.unit))
+                .sum();
+        });
+    }
+
+    pub fn record(family: PublicMetricFamily, now_ns: u64, metrics: &[PublicMetricSample]) {
+        Self::expire(now_ns);
+        HISTORY.with_borrow_mut(|history| {
+            for metric in metrics {
+                let slot = metric.observed_at_ns / PUBLIC_METRICS_CADENCE_NS;
+                let now_slot = now_ns / PUBLIC_METRICS_CADENCE_NS;
+                if now_slot.saturating_sub(slot) >= PUBLIC_HISTORY_SLOTS as u64 {
+                    continue;
+                }
+                let key = SeriesKey {
+                    family,
+                    name: metric.name.clone(),
+                    canister_id: metric.canister_id,
+                };
+                let series_count = history.series.len();
+                let series = match history.series.entry(key) {
+                    Entry::Vacant(entry) => {
+                        let bytes = reservation(entry.key(), &metric.unit);
+                        if series_count >= MAX_HISTORY_SERIES
+                            || history.reserved_bytes + bytes > MAX_HISTORY_BYTES
+                        {
+                            history.truncated = true;
+                            continue;
+                        }
+                        history.reserved_bytes += bytes;
+                        entry.insert(PublicHistorySeries {
+                            unit: metric.unit.clone(),
+                            slots: VecDeque::with_capacity(PUBLIC_HISTORY_SLOTS),
+                            latest_observed_at_ns: metric.observed_at_ns,
+                        })
+                    }
+                    Entry::Occupied(mut entry) => {
+                        if metric.observed_at_ns < entry.get().latest_observed_at_ns {
+                            continue;
+                        }
+                        if entry.get().unit != metric.unit {
+                            let prior_bytes = reservation(entry.key(), &entry.get().unit);
+                            let next_bytes = reservation(entry.key(), &metric.unit);
+                            let next_total = history.reserved_bytes - prior_bytes + next_bytes;
+                            if next_total > MAX_HISTORY_BYTES {
+                                history.reserved_bytes -= prior_bytes;
+                                history.truncated = true;
+                                entry.remove();
+                                continue;
+                            }
+                            history.reserved_bytes = next_total;
+                            let series = entry.get_mut();
+                            series.unit = metric.unit.as_str().into();
+                            series.slots.clear();
+                        }
+                        entry.into_mut()
+                    }
+                };
+                let point = PublicHistorySample {
+                    slot,
+                    observed_at_ns: metric.observed_at_ns,
+                    value: metric.value,
+                    kind: metric.kind,
+                };
+                if let Some(previous) = series.slots.back_mut().filter(|point| point.slot == slot) {
+                    *previous = point;
+                } else {
+                    while series.slots.front().is_some_and(|point| {
+                        slot.saturating_sub(point.slot) >= PUBLIC_HISTORY_SLOTS as u64
+                    }) {
+                        series.slots.pop_front();
+                    }
+                    // Pop before pushing so the ring never grows beyond its initial capacity.
+                    if series.slots.len() == PUBLIC_HISTORY_SLOTS {
+                        series.slots.pop_front();
+                    }
+                    series.slots.push_back(point);
+                }
+                series.latest_observed_at_ns = metric.observed_at_ns;
+            }
+        });
+    }
+
+    #[must_use]
+    pub fn series(
+        family: PublicMetricFamily,
+        name: String,
+        canister_id: Option<Principal>,
+    ) -> Option<PublicHistorySeries> {
+        HISTORY.with_borrow(|history| {
+            history
+                .series
+                .get(&SeriesKey {
+                    family,
+                    name,
+                    canister_id,
+                })
+                .cloned()
+        })
+    }
+
+    #[must_use]
+    pub fn heap_started_at_ns() -> Option<u64> {
+        HISTORY.with_borrow(|history| history.heap_started_at_ns)
+    }
+
+    #[must_use]
+    pub fn reserved_bytes() -> usize {
+        HISTORY.with_borrow(|history| history.reserved_bytes)
+    }
+
+    #[must_use]
+    pub fn truncated() -> bool {
+        HISTORY.with_borrow(|history| history.truncated)
+    }
+}
+
+// Reserve full ring capacity, copied labels and an entire sparse tree node per series.
+const fn reservation(key: &SeriesKey, unit: &str) -> usize {
+    PUBLIC_HISTORY_SLOTS * size_of::<PublicHistorySample>()
+        + size_of::<SeriesKey>()
+        + size_of::<PublicHistorySeries>()
+        + key.name.len()
+        + unit.len()
+        + 2048
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::public_metrics::PublicMetricsCache;
+
+    fn sample(slot: u64, value: u128) -> PublicMetricSample {
+        PublicMetricSample {
+            name: "entities".into(),
+            canister_id: None,
+            unit: "count".into(),
+            observed_at_ns: slot * PUBLIC_METRICS_CADENCE_NS + 1,
+            value,
+            kind: PublicMetricKind::Gauge,
+        }
+    }
+
+    fn publish(row: PublicMetricSample) {
+        PublicMetricsCache::replace(PublicMetricFamily::Application, row.observed_at_ns, [row])
+            .unwrap();
+    }
+
+    fn points() -> Vec<PublicHistorySample> {
+        let series =
+            PublicHistoryCache::series(PublicMetricFamily::Application, "entities".into(), None)
+                .unwrap();
+        let mut points: Vec<_> = series.slots.into_iter().collect();
+        points.sort_by_key(|point| point.slot);
+        points
+    }
+
+    #[test]
+    fn history_coalesces_slots_keeps_gaps_and_rejects_older_source_time() {
+        publish(sample(1, 7));
+        let mut later = sample(1, 8);
+        later.observed_at_ns += 1;
+        publish(later.clone());
+        publish(sample(4, 9));
+        assert_eq!(
+            points()
+                .iter()
+                .map(|p| (p.slot, p.value))
+                .collect::<Vec<_>>(),
+            [(1, 8), (4, 9)]
+        );
+        let error = PublicMetricsCache::replace(
+            PublicMetricFamily::Application,
+            later.observed_at_ns,
+            [later],
+        )
+        .unwrap_err();
+        assert_eq!(error.code(), crate::diagnostics::codes::REQUEST_INVALID);
+        assert_eq!(points().len(), 2);
+    }
+
+    #[test]
+    fn history_ring_has_exact_retention_and_expiration_releases_budget() {
+        for slot in 0..300 {
+            publish(sample(slot, slot.into()));
+        }
+        assert_eq!(points().len(), PUBLIC_HISTORY_SLOTS);
+        assert_eq!(points()[0].slot, 12);
+        assert!(PublicHistoryCache::reserved_bytes() <= MAX_HISTORY_BYTES);
+        PublicHistoryCache::expire(587 * PUBLIC_METRICS_CADENCE_NS);
+        assert!(
+            PublicHistoryCache::series(PublicMetricFamily::Application, "entities".into(), None)
+                .is_none()
+        );
+        assert_eq!(PublicHistoryCache::reserved_bytes(), 0);
+    }
+
+    #[test]
+    fn history_caps_total_series_bytes_and_preserves_latest_snapshot() {
+        let rows = (0..256).map(|index| {
+            let mut row = sample(1, 7);
+            row.name = format!("series_{index}");
+            row
+        });
+        PublicMetricsCache::replace(
+            PublicMetricFamily::Application,
+            2 * PUBLIC_METRICS_CADENCE_NS,
+            rows,
+        )
+        .unwrap();
+        let mut extra = sample(2, 9);
+        extra.name = "extra".into();
+        PublicMetricsCache::replace(PublicMetricFamily::Cycles, extra.observed_at_ns, [extra])
+            .unwrap();
+        assert!(PublicHistoryCache::truncated());
+        assert!(PublicHistoryCache::reserved_bytes() <= MAX_HISTORY_BYTES);
+        assert!(PublicMetricsCache::snapshot(PublicMetricFamily::Cycles).is_some());
+        HISTORY.with_borrow(|history| assert!(history.series.len() <= MAX_HISTORY_SERIES));
+    }
+
+    #[test]
+    fn history_counter_windows_and_unit_changes_are_explicit() {
+        let mut first = sample(1, 100);
+        first.kind = PublicMetricKind::Counter {
+            window_id: 1,
+            saturated: false,
+        };
+        publish(first);
+        let mut reset = sample(2, 3);
+        reset.kind = PublicMetricKind::Counter {
+            window_id: 2,
+            saturated: false,
+        };
+        publish(reset);
+        assert_ne!(points()[0].kind, points()[1].kind);
+        let mut changed_unit = sample(3, 8);
+        changed_unit.unit = "instructions".into();
+        publish(changed_unit);
+        assert_eq!(points().len(), 1);
+        assert_eq!(points()[0].kind, PublicMetricKind::Gauge);
+        assert_eq!(
+            PublicHistoryCache::series(PublicMetricFamily::Application, "entities".into(), None)
+                .unwrap()
+                .unit,
+            "instructions"
+        );
+    }
+
+    #[test]
+    fn older_reappearing_series_cannot_erase_retained_history_by_changing_units() {
+        publish(sample(2, 7));
+        let mut other = sample(3, 9);
+        other.name = "other".into();
+        publish(other);
+        let mut old = sample(1, 3);
+        old.unit = "instructions".into();
+        PublicMetricsCache::replace(
+            PublicMetricFamily::Application,
+            4 * PUBLIC_METRICS_CADENCE_NS,
+            [old],
+        )
+        .unwrap();
+        assert_eq!(points().len(), 1);
+        assert_eq!(points()[0].value, 7);
+        assert_eq!(
+            PublicHistoryCache::series(PublicMetricFamily::Application, "entities".into(), None)
+                .unwrap()
+                .unit,
+            "count"
+        );
+    }
+
+    #[test]
+    fn history_accepts_distinct_counter_resets_at_the_same_source_time() {
+        for window_id in 1..=2 {
+            let mut row = sample(1, 0);
+            row.kind = PublicMetricKind::Counter {
+                window_id,
+                saturated: false,
+            };
+            publish(row);
+        }
+        assert_eq!(points().len(), 1);
+        assert_eq!(
+            points()[0].kind,
+            PublicMetricKind::Counter {
+                window_id: 2,
+                saturated: false
+            }
+        );
+    }
+
+    #[test]
+    fn history_cached_provider_data_cannot_be_restamped_or_create_new_slots() {
+        let row = sample(1, 7);
+        publish(row.clone());
+        PublicMetricsCache::replace(
+            PublicMetricFamily::Application,
+            4 * PUBLIC_METRICS_CADENCE_NS,
+            [row],
+        )
+        .unwrap();
+        assert_eq!(points().len(), 1);
+        assert_eq!(
+            PublicMetricsCache::snapshot(PublicMetricFamily::Application)
+                .unwrap()
+                .sampled_at_ns,
+            PUBLIC_METRICS_CADENCE_NS + 1
+        );
+        let mut future = sample(5, 9);
+        future.name = "future".into();
+        assert!(
+            PublicMetricsCache::replace(
+                PublicMetricFamily::Application,
+                4 * PUBLIC_METRICS_CADENCE_NS,
+                [future]
+            )
+            .is_err()
+        );
+        assert_eq!(points().len(), 1);
+    }
+}

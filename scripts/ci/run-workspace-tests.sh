@@ -543,25 +543,14 @@ if [ "$PLAN_ONLY" -eq 0 ]; then
     cargo fetch --locked
 fi
 
-# Run ordinary unit/lib/bin tests with libtest's default parallelism. The
-# internal harness remains separate because its library contains PocketIC
-# journeys protected by process-local fixture serialization.
+# The internal library's ordinary tests join the workspace graph. Its stateful
+# catalogue is compiled only when the serial PocketIC lane enables its feature.
 if [[ "$MODE" == "full" || "$MODE" == "ordinary" ]]; then
     run_parallel_test \
         "workspace parallel lib/bin tests" \
         --workspace \
         --lib \
-        --bins \
-        --exclude canic-testing-internal
-    run_parallel_test \
-        "canic-testing-internal fast lib tests" \
-        -p canic-testing-internal \
-        --no-default-features \
-        --lib \
-        pic::governed_suite::governed_fast_internal_suite \
-        -- \
-        --exact \
-        --ignored
+        --bins
 fi
 
 if [[ "$MODE" == "fast" ]]; then

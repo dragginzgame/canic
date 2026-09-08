@@ -19,3 +19,8 @@ In practice, this crate is where Canic keeps:
 Use this crate only for Canic's own workspace tests.
 Downstream projects should prefer `ic-testkit`, which exposes the generic
 PocketIC/test helper surface without these repo-specific fixtures.
+
+Ordinary native tests use normal libtest discovery in the workspace library
+invocation. The library test binary compiles the stateful Fleet catalogue only
+with `governed-pocketic-tests`; fixture-library consumers retain the default
+`pocketic-fixtures` surface. Use the governed runner for serial PocketIC cases.

@@ -25,48 +25,61 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from maintainer-pushed `v0.110.10`. Its governed marker records the
-validated pre-version source below; immutable details are in
-[the 0.110 changelog](../changelog/0.110.md). Post-release work is retained
-in the open changelog draft until it forms a coherent batch. Source-development truth
-comes from Git and the working tree.
+Current development begins from maintainer-pushed `v0.110.11`. Its immutable
+release details are in [the 0.110 changelog](../changelog/0.110.md). Package
+versions remain 0.110.11; the next source batch uses the open 0.110.12 draft.
 
 ## Active Release Turnaround Correction
 
-The maintainer reported 67m20.980s for `make release-patch && make publish`
-and authorized speed improvements. The open 0.110.11 batch now also replaces
-publication's Rust manifest test with a shared locked offline metadata guard,
-reuses registry observations within one invocation, and retains successful
-validation/publication logs and stage timings. Script regressions and the six
-remaining Rust manifest tests pass, as do affected-target Clippy, shell lint,
-release-integrity and document checks. The shared manifest check took 0.06s.
-The combined 0.110.11 batch and changelog are ready for release approval;
-package versions remain 0.110.10. The
-[turnaround handoff](../audits/reports/2026-09/2026-09-08/release-turnaround.md)
-records the scope and remaining measurement work. Fleet journeys retain their
-existing assertions and serial isolation.
-The prior successful full-run log was discarded, so the exact 67-minute
-breakdown and end-to-end savings remain unmeasured.
+The completed release retained a 4,497-second workspace test run, including
+3,524 seconds in the internal PocketIC tier. A separate compilation for six
+pure internal cases took 185 seconds. The current batch folds those cases into
+the ordinary workspace library graph, removes their redundant aggregate harness,
+and reuses artifact-builder preflight within each Fleet release. The shorter
+polling experiment showed no measured improvement and was removed. Ten native
+tests, governed catalogue verification, default/all-feature Clippy, runner and
+document guards pass. The focused Fleet experiment also passed recovery,
+conservation and zero-effect replay; its exact scope and timing limitations are
+in the [compile-consolidation handoff](../audits/reports/2026-09/2026-09-08/test-compile-consolidation.md).
+The bounded turnaround correction is complete. The maintainer has added
+CANIC-147 public history to the open 0.110.12 batch. Nineteen final native cases,
+eight timer-focused PocketIC cases, canonical Candid equality and focused Clippy
+pass. The complete Canic source batch and changelog draft are ready for release
+approval. Downstream CANIC-148 producer qualification remains separate and open.
+No new full-release duration is established; the serial
+PocketIC tier remains the largest cost. No version, Git publication, deployment
+or broad validation command was run.
 
-## Active Public Sampling Correction
+The proposed 0.110.12 would exceed the soft twelve-release minor guideline.
+The maintainer explicitly selected CANIC-147 to complete the published public
+metrics surface alongside the release-turnaround correction. This accepted
+consolidation remains on 0.110;
+no next-minor implementation or closeout approval is inferred.
 
-The maintainer reports 0.110.10 pushed and requested refreshed Toko Miner
-feedback. CANIC-143/144/146 are adopted or available downstream. CANIC-148 is
-the next correction batch: bounded owner projections, deterministic truncation,
-family failure isolation and cycle-tracking qualification. Implementation,
-propagation and targeted qualification are complete. The open 0.110.11 draft
-is ready for release approval; package versions remain 0.110.10. The
+The preceding [turnaround handoff](../audits/reports/2026-09/2026-09-08/release-turnaround.md)
+records the shipped metadata publication guard, registry-observation reuse and
+persistent timing logs. `sccache` is already enabled through Make when installed.
+
+## Public Sampling Follow-up
+
+CANIC-148's bounded sampling and family isolation shipped in 0.110.11. The
 [sampling handoff](../audits/reports/2026-09/2026-09-08/public-sampling-bounds.md)
-records 112 all-feature and 10 default native passes, 17 storage/timer guards,
-affected-target Clippy and seven PocketIC passes (96-second runner including
-artifact rebuilds). Sampling cost was 4,449,546 instructions at 256 checkpoints
-and 4,647,992 at 4,096; rejected optional performance sampling preserved cycle
-tracking and independent occupancy refresh. The maintainer-selected release
-gate/publication and downstream adoption qualification remain.
-CANIC-147 periodic chart history is the separate capability request awaiting
-contract acceptance. CANIC-141 remains deferred. Sibling
-repositories remain read-only; no version or publication action is implied.
-The following sections retain the preceding release's implementation evidence.
+retains its focused evidence. Downstream adoption/live qualification remains
+with Toko Miner. The maintainer accepted CANIC-147 on 2026-09-08: one optional
+five-minute native sampling claim, bounded 24-hour heap history and an explicit
+measurement participant. CANIC-147 implementation and qualification are complete.
+All eight timer-focused PocketIC cases pass, including
+actual periodic sampling below the existing 20-million-instruction fixture budget.
+The [history and qualification handoff](../audits/reports/2026-09/2026-09-08/public-chart-history.md)
+records the implementation, measured costs and precise downstream evidence gap.
+The [public observability contract](../features/runtime/public-observability.md)
+contains current caps, counter/reset semantics and application composition.
+Public health now uses the precise `responding` label in Rust and canonical
+Candid. It proves query responsiveness only, not Fleet readiness; downstream
+bindings and labels must follow that hard cut.
+CANIC-141 stays deferred. Sibling repositories remain read-only; actual Toko Miner
+producer/cost qualification cannot be claimed from Canic's neutral fixtures.
+The following sections retain historical implementation evidence.
 
 ## Active Generated Fleet Build Batch
 

@@ -46,12 +46,14 @@ enum RoleStatusResponse {
 enum PublicStatusRequest {
     Health,
     Metrics(canic::dto::public_status::PublicMetricsRequest),
+    History(canic::dto::public_status::PublicHistoryRequest),
 }
 
 #[derive(CandidType, Deserialize)]
 enum PublicStatusResponse {
     Health(canic::dto::public_status::PublicHealth),
     Metrics(canic::dto::public_status::PublicMetricsSnapshot),
+    History(canic::dto::public_status::PublicHistorySnapshot),
 }
 
 #[test]
@@ -125,7 +127,7 @@ fn public_snapshots_preserve_observer_authority() {
             matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
         );
     }
-    fixture.pic.advance_time(Duration::from_secs(301));
+    fixture.pic.advance_time(Duration::from_secs(361));
     fixture.pic.tick();
     let stale = query(published, PublicMetricFamily::Application);
     assert_eq!(stale.state, PublicSnapshotState::Stale);
@@ -187,22 +189,12 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     let full = full.expect("authorized fixture sampling");
     full.sample.unwrap();
     full.cycle_tracking.unwrap();
-    println!(
-        "public sampling instructions: 256 checkpoints={}, 4096 checkpoints={}",
-        baseline.sample_instructions, full.sample_instructions
-    );
-    assert!(
-        full.sample_instructions < 20_000_000,
-        "bounded public sampling instruction budget"
-    );
-    assert!(
-        full.sample_instructions <= baseline.sample_instructions.saturating_mul(2),
-        "sampling cost must remain bounded beyond the retained-series ceiling"
-    );
+    assert_explicit_sampling_cost(baseline.sample_instructions, full.sample_instructions);
+    assert_periodic_sampling_cost(&fixture.pic, canister);
     let performance = query(PublicMetricFamily::Performance);
     assert!(performance.truncated);
     assert_eq!(performance.metrics.entries.len(), 256);
-    fixture.pic.advance_time(Duration::from_secs(301));
+    fixture.pic.advance_time(Duration::from_secs(361));
     let rejected: Result<PublicSamplingProbe, Error> = fixture
         .pic
         .update_candid(canister, "qualify_public_metrics_sampling", (0_u16, true))
@@ -740,4 +732,187 @@ fn wait_for_fixture_ready(pic: &PocketIc, canister_id: Principal, context: &str)
 fn install_retry_policy() -> RetryPolicy {
     RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
         .expect("install retry policy")
+}
+
+#[test]
+fn public_history_samples_without_readers_and_resets_after_restoration() {
+    use canic::dto::public_status::PublicSnapshotState;
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister = fixture.install_runtime_probe_canister();
+    wait_for_fixture_ready(&fixture.pic, canister, "install");
+    let history = || cached_cycle_history(&fixture.pic, canister, fixture.root);
+    let sampler_count = |canister| {
+        runtime_status(&fixture.pic, canister)
+            .timers
+            .iter()
+            .filter(|timer| {
+                timer.owner == "canic"
+                    && timer.subsystem == "public_metrics"
+                    && timer.name == "sample"
+            })
+            .count()
+    };
+    assert_eq!(sampler_count(canister), 1);
+    let restricted = fixture.install_canic_canister();
+    assert_eq!(sampler_count(restricted), 0);
+    fixture
+        .pic
+        .update_candid::<Result<(), Error>, _>(canister, "configure_public_sampler", (false,))
+        .unwrap()
+        .unwrap();
+    let application = || cached_application_metrics(&fixture.pic, canister, fixture.root);
+    let before = history();
+    fixture.pic.advance_time(Duration::from_secs(301));
+    tick(&fixture.pic, 8);
+    let first = history();
+    assert_eq!(first.state, PublicSnapshotState::Fresh);
+    assert!(!first.points.entries.is_empty());
+    assert!(first.points.entries.len() <= 288);
+    let supplied = application();
+    assert_eq!(supplied.state, PublicSnapshotState::Fresh);
+    assert_eq!(supplied.metrics.entries[0].name, "timer_completions");
+    fixture
+        .pic
+        .update_candid::<Result<(), Error>, _>(canister, "configure_public_sampler", (true,))
+        .unwrap()
+        .unwrap();
+    let repeated = history();
+    assert_eq!(first.points.entries, repeated.points.entries);
+    assert_eq!(first.reserved_bytes, repeated.reserved_bytes);
+    // Several missed slots produce one new observation, without a catch-up backlog.
+    fixture.pic.advance_time(Duration::from_mins(25));
+    tick(&fixture.pic, 8);
+    let delayed = history();
+    assert_eq!(delayed.points.entries.len(), first.points.entries.len() + 1);
+    let last = delayed.points.entries.last().unwrap();
+    let prior = &delayed.points.entries[delayed.points.entries.len() - 2];
+    assert!(last.slot_start_ns - prior.slot_start_ns >= 5 * delayed.cadence_ns);
+    assert!(delayed.reserved_bytes <= delayed.byte_limit);
+    let rejected = application();
+    assert_eq!(rejected.sampled_at_ns, supplied.sampled_at_ns);
+    assert_eq!(rejected.metrics.entries, supplied.metrics.entries);
+    assert_eq!(rejected.state, PublicSnapshotState::Stale);
+    fixture
+        .pic
+        .update_candid::<Result<(), Error>, _>(canister, "suspend_public_sampler_fixture", ())
+        .unwrap()
+        .unwrap();
+    fixture.pic.advance_time(Duration::from_secs(601));
+    tick(&fixture.pic, 8);
+    let suspended = history();
+    assert_eq!(suspended.points.entries, delayed.points.entries);
+    assert_eq!(suspended.state, PublicSnapshotState::Stale);
+    assert!(delayed.canister_version >= before.canister_version);
+    fixture
+        .pic
+        .retry_install_code(install_retry_policy(), || {
+            fixture.pic.upgrade_canister(
+                canister,
+                fixture.runtime_probe_wasm.clone(),
+                upgrade_args(),
+                None,
+            )
+        })
+        .expect("same-release restoration");
+    let restored = history();
+    assert!(restored.canister_version > delayed.canister_version);
+    assert_eq!(restored.state, PublicSnapshotState::Unavailable);
+    assert!(restored.points.entries.is_empty());
+    wait_for_fixture_ready(&fixture.pic, canister, "post_upgrade");
+    fixture.pic.advance_time(Duration::from_secs(301));
+    tick(&fixture.pic, 8);
+    let resumed = history();
+    assert_eq!(resumed.points.entries.len(), 1);
+    assert_eq!(resumed.state, PublicSnapshotState::Fresh);
+    assert_eq!(sampler_count(canister), 1);
+}
+
+fn cached_cycle_history(
+    pic: &PocketIc,
+    canister: Principal,
+    caller: Principal,
+) -> canic::dto::public_status::PublicHistorySnapshot {
+    use canic::dto::public_status::{PublicHistoryRequest, PublicMetricFamily};
+
+    let response: Result<PublicStatusResponse, Error> = pic.query_candid_as_or_panic(
+        canister,
+        caller,
+        protocol::CANIC_PUBLIC_STATUS,
+        (PublicStatusRequest::History(PublicHistoryRequest {
+            family: PublicMetricFamily::Cycles,
+            name: "balance".into(),
+            canister_id: Some(canister),
+            page: PageRequest {
+                offset: 0,
+                limit: u64::MAX,
+            },
+        }),),
+    );
+    let PublicStatusResponse::History(history) = response.unwrap() else {
+        panic!("history response")
+    };
+    history
+}
+
+fn cached_application_metrics(
+    pic: &PocketIc,
+    canister: Principal,
+    caller: Principal,
+) -> canic::dto::public_status::PublicMetricsSnapshot {
+    use canic::dto::public_status::PublicMetricFamily;
+
+    let response: Result<PublicStatusResponse, Error> = pic.query_candid_as_or_panic(
+        canister,
+        caller,
+        protocol::CANIC_PUBLIC_STATUS,
+        (PublicStatusRequest::Metrics(
+            canic::dto::public_status::PublicMetricsRequest {
+                family: PublicMetricFamily::Application,
+                page: PageRequest {
+                    offset: 0,
+                    limit: 256,
+                },
+            },
+        ),),
+    );
+    let PublicStatusResponse::Metrics(snapshot) = response.unwrap() else {
+        panic!("application snapshot")
+    };
+    snapshot
+}
+
+fn assert_periodic_sampling_cost(pic: &PocketIc, canister: Principal) {
+    pic.advance_time(Duration::from_secs(301));
+    tick(pic, 8);
+    let status = runtime_status(pic, canister);
+    let sampler = status
+        .timers
+        .iter()
+        .find(|timer| timer.subsystem == "public_metrics" && timer.name == "sample")
+        .expect("public sampling timer");
+    let instructions = sampler
+        .work_performance
+        .instructions_maximum
+        .expect("scheduled sample completed");
+    println!("periodic public sampling maximum instructions: {instructions}");
+    assert!(
+        instructions < 20_000_000,
+        "bounded scheduled sampling instruction budget"
+    );
+}
+
+fn assert_explicit_sampling_cost(baseline: u64, full: u64) {
+    println!("public sampling instructions: 256 checkpoints={baseline}, 4096 checkpoints={full}");
+    assert!(
+        baseline < 20_000_000,
+        "bounded first-sample allocation instruction budget"
+    );
+    assert!(
+        full < 20_000_000,
+        "bounded public sampling instruction budget"
+    );
+    assert!(
+        full <= baseline.saturating_mul(2),
+        "sampling cost must remain bounded beyond the retained-series ceiling"
+    );
 }

@@ -751,6 +751,7 @@ macro_rules! canic_emit_root_status_endpoint {
         pub enum PublicStatusRequest {
             Health,
             Metrics(::canic::dto::public_status::PublicMetricsRequest),
+            History(::canic::dto::public_status::PublicHistoryRequest),
             Overview,
             Children(::canic::dto::page::PageRequest),
             ComponentDirectoryPage(::canic::dto::component_registry::ComponentDirectoryPageRequest),
@@ -760,6 +761,7 @@ macro_rules! canic_emit_root_status_endpoint {
         pub enum PublicStatusResponse {
             Health(::canic::dto::public_status::PublicHealth),
             Metrics(::canic::dto::public_status::PublicMetricsSnapshot),
+            History(::canic::dto::public_status::PublicHistorySnapshot),
             Overview(::canic::dto::role::RoleOverviewResponse),
             Children(::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>),
             ComponentDirectoryPage(::canic::dto::component_registry::ComponentDirectoryPageResponse),
@@ -771,6 +773,7 @@ macro_rules! canic_emit_root_status_endpoint {
             match request {
                 PublicStatusRequest::Health => Ok(PublicStatusResponse::Health(::canic::__internal::core::api::public_status::PublicStatusApi::health())),
                 PublicStatusRequest::Metrics(request) => Ok(PublicStatusResponse::Metrics(::canic::__internal::core::api::public_status::PublicStatusApi::metrics(request))),
+                PublicStatusRequest::History(request) => Ok(PublicStatusResponse::History(::canic::__internal::core::api::public_status::PublicStatusApi::history(request))),
                 PublicStatusRequest::Overview => {
                     let capabilities = $crate::__canic_compiled_role_capabilities!();
                     Ok(PublicStatusResponse::Overview(
