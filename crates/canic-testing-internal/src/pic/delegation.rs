@@ -113,7 +113,7 @@ pub fn issue_delegated_token_from_active_proof_with_request_nonce(
     let issued: Result<CanisterStatusResponse, Error> = pic.query_candid_as_or_panic(
         issuer_pid,
         subject,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_AUTH_STATUS,
         (CanisterStatusRequest::DelegatedToken(
             DelegatedTokenGetRequest {
                 claims_hash: prepared.claims_hash,

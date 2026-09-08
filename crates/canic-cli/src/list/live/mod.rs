@@ -176,7 +176,7 @@ fn local_ready_statuses(
     let environment = options.environment.clone();
     let icp_root = icp_root.to_path_buf();
     collect_visible_entry_values(registry, canister, ReadyStatus::Error, move |entry| {
-        let Ok(binding) = registry_entry_candid_path(
+        let Ok(_binding) = registry_entry_candid_path(
             Some(&icp_root),
             environment.as_deref().unwrap_or("local"),
             &entry,
@@ -187,7 +187,6 @@ fn local_ready_statuses(
             environment.as_deref().unwrap_or("local"),
             &entry.pid,
             Some(&icp_root),
-            &binding,
         ) {
             Ok(true) => ReadyStatus::Ready,
             Ok(false) => ReadyStatus::NotReady,

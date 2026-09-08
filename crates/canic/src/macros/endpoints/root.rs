@@ -527,7 +527,6 @@ macro_rules! canic_emit_root_command_endpoint {
                         .map(RootCommandResponse::PrepareComponentRegistry)
                 }
                 RootCommand::PrepareFleetActivation => {
-                    __canic_run_prepared_root_init_block().await;
                     let response = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_fleet_activation().await?;
                     Ok(RootCommandResponse::OperationAccepted(
                         ::canic::dto::role::OperationReceipt {
@@ -656,7 +655,6 @@ macro_rules! canic_emit_root_command_endpoint {
                 RootCommand::ResumeFleetActivation(request) => {
                     let operation_id = request.operation_id;
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::resume_fleet_activation(request).await?;
-                    __canic_schedule_prepared_activation_init();
                     Ok(RootCommandResponse::OperationAccepted(
                         ::canic::dto::role::OperationReceipt { operation_id },
                     ))
@@ -748,80 +746,245 @@ macro_rules! canic_emit_root_command_endpoint {
 #[macro_export]
 macro_rules! canic_emit_root_status_endpoint {
     () => {
-        #[derive(
-            ::canic::__internal::candid::CandidType,
-            ::canic::__internal::serde::Deserialize,
-        )]
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
         #[serde(crate = "::canic::__internal::serde")]
-        pub enum RootStatusRequest {
-            Admission(::canic::dto::page::PageRequest),
-            AuthorityRestore,
+        pub enum PublicStatusRequest {
+            Health,
+            Metrics(::canic::dto::public_status::PublicMetricsRequest),
+            Overview,
             Children(::canic::dto::page::PageRequest),
-            ComponentChildProvisioning(::canic::dto::role::OperationStatusRequest),
-            ComponentDirectoryHead(
-                ::canic::dto::component_registry::ComponentDirectoryHeadRequest,
-            ),
-            ComponentDirectoryPage(
-                ::canic::dto::component_registry::ComponentDirectoryPageRequest,
-            ),
-            ComponentProvisioning(::canic::dto::role::OperationStatusRequest),
-            ComponentRegistry(
-                ::canic::dto::component_registry::RootComponentRegistryPreparationRequest,
-            ),
-            ComponentRegistryActivePartition(
-                ::canic::dto::component_registry::ComponentRegistryActivePartitionRequest,
-            ),
-            ComponentRegistryPartition(
-                ::canic::dto::component_registry::ComponentRegistryPartitionRequest,
-            ),
-            Config,
+            ComponentDirectoryPage(::canic::dto::component_registry::ComponentDirectoryPageRequest),
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum PublicStatusResponse {
+            Health(::canic::dto::public_status::PublicHealth),
+            Metrics(::canic::dto::public_status::PublicMetricsSnapshot),
+            Overview(::canic::dto::role::RoleOverviewResponse),
+            Children(::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>),
+            ComponentDirectoryPage(::canic::dto::component_registry::ComponentDirectoryPageResponse),
+        }
+        #[$crate::canic_query(public)]
+        async fn canic_public_status(
+            request: PublicStatusRequest,
+        ) -> Result<PublicStatusResponse, ::canic::Error> {
+            match request {
+                PublicStatusRequest::Health => Ok(PublicStatusResponse::Health(::canic::__internal::core::api::public_status::PublicStatusApi::health())),
+                PublicStatusRequest::Metrics(request) => Ok(PublicStatusResponse::Metrics(::canic::__internal::core::api::public_status::PublicStatusApi::metrics(request))),
+                PublicStatusRequest::Overview => {
+                    let capabilities = $crate::__canic_compiled_role_capabilities!();
+                    Ok(PublicStatusResponse::Overview(
+                        $crate::__internal::core::api::role::RoleOverviewApi::overview(
+                            $crate::__internal::core::ids::CanisterRole::from(env!(
+                                "CANIC_CANISTER_ROLE"
+                            )),
+                            &capabilities,
+                            $crate::__canic_protocol_profile_digest!(),
+                            $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
+                                env!("CARGO_PKG_NAME"),
+                                env!("CARGO_PKG_VERSION"),
+                                env!("CARGO_PKG_DESCRIPTION"),
+                                $crate::VERSION,
+                                $crate::__internal::cdk::api::canister_version(),
+                            ),
+                            $crate::__internal::core::api::ready::ReadyApi::bootstrap_status(),
+                        ),
+                    ))
+                }
+                PublicStatusRequest::Children(page) => {
+                    $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(false)?;
+                    Ok(PublicStatusResponse::Children(
+                    $crate::__internal::core::api::topology::children::CanisterChildrenApi::page(
+                        page,
+                    ),
+                    ))
+                }
+                PublicStatusRequest::ComponentDirectoryPage(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_page(request)
+                        .map(PublicStatusResponse::ComponentDirectoryPage)
+                }
+            }
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum ObservabilityRequest {
             CycleBalance,
             CycleHistory(::canic::dto::page::PageRequest),
-            FleetAuthority,
-            FleetState,
-            Funding,
             Health,
-            Inventory,
-            #[cfg(canic_capability_root_delegation)]
-            IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest),
             Logs(::canic::dto::role::LogStatusRequest),
             Metrics(::canic::dto::role::MetricsStatusRequest),
-            Operation(::canic::dto::role::OperationStatusRequest),
-            Overview,
-            Pool(::canic::dto::pool::CanisterPoolStatusRequest),
             Readiness,
+            Runtime,
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum ObservabilityResponse {
+            CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
+            CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
+            Health(::canic::dto::runtime::CanicHealthStatus),
+            Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
+            Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
+            Readiness(::canic::dto::runtime::CanicReadinessStatus),
+            Runtime(::canic::dto::runtime::CanicRuntimeStatus),
+        }
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_observability(
+            request: ObservabilityRequest,
+        ) -> Result<ObservabilityResponse, ::canic::Error> {
+            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(false)?;
+
+            match request {
+                ObservabilityRequest::CycleBalance => Ok(ObservabilityResponse::CycleBalance(
+                    ::canic::dto::role::CycleBalanceStatusResponse {
+                        cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
+                    },
+                )),
+                ObservabilityRequest::CycleHistory(page) => {
+                    Ok(ObservabilityResponse::CycleHistory(
+                        $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
+                    ))
+                }
+                ObservabilityRequest::Health => Ok(ObservabilityResponse::Health(
+                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::health(Some(
+                        $crate::__internal::cdk::api::time(),
+                    )),
+                )),
+                ObservabilityRequest::Logs(request) => Ok(ObservabilityResponse::Logs(
+                    $crate::__internal::core::api::log::LogQuery::page(
+                        request.crate_name,
+                        request.topic,
+                        request.min_level,
+                        request.page,
+                    ),
+                )),
+                ObservabilityRequest::Metrics(request) => {
+                    $crate::__canic_role_metrics_status!(request).map(ObservabilityResponse::Metrics)
+                }
+                ObservabilityRequest::Readiness => Ok(ObservabilityResponse::Readiness(
+                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::readiness(
+                        $crate::__internal::cdk::api::time(),
+                    ),
+                )),
+                ObservabilityRequest::Runtime => Ok(ObservabilityResponse::Runtime(
+                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::runtime_status(
+                        $crate::__internal::cdk::api::time(),
+                        env!("CARGO_PKG_NAME"),
+                        env!("CARGO_PKG_VERSION"),
+                        $crate::VERSION,
+                        $crate::__internal::cdk::api::canister_version(),
+                    ),
+                )),
+            }
+        }
+        #[cfg(canic_capability_role_attestation_signer)]
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum RootAuthStatusRequest {
             #[cfg(canic_capability_role_attestation_signer)]
             RoleAttestation(::canic::dto::auth::RoleAttestationGetRequest),
-            Runtime,
-            StoreOverview,
         }
-
-        #[derive(
-            ::canic::__internal::candid::CandidType,
-            ::canic::__internal::serde::Deserialize,
-        )]
+        #[cfg(canic_capability_role_attestation_signer)]
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
         #[serde(crate = "::canic::__internal::serde")]
-        pub enum RootStatusResponse {
-            Admission(::canic::dto::fleet_admission::FleetAdmissionRootStatusResponse),
-            AuthorityRestore(::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse),
-            Children(
-                ::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>,
-            ),
+        pub enum RootAuthStatusResponse {
+            #[cfg(canic_capability_role_attestation_signer)]
+            RoleAttestation(::canic::dto::auth::SignedRoleAttestation),
+        }
+        #[cfg(canic_capability_role_attestation_signer)]
+        #[$crate::canic_query(public)]
+        async fn canic_root_auth_status(
+            request: RootAuthStatusRequest,
+        ) -> Result<RootAuthStatusResponse, ::canic::Error> {
+            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(false)?;
+
+            match request {
+                #[cfg(canic_capability_role_attestation_signer)]
+                RootAuthStatusRequest::RoleAttestation(request) => {
+                    $crate::__internal::control_plane::api::component_auth::ComponentAuthApi::get_role_attestation(request)
+                        .map(RootAuthStatusResponse::RoleAttestation)
+                }
+            }
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum RootOperationStatusRequest {
+            ComponentChildProvisioning(::canic::dto::role::OperationStatusRequest),
+            ComponentProvisioning(::canic::dto::role::OperationStatusRequest),
+            Operation(::canic::dto::role::OperationStatusRequest),
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum RootOperationStatusResponse {
             ComponentChildProvisioning(
                 ::canic::dto::component_registry::RootComponentChildAllocationResponse,
-            ),
-            ComponentDirectoryHead(
-                ::canic::dto::component_registry::ComponentDirectoryHead,
-            ),
-            ComponentDirectoryPage(
-                ::canic::dto::component_registry::ComponentDirectoryPageResponse,
             ),
             ComponentProvisioning(
                 ::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse,
             ),
-            ComponentRegistry(
-                ::canic::dto::component_registry::RootComponentRegistryStatusResponse,
+            Operation(::canic::dto::root::RootOperationStatusResponse),
+        }
+        #[$crate::canic_query(public)]
+        async fn canic_root_operation_status(
+            request: RootOperationStatusRequest,
+        ) -> Result<RootOperationStatusResponse, ::canic::Error> {
+            let caller = $crate::__internal::cdk::api::msg_caller();
+            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(true)?;
+
+            match request {
+                RootOperationStatusRequest::ComponentChildProvisioning(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_component_child_provisioning_status(
+                        request.operation_id,
+                        caller,
+                        $crate::__internal::cdk::api::is_controller(&caller),
+                    )
+                    .map(RootOperationStatusResponse::ComponentChildProvisioning)
+                }
+                RootOperationStatusRequest::ComponentProvisioning(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_component_provisioning_status(
+                        request.operation_id,
+                        caller,
+                        $crate::__internal::cdk::api::is_controller(&caller),
+                    )
+                    .map(RootOperationStatusResponse::ComponentProvisioning)
+                }
+                RootOperationStatusRequest::Operation(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_operation_status(
+                        request.operation_id,
+                        caller,
+                        $crate::__internal::cdk::api::is_controller(&caller),
+                    )
+                    .map(RootOperationStatusResponse::Operation)
+                }
+            }
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum RootStatusRequest {
+            Admission(::canic::dto::page::PageRequest),
+            AuthorityRestore,
+            ComponentDirectoryHead(::canic::dto::component_registry::ComponentDirectoryHeadRequest),
+            ComponentRegistry(::canic::dto::component_registry::RootComponentRegistryPreparationRequest),
+            ComponentRegistryActivePartition(
+                ::canic::dto::component_registry::ComponentRegistryActivePartitionRequest,
             ),
+            ComponentRegistryPartition(::canic::dto::component_registry::ComponentRegistryPartitionRequest),
+            Config,
+            FleetAuthority,
+            FleetState,
+            Funding,
+            Inventory,
+            #[cfg(canic_capability_root_delegation)]
+            IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest),
+            Pool(::canic::dto::pool::CanisterPoolStatusRequest),
+            StoreOverview,
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum RootStatusResponse {
+            Admission(::canic::dto::fleet_admission::FleetAdmissionRootStatusResponse),
+            AuthorityRestore(::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse),
+            ComponentDirectoryHead(::canic::dto::component_registry::ComponentDirectoryHead),
+            ComponentRegistry(::canic::dto::component_registry::RootComponentRegistryStatusResponse),
             ComponentRegistryActivePartition(
                 ::canic::dto::component_registry::ComponentRegistryActivePartitionResponse,
             ),
@@ -829,93 +992,30 @@ macro_rules! canic_emit_root_status_endpoint {
                 ::canic::dto::component_registry::ComponentRegistryPartitionResponse,
             ),
             Config(::canic::dto::role::ConfigStatusResponse),
-            CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
-            CycleHistory(
-                ::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>,
-            ),
             FleetAuthority(::canic::dto::fleet_subnet_root::FleetSubnetRootAuthority),
             FleetState(::canic::dto::state::FleetStateResponse),
             Funding(::canic::dto::root::RootFundingStatusResponse),
-            Health(::canic::dto::runtime::CanicHealthStatus),
             Inventory(::canic::dto::fleet_subnet_root::FleetSubnetRootCanisterSummary),
             #[cfg(canic_capability_root_delegation)]
             IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusResponse),
-            Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
-            Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
-            Operation(::canic::dto::root::RootOperationStatusResponse),
-            Overview(::canic::dto::role::RoleOverviewResponse),
             Pool(::canic::dto::pool::CanisterPoolResponse),
-            Readiness(::canic::dto::runtime::CanicReadinessStatus),
-            #[cfg(canic_capability_role_attestation_signer)]
-            RoleAttestation(::canic::dto::auth::SignedRoleAttestation),
-            Runtime(::canic::dto::runtime::CanicRuntimeStatus),
             StoreOverview(::canic::dto::template::WasmStoreOverviewResponse),
         }
-
-        #[$crate::canic_query(public)]
+        #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_root_status(
             request: RootStatusRequest,
         ) -> Result<RootStatusResponse, ::canic::Error> {
-            let caller = $crate::__internal::cdk::api::msg_caller();
-            let prepared_status = matches!(
+            let prepared = matches!(
                 &request,
-                RootStatusRequest::ComponentChildProvisioning(_)
-                    | RootStatusRequest::ComponentDirectoryHead(_)
-                    | RootStatusRequest::ComponentDirectoryPage(_)
-                    | RootStatusRequest::ComponentProvisioning(_)
+                RootStatusRequest::ComponentDirectoryHead(_)
                     | RootStatusRequest::ComponentRegistry(_)
                     | RootStatusRequest::ComponentRegistryActivePartition(_)
                     | RootStatusRequest::ComponentRegistryPartition(_)
                     | RootStatusRequest::FleetAuthority
-                    | RootStatusRequest::Operation(_)
-                    | RootStatusRequest::Overview
                     | RootStatusRequest::Pool(_)
                     | RootStatusRequest::StoreOverview
             );
-            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(
-                prepared_status,
-            )?;
-            match &request {
-                RootStatusRequest::Children(_)
-                | RootStatusRequest::ComponentDirectoryPage(_)
-                | RootStatusRequest::Overview => {}
-                #[cfg(canic_capability_role_attestation_signer)]
-                RootStatusRequest::RoleAttestation(_) => {}
-                RootStatusRequest::ComponentChildProvisioning(_)
-                | RootStatusRequest::ComponentProvisioning(_)
-                | RootStatusRequest::Operation(_) => {
-                    // The durable operation owner supplies the exact public, peer, or
-                    // controller authority used by the dispatch arm below.
-                }
-                #[cfg(canic_capability_root_delegation)]
-                RootStatusRequest::IssuerRenewal(_) => {
-                    $crate::__internal::core::access::auth::is_controller(caller).await.map_err(::canic::Error::from)?;
-                }
-                RootStatusRequest::Admission(_)
-                | RootStatusRequest::AuthorityRestore
-                | RootStatusRequest::ComponentDirectoryHead(_)
-                | RootStatusRequest::ComponentRegistry(_)
-                | RootStatusRequest::ComponentRegistryActivePartition(_)
-                | RootStatusRequest::ComponentRegistryPartition(_)
-                | RootStatusRequest::Config
-                | RootStatusRequest::CycleBalance
-                | RootStatusRequest::CycleHistory(_)
-                | RootStatusRequest::FleetAuthority
-                | RootStatusRequest::FleetState
-                | RootStatusRequest::Funding
-                | RootStatusRequest::Health
-                | RootStatusRequest::Inventory
-                | RootStatusRequest::Logs(_)
-                | RootStatusRequest::Metrics(_)
-                | RootStatusRequest::Pool(_)
-                | RootStatusRequest::Readiness
-                | RootStatusRequest::Runtime
-                | RootStatusRequest::StoreOverview => {
-                    $crate::__internal::core::access::auth::is_controller(caller)
-                        .await
-                        .map_err(::canic::Error::from)?;
-                }
-            }
+            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(prepared)?;
 
             match request {
                 RootStatusRequest::Admission(page) => {
@@ -926,34 +1026,9 @@ macro_rules! canic_emit_root_status_endpoint {
                     $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::status()
                         .map(RootStatusResponse::AuthorityRestore)
                 }
-                RootStatusRequest::Children(page) => Ok(RootStatusResponse::Children(
-                    $crate::__internal::core::api::topology::children::CanisterChildrenApi::page(
-                        page,
-                    ),
-                )),
-                RootStatusRequest::ComponentChildProvisioning(request) => {
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_component_child_provisioning_status(
-                        request.operation_id,
-                        caller,
-                        $crate::__internal::cdk::api::is_controller(&caller),
-                    )
-                    .map(RootStatusResponse::ComponentChildProvisioning)
-                }
                 RootStatusRequest::ComponentDirectoryHead(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_head(request)
                         .map(RootStatusResponse::ComponentDirectoryHead)
-                }
-                RootStatusRequest::ComponentDirectoryPage(request) => {
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_page(request)
-                        .map(RootStatusResponse::ComponentDirectoryPage)
-                }
-                RootStatusRequest::ComponentProvisioning(request) => {
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_component_provisioning_status(
-                        request.operation_id,
-                        caller,
-                        $crate::__internal::cdk::api::is_controller(&caller),
-                    )
-                    .map(RootStatusResponse::ComponentProvisioning)
                 }
                 RootStatusRequest::ComponentRegistry(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::local_component_registry_status(request)
@@ -972,16 +1047,6 @@ macro_rules! canic_emit_root_status_endpoint {
                         RootStatusResponse::Config(::canic::dto::role::ConfigStatusResponse { toml })
                     })
                 }
-                RootStatusRequest::CycleBalance => Ok(RootStatusResponse::CycleBalance(
-                    ::canic::dto::role::CycleBalanceStatusResponse {
-                        cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
-                    },
-                )),
-                RootStatusRequest::CycleHistory(page) => {
-                    Ok(RootStatusResponse::CycleHistory(
-                        $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
-                    ))
-                }
                 RootStatusRequest::FleetAuthority => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_authority()
                         .map(RootStatusResponse::FleetAuthority)
@@ -993,11 +1058,6 @@ macro_rules! canic_emit_root_status_endpoint {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_funding_status()
                         .map(RootStatusResponse::Funding)
                 }
-                RootStatusRequest::Health => Ok(RootStatusResponse::Health(
-                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::health(Some(
-                        $crate::__internal::cdk::api::time(),
-                    )),
-                )),
                 RootStatusRequest::Inventory => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_canister_summary()
                         .map(RootStatusResponse::Inventory)
@@ -1009,75 +1069,17 @@ macro_rules! canic_emit_root_status_endpoint {
                     )
                     .map(RootStatusResponse::IssuerRenewal)
                 }
-                RootStatusRequest::Logs(request) => Ok(RootStatusResponse::Logs(
-                    $crate::__internal::core::api::log::LogQuery::page(
-                        request.crate_name,
-                        request.topic,
-                        request.min_level,
-                        request.page,
-                    ),
-                )),
-                RootStatusRequest::Metrics(request) => {
-                    $crate::__canic_role_metrics_status!(request).map(RootStatusResponse::Metrics)
-                }
-                RootStatusRequest::Operation(request) => {
-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_operation_status(
-                        request.operation_id,
-                        caller,
-                        $crate::__internal::cdk::api::is_controller(&caller),
-                    )
-                    .map(RootStatusResponse::Operation)
-                }
-                RootStatusRequest::Overview => {
-                    let capabilities = $crate::__canic_compiled_role_capabilities!();
-                    Ok(RootStatusResponse::Overview(
-                        $crate::__internal::core::api::role::RoleOverviewApi::overview(
-                            $crate::__internal::core::ids::CanisterRole::from(env!(
-                                "CANIC_CANISTER_ROLE"
-                            )),
-                            &capabilities,
-                            $crate::__canic_protocol_profile_digest!(),
-                            $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
-                                env!("CARGO_PKG_NAME"),
-                                env!("CARGO_PKG_VERSION"),
-                                env!("CARGO_PKG_DESCRIPTION"),
-                                $crate::VERSION,
-                                $crate::__internal::cdk::api::canister_version(),
-                            ),
-                            $crate::__internal::core::api::ready::ReadyApi::bootstrap_status(),
-                        ),
-                    ))
-                }
                 RootStatusRequest::Pool(request) => {
                     $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::status(
                         request,
                     )
                     .map(RootStatusResponse::Pool)
                 }
-                RootStatusRequest::Readiness => Ok(RootStatusResponse::Readiness(
-                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::readiness(
-                        $crate::__internal::cdk::api::time(),
-                    ),
-                )),
-                #[cfg(canic_capability_role_attestation_signer)]
-                RootStatusRequest::RoleAttestation(request) => {
-                    $crate::__internal::control_plane::api::component_auth::ComponentAuthApi::get_role_attestation(request)
-                        .map(RootStatusResponse::RoleAttestation)
-                }
-                RootStatusRequest::Runtime => Ok(RootStatusResponse::Runtime(
-                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::runtime_status(
-                        $crate::__internal::cdk::api::time(),
-                        env!("CARGO_PKG_NAME"),
-                        env!("CARGO_PKG_VERSION"),
-                        $crate::VERSION,
-                        $crate::__internal::cdk::api::canister_version(),
-                    ),
-                )),
                 RootStatusRequest::StoreOverview => {
                     ::canic::api::canister::template::WasmStorePublicationApi::overview()
                         .map(RootStatusResponse::StoreOverview)
                 }
-            }
+                        }
         }
     };
 }

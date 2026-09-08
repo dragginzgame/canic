@@ -331,6 +331,7 @@ where
     {
         let root_start_authority = read_root_start_authority(&paths)?;
         if let Some(plan) = compile_root_start_prerequisite_plan(RootStartPlanInput {
+            state: &state,
             authority: root_start_authority.as_ref(),
             created_at_time,
             desired,
@@ -349,6 +350,7 @@ where
         }
         if let Some(plan) = crate::fleet_ensure::policy::root_reinstall::compile(
             RootStartPlanInput {
+                state: &state,
                 authority: None,
                 created_at_time,
                 desired,
@@ -1968,6 +1970,7 @@ where
             .ok_or(EnsureWorkflowError::PlanIntegrity)?;
         let current = recompile_root_start_prerequisite_plan(
             RootStartPlanInput {
+                state,
                 authority: retained_plan.root_start_authority.as_deref(),
                 created_at_time: retained_plan.planned_at_time,
                 desired,
@@ -2303,6 +2306,7 @@ where
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
     let current = recompile_root_start_prerequisite_plan(
         RootStartPlanInput {
+            state,
             authority: retained_plan.root_start_authority.as_deref(),
             created_at_time: retained_plan.planned_at_time,
             desired,
@@ -2363,6 +2367,7 @@ where
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
     let current = recompile_root_start_prerequisite_plan(
         RootStartPlanInput {
+            state,
             authority: plan.root_start_authority.as_deref(),
             created_at_time: plan.planned_at_time,
             desired,
@@ -2586,22 +2591,23 @@ fn retained_funding_remains_sufficient(
             EnsureAction::Fund {
                 amount,
                 name,
-                pool_root,
+                pool_funding,
                 principal,
                 ..
-            } => Some((amount, name, pool_root, principal)),
+            } => Some((amount, name, pool_funding, principal)),
             _ => None,
         })
-        .all(|(amount, name, pool_root, principal)| {
-            if let Some(root) = pool_root {
+        .all(|(amount, name, pool_funding, principal)| {
+            if let Some(root) = pool_funding {
                 return observation
                     .estate_funding_domains
                     .values()
-                    .find(|domain| domain.root_principal.as_ref() == Some(root))
+                    .find(|domain| domain.root_principal.as_ref() == Some(&root.root))
                     .and_then(|domain| domain.pool.as_ref())
                     .is_some_and(|pool| {
                         pool.assets.iter().any(|asset| {
                             asset.principal == *principal
+                                && asset.lifecycle == root.lifecycle
                                 && asset
                                     .cycles
                                     .checked_add(*amount)
@@ -3587,7 +3593,7 @@ fn is_reviewed_pool_funding(
     expected_principal: Option<&str>,
 ) -> bool {
     let EnsureAction::Fund {
-        pool_root: Some(root),
+        pool_funding: Some(root),
         principal,
         ..
     } = action
@@ -3609,7 +3615,7 @@ fn is_reviewed_pool_funding(
         let CurrentFleetProtocolAction::ReconcilePoolAsset { request, .. } = action.as_ref() else {
             return false;
         };
-        target == root && request.canister_id.to_text() == *principal
+        target == &root.root && request.canister_id.to_text() == *principal
     })
 }
 

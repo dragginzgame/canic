@@ -101,6 +101,8 @@ pub struct RoleRuntimeAuthority {
     pub log: LogConfig,
     pub auth: AuthConfig,
     pub fleet_admission: bool,
+    pub public_metrics:
+        std::collections::BTreeSet<crate::domain::public_metrics::PublicMetricFamily>,
     pub global_icrc21: bool,
     pub component_topology: ComponentTopology,
     pub canisters: Vec<RuntimeCanisterAuthority>,
@@ -199,6 +201,7 @@ impl RoleRuntimeAuthority {
         Ok(Self {
             role: role.clone(),
             app_init_mode: config.app.init_mode,
+            public_metrics: config.public_metrics.clone(),
             log: config.log.clone(),
             auth: config.auth.clone(),
             fleet_admission: declaration.fleet_admission,
@@ -223,6 +226,7 @@ impl RoleRuntimeAuthority {
         Ok(Self {
             role: CanisterRole::WASM_STORE,
             app_init_mode: config.app.init_mode,
+            public_metrics: config.public_metrics.clone(),
             log: config.log.clone(),
             auth: config.auth.clone(),
             fleet_admission: false,

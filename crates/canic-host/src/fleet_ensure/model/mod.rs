@@ -146,6 +146,14 @@ pub enum EstatePoolAssetOrigin {
     Recycled,
 }
 
+/// Reviewed Root authority and lifecycle of a native pool funding target.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PoolFundingAuthority {
+    pub root: String,
+    pub lifecycle: EstatePoolAssetLifecycle,
+}
+
 /// Capacity-relevant lifecycle of one Root-owned pool asset.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -414,9 +422,9 @@ pub enum EnsureAction {
         principal: String,
     },
     Fund {
-        /// Exact Root Principal for protected observation of a pool funding target.
+        /// Exact Root and lifecycle for protected inspection of a pool funding target.
         #[serde(deserialize_with = "serialization::required_option")]
-        pool_root: Option<String>,
+        pool_funding: Option<PoolFundingAuthority>,
         #[serde(with = "u128_text")]
         amount: u128,
         created_at_time: u64,

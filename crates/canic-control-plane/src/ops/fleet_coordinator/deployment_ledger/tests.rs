@@ -32,7 +32,6 @@ name = "deployment_ledger"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.worker]
 kind = "canister"

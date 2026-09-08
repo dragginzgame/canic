@@ -130,7 +130,7 @@ impl RootConfigOps {
         config
             .roles
             .get(canister_role)
-            .map(|declaration| declaration.package.clone())
+            .and_then(|declaration| declaration.package.clone())
             .ok_or_else(|| {
                 ConfigOpsError::CanisterNotFound(
                     canister_role.to_string(),

@@ -283,7 +283,7 @@ mod tests {
                 method: canic_core::protocol::CANIC_ROOT_COMMAND,
                 source: IcpCommandError::Failed {
                     command: "icp canister call".to_string(),
-                    stderr: "Canister has no query method 'canic_status'.".to_string(),
+                    stderr: "Canister has no query method 'canic_observability'.".to_string(),
                 },
             },
         ));

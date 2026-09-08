@@ -120,8 +120,15 @@ fn root_status(
     root: Principal,
     request: RootStatusRequestFragment,
 ) -> Result<RootStatusResponseFragment, Error> {
-    pic.query_candid(root, protocol::CANIC_ROOT_STATUS, (request,))
-        .expect("Root status transport")
+    pic.query_candid(
+        root,
+        match &request {
+            RootStatusRequestFragment::Readiness => protocol::CANIC_OBSERVABILITY,
+            RootStatusRequestFragment::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
+        },
+        (request,),
+    )
+    .expect("Root status transport")
 }
 
 ///
@@ -210,7 +217,7 @@ pub trait CanicPicExt {
         config_path: &Path,
     ) -> Result<Principal, Error>;
 
-    /// Wait until one ordinary managed canister reports `canic_status(Readiness)`.
+    /// Wait until one ordinary managed canister reports `canic_observability(Readiness)`.
     fn wait_for_ready(
         &self,
         canister_id: Principal,
@@ -568,7 +575,7 @@ pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usiz
             pic.query_candid_as::<Result<RootStatusResponseFragment, Error>, _>(
                 canister_id,
                 Principal::anonymous(),
-                protocol::CANIC_ROOT_STATUS,
+                protocol::CANIC_OBSERVABILITY,
                 (RootStatusRequestFragment::Readiness,),
             ),
             Ok(Ok(RootStatusResponseFragment::Readiness(
@@ -662,7 +669,7 @@ pub fn install_standalone_canister_on_pic(
 fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
     match pic.query_candid::<Result<CanisterStatusResponseFragment, Error>, _>(
         canister_id,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_OBSERVABILITY,
         (CanisterStatusRequestFragment::Readiness,),
     ) {
         Ok(Ok(CanisterStatusResponseFragment::Readiness(readiness))) => {
@@ -676,7 +683,7 @@ fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCal
 fn fetch_root_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
     match pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
         canister_id,
-        protocol::CANIC_ROOT_STATUS,
+        protocol::CANIC_OBSERVABILITY,
         (RootStatusRequestFragment::Readiness,),
     ) {
         Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {
@@ -893,4 +900,26 @@ const fn test_subnet(byte: u8) -> SubnetId {
 
 fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+}
+
+/// Exact read transport used by Coordinator fixtures after endpoint separation.
+pub(super) trait CoordinatorRead: candid::CandidType {
+    type Response: candid::CandidType + for<'de> serde::Deserialize<'de>;
+    const METHOD: &'static str;
+}
+impl CoordinatorRead
+    for canic_control_plane::dto::fleet_coordinator::CoordinatorObservabilityRequest
+{
+    type Response = canic_control_plane::dto::fleet_coordinator::CoordinatorObservabilityResponse;
+    const METHOD: &'static str = canic::protocol::CANIC_OBSERVABILITY;
+}
+impl CoordinatorRead for canic_control_plane::dto::fleet_coordinator::CoordinatorRegistryRequest {
+    type Response = canic_control_plane::dto::fleet_coordinator::CoordinatorRegistryResponse;
+    const METHOD: &'static str = canic::protocol::CANIC_COORDINATOR_REGISTRY;
+}
+impl CoordinatorRead
+    for canic_control_plane::dto::fleet_coordinator::CoordinatorOperationReadRequest
+{
+    type Response = canic_control_plane::dto::fleet_coordinator::CoordinatorOperationReadResponse;
+    const METHOD: &'static str = canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS;
 }

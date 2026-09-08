@@ -268,7 +268,7 @@ fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
             continuation: None,
             canisters: vec![CanisterPlan {
                 actions: vec![EnsureAction::Fund {
-                    pool_root: None,
+                    pool_funding: None,
                     amount: 1_000_000_000_000_000,
                     created_at_time: 1,
                     expected_post_cycles: 1_002_000_000_000,

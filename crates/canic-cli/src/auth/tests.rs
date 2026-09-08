@@ -159,7 +159,7 @@ fn renewal_status_reports_matching_issuer_observation() {
             renewal_status_response_json(issuer, [3; 32], 1_620_329_000_000_000_000),
         ),
         scripted_response(
-            CANIC_STATUS,
+            canic_core::protocol::CANIC_AUTH_STATUS,
             Some(codec::issuer_active_proof_status_arg().to_string()),
             Some("json"),
             issuer_status_response_json([3; 32], 1_620_329_000_000_000_000),
@@ -179,7 +179,7 @@ fn renewal_status_reports_matching_issuer_observation() {
     );
     assert_eq!(
         runtime.called_methods(),
-        vec![CANIC_ROOT_STATUS, CANIC_STATUS]
+        vec![CANIC_ROOT_STATUS, CANIC_AUTH_STATUS]
     );
 }
 
@@ -194,7 +194,7 @@ fn renewal_status_reports_root_issuer_drift() {
             renewal_status_response_json(issuer, [3; 32], 1_620_329_000_000_000_000),
         ),
         scripted_response(
-            CANIC_STATUS,
+            canic_core::protocol::CANIC_AUTH_STATUS,
             Some(codec::issuer_active_proof_status_arg().to_string()),
             Some("json"),
             issuer_status_response_json([4; 32], 1_620_329_000_000_000_000),
@@ -223,7 +223,7 @@ fn renewal_status_warns_when_active_proof_is_missing() {
             renewal_status_without_state_response_json(issuer),
         ),
         scripted_response(
-            CANIC_STATUS,
+            canic_core::protocol::CANIC_AUTH_STATUS,
             Some(codec::issuer_active_proof_status_arg().to_string()),
             Some("json"),
             issuer_missing_status_response_json(),

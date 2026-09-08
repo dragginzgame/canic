@@ -110,8 +110,7 @@ prepare_downstream_root() {
     mkdir -p \
         "$DOWNSTREAM_ROOT/.icp/local/canisters/app" \
         "$DOWNSTREAM_ROOT/.icp/local/canisters/root" \
-        "$DOWNSTREAM_ROOT/apps/downstream/app" \
-        "$DOWNSTREAM_ROOT/apps/downstream/root"
+        "$DOWNSTREAM_ROOT/apps/downstream/app"
 
     cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
 [workspace]
@@ -120,13 +119,6 @@ resolver = "2"
 
 [workspace.package]
 version = "0.0.0"
-EOF
-
-    cat > "$DOWNSTREAM_ROOT/apps/downstream/root/Cargo.toml" <<'EOF'
-[package]
-name = "downstream-root"
-version = { workspace = true }
-edition = "2024"
 EOF
 
     cat > "$DOWNSTREAM_ROOT/apps/downstream/app/Cargo.toml" <<'EOF'
@@ -142,7 +134,6 @@ name = "downstream"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

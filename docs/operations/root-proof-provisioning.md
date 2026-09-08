@@ -34,9 +34,9 @@ root timer             -> root prepares due issuer entries in a chain-key batch
 root                   -> management canister sign_with_ecdsa
 root                   -> issuer canic_command InstallDelegationProof update
 operator/medic         -> root canic_root_status IssuerRenewal query
-operator/medic         -> issuer canic_status ActiveDelegationProof query
+operator/medic         -> issuer canic_auth_status ActiveDelegationProof query
 caller/session         -> issuer canic_command PrepareDelegatedToken update
-caller/session         -> issuer canic_status DelegatedToken query
+caller/session         -> issuer canic_auth_status DelegatedToken query
 ```
 
 Issuer delegated-token preparation also has a root lazy-repair path. When an

@@ -124,7 +124,6 @@ name = "toko"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -183,7 +182,6 @@ name = "toko"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 
 "#,
@@ -213,7 +211,6 @@ name = "toko"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -351,11 +348,10 @@ fn write_test_config(path: &Path, app: &str, roles: &[&str]) {
     let mut source = format!("[app]\nname = \"{app}\"\n");
     for role in roles {
         let kind = if *role == "root" { "root" } else { "canister" };
-        write!(
-            source,
-            "\n[roles.{role}]\nkind = \"{kind}\"\npackage = \"{role}\"\n"
-        )
-        .expect("write role declaration");
+        write!(source, "\n[roles.{role}]\nkind = \"{kind}\"\n").expect("write role declaration");
+        if *role != "root" {
+            writeln!(source, "package = \"{role}\"").expect("write application package");
+        }
     }
     for role in roles {
         if *role == "root" {

@@ -1694,6 +1694,35 @@ impl IcpEnsurePlatform {
         )
     }
 
+    fn pool_funding_module(
+        &self,
+        name: &str,
+        authority: &crate::fleet_ensure::model::PoolFundingAuthority,
+        principal: &str,
+    ) -> Result<InspectedModule, IcpEnsurePlatformError> {
+        let candid = self.root_protocol_candid()?;
+        let root = parse_principal("Fleet Subnet Root", &authority.root)?;
+        let target = parse_principal("pool funding target", principal)?;
+        let mut start_after = None;
+        loop {
+            let page = self.query_estate_pool_page(&candid, root, start_after)?;
+            if let Some(asset) = page
+                .entries
+                .iter()
+                .find(|asset| asset.canister_id == target)
+            {
+                return pool_funding_inspected_module(name, authority.lifecycle, &asset.status);
+            }
+            if page.next_start_after.is_none() || page.next_start_after == start_after {
+                return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                    canister: name.to_string(),
+                    field: "reviewed pool membership",
+                });
+            }
+            start_after = page.next_start_after;
+        }
+    }
+
     fn observed_root_owned_asset(
         configured: &crate::fleet_ensure::model::DesiredCanister,
         principal: &str,
@@ -1916,7 +1945,7 @@ impl IcpEnsurePlatform {
             .icp
             .canister_query_candid(
                 principal,
-                canic_protocol::CANIC_STATUS,
+                canic_protocol::CANIC_OBSERVABILITY,
                 &ManagedCanisterStatusRequest::CycleBalance,
                 None,
             )
@@ -3097,19 +3126,16 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 .map_err(|error| IcpEnsurePlatformError::LedgerTransfer(error.to_string()));
         }
         if let EnsureAction::Fund {
-            pool_root: Some(root),
+            pool_funding: Some(authority),
             name,
             principal,
             ..
         } = action
         {
+            let principal = Self::action_principal(state, principal)?;
+            let module = self.pool_funding_module(name, authority, principal)?;
             return self
-                .inspect_pool_balance(
-                    name,
-                    root,
-                    Self::action_principal(state, principal)?,
-                    InspectedModule::Empty,
-                )
+                .inspect_pool_balance(name, &authority.root, principal, module)
                 .map(Some);
         }
         let (name, principal) = match action {
@@ -3433,11 +3459,31 @@ pub const fn estate_funding_applied(observation: EstateFundingObservation) -> bo
         && observation.destination_after == observation.expected_destination_after
 }
 
-/// Balance accounting accepts installed assets; creation/funding requires an empty module.
-#[derive(Clone, Copy)]
+/// Creation and Ready funding require empty modules; reviewed reset funding accepts installed assets.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InspectedModule {
     Any,
     Empty,
+}
+
+fn pool_funding_inspected_module(
+    canister: &str,
+    reviewed: EstatePoolAssetLifecycle,
+    observed: &CanisterPoolAssetStatus,
+) -> Result<InspectedModule, IcpEnsurePlatformError> {
+    match (reviewed, observed) {
+        (EstatePoolAssetLifecycle::Ready, CanisterPoolAssetStatus::Ready) => {
+            Ok(InspectedModule::Empty)
+        }
+        (EstatePoolAssetLifecycle::PendingReset, CanisterPoolAssetStatus::PendingReset)
+        | (EstatePoolAssetLifecycle::Failed, CanisterPoolAssetStatus::Failed { .. }) => {
+            Ok(InspectedModule::Any)
+        }
+        _ => Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+            canister: canister.to_string(),
+            field: "reviewed pool lifecycle",
+        }),
+    }
 }
 
 fn validate_pending_fresh_pool_inspection(
@@ -3730,6 +3776,49 @@ const fn rejection_code_name(code: RejectionCode) -> &'static str {
 mod tests {
     use super::*;
     use canic_core::dto::pool::CanisterPoolAssetStatus;
+
+    #[test]
+    fn pool_funding_binds_reset_lifecycle_without_weakening_ready_inspection() {
+        let failed = CanisterPoolAssetStatus::Failed {
+            reason: "reset stopped".to_string(),
+        };
+        for (lifecycle, status, expected) in [
+            (
+                EstatePoolAssetLifecycle::Ready,
+                CanisterPoolAssetStatus::Ready,
+                InspectedModule::Empty,
+            ),
+            (
+                EstatePoolAssetLifecycle::PendingReset,
+                CanisterPoolAssetStatus::PendingReset,
+                InspectedModule::Any,
+            ),
+            (
+                EstatePoolAssetLifecycle::Failed,
+                failed,
+                InspectedModule::Any,
+            ),
+        ] {
+            let module = pool_funding_inspected_module("pool", lifecycle, &status).unwrap();
+            assert_eq!(module, expected);
+            let installed =
+                validate_inspected_cycles("pool", module, Some(&[1; 32]), &Nat::from(100_u8));
+            assert_eq!(installed.is_ok(), module == InspectedModule::Any);
+            for wrong in [
+                EstatePoolAssetLifecycle::Ready,
+                EstatePoolAssetLifecycle::PendingReset,
+                EstatePoolAssetLifecycle::Failed,
+                EstatePoolAssetLifecycle::Workload,
+            ] {
+                if wrong != lifecycle {
+                    assert!(matches!(
+                        pool_funding_inspected_module("pool", wrong, &status),
+                        Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict { .. })
+                    ));
+                }
+            }
+        }
+    }
 
     #[cfg(unix)]
     #[test]

@@ -92,6 +92,12 @@ it again. The same journal records intent and the pre-install canister version;
 a lost response resumes observation instead of repeating an already completed
 reset.
 
+After a completed fresh installation, the original symbolic fresh seed may be
+used again. Ensure resolves its Root name through the existing Fleet state
+before management prerequisites. A configured Principal that conflicts with
+that retained identity rejects; observed identity, Subnet, controller and module
+checks still apply. A changed release still requires reviewed reinstall.
+
 A completed prerequisite is not a ready Fleet. Run Ensure planning again and
 review its full plan for the remaining infrastructure and current protocol
 convergence. Repeat `canic fleet ensure <fleet> --desired <path>` to plan, then
@@ -345,14 +351,18 @@ wasm = "artifacts/fleet_coordinator.wasm"
 
 `maximum_stalled_observations` is the base consecutive-unchanged limit for one
 effect. The long-running typed `ProvisionComponents` action raises that limit,
-when necessary, to its exact topology-derived terminal-observation floor: one
-base observation, five per Root and three per top-level Component. That
+when necessary, to its compiled initial-topology floor: one base observation,
+five per Root, three per top-level Component and three per recursively required
+initial child. Future descendant capacity does not increase this floor. That
 automatic floor is capped at 64; an explicitly reviewed larger configured
 limit is still honored. Only passive status queries are paced, using bounded
 exponential delays from 250 milliseconds to five seconds. Any durable semantic
 progress resets the counter. Silence never authorizes a second command; only
 the exact retained typed retryable-failure result may replay the same operation
 identity.
+
+The provisioning burn reservation includes this selected wait bound. It does
+not turn unused descendant capacity into terminal inventory work.
 
 After protocol completion, a retained Root-owned pool asset may briefly lack an
 exact current balance while the Root finishes publishing its lifecycle result.
@@ -563,6 +573,14 @@ canister funding. Root estate funding is the separate, explicitly reviewed
 `FundEstate` action described above: it credits the exact protected Root Ledger
 account before autonomous creation and is never represented as native pool
 capacity.
+
+Native pool funding records `pool_funding.root` and `pool_funding.lifecycle`
+in the reviewed action. Ready assets require an empty module. PendingReset and
+Failed assets may retain installed modules because funding precedes their
+separately journalled Root reset. Before funding, the adapter verifies exact
+pool membership, the reviewed lifecycle and sole-Root controllers. Retry keeps
+the original Ledger withdrawal identity and receipt; it does not repeat an
+already completed credit. This is the current schema-1 hard cut.
 
 Fleet Ensure no longer installs a temporary recovery canister. Direct pool
 creation and ordinary top-up target native canister balances, while

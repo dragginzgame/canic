@@ -26,10 +26,6 @@ and call them directly.
 ```text
 apps/example/
 ├── canic.toml
-├── root/
-│   ├── Cargo.toml
-│   ├── build.rs
-│   └── src/lib.rs
 ├── hub/
 │   ├── Cargo.toml
 │   ├── build.rs
@@ -116,7 +112,6 @@ name = "example"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.hub]
 kind = "canister"
@@ -153,38 +148,18 @@ fn main() {
 If your canisters are nested more deeply, pass the real relative path, for
 example `../../canic.toml`.
 
-## Root Canister
+## Fleet Subnet Root
 
-The root crate needs Canic's `control-plane` feature. Add
-`auth-root-canister-sig-create` only when the fleet issues role attestations.
-Add `auth-issuer-canister-sig-create` to canisters that issue delegated tokens,
-and `auth-delegated-token-verify` to endpoint verifiers.
+Declare `[roles.root]` with `kind = "root"` and omit `package`. Canic builds
+`canic-fleet-root` from the selected App configuration and its required
+capabilities. There is no application Root crate, lifecycle hook or custom
+endpoint surface. The Coordinator and `canic-fleet-wasm-store` are also
+Canic-owned infrastructure.
 
-```toml
-[package.metadata.canic]
-app = "example"
-role = "root"
-
-[dependencies]
-candid = "<version>"
-canic = { version = "<same-version-as-canic-cli>", features = ["auth-root-canister-sig-create", "control-plane"] }
-ic-cdk = "0.20"
-
-[build-dependencies]
-canic = "<same-version-as-canic-cli>"
-```
-
-```rust
-#![expect(clippy::unused_async)]
-
-canic::start!();
-
-async fn canic_setup() {}
-async fn canic_install() {}
-async fn canic_upgrade() {}
-
-canic::finish!();
-```
+Build the configured Root with `canic build example root`. Its artifact binds
+the exact configuration, capabilities and release identity. Fleet Ensure owns
+initialization and readiness; application initialization belongs in the child
+canisters. Pre-1.0 release transitions use explicit reviewed reinstall.
 
 ## Child Canister
 

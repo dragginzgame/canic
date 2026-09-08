@@ -219,7 +219,6 @@ name = "test"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -321,7 +320,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 "#,
         )
         .expect("root infrastructure config parses");
@@ -419,7 +417,6 @@ name = "test"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -450,7 +447,6 @@ name = "test"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

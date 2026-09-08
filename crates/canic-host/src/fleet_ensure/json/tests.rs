@@ -131,7 +131,7 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
 #[test]
 fn current_funding_action_emits_explicit_cycle_bounds() {
     let action = EnsureAction::Fund {
-        pool_root: None,
+        pool_funding: None,
         amount: 1,
         created_at_time: 1,
         expected_post_cycles: 0,
@@ -142,7 +142,7 @@ fn current_funding_action_emits_explicit_cycle_bounds() {
         principal: "target".into(),
     };
     let document = to_value(&action).unwrap();
-    assert_eq!(document.get("pool_root"), Some(&Value::Null));
+    assert_eq!(document.get("pool_funding"), Some(&Value::Null));
     for field in [
         "expected_post_cycles",
         "funding_deficit_cycles",

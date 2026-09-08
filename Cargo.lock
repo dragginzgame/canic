@@ -564,6 +564,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "canic-fleet-root"
+version = "0.110.9"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
+name = "canic-fleet-wasm-store"
+version = "0.110.9"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "canic-host"
 version = "0.110.9"
 dependencies = [
@@ -642,15 +660,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-wasm-store"
-version = "0.110.9"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
 name = "canic_icydb_lifecycle_probe"
 version = "0.110.9"
 dependencies = [
@@ -705,16 +714,6 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
-]
-
-[[package]]
-name = "canister_root"
-version = "0.110.9"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
- "serde",
 ]
 
 [[package]]
@@ -1317,20 +1316,10 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "ic-timers",
 ]
 
 [[package]]
 name = "demo_fleet_app"
-version = "0.110.9"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "demo_fleet_subnet_root"
 version = "0.110.9"
 dependencies = [
  "candid",

@@ -254,7 +254,7 @@ fn public_error_contract_is_the_compact_nat16_hard_cut() {
 
     for relative_path in [
         "crates/canic-fleet-coordinator/fleet_coordinator.did",
-        "crates/canic-wasm-store/wasm_store.did",
+        "crates/canic-fleet-wasm-store/wasm_store.did",
     ] {
         let did_path = workspace_root().join(relative_path);
         let did = read_text(&did_path);
@@ -305,7 +305,7 @@ fn cycles_preflight_contract_preserves_caller_continuation_values() {
         "cycles response must not expose the parent balance:\n{response_env}"
     );
 
-    let relative_path = "crates/canic-wasm-store/wasm_store.did";
+    let relative_path = "crates/canic-fleet-wasm-store/wasm_store.did";
     let did = read_text(&workspace_root().join(relative_path));
     for field in [
         "approved_cycles : nat",
@@ -451,15 +451,9 @@ fn application_session_audit_is_bounded_protected_and_secret_free() {
 
     let role_surface =
         read_text(&workspace_root().join("crates/canic/src/macros/endpoints/role.rs"));
-    let audit_authorization = role_surface
-        .split("CanisterStatusRequest::ApplicationSessionAudit(_) =>")
-        .nth(1)
-        .expect("audit authorization arm");
-    let audit_authorization = audit_authorization
-        .split("CanisterStatusRequest::CycleBalance")
-        .next()
-        .expect("bounded audit authorization arm");
-    assert!(audit_authorization.contains("access::auth::is_root(caller)"));
+    let authorization = preceding_attribute(&role_surface, "async fn canic_control_status");
+    assert!(authorization.contains("requires(caller::is_root())"));
+    assert!(role_surface.contains("ControlStatusRequest::ApplicationSessionAudit"));
 }
 
 #[test]
@@ -495,14 +489,14 @@ fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {
 }
 
 #[test]
-fn wasm_store_exposes_cycle_history_only_through_status() {
-    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
+fn wasm_store_exposes_cycle_history_through_observability() {
+    let did_path = workspace_root().join("crates/canic-fleet-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
 
     assert!(
         did.contains("type PageRequest = record { offset : nat64; limit : nat64 };")
             && did.contains("CycleHistory : PageRequest"),
-        "Store cycle history must be a status variant in {}",
+        "Store cycle history must be an observability variant in {}",
         did_path.display()
     );
     assert!(
@@ -515,7 +509,7 @@ fn wasm_store_exposes_cycle_history_only_through_status() {
 
 #[test]
 fn wasm_store_excludes_default_memory_diagnostics() {
-    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
+    let did_path = workspace_root().join("crates/canic-fleet-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
 
     assert!(
@@ -533,7 +527,7 @@ fn wasm_store_excludes_default_memory_diagnostics() {
 
 #[test]
 fn wasm_store_canonical_did_parses() {
-    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
+    let did_path = workspace_root().join("crates/canic-fleet-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
     assert!(
         did.contains("type FleetKey = record {")
@@ -577,13 +571,16 @@ fn wasm_store_canonical_did_parses() {
     assert_eq!(
         methods,
         vec![
+            canic::protocol::CANIC_OBSERVABILITY,
+            canic::protocol::CANIC_PUBLIC_STATUS,
+            canic::protocol::CANIC_WASM_STORE_CATALOG,
             canic::protocol::CANIC_WASM_STORE_CHUNK,
             canic::protocol::CANIC_WASM_STORE_COMMAND,
             canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
             canic::protocol::CANIC_WASM_STORE_STATUS,
             canic::protocol::ICRC10_SUPPORTED_STANDARDS,
         ],
-        "canonical Store must expose only role-owned control, two byte lanes and ICRC-10"
+        "canonical Store exposes its current read, control, byte and ICRC-10 methods"
     );
 
     let status_env = candid_type_env::<FleetActivationStatusResponse>();
@@ -594,40 +591,18 @@ fn wasm_store_canonical_did_parses() {
 }
 
 #[test]
-fn wasm_store_status_surface_is_profile_exact() {
-    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
-    let did = read_text(&did_path);
-    let request = did
-        .split("type StoreStatusRequest = variant {")
-        .nth(1)
-        .and_then(|tail| tail.split("};").next())
-        .expect("canonical Store DID must declare StoreStatusRequest");
-
-    for variant in [
-        "Authority",
-        "Catalog",
-        "CycleBalance",
-        "CycleHistory : PageRequest",
-        "Operation : OperationReceipt",
-        "Overview",
-        "Storage",
+fn canonical_store_exposes_public_and_protected_reads() {
+    let did = read_text(&workspace_root().join("crates/canic-fleet-wasm-store/wasm_store.did"));
+    let (env, actor) = CandidSource::Text(&did).load().unwrap();
+    let service = env.as_service(actor.as_ref().unwrap()).unwrap();
+    for method in [
+        canic::protocol::CANIC_PUBLIC_STATUS,
+        canic::protocol::CANIC_OBSERVABILITY,
+        canic::protocol::CANIC_WASM_STORE_CATALOG,
+        canic::protocol::CANIC_WASM_STORE_STATUS,
     ] {
-        assert!(
-            request.contains(variant),
-            "StoreStatusRequest omits {variant}:\n{request}"
-        );
+        assert!(service.iter().any(|(name, _)| name == method));
     }
-    assert!(
-        !request.contains("CycleTopups"),
-        "the implicit Store profile must not acquire AutomaticTopup"
-    );
-    assert!(
-        did.contains(&format!(
-            "{} : (StoreStatusRequest) -> (Result_3) query;",
-            canic::protocol::CANIC_WASM_STORE_STATUS
-        )),
-        "canonical Store DID must expose its role-owned status query"
-    );
 }
 
 #[test]
@@ -651,7 +626,10 @@ fn fleet_coordinator_canonical_did_parses() {
         methods,
         vec![
             canic::protocol::CANIC_COORDINATOR_COMMAND,
-            canic::protocol::CANIC_COORDINATOR_STATUS,
+            canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
+            canic::protocol::CANIC_COORDINATOR_REGISTRY,
+            canic::protocol::CANIC_OBSERVABILITY,
+            canic::protocol::CANIC_PUBLIC_STATUS,
         ],
         "Fleet Coordinator must expose only its role-owned command and status methods"
     );
@@ -798,58 +776,85 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
 }
 
 #[test]
-fn fleet_coordinator_status_surface_is_profile_exact() {
-    let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
-    let did = read_text(&did_path);
-    let request = did
-        .split("type CoordinatorStatusRequest = variant {")
-        .nth(1)
-        .and_then(|tail| tail.split("};").next())
-        .expect("canonical Coordinator DID must declare CoordinatorStatusRequest");
-
-    for variant in [
-        "Admission",
-        "AuthorityRestore",
-        "Funding",
-        // Candid is structural: the extractor deduplicates the identical
-        // OperationStatusRequest and OperationReceipt records under this name.
-        "Operation : OperationReceipt",
-        "Overview",
-        "Registry",
-        "RegistryManifest",
-        "RegistryVersion",
-        "RootAcknowledgements",
-    ] {
-        assert!(
-            request.contains(variant),
-            "CoordinatorStatusRequest omits {variant}:\n{request}"
-        );
+fn infrastructure_read_contracts_match_their_authority_owners() {
+    fn assert_contract<Q: candid::CandidType, R: candid::CandidType>(path: &str, method: &str) {
+        let did = read_text(&workspace_root().join(path));
+        let (mut env, actor) = CandidSource::Text(&did)
+            .load()
+            .expect("parse canonical read contract");
+        let service = env
+            .as_service(actor.as_ref().expect("canonical service"))
+            .unwrap();
+        let (_, ty) = service
+            .iter()
+            .find(|(name, _)| name == method)
+            .expect("current read endpoint");
+        let function = env.as_func(ty).unwrap();
+        assert_eq!(function.args.len(), 1);
+        assert_eq!(function.rets.len(), 1);
+        assert_eq!(function.modes, vec![candid::types::FuncMode::Query]);
+        let canonical_request = function.args[0].clone();
+        let canonical_response = function.rets[0].clone();
+        let mut rust = TypeContainer::new();
+        let request = rust.add::<Q>();
+        let response = rust.add::<Result<R, canic::Error>>();
+        let request = env.merge_type(rust.env.clone(), request);
+        let response = env.merge_type(rust.env, response);
+        for (canonical, ty) in [(canonical_request, request), (canonical_response, response)] {
+            candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
+                .expect("read contract matches its current authority owner");
+        }
     }
-    assert_eq!(
-        request.lines().filter(|line| line.contains(';')).count(),
-        9,
-        "CoordinatorStatusRequest acquired an unreviewed variant:\n{request}"
+    use canic::dto::{
+        fleet_coordinator::{
+            CoordinatorObservabilityRequest, CoordinatorObservabilityResponse,
+            CoordinatorOperationReadRequest, CoordinatorOperationReadResponse,
+            CoordinatorRegistryRequest, CoordinatorRegistryResponse,
+        },
+        template::{
+            StoreCatalogRequest, StoreCatalogResponse, StoreObservabilityRequest,
+            StoreObservabilityResponse, StoreStatusRequest, StoreStatusResponse,
+        },
+    };
+    let coordinator = "crates/canic-fleet-coordinator/fleet_coordinator.did";
+    assert_contract::<CoordinatorObservabilityRequest, CoordinatorObservabilityResponse>(
+        coordinator,
+        canic::protocol::CANIC_OBSERVABILITY,
     );
-    assert!(
-        did.contains("canic_coordinator_status : (CoordinatorStatusRequest) -> (Result_1) query;"),
-        "canonical Coordinator DID must expose its role-owned status query"
+    assert_contract::<CoordinatorRegistryRequest, CoordinatorRegistryResponse>(
+        coordinator,
+        canic::protocol::CANIC_COORDINATOR_REGISTRY,
+    );
+    assert_contract::<CoordinatorOperationReadRequest, CoordinatorOperationReadResponse>(
+        coordinator,
+        canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
+    );
+    let store = "crates/canic-fleet-wasm-store/wasm_store.did";
+    assert_contract::<StoreStatusRequest, StoreStatusResponse>(
+        store,
+        canic::protocol::CANIC_WASM_STORE_STATUS,
+    );
+    assert_contract::<StoreCatalogRequest, StoreCatalogResponse>(
+        store,
+        canic::protocol::CANIC_WASM_STORE_CATALOG,
+    );
+    assert_contract::<StoreObservabilityRequest, StoreObservabilityResponse>(
+        store,
+        canic::protocol::CANIC_OBSERVABILITY,
     );
 }
 
 #[test]
-fn infrastructure_role_ingress_uses_distinct_command_status_pairs() {
+fn infrastructure_role_ingress_names_match_current_protocol() {
     assert_eq!(canic::protocol::CANIC_COMMAND, "canic_command");
     assert_eq!(
         canic::protocol::CANIC_COORDINATOR_COMMAND,
         "canic_coordinator_command"
     );
-    assert_eq!(
-        canic::protocol::CANIC_COORDINATOR_STATUS,
-        "canic_coordinator_status"
-    );
+    assert_eq!(canic::protocol::CANIC_OBSERVABILITY, "canic_observability");
     assert_eq!(canic::protocol::CANIC_ROOT_COMMAND, "canic_root_command");
     assert_eq!(canic::protocol::CANIC_ROOT_STATUS, "canic_root_status");
-    assert_eq!(canic::protocol::CANIC_STATUS, "canic_status");
+    assert_eq!(canic::protocol::CANIC_PUBLIC_STATUS, "canic_public_status");
     assert_eq!(
         canic::protocol::CANIC_WASM_STORE_COMMAND,
         "canic_wasm_store_command"

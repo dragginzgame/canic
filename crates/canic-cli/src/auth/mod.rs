@@ -22,7 +22,7 @@ use crate::{
     support::candid::registry_entry_candid_path,
     version_text,
 };
-use canic_core::protocol::{CANIC_ROOT_STATUS, CANIC_STATUS};
+use canic_core::protocol::{CANIC_AUTH_STATUS, CANIC_ROOT_STATUS};
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
     fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
@@ -774,16 +774,18 @@ fn issuer_observation_with_runtime(
     issuer_pid: &str,
     status: &AuthRenewalStatusSummary,
 ) -> AuthIssuerObservation {
-    let target = match runtime.resolve_issuer_target(options, root_target, issuer_pid, CANIC_STATUS)
-    {
-        Ok(Some(target)) => target,
-        Ok(None) => return unavailable_issuer_observation(ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON),
-        Err(_) => return unavailable_issuer_observation("issuer_status_metadata_unavailable"),
-    };
+    let target =
+        match runtime.resolve_issuer_target(options, root_target, issuer_pid, CANIC_AUTH_STATUS) {
+            Ok(Some(target)) => target,
+            Ok(None) => {
+                return unavailable_issuer_observation(ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON);
+            }
+            Err(_) => return unavailable_issuer_observation("issuer_status_metadata_unavailable"),
+        };
     let Ok(output) = runtime.query_issuer_output(
         options,
         &target,
-        CANIC_STATUS,
+        canic_core::protocol::CANIC_AUTH_STATUS,
         Some(issuer_active_proof_status_arg()),
         Some("json"),
     ) else {

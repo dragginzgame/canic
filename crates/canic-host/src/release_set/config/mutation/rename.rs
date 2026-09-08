@@ -76,7 +76,10 @@ pub(in crate::release_set) fn rename_app_role_source(
         config_path.parent().map_or_else(
             || (None, None, Some("config path has no parent".to_string())),
             |parent| {
-                let manifest = parent.join(&declaration.package).join("Cargo.toml");
+                let Some(package) = declaration.package.as_deref() else {
+                    return (None, None, None);
+                };
+                let manifest = parent.join(package).join("Cargo.toml");
                 match update_package_manifest_role(&manifest, expected_app, old_role, new_role) {
                     Ok(Some(updated)) => (Some(manifest), Some(updated), None),
                     Ok(None) => (

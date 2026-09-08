@@ -99,10 +99,15 @@ mod tests {
         dto::fleet_activation::{FleetActivationPhase, FleetActivationResumeRequest},
     };
     #[cfg(test)]
+    use canic_control_plane::dto::fleet_coordinator::{
+        CoordinatorOperationReadRequest, CoordinatorOperationReadResponse,
+    };
+    #[cfg(test)]
     use canic_control_plane::dto::root::RootFundingStatusResponse;
     #[cfg(test)]
     use canic_control_plane::dto::template::{
-        StoreStatusRequest, StoreStatusResponse, TemplateLookupRequest, TemplateManifestResponse,
+        StoreCatalogRequest, StoreCatalogResponse, StoreObservabilityRequest,
+        StoreObservabilityResponse, TemplateLookupRequest, TemplateManifestResponse,
         TemplateStagingStatusResponse,
     };
     use canic_control_plane::{
@@ -112,8 +117,9 @@ mod tests {
         },
         dto::{
             fleet_coordinator::{
-                CoordinatorCommand, CoordinatorCommandResponse, CoordinatorStatusRequest,
-                CoordinatorStatusResponse, FleetCoordinatorInitArgs,
+                CoordinatorCommand, CoordinatorCommandResponse, CoordinatorObservabilityRequest,
+                CoordinatorObservabilityResponse, CoordinatorRegistryRequest,
+                CoordinatorRegistryResponse, FleetCoordinatorInitArgs,
             },
             root::RootOperationStatusResponse,
         },
@@ -228,7 +234,7 @@ mod tests {
     use crate::pic::artifacts::{
         INTERNAL_TEST_RELEASE_BUILD_ID, INTERNAL_TEST_RELEASE_BUILD_NONCE,
         internal_test_artifact_maintenance_interval, internal_test_artifact_prune_policy,
-        report_artifact_cache_maintenance,
+        report_artifact_cache_maintenance, with_canonical_root_cargo_inputs,
     };
     use crate::pic::fleet_registry::fixture::progress_elapsed;
     use crate::pic::{
@@ -567,8 +573,22 @@ mod tests {
         root: Principal,
         request: RootStatusRequestFragment,
     ) -> Result<RootStatusResponseFragment, Error> {
-        pic.query_candid(root, canic::protocol::CANIC_ROOT_STATUS, (request,))
-            .expect("Root status transport")
+        pic.query_candid(
+            root,
+            match &request {
+                RootStatusRequestFragment::Operation(_) => {
+                    canic::protocol::CANIC_ROOT_OPERATION_STATUS
+                }
+                #[cfg(test)]
+                RootStatusRequestFragment::CycleBalance
+                | RootStatusRequestFragment::CycleHistory(_)
+                | RootStatusRequestFragment::Metrics(_)
+                | RootStatusRequestFragment::Runtime => canic::protocol::CANIC_OBSERVABILITY,
+                _ => canic::protocol::CANIC_ROOT_STATUS,
+            },
+            (request,),
+        )
+        .expect("Root status transport")
     }
 
     #[cfg(test)]
@@ -603,7 +623,7 @@ mod tests {
         let denied: Result<RootStatusResponseFragment, Error> = pic.query_candid_as(
             root,
             outsider,
-            canic::protocol::CANIC_ROOT_STATUS,
+            canic::protocol::CANIC_OBSERVABILITY,
             (request(),),
         )?;
         if !controller_authority_unavailable(&denied) {
@@ -630,15 +650,15 @@ mod tests {
         controller: Principal,
         outsider: Principal,
         request: F,
-        accepted: fn(&StoreStatusResponse) -> bool,
+        accepted: fn(&StoreObservabilityResponse) -> bool,
     ) -> Result<(), ActiveComponentRegistryBaselineError>
     where
-        F: Fn() -> StoreStatusRequest,
+        F: Fn() -> StoreObservabilityRequest,
     {
-        let denied: Result<StoreStatusResponse, Error> = pic.query_candid_as(
+        let denied: Result<StoreObservabilityResponse, Error> = pic.query_candid_as(
             store,
             outsider,
-            canic::protocol::CANIC_WASM_STORE_STATUS,
+            canic::protocol::CANIC_OBSERVABILITY,
             (request(),),
         )?;
         if !controller_authority_unavailable(&denied) {
@@ -646,10 +666,10 @@ mod tests {
                 "Store sensitive observability accepted a non-controller".to_string(),
             ));
         }
-        let response: Result<StoreStatusResponse, Error> = pic.query_candid_as(
+        let response: Result<StoreObservabilityResponse, Error> = pic.query_candid_as(
             store,
             controller,
-            canic::protocol::CANIC_WASM_STORE_STATUS,
+            canic::protocol::CANIC_OBSERVABILITY,
             (request(),),
         )?;
         let response = baseline_application_result(
@@ -706,7 +726,7 @@ mod tests {
             metadata.wasm_store,
             metadata.root,
             outsider,
-            || StoreStatusRequest::CycleBalance,
+            || StoreObservabilityRequest::CycleBalance,
             matches_store_cycle_balance,
         )?;
         validate_store_sensitive_observation(
@@ -714,14 +734,14 @@ mod tests {
             metadata.wasm_store,
             metadata.root,
             outsider,
-            || StoreStatusRequest::CycleHistory(page()),
+            || StoreObservabilityRequest::CycleHistory(page()),
             matches_store_cycle_history,
         )?;
 
         let direct_denied: Result<ManagedStatusResponseFragment, Error> = pic.query_candid_as(
             metadata.issuer.canister_id,
             outsider,
-            canic::protocol::CANIC_STATUS,
+            canic::protocol::CANIC_OBSERVABILITY,
             (ManagedStatusRequestFragment::CycleHistory(page()),),
         )?;
         if !controller_authority_unavailable(&direct_denied) {
@@ -781,13 +801,13 @@ mod tests {
     }
 
     #[cfg(test)]
-    const fn matches_store_cycle_balance(response: &StoreStatusResponse) -> bool {
-        matches!(response, StoreStatusResponse::CycleBalance(_))
+    const fn matches_store_cycle_balance(response: &StoreObservabilityResponse) -> bool {
+        matches!(response, StoreObservabilityResponse::CycleBalance(_))
     }
 
     #[cfg(test)]
-    const fn matches_store_cycle_history(response: &StoreStatusResponse) -> bool {
-        matches!(response, StoreStatusResponse::CycleHistory(_))
+    const fn matches_store_cycle_history(response: &StoreObservabilityResponse) -> bool {
+        matches!(response, StoreObservabilityResponse::CycleHistory(_))
     }
 
     #[cfg(test)]
@@ -800,7 +820,7 @@ mod tests {
             .query_candid_as(
                 canister,
                 root,
-                canic::protocol::CANIC_STATUS,
+                canic::protocol::CANIC_OBSERVABILITY,
                 (ManagedStatusRequestFragment::Binding,),
             )
             .expect("managed binding status transport");
@@ -932,21 +952,21 @@ mod tests {
         context: &str,
     ) -> Result<(), ActiveComponentRegistryBaselineError>
     where
-        I: IntoIterator<Item = (L, Principal, Principal, &'static str)>,
+        I: IntoIterator<Item = (L, Principal, Principal)>,
         L: Into<String>,
     {
         let targets = targets
             .into_iter()
-            .map(|(label, canister_id, diagnostic_sender, endpoint)| {
-                (label.into(), canister_id, diagnostic_sender, endpoint)
+            .map(|(label, canister_id, diagnostic_sender)| {
+                (label.into(), canister_id, diagnostic_sender)
             })
             .collect::<Vec<_>>();
         let mut observations = Vec::with_capacity(targets.len());
         for _ in 0..tick_limit {
             observations.clear();
             let mut query_failures = Vec::new();
-            for (label, canister_id, _, endpoint) in &targets {
-                match fetch_role_overview_readiness(pic, *canister_id, endpoint) {
+            for (label, canister_id, _) in &targets {
+                match fetch_role_overview_readiness(pic, *canister_id) {
                     Ok(observation) => observations.push((label, *canister_id, observation)),
                     Err(error) => query_failures.push(RoleOverviewQueryFailure {
                         label: label.clone(),
@@ -960,7 +980,7 @@ mod tests {
                     pic,
                     targets
                         .iter()
-                        .map(|(label, canister_id, diagnostic_sender, _)| {
+                        .map(|(label, canister_id, diagnostic_sender)| {
                             (label.clone(), *canister_id, *diagnostic_sender)
                         }),
                     context,
@@ -985,7 +1005,7 @@ mod tests {
                 .iter()
                 .zip(&observations)
                 .filter(|(_, (_, _, observation))| !observation.is_ready())
-                .map(|((label, canister_id, diagnostic_sender, _), _)| {
+                .map(|((label, canister_id, diagnostic_sender), _)| {
                     (label.clone(), *canister_id, *diagnostic_sender)
                 }),
             context,
@@ -1006,11 +1026,10 @@ mod tests {
     fn fetch_role_overview_readiness(
         pic: &PocketIc,
         canister_id: Principal,
-        endpoint: &str,
     ) -> Result<RoleOverviewReadinessObservation, CandidCallError> {
         match pic.query_candid::<Result<RoleOverviewStatusResponseFragment, Error>, _>(
             canister_id,
-            endpoint,
+            canic::protocol::CANIC_PUBLIC_STATUS,
             (RoleOverviewStatusRequestFragment::Overview,),
         ) {
             Ok(Ok(RoleOverviewStatusResponseFragment::Overview(overview))) => {
@@ -1041,17 +1060,13 @@ mod tests {
         .expect("Coordinator command transport")
     }
 
-    fn coordinator_status(
+    fn coordinator_status<R: crate::pic::canic::CoordinatorRead>(
         pic: &PocketIc,
         coordinator: Principal,
-        request: CoordinatorStatusRequest,
-    ) -> Result<CoordinatorStatusResponse, Error> {
-        pic.query_candid(
-            coordinator,
-            canic::protocol::CANIC_COORDINATOR_STATUS,
-            (request,),
-        )
-        .expect("Coordinator status transport")
+        request: R,
+    ) -> Result<R::Response, Error> {
+        pic.query_candid(coordinator, R::METHOD, (request,))
+            .expect("Coordinator status transport")
     }
 
     #[cfg(test)]
@@ -1065,10 +1080,10 @@ mod tests {
             let status = coordinator_status(
                 pic,
                 coordinator,
-                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
             )
             .expect("query Fleet admission operation");
-            let CoordinatorStatusResponse::Operation(
+            let CoordinatorOperationReadResponse::Operation(
                 CoordinatorOperationStatusResponse::Admission(operation),
             ) = status
             else {
@@ -1113,10 +1128,10 @@ mod tests {
             let status = coordinator_status(
                 pic,
                 coordinator,
-                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
             )
             .expect("query interrupted Fleet admission operation");
-            let CoordinatorStatusResponse::Operation(
+            let CoordinatorOperationReadResponse::Operation(
                 CoordinatorOperationStatusResponse::Admission(operation),
             ) = status
             else {
@@ -1232,7 +1247,7 @@ mod tests {
             .query_candid_as(
                 canister_id,
                 root,
-                canic::protocol::CANIC_STATUS,
+                canic::protocol::CANIC_ADMISSION_STATUS,
                 (ManagedAdmissionStatusRequestFragment::Admission(
                     PageRequest {
                         limit: 128,
@@ -1498,36 +1513,11 @@ mod tests {
             wait_for_role_overviews_ready(
                 baseline.pocket_ic(),
                 [
-                    (
-                        "coordinator",
-                        metadata.coordinator,
-                        Principal::anonymous(),
-                        canic::protocol::CANIC_COORDINATOR_STATUS,
-                    ),
-                    (
-                        "root",
-                        metadata.root,
-                        Principal::anonymous(),
-                        canic::protocol::CANIC_ROOT_STATUS,
-                    ),
-                    (
-                        "wasm_store",
-                        metadata.wasm_store,
-                        metadata.root,
-                        canic::protocol::CANIC_WASM_STORE_STATUS,
-                    ),
-                    (
-                        "issuer",
-                        metadata.issuer.canister_id,
-                        metadata.root,
-                        canic::protocol::CANIC_STATUS,
-                    ),
-                    (
-                        "verifier",
-                        metadata.verifier.canister_id,
-                        metadata.root,
-                        canic::protocol::CANIC_STATUS,
-                    ),
+                    ("coordinator", metadata.coordinator, Principal::anonymous()),
+                    ("root", metadata.root, Principal::anonymous()),
+                    ("wasm_store", metadata.wasm_store, metadata.root),
+                    ("issuer", metadata.issuer.canister_id, metadata.root),
+                    ("verifier", metadata.verifier.canister_id, metadata.root),
                 ],
                 60,
                 "restored active Component Registry baseline",
@@ -2002,10 +1992,13 @@ exec icp "$@"
         let mut packages = BTreeSet::from([
             "canic-fleet-coordinator".to_string(),
             "canic-host".to_string(),
-            "canic-wasm-store".to_string(),
+            "canic-fleet-wasm-store".to_string(),
         ]);
         for role in configured_roles {
             let role = CanisterRole::from(role.clone());
+            if role.is_root() {
+                continue;
+            }
             let RolePackageValidation::Supported(evidence) = validate_declared_role_package(
                 config_path,
                 snapshot.model(),
@@ -2058,6 +2051,13 @@ exec icp "$@"
         .with_prune_policy_at_most_every(
             internal_test_artifact_prune_policy(),
             internal_test_artifact_maintenance_interval(),
+        );
+        cache = with_canonical_root_cargo_inputs(
+            cache,
+            config_path,
+            &literal_zero_canister_build_target(workspace_root),
+            CanicWasmBuildProfile::Fast,
+            &environment,
         );
         for (name, path) in outputs {
             cache = cache.with_output(name, path);
@@ -2756,12 +2756,12 @@ exec icp "$@"
         let mut last_status = None;
         let mut terminal = None;
         for _ in 0..120 {
-            let CoordinatorStatusResponse::Operation(
+            let CoordinatorOperationReadResponse::Operation(
                 CoordinatorOperationStatusResponse::ComponentProvisioning(status),
             ) = coordinator_status(
                 &pic,
                 coordinator,
-                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
             )
             .expect("query retained-pool provisioning")
             else {
@@ -2928,12 +2928,12 @@ exec icp "$@"
         let mut provisioned = None;
         let mut last_status = None;
         for _ in 0..240 {
-            let CoordinatorStatusResponse::Operation(
+            let CoordinatorOperationReadResponse::Operation(
                 CoordinatorOperationStatusResponse::ComponentProvisioning(status),
             ) = coordinator_status(
                 &pic,
                 coordinator,
-                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
             )
             .expect("query fresh Component provisioning")
             else {
@@ -3061,12 +3061,9 @@ exec icp "$@"
             joining_version,
             sync_request,
         );
-        let CoordinatorStatusResponse::Registry(registry) =
-            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query active Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let CoordinatorRegistryResponse::Registry(registry) =
+            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("query active Registry");
         let operation_id = [0x71; 32];
         let compiled = fixture_fresh_component_plan(config.model(), &registry, operation_id);
         let request = compiled.request;
@@ -3094,10 +3091,10 @@ exec icp "$@"
             let status = coordinator_status(
                 &pic,
                 coordinator,
-                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
             )
             .expect("query initial-Shard Component provisioning");
-            let CoordinatorStatusResponse::Operation(
+            let CoordinatorOperationReadResponse::Operation(
                 CoordinatorOperationStatusResponse::ComponentProvisioning(status),
             ) = status
             else {
@@ -3138,7 +3135,7 @@ exec icp "$@"
                             .query_candid_as(
                                 fixture.root_id,
                                 *caller,
-                                canic::protocol::CANIC_ROOT_STATUS,
+                                canic::protocol::CANIC_ROOT_OPERATION_STATUS,
                                 (RootStatusRequestFragment::Operation(OperationStatusRequest {
                                     operation_id,
                                 }),),
@@ -3166,7 +3163,6 @@ exec icp "$@"
                     let readiness = fetch_role_overview_readiness(
                         &pic,
                         entry.canister_id,
-                        canic::protocol::CANIC_STATUS,
                     )
                         .map_or_else(|error| format!("query-error={error}"), |status| status.to_string());
                     format!("canister={} {readiness}", entry.canister_id)
@@ -3297,7 +3293,7 @@ exec icp "$@"
         assert_eq!(child_binding.component, *hub_binding);
         for canister in workload_principals {
             assert!(matches!(
-                fetch_role_overview_readiness(&pic, canister, canic::protocol::CANIC_STATUS)
+                fetch_role_overview_readiness(&pic, canister)
                     .expect("query managed initial-Shard readiness"),
                 RoleOverviewReadinessObservation::Ready
             ));
@@ -3590,12 +3586,9 @@ exec icp "$@"
             "Running"
         );
         assert!(pic.cycle_balance(coordinator) <= coordinator_cycles_before_start);
-        let CoordinatorStatusResponse::Registry(genesis) =
-            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query current genesis Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let CoordinatorRegistryResponse::Registry(genesis) =
+            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("query current genesis Registry");
         let desired = current_protocol_desired(&configuration, coordinator, &installed.init_args);
         let state = FleetEnsureStateRecord {
             active_registry: None,
@@ -3650,12 +3643,12 @@ exec icp "$@"
                         let status = coordinator_status(
                             &pic,
                             step.target,
-                            CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                            CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
                                 operation_id: request.operation_id,
                             }),
                         );
                         let failure = match status {
-                            Ok(CoordinatorStatusResponse::Operation(
+                            Ok(CoordinatorOperationReadResponse::Operation(
                                 CoordinatorOperationStatusResponse::ComponentProvisioning(status),
                             )) => status.pending_root_failure,
                             _ => None,
@@ -3683,19 +3676,16 @@ exec icp "$@"
         }
         assert!(replayed_component_command);
 
-        let CoordinatorStatusResponse::Registry(terminal_registry) =
-            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query terminal Fleet Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let CoordinatorRegistryResponse::Registry(terminal_registry) =
+            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("query terminal Fleet Registry");
         assert_eq!(terminal_registry.revision, 4);
-        let CoordinatorStatusResponse::Operation(
+        let CoordinatorOperationReadResponse::Operation(
             CoordinatorOperationStatusResponse::ComponentProvisioning(terminal_status),
         ) = coordinator_status(
             &pic,
             coordinator,
-            CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
         )
         .expect("query terminal Component operation")
         else {
@@ -3861,12 +3851,9 @@ exec icp "$@"
             joining_version,
             sync_request,
         );
-        let CoordinatorStatusResponse::Registry(registry) =
-            coordinator_status(&pic, coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query active Registry")
-        else {
-            panic!("expected Registry response");
-        };
+        let CoordinatorRegistryResponse::Registry(registry) =
+            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("query active Registry");
         let operation_id = [0x72; 32];
         let request = fixture_fresh_component_plan(config.model(), &registry, operation_id).request;
         let CoordinatorCommandResponse::OperationAccepted(first) = coordinator_command(
@@ -3880,12 +3867,14 @@ exec icp "$@"
         let mut last = None;
         let terminal = (0..240_u32.saturating_add(descendants.saturating_mul(32)))
             .find_map(|_| {
-                let CoordinatorStatusResponse::Operation(
+                let CoordinatorOperationReadResponse::Operation(
                     CoordinatorOperationStatusResponse::ComponentProvisioning(status),
                 ) = coordinator_status(
                     &pic,
                     coordinator,
-                    CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+                    CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
+                        operation_id,
+                    }),
                 )
                 .expect("query initial Root activation")
                 else {
@@ -4126,7 +4115,7 @@ exec icp "$@"
             readiness_floor
                 .checked_sub(500_000_000_000)
                 .expect("fixture readiness floor")
-        } else if matches!(funding, FundingJourney::Fresh) {
+        } else if matches!(funding, FundingJourney::Fresh | FundingJourney::Reinstall) {
             canic_host::fleet_ensure::fresh_pool_creation_funding(readiness_floor)
                 .expect("generator-owned initial pool funding")
         } else {
@@ -4384,7 +4373,7 @@ exec icp "$@"
             root_key: hex_bytes(pic.root_key().expect("PocketIC local root key")),
             url: live_url.to_string(),
         };
-        let desired = if matches!(funding, FundingJourney::Fresh) {
+        let desired = if matches!(funding, FundingJourney::Fresh | FundingJourney::Reinstall) {
             generate_journey_desired(GeneratedJourneyInput {
                 root: &adapter_root,
                 config: &config_path,
@@ -4626,6 +4615,9 @@ exec icp "$@"
         }
 
         let (protocol_terminal, repair_funding, withdrawals) = if funded_import_repair {
+            for asset in &pools {
+                pic.install_canister(*asset, b"\0asm\x01\0\0\0".to_vec(), Vec::new(), Some(root));
+            }
             let failed = root_command_as(
                 &pic,
                 root,
@@ -4662,11 +4654,11 @@ exec icp "$@"
                     if let EnsureAction::Fund {
                         amount,
                         principal,
-                        pool_root: Some(pool_root),
+                        pool_funding: Some(pool_funding),
                         ..
                     } = action
                     {
-                        assert_eq!(*pool_root, root.to_text());
+                        assert_eq!(pool_funding.root, root.to_text());
                         Some((principal.clone(), *amount))
                     } else {
                         None
@@ -4688,6 +4680,28 @@ exec icp "$@"
                             EnsureAction::Fund { .. } | EnsureAction::FleetProtocol { .. }
                         ))
                 );
+                let installed = pic.canister_status(pools[1], Some(root)).unwrap();
+                assert!(installed.module_hash.is_some());
+                assert!(installed.cycles < readiness_floor);
+                pic.set_controllers(pools[1], Some(root), vec![root, operator])
+                    .unwrap();
+                let rejected = fleet_ensure_workflow::apply(
+                    &adapter_root,
+                    &desired,
+                    &desired_identity,
+                    &desired.fleet,
+                    &repair_plan.plan.plan_sha256,
+                    &mut resumed_platform,
+                );
+                assert!(matches!(rejected, Err(EnsureWorkflowError::Platform(
+                    canic_host::fleet_ensure::ops::IcpEnsurePlatformError::FundingInspectionAuthorityConflict { .. }
+                ))));
+                let before: u64 = pic
+                    .query_candid(cycles_ledger, "withdrawal_count", ())
+                    .unwrap();
+                assert_eq!(before, 0);
+                pic.set_controllers(pools[1], Some(operator), vec![root])
+                    .unwrap();
                 std::fs::write(adapter_root.join("lose-funding-response"), [])
                     .expect("enable exact withdrawal response loss");
                 let native_before_funding = pic.cycle_balance(pools[0]);
@@ -5058,7 +5072,6 @@ exec icp "$@"
         let root = input.adapter_root;
         let pic = input.pic;
         let operator = Principal::from_text(&input.desired.operator).unwrap();
-        let subnet = *pic.topology().get_app_subnets().first().unwrap();
         let ledger = Principal::from_text(&input.desired.cycles_ledger).unwrap();
         let transfer: Result<Nat, QualificationIcrc1TransferError> = pic
             .update_candid_as(
@@ -5118,48 +5131,8 @@ exec icp "$@"
             fingerprint: &canic_core::cdk::utils::hash::sha256_hex(&root_key),
         })
         .expect("enroll the exact reinstall network");
-        let source = root.join("reinstall-policy.toml");
-        let readiness = &input.desired.bootstrap.as_ref().unwrap().roots[0]
-            .limits
-            .canister_pool
-            .canister_cycles;
-        let policy = generated_journey_policy(operator, subnet, 1, 1)
-            .replace(
-                "component_admissions = { catalogue = 1, scaling = 1, users = 1 }",
-                "component_admissions = { default = 1 }",
-            )
-            .replace(
-                "canister_cycles = \"5T\"",
-                &format!("canister_cycles = \"{}\"", readiness.to_config_string()),
-            );
-        std::fs::write(&source, policy).unwrap();
-        let seed = root.join("reinstall-seed.toml");
-        let fleet_id = FleetId::from_generated_bytes([0xa4; 32]);
-        let pools = input
-            .pools
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        std::fs::write(
-            &seed,
-            format!(
-                r#"
-schema_version = 1
-fleet_id = "{fleet_id}"
-fresh_estate = false
-management_creation_fee_cycles = "0B"
-coordinator = "{}"
-cycles_ledger = "{ledger}"
-[[roots]]
-placement_subnet = "{subnet}"
-root = "{}"
-store = "{}"
-pool_imports = {pools:?}
-"#,
-                input.coordinator, input.root, input.store
-            ),
-        )
-        .unwrap();
+        let source = root.join("fleet-policy.toml");
+        let seed = root.join("fleet-seed.toml");
         let generator = root.join("reinstall-generator-icp");
         std::fs::write(
             &generator,
@@ -5195,12 +5168,15 @@ exec '{}' "$@"
             use std::os::unix::fs::PermissionsExt as _;
             std::fs::set_permissions(&generator, std::fs::Permissions::from_mode(0o700)).unwrap();
         }
-        // The new release needs no previous host journal or stable-state decoder.
         let old_paths =
             canic_host::fleet_ensure::ops::EnsurePaths::under(root, "local", &input.desired.fleet);
-        for path in [&old_paths.plan, &old_paths.journal, &old_paths.state] {
-            std::fs::remove_file(path).expect("discard prior release host records");
-        }
+        assert_eq!(
+            canic_host::fleet_ensure::ops::read_journal(&old_paths)
+                .unwrap()
+                .unwrap()
+                .completion,
+            canic_host::fleet_ensure::model::FleetEnsureCompletion::Converged
+        );
         let request = canic_host::fleet_ensure::FleetGenerateRequest {
             app_config: &config_path,
             environment: "local",
@@ -5213,7 +5189,14 @@ exec '{}' "$@"
         };
         let generated = canic_host::fleet_ensure::generate_desired_fleet(&request)
             .expect("generate from exact management authority before any reset");
-        assert_eq!(generated.observed_canisters, 2);
+        assert_eq!(generated.observed_canisters, 0);
+        assert!(
+            generated
+                .desired
+                .canisters
+                .iter()
+                .all(|canister| canister.principal.is_none())
+        );
         let desired = generated.desired;
         let digest = desired_sha256(&desired);
         let platform = || {
@@ -5261,7 +5244,8 @@ exec '{}' "$@"
         assert!(
             canic_host::fleet_ensure::ops::read_journal(&old_paths)
                 .unwrap()
-                .is_none()
+                .is_some_and(|journal| journal.completion
+                    == canic_host::fleet_ensure::model::FleetEnsureCompletion::Converged)
         );
         pic.set_controllers(input.root, Some(operator), vec![operator])
             .expect("restore the exact reviewed controller authority");
@@ -6256,10 +6240,10 @@ exec '{}' "$@"
                 EnsureAction::Fund {
                     principal,
                     amount,
-                    pool_root: Some(root),
+                    pool_funding: Some(root),
                     ..
                 } => {
-                    assert_eq!(root, &input.root.to_text());
+                    assert_eq!(root.root, input.root.to_text());
                     assert!(funded.insert(principal.clone(), *amount).is_none());
                 }
                 EnsureAction::FleetProtocol { action, .. } => {
@@ -6451,8 +6435,15 @@ exec '{}' "$@"
         let source_directory = root.join("app-source");
         let source_workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         #[cfg(unix)]
-        std::os::unix::fs::symlink(&source_workspace, &source_directory)
-            .expect("retain the unchanged App source layout in the isolated workspace");
+        if source_directory.symlink_metadata().is_ok() {
+            assert_eq!(
+                std::fs::read_link(&source_directory).unwrap(),
+                source_workspace
+            );
+        } else {
+            std::os::unix::fs::symlink(&source_workspace, &source_directory)
+                .expect("retain the unchanged App source layout in the isolated workspace");
+        }
         let config = source_directory.join(
             source_config
                 .strip_prefix(source_workspace)
@@ -6506,6 +6497,7 @@ exec '{}' "$@"
             input.subnet,
             input.workload_count,
             input.ready_count,
+            &config,
         );
         std::fs::write(&source, source_text).expect("write reviewed generator policy");
         canic_host::fleet_ensure::initialize_fresh_estate_seed(
@@ -6608,7 +6600,24 @@ esac
         subnet: Principal,
         workloads: usize,
         ready: usize,
+        config_path: &Path,
     ) -> String {
+        let configuration = AppConfigSnapshot::load(config_path).unwrap();
+        let readiness = configuration
+            .model()
+            .component_specs
+            .values()
+            .map(|spec| &spec.initial_cycles)
+            .max()
+            .unwrap()
+            .to_config_string();
+        let admissions = configuration
+            .model()
+            .component_specs
+            .keys()
+            .map(|spec| format!("{spec} = 1"))
+            .collect::<Vec<_>>()
+            .join(", ");
         let capacity = workloads + ready;
         format!(
             r#"
@@ -6638,7 +6647,7 @@ maximum_automatic_cycles = "60T"
 [[fleet_subnet_roots]]
 placement_subnet = "{subnet}"
 acknowledge_fiduciary_cost = false
-component_admissions = {{ catalogue = 1, scaling = 1, users = 1 }}
+component_admissions = {{ {admissions} }}
 
 [fleet_subnet_roots.component_group_placements]
 qualification = [0]
@@ -6646,7 +6655,7 @@ qualification = [0]
 [fleet_subnet_roots.canister_pool]
 minimum_size = {ready}
 maximum_size = {capacity}
-canister_cycles = "5T"
+canister_cycles = "{readiness}"
 
 [fleet_subnet_roots.root_funding]
 request_threshold = "10T"
@@ -6989,12 +6998,12 @@ cycles = "80T"
             let status = coordinator_status(
                 pic,
                 step.target,
-                CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
                     operation_id: request.operation_id,
                 }),
             );
             let detail = match status {
-                Ok(CoordinatorStatusResponse::Operation(
+                Ok(CoordinatorOperationReadResponse::Operation(
                     CoordinatorOperationStatusResponse::ComponentProvisioning(status),
                 )) => format!("{status:?}"),
                 Ok(_) => "differently correlated status".to_string(),
@@ -7057,8 +7066,8 @@ cycles = "80T"
             | CurrentFleetProtocolAction::JoinRoot {
                 expected_registry, ..
             } => matches!(
-                coordinator_status(pic, step.target, CoordinatorStatusRequest::Registry),
-                Ok(CoordinatorStatusResponse::Registry(observed)) if observed == *expected_registry
+                coordinator_status(pic, step.target, CoordinatorRegistryRequest::Registry),
+                Ok(CoordinatorRegistryResponse::Registry(observed)) if observed == *expected_registry
             ),
             CurrentFleetProtocolAction::ActivateRegistryMirror { expected, request } => {
                 matches!(
@@ -7128,11 +7137,11 @@ cycles = "80T"
                 coordinator_status(
                     pic,
                     step.target,
-                    CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                    CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
                         operation_id: request.operation_id,
                     }),
                 ),
-                Ok(CoordinatorStatusResponse::Operation(
+                Ok(CoordinatorOperationReadResponse::Operation(
                     CoordinatorOperationStatusResponse::ComponentProvisioning(observed)
                 )) if observed.operation_id == request.operation_id
                     && observed.plan_hash == *plan_hash
@@ -7189,18 +7198,18 @@ cycles = "80T"
         template_id: &TemplateId,
         version: &TemplateVersion,
     ) -> TemplateStagingStatusResponse {
-        let response: Result<StoreStatusResponse, Error> = pic
+        let response: Result<StoreCatalogResponse, Error> = pic
             .query_candid_as(
                 store,
                 caller,
-                canic::protocol::CANIC_WASM_STORE_STATUS,
-                (StoreStatusRequest::Template(TemplateLookupRequest {
+                canic::protocol::CANIC_WASM_STORE_CATALOG,
+                (StoreCatalogRequest::Template(TemplateLookupRequest {
                     template_id: template_id.clone(),
                     version: version.clone(),
                 }),),
             )
             .expect("query current Store staging transport");
-        let StoreStatusResponse::Template(status) = response.expect("query current Store staging")
+        let StoreCatalogResponse::Template(status) = response.expect("query current Store staging")
         else {
             panic!("Store returned a differently correlated staging status");
         };
@@ -7272,10 +7281,10 @@ cycles = "80T"
         assert_eq!(status.automatic_cycles, grant.request.granted_cycles);
         assert!(fixture.pic.cycle_balance(fixture.root) > fixture.root_balance_before_activation);
 
-        let CoordinatorStatusResponse::Funding(coordinator) = coordinator_status(
+        let CoordinatorObservabilityResponse::Funding(coordinator) = coordinator_status(
             &fixture.pic,
             fixture.coordinator,
-            CoordinatorStatusRequest::Funding,
+            CoordinatorObservabilityRequest::Funding,
         )
         .expect("query protected Coordinator funding status") else {
             panic!("Coordinator returned a differently correlated funding status");
@@ -7334,10 +7343,10 @@ cycles = "80T"
                 .expect("two Root grants fit in u128");
         }
 
-        let CoordinatorStatusResponse::Funding(coordinator) = coordinator_status(
+        let CoordinatorObservabilityResponse::Funding(coordinator) = coordinator_status(
             &fixture.pic,
             fixture.coordinator,
-            CoordinatorStatusRequest::Funding,
+            CoordinatorObservabilityRequest::Funding,
         )
         .expect("query multi-Root Coordinator funding status") else {
             panic!("Coordinator returned a differently correlated funding status");
@@ -8372,10 +8381,12 @@ cycles = "80T"
         coordinator: Principal,
         fixtures: [&BootstrappedRootFixture; 2],
     ) -> [ComponentBinding; 2] {
-        let CoordinatorStatusResponse::RegistryVersion(mut version) =
-            coordinator_status(pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
-                .expect("query multi-Root Registry genesis")
-        else {
+        let CoordinatorObservabilityResponse::RegistryVersion(mut version) = coordinator_status(
+            pic,
+            coordinator,
+            CoordinatorObservabilityRequest::RegistryVersion,
+        )
+        .expect("query multi-Root Registry genesis") else {
             panic!("Coordinator returned a differently correlated Registry status");
         };
         for fixture in fixtures {
@@ -8604,10 +8615,10 @@ cycles = "80T"
     fn coordinator_funding_status(
         fixture: &RootFundingJourneyFixture,
     ) -> CoordinatorFundingStatusResponse {
-        let CoordinatorStatusResponse::Funding(status) = coordinator_status(
+        let CoordinatorObservabilityResponse::Funding(status) = coordinator_status(
             &fixture.pic,
             fixture.coordinator,
-            CoordinatorStatusRequest::Funding,
+            CoordinatorObservabilityRequest::Funding,
         )
         .expect("query protected Coordinator funding status") else {
             panic!("Coordinator returned a differently correlated funding status");
@@ -8621,12 +8632,14 @@ cycles = "80T"
     ) -> FleetFundingPolicyRotationPlan {
         let coordinator = coordinator_funding_status(fixture);
         let root = root_funding_status(&fixture.pic, fixture.root);
-        let CoordinatorStatusResponse::RegistryVersion(predecessor_registry) = coordinator_status(
-            &fixture.pic,
-            fixture.coordinator,
-            CoordinatorStatusRequest::RegistryVersion,
-        )
-        .expect("query predecessor Registry version") else {
+        let CoordinatorObservabilityResponse::RegistryVersion(predecessor_registry) =
+            coordinator_status(
+                &fixture.pic,
+                fixture.coordinator,
+                CoordinatorObservabilityRequest::RegistryVersion,
+            )
+            .expect("query predecessor Registry version")
+        else {
             panic!("Coordinator returned a differently correlated Registry version");
         };
         assert_eq!(coordinator.policy_generation, root.policy_generation);
@@ -8723,12 +8736,12 @@ cycles = "80T"
         operation_id: [u8; 32],
     ) -> FleetFundingPolicyRotationReceipt {
         for _ in 0..128 {
-            let CoordinatorStatusResponse::Operation(
+            let CoordinatorOperationReadResponse::Operation(
                 CoordinatorOperationStatusResponse::FundingPolicyRotation(status),
             ) = coordinator_status(
                 &fixture.pic,
                 fixture.coordinator,
-                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
             )
             .expect("query funding-policy rotation status")
             else {
@@ -9651,12 +9664,9 @@ cycles = "80T"
         owned: &[BootstrappedRootFixture],
         foreign: &BootstrappedRootFixture,
     ) {
-        let CoordinatorStatusResponse::Registry(registry) =
-            coordinator_status(pic, coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query isolated Coordinator Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let CoordinatorRegistryResponse::Registry(registry) =
+            coordinator_status(pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("query isolated Coordinator Registry");
         assert_eq!(
             registry.authority.binding.fleet,
             owned[0].init_args.authority.binding.authority.binding.fleet
@@ -9705,12 +9715,12 @@ cycles = "80T"
         let pic = fixture.pic();
         let added = Principal::self_authenticating([0xd1; 32]);
 
-        let CoordinatorStatusResponse::Registry(initial_registry) =
-            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query initial Fleet Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status")
-        };
+        let CoordinatorRegistryResponse::Registry(initial_registry) = coordinator_status(
+            pic,
+            fixture.coordinator,
+            CoordinatorRegistryRequest::Registry,
+        )
+        .expect("query initial Fleet Registry");
         assert!(!initial_registry.admission.fleet_principals.contains(&added));
 
         let mut added_principals = initial_registry.admission.fleet_principals.clone();
@@ -9780,12 +9790,12 @@ cycles = "80T"
         );
         assert_eq!(replayed_add.operation_id, add_operation_id);
 
-        let CoordinatorStatusResponse::Registry(added_registry) =
-            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query added Fleet Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status")
-        };
+        let CoordinatorRegistryResponse::Registry(added_registry) = coordinator_status(
+            pic,
+            fixture.coordinator,
+            CoordinatorRegistryRequest::Registry,
+        )
+        .expect("query added Fleet Registry");
         assert_eq!(added_registry.admission, added_policy);
 
         let mut removed_principals = added_registry.admission.fleet_principals.clone();
@@ -9843,12 +9853,12 @@ cycles = "80T"
             assert!(status.prepared.is_none());
         }
 
-        let CoordinatorStatusResponse::Registry(removed_registry) =
-            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query removed Fleet Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status")
-        };
+        let CoordinatorRegistryResponse::Registry(removed_registry) = coordinator_status(
+            pic,
+            fixture.coordinator,
+            CoordinatorRegistryRequest::Registry,
+        )
+        .expect("query removed Fleet Registry");
         drop(fixture);
         assert_eq!(removed_registry.admission, removed_policy);
     }
@@ -9865,12 +9875,12 @@ cycles = "80T"
         let added = Principal::self_authenticating([0xd4; 32]);
         let operation_id = [0xd5; 32];
 
-        let CoordinatorStatusResponse::Registry(initial_registry) =
-            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query initial Fleet Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status")
-        };
+        let CoordinatorRegistryResponse::Registry(initial_registry) = coordinator_status(
+            pic,
+            fixture.coordinator,
+            CoordinatorRegistryRequest::Registry,
+        )
+        .expect("query initial Fleet Registry");
         let mut successor_principals = initial_registry.admission.fleet_principals.clone();
         successor_principals.push(added);
         successor_principals.sort_unstable();
@@ -9912,12 +9922,12 @@ cycles = "80T"
             pic.advance_time(Duration::from_secs(1));
             pic.tick();
         }
-        let CoordinatorStatusResponse::Operation(CoordinatorOperationStatusResponse::Admission(
-            blocked,
-        )) = coordinator_status(
+        let CoordinatorOperationReadResponse::Operation(
+            CoordinatorOperationStatusResponse::Admission(blocked),
+        ) = coordinator_status(
             pic,
             fixture.coordinator,
-            CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
         )
         .expect("query blocked admission operation")
         else {
@@ -9928,12 +9938,12 @@ cycles = "80T"
             FleetAdmissionOperationPhase::Planned { .. }
                 | FleetAdmissionOperationPhase::Preparing { .. }
         ));
-        let CoordinatorStatusResponse::Registry(blocked_registry) =
-            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query blocked Fleet Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status")
-        };
+        let CoordinatorRegistryResponse::Registry(blocked_registry) = coordinator_status(
+            pic,
+            fixture.coordinator,
+            CoordinatorRegistryRequest::Registry,
+        )
+        .expect("query blocked Fleet Registry");
         assert_eq!(blocked_registry.admission, initial_registry.admission);
 
         let reachable = managed_admission_status(pic, fixture.issuer.canister_id, fixture.root);
@@ -10000,12 +10010,12 @@ cycles = "80T"
         let pic = fixture.pic();
         let added = Principal::self_authenticating([0xe0; 32]);
 
-        let CoordinatorStatusResponse::Registry(initial_registry) =
-            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query initial Fleet Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status")
-        };
+        let CoordinatorRegistryResponse::Registry(initial_registry) = coordinator_status(
+            pic,
+            fixture.coordinator,
+            CoordinatorRegistryRequest::Registry,
+        )
+        .expect("query initial Fleet Registry");
         let mut successor_principals = initial_registry.admission.fleet_principals.clone();
         successor_principals.push(added);
         successor_principals.sort_unstable();
@@ -10075,12 +10085,12 @@ cycles = "80T"
         };
         assert_eq!(replayed_release, released);
 
-        let CoordinatorStatusResponse::Registry(unchanged_registry) =
-            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query Registry after stale-catalog release")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status")
-        };
+        let CoordinatorRegistryResponse::Registry(unchanged_registry) = coordinator_status(
+            pic,
+            fixture.coordinator,
+            CoordinatorRegistryRequest::Registry,
+        )
+        .expect("query Registry after stale-catalog release");
         assert_eq!(unchanged_registry.admission, initial_registry.admission);
         for target in [
             fixture.issuer.canister_id,
@@ -10144,14 +10154,12 @@ cycles = "80T"
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_multi_root_funding_journey();
         let added = Principal::self_authenticating([0xd9; 32]);
-        let CoordinatorStatusResponse::Registry(initial) = coordinator_status(
+        let CoordinatorRegistryResponse::Registry(initial) = coordinator_status(
             &fixture.pic,
             fixture.coordinator,
-            CoordinatorStatusRequest::Registry,
+            CoordinatorRegistryRequest::Registry,
         )
-        .expect("query initial two-Root Registry") else {
-            panic!("Coordinator returned a differently correlated Registry status")
-        };
+        .expect("query initial two-Root Registry");
         let mut added_principals = initial.admission.fleet_principals.clone();
         added_principals.push(added);
         added_principals.sort_unstable();
@@ -10206,14 +10214,12 @@ cycles = "80T"
             assert!(status.principals.entries.contains(&added));
         }
 
-        let CoordinatorStatusResponse::Registry(added_registry) = coordinator_status(
+        let CoordinatorRegistryResponse::Registry(added_registry) = coordinator_status(
             &fixture.pic,
             fixture.coordinator,
-            CoordinatorStatusRequest::Registry,
+            CoordinatorRegistryRequest::Registry,
         )
-        .expect("query added two-Root Registry") else {
-            panic!("Coordinator returned a differently correlated Registry status")
-        };
+        .expect("query added two-Root Registry");
         let mut removed_principals = added_registry.admission.fleet_principals.clone();
         removed_principals.retain(|principal| *principal != added);
         let removed_policy = compile_installed_fleet_admission_policy(
@@ -10485,18 +10491,16 @@ cycles = "80T"
             .set_controllers(fixture.coordinator, None, controllers)
             .expect("reviewed retirement operator controls Coordinator");
 
-        let CoordinatorStatusResponse::Registry(registry) = coordinator_status(
+        let CoordinatorRegistryResponse::Registry(registry) = coordinator_status(
             fixture.pic(),
             fixture.coordinator,
-            CoordinatorStatusRequest::Registry,
+            CoordinatorRegistryRequest::Registry,
         )
-        .expect("query active Registry before root removal") else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
-        let CoordinatorStatusResponse::RegistryVersion(version) = coordinator_status(
+        .expect("query active Registry before root removal");
+        let CoordinatorObservabilityResponse::RegistryVersion(version) = coordinator_status(
             fixture.pic(),
             fixture.coordinator,
-            CoordinatorStatusRequest::RegistryVersion,
+            CoordinatorObservabilityRequest::RegistryVersion,
         )
         .expect("query active Registry version before root removal") else {
             panic!("Coordinator returned a differently correlated Registry status");
@@ -10580,14 +10584,14 @@ cycles = "80T"
             let coordinator = coordinator_status(
                 fixture.pic(),
                 fixture.coordinator,
-                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
             )
             .ok()
             .and_then(|response| match response {
-                CoordinatorStatusResponse::Operation(
+                CoordinatorOperationReadResponse::Operation(
                     CoordinatorOperationStatusResponse::RootRemoval(status),
                 ) => Some(status),
-                _ => None,
+                CoordinatorOperationReadResponse::Operation(_) => None,
             });
             let root_progress = last_status.as_ref().map(|status| {
                 (
@@ -10656,12 +10660,12 @@ cycles = "80T"
             "autonomous removal must delete the retained Store"
         );
 
-        let CoordinatorStatusResponse::Operation(CoordinatorOperationStatusResponse::RootRemoval(
-            coordinator,
-        )) = coordinator_status(
+        let CoordinatorOperationReadResponse::Operation(
+            CoordinatorOperationStatusResponse::RootRemoval(coordinator),
+        ) = coordinator_status(
             fixture.pic(),
             fixture.coordinator,
-            CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
         )
         .expect("query Coordinator root-removal status")
         else {
@@ -10715,10 +10719,10 @@ cycles = "80T"
     ) {
         use canic_core::dto::fleet_registry::FleetRetirementRequest;
         let pic = fixture.pic();
-        let CoordinatorStatusResponse::RegistryVersion(version) = coordinator_status(
+        let CoordinatorObservabilityResponse::RegistryVersion(version) = coordinator_status(
             pic,
             fixture.coordinator,
-            CoordinatorStatusRequest::RegistryVersion,
+            CoordinatorObservabilityRequest::RegistryVersion,
         )
         .expect("removed Registry") else {
             panic!("Registry version correlation");
@@ -11041,36 +11045,11 @@ cycles = "80T"
         wait_for_role_overviews_ready(
             fixture.pic(),
             [
-                (
-                    "coordinator",
-                    fixture.coordinator,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_COORDINATOR_STATUS,
-                ),
-                (
-                    "root",
-                    fixture.root,
-                    Principal::anonymous(),
-                    canic::protocol::CANIC_ROOT_STATUS,
-                ),
-                (
-                    "wasm_store",
-                    fixture.wasm_store,
-                    fixture.root,
-                    canic::protocol::CANIC_WASM_STORE_STATUS,
-                ),
-                (
-                    "issuer",
-                    fixture.issuer.canister_id,
-                    fixture.root,
-                    canic::protocol::CANIC_STATUS,
-                ),
-                (
-                    "verifier",
-                    fixture.verifier.canister_id,
-                    fixture.root,
-                    canic::protocol::CANIC_STATUS,
-                ),
+                ("coordinator", fixture.coordinator, Principal::anonymous()),
+                ("root", fixture.root, Principal::anonymous()),
+                ("wasm_store", fixture.wasm_store, fixture.root),
+                ("issuer", fixture.issuer.canister_id, fixture.root),
+                ("verifier", fixture.verifier.canister_id, fixture.root),
             ],
             60,
             "fresh active Component Registry fixture",
@@ -11211,10 +11190,12 @@ cycles = "80T"
         canic::dto::fleet_registry::FleetRegistryVersion,
         FleetSubnetRootRegistrySyncRequest,
     ) {
-        let CoordinatorStatusResponse::RegistryVersion(genesis) =
-            coordinator_status(pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
-                .expect("query Registry genesis")
-        else {
+        let CoordinatorObservabilityResponse::RegistryVersion(genesis) = coordinator_status(
+            pic,
+            coordinator,
+            CoordinatorObservabilityRequest::RegistryVersion,
+        )
+        .expect("query Registry genesis") else {
             panic!("Coordinator returned a differently correlated Registry status");
         };
         let binding = &fixture.init_args.authority.binding;
@@ -11277,12 +11258,14 @@ cycles = "80T"
             panic!("Root returned a differently correlated synchronization response");
         };
         assert_eq!(retried, receipt);
-        let CoordinatorStatusResponse::RootAcknowledgements(acknowledgements) = coordinator_status(
-            pic,
-            coordinator,
-            CoordinatorStatusRequest::RootAcknowledgements,
-        )
-        .expect("query root acknowledgements") else {
+        let CoordinatorObservabilityResponse::RootAcknowledgements(acknowledgements) =
+            coordinator_status(
+                pic,
+                coordinator,
+                CoordinatorObservabilityRequest::RootAcknowledgements,
+            )
+            .expect("query root acknowledgements")
+        else {
             panic!("Coordinator returned a differently correlated acknowledgement status");
         };
         assert_eq!(acknowledgements, vec![synchronized.acknowledgement]);
@@ -11349,19 +11332,14 @@ cycles = "80T"
         let metadata = baseline.metadata();
         #[cfg(test)]
         validate_sensitive_observability_authority(pic, metadata)?;
-        let CoordinatorStatusResponse::Registry(registry) = baseline_application_result(
+        let CoordinatorRegistryResponse::Registry(registry) = baseline_application_result(
             coordinator_status(
                 pic,
                 metadata.coordinator,
-                CoordinatorStatusRequest::Registry,
+                CoordinatorRegistryRequest::Registry,
             ),
             "query active Fleet Registry",
-        )?
-        else {
-            return Err(ActiveComponentRegistryBaselineError::Invariant(
-                "Coordinator returned a differently correlated Registry status".to_string(),
-            ));
-        };
+        )?;
         if registry.fleet_subnet_roots.len() != 1
             || registry.fleet_subnet_roots[0].fleet_subnet_root != metadata.root
             || registry.fleet_subnet_roots[0].status != FleetSubnetRootStatus::Active
@@ -11393,7 +11371,7 @@ cycles = "80T"
             let runtime: Result<ManagedStatusResponseFragment, Error> = pic.query_candid_as(
                 binding.canister_id,
                 metadata.root,
-                canic::protocol::CANIC_STATUS,
+                canic::protocol::CANIC_CONTROL_STATUS,
                 (ManagedStatusRequestFragment::Operation(
                     OperationStatusRequest { operation_id },
                 ),),
@@ -11459,12 +11437,14 @@ cycles = "80T"
         .expect("query Fleet Subnet Root Canister summary") else {
             panic!("Root returned a differently correlated inventory status");
         };
-        let CoordinatorStatusResponse::RegistryVersion(coordinator_version) = coordinator_status(
-            fixture.pic(),
-            fixture.coordinator,
-            CoordinatorStatusRequest::RegistryVersion,
-        )
-        .expect("query Coordinator Registry version") else {
+        let CoordinatorObservabilityResponse::RegistryVersion(coordinator_version) =
+            coordinator_status(
+                fixture.pic(),
+                fixture.coordinator,
+                CoordinatorObservabilityRequest::RegistryVersion,
+            )
+            .expect("query Coordinator Registry version")
+        else {
             panic!("Coordinator returned a differently correlated Registry status");
         };
 
@@ -11605,12 +11585,9 @@ cycles = "80T"
             joining_version,
             sync_request,
         );
-        let CoordinatorStatusResponse::Registry(registry) =
-            coordinator_status(pic, coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query active Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let CoordinatorRegistryResponse::Registry(registry) =
+            coordinator_status(pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("query active Registry");
         let config =
             AppConfigSnapshot::load(config_path).expect("load provisioning fixture config");
         let compiled = fixture_fresh_component_plan(config.model(), &registry, operation_id);
@@ -11660,12 +11637,9 @@ cycles = "80T"
         .expect("activate Registry") else {
             panic!("Coordinator returned a differently correlated activation response");
         };
-        let CoordinatorStatusResponse::Registry(active) =
-            coordinator_status(pic, coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query active Registry")
-        else {
-            panic!("Coordinator returned a differently correlated Registry status");
-        };
+        let CoordinatorRegistryResponse::Registry(active) =
+            coordinator_status(pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("query active Registry");
         assert_eq!(
             active.fleet_subnet_roots.first().expect("one root").status,
             FleetSubnetRootStatus::Active
@@ -12584,11 +12558,13 @@ cycles = "80T"
             existing.as_ref().is_none_or(|bytes| bytes == &compressed),
             "one role must retain one exact artifact payload"
         );
-        let declared_package = &config
+        let declared_package = config
             .roles
             .get(role)
             .expect("fixture role declaration")
-            .package;
+            .package
+            .as_deref()
+            .expect("application fixture package");
         RootStoreReleaseSetEntry {
             component_spec: component_spec.clone(),
             kind,

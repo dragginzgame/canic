@@ -8,11 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.10` makes Fleet Subnet Root Canic-owned: a breaking hard cut removes
+  application Root packages and hooks, builds Root automatically and renames
+  the Store package to `canic-fleet-wasm-store`. It also fixes retained Fleet
+  funding, restart and initial-child activation waits, and separates public
+  status from protected observability with opt-in cached aggregate metrics.
 - `0.110.9` uses smaller application-neutral Fleet proofs, removes repeated
   recovery setup and a no-op audit invocation, rejects empty exact test selections,
   shows help when `canic` is run without a command, hard-cuts redundant restore

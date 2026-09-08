@@ -42,6 +42,97 @@ enum RoleStatusResponse {
     Runtime(Box<CanicRuntimeStatus>),
 }
 
+#[derive(CandidType)]
+enum PublicStatusRequest {
+    Health,
+    Metrics(canic::dto::public_status::PublicMetricsRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum PublicStatusResponse {
+    Health(canic::dto::public_status::PublicHealth),
+    Metrics(canic::dto::public_status::PublicMetricsSnapshot),
+}
+
+#[test]
+fn public_snapshots_preserve_observer_authority() {
+    use canic::dto::public_status::{
+        PublicMetricFamily, PublicMetricsRequest, PublicSnapshotState,
+    };
+    let fixture = install_lifecycle_boundary_fixture();
+    let published = fixture.install_runtime_probe_canister();
+    let restricted = fixture.install_canic_canister();
+    let outsider = fixture.root;
+    let query = |canister_id, family| {
+        let response: Result<PublicStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
+            canister_id,
+            outsider,
+            protocol::CANIC_PUBLIC_STATUS,
+            (PublicStatusRequest::Metrics(PublicMetricsRequest {
+                family,
+                page: PageRequest {
+                    limit: 256,
+                    offset: 0,
+                },
+            }),),
+        );
+        let PublicStatusResponse::Metrics(snapshot) = response.expect("public snapshot read")
+        else {
+            panic!("expected metrics snapshot");
+        };
+        snapshot
+    };
+    let health: Result<PublicStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
+        published,
+        outsider,
+        protocol::CANIC_PUBLIC_STATUS,
+        (PublicStatusRequest::Health,),
+    );
+    let PublicStatusResponse::Health(health) = health.expect("public health") else {
+        panic!("expected summary health");
+    };
+    assert_eq!(health.canister_id, published);
+    let disabled = query(restricted, PublicMetricFamily::Cycles);
+    assert_eq!(disabled.state, PublicSnapshotState::Disabled);
+    assert!(disabled.metrics.entries.is_empty());
+    assert_eq!(
+        query(published, PublicMetricFamily::Application).state,
+        PublicSnapshotState::Unavailable
+    );
+    let sampled: Result<(), Error> = fixture
+        .pic
+        .update_candid(published, "sample_public_metrics", ())
+        .expect("trusted sampling transport");
+    sampled.expect("trusted sampling");
+    let snapshot = query(published, PublicMetricFamily::Application);
+    assert_eq!(snapshot.state, PublicSnapshotState::Fresh);
+    assert_eq!(snapshot.metrics.entries[0].value, 7);
+    assert_eq!(
+        query(published, PublicMetricFamily::Operations).state,
+        PublicSnapshotState::Disabled
+    );
+    let cycles = query(published, PublicMetricFamily::Cycles);
+    assert_eq!(cycles.state, PublicSnapshotState::Fresh);
+    assert_eq!(cycles.metrics.entries[0].unit, "cycles");
+    for request in sensitive_observability_requests(false) {
+        let denied: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
+            published,
+            outsider,
+            protocol::CANIC_OBSERVABILITY,
+            (request,),
+        );
+        assert!(
+            matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+        );
+    }
+    fixture.pic.advance_time(Duration::from_secs(301));
+    fixture.pic.tick();
+    let stale = query(published, PublicMetricFamily::Application);
+    assert_eq!(stale.state, PublicSnapshotState::Stale);
+    assert_eq!(stale.sampled_at_ns, snapshot.sampled_at_ns);
+    assert_eq!(stale.metrics.entries, snapshot.metrics.entries);
+}
+
 #[test]
 fn exact_cycles_and_runtime_metrics_require_controller() {
     let fixture = install_lifecycle_boundary_fixture();
@@ -58,7 +149,7 @@ fn exact_cycles_and_runtime_metrics_require_controller() {
             let denied: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
                 canister_id,
                 fixture.root,
-                protocol::CANIC_STATUS,
+                protocol::CANIC_OBSERVABILITY,
                 (request.clone(),),
             );
             assert!(matches!(
@@ -70,7 +161,11 @@ fn exact_cycles_and_runtime_metrics_require_controller() {
 
             let accepted: Result<RoleStatusResponse, Error> = fixture
                 .pic
-                .query_candid(canister_id, protocol::CANIC_STATUS, (request.clone(),))
+                .query_candid(
+                    canister_id,
+                    protocol::CANIC_OBSERVABILITY,
+                    (request.clone(),),
+                )
                 .expect("controller observability transport");
             let accepted = accepted.expect("controller observability application result");
             assert!(matches!(
@@ -420,13 +515,13 @@ fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus 
     let result: Result<RoleStatusResponse, canic::Error> = pic
         .query_candid(
             canister_id,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_OBSERVABILITY,
             (RoleStatusRequest::Runtime,),
         )
         .expect("query runtime status");
     let RoleStatusResponse::Runtime(status) = result.expect("runtime status application result")
     else {
-        panic!("canic_status returned a non-Runtime response")
+        panic!("canic_observability returned a non-Runtime response")
     };
     *status
 }
@@ -482,7 +577,7 @@ fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     let response: Result<RoleStatusResponse, Error> = pic
         .query_candid(
             canister_id,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_OBSERVABILITY,
             (RoleStatusRequest::Metrics(MetricsStatusRequest {
                 kind: MetricsKind::Runtime,
                 page: PageRequest {
@@ -495,7 +590,7 @@ fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
 
     let RoleStatusResponse::Metrics(page) = response.expect("runtime metrics application result")
     else {
-        panic!("canic_status returned a non-Metrics response")
+        panic!("canic_observability returned a non-Metrics response")
     };
     page.entries
 }

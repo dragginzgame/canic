@@ -30,7 +30,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.alpha]
 kind = "canister"

@@ -98,8 +98,10 @@ role = "app"
 
 Use `canic::build!("../canic.toml")` from `build.rs` and `canic::start!()` from
 `lib.rs`. The `app` value must match `[app].name` in the selected
-`canic.toml`. `role = "root"` selects the root lifecycle and root endpoint
-bundle; ordinary roles select the non-root lifecycle and endpoint bundle.
+`canic.toml`. These are application canisters. Fleet Subnet Root is owned by
+`canic-fleet-root` and built automatically from the App configuration; its
+`[roles.root]` declaration has no `package`. Root has no application hooks or
+custom endpoint surface.
 
 ## Inter-Canister Calls
 

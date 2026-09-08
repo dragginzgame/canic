@@ -511,7 +511,7 @@ fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     let response: Result<RoleStatusResponse, Error> = pic
         .query_candid(
             canister_id,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_OBSERVABILITY,
             (RoleStatusRequest::Metrics(MetricsStatusRequest {
                 kind: MetricsKind::Runtime,
                 page: PageRequest {

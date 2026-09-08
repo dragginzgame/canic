@@ -7,7 +7,7 @@ Reviewed: 2026-09-06
 - Deferred and unnumbered. No investigation, implementation or release is
   authorized by this note.
 - Priority: one of the maintainer's two most pressing ideas, alongside
-  [canonical infrastructure crates](../canonical-fleet-subnet-root/design.md).
+  [canonical infrastructure crates](../../0.110-fleet-runtime-contraction/0.110-design.md#canonical-fleet-subnet-root-batch-cr1).
   Its release position remains unassigned.
 - Retained need: separate application blob-storage semantics from Canic's
   infrastructure lifecycle responsibilities.

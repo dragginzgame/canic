@@ -118,12 +118,13 @@ macro_rules! __canic_build_internal {
         let role_id: $crate::__internal::core::ids::CanisterRole = role_name.to_string().into();
         let mut app_name = __canic_app_name.as_str();
         let __canic_wasm_store_special = role_name == "wasm_store";
-        if __canic_wasm_store_special
+        let __canic_infrastructure = __canic_wasm_store_special || role_name == "root";
+        if __canic_infrastructure
             && !$crate::__build::config_declares_role($cfg.as_ref(), app_name, role_name)
         {
             app_name = $crate::__build::config_app_id($cfg.as_ref());
         }
-        if !__canic_wasm_store_special
+        if !__canic_infrastructure
             && !$crate::__build::config_declares_role($cfg.as_ref(), app_name, role_name)
         {
             panic!(

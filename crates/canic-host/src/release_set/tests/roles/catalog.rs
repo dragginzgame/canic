@@ -20,7 +20,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "canisters/root"
 
 [roles.user_hub]
 kind = "canister"
@@ -88,7 +87,6 @@ init_mode = "enabled"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

@@ -321,7 +321,7 @@ fn query_registry(
             icp,
             binding,
             coordinator,
-            canic_core::protocol::CANIC_COORDINATOR_STATUS,
+            canic_core::protocol::CANIC_COORDINATOR_REGISTRY,
             &RemoteCoordinatorStatusRequest::Registry,
         )?;
     match response {
@@ -340,7 +340,7 @@ fn query_coordinator(
 ) -> Result<RemoteCoordinatorFundingStatus, CyclesCommandError> {
     let output = icp.canister_query_arg_output_with_candid(
         &coordinator.to_text(),
-        canic_core::protocol::CANIC_COORDINATOR_STATUS,
+        canic_core::protocol::CANIC_OBSERVABILITY,
         "(variant { Funding })",
         Some("hex"),
         Some(binding.candid_path()),

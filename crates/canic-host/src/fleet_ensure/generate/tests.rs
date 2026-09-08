@@ -1834,6 +1834,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
 
     write_icp("stopped");
     let mut allocated_fresh_state = empty_fresh_state;
+    allocated_fresh_state.fleet.clone_from(&fresh.desired.fleet);
     allocated_fresh_state
         .pending_principals
         .insert("root-0".to_string(), fleet_root.clone());
@@ -1853,6 +1854,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(
         crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
             crate::fleet_ensure::policy::RootStartPlanInput {
+                state: &allocated_fresh_state,
                 authority: None,
                 created_at_time: 1,
                 desired: &fresh.desired,
@@ -1863,6 +1865,36 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         )
         .is_err()
     );
+    let mut running = management;
+    for observed in running.roots.values_mut() {
+        observed.live.status = CanisterRuntimeStatus::Running;
+    }
+    let retained_root_check = |state: &FleetEnsureStateRecord| {
+        crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
+            crate::fleet_ensure::policy::RootStartPlanInput {
+                state,
+                authority: None,
+                created_at_time: 1,
+                desired: &fresh.desired,
+                desired_sha256: "retained-symbolic-root",
+                observation: &running,
+                requested_fleet: &fresh.desired.fleet,
+            },
+        )
+    };
+    assert!(
+        retained_root_check(&allocated_fresh_state)
+            .expect("running symbolic Root uses retained identity")
+            .is_none()
+    );
+    let mut wrong_state = allocated_fresh_state.clone();
+    for principal in wrong_state.pending_principals.values_mut() {
+        *principal = principal_text(98);
+    }
+    assert!(matches!(
+        retained_root_check(&wrong_state),
+        Err(crate::fleet_ensure::policy::EnsurePolicyError::RootManagementAuthorityMismatch { .. })
+    ));
     assert!(matches!(
         initialize_fresh_estate_seed(&FreshEstateSeedRequest {
             cycles_ledger: &mainnet_cycles_ledger(),
@@ -2482,6 +2514,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             store_module_hash: store_hash,
         },
     );
+    let management_state = read_state(&stopped_paths, &stopped_desired.fleet).unwrap();
     let root_management = RootManagementObservation {
         operator_cycles: 500_000_000_000_000,
         roots: BTreeMap::from([(
@@ -2505,6 +2538,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(matches!(
         crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
             crate::fleet_ensure::policy::RootStartPlanInput {
+                state: &management_state,
                 authority: None,
                 created_at_time: 1_800_000_000_000_000_150,
                 desired: &stopped_desired,
@@ -2526,6 +2560,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(matches!(
         crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
             crate::fleet_ensure::policy::RootStartPlanInput {
+                state: &management_state,
                 authority: Some(&wrong_authority),
                 created_at_time: 1_800_000_000_000_000_150,
                 desired: &stopped_desired,
@@ -2547,6 +2582,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(matches!(
         crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
             crate::fleet_ensure::policy::RootStartPlanInput {
+                state: &management_state,
                 authority: Some(&wrong_fleet_identity),
                 created_at_time: 1_800_000_000_000_000_150,
                 desired: &stopped_desired,
@@ -2564,6 +2600,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     ));
     crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
         crate::fleet_ensure::policy::RootStartPlanInput {
+            state: &management_state,
             authority: Some(&stopped_authority),
             created_at_time: 1_800_000_000_000_000_150,
             desired: &stopped_desired,
@@ -2596,6 +2633,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         }
         let error = crate::fleet_ensure::policy::compile_root_start_prerequisite_plan(
             crate::fleet_ensure::policy::RootStartPlanInput {
+                state: &management_state,
                 authority: Some(&stopped_authority),
                 created_at_time: 1_800_000_000_000_000_150,
                 desired: &stopped_desired,
@@ -3784,7 +3822,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -4401,7 +4438,7 @@ fn write_fake_icp_with_status_projection(
             ),
         ));
         format!(
-            r#"if [ "$1" = "canister" ] && [ "$2" = "call" ] && [ "$3" = "{canister}" ] && [ "$4" = "canic_status" ]; then
+            r#"if [ "$1" = "canister" ] && [ "$2" = "call" ] && [ "$3" = "{canister}" ] && [ "$4" = "canic_observability" ]; then
   printf '%s\n' '{response}'
   exit 0
 fi

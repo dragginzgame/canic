@@ -18,6 +18,14 @@ Use the same `canic` version in normal and build dependencies. Each canister
 package declares its App and role through `[package.metadata.canic]`; the App
 name must match the selected `canic.toml`.
 
+Fleet Subnet Root is a Canic-owned infrastructure canister. Its canonical
+entrypoint has no application lifecycle participant or user hook. Applications
+declare `[roles.root]` without a package path; Canic derives its runtime features
+from the App configuration.
+
+See [public status and protected observability](public-observability.md) for
+caller access, optional aggregate publication and cached snapshot semantics.
+
 ## Boundary
 
 The facade owns framework lifecycle invariants, not application state

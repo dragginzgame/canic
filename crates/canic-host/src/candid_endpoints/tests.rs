@@ -4,7 +4,7 @@ const CANDID: &str = r#"
 type Nested = record { field : text };
 type Status = variant { Readiness };
 service : (record { init : text }) -> {
-  canic_status : (Status) -> (bool) query;
+  canic_observability : (Status) -> (bool) query;
   "icrc10-supported-standards" : () -> (vec record { text; text }) query;
   canic_update : (Nested) -> (
   variant { Ok; Err : text },
@@ -16,10 +16,10 @@ service : (record { init : text }) -> {
 #[test]
 fn parses_candid_service_endpoints() {
     let endpoints = parse_candid_service_endpoints(CANDID).expect("parse endpoints");
-    let canic_status = endpoints
+    let canic_observability = endpoints
         .iter()
-        .find(|endpoint| endpoint.name == "canic_status")
-        .expect("canic_status endpoint");
+        .find(|endpoint| endpoint.name == "canic_observability")
+        .expect("canic_observability endpoint");
     let icrc10 = endpoints
         .iter()
         .find(|endpoint| endpoint.name == "icrc10-supported-standards")
@@ -31,10 +31,10 @@ fn parses_candid_service_endpoints() {
 
     assert_eq!(endpoints.len(), 3);
     assert_eq!(
-        canic_status.candid,
-        "canic_status : (Status) -> (bool) query;"
+        canic_observability.candid,
+        "canic_observability : (Status) -> (bool) query;"
     );
-    assert_eq!(canic_status.modes, vec![EndpointMode::Query]);
+    assert_eq!(canic_observability.modes, vec![EndpointMode::Query]);
     assert_eq!(
         icrc10.candid,
         "\"icrc10-supported-standards\" : () -> (vec record { text; text }) query;"

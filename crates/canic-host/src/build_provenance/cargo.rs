@@ -7,7 +7,7 @@ use canic_core::cdk::utils::hash::sha256_hex;
 use crate::{cargo_command, evidence_envelope::file_input_fingerprint};
 
 use super::{
-    inputs::cargo_config_fingerprints,
+    inputs::{build_cargo_lock_path, cargo_config_fingerprints},
     model::{BuildProvenanceRequest, BuildScriptInputStateV1, CargoProvenanceV1, WASM_TARGET},
 };
 
@@ -17,7 +17,7 @@ pub(super) fn cargo_provenance(
 ) -> Result<CargoProvenanceV1, Box<dyn std::error::Error>> {
     let manifest_source = fs::read_to_string(package_manifest)?;
     let manifest = toml::from_str::<TomlValue>(&manifest_source)?;
-    let cargo_lock_path = request.workspace_root.join("Cargo.lock");
+    let cargo_lock_path = build_cargo_lock_path(request, package_manifest);
     let package_metadata_app = required_manifest_str(
         &manifest,
         &["package", "metadata", "canic", "app"],

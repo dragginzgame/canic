@@ -25,12 +25,69 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from published `v0.110.8` at
-`3e8c84cbd4e271d0d97ed2669524b008fcac7c73`. Its governed marker records the
+Current development begins from maintainer-pushed `v0.110.9`. Its governed marker records the
 validated pre-version source below; immutable details are in
 [the 0.110 changelog](../changelog/0.110.md). Post-release work is retained
 in the open changelog draft until it forms a coherent batch. Source-development truth
 comes from Git and the working tree.
+
+## Active Read-Surface Separation Batch
+
+The maintainer accepted separating public status from protected observability,
+with optional aggregate metrics disabled by default. The open 0.110.10 batch
+now includes this implementation. Public snapshots expose explicit sampling
+and staleness, bounded aggregate shard occupancy, cycles, performance and
+application-supplied values; controller/Root authority stays independent of
+publication and player admission. Authentication and durable-operation reads
+retain their owning contracts on separate methods. Implementation, interface
+propagation, cleanup and targeted qualification are complete. Public snapshot
+and observer PocketIC tests (6), native authentication/session tests (7), and
+the Coordinator Registry/replay case pass, including fresh infrastructure
+activation. Canonical Wasm builds, Candid equality, focused host/CLI/policy
+checks, affected-package Clippy and formatting pass. The
+[read-surface handoff](../audits/reports/2026-09/2026-09-07/public-observability.md)
+records evidence, metric semantics and downstream adoption requirements.
+The combined canonical Root, retained Fleet and read-surface batch is ready
+for release approval, with the open 0.110.10 changelog ready; package versions
+remain 0.110.9. The maintainer-selected release gate and publication remain.
+Toko Miner binding/UI adoption and live qualification remain downstream work.
+CANIC-141 stays deferred. No sibling edits, compatibility aliases, publication
+or version transaction were made.
+
+## Active Retained Fleet Feedback Batch
+
+The maintainer selected CANIC-143, CANIC-144 and the CANIC-125 follow-up after
+CR1. Work extends the open 0.110.10 draft: bind native pool funding to its
+reviewed reset lifecycle, resolve symbolic Root prerequisites from existing
+retained identity, and size bounded provisioning waits from initial child
+demand. Existing production-adapter recovery journeys own qualification.
+The corrections are complete and the combined CR1/RF1 draft is ready for
+release approval. All 150 focused Fleet host tests and affected-package
+Clippy pass. Installed-import funding/reset recovery, conservation and replay
+pass in 310.66s; generated symbolic-seed restart through reinstall and replay
+passes in 393.03s. Formatting and document checks pass. The
+[feedback handoff](../audits/reports/2026-09/2026-09-07/retained-fleet-feedback.md)
+records final evidence and downstream qualification. CANIC-141 stays deferred.
+The maintainer-selected release gate/publication and downstream live timing
+qualification remain; no new recovery mode, compatibility lane or sibling edit.
+
+## Active Canonical Root Batch
+
+The maintainer reports 0.110.9 pushed and selected canonical Fleet Subnet Root
+as the next hard-cut batch. CR1 in the [0.110 tracker](../design/0.110-fleet-runtime-contraction/status.md)
+owns canonical Root packaging/builds, removal of application-owned Root hooks
+and package selection, the Fleet Store crate rename and complete focused
+qualification/propagation. CR1 is complete and ready for release approval;
+the open 0.110.10 changelog covers the complete batch while package versions
+remain 0.110.9. Fresh generated Fleet recovery and both effect-free replays
+pass in 12m00s, including a 4m03s cold artifact build. Generated reinstall,
+lost-response recovery, conservation and replay pass in 8m16s. Packaged Root
+building, focused config/host/CLI/interface checks, affected-package Clippy
+and formatting pass. The [CR1 handoff](../audits/reports/2026-09/2026-09-07/canonical-fleet-root.md)
+records the final evidence and adoption contract. No implementation blocker
+remains within CR1; the maintainer-selected release gate and publication remain.
+CANIC-141 and downstream live qualification remain deferred. The sections below
+retain the preceding release's implementation evidence.
 
 ## Active Test Throughput Batch
 

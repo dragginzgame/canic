@@ -31,7 +31,6 @@ name = "ensure_protocol_test"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.alpha]
 kind = "canister"

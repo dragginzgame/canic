@@ -23,7 +23,6 @@ name = "toko"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.user_hub]
 kind = "canister"
@@ -304,7 +303,7 @@ fn spec_hash_binds_package_limits_pools_and_child_policy() {
         .roles
         .get_mut("project_instance")
         .expect("project instance declaration")
-        .package = "renamed_project_instance".to_string();
+        .package = Some("renamed_project_instance".to_string());
 
     let mut limits = config.clone();
     limits
@@ -566,7 +565,7 @@ fn canonical_encoding_rejects_oversized_role_package_identity() {
         .roles
         .get_mut("project_hub")
         .expect("project hub declaration")
-        .package = "x".repeat(MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES);
+        .package = Some("x".repeat(MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES));
 
     std::assert_matches!(
         ComponentTopology::compile(&config),

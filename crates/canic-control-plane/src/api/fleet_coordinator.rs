@@ -52,6 +52,25 @@ use ic_cdk::api::{canister_self, is_controller, msg_caller};
 
 pub struct FleetCoordinatorApi;
 
+/// Existing Registry authority exposed as one endpoint-wide access predicate.
+pub struct FleetCoordinatorRegistryCallerPredicate;
+
+#[async_trait::async_trait]
+impl canic_core::access::expr::AsyncAccessPredicate for FleetCoordinatorRegistryCallerPredicate {
+    fn name(&self) -> &'static str {
+        "fleet_coordinator::registry_caller"
+    }
+
+    async fn eval(
+        &self,
+        context: &canic_core::access::expr::AccessContext,
+    ) -> Result<(), canic_core::access::AccessError> {
+        let caller = context.transport_caller();
+        FleetCoordinatorWorkflow::authorize_registry_caller(caller, is_controller(&caller))
+            .map_err(canic_core::access::AccessError::Internal)
+    }
+}
+
 impl FleetCoordinatorApi {
     /// Authorize an exact joining Root before command workflow dispatch.
     pub fn authorize_calling_root_snapshot() -> Result<(), Error> {
@@ -61,13 +80,6 @@ impl FleetCoordinatorApi {
     /// Authorize the exact registered Root before any Coordinator treasury observation.
     pub fn authorize_calling_root_funding() -> Result<(), Error> {
         FleetCoordinatorWorkflow::authorize_root_funding_caller(msg_caller()).map_err(Into::into)
-    }
-
-    /// Authorize a controller or exact snapshot Root before status workflow dispatch.
-    pub fn authorize_calling_registry_status() -> Result<(), Error> {
-        let caller = msg_caller();
-        FleetCoordinatorWorkflow::authorize_registry_caller(caller, is_controller(&caller))
-            .map_err(Into::into)
     }
 
     /// Restore memory invariants and synchronously commit fresh genesis during install.

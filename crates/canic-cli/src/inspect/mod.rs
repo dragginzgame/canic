@@ -15,14 +15,12 @@ use crate::{
     version_text,
 };
 use candid::{CandidType, Deserialize, Principal, types::principal::PrincipalError};
-#[cfg(test)]
-use canic_core::protocol::CANIC_ROOT_STATUS;
 use canic_core::{
     dto::runtime::{
         CanicRuntimeStatus, RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeFeatureStatus,
         RuntimeStatus,
     },
-    protocol::status_endpoint_for_role,
+    protocol::CANIC_OBSERVABILITY,
 };
 use canic_host::{
     fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
@@ -336,7 +334,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
     if let Some(root) = &target.icp_root {
         icp = icp.with_cwd(root);
     }
-    let endpoint = status_endpoint_for_role(&target.protocol_binding.binding().role);
+    let endpoint = CANIC_OBSERVABILITY;
     let output = icp.canister_query_arg_output_with_candid(
         &target.canister_id,
         endpoint,
@@ -808,7 +806,7 @@ mod tests {
 
         assert!(rendered.contains("source: cli_arg"));
         assert!(rendered.contains("source: runtime_observed"));
-        assert!(rendered.contains("endpoint: canic_root_status"));
+        assert!(rendered.contains("endpoint: canic_observability"));
         assert!(rendered.contains("response_format: candid"));
         assert!(rendered.contains("status: ok"));
         assert!(rendered.contains("runtime_status: ok"));
@@ -843,7 +841,7 @@ mod tests {
         assert_eq!(value["schema_version"], INSPECT_SCHEMA_VERSION);
         assert_eq!(value["command"], "canic inspect canister");
         assert_eq!(value["target_resolution"]["source"], "cli_arg");
-        assert_eq!(value["endpoint"], CANIC_ROOT_STATUS);
+        assert_eq!(value["endpoint"], CANIC_OBSERVABILITY);
         assert_eq!(value["status"], "ok");
         assert_eq!(value["runtime_status"]["source"], "runtime_observed");
         assert_eq!(value["runtime_status"]["status"]["status"], "ok");
@@ -926,7 +924,7 @@ mod tests {
                 environment: "local".to_string(),
                 source: InspectSource::CliArg,
             },
-            endpoint: CANIC_ROOT_STATUS,
+            endpoint: CANIC_OBSERVABILITY,
             status: RuntimeStatus::Ok,
             runtime_status: RuntimeStatusPayload {
                 source: RUNTIME_OBSERVED_SOURCE,

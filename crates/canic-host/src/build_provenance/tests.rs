@@ -24,6 +24,32 @@ fn build_provenance_schema_is_stable() {
 }
 
 #[test]
+fn canonical_root_provenance_records_its_build_lockfile() {
+    let root = temp_dir("canic-root-provenance");
+    write_sample_workspace(&root, "demo", "app");
+    let output = write_sample_artifacts(&root, "root");
+    let mut request = sample_request(&root, output);
+    request.role = "root".to_string();
+    let manifest = root.join("apps/demo/.canic/generated/canic-fleet-root/Cargo.toml");
+    fs::create_dir_all(manifest.parent().unwrap()).unwrap();
+    fs::write(&manifest, "[package]\nname = 'canic-fleet-root'\n").unwrap();
+    let lock = manifest.with_file_name("Cargo.lock");
+    fs::write(&lock, "# exact Root graph\n").unwrap();
+    let inputs = inputs::build_input_fingerprints(&request, &manifest).unwrap();
+    let recorded = inputs
+        .iter()
+        .find(|input| input.kind == "cargo_lock")
+        .unwrap();
+    assert_eq!(
+        recorded.sha256,
+        Some(canic_core::cdk::utils::hash::sha256_hex(
+            &fs::read(&lock).unwrap()
+        ))
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn unknown_source_provenance_is_explicit() {
     let root = temp_dir("canic-build-provenance-no-git");
     fs::create_dir_all(&root).expect("create root");
@@ -327,7 +353,6 @@ name = "{app}"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.{role}]
 kind = "canister"

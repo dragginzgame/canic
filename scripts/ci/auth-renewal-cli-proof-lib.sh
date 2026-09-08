@@ -29,7 +29,6 @@ name = "downstream"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -67,7 +66,7 @@ service : {
   get_blob_storage_status : (record { sync_gateway_principals : bool }) -> () query;
   "_immutableObjectStorageUpdateGatewayPrincipals" : () -> ();
   "_immutableObjectStorageFundFromProjectCycles" : (nat) -> ();
-  canic_status : (variant { ActiveDelegationProof }) -> () query;
+  canic_auth_status : (variant { ActiveDelegationProof }) -> () query;
 }
 EOF
 }

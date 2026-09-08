@@ -188,7 +188,7 @@ fn observe_store(
         icp,
         &binding,
         store_canister,
-        protocol::CANIC_WASM_STORE_STATUS,
+        protocol::CANIC_OBSERVABILITY,
         &request,
     )?;
     let StoreStatusResponseFragment::CycleHistory(page) = response;
@@ -220,7 +220,7 @@ fn observe_root(
         icp,
         &binding,
         root_canister,
-        protocol::CANIC_ROOT_STATUS,
+        protocol::CANIC_OBSERVABILITY,
         &request,
     )?;
     Ok(match response {

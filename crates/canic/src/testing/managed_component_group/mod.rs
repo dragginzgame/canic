@@ -48,7 +48,10 @@ use crate::{
         FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
         FleetSubnetRootLimits, ManagedCanisterBinding, SubnetId,
     },
-    protocol::{CANIC_COMMAND, CANIC_STATUS},
+    protocol::{
+        CANIC_ADMISSION_STATUS, CANIC_COMMAND, CANIC_CONTROL_STATUS, CANIC_OBSERVABILITY,
+        CANIC_PUBLIC_STATUS,
+    },
 };
 use candid::{CandidType, Deserialize, Principal, encode_args, encode_one};
 use canic_core::{
@@ -195,7 +198,7 @@ impl ManagedComponentGroupFixture {
         let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
             target,
             self.root(),
-            CANIC_STATUS,
+            CANIC_ADMISSION_STATUS,
             (ManagedStatusRequest::Admission(PageRequest {
                 limit: DEFAULT_STATUS_PAGE_LIMIT,
                 offset: 0,
@@ -265,7 +268,7 @@ impl ManagedComponentGroupFixture {
         let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
             target,
             self.root(),
-            CANIC_STATUS,
+            CANIC_OBSERVABILITY,
             (ManagedStatusRequest::Binding,),
         )?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
@@ -286,7 +289,7 @@ impl ManagedComponentGroupFixture {
         let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
             target,
             self.root(),
-            CANIC_STATUS,
+            CANIC_CONTROL_STATUS,
             (ManagedStatusRequest::Operation(OperationStatusRequest {
                 operation_id: node.directory.operation_id,
             }),),
@@ -309,7 +312,7 @@ impl ManagedComponentGroupFixture {
         let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
             target,
             self.root(),
-            CANIC_STATUS,
+            CANIC_OBSERVABILITY,
             (ManagedStatusRequest::Runtime,),
         )?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
@@ -1223,8 +1226,11 @@ fn overview(
     pic: &PocketIc,
     target: Principal,
 ) -> Result<RoleOverviewResponse, ManagedComponentGroupQualificationError> {
-    let response: Result<ManagedStatusResponse, Error> =
-        pic.query_candid(target, CANIC_STATUS, (ManagedStatusRequest::Overview,))?;
+    let response: Result<ManagedStatusResponse, Error> = pic.query_candid(
+        target,
+        CANIC_PUBLIC_STATUS,
+        (ManagedStatusRequest::Overview,),
+    )?;
     let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
     let ManagedStatusResponse::Overview(status) = response else {
         return Err(ManagedComponentGroupQualificationError::UnexpectedResponse(

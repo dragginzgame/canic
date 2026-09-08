@@ -11,7 +11,7 @@ This crate exists to hold the shared control-plane runtime pieces used by:
 
 - the `canic` facade when `control-plane` is enabled
 - the canonical `canic-fleet-coordinator` crate
-- the canonical `canic-wasm-store` crate
+- the canonical `canic-fleet-wasm-store` crate
 - internal root/bootstrap orchestration support
 
 ## Feature Contract

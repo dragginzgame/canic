@@ -11,7 +11,6 @@ Supporting implementation evidence does not belong here.
 
 ## Current Topics
 
-- `canonical-fleet-subnet-root/`
 - `cross-subnet-data-transport-groundwork/`
 - `declarative-authentication-profiles/`
 - `demand-driven-canister-pool-maintenance/`
@@ -28,14 +27,14 @@ Supporting implementation evidence does not belong here.
 
 The two most pressing ideas, identified by the maintainer on 2026-09-06, are:
 
-1. [Canonical infrastructure crates](canonical-fleet-subnet-root/design.md):
+1. [Canonical infrastructure crates](../0.110-fleet-runtime-contraction/0.110-design.md#canonical-fleet-subnet-root-batch-cr1):
    give Root one Canic-owned entrypoint and consistent Fleet crate names.
 2. [Standalone blob extraction](standalone-blob-service-extraction/design.md):
    remove application blob-storage semantics from Canic infrastructure.
 
-These take priority over the other deferred ideas. Release positions and a
-complete implementation sequence remain unassigned; current release work and
-accepted roadmap boundaries still apply.
+Canonical infrastructure was promoted into the current 0.110 CR1 batch on
+2026-09-07 at the maintainer’s request. Standalone blob extraction remains
+deferred; the remaining ideas have no release position.
 
 ## Review Disposition
 

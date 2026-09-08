@@ -88,6 +88,7 @@ impl CanisterArtifactBuilder {
                 require_default_build_options(options, WASM_STORE_ROLE)?;
                 return build_bootstrap_wasm_store_artifact(context, &self.toolchain);
             }
+            CanisterArtifactSource::Root => require_default_build_options(options, "root")?,
             CanisterArtifactSource::DeclaredRole => {}
         }
 
@@ -103,6 +104,7 @@ impl CanisterArtifactBuilder {
         roles: &[String],
     ) -> Result<Vec<ConfiguredCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
         self.toolchain.require_profile(context.profile)?;
+        let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
         let config = AppConfigSnapshot::load(&context.config_path)?;
         let specs = resolve_canister_artifact_build_specs(context, config.model(), roles)?;
         let outputs = build_workspace_canister_artifacts_from_specs_with_toolchain(
@@ -243,7 +245,6 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
     if specs.is_empty() {
         return Ok(Vec::new());
     }
-    let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
     let embed_candid = should_embed_candid_metadata(context.build_network);
 
     for spec in specs {
@@ -877,7 +878,7 @@ mod tests {
     }
 
     #[test]
-    fn repository_configured_specs_share_workspace_build_authority() {
+    fn configured_specs_bind_canonical_root_and_application_workspace() {
         let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let config_path = workspace_root.join("apps/demo/canic.toml");
         let config = AppConfigSnapshot::load(&config_path).expect("load demo App config");
@@ -904,12 +905,21 @@ mod tests {
                 .iter()
                 .all(|spec| spec.package_version == env!("CARGO_PKG_VERSION"))
         );
-        assert!(specs.iter().all(|spec| {
-            spec.cargo_workspace_root
-                .canonicalize()
-                .expect("canonical Cargo workspace")
-                == workspace_root.canonicalize().expect("canonical repository")
-        }));
+        for spec in &specs {
+            let expected_workspace = if spec.role == "root" {
+                assert_eq!(spec.package_name, crate::canonical_root::PACKAGE);
+                crate::canonical_root::manifest_path(&context.config_path)
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+            } else {
+                workspace_root.clone()
+            };
+            assert_eq!(
+                spec.cargo_workspace_root.canonicalize().unwrap(),
+                expected_workspace.canonicalize().unwrap()
+            );
+        }
         let app = specs
             .iter()
             .find(|spec| spec.role == "app")

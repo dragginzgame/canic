@@ -148,7 +148,7 @@ pub(super) fn verification_rows(
                     .to_string(),
         },
         VerificationRow {
-            command: "canic_status(Metrics(MetricsStatusRequest { kind=Runtime, page={ limit=512, offset=0 } }))"
+            command: "canic_observability(Metrics(MetricsStatusRequest { kind=Runtime, page={ limit=512, offset=0 } }))"
                 .to_string(),
             status: STATUS_PASS.to_string(),
             notes: format!("Update scenarios were sampled before/after through persisted perf rows; the install scenario groups retained bootstrap checkpoints. Normalized rows are under `artifacts/{artifacts_dir_name}/perf-rows.json`."),

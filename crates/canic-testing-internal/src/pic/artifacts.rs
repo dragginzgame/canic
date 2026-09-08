@@ -1,4 +1,6 @@
 use canic_core::ids::BuildNetwork;
+#[cfg(feature = "pocketic-fixtures")]
+use canic_host::role_contract::{PackageValidationMode, RolePackageValidation};
 use ic_testkit::artifacts::{
     ArtifactCacheMaintenance, ArtifactCachePrunePolicy, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
@@ -30,6 +32,44 @@ const INTERNAL_TEST_WASM_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_AGE: Duration = Duration::from_hours(168);
 const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
+
+/// Bind external artifact reuse to the actual configured canonical Root Cargo graph.
+#[cfg(feature = "pocketic-fixtures")]
+pub(super) fn with_canonical_root_cargo_inputs(
+    cache: ArtifactCacheSpec,
+    config_path: &Path,
+    target_dir: &Path,
+    profile: CanicWasmBuildProfile,
+    environment: &[(&str, &str)],
+) -> ArtifactCacheSpec {
+    let config = canic_host::release_set::AppConfigSnapshot::load(config_path)
+        .expect("canonical Root cache configuration");
+    let validation = canic_host::role_contract::validate_declared_role_package(
+        config_path,
+        config.model(),
+        &canic_core::ids::CanisterRole::ROOT,
+        PackageValidationMode::Build,
+    );
+    let RolePackageValidation::Supported(evidence) = validation else {
+        panic!("canonical Root cache package must resolve: {validation:?}");
+    };
+    let build = WasmBuildSpec::new(
+        &evidence.cargo_workspace_root,
+        target_dir,
+        &[evidence.role_package_name.as_str()],
+        profile.target_dir_name(),
+    )
+    .with_cargo_profile_args(
+        profile
+            .cargo_profile_args()
+            .iter()
+            .copied()
+            .chain(["--locked"]),
+    )
+    .with_extra_env(environment.iter().copied());
+    let inputs = resolve_cargo_build_inputs(&build).expect("canonical Root cache Cargo inputs");
+    cache.with_cargo_build_inputs("canonical-root-cargo", &build, &inputs)
+}
 
 pub(super) const INTERNAL_TEST_RELEASE_BUILD_ID: (&str, &str) = (
     canic_core::ids::RELEASE_BUILD_ID_ENV,

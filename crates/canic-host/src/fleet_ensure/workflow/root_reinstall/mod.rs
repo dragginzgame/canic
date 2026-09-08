@@ -33,6 +33,7 @@ pub(super) fn verify_before_apply<P: EnsurePlatform>(
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
     let current = root_reinstall::compile(
         RootStartPlanInput {
+            state,
             authority: None,
             created_at_time: plan.planned_at_time,
             desired,

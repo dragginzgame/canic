@@ -11,7 +11,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.store]
 kind = "canister"

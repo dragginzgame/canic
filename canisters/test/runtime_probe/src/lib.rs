@@ -274,4 +274,18 @@ fn application_timer_identity(name: &str) -> ic_timers::TimerIdentity {
         .expect("valid native application timer identity")
 }
 
+/// Publish bounded synthetic aggregates through the trusted local API.
+#[canic_update(requires(caller::is_controller()))]
+async fn sample_public_metrics() -> Result<(), canic::Error> {
+    canic::api::public_status::PublicStatusApi::sample_metrics()?;
+    canic::api::public_status::PublicStatusApi::record_application_metrics(vec![
+        canic::dto::public_status::PublicMetric {
+            name: "assigned_items".to_string(),
+            canister_id: Some(ic_cdk::api::canister_self()),
+            value: 7,
+            unit: "assignments".to_string(),
+        },
+    ])
+}
+
 canic::finish!();

@@ -17,6 +17,12 @@ Evidence envelopes are designed for transport and comparison in CI. They
 preserve the underlying report and its input fingerprints without claiming
 that a deployment mutation happened.
 
+Fleet infrastructure uses `canic-fleet-coordinator`, `canic-fleet-root` and
+`canic-fleet-wasm-store`. Root builds bind the exact App configuration and
+required capabilities. The host materializes the canonical Root entrypoint and
+an exact dependency manifest, including for packaged consumers without a Root
+source package. It validates that Cargo graph before finalizing the artifact.
+
 ## Boundary
 
 Build provenance is not runtime attestation. Evidence and policy commands do

@@ -303,7 +303,11 @@ fn build_outputs(
     release_build_id: ReleaseBuildId,
 ) -> Vec<CanicInfrastructureArtifactBuildOutput> {
     [
-        ("canic-wasm-store", CanicInfrastructureRole::WasmStore, 3),
+        (
+            "canic-fleet-wasm-store",
+            CanicInfrastructureRole::WasmStore,
+            3,
+        ),
         (
             "canic-control-plane",
             CanicInfrastructureRole::FleetCoordinator,

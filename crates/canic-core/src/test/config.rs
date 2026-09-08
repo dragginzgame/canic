@@ -74,7 +74,7 @@ impl ConfigTestBuilder {
             role.clone(),
             RoleDeclaration {
                 kind: declaration_kind,
-                package: role.as_ref().to_string(),
+                package: (!role.is_root()).then(|| role.as_ref().to_string()),
                 fleet_admission: false,
             },
         );

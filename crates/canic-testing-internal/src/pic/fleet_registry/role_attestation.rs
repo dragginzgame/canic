@@ -20,7 +20,7 @@ use canic::{
         rpc::RootRequestMetadata,
     },
     ids::{CanisterRole, ComponentBinding},
-    protocol::{CANIC_ROOT_COMMAND, CANIC_ROOT_STATUS, CANIC_STATUS},
+    protocol::CANIC_ROOT_COMMAND,
 };
 use ic_testkit::pic::{CandidCallExt, PocketIc};
 
@@ -285,7 +285,7 @@ fn issue_requested_role_attestation(
         .query_candid_as(
             root,
             issuer.canister_id,
-            CANIC_ROOT_STATUS,
+            canic_core::protocol::CANIC_ROOT_AUTH_STATUS,
             (RootStatusRequest::RoleAttestation(
                 RoleAttestationGetRequest {
                     payload_hash: prepared.payload_hash,
@@ -392,7 +392,7 @@ fn query_metric_entries(
         .query_candid_as(
             canister,
             caller,
-            CANIC_STATUS,
+            canic_core::protocol::CANIC_OBSERVABILITY,
             (ManagedStatusRequest::Metrics(MetricsStatusRequest {
                 kind,
                 page: PageRequest {

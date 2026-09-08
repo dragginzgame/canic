@@ -16,10 +16,10 @@ use crate::{
         CurrentFleetProtocolAction, CycleConservation, DesiredCanisterKind, DesiredFleet,
         DesiredFleetArtifacts, DesiredFleetBootstrapRoot, DesiredPresence, EnsureAction,
         EstateFundingDomainPlan, EstatePoolAssetLifecycle, FLEET_ENSURE_SCHEMA_VERSION,
-        FleetEnsurePlan, FleetEnsurePlanScope, FleetObservation, InstallMode, LiveCanister,
-        MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
-        RetainedRootStartAuthorityRecord, RootManagementBinding, RootManagementObservation,
-        RootOwnedCanisterLifecycle,
+        FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureStateRecord, FleetObservation,
+        InstallMode, LiveCanister, MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
+        PoolFundingAuthority, RetainedRootStartAuthorityRecord, RootManagementBinding,
+        RootManagementObservation, RootOwnedCanisterLifecycle,
     },
 };
 use candid::Principal;
@@ -838,7 +838,10 @@ fn append_pool_reconciliation_funding(
         accumulator.canisters[plan_index]
             .actions
             .push(EnsureAction::Fund {
-                pool_root: Some(root.clone()),
+                pool_funding: Some(PoolFundingAuthority {
+                    root: root.clone(),
+                    lifecycle: asset.lifecycle,
+                }),
                 amount,
                 created_at_time: action_time,
                 expected_post_cycles,
@@ -911,12 +914,40 @@ fn append_estate_funding_actions(
 
 /// Complete pure authority used to compile one management-only Root Start prerequisite.
 pub(crate) struct RootStartPlanInput<'a> {
+    pub state: &'a FleetEnsureStateRecord,
     pub authority: Option<&'a RetainedRootStartAuthorityRecord>,
     pub created_at_time: u64,
     pub desired: &'a DesiredFleet,
     pub desired_sha256: &'a str,
     pub observation: &'a RootManagementObservation,
     pub requested_fleet: &'a str,
+}
+
+fn root_management_principal<'a>(
+    configured: &'a crate::fleet_ensure::model::DesiredCanister,
+    state: &'a FleetEnsureStateRecord,
+    fleet: &str,
+) -> Result<&'a str, EnsurePolicyError> {
+    let retained = state
+        .pending_principals
+        .get(&configured.name)
+        .or_else(|| state.principals.get(&configured.name))
+        .map(String::as_str);
+    let configured_principal = configured.principal.as_deref();
+    let conflict = state.fleet != fleet
+        || matches!((configured_principal, retained), (Some(configured), Some(retained)) if configured != retained);
+    if conflict {
+        return Err(EnsurePolicyError::RootManagementAuthorityMismatch {
+            field: "retained Principal",
+            name: configured.name.clone(),
+        });
+    }
+    configured_principal.or(retained).ok_or_else(|| {
+        EnsurePolicyError::RootManagementAuthorityMismatch {
+            field: "Principal",
+            name: configured.name.clone(),
+        }
+    })
 }
 
 /// Compile the one management-only prerequisite allowed before protected Root observation.
@@ -947,6 +978,7 @@ fn compile_root_start_plan(
     reviewed_targets: Option<&BTreeSet<String>>,
 ) -> Result<Option<FleetEnsurePlan>, EnsurePolicyError> {
     let RootStartPlanInput {
+        state,
         authority,
         created_at_time,
         desired,
@@ -979,12 +1011,7 @@ fn compile_root_start_plan(
                 name: configured.name.clone(),
             }
         })?;
-        let expected_principal = configured.principal.as_deref().ok_or_else(|| {
-            EnsurePolicyError::RootManagementAuthorityMismatch {
-                field: "Principal",
-                name: configured.name.clone(),
-            }
-        })?;
+        let expected_principal = root_management_principal(configured, state, requested_fleet)?;
         if observed.name != configured.name || observed.live.principal != expected_principal {
             return Err(EnsurePolicyError::RootManagementAuthorityMismatch {
                 field: "Principal",
@@ -1658,8 +1685,14 @@ fn append_target_funding(
     actions.insert(
         0,
         EnsureAction::Fund {
-            pool_root: if configured.kind == DesiredCanisterKind::Pool {
-                live.controllers.first().cloned()
+            pool_funding: if configured.kind == DesiredCanisterKind::Pool {
+                live.controllers
+                    .first()
+                    .cloned()
+                    .map(|root| PoolFundingAuthority {
+                        root,
+                        lifecycle: EstatePoolAssetLifecycle::Ready,
+                    })
             } else {
                 None
             },
@@ -3114,13 +3147,25 @@ fn maximum_observation_count(
         protocol_actions,
         additional_controlled_canisters,
     )?;
+    let stalled_observations = canisters
+        .iter()
+        .flat_map(|canister| &canister.actions)
+        .chain(protocol_actions.iter())
+        .filter(|action| {
+            matches!(action, EnsureAction::FleetProtocol { action, .. }
+            if matches!(action.as_ref(), CurrentFleetProtocolAction::ProvisionComponents { .. }))
+        })
+        .try_fold(desired.maximum_stalled_observations, |bound, action| {
+            effect_observation_policy(desired, action)
+                .map(|policy| bound.max(policy.maximum_stalled_observations))
+        })?;
     initially_present
         .checked_mul(2)
         .and_then(|value| value.checked_add(terminal_present))
         .and_then(|value| value.checked_add(action_observations))
         .and_then(|value| value.checked_add(protocol_observations))
         .and_then(|value| value.checked_add(terminal_protocol_observations))
-        .and_then(|value| value.checked_add(u128::from(desired.maximum_stalled_observations)))
+        .and_then(|value| value.checked_add(u128::from(stalled_observations)))
         .ok_or(EnsurePolicyError::ArithmeticOverflow {
             field: "maximum observation count",
         })
@@ -3254,7 +3299,7 @@ pub(super) fn effect_observation_policy(
             paced: false,
         });
     };
-    let topology_bound = component_provisioning_observation_bound(&request.plan.batches)?;
+    let topology_bound = component_provisioning_stall_bound(desired, &request.plan.batches)?;
     Ok(EffectObservationPolicy {
         maximum_stalled_observations: paced_protocol_stall_limit(
             desired.maximum_stalled_observations,
@@ -3271,6 +3316,63 @@ fn paced_protocol_stall_limit(configured: u32, topology_bound: u128) -> u32 {
         .unwrap_or(MAXIMUM_PACED_PROTOCOL_STALL_OBSERVATIONS)
         .min(MAXIMUM_PACED_PROTOCOL_STALL_OBSERVATIONS);
     configured.max(topology_bound)
+}
+
+fn component_provisioning_stall_bound(
+    desired: &DesiredFleet,
+    batches: &[canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch],
+) -> Result<u128, EnsurePolicyError> {
+    let base = component_provisioning_observation_bound(batches)?;
+    if batches.iter().all(|batch| {
+        batch
+            .placements
+            .iter()
+            .all(|placement| placement.entries.is_empty())
+    }) {
+        return Ok(base);
+    }
+    let bootstrap =
+        desired
+            .bootstrap
+            .as_ref()
+            .ok_or_else(|| EnsurePolicyError::EstateFundingTopology {
+                reason: "Component provisioning has no compiled bootstrap configuration"
+                    .to_string(),
+            })?;
+    let specs = &bootstrap
+        .component_deployment_configuration
+        .component_topology
+        .component_specs;
+    let entries = batches
+        .iter()
+        .flat_map(|batch| &batch.placements)
+        .flat_map(|placement| &placement.entries)
+        .map(|entry| (&entry.component_spec, &entry.spec_hash));
+    checked_add(
+        base,
+        initial_child_observation_bound(specs, entries)?,
+        "Component observation count",
+    )
+}
+
+fn initial_child_observation_bound<'a>(
+    specs: &[canic_core::control_plane_support::config::ComponentSpec],
+    entries: impl IntoIterator<Item = (&'a canic_core::ids::ComponentSpecId, &'a [u8; 32])>,
+) -> Result<u128, EnsurePolicyError> {
+    entries.into_iter().try_fold(0, |bound, (id, hash)| {
+        let spec = specs
+            .iter()
+            .find(|spec| &spec.component_spec == id && &spec.spec_hash == hash)
+            .ok_or_else(|| EnsurePolicyError::EstateFundingTopology {
+                reason: format!("provisioning Component Spec {id} differs from compiled authority"),
+            })?;
+        let children = initial_role_tree_size(spec)?.saturating_sub(1);
+        checked_add(
+            bound,
+            u128::from(children) * 3,
+            "initial child observation count",
+        )
+    })
 }
 
 fn component_provisioning_observation_bound(
@@ -3476,7 +3578,7 @@ mod tests {
         CanisterDisposition, CanisterPlan, DesiredFleetBootstrapRoot, EnsureAction,
         EstateFundingDomainPlan, EstatePoolAssetLifecycle, EstatePoolAssetObservation,
         EstatePoolAssetOrigin, EstatePoolInventoryObservation,
-        EstatePoolPendingCreationObservation,
+        EstatePoolPendingCreationObservation, PoolFundingAuthority,
     };
     use candid::Principal;
     use canic_core::{
@@ -3490,7 +3592,7 @@ mod tests {
 
     #[test]
     fn estate_workload_forecast_includes_recursive_initial_children() {
-        let spec = ComponentSpec {
+        let mut spec = ComponentSpec {
             component_spec: ComponentSpecId::try_from(String::from("hub"))
                 .expect("hub Component Spec ID"),
             spec_hash: [1; 32],
@@ -3522,6 +3624,24 @@ mod tests {
         };
 
         assert_eq!(initial_role_tree_size(&spec), Ok(9));
+        for capacity in [8, 10_000, u32::MAX] {
+            spec.limits.maximum_descendants = capacity;
+            let children = super::initial_child_observation_bound(
+                std::slice::from_ref(&spec),
+                [(&spec.component_spec, &spec.spec_hash); 2],
+            )
+            .unwrap();
+            assert_eq!(children, 48);
+            let base = component_provisioning_observation_bound_from_counts(1, 2).unwrap();
+            assert_eq!(paced_protocol_stall_limit(8, base + children), 60);
+        }
+        assert!(matches!(
+            super::initial_child_observation_bound(
+                std::slice::from_ref(&spec),
+                [(&spec.component_spec, &[2; 32])]
+            ),
+            Err(EnsurePolicyError::EstateFundingTopology { .. })
+        ));
     }
 
     #[test]
@@ -3800,7 +3920,7 @@ mod tests {
         assert_eq!(accumulator.fees, 4 * 5);
         for plan in &accumulator.canisters {
             assert!(matches!(plan.actions.as_slice(), [EnsureAction::Fund {
-                pool_root: Some(bound_root), principal, amount: 131, expected_post_cycles: 2_030,
+                pool_funding: Some(PoolFundingAuthority { root: bound_root, lifecycle: EstatePoolAssetLifecycle::Failed }), principal, amount: 131, expected_post_cycles: 2_030,
                 funding_deficit_cycles: 101, funding_margin_cycles: 30, ..
             }] if bound_root == &root && Some(principal) == plan.principal.as_ref()));
         }

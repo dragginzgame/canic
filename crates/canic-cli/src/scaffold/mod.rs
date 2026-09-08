@@ -264,7 +264,6 @@ fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     let result = scaffold_app_at(&workspace_root, &options)?;
     println!("Created Canic app:");
     println!("  {}", result.app_root.display());
-    println!("  {}", result.root_dir.display());
     println!("  {}", result.app_dir.display());
     println!("  {}", result.config_path.display());
     println!();
@@ -311,7 +310,6 @@ struct CanisterScaffoldPlan {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ScaffoldResult {
     app_root: PathBuf,
-    root_dir: PathBuf,
     app_dir: PathBuf,
     config_path: PathBuf,
 }
@@ -337,14 +335,10 @@ fn plan_scaffold_app_at(
         ));
     }
 
-    let root_dir = app_root.join("root");
     let app_dir = app_root.join("app");
     let config_path = app_root.join("canic.toml");
     let files = vec![
         config_path.clone(),
-        root_dir.join("Cargo.toml"),
-        root_dir.join("build.rs"),
-        root_dir.join("src/lib.rs"),
         app_dir.join("Cargo.toml"),
         app_dir.join("build.rs"),
         app_dir.join("src/lib.rs"),
@@ -353,7 +347,6 @@ fn plan_scaffold_app_at(
     Ok(ScaffoldAppPlan {
         result: ScaffoldResult {
             app_root,
-            root_dir,
             app_dir,
             config_path,
         },
@@ -367,17 +360,10 @@ fn scaffold_app_at(
 ) -> Result<ScaffoldResult, ScaffoldCommandError> {
     let plan = plan_scaffold_app_at(workspace_root, options)?;
     let result = &plan.result;
-    let root_src_dir = result.root_dir.join("src");
     let app_src_dir = result.app_dir.join("src");
 
     let write_result = (|| {
         write_new_file(&result.config_path, &canic_toml(&options.name))?;
-        write_new_file(
-            &result.root_dir.join("Cargo.toml"),
-            &root_cargo_toml(&options.name),
-        )?;
-        write_new_file(&result.root_dir.join("build.rs"), ROOT_BUILD_RS)?;
-        write_new_file(&root_src_dir.join("lib.rs"), ROOT_LIB_RS)?;
         write_new_file(
             &result.app_dir.join("Cargo.toml"),
             &app_cargo_toml(&options.name),
@@ -805,7 +791,6 @@ fn render_scaffold_app_plan(plan: &ScaffoldAppPlan) -> String {
     let mut lines = vec![
         "Planned Canic app scaffold:".to_string(),
         format!("  source: {}", plan.result.app_root.display()),
-        format!("  root: {}", plan.result.root_dir.display()),
         format!("  app: {}", plan.result.app_dir.display()),
         format!("  config: {}", plan.result.config_path.display()),
     ];
@@ -975,7 +960,6 @@ enabled = false
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -986,35 +970,6 @@ package = "app"
 [component_specs.app]
 component_role = "app"
 maximum_instances = 1
-"#
-    )
-}
-
-fn root_cargo_toml(name: &str) -> String {
-    let canic_version = env!("CARGO_PKG_VERSION");
-    format!(
-        r#"[package]
-name = "canister_{name}_root"
-edition = "2024"
-rust-version = "1.91.0"
-version = "0.1.0"
-publish = false
-
-[package.metadata.canic]
-app = "{name}"
-role = "root"
-
-[lib]
-crate-type = ["cdylib"]
-
-[dependencies]
-candid = {{ version = "0.10", default-features = false }}
-# Add runtime Canic features here when canic.toml enables auth settings.
-canic = {{ version = "{canic_version}", features = ["control-plane"] }}
-ic-cdk = "0.20"
-
-[build-dependencies]
-canic = "{canic_version}"
 "#
     )
 }
@@ -1048,11 +1003,6 @@ canic = "{canic_version}"
     )
 }
 
-const ROOT_BUILD_RS: &str = r#"fn main() {
-    canic::build!("../canic.toml");
-}
-"#;
-
 const APP_BUILD_RS: &str = r#"fn main() {
     canic::build!("../canic.toml");
 }
@@ -1062,26 +1012,6 @@ const CANISTER_BUILD_RS: &str = r#"fn main() {
     canic::build!("../canic.toml");
 }
 "#;
-
-const ROOT_LIB_RS: &str = r"#![expect(clippy::unused_async)]
-
-//
-// CANIC
-//
-
-canic::start!();
-
-/// Run no-op setup for this scaffolded root.
-async fn canic_setup() {}
-
-/// Run no-op install handling for this scaffolded root.
-async fn canic_install() {}
-
-/// Run no-op upgrade handling for this scaffolded root.
-async fn canic_upgrade() {}
-
-canic::finish!();
-";
 
 const APP_LIB_RS: &str = r"#![expect(clippy::unused_async)]
 

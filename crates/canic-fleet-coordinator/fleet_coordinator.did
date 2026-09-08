@@ -276,6 +276,10 @@ type CoordinatorFundingWindowStatusResponse = record {
   window_start_secs : nat64;
   reserved_cycles : nat;
 };
+type CoordinatorOperationReadRequest = variant { Operation : OperationReceipt };
+type CoordinatorOperationReadResponse = variant {
+  Operation : CoordinatorOperationStatusResponse;
+};
 // Coordinator-owned durable operation detail selected by one operation ID.
 type CoordinatorOperationStatusResponse = variant {
   Admission : FleetAdmissionOperationStatusResponse;
@@ -284,6 +288,8 @@ type CoordinatorOperationStatusResponse = variant {
   Retirement : FleetRetirementStatus;
   ComponentProvisioning : FleetComponentProvisioningStatusResponse;
 };
+type CoordinatorRegistryReadRequest = variant { Registry };
+type CoordinatorRegistryReadResponse = variant { Registry : FleetRegistry };
 // Controller-only funding usage and operation state for one registered Root.
 type CoordinatorRootFundingStatusResponse = record {
   automatic_grants : nat32;
@@ -309,30 +315,6 @@ type CoordinatorRootRemovalOperationStatus = record {
   execution : opt FleetSubnetRootDeletionExecutionResponse;
   removal : opt FleetSubnetRootRemovalPublicationResponse;
   readiness : opt FleetSubnetRootDeletionReadinessResponse;
-};
-// Closed Coordinator observation selector carried by its single status query.
-type CoordinatorStatusRequest = variant {
-  RootAcknowledgements;
-  Admission : FleetAdmissionStatusRequest;
-  Overview;
-  Operation : OperationReceipt;
-  RegistryManifest;
-  Registry;
-  Funding;
-  AuthorityRestore;
-  RegistryVersion;
-};
-// Closed response union for the Coordinator's single status query.
-type CoordinatorStatusResponse = variant {
-  RootAcknowledgements : vec FleetSubnetRootSnapshotAcknowledgement;
-  Admission : FleetAdmissionStatusResponse;
-  Overview : RoleOverviewResponse;
-  Operation : CoordinatorOperationStatusResponse;
-  RegistryManifest : FleetRegistryManifest;
-  Registry : FleetRegistry;
-  Funding : CoordinatorFundingStatusResponse;
-  AuthorityRestore : AuthorityRestoreFenceStatusResponse;
-  RegistryVersion : FleetRegistryVersion;
 };
 //
 // CyclesFundingBudget
@@ -1250,12 +1232,47 @@ type FleetSubnetRootSnapshotAcknowledgementRequest = record {
 // Lifecycle state of one Fleet Subnet Root in the Fleet Registry snapshot.
 //
 type FleetSubnetRootStatus = variant { Joining; Draining; Active; Removed };
+//
+// HealthStatus
+//
+type HealthStatus = variant { unhealthy; healthy; degraded; unknown };
+type ObservabilityRequest = variant {
+  RootAcknowledgements;
+  Admission : FleetAdmissionStatusRequest;
+  RegistryManifest;
+  Funding;
+  AuthorityRestore;
+  RegistryVersion;
+};
+type ObservabilityResponse = variant {
+  RootAcknowledgements : vec FleetSubnetRootSnapshotAcknowledgement;
+  Admission : FleetAdmissionStatusResponse;
+  RegistryManifest : FleetRegistryManifest;
+  Funding : CoordinatorFundingStatusResponse;
+  AuthorityRestore : AuthorityRestoreFenceStatusResponse;
+  RegistryVersion : FleetRegistryVersion;
+};
 // Durable identity returned when one role-owned asynchronous command is accepted.
 type OperationReceipt = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec principal };
 type PageRequest = record { offset : nat64; limit : nat64 };
+// Minimal local identity and health without diagnostic checks or failure details.
+type PublicHealth = record {
+  role : opt text;
+  observed_at_ns : nat64;
+  canister_id : principal;
+  health : HealthStatus;
+};
+type PublicStatusRequest = variant { Overview; Health };
+type PublicStatusResponse = variant {
+  Overview : RoleOverviewResponse;
+  Health : PublicHealth;
+};
 type Result = variant { Ok : CoordinatorCommandResponse; Err : Error };
-type Result_1 = variant { Ok : CoordinatorStatusResponse; Err : Error };
+type Result_1 = variant { Ok : CoordinatorOperationReadResponse; Err : Error };
+type Result_2 = variant { Ok : CoordinatorRegistryReadResponse; Err : Error };
+type Result_3 = variant { Ok : ObservabilityResponse; Err : Error };
+type Result_4 = variant { Ok : PublicStatusResponse; Err : Error };
 // Closed compiled capability identity exposed by the immutable role overview.
 type RoleCapability = variant {
   Sharding;
@@ -1310,5 +1327,12 @@ type SetStateResponse = record {
 };
 service : (FleetCoordinatorInitArgs) -> {
   canic_coordinator_command : (CoordinatorCommand) -> (Result);
-  canic_coordinator_status : (CoordinatorStatusRequest) -> (Result_1) query;
+  canic_coordinator_operation_status : (CoordinatorOperationReadRequest) -> (
+      Result_1,
+    ) query;
+  canic_coordinator_registry : (CoordinatorRegistryReadRequest) -> (
+      Result_2,
+    ) query;
+  canic_observability : (ObservabilityRequest) -> (Result_3) query;
+  canic_public_status : (PublicStatusRequest) -> (Result_4) query;
 }

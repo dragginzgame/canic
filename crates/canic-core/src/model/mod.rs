@@ -17,5 +17,6 @@ pub mod fleet_admission_root;
 pub mod fleet_funding_policy;
 pub mod intent;
 pub mod placement;
+pub mod public_metrics;
 pub mod replay;
 pub mod runtime_kind;

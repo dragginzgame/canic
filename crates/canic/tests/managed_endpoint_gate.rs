@@ -142,10 +142,7 @@ fn prepared_managed_init_defers_application_work_while_standalone_local_starts_i
     let local = source
         .split("macro_rules! __canic_start_local_lifecycle_core")
         .nth(1)
-        .and_then(|rest| {
-            rest.split("macro_rules! __canic_root_lifecycle_core")
-                .next()
-        })
+        .and_then(|rest| rest.split("macro_rules! start_fleet_root").next())
         .expect("standalone-local lifecycle macro");
     let local_init = local
         .split("#[$crate::__internal::cdk::init]")
@@ -190,15 +187,6 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
                 .next()
         })
         .expect("Wasm Store lifecycle macro");
-    let root = source
-        .split("macro_rules! __canic_root_lifecycle_core")
-        .nth(1)
-        .and_then(|rest| {
-            rest.split("// Run the optional init block from a lifecycle timer")
-                .next()
-        })
-        .expect("managed root lifecycle macro");
-
     assert!(
         nonroot.contains("fn __canic_schedule_prepared_activation_init(args: Option<Vec<u8>>)")
             && nonroot.contains("canic_install(args).await;"),
@@ -209,31 +197,14 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
             && wasm_store.contains("canic_install(args).await;"),
         "Wasm Store activation must receive durable init bytes from its transition"
     );
-    assert!(
-        root.contains("fn __canic_schedule_prepared_activation_init()")
-            && root.contains("canic_setup().await;")
-            && root.contains("canic_install().await;"),
-        "managed root activation must schedule its current application install hooks"
-    );
-
     let duplicate_guard = "__CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true)";
-    for (adapter, lifecycle) in [
-        ("managed non-root", nonroot),
-        ("Wasm Store", wasm_store),
-        ("managed root", root),
-    ] {
+    for (adapter, lifecycle) in [("managed non-root", nonroot), ("Wasm Store", wasm_store)] {
         assert_eq!(
             lifecycle.matches(duplicate_guard).count(),
             1,
             "{adapter} activation adapter must suppress duplicate hook scheduling"
         );
     }
-    assert_eq!(
-        source.matches(duplicate_guard).count(),
-        3,
-        "only the root, non-root and Wasm Store activation adapters may schedule application install hooks"
-    );
-
     let nonroot_path = workspace.join("crates/canic/src/macros/endpoints/role.rs");
     let nonroot_endpoints = fs::read_to_string(&nonroot_path)
         .unwrap_or_else(|error| panic!("read {}: {error}", nonroot_path.display()));
@@ -241,14 +212,6 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         nonroot_endpoints.contains("__canic_schedule_prepared_activation_init(")
             && nonroot_endpoints.contains("transition.application_init_args,"),
         "managed non-root activation must hand durable init bytes to the lifecycle adapter"
-    );
-
-    let root_path = workspace.join("crates/canic/src/macros/endpoints/root.rs");
-    let root_endpoints = fs::read_to_string(&root_path)
-        .unwrap_or_else(|error| panic!("read {}: {error}", root_path.display()));
-    assert!(
-        root_endpoints.contains("__canic_schedule_prepared_activation_init();"),
-        "managed root activation must hand success to the lifecycle adapter"
     );
 }
 
@@ -358,7 +321,7 @@ fn fleet_admission_projection_is_managed_only_and_authenticates_before_state_acc
     assert!(
         managed_status.contains(
             "#[cfg(canic_capability_fleet_admission_projection)]\n            Admission("
-        ) && managed_status.contains("CanisterStatusRequest::Admission"),
+        ) && managed_status.contains("AdmissionStatusRequest::Admission"),
         "an explicitly enrolled managed role must expose the local Fleet-admission projection"
     );
     for variant in [
@@ -376,7 +339,7 @@ fn fleet_admission_projection_is_managed_only_and_authenticates_before_state_acc
         );
     }
     let auth = managed_status
-        .find("is_controller_or_root(caller)")
+        .find("requires(any(caller::is_controller(), caller::is_root()))")
         .expect("controller-or-Root authorization");
     let dispatch = managed_status
         .find("FleetAdmissionProjectionApi::status")
@@ -392,7 +355,7 @@ fn fleet_admission_projection_is_managed_only_and_authenticates_before_state_acc
     );
     assert!(
         !local_status.contains("FleetAdmissionProjection")
-            && !local_status.contains("CanisterStatusRequest::Admission"),
+            && !local_status.contains("AdmissionStatusRequest::Admission"),
         "standalone-local status must not expose managed Fleet-admission state"
     );
 
@@ -417,18 +380,16 @@ fn managed_start_remains_a_thin_profile_surface_composer() {
     let source = fs::read_to_string(&start_path)
         .unwrap_or_else(|error| panic!("read {}: {error}", start_path.display()));
     let managed_start = source
-        .split("macro_rules! start")
+        .split("macro_rules! start {")
         .nth(1)
         .and_then(|rest| rest.split("macro_rules! start_local").next())
         .expect("managed start macro");
 
     for emitter in [
-        "__canic_root_lifecycle_core!",
         "__canic_start_nonroot_lifecycle_core!",
         "__canic_start_ingress_payload_inspect!",
         "__canic_emit_managed_command_endpoint!",
         "__canic_emit_managed_status_endpoint!",
-        "canic_bundle_root_only_endpoints!",
     ] {
         assert!(
             managed_start.contains(emitter),
@@ -438,7 +399,7 @@ fn managed_start_remains_a_thin_profile_surface_composer() {
     assert!(
         !managed_start.contains("workflow::")
             && !managed_start.contains(".await")
-            && !managed_start.contains("fn canic_status")
+            && !managed_start.contains("fn canic_observability")
             && !managed_start.contains("fn canic_command"),
         "start! must compose lifecycle and role emitters without owning orchestration or protocol handlers"
     );

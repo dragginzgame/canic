@@ -245,17 +245,19 @@ Use this map when judging intended downstream contract:
 | `crates/canic-cli`           | published operator CLI package exposing the `canic` binary                |
 | `crates/canic-core`          | lower-level runtime/support crate, not the primary beginner entry surface |
 | `crates/canic-control-plane` | lower-level control-plane support crate                                   |
+| `crates/canic-fleet-coordinator` | canonical Fleet Coordinator canister artifact |
+| `crates/canic-fleet-root` | canonical Fleet Subnet Root canister artifact |
 | `crates/canic-host`          | host-side build, deployment-truth, evidence, fleet, and release support   |
 | `crates/canic-macros`        | proc-macro support crate, public but not a general facade                 |
-| `crates/canic-wasm-store`    | canonical special `wasm_store` canister crate                             |
+| `crates/canic-fleet-wasm-store`    | canonical special `wasm_store` canister crate                             |
 
 Rules:
 
 * `canic` is the primary broad facade.
 * `canic-core`, `canic-control-plane`, and `canic-macros` may remain published while still being lower-level and thinner in documentation posture.
-* `canic-backup`, `canic-host`, `canic-cli`, and `canic-wasm-store` are published role-specific crates; their binary/README posture must clearly say so.
+* `canic-backup`, `canic-host`, `canic-cli`, and `canic-fleet-wasm-store` are published role-specific crates; their binary/README posture must clearly say so.
 * Lower-level published crates are allowed to be thinner than `canic`, but not allowed to be misleading about their role.
-* `canic-wasm-store` is special: its package posture may describe the
+* `canic-fleet-wasm-store` is special: its package posture may describe the
   canonical bootstrap/runtime role, but must not imply ordinary users should
   import Canic-managed canister crates as general rlib dependencies.
 * Unpublished support/test crates such as `canic-testing-internal` and
@@ -263,14 +265,15 @@ Rules:
 
 Current hard-cut package posture:
 
-* The current published crate count is eight. Baseline reports with a different
-  package roster are partially comparable and must identify the roster delta.
+* Derive the current published roster from workspace manifests. Baseline
+  reports with a different roster must identify the package delta.
 * The declared published MSRV is the workspace `rust-version` (`1.91.0` at the
   time this definition was refreshed); the internal Rust toolchain may be newer.
 * `canic`'s default feature set is intentionally small. If defaults change,
   package-local README text must change with it.
-* `canic-wasm-store` must remain a `cdylib` canister artifact source, not an
-  ordinary `rlib` dependency surface.
+* Fleet Coordinator, Root and Wasm Store must remain `cdylib` canister
+  artifact sources. Their entrypoints are owned by Canic. Root builds bind
+  the selected App configuration and capabilities.
 * Install URLs and release-script default versions are release-preparation
   material; ordinary audit slices should verify posture without bumping them.
 
@@ -428,7 +431,7 @@ Rules:
 * the published MSRV is package-contract evidence. If the internal toolchain is
   newer than the published MSRV, docs and package metadata must make that split
   understandable.
-* a canister artifact source such as `canic-wasm-store` must not ship an `rlib`
+* a canister artifact source such as `canic-fleet-wasm-store` must not ship an `rlib`
   unless the package contract intentionally supports Rust-library reuse.
 
 ---
@@ -572,7 +575,7 @@ At minimum, the auditor must:
 Recommended current package verification command:
 
 ```bash
-cargo package -p canic -p canic-backup -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-wasm-store --locked --allow-dirty
+cargo package -p canic -p canic-backup -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-fleet-wasm-store --locked --allow-dirty
 ```
 
 If the crate set differs, derive the publishable crate list from current

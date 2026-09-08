@@ -86,7 +86,8 @@ with this file, the code is wrong.
 
 ## Ownership
 - Runtime/facade: `canic`, `canic-core`, `canic-macros`.
-- Canister control plane/store: `canic-control-plane`, `canic-wasm-store`.
+- Canister control plane/infrastructure: `canic-control-plane`,
+  `canic-fleet-coordinator`, `canic-fleet-root`, `canic-fleet-wasm-store`.
 - Host/operator: `canic-cli`, `canic-host`, `canic-backup`.
 - Testing: sibling `ic-testkit`, `canic-testing-internal`, `canic-tests`.
 - `scripts/dev/*` are intentional maintainer helpers, not stale CLI leftovers.

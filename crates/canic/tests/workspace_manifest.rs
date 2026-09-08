@@ -667,6 +667,7 @@ fn canic_role_declaration_packages_exist() {
     let mut failures = Vec::new();
     for ((app, role), declaration) in declared_roles {
         match declaration.package_manifest.as_ref() {
+            None if role == "root" && declaration.kind.as_deref() == Some("root") => {}
             Some(package_manifest) if package_manifest.is_file() => {}
             Some(package_manifest) => failures.push(format!(
                 "{}: [roles.{role}] package for {app}.{role} must contain Cargo.toml, missing {}",
@@ -729,6 +730,12 @@ fn canic_package_metadata_resolves_to_declared_app_roles() {
         };
 
         match role.package_manifest.as_ref() {
+            None if metadata.role == "root"
+                && ((package_name(&manifest) == Some("canic-fleet-root")
+                    && comparable_path(&manifest_path)
+                        == comparable_path(&root.join("crates/canic-fleet-root/Cargo.toml")))
+                    || (manifest_path.starts_with(root.join("canisters"))
+                        && is_explicitly_unpublished(&manifest))) => {}
             Some(package_manifest)
                 if comparable_path(package_manifest) == comparable_path(&manifest_path) => {}
             Some(package_manifest) => failures.push(format!(

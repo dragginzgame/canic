@@ -1,3 +1,5 @@
+public_metrics = ["application", "cycles", "performance", "shard_occupancy"]
+
 [app]
 name = "runtime_probe"
 init_mode = "enabled"
@@ -5,7 +7,6 @@ init_mode = "enabled"
 
 [roles.root]
 kind = "root"
-package = "../../audit/root_probe"
 
 [roles.test]
 kind = "canister"

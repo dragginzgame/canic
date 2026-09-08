@@ -40,9 +40,12 @@ pub fn resolve_infrastructure_candid(
         });
     }
 
-    build_debug_wasm()?;
-
-    let candid = extract_candid_bytes(debug_wasm_path)?;
+    let candid = if let Some(generated_candid) = generated_candid {
+        generated_candid.to_vec()
+    } else {
+        build_debug_wasm()?;
+        extract_candid_bytes(debug_wasm_path)?
+    };
 
     if let Some(canonical_did_path) = canonical_did_path {
         write_bytes(canonical_did_path, &candid)?;
@@ -97,6 +100,27 @@ mod tests {
                 .to_string()
                 .contains("canonical test_role Candid file is missing")
         );
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
+    fn explicit_refresh_writes_the_compiled_declaration_without_runtime_extraction() {
+        let root = temp_dir("canic-bootstrap-candid-refresh");
+        fs::create_dir_all(&root).expect("create temp dir");
+        let canonical = root.join("canonical.did");
+        fs::write(&canonical, "service : {}\n").expect("write existing DID");
+        let compiled = b"service : { canic_public_status : () -> () query }\n";
+        let candid = resolve_infrastructure_candid(
+            "test_role",
+            Some(&canonical),
+            true,
+            Some(compiled),
+            &root.join("runtime-without-candid.wasm"),
+            || panic!("the exact declaration was already extracted"),
+        )
+        .expect("refresh canonical declaration");
+        assert_eq!(candid, compiled);
+        assert_eq!(fs::read(&canonical).unwrap(), compiled);
         fs::remove_dir_all(root).expect("clean temp dir");
     }
 

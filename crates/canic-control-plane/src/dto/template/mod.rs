@@ -7,15 +7,10 @@ use canic_core::{
     dto::{
         capability::{NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1},
         cascade::{StateSnapshotInput, TopologySnapshotInput},
-        cycles::CycleTrackerEntry,
         fleet_activation::{
             FleetActivationRequest, FleetActivationStatusResponse, FleetCredentialGenerationRequest,
         },
-        page::{Page, PageRequest},
-        role::{
-            CycleBalanceStatusResponse, OperationReceipt, OperationStatusRequest,
-            RoleOverviewResponse,
-        },
+        role::{OperationReceipt, OperationStatusRequest},
     },
     ids::FleetSubnetWasmStoreAuthority,
 };
@@ -210,17 +205,41 @@ pub enum StoreCommandResponse {
     SynchronizeTopology,
 }
 
-/// Closed Store observation selector carried by its single status query.
+/// Store diagnostics are uniformly controller-authorized.
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub enum StoreObservabilityRequest {
+    CycleBalance,
+    CycleHistory(canic_core::dto::page::PageRequest),
+}
+
+/// Store diagnostic results under one controller rule.
+#[derive(CandidType, Deserialize)]
+pub enum StoreObservabilityResponse {
+    CycleBalance(canic_core::dto::role::CycleBalanceStatusResponse),
+    CycleHistory(canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>),
+}
+
+/// Store catalog reads share the existing Store publication-caller authority.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum StoreCatalogRequest {
+    Catalog,
+    Storage,
+    Template(TemplateLookupRequest),
+}
+
+/// Catalog results under one Store publication-caller rule.
+#[derive(CandidType, Deserialize)]
+pub enum StoreCatalogResponse {
+    Catalog(Vec<WasmStoreCatalogEntryResponse>),
+    Storage(WasmStoreStatusResponse),
+    Template(TemplateStagingStatusResponse),
+}
+
+/// Controller-owned Store authority and operation reads.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum StoreStatusRequest {
     Authority,
-    Catalog,
-    CycleBalance,
-    CycleHistory(PageRequest),
     Operation(OperationStatusRequest),
-    Overview,
-    Storage,
-    Template(TemplateLookupRequest),
 }
 
 /// Store-owned durable operation detail selected by one operation ID.
@@ -234,17 +253,11 @@ pub enum StoreOperationStatusResponse {
     GarbageCollection(WasmStoreGcOperationStatus),
 }
 
-/// Closed response union for the Store's single status query.
+/// Responses to controller-owned Store authority and operation reads.
 #[derive(CandidType, Deserialize)]
 pub enum StoreStatusResponse {
     Authority(FleetSubnetWasmStoreAuthority),
-    Catalog(Vec<WasmStoreCatalogEntryResponse>),
-    CycleBalance(CycleBalanceStatusResponse),
-    CycleHistory(Page<CycleTrackerEntry>),
     Operation(StoreOperationStatusResponse),
-    Overview(RoleOverviewResponse),
-    Storage(WasmStoreStatusResponse),
-    Template(TemplateStagingStatusResponse),
 }
 
 /// Minimum operational headroom retained above the live freezing reserve while
@@ -382,23 +395,10 @@ mod tests {
 
     #[test]
     fn store_status_request_keeps_the_manifest_exact_flat_variants() {
-        let page = PageRequest {
-            limit: 10,
-            offset: 0,
-        };
         let requests = [
             StoreStatusRequest::Authority,
-            StoreStatusRequest::Catalog,
-            StoreStatusRequest::CycleBalance,
-            StoreStatusRequest::CycleHistory(page),
             StoreStatusRequest::Operation(OperationStatusRequest {
                 operation_id: [5; 32],
-            }),
-            StoreStatusRequest::Overview,
-            StoreStatusRequest::Storage,
-            StoreStatusRequest::Template(TemplateLookupRequest {
-                template_id: TemplateId::new("embedded:app"),
-                version: TemplateVersion::new("current"),
             }),
         ];
 

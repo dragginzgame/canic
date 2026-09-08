@@ -600,7 +600,7 @@ fn query_root_component_status(
             icp,
             candid_path,
             root,
-            protocol::CANIC_ROOT_STATUS,
+            protocol::CANIC_ROOT_OPERATION_STATUS,
             &RootInventoryStatusRequest::ComponentProvisioning(OperationStatusRequest {
                 operation_id,
             }),
@@ -1215,7 +1215,7 @@ fn validate_terminal_descendant_allocation(
             icp,
             root_candid_path,
             authority.root,
-            protocol::CANIC_ROOT_STATUS,
+            protocol::CANIC_ROOT_OPERATION_STATUS,
             &RootInventoryStatusRequest::ComponentChildProvisioning(OperationStatusRequest {
                 operation_id: authority.workload.operation_id,
             }),
@@ -1599,7 +1599,7 @@ fn query_all_children(
                 icp,
                 candid_path,
                 parent,
-                protocol::CANIC_STATUS,
+                protocol::CANIC_PUBLIC_STATUS,
                 &ChildrenStatusRequest::Children(PageRequest {
                     limit: CHILD_PAGE_LIMIT,
                     offset,

@@ -6,7 +6,6 @@ name = "qualification"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.hub]
 kind = "canister"

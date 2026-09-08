@@ -79,7 +79,7 @@ fn ensure_probe_wasm_ready(
     build_internal_test_wasm_canisters_with_env(
         workspace_root,
         target_dir,
-        &[crate_name, "canic-wasm-store"],
+        &[crate_name, "canic-fleet-wasm-store"],
         profile,
         &build_env,
     );

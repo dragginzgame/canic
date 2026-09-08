@@ -28,8 +28,8 @@ use canic_host::{
     release_set::{AppConfigSnapshot, ConfiguredRoleLifecycle},
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
-        materialize_state_manifest, resolve_declared_role_package_contract,
-        validate_declared_role_package,
+        materialize_state_manifest, resolve_canonical_root_contract,
+        resolve_declared_role_package_contract, validate_declared_role_package,
     },
 };
 
@@ -61,6 +61,9 @@ fn app_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
     roles
         .iter()
         .flat_map(|role| {
+            if role.role == CanisterRole::ROOT.as_str() {
+                return check_canonical_root_contract(snapshot.model(), role);
+            }
             let mut checks = vec![check_role_package_metadata(root, config, role, &app)];
             let role_id = CanisterRole::owned(role.role.clone());
             match validate_declared_role_package(
@@ -92,6 +95,34 @@ fn app_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
             }
             checks
         })
+        .collect()
+}
+
+fn check_canonical_root_contract(
+    config: &ConfigModel,
+    role: &ConfiguredRoleLifecycle,
+) -> Vec<MedicCheck> {
+    let errors = match resolve_canonical_root_contract(config) {
+        RoleContractResolution::Resolved { contract } => {
+            match materialize_state_manifest(std::slice::from_ref(&contract)) {
+                Ok(_) => {
+                    return vec![MedicCheck::pass(
+                        MedicCategory::WorkspaceConfig,
+                        "canonical_root_contract",
+                        role.display.clone(),
+                        "Canic selects Root runtime features from the App configuration",
+                        "none",
+                        MedicSource::AppConfig,
+                    )];
+                }
+                Err(errors) => errors,
+            }
+        }
+        RoleContractResolution::Rejected { errors } => errors,
+    };
+    errors
+        .iter()
+        .filter_map(|finding| check_role_package_contract(role, finding))
         .collect()
 }
 

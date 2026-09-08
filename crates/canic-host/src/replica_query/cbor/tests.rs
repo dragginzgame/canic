@@ -2,8 +2,13 @@ use super::{QueryOutcome, decode_query_response, encode_anonymous_query};
 
 #[test]
 fn anonymous_query_envelope_has_exact_wire_bytes() {
-    let bytes = encode_anonymous_query(&[1, 2, 3], "canic_status", &[0x44, 0x49, 0x44, 0x4c], 42)
-        .expect("encode query");
+    let bytes = encode_anonymous_query(
+        &[1, 2, 3],
+        "canic_observability",
+        &[0x44, 0x49, 0x44, 0x4c],
+        42,
+    )
+    .expect("encode query");
 
     assert_eq!(
         bytes,

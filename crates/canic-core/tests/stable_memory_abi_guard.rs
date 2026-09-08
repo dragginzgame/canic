@@ -10,7 +10,7 @@ const CANIC_MANAGED_RUNTIME_CRATES: &[&str] = &[
     "canic-core",
     "canic-control-plane",
     "canic-macros",
-    "canic-wasm-store",
+    "canic-fleet-wasm-store",
 ];
 
 #[test]

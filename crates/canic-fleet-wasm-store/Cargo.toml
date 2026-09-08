@@ -1,12 +1,12 @@
 [package]
-name = "canic-wasm-store"
+name = "canic-fleet-wasm-store"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
 description = "Canonical Canic wasm_store canister crate"
 readme = "README.md"
-documentation = "https://docs.rs/canic-wasm-store"
+documentation = "https://docs.rs/canic-fleet-wasm-store"
 homepage = { workspace = true }
 repository = { workspace = true }
 keywords = { workspace = true }

@@ -33,7 +33,6 @@ init_mode = "enabled"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

@@ -61,8 +61,9 @@ Component topology is present.
 
 - `kind = "root" | "canister"` – package role class. Only `[roles.root]` may
   use `root`.
-- `package: string` – non-empty path to the role package, relative to this
-  `canic.toml`.
+- `package: string` – required non-empty path for application roles, relative
+  to this `canic.toml`. Root must omit this field: Canic builds its canonical
+  `canic-fleet-root` package with the selected configuration and capabilities.
 - `fleet_admission: bool` – optional, default `false`. `true` enrolls every
   managed instance of this non-Root role in the Fleet admission participant
   set and gives it the local projection plus protected admission surfaces.
@@ -397,7 +398,6 @@ name = "example"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -525,3 +525,12 @@ This separation is deliberate:
 - config defines the user-managed flat Component topology only
 - root-approved manifest/runtime state defines what is installable and which implicit store is active
 - wasm stores hold the bytes and deterministic chunk-set metadata only
+
+## Public metric publication
+
+The top-level `public_metrics` selection is empty by default. Supported values
+are `application`, `cycles`, `operations`, `performance` and `shard_occupancy`.
+Enabling a family publishes only its bounded cached aggregate snapshot through
+`canic_public_status`; it never changes `canic_observability` authorization.
+See [public observability](docs/features/runtime/public-observability.md) for
+sampling, staleness, units and application publication APIs.

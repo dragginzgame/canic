@@ -7,7 +7,7 @@ App name as a positional argument.
 
 The built-in `fleet_coordinator` and `wasm_store` roles are not sourced from
 this directory. Their canonical canister crates live at
-`crates/canic-fleet-coordinator/` and `crates/canic-wasm-store/` so downstreams
+`crates/canic-fleet-coordinator/` and `crates/canic-fleet-wasm-store/` so downstreams
 build the same infrastructure from published Canic sources instead of carrying
 local built-in role crates. The local build helper discovers matching canonical
 sources from the resolved `canic` package automatically. Each App still owns

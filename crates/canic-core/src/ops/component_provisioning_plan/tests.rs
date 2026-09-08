@@ -30,7 +30,6 @@ name = "plan_test"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.alpha]
 kind = "canister"
@@ -69,7 +68,6 @@ name = "plan_test"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.alpha]
 kind = "canister"
@@ -105,7 +103,6 @@ name = "plan_test"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.project_hub]
 kind = "canister"

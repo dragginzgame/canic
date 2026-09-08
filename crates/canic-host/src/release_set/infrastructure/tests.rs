@@ -27,7 +27,7 @@ fn owned_inputs(release_build_id: ReleaseBuildId) -> Vec<OwnedInput> {
     vec![
         OwnedInput::new(
             CanicInfrastructureRole::WasmStore,
-            "canic-wasm-store",
+            "canic-fleet-wasm-store",
             release_build_id,
             3,
         ),

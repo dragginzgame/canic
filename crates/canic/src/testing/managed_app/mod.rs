@@ -38,7 +38,7 @@ use crate::{
         FleetKey, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
         FleetSubnetRootLimits, ManagedCanisterBinding, SubnetId,
     },
-    protocol::{CANIC_COMMAND, CANIC_STATUS},
+    protocol::{CANIC_ADMISSION_STATUS, CANIC_COMMAND, CANIC_CONTROL_STATUS},
 };
 use candid::{CandidType, Deserialize, Principal, encode_args, encode_one};
 use canic_core::{
@@ -193,7 +193,7 @@ impl ManagedAppFixture {
         let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
             self.app,
             self.root,
-            CANIC_STATUS,
+            CANIC_ADMISSION_STATUS,
             (ManagedStatusRequest::Admission(PageRequest {
                 limit: DEFAULT_STATUS_PAGE_LIMIT,
                 offset: 0,
@@ -271,7 +271,7 @@ impl ManagedAppFixture {
         let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
             self.app,
             self.root,
-            CANIC_STATUS,
+            CANIC_CONTROL_STATUS,
             (ManagedStatusRequest::Operation(OperationStatusRequest {
                 operation_id: self.directory.operation_id,
             }),),

@@ -4,7 +4,7 @@
 
 This directory defines source consistency and readability standards for the
 Canic workspace, including `canic`, `canic-core`, `canic-macros`,
-`canic-control-plane`, `canic-wasm-store`, `canic-cli`, `canic-host`, and
+`canic-control-plane`, `canic-fleet-wasm-store`, `canic-cli`, `canic-host`, and
 `canic-backup`.
 
 The goal is to keep the codebase easy to navigate while preserving Canic's
@@ -438,5 +438,5 @@ than one massive commit.
 Examples:
 
 1. `cleanup: normalize imports in canic-core workflow`
-2. `cleanup: tighten visibility in canic-wasm-store`
+2. `cleanup: tighten visibility in canic-fleet-wasm-store`
 3. `cleanup: remove stale protocol helpers from blob storage`

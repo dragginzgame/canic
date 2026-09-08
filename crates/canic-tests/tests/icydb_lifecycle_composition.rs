@@ -12,7 +12,7 @@ use canic::{
             TimerSchedulingMode,
         },
     },
-    protocol::{CANIC_COMMAND, CANIC_STATUS},
+    protocol::{CANIC_COMMAND, CANIC_OBSERVABILITY},
 };
 use canic_testing_internal::pic::{
     CanicIcydbLifecycleFixture, icydb_participant_trap_wasm, install_canic_icydb_lifecycle_fixture,
@@ -428,7 +428,7 @@ fn assert_runtime_phase(
         .query_candid_as(
             canister_id,
             root,
-            CANIC_STATUS,
+            canic_core::protocol::CANIC_CONTROL_STATUS,
             (CanisterStatusRequest::Operation(OperationStatusRequest {
                 operation_id,
             }),),
@@ -437,7 +437,7 @@ fn assert_runtime_phase(
     let CanisterStatusResponse::Operation(operation) =
         result.expect("combined managed runtime operation status")
     else {
-        panic!("canic_status returned a non-Operation response")
+        panic!("canic_observability returned a non-Operation response")
     };
     let CanisterOperationStatusResponse::ConfigureRuntime(status) = *operation;
     assert_eq!(status.runtime.phase, expected);
@@ -461,12 +461,16 @@ fn assert_timer_inventory(
 
 fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus {
     let result: Result<CanisterStatusResponse, Error> = pic
-        .query_candid(canister_id, CANIC_STATUS, (CanisterStatusRequest::Runtime,))
+        .query_candid(
+            canister_id,
+            CANIC_OBSERVABILITY,
+            (CanisterStatusRequest::Runtime,),
+        )
         .expect("query combined Canic/IcyDB timer inventory");
     let CanisterStatusResponse::Runtime(status) =
         result.expect("combined Canic/IcyDB runtime status")
     else {
-        panic!("canic_status returned a non-Runtime response")
+        panic!("canic_observability returned a non-Runtime response")
     };
     *status
 }

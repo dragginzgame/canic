@@ -54,6 +54,7 @@ pub mod observability;
 pub mod page;
 pub mod placement;
 pub mod pool;
+pub mod public_status;
 pub mod role;
 pub mod root_store;
 pub mod rpc;

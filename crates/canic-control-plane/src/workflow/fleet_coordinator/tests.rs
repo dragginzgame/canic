@@ -534,7 +534,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.project]
 kind = "canister"
@@ -570,7 +569,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.project]
 kind = "canister"
@@ -597,7 +595,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.project]
 kind = "canister"
@@ -633,7 +630,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.project]
 kind = "canister"

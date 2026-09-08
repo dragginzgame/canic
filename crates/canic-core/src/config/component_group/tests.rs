@@ -16,7 +16,6 @@ name = "composition"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.a]
 kind = "canister"

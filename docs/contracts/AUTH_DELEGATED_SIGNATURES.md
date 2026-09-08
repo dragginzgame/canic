@@ -269,7 +269,7 @@ root query, or client-side provisioning step.
    -> persist signed batch
    -> install issuer-specific proof/witness on issuer canisters
 2. caller/session -> issuer `canic_command::PrepareDelegatedToken` update
-3. caller/session -> issuer `canic_status::DelegatedToken` query
+3. caller/session -> issuer `canic_auth_status::DelegatedToken` query
 4. caller/session -> endpoint with DelegatedToken
 ```
 

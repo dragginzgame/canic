@@ -4,4 +4,5 @@
 //! Does not own: metric recording, endpoint authorization, or DTO schemas.
 //! Boundary: workflow query namespace over runtime metrics projections.
 
+pub mod publication;
 pub mod query;

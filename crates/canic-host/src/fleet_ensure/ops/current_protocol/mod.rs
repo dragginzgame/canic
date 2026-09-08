@@ -31,15 +31,17 @@ use crate::{
 };
 use candid::{CandidType, Principal};
 use canic_control_plane::dto::fleet_coordinator::{
-    CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
-    CoordinatorStatusRequest, CoordinatorStatusResponse,
+    CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationReadRequest,
+    CoordinatorOperationReadResponse, CoordinatorOperationStatusResponse,
+    CoordinatorRegistryRequest, CoordinatorRegistryResponse,
 };
 use canic_control_plane::dto::{
     root::RootOperationStatusResponse,
     template::{
-        StoreCommand, StoreCommandResponse, StoreStatusRequest, StoreStatusResponse,
-        TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateLookupRequest,
-        TemplateManifestInput, TemplateManifestResponse, TemplateStagingStatusResponse,
+        StoreCatalogRequest, StoreCatalogResponse, StoreCommand, StoreCommandResponse,
+        StoreStatusRequest, StoreStatusResponse, TemplateChunkInput, TemplateChunkSetPrepareInput,
+        TemplateLookupRequest, TemplateManifestInput, TemplateManifestResponse,
+        TemplateStagingStatusResponse,
     },
 };
 use canic_control_plane::ids::{
@@ -1616,17 +1618,17 @@ fn query_store_staging(
     template_id: &TemplateId,
     version: &TemplateVersion,
 ) -> Result<TemplateStagingStatusResponse, CurrentProtocolError> {
-    let response: StoreStatusResponse = query_with_candid(
+    let response: StoreCatalogResponse = query_with_candid(
         icp,
         &resolved.candid_path,
         resolved.target,
-        protocol::CANIC_WASM_STORE_STATUS,
-        &StoreStatusRequest::Template(TemplateLookupRequest {
+        protocol::CANIC_WASM_STORE_CATALOG,
+        &StoreCatalogRequest::Template(TemplateLookupRequest {
             template_id: template_id.clone(),
             version: version.clone(),
         }),
     )?;
-    let StoreStatusResponse::Template(status) = response else {
+    let StoreCatalogResponse::Template(status) = response else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };
     Ok(status)
@@ -1642,7 +1644,7 @@ fn query_root_operation(
         icp,
         candid_path,
         root,
-        protocol::CANIC_ROOT_STATUS,
+        protocol::CANIC_ROOT_OPERATION_STATUS,
         &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
     );
     let response = match response {
@@ -2454,16 +2456,14 @@ pub(super) fn query_registry(
     candid: &Path,
     coordinator: Principal,
 ) -> Result<FleetRegistry, CurrentProtocolError> {
-    let response: CoordinatorStatusResponse = query_with_candid(
+    let response: CoordinatorRegistryResponse = query_with_candid(
         icp,
         candid,
         coordinator,
-        protocol::CANIC_COORDINATOR_STATUS,
-        &CoordinatorStatusRequest::Registry,
+        protocol::CANIC_COORDINATOR_REGISTRY,
+        &CoordinatorRegistryRequest::Registry,
     )?;
-    let CoordinatorStatusResponse::Registry(registry) = response else {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    };
+    let CoordinatorRegistryResponse::Registry(registry) = response;
     Ok(registry)
 }
 
@@ -2476,13 +2476,14 @@ pub(super) fn query_operation(
     Option<canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse>,
     CurrentProtocolError,
 > {
-    let response: Result<CoordinatorStatusResponse, CanisterProtocolError> = query_with_candid(
-        icp,
-        candid,
-        coordinator,
-        protocol::CANIC_COORDINATOR_STATUS,
-        &CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
-    );
+    let response: Result<CoordinatorOperationReadResponse, CanisterProtocolError> =
+        query_with_candid(
+            icp,
+            candid,
+            coordinator,
+            protocol::CANIC_COORDINATOR_OPERATION_STATUS,
+            &CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+        );
     let response = match response {
         Ok(response) => response,
         Err(error) if error.is_rejected_with(canic_core::diagnostics::codes::STATE_UNAVAILABLE) => {
@@ -2490,7 +2491,7 @@ pub(super) fn query_operation(
         }
         Err(error) => return Err(error.into()),
     };
-    let CoordinatorStatusResponse::Operation(
+    let CoordinatorOperationReadResponse::Operation(
         CoordinatorOperationStatusResponse::ComponentProvisioning(status),
     ) = response
     else {

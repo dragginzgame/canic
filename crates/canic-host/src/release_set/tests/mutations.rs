@@ -11,7 +11,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 
 "#;
@@ -101,7 +100,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.store]
 kind = "canister"
@@ -136,7 +134,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.worker]
 kind = "canister"
@@ -173,7 +170,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.worker]
 kind = "canister"
@@ -211,7 +207,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.alpha]
 kind = "canister"
@@ -273,7 +268,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.alpha]
 kind = "canister"
@@ -341,7 +335,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.hub]
 kind = "canister"
@@ -427,7 +420,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.hub]
 kind = "canister"

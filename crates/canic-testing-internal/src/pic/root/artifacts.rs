@@ -28,7 +28,7 @@ use crate::pic::{
     artifacts::{
         INTERNAL_TEST_RELEASE_BUILD_ID, internal_test_artifact_maintenance_interval,
         internal_test_artifact_prune_policy, report_artifact_cache_maintenance,
-        run_icp_all_with_env,
+        run_icp_all_with_env, with_canonical_root_cargo_inputs,
     },
     progress as test_progress,
 };
@@ -234,6 +234,13 @@ fn root_release_artifact_cache_spec(
         internal_test_artifact_prune_policy(),
         internal_test_artifact_maintenance_interval(),
     );
+    cache = with_canonical_root_cargo_inputs(
+        cache,
+        &spec.build_config_path,
+        &spec.workspace_root.join("target/icp-build"),
+        spec.build_profile,
+        &environment,
+    );
 
     for relative in spec.artifact_watch_paths {
         cache = cache.with_input(relative, &spec.workspace_root.join(relative));
@@ -255,8 +262,11 @@ fn root_release_cargo_build_spec(
         .into_iter()
         .map(|lifecycle| (lifecycle.role, lifecycle.package))
         .collect::<BTreeMap<_, _>>();
-    let mut packages = BTreeSet::from(["canic-host".to_string(), "canic-wasm-store".to_string()]);
-    for role in std::iter::once("root").chain(spec.release_roles.iter().copied()) {
+    let mut packages = BTreeSet::from([
+        "canic-host".to_string(),
+        "canic-fleet-wasm-store".to_string(),
+    ]);
+    for role in spec.release_roles.iter().copied() {
         packages.insert(
             role_packages
                 .get(role)

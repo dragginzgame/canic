@@ -13,8 +13,10 @@ mod tests {
     use crate::pic::startup::start_pocket_ic;
     use candid::{Principal, encode_one};
     use canic_control_plane::dto::fleet_coordinator::{
-        CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
-        CoordinatorStatusRequest, CoordinatorStatusResponse, FleetCoordinatorInitArgs,
+        CoordinatorCommand, CoordinatorCommandResponse, CoordinatorObservabilityRequest,
+        CoordinatorObservabilityResponse, CoordinatorOperationReadRequest,
+        CoordinatorOperationReadResponse, CoordinatorOperationStatusResponse,
+        CoordinatorRegistryRequest, CoordinatorRegistryResponse, FleetCoordinatorInitArgs,
     };
     use canic_core::{
         bootstrap::parse_config_model,
@@ -81,28 +83,23 @@ mod tests {
         .expect("Coordinator command transport")
     }
 
-    fn status(
+    fn status<R: crate::pic::canic::CoordinatorRead>(
         pic: &PocketIc,
         coordinator: Principal,
-        request: CoordinatorStatusRequest,
-    ) -> Result<CoordinatorStatusResponse, Error> {
-        pic.query_candid(coordinator, protocol::CANIC_COORDINATOR_STATUS, (request,))
+        request: R,
+    ) -> Result<R::Response, Error> {
+        pic.query_candid(coordinator, R::METHOD, (request,))
             .expect("Coordinator status transport")
     }
 
-    fn status_as(
+    fn status_as<R: crate::pic::canic::CoordinatorRead>(
         pic: &PocketIc,
         coordinator: Principal,
         caller: Principal,
-        request: CoordinatorStatusRequest,
-    ) -> Result<CoordinatorStatusResponse, Error> {
-        pic.query_candid_as(
-            coordinator,
-            caller,
-            protocol::CANIC_COORDINATOR_STATUS,
-            (request,),
-        )
-        .expect("Coordinator status transport")
+        request: R,
+    ) -> Result<R::Response, Error> {
+        pic.query_candid_as(coordinator, caller, R::METHOD, (request,))
+            .expect("Coordinator status transport")
     }
 
     fn command_error(
@@ -115,10 +112,7 @@ mod tests {
         }
     }
 
-    fn status_error(
-        result: Result<CoordinatorStatusResponse, Error>,
-        message: &'static str,
-    ) -> Error {
+    fn status_error<T>(result: Result<T, Error>, message: &'static str) -> Error {
         match result {
             Err(error) => error,
             Ok(_) => panic!("{message}"),
@@ -130,7 +124,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.project]
 kind = "canister"
@@ -180,10 +173,12 @@ placement.minimum_distinct_roots = 2
             None,
         );
 
-        let CoordinatorStatusResponse::RegistryVersion(genesis) =
-            status(&pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
-                .expect("genesis version")
-        else {
+        let CoordinatorObservabilityResponse::RegistryVersion(genesis) = status(
+            &pic,
+            coordinator,
+            CoordinatorObservabilityRequest::RegistryVersion,
+        )
+        .expect("genesis version") else {
             panic!("Coordinator returned a differently correlated status response");
         };
         let first_request = FleetSubnetRootJoinRequest {
@@ -227,11 +222,9 @@ placement.minimum_distinct_roots = 2
             "late exact retry must retain the original revision-two response"
         );
 
-        let CoordinatorStatusResponse::Registry(registry) =
-            status(&pic, coordinator, CoordinatorStatusRequest::Registry).expect("joined Registry")
-        else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
+        let CoordinatorRegistryResponse::Registry(registry) =
+            status(&pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("joined Registry");
         assert_eq!(registry.revision, 3);
         assert_eq!(registry.fleet_subnet_roots.len(), 2);
 
@@ -289,12 +282,12 @@ placement.minimum_distinct_roots = 2
             panic!("Coordinator returned a differently correlated command response");
         };
         assert_eq!(receipt.operation_id, [71; 32]);
-        let CoordinatorStatusResponse::Operation(
+        let CoordinatorOperationReadResponse::Operation(
             CoordinatorOperationStatusResponse::ComponentProvisioning(prepared),
         ) = status(
             &pic,
             coordinator,
-            CoordinatorStatusRequest::Operation(OperationStatusRequest {
+            CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
                 operation_id: [71; 32],
             }),
         )
@@ -307,12 +300,12 @@ placement.minimum_distinct_roots = 2
         assert_eq!(prepared.root_batch_count, 2);
         assert_eq!(prepared.component_count, 2);
 
-        let CoordinatorStatusResponse::Operation(
+        let CoordinatorOperationReadResponse::Operation(
             CoordinatorOperationStatusResponse::ComponentProvisioning(observed),
         ) = status(
             &pic,
             coordinator,
-            CoordinatorStatusRequest::Operation(OperationStatusRequest {
+            CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
                 operation_id: [71; 32],
             }),
         )
@@ -358,10 +351,12 @@ placement.minimum_distinct_roots = 2
             },
         )
         .expect("Coordinator snapshot restore");
-        let CoordinatorStatusResponse::AuthorityRestore(restored) =
-            status(pic, coordinator, CoordinatorStatusRequest::AuthorityRestore)
-                .expect("restored authority fence status")
-        else {
+        let CoordinatorObservabilityResponse::AuthorityRestore(restored) = status(
+            pic,
+            coordinator,
+            CoordinatorObservabilityRequest::AuthorityRestore,
+        )
+        .expect("restored authority fence status") else {
             panic!("Coordinator returned a differently correlated status response");
         };
         assert_eq!(restored.phase, AuthorityRestoreFencePhase::Sealed);
@@ -396,10 +391,12 @@ placement.minimum_distinct_roots = 2
         pic: &PocketIc,
         coordinator: Principal,
     ) -> canic_core::dto::fleet_registry::FleetRegistryVersion {
-        let CoordinatorStatusResponse::RegistryVersion(version) =
-            status(pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
-                .expect("restored Registry version")
-        else {
+        let CoordinatorObservabilityResponse::RegistryVersion(version) = status(
+            pic,
+            coordinator,
+            CoordinatorObservabilityRequest::RegistryVersion,
+        )
+        .expect("restored Registry version") else {
             panic!("Coordinator returned a differently correlated status response");
         };
         version
@@ -412,22 +409,20 @@ placement.minimum_distinct_roots = 2
         version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
     ) {
         let first_root = principal(21);
-        let CoordinatorStatusResponse::Registry(snapshot) = status_as(
+        let CoordinatorRegistryResponse::Registry(snapshot) = status_as(
             pic,
             coordinator,
             first_root,
-            CoordinatorStatusRequest::Registry,
+            CoordinatorRegistryRequest::Registry,
         )
-        .expect("registered root snapshot") else {
-            panic!("Coordinator returned a differently correlated command response");
-        };
+        .expect("registered root snapshot");
         assert_eq!(&snapshot, registry);
 
         let unregistered_snapshot = status_as(
             pic,
             coordinator,
             principal(99),
-            CoordinatorStatusRequest::Registry,
+            CoordinatorRegistryRequest::Registry,
         );
         assert_eq!(
             status_error(
@@ -470,10 +465,10 @@ placement.minimum_distinct_roots = 2
             panic!("Coordinator returned a differently correlated command response");
         };
 
-        let CoordinatorStatusResponse::RootAcknowledgements(acknowledgements) = status(
+        let CoordinatorObservabilityResponse::RootAcknowledgements(acknowledgements) = status(
             pic,
             coordinator,
-            CoordinatorStatusRequest::RootAcknowledgements,
+            CoordinatorObservabilityRequest::RootAcknowledgements,
         )
         .expect("acknowledgement inventory") else {
             panic!("Coordinator returned a differently correlated status response");
@@ -521,12 +516,9 @@ placement.minimum_distinct_roots = 2
             command_error(unauthorized, "non-controller activation must fail").code(),
             canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
-        let CoordinatorStatusResponse::Registry(active) =
-            status(pic, coordinator, CoordinatorStatusRequest::Registry)
-                .expect("query active Registry")
-        else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
+        let CoordinatorRegistryResponse::Registry(active) =
+            status(pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("query active Registry");
         assert!(
             active
                 .fleet_subnet_roots
@@ -541,10 +533,12 @@ placement.minimum_distinct_roots = 2
         coordinator: Principal,
         topology: &canic_core::control_plane_support::config::ComponentTopology,
     ) -> FleetRegistry {
-        let CoordinatorStatusResponse::RegistryVersion(genesis) =
-            status(pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
-                .expect("genesis version")
-        else {
+        let CoordinatorObservabilityResponse::RegistryVersion(genesis) = status(
+            pic,
+            coordinator,
+            CoordinatorObservabilityRequest::RegistryVersion,
+        )
+        .expect("genesis version") else {
             panic!("Coordinator returned a differently correlated status response");
         };
         let CoordinatorCommandResponse::JoinRoot(first) = command(
@@ -595,11 +589,9 @@ placement.minimum_distinct_roots = 2
         .expect("activate Registry") else {
             panic!("Coordinator returned a differently correlated command response");
         };
-        let CoordinatorStatusResponse::Registry(registry) =
-            status(pic, coordinator, CoordinatorStatusRequest::Registry).expect("active Registry")
-        else {
-            panic!("Coordinator returned a differently correlated status response");
-        };
+        let CoordinatorRegistryResponse::Registry(registry) =
+            status(pic, coordinator, CoordinatorRegistryRequest::Registry)
+                .expect("active Registry");
         registry
     }
 

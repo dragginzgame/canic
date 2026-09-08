@@ -24,8 +24,8 @@ Verify that IC lifecycle entrypoints remain thin synchronous adapters that resto
 This audit tracks the current post-v1 startup surface:
 
 * ordinary Canic-managed canisters use `canic::start!()`;
-* root vs non-root lifecycle selection is compile-time cfg dispatch from
-  package metadata emitted by `canic::build!`;
+* canonical Fleet Root uses `canic::start_fleet_root!()` with exact App
+  configuration emitted by `canic::build!`;
 * `start_local!` and `start_wasm_store!` remain separate special-purpose
   runtime modes and must still obey the same lifecycle timer boundary.
 * lifecycle adapters may record bounded lifecycle metrics synchronously and may
@@ -137,7 +137,7 @@ Optional supporting scope:
 
 * lifecycle-related tests in `crates/canic-tests/tests`
 * lifecycle-related tests in `crates/canic-core/tests`
-* root fixture uses of `start!(init = { ... })`
+* canonical Root entrypoint and Prepared-to-Active service restoration
 * specialized uses of `start_local!` and `start_wasm_store!`
 
 ---
@@ -292,7 +292,7 @@ rg -n 'lifecycle|post_upgrade|init|bootstrap|Timer' \
 #### Root fixture coverage
 
 ```bash
-rg -n 'start!\(|start_local!\(|start_wasm_store!\(|init = \{' canisters crates/canic-tests crates/canic-wasm-store -g '*.rs'
+rg -n 'start!\(|start_local!\(|start_wasm_store!\(|init = \{' canisters crates/canic-tests crates/canic-fleet-wasm-store -g '*.rs'
 ```
 
 ---
@@ -321,7 +321,7 @@ Checklist:
 * [ ] Macros do not embed policy/ops/model/storage logic
 * [ ] Macros do not run async orchestration directly
 * [ ] User hooks are scheduled/delegated, not awaited
-* [ ] `start!()` root/non-root dispatch comes from build metadata cfgs
+* [ ] `start!()` owns application lifecycle; canonical Root uses `start_fleet_root!()`
 * [ ] `start_local!` and `start_wasm_store!` stay special runtime modes, not
   alternate ordinary fleet startup paths
 

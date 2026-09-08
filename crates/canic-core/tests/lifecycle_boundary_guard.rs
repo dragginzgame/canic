@@ -74,7 +74,7 @@ fn root_init_stays_prepared_without_scheduling_bootstrap_or_application_hooks() 
     let source = read_source("crates/canic/src/macros/start.rs");
     let body = macro_section(
         &source,
-        "macro_rules! __canic_root_lifecycle_core",
+        "macro_rules! start_fleet_root",
         "// Run the optional init block from a lifecycle timer",
     );
     let init = function_body(body, "init");
@@ -82,10 +82,6 @@ fn root_init_stays_prepared_without_scheduling_bootstrap_or_application_hooks() 
     assert!(
         body.contains("fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs)"),
         "root init must accept the exact Fleet Subnet Root authority"
-    );
-    assert!(
-        body.contains("let _ = canic_install;"),
-        "root lifecycle must retain the application install-hook contract without executing it"
     );
     for forbidden in [
         "TimerApi::defer_lifecycle",
@@ -100,20 +96,19 @@ fn root_init_stays_prepared_without_scheduling_bootstrap_or_application_hooks() 
 }
 
 #[test]
-fn root_post_upgrade_schedules_services_and_hooks_only_when_active() {
+fn root_post_upgrade_schedules_services_only_when_active() {
     let macro_source = read_source("crates/canic/src/macros/start.rs");
     let root = macro_section(
         &macro_source,
-        "macro_rules! __canic_root_lifecycle_core",
+        "macro_rules! start_fleet_root",
         "// Run the optional init block from a lifecycle timer",
     );
     let post_upgrade = function_body(root, "post_upgrade");
     assert!(
         post_upgrade.contains("let active =")
             && post_upgrade.contains("if active {")
-            && post_upgrade.contains("schedule_post_upgrade_root_bootstrap();")
-            && post_upgrade.contains("canic_upgrade().await;"),
-        "root post-upgrade must gate bootstrap and application hooks on Active"
+            && post_upgrade.contains("schedule_post_upgrade_root_bootstrap();"),
+        "root post-upgrade must gate bootstrap on Active"
     );
 
     let runtime_source = read_source("crates/canic-core/src/workflow/runtime/root.rs");
@@ -142,7 +137,7 @@ fn automatic_topup_reachability_is_exactly_role_owned() {
     let local = macro_section(
         &start,
         "macro_rules! __canic_start_local_lifecycle_core",
-        "// Lifecycle core for the root Canic canister.",
+        "/// Configure Canic's canonical Fleet Subnet Root lifecycle and endpoints.",
     );
     for lifecycle in [nonroot, local] {
         assert!(
@@ -199,21 +194,15 @@ fn lifecycle_participant_is_paired_safe_and_ordered_before_deferred_work() {
     let local = macro_section(
         &source,
         "macro_rules! __canic_start_local_lifecycle_core",
-        "// Lifecycle core for the root Canic canister.",
+        "/// Configure Canic's canonical Fleet Subnet Root lifecycle and endpoints.",
     );
-    let root = macro_section(
-        &source,
-        "macro_rules! __canic_root_lifecycle_core",
-        "// Run the optional init block from a lifecycle timer",
-    );
-
-    assert_lifecycle_participant_grammar(&source, nonroot, local, root);
-    assert_lifecycle_participant_ordering(nonroot, local, root);
+    assert_lifecycle_participant_grammar(&source, nonroot, local);
+    assert_lifecycle_participant_ordering(nonroot, local);
     assert_specialized_start_macros_reject_participants(&source);
 }
 
-fn assert_lifecycle_participant_grammar(source: &str, nonroot: &str, local: &str, root: &str) {
-    for (name, section) in [("managed", nonroot), ("local", local), ("Root", root)] {
+fn assert_lifecycle_participant_grammar(source: &str, nonroot: &str, local: &str) {
+    for (name, section) in [("managed", nonroot), ("local", local)] {
         assert!(
             section.contains("init = $lifecycle_init:path,")
                 && section.contains("post_upgrade = $lifecycle_post_upgrade:path,")
@@ -234,10 +223,10 @@ fn assert_lifecycle_participant_grammar(source: &str, nonroot: &str, local: &str
 
     for (name, section) in [
         (
-            "managed/Root",
+            "managed",
             macro_section(
                 source,
-                "macro_rules! start",
+                "macro_rules! start {",
                 "/// Configure a local-only non-root Canic canister",
             ),
         ),
@@ -267,7 +256,7 @@ fn assert_lifecycle_participant_grammar(source: &str, nonroot: &str, local: &str
     }
 }
 
-fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str, root: &str) {
+fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str) {
     assert_ordered(
         function_body(nonroot, "init"),
         &[
@@ -302,23 +291,6 @@ fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str, root: &str)
             "$crate::__canic_after_optional_start_init_hook!",
         ],
         "local post-upgrade participant ordering",
-    );
-    assert_ordered(
-        function_body(root, "init"),
-        &[
-            "init_root_canister_before_bootstrap(",
-            "$(($lifecycle_init)();)?",
-        ],
-        "Root init participant ordering",
-    );
-    assert_ordered(
-        function_body(root, "post_upgrade"),
-        &[
-            "post_upgrade_root_canister_before_bootstrap(",
-            "$(($lifecycle_post_upgrade)();)?",
-            "if active {",
-        ],
-        "Root post-upgrade participant ordering",
     );
 }
 
