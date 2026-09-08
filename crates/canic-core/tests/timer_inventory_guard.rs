@@ -779,7 +779,6 @@ fn expected_timer_manifest_consumers() -> BTreeSet<String> {
         "Cargo.toml",
         "apps/test/test/Cargo.toml",
         "canisters/test/canic_icydb_lifecycle_probe/Cargo.toml",
-        "canisters/test/delegation_root_stub/Cargo.toml",
         "canisters/test/runtime_probe/Cargo.toml",
         "crates/canic-control-plane/Cargo.toml",
         "crates/canic-core/Cargo.toml",
