@@ -66,7 +66,7 @@ pub(super) fn load_report(
         &icp,
         &coordinator_binding,
         coordinator,
-        protocol::CANIC_COORDINATOR_STATUS,
+        protocol::CANIC_COORDINATOR_REGISTRY,
         &CoordinatorStatusRequestFragment::Registry,
     )?
     else {
@@ -76,7 +76,7 @@ pub(super) fn load_report(
         &icp,
         &coordinator_binding,
         coordinator,
-        protocol::CANIC_COORDINATOR_STATUS,
+        protocol::CANIC_OBSERVABILITY,
         &CoordinatorStatusRequestFragment::RegistryManifest,
     )?
     else {
@@ -86,7 +86,7 @@ pub(super) fn load_report(
         &icp,
         &coordinator_binding,
         coordinator,
-        protocol::CANIC_COORDINATOR_STATUS,
+        protocol::CANIC_OBSERVABILITY,
         &CoordinatorStatusRequestFragment::RegistryVersion,
     )?
     else {

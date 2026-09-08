@@ -699,7 +699,7 @@ fn internal_pocketic_packages_are_validated_before_the_marker_is_granted() {
         "canister_app",
         "canister_index_child",
         "canister_index_hub",
-        "canister_root",
+        "canic-fleet-root",
         "canister_scale",
         "canister_scale_hub",
         "canister_test",
@@ -940,7 +940,7 @@ fn assert_unpublished_package_under(
 fn built_in_wasm_store_uses_the_canonical_role_graph_contract() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let validation = validate_built_in_wasm_store_package(
-        &workspace.join("crates/canic-wasm-store/Cargo.toml"),
+        &workspace.join("crates/canic-fleet-wasm-store/Cargo.toml"),
         PackageValidationMode::LockedBuild,
     );
     let RolePackageValidation::Supported(evidence) = validation else {

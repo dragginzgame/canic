@@ -24,7 +24,7 @@ use std::{
 };
 
 const WASM_STORE_ROLE: &str = "wasm_store";
-const GENERATED_WRAPPER_RELATIVE: &str = ".icp/local/generated/canic-wasm-store";
+const GENERATED_WRAPPER_RELATIVE: &str = ".icp/local/generated/canic-fleet-wasm-store";
 const CANONICAL_WASM_STORE_DID_FILE: &str = "wasm_store.did";
 const CANONICAL_WASM_STORE_CRATE_NAME: &str = "canister_wasm_store";
 const GENERATED_WRAPPER_PACKAGE_NAME: &str = "canic-generated-wasm-store";
@@ -164,7 +164,7 @@ fn require_built_in_wasm_store_contract(
     }
 }
 
-// Resolve the canonical published/workspace `canic-wasm-store` source or fall
+// Resolve the canonical published/workspace `canic-fleet-wasm-store` source or fall
 // back to a generated wrapper when downstreams only depend on `canic`.
 fn resolve_bootstrap_wasm_store_source(
     workspace_root: &Path,
@@ -210,7 +210,7 @@ pub fn resolved_canic_package(
     Ok(package)
 }
 
-// Prefer the exact resolved `canic-wasm-store` package, then the exact sibling
+// Prefer the exact resolved `canic-fleet-wasm-store` package, then the exact sibling
 // source belonging to the selected Canic package.
 fn resolve_canonical_bootstrap_wasm_store_source(
     metadata: &CargoMetadata,
@@ -220,7 +220,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
         .packages
         .iter()
         .filter(|package| {
-            package.name == "canic-wasm-store"
+            package.name == "canic-fleet-wasm-store"
                 && package.version == canic_package.version
                 && package.source == canic_package.source
         })
@@ -253,14 +253,14 @@ fn resolve_canonical_bootstrap_wasm_store_source(
     let registry_version = registry_package_version_suffix(&canic_package.manifest_path, "canic")
         .filter(|version| *version == canic_package.version);
     let sibling_dir = registry_version.map_or_else(
-        || "canic-wasm-store".to_string(),
-        |version| format!("canic-wasm-store-{version}"),
+        || "canic-fleet-wasm-store".to_string(),
+        |version| format!("canic-fleet-wasm-store-{version}"),
     );
     let sibling_manifest = sibling_root.join(sibling_dir).join("Cargo.toml");
     if sibling_manifest.is_file() {
         require_package_manifest_identity(
             &sibling_manifest,
-            "canic-wasm-store",
+            "canic-fleet-wasm-store",
             &canic_package.version,
         )?;
         let source_root = sibling_manifest
@@ -269,7 +269,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
             .to_path_buf();
         return Ok(Some(BootstrapWasmStoreSource {
             manifest_path: sibling_manifest,
-            package_name: "canic-wasm-store".to_string(),
+            package_name: "canic-fleet-wasm-store".to_string(),
             package_version: canic_package.version.clone(),
             canonical_did_path: Some(source_root.join(CANONICAL_WASM_STORE_DID_FILE)),
         }));
@@ -341,7 +341,7 @@ fn resolved_normal_dependency<'a>(
     Ok(package)
 }
 
-// Render the generated wrapper under `.icp/local/generated/canic-wasm-store`.
+// Render the generated wrapper under `.icp/local/generated/canic-fleet-wasm-store`.
 fn ensure_generated_wasm_store_wrapper(
     icp_root: &Path,
     workspace_root: &Path,
@@ -506,7 +506,12 @@ pub fn render_profile(output: &mut String, profile: &str, settings: &[(&str, &st
     }
 }
 
-// Build the chosen `canic-wasm-store` source/wrapper for one target profile.
+pub fn render_infrastructure_profiles(output: &mut String) {
+    render_profile(output, "release", WASM_STORE_RELEASE_PROFILE);
+    render_profile(output, "fast", WASM_STORE_FAST_PROFILE);
+}
+
+// Build the chosen `canic-fleet-wasm-store` source/wrapper for one target profile.
 fn run_wasm_store_cargo_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,

@@ -61,8 +61,7 @@ run_installed_canic_in_workspace() {
 
 prepare_blob_storage_workspace() {
     mkdir -p \
-        "$DOWNSTREAM_ROOT/apps/downstream/app" \
-        "$DOWNSTREAM_ROOT/apps/downstream/root"
+        "$DOWNSTREAM_ROOT/apps/downstream/app"
 
     cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
 [workspace]
@@ -79,7 +78,6 @@ name = "downstream"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

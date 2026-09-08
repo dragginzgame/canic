@@ -115,7 +115,10 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
                 display: format!("{app}.{role}"),
                 role: role_name,
                 declaration_kind: if role.is_root() { "root" } else { "canister" }.to_string(),
-                package: declaration.package.clone(),
+                package: declaration
+                    .package
+                    .clone()
+                    .unwrap_or_else(|| "canic-fleet-root".to_string()),
                 attached,
                 state: if attached { "attached" } else { "declared" }.to_string(),
                 topology: topology.get(role).map(|labels| labels.join(",")),

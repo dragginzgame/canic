@@ -9,7 +9,6 @@ use canic::{
         role::{ComponentRuntimeOperationStatus, OperationStatusRequest},
         runtime::{CanicReadinessStatus, ReadinessStatus},
     },
-    protocol::CANIC_STATUS,
 };
 use canic_testing_internal::pic::{
     install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
@@ -266,7 +265,7 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
         .query_candid_as(
             canister_id,
             root,
-            CANIC_STATUS,
+            canic_core::protocol::CANIC_CONTROL_STATUS,
             (CanisterStatusRequest::Operation(OperationStatusRequest {
                 operation_id: [0x43; 32],
             }),),
@@ -284,7 +283,7 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
     let readiness: Result<CanisterStatusResponse, Error> = pic
         .query_candid(
             canister_id,
-            CANIC_STATUS,
+            canic_core::protocol::CANIC_OBSERVABILITY,
             (CanisterStatusRequest::Readiness,),
         )
         .expect("query managed Canister readiness");

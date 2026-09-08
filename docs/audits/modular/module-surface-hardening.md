@@ -149,7 +149,7 @@ Default in-scope roots:
 * `crates/canic/src`
 * `crates/canic-macros/src`
 * `crates/canic-control-plane/src`
-* `crates/canic-wasm-store/src`
+* `crates/canic-fleet-wasm-store/src`
 * `crates/canic-host/src`
 * `crates/canic-cli/src`
 * `crates/canic-backup/src`

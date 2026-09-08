@@ -6,8 +6,8 @@
 
 use crate::{
     protocol::{
-        CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_COORDINATOR_STATUS, CANIC_ROOT_COMMAND,
-        CANIC_ROOT_STATUS, CANIC_STATUS, CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
+        CANIC_COMMAND, CANIC_CONTROL_STATUS, CANIC_COORDINATOR_COMMAND, CANIC_OBSERVABILITY,
+        CANIC_ROOT_COMMAND, CANIC_ROOT_STATUS, CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
     },
     replay_policy::types::{
         CostClass, EndpointKind, EndpointReplayPolicy, ReplayCommandKindLabel,
@@ -36,7 +36,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
         None,
     ),
-    query_read_only(CANIC_COORDINATOR_STATUS),
+    query_read_only(CANIC_OBSERVABILITY),
     update_command_dispatch(
         CANIC_ROOT_COMMAND,
         command_kind("role.command.v1"),
@@ -47,7 +47,15 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     query_read_only(CANIC_ROOT_STATUS),
-    query_read_only(CANIC_STATUS),
+    query_read_only(CANIC_CONTROL_STATUS),
+    query_read_only(crate::protocol::CANIC_PUBLIC_STATUS),
+    query_read_only(crate::protocol::CANIC_AUTH_STATUS),
+    query_read_only(crate::protocol::CANIC_ADMISSION_STATUS),
+    query_read_only(crate::protocol::CANIC_ROOT_AUTH_STATUS),
+    query_read_only(crate::protocol::CANIC_ROOT_OPERATION_STATUS),
+    query_read_only(crate::protocol::CANIC_COORDINATOR_OPERATION_STATUS),
+    query_read_only(crate::protocol::CANIC_COORDINATOR_REGISTRY),
+    query_read_only(crate::protocol::CANIC_WASM_STORE_CATALOG),
 ];
 
 /// Exact replay-policy rows for the Store role, including its two data lanes.

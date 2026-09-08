@@ -3765,7 +3765,7 @@ pub fn directory_page(
 async fn query_managed_binding(
     canister: candid::Principal,
 ) -> Result<ManagedCanisterBinding, InternalError> {
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_STATUS)
+    let call = CallOps::bounded_wait(canister, protocol::CANIC_OBSERVABILITY)
         .with_arg(CanisterStatusRequestFragment::Binding)?
         .execute()
         .await
@@ -4177,7 +4177,7 @@ async fn query_component_runtime_status(
     canister: candid::Principal,
     operation_id: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_STATUS)
+    let call = CallOps::bounded_wait(canister, protocol::CANIC_CONTROL_STATUS)
         .with_arg(CanisterStatusRequestFragment::Operation(
             OperationStatusRequest { operation_id },
         ))?
@@ -4207,7 +4207,7 @@ async fn require_component_runtime_ready(
     canister: candid::Principal,
     expected_role: &CanisterRole,
 ) -> Result<(), InternalError> {
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_STATUS)
+    let call = CallOps::bounded_wait(canister, protocol::CANIC_OBSERVABILITY)
         .with_arg(CanisterStatusRequestFragment::Readiness)?
         .execute()
         .await

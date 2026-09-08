@@ -186,7 +186,17 @@ fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaEr
             )));
         }
 
-        if declaration.package.trim().is_empty() {
+        if declaration.kind == RoleDeclarationKind::Root {
+            if declaration.package.is_some() {
+                return Err(ConfigSchemaError::ValidationError(
+                    "Root uses the canonical Canic package; omit roles.root.package".into(),
+                ));
+            }
+        } else if declaration
+            .package
+            .as_deref()
+            .is_none_or(|package| package.trim().is_empty())
+        {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "role declaration '{role}' package must not be empty",
             )));

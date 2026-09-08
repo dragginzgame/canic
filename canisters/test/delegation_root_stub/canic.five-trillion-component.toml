@@ -3,7 +3,6 @@ name = "delegation_root_stub"
 
 [roles.root]
 kind = "root"
-package = "."
 
 [roles.issuer]
 kind = "canister"

@@ -4,10 +4,18 @@
 
 pub const CANIC_COMMAND: &str = "canic_command";
 pub const CANIC_COORDINATOR_COMMAND: &str = "canic_coordinator_command";
-pub const CANIC_COORDINATOR_STATUS: &str = "canic_coordinator_status";
+pub const CANIC_COORDINATOR_OPERATION_STATUS: &str = "canic_coordinator_operation_status";
+pub const CANIC_COORDINATOR_REGISTRY: &str = "canic_coordinator_registry";
+pub const CANIC_WASM_STORE_CATALOG: &str = "canic_wasm_store_catalog";
 pub const CANIC_ROOT_COMMAND: &str = "canic_root_command";
 pub const CANIC_ROOT_STATUS: &str = "canic_root_status";
-pub const CANIC_STATUS: &str = "canic_status";
+pub const CANIC_PUBLIC_STATUS: &str = "canic_public_status";
+pub const CANIC_OBSERVABILITY: &str = "canic_observability";
+pub const CANIC_AUTH_STATUS: &str = "canic_auth_status";
+pub const CANIC_CONTROL_STATUS: &str = "canic_control_status";
+pub const CANIC_ADMISSION_STATUS: &str = "canic_admission_status";
+pub const CANIC_ROOT_AUTH_STATUS: &str = "canic_root_auth_status";
+pub const CANIC_ROOT_OPERATION_STATUS: &str = "canic_root_operation_status";
 pub const CANIC_WASM_STORE_COMMAND: &str = "canic_wasm_store_command";
 pub const CANIC_WASM_STORE_STATUS: &str = "canic_wasm_store_status";
 
@@ -22,20 +30,6 @@ pub fn command_endpoint_for_role(role: &crate::ids::CanisterRole) -> &'static st
         CANIC_WASM_STORE_COMMAND
     } else {
         CANIC_COMMAND
-    }
-}
-
-/// Return the exact status endpoint owned by one Canic role.
-#[must_use]
-pub fn status_endpoint_for_role(role: &crate::ids::CanisterRole) -> &'static str {
-    if role.is_fleet_coordinator() {
-        CANIC_COORDINATOR_STATUS
-    } else if role.is_root() {
-        CANIC_ROOT_STATUS
-    } else if role.is_wasm_store() {
-        CANIC_WASM_STORE_STATUS
-    } else {
-        CANIC_STATUS
     }
 }
 
@@ -77,46 +71,28 @@ pub const BLOB_STORAGE_070_CASHIER_METHODS: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use super::{
-        CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_COORDINATOR_STATUS, CANIC_ROOT_COMMAND,
-        CANIC_ROOT_STATUS, CANIC_STATUS, CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
-        command_endpoint_for_role, status_endpoint_for_role,
+        CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND, CANIC_WASM_STORE_COMMAND,
+        command_endpoint_for_role,
     };
     use crate::ids::CanisterRole;
     use std::collections::BTreeSet;
 
     #[test]
-    fn built_in_roles_own_distinct_typed_command_and_status_endpoints() {
+    fn built_in_roles_own_distinct_command_endpoints() {
         let ordinary = CanisterRole::new("ordinary");
         let roles = [
-            (&ordinary, CANIC_COMMAND, CANIC_STATUS),
-            (
-                &CanisterRole::FLEET_COORDINATOR,
-                CANIC_COORDINATOR_COMMAND,
-                CANIC_COORDINATOR_STATUS,
-            ),
-            (&CanisterRole::ROOT, CANIC_ROOT_COMMAND, CANIC_ROOT_STATUS),
-            (
-                &CanisterRole::WASM_STORE,
-                CANIC_WASM_STORE_COMMAND,
-                CANIC_WASM_STORE_STATUS,
-            ),
+            (&ordinary, CANIC_COMMAND),
+            (&CanisterRole::FLEET_COORDINATOR, CANIC_COORDINATOR_COMMAND),
+            (&CanisterRole::ROOT, CANIC_ROOT_COMMAND),
+            (&CanisterRole::WASM_STORE, CANIC_WASM_STORE_COMMAND),
         ];
-
-        for (role, command, status) in roles {
+        for (role, command) in roles {
             assert_eq!(command_endpoint_for_role(role), command);
-            assert_eq!(status_endpoint_for_role(role), status);
         }
-
         let commands = roles
             .iter()
-            .map(|(_, command, _)| *command)
+            .map(|(_, command)| *command)
             .collect::<BTreeSet<_>>();
         assert_eq!(commands.len(), roles.len());
-
-        let statuses = roles
-            .iter()
-            .map(|(_, _, status)| *status)
-            .collect::<BTreeSet<_>>();
-        assert_eq!(statuses.len(), roles.len());
     }
 }

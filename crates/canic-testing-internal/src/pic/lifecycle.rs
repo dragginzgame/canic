@@ -671,7 +671,7 @@ mod tests {
             page::PageRequest,
             role::OperationReceipt,
         },
-        protocol::{CANIC_COMMAND, CANIC_STATUS},
+        protocol::CANIC_COMMAND,
     };
     use ic_testkit::pic::{CandidCallExt, CanisterInstallExt};
     use std::time::Duration;
@@ -1544,7 +1544,7 @@ mod tests {
         let response: Result<ManagedStatusResponse, Error> = pic.query_candid_as_or_panic(
             canister,
             root,
-            CANIC_STATUS,
+            canic_core::protocol::CANIC_ADMISSION_STATUS,
             (ManagedStatusRequest::Admission(PageRequest {
                 offset: 0,
                 limit: u64::MAX,

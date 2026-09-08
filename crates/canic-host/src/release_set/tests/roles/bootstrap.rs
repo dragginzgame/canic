@@ -10,7 +10,6 @@ init_mode = "enabled"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -126,7 +125,6 @@ init_mode = "enabled"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -180,7 +178,6 @@ init_mode = "enabled"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

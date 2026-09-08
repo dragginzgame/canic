@@ -3,7 +3,6 @@ name = "standalone"
 
 [roles.root]
 kind = "root"
-package = "."
 
 [roles.app]
 kind = "canister"

@@ -21,7 +21,6 @@ name = "configuration_digest"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.database]
 kind = "canister"
@@ -118,7 +117,6 @@ fn semantic_digest_is_stable_across_source_order_and_formatting() {
 name = "order_independent"
 [roles.root]
 kind = "root"
-package = "root"
 [roles.a]
 kind = "canister"
 package = "a"
@@ -160,7 +158,6 @@ kind = "canister"
 package = "a"
 kind = "canister"
 [roles.root]
-package = "root"
 kind = "root"
 
 [component_specs.b]

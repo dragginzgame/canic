@@ -98,7 +98,6 @@ name = "probe"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -347,7 +346,7 @@ fn complete_config_validation_rejects_unadmitted_role_declarations() {
             CanisterRole::owned(role.clone()),
             RoleDeclaration {
                 kind: RoleDeclarationKind::Canister,
-                package: "app".to_string(),
+                package: Some("app".to_string()),
                 fleet_admission: false,
             },
         );
@@ -438,7 +437,7 @@ fn every_checked_in_canic_config_parses_and_validates() {
     for required in [
         "apps/demo/canic.toml",
         "apps/test/canic.toml",
-        "crates/canic-wasm-store/canic.toml",
+        "crates/canic-fleet-wasm-store/canic.toml",
     ] {
         assert!(configs.contains(&root.join(required)), "missing {required}");
     }
@@ -471,7 +470,7 @@ fn non_root_role_declaration_may_be_declared_only() {
         CanisterRole::from("store"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: "crates/store".to_string(),
+            package: Some("crates/store".to_string()),
             fleet_admission: false,
         },
     );
@@ -484,13 +483,28 @@ fn non_root_role_declaration_may_be_declared_only() {
 }
 
 #[test]
-fn role_declarations_require_package_paths() {
-    toml::from_str::<RoleDeclaration>(
-        r#"
-kind = "canister"
-"#,
-    )
-    .expect_err("role declaration without package should fail deserialization");
+fn role_package_authority_distinguishes_canonical_root_and_application() {
+    let mut config = ConfigModel::test_default();
+    assert!(config.roles[&CanisterRole::ROOT].package.is_none());
+    config
+        .validate()
+        .expect("canonical Root has no package path");
+    let mut selected_package = config.clone();
+    selected_package
+        .roles
+        .get_mut(&CanisterRole::ROOT)
+        .unwrap()
+        .package = Some("root".to_string());
+    assert!(matches!(
+        selected_package.validate(),
+        Err(ConfigSchemaError::ValidationError(_))
+    ));
+    let declaration = toml::from_str::<RoleDeclaration>(r#"kind = "canister""#).unwrap();
+    config.roles.insert(CanisterRole::from("app"), declaration);
+    assert!(matches!(
+        config.validate(),
+        Err(ConfigSchemaError::ValidationError(_))
+    ));
 }
 
 #[test]
@@ -534,7 +548,7 @@ fn role_declaration_package_paths_must_not_be_empty() {
         CanisterRole::from("store"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: " ".to_string(),
+            package: Some(" ".to_string()),
             fleet_admission: false,
         },
     );
@@ -551,7 +565,7 @@ fn topology_less_config_may_declare_only_non_root_roles() {
         CanisterRole::from("store"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: "store".to_string(),
+            package: Some("store".to_string()),
             fleet_admission: false,
         },
     );
@@ -571,7 +585,7 @@ fn topology_less_config_may_declare_root_infrastructure() {
         CanisterRole::ROOT,
         RoleDeclaration {
             kind: RoleDeclarationKind::Root,
-            package: "root".to_string(),
+            package: None,
             fleet_admission: false,
         },
     );
@@ -595,7 +609,7 @@ fn component_spec_instance_ceilings_are_fleet_bounded() {
         CanisterRole::from("aux"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: "aux".to_string(),
+            package: Some("aux".to_string()),
             fleet_admission: false,
         },
     );
@@ -644,7 +658,7 @@ fn provisioning_grant_graph_requires_existing_distinct_acyclic_specs() {
         CanisterRole::from("aux"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: "aux".to_string(),
+            package: Some("aux".to_string()),
             fleet_admission: false,
         },
     );
@@ -712,7 +726,7 @@ fn potential_descendant_roles_may_be_reused_across_component_specs() {
             CanisterRole::from(role),
             RoleDeclaration {
                 kind: RoleDeclarationKind::Canister,
-                package: role.to_string(),
+                package: Some(role.to_string()),
                 fleet_admission: false,
             },
         );
@@ -759,7 +773,7 @@ fn a_component_role_may_also_be_a_potential_child_role() {
         CanisterRole::from("aux"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: "aux".to_string(),
+            package: Some("aux".to_string()),
             fleet_admission: false,
         },
     );
@@ -807,7 +821,7 @@ fn attached_and_deployable_roles_follow_structural_ownership() {
         CanisterRole::from("user_hub"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: "user_hub".to_string(),
+            package: Some("user_hub".to_string()),
             fleet_admission: false,
         },
     );
@@ -815,7 +829,7 @@ fn attached_and_deployable_roles_follow_structural_ownership() {
         CanisterRole::from("user_shard"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: "user_shard".to_string(),
+            package: Some("user_shard".to_string()),
             fleet_admission: false,
         },
     );
@@ -848,7 +862,7 @@ fn app_cannot_declare_the_built_in_fleet_coordinator_role() {
         CanisterRole::FLEET_COORDINATOR,
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: "coordinator".to_string(),
+            package: Some("coordinator".to_string()),
             fleet_admission: false,
         },
     );
@@ -864,7 +878,7 @@ fn several_component_specs_may_define_distinct_components() {
         CanisterRole::from("aux"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: "aux".to_string(),
+            package: Some("aux".to_string()),
             fleet_admission: false,
         },
     );
@@ -1081,7 +1095,6 @@ principals = ["aaaaa-aa"]
 
 [roles.root]
 kind = "root"
-package = "root"
 "#,
     )
     .expect_err("removed App whitelist authority must reject");

@@ -5,8 +5,8 @@ use super::*;
 fn renders_plain_endpoint_signatures_as_table() {
     let endpoints = vec![
         EndpointEntry {
-            name: "canic_status".to_string(),
-            candid: "canic_status : (opt text, opt text, Level, PageRequest) -> () query;"
+            name: "canic_observability".to_string(),
+            candid: "canic_observability : (opt text, opt text, Level, PageRequest) -> () query;"
                 .to_string(),
             modes: vec![EndpointMode::Query],
             arguments: vec![
@@ -33,17 +33,21 @@ fn renders_plain_endpoint_signatures_as_table() {
         },
     ];
 
-    assert_eq!(
-        render_plain_endpoints(&endpoints),
-        [
-            "FUNCTION             MODE           SIGNATURE",
-            "------------------   ------------   ----------------------------------------------",
-            "canic_status         query          (opt text, opt text, Level, PageRequest) -> ()",
-            "canic_command        update         (Envelope) -> (Result)",
-            "application_stream   query oneway   (Envelope) -> (Result)",
-        ]
-        .join("\n")
-    );
+    let rendered = render_plain_endpoints(&endpoints);
+    let lines = rendered.lines().collect::<Vec<_>>();
+    assert_eq!(lines.len(), endpoints.len() + 2);
+    let mode_column = lines[0].find("MODE").expect("mode column");
+    let signature_column = lines[0].find("SIGNATURE").expect("signature column");
+    let expected = [
+        ("query", "(opt text, opt text, Level, PageRequest) -> ()"),
+        ("update", "(Envelope) -> (Result)"),
+        ("query oneway", "(Envelope) -> (Result)"),
+    ];
+    for ((line, endpoint), (mode, signature)) in lines[2..].iter().zip(&endpoints).zip(expected) {
+        assert_eq!(line[..mode_column].trim(), endpoint.name);
+        assert_eq!(line[mode_column..signature_column].trim(), mode);
+        assert_eq!(line[signature_column..].trim(), signature);
+    }
 }
 
 fn test_endpoint_type(candid: &str) -> EndpointType {

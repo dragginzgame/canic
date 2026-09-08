@@ -1,5 +1,43 @@
 # Canic 0.110 Implementation Status
 
+## RF1: Retained Fleet Feedback
+
+Ready for release approval, selected by the maintainer after CR1 on 2026-09-07. Extends the open
+0.110.10 draft with CANIC-143, CANIC-144 and the CANIC-125 observation follow-up.
+Host policy, transport and the existing journal remain the owners. The outcome
+is ordinary convergence of installed underfunded imports, symbolic retained
+Root restart and bounded initial-child activation without application retries.
+Required evidence: exact lifecycle/controller rejection before funding, retained
+withdrawal receipts across lost replies, generated symbolic restart through
+reviewed reinstall, conservation/replay, initial-child demand bounds and no
+duplicate issuance. Reuse the existing focused production-adapter journeys.
+The implementation, propagation and focused qualification are complete:
+150 Fleet host tests, affected-package Clippy, installed-import recovery
+(310.66s) and generated symbolic-seed reinstall/recovery (393.03s) pass.
+Both runtime cases include conservation and effect-free replay. The
+[feedback handoff](../../audits/reports/2026-09/2026-09-07/retained-fleet-feedback.md)
+records the final boundaries. CANIC-141 remains deferred. The combined CR1/RF1
+draft is ready; release execution and downstream live timing remain separate.
+
+## CR1: Canonical Fleet Subnet Root
+
+Ready for release approval, explicitly selected by the maintainer on 2026-09-07
+after 0.110.9.
+This is the next accepted batch in the current minor, ahead of further downstream
+feedback; CANIC-141 remains deferred. The canonical Root build, package rename,
+configuration and lifecycle hard cut, fixture/documentation propagation and
+focused fresh/reinstall/recovery qualification are one release batch.
+Owners: facade/control plane, host build/role contract and test infrastructure.
+See [the CR1 contract](0.110-design.md#canonical-fleet-subnet-root-batch-cr1).
+The complete hard cut and propagation are implemented in the open 0.110.10
+draft. Packaged Root construction, fresh generated Fleet recovery/replay
+(720.46s, including cold builds), generated reinstall/recovery/conservation/
+replay (496.36s), focused source/interface tests and affected-target Clippy pass.
+See [the CR1 handoff](../../audits/reports/2026-09/2026-09-07/canonical-fleet-root.md).
+Package versions remain 0.110.9; the maintainer-selected release gate and
+publication remain. CR1 does not close the independent runtime-contraction line.
+
+
 Date: 2026-09-06
 
 ## Status

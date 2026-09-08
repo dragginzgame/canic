@@ -59,6 +59,11 @@ fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStrea
     let app_init_mode = render_fleet_init_mode(authority.app_init_mode);
     let log = render_log_config(&authority.log);
     let auth = render_auth_config(&authority.auth);
+    let public_metrics = authority.public_metrics.iter().map(|family| {
+        let variant =
+            proc_macro2::Ident::new(&format!("{family:?}"), proc_macro2::Span::call_site());
+        quote! { ::canic::__internal::core::dto::public_status::PublicMetricFamily::#variant }
+    });
     let fleet_admission = authority.fleet_admission;
     let global_icrc21 = authority.global_icrc21;
     let component_topology = render_component_topology(&authority.component_topology);
@@ -85,6 +90,7 @@ fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStrea
             app_init_mode: #app_init_mode,
             log: #log,
             auth: #auth,
+            public_metrics: ::std::collections::BTreeSet::from([#(#public_metrics),*]),
             fleet_admission: #fleet_admission,
             global_icrc21: #global_icrc21,
             component_topology: #component_topology,
@@ -393,6 +399,11 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
     let standards = render_option(config.standards.as_ref(), render_standards);
     let log = render_log_config(&config.log);
     let auth = render_auth_config(&config.auth);
+    let public_metrics = config.public_metrics.iter().map(|family| {
+        let variant =
+            proc_macro2::Ident::new(&format!("{family:?}"), proc_macro2::Span::call_site());
+        quote! { ::canic::__internal::core::dto::public_status::PublicMetricFamily::#variant }
+    });
     let app = render_app_config(&config.app);
     let roles = render_btree_map(
         config.roles.iter(),
@@ -417,6 +428,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
     let services = render_services_config(&config.services);
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ConfigModel {
+            public_metrics: ::std::collections::BTreeSet::from([#(#public_metrics),*]),
             standards: #standards,
             log: #log,
             auth: #auth,
@@ -433,7 +445,9 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
 // Render an App role declaration.
 fn render_role_declaration(declaration: &RoleDeclaration) -> TokenStream {
     let kind = render_role_declaration_kind(declaration.kind);
-    let package = render_owned_string(&declaration.package);
+    let package = render_option(declaration.package.as_ref(), |package| {
+        render_owned_string(package)
+    });
     let fleet_admission = declaration.fleet_admission;
 
     quote! {
@@ -1520,7 +1534,6 @@ name = "render_v3"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.hub]
 kind = "canister"

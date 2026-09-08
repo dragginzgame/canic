@@ -1069,7 +1069,7 @@ fn role_package<'a>(
     config
         .roles
         .get(role)
-        .map(|declaration| declaration.package.as_str())
+        .and_then(|declaration| declaration.package.as_deref())
         .ok_or_else(|| ComponentTopologyError::MissingRoleDeclaration { role: role.clone() })
 }
 

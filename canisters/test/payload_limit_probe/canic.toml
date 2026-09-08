@@ -5,7 +5,6 @@ init_mode = "enabled"
 
 [roles.root]
 kind = "root"
-package = "../../audit/root_probe"
 
 [roles.test]
 kind = "canister"

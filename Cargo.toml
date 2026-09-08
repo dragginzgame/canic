@@ -1,13 +1,11 @@
 [workspace]
 members = [
     "apps/demo/app",
-    "apps/demo/root",
     "apps/demo/user_hub",
     "apps/demo/user_shard",
     "apps/test/app",
     "apps/test/index_child",
     "apps/test/index_hub",
-    "apps/test/root",
     "apps/test/scale",
     "apps/test/scale_hub",
     "apps/test/test",
@@ -39,11 +37,12 @@ members = [
     "crates/canic-control-plane",
     "crates/canic-core",
     "crates/canic-fleet-coordinator",
+    "crates/canic-fleet-root",
+    "crates/canic-fleet-wasm-store",
     "crates/canic-host",
     "crates/canic-macros",
     "crates/canic-testing-internal",
     "crates/canic-tests",
-    "crates/canic-wasm-store",
 ]
 resolver = "2"
 
@@ -69,11 +68,12 @@ canic-backup = { version = "0.110.9", path = "crates/canic-backup" }
 canic-control-plane = { version = "0.110.9", path = "crates/canic-control-plane", default-features = false }
 canic-core = { version = "0.110.9", path = "crates/canic-core" }
 canic-fleet-coordinator = { version = "0.110.9", path = "crates/canic-fleet-coordinator" }
+canic-fleet-root = { version = "0.110.9", path = "crates/canic-fleet-root" }
+canic-fleet-wasm-store = { version = "0.110.9", path = "crates/canic-fleet-wasm-store" }
 canic-host = { version = "0.110.9", path = "crates/canic-host" }
 canic-icydb-lifecycle-schema = { version = "0.110.9", path = "canisters/test/canic_icydb_lifecycle_probe/schema" }
 canic-macros = { version = "0.110.9", path = "crates/canic-macros" }
 canic-testing-internal = { version = "0.110.9", path = "crates/canic-testing-internal" }
-canic-wasm-store = { version = "0.110.9", path = "crates/canic-wasm-store" }
 ciborium = "0.2"
 clap = { version = "4.6.1", features = ["derive"] }
 criterion = "0.8"
@@ -155,9 +155,10 @@ canic-cli = { path = "crates/canic-cli" }
 canic-control-plane = { path = "crates/canic-control-plane" }
 canic-core = { path = "crates/canic-core" }
 canic-fleet-coordinator = { path = "crates/canic-fleet-coordinator" }
+canic-fleet-root = { path = "crates/canic-fleet-root" }
 canic-macros = { path = "crates/canic-macros" }
 canic-host = { path = "crates/canic-host" }
-canic-wasm-store = { path = "crates/canic-wasm-store" }
+canic-fleet-wasm-store = { path = "crates/canic-fleet-wasm-store" }
 
 # profiles
 [profile.dev]

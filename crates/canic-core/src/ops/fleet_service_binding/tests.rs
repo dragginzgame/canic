@@ -40,7 +40,6 @@ name = "service_binding_test"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.database]
 kind = "canister"

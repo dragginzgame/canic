@@ -886,7 +886,7 @@ async fn query_root_removal(
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<RootRemovalOperationStatus, InternalError> {
-    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_STATUS)
+    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_OPERATION_STATUS)
         .with_arg(RemoteRootStatusRequest::Operation(OperationStatusRequest {
             operation_id,
         }))?
@@ -1269,7 +1269,7 @@ async fn query_root_component_provisioning(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_STATUS)
+    let result = CallOps::unbounded_wait(root, protocol::CANIC_ROOT_OPERATION_STATUS)
         .with_arg(RemoteRootStatusRequest::Operation(OperationStatusRequest {
             operation_id,
         }))?

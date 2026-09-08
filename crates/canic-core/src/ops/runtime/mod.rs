@@ -13,6 +13,7 @@ pub mod install_source;
 pub mod log;
 pub mod memory;
 pub mod metrics;
+pub mod public_metrics;
 pub mod ready;
 pub mod recent_failure;
 pub mod root_funding;

@@ -96,6 +96,10 @@ pub mod protocol {
 }
 
 /// Observability and operational helpers
+pub mod public_status {
+    pub use crate::__internal::core::api::public_status::PublicStatusApi;
+}
+
 pub mod metrics {
     pub use crate::__internal::core::api::metrics::MetricsQuery;
 }

@@ -1,4 +1,4 @@
-# canic-wasm-store
+# canic-fleet-wasm-store
 
 Canonical `wasm_store` canister crate for Canic.
 
@@ -15,7 +15,7 @@ Use this crate directly when you:
 - are wiring the standard Canic root/bootstrap/store topology
 
 Most ordinary Canic canister projects should start with `canic`, not
-`canic-wasm-store`.
+`canic-fleet-wasm-store`.
 
 This package is a canister artifact source, not a reusable Rust dependency. It
 builds only as a `cdylib` Wasm canister target and intentionally does not expose
@@ -44,7 +44,7 @@ built crate, run the host artifact builder from the Canic workspace with:
 ```bash
 CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- \
   wasm_store debug . . apps/test/canic.toml --refresh-canonical-did
-git diff --exit-code -- crates/canic-wasm-store/wasm_store.did
+git diff --exit-code -- crates/canic-fleet-wasm-store/wasm_store.did
 ```
 
 The second command is the drift check: it succeeds only when the checked-in

@@ -536,7 +536,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -553,7 +552,6 @@ component_role = "app"
 maximum_instances = 1
 "#,
     );
-    write_medic_package(&root, "root", "demo", "root");
     write_medic_package(&root, "app", "demo", "app");
     write_medic_package(&root, "store", "demo", "store");
 
@@ -563,6 +561,11 @@ maximum_instances = 1
         check.status == MedicStatus::Pass
             && check.code == "role_package_metadata_present"
             && check.subject == "demo.app"
+    }));
+    assert!(checks.iter().any(|check| {
+        check.status == MedicStatus::Pass
+            && check.code == "canonical_root_contract"
+            && check.subject == "demo.root"
     }));
     let store = checks
         .iter()
@@ -586,7 +589,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -607,7 +609,6 @@ component_role = "store"
 maximum_instances = 1
 "#,
     );
-    write_medic_package(&root, "root", "demo", "root");
     write_medic_package(&root, "app", "demo", "other");
 
     let checks = workspace_config_quality_checks(&root, &[config]);
@@ -643,7 +644,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -658,13 +658,6 @@ maximum_instances = 1
 [component_specs.app.auth]
 role_attestation_cache = true
 "#,
-    );
-    write_medic_package_with_canic_features(
-        &root,
-        "root",
-        "demo",
-        "root",
-        &["auth-root-canister-sig-create"],
     );
     write_medic_package_with_canic_features(
         &root,
@@ -709,7 +702,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -724,13 +716,6 @@ maximum_instances = 1
 [component_specs.app.auth]
 role_attestation_cache = true
 "#,
-    );
-    write_medic_package_with_canic_features(
-        &root,
-        "root",
-        "demo",
-        "root",
-        &["auth-root-canister-sig-create"],
     );
     write_medic_package_with_canic_features(
         &root,
@@ -767,7 +752,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -815,7 +799,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -838,7 +821,6 @@ role_attestation_cache = true
             "auth-root-canister-sig-verify",
         ],
     );
-    write_medic_package(&root, "root", "demo", "root");
     write_medic_package(&root, "app", "demo", "app");
 
     let checks = workspace_config_quality_checks(&root, &[config]);
@@ -871,7 +853,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"
@@ -1138,7 +1119,7 @@ fn blob_storage_passive_detection_rejects_partial_or_unrelated_candid() {
     assert!(!candid_declares_blob_storage_billing(
         r"
             service : {
-                canic_status : (variant { Readiness }) -> (bool) query;
+                canic_observability : (variant { Readiness }) -> (bool) query;
             }
         "
     ));

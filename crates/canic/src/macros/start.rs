@@ -329,59 +329,20 @@ macro_rules! __canic_start_local_lifecycle_core {
     };
 }
 
-// Lifecycle core for the root Canic canister.
-#[doc(hidden)]
+/// Configure Canic's canonical Fleet Subnet Root lifecycle and endpoints.
+///
+/// Root has no application lifecycle participant or hook. Its configuration and
+/// capability authority are emitted by the canonical host build.
 #[macro_export]
-macro_rules! __canic_root_lifecycle_core {
-    (
-        $(lifecycle_participant(
-            init = $lifecycle_init:path,
-            post_upgrade = $lifecycle_post_upgrade:path,
-        ))?
-        $(, init = $init:block)?
-    ) => {
-        ::std::thread_local! {
-            static __CANIC_PREPARED_ROOT_INIT_COMPLETED:
-                ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
-            static __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED:
-                ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
-        }
-
-        // The activation adapter owns execution of this application hook.
-        // Keep the contract bound without polling or scheduling it in Prepared.
+macro_rules! start_fleet_root {
+    () => {
+        $crate::__canic_require_finish!();
         #[doc(hidden)]
-        const _: () = {
-            let _ = canic_install;
+        #[used]
+        static __CANIC_RELEASE_BUILD_ID: &str = match option_env!("CANIC_RELEASE_BUILD_ID") {
+            Some(value) => value,
+            None => "",
         };
-
-        $($crate::__canic_typecheck_lifecycle_participant_pair!(
-            $lifecycle_init,
-            $lifecycle_post_upgrade
-        );)?
-
-        #[doc(hidden)]
-        async fn __canic_run_prepared_root_init_block() {
-            if __CANIC_PREPARED_ROOT_INIT_COMPLETED.replace(true) {
-                return;
-            }
-            $($init)?
-        }
-
-        #[doc(hidden)]
-        fn __canic_schedule_prepared_activation_init() {
-            if __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true) {
-                return;
-            }
-            $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
-                ::core::time::Duration::ZERO,
-                "canic:user:init",
-                async move {
-                    canic_setup().await;
-                    canic_install().await;
-                },
-            );
-        }
-
         #[doc(hidden)]
         fn __canic_compiled_config() -> (
             $crate::__internal::core::bootstrap::compiled::RoleRuntimeAuthority,
@@ -409,7 +370,6 @@ macro_rules! __canic_root_lifecycle_core {
                 config_path,
             );
 
-            $(($lifecycle_init)();)?
         }
 
         #[$crate::__internal::cdk::post_upgrade]
@@ -424,26 +384,13 @@ macro_rules! __canic_root_lifecycle_core {
                 config_path,
             );
 
-            $(($lifecycle_post_upgrade)();)?
-
             if active {
-                $crate::__canic_after_optional_start_init_hook!(
-                    "canic:user:post_upgrade_block",
-                    {
-                        $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
-                        $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
-                            ::core::time::Duration::ZERO,
-                            "canic:user:post_upgrade",
-                            async move {
-                                canic_setup().await;
-                                canic_upgrade().await;
-                            },
-                        );
-                    }
-                    $(, $init)?
-                );
+                $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
             }
         }
+        $crate::__canic_start_ingress_payload_inspect!(root);
+        $crate::canic_bundle_root_only_endpoints!();
+        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 
@@ -517,7 +464,7 @@ macro_rules! __canic_require_finish {
 /// Finish a Canic canister module.
 ///
 /// Place this macro at the end of the canister's crate root after
-/// `start!`, `start_local!`, `start_wasm_store!`, or
+/// `start!`, `start_local!`, `start_wasm_store!`, `start_fleet_root!`, or
 /// `start_fleet_coordinator!` and after any extra endpoint definitions. In
 /// Canic's dedicated declaration pass it exports Candid from the exact selected
 /// Wasm; final artifacts only satisfy the required Canic finish marker.
@@ -546,8 +493,8 @@ macro_rules! finish {
 ///
 /// The canister role comes from `[package.metadata.canic] role = "..."` in the
 /// crate manifest and is emitted by `canic::build!` at compile time.
-/// `role = "root"` selects root lifecycle adapters and endpoint bundles;
-/// every other role selects non-root lifecycle adapters and endpoint bundles.
+/// Fleet infrastructure uses its canonical entrypoints. This macro configures
+/// application canisters only.
 ///
 /// This macro defines the IC-required `init` and `post_upgrade` entry points
 /// at the crate root and immediately delegates lifecycle semantics to runtime
@@ -601,13 +548,7 @@ macro_rules! start {
             };
 
         #[cfg(canic_is_root)]
-        $crate::__canic_root_lifecycle_core!(
-            $(lifecycle_participant(
-                init = $lifecycle_init,
-                post_upgrade = $lifecycle_post_upgrade,
-            ))?
-            $(, init = $init)?
-        );
+        compile_error!("Fleet Subnet Root is built by Canic's canonical infrastructure builder");
 
         #[cfg(not(canic_is_root))]
         $crate::__canic_start_nonroot_lifecycle_core!(
@@ -619,9 +560,6 @@ macro_rules! start {
             $(, init = $init)?
         );
 
-        #[cfg(canic_is_root)]
-        $crate::__canic_start_ingress_payload_inspect!(root);
-
         #[cfg(not(canic_is_root))]
         $crate::__canic_start_ingress_payload_inspect!(managed);
 
@@ -630,9 +568,6 @@ macro_rules! start {
 
         #[cfg(not(canic_is_root))]
         $crate::__canic_emit_managed_status_endpoint!();
-
-        #[cfg(canic_is_root)]
-        $crate::canic_bundle_root_only_endpoints!();
 
         $crate::canic_emit_icrc_standards_endpoints!();
     };

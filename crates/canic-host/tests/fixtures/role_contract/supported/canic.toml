@@ -3,7 +3,6 @@ name = "fixture_supported"
 
 [roles.root]
 kind = "root"
-package = "role"
 
 [roles.app]
 kind = "canister"

@@ -241,7 +241,6 @@ name = "probe"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

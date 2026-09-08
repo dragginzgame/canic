@@ -152,6 +152,10 @@ pub trait Validate {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigModel {
+    /// Public aggregate families; an empty selection disables metric publication.
+    #[serde(default)]
+    pub public_metrics: BTreeSet<crate::domain::public_metrics::PublicMetricFamily>,
+
     #[serde(default)]
     pub standards: Option<Standards>,
 
@@ -387,7 +391,7 @@ impl ConfigModel {
             CanisterRole::ROOT,
             RoleDeclaration {
                 kind: RoleDeclarationKind::Root,
-                package: "root".to_string(),
+                package: None,
                 fleet_admission: false,
             },
         );
@@ -395,7 +399,7 @@ impl ConfigModel {
             CanisterRole::from("app"),
             RoleDeclaration {
                 kind: RoleDeclarationKind::Canister,
-                package: "app".to_string(),
+                package: Some("app".to_string()),
                 fleet_admission: false,
             },
         );

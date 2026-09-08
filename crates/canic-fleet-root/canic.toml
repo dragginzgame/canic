@@ -1,0 +1,8 @@
+[app]
+name = "fleet_root"
+
+[roles.root]
+kind = "root"
+
+[auth.delegated_tokens]
+enabled = false

@@ -14,7 +14,6 @@ use crate::{
 use candid::{CandidType, Deserialize};
 use canic_core::{
     dto::role::{RoleCapability, RoleOverviewResponse},
-    protocol,
     role_contract::RoleCapabilityKey,
 };
 use thiserror::Error as ThisError;
@@ -50,7 +49,7 @@ pub fn query_canic_metadata_version(
 ) -> Result<String, CanicMetadataQueryError> {
     let output = icp.canister_query_arg_output_with_candid(
         canister_id,
-        protocol::status_endpoint_for_role(&binding.binding().role),
+        canic_core::protocol::CANIC_PUBLIC_STATUS,
         "(variant { Overview })",
         Some(ICP_JSON_OUTPUT),
         Some(binding.candid_path.as_path()),

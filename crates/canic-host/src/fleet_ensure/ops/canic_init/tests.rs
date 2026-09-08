@@ -22,7 +22,6 @@ name = "init_wire_test"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

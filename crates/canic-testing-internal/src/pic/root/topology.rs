@@ -220,7 +220,7 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
         let page: Result<RootStatusResponse, Error> = pic
             .query_candid(
                 root_id,
-                protocol::CANIC_ROOT_STATUS,
+                protocol::CANIC_PUBLIC_STATUS,
                 (RootStatusRequest::Children(PageRequest {
                     limit: PAGE_LIMIT,
                     offset,

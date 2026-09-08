@@ -187,6 +187,10 @@ type FleetSubnetWasmStoreInitArgs = record {
   install_id : blob;
   authority : FleetSubnetWasmStoreAuthority;
 };
+//
+// HealthStatus
+//
+type HealthStatus = variant { unhealthy; healthy; degraded; unknown };
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -195,16 +199,76 @@ type NonrootCyclesCapabilityEnvelopeV1 = record {
   capability : CyclesRequest;
 };
 type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
+type ObservabilityRequest = variant {
+  CycleHistory : PageRequest;
+  CycleBalance;
+};
+type ObservabilityResponse = variant {
+  CycleHistory : Page;
+  CycleBalance : CycleBalanceStatusResponse;
+};
 // Durable identity returned when one role-owned asynchronous command is accepted.
 type OperationReceipt = record { operation_id : blob };
 // Lookup key shared by each role's local durable-operation status variant.
 type OperationStatusRequest = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec CycleTrackerEntry };
 type PageRequest = record { offset : nat64; limit : nat64 };
-type Result = variant { Ok : TemplateChunkResponse; Err : Error };
-type Result_1 = variant { Ok : StoreCommandResponse; Err : Error };
-type Result_2 = variant { Ok; Err : Error };
-type Result_3 = variant { Ok : StoreStatusResponse; Err : Error };
+type Page_1 = record { total : nat64; entries : vec PublicMetric };
+// Minimal local identity and health without diagnostic checks or failure details.
+type PublicHealth = record {
+  role : opt text;
+  observed_at_ns : nat64;
+  canister_id : principal;
+  health : HealthStatus;
+};
+// An explicitly named aggregate value with an optional canister dimension.
+type PublicMetric = record {
+  value : nat;
+  name : text;
+  unit : text;
+  canister_id : opt principal;
+};
+// Aggregate families an App may explicitly publish to every caller.
+type PublicMetricFamily = variant {
+  application;
+  cycles;
+  performance;
+  operations;
+  shard_occupancy;
+};
+// Select a published aggregate family and one bounded page.
+type PublicMetricsRequest = record {
+  page : PageRequest;
+  family : PublicMetricFamily;
+};
+// One cached aggregate snapshot. Reading it never refreshes it.
+type PublicMetricsSnapshot = record {
+  metrics : Page_1;
+  sampled_at_ns : opt nat64;
+  truncated : bool;
+  state : PublicSnapshotState;
+  stale_after_ns : nat64;
+  family : PublicMetricFamily;
+};
+// Availability is data, independent of caller identity.
+type PublicSnapshotState = variant { Stale; Disabled; Fresh; Unavailable };
+type PublicStatusRequest = variant {
+  Overview;
+  Health;
+  Metrics : PublicMetricsRequest;
+};
+type PublicStatusResponse = variant {
+  Overview : RoleOverviewResponse;
+  Health : PublicHealth;
+  Metrics : PublicMetricsSnapshot;
+};
+type Result = variant { Ok : ObservabilityResponse; Err : Error };
+type Result_1 = variant { Ok : PublicStatusResponse; Err : Error };
+type Result_2 = variant { Ok : StoreCatalogReadResponse; Err : Error };
+type Result_3 = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result_4 = variant { Ok : StoreCommandResponse; Err : Error };
+type Result_5 = variant { Ok; Err : Error };
+type Result_6 = variant { Ok : StoreStatusResponse; Err : Error };
 // Closed compiled capability identity exposed by the immutable role overview.
 type RoleCapability = variant {
   Sharding;
@@ -235,6 +299,16 @@ type RoleOverviewResponse = record {
 };
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
 type StateSnapshotInput = record { fleet_state : opt FleetStateInput };
+type StoreCatalogReadRequest = variant {
+  Storage;
+  Template : TemplateLookupRequest;
+  Catalog;
+};
+type StoreCatalogReadResponse = variant {
+  Storage : WasmStoreStatusResponse;
+  Template : TemplateStagingStatusResponse;
+  Catalog : vec WasmStoreCatalogEntryResponse;
+};
 // Closed Store control-plane command union.
 type StoreCommand = variant {
   ActivateFleet : FleetActivationRequest;
@@ -264,27 +338,10 @@ type StoreOperationStatusResponse = variant {
   FleetActivation : FleetActivationStatusResponse;
   GarbageCollection : WasmStoreGcOperationStatus;
 };
-// Closed Store observation selector carried by its single status query.
-type StoreStatusRequest = variant {
-  Storage;
-  Overview;
-  CycleHistory : PageRequest;
-  Operation : OperationReceipt;
-  Authority;
-  Template : TemplateLookupRequest;
-  Catalog;
-  CycleBalance;
-};
-// Closed response union for the Store's single status query.
+type StoreStatusRequest = variant { Operation : OperationReceipt; Authority };
 type StoreStatusResponse = variant {
-  Storage : WasmStoreStatusResponse;
-  Overview : RoleOverviewResponse;
-  CycleHistory : Page;
   Operation : StoreOperationStatusResponse;
   Authority : FleetSubnetWasmStoreAuthority;
-  Template : TemplateStagingStatusResponse;
-  Catalog : vec WasmStoreCatalogEntryResponse;
-  CycleBalance : CycleBalanceStatusResponse;
 };
 type TemplateChunkInput = record {
   chunk_index : nat32;
@@ -325,6 +382,18 @@ type TemplateManifestInput = record {
   chunking_mode : TemplateChunkingMode;
   payload_hash : blob;
 };
+type TemplateManifestResponse = record {
+  role : text;
+  payload_size_bytes : nat64;
+  manifest_state : TemplateManifestState;
+  approved_at : opt nat64;
+  created_at : nat64;
+  template_id : text;
+  version : text;
+  store_binding : text;
+  chunking_mode : TemplateChunkingMode;
+  payload_hash : blob;
+};
 //
 // TemplateManifestState
 //
@@ -339,7 +408,7 @@ type TemplateStagingStatusResponse = record {
   version : text;
   complete : bool;
   chunk_set_present : bool;
-  manifest : opt TemplateManifestInput;
+  manifest : opt TemplateManifestResponse;
   payload_hash : opt blob;
 };
 type TopologyChildren = record {
@@ -418,9 +487,12 @@ type WasmStoreTemplateStatusResponse = record {
   versions : nat16;
 };
 service : (FleetSubnetWasmStoreInitArgs) -> {
-  canic_wasm_store_chunk : (TemplateChunkRequest) -> (Result);
-  canic_wasm_store_command : (StoreCommand) -> (Result_1);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_2);
-  canic_wasm_store_status : (StoreStatusRequest) -> (Result_3) query;
+  canic_observability : (ObservabilityRequest) -> (Result) query;
+  canic_public_status : (PublicStatusRequest) -> (Result_1) query;
+  canic_wasm_store_catalog : (StoreCatalogReadRequest) -> (Result_2) query;
+  canic_wasm_store_chunk : (TemplateChunkRequest) -> (Result_3);
+  canic_wasm_store_command : (StoreCommand) -> (Result_4);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_5);
+  canic_wasm_store_status : (StoreStatusRequest) -> (Result_6) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

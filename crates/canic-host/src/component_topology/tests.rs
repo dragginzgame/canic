@@ -21,7 +21,6 @@ name = "toko"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.database]
 kind = "canister"
@@ -46,7 +45,6 @@ name = "reserve"
 
 [roles.root]
 kind = "root"
-package = "root"
 "#;
 
 fn config() -> ConfigModel {

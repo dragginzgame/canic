@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::evidence_envelope::{
     InputFingerprintV1, InputPathDisplayV1, PayloadSchemaRefV1, file_input_fingerprint,
@@ -20,7 +20,7 @@ pub(super) fn build_input_fingerprints(
         )),
         None,
     )?];
-    let cargo_lock_path = request.workspace_root.join("Cargo.lock");
+    let cargo_lock_path = build_cargo_lock_path(request, package_manifest);
     if cargo_lock_path.is_file() {
         inputs.push(file_input_fingerprint(
             "cargo_lock",
@@ -45,6 +45,17 @@ pub(super) fn build_input_fingerprints(
     });
     inputs.extend(cargo_config_fingerprints(&request.workspace_root)?);
     Ok(inputs)
+}
+
+pub(super) fn build_cargo_lock_path(
+    request: &BuildProvenanceRequest,
+    package_manifest: &Path,
+) -> PathBuf {
+    if request.role == "root" {
+        package_manifest.with_file_name("Cargo.lock")
+    } else {
+        request.workspace_root.join("Cargo.lock")
+    }
 }
 
 pub(super) fn cargo_config_fingerprints(

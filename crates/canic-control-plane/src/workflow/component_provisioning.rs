@@ -300,7 +300,7 @@ async fn query_coordinator_provisioning(
     canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
     InternalError,
 > {
-    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_STATUS)
+    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_OPERATION_STATUS)
         .with_arg(RemoteCoordinatorStatusRequest::Operation(
             OperationStatusRequest { operation_id },
         ))?

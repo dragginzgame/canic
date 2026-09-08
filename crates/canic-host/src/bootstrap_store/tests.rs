@@ -102,7 +102,7 @@ fn wasm_store_build_uses_the_locked_resolver() {
     };
     let command = wasm_store_cargo_build_command(
         &context,
-        Path::new("/workspace/crates/canic-wasm-store/Cargo.toml"),
+        Path::new("/workspace/crates/canic-fleet-wasm-store/Cargo.toml"),
         false,
     );
     assert!(command.get_args().any(|argument| argument == "--locked"));
@@ -124,7 +124,7 @@ fn wasm_store_declaration_build_uses_the_canonical_candid_environment() {
     };
     let command = wasm_store_cargo_build_command(
         &context,
-        Path::new("/workspace/crates/canic-wasm-store/Cargo.toml"),
+        Path::new("/workspace/crates/canic-fleet-wasm-store/Cargo.toml"),
         true,
     );
 
@@ -166,7 +166,7 @@ fn workspace_wasm_store_source_owns_a_canonical_did() {
         source
             .canonical_did_path
             .as_deref()
-            .is_some_and(|path| path.ends_with("crates/canic-wasm-store/wasm_store.did"))
+            .is_some_and(|path| path.ends_with("crates/canic-fleet-wasm-store/wasm_store.did"))
     );
 }
 

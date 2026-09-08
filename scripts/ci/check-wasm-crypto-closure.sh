@@ -7,11 +7,12 @@ cd "$ROOT"
 
 CANONICAL_PACKAGE_PROFILES=(
     canic-fleet-coordinator:none
-    canic-wasm-store:none
+    canic-fleet-root:none
+    delegation_root_stub:root-sign
+    canic-fleet-wasm-store:none
     canister_app:none
     canister_index_child:none
     canister_index_hub:none
-    canister_root:root-sign
     canister_scale:none
     canister_scale_hub:none
     canister_test:delegated-verify

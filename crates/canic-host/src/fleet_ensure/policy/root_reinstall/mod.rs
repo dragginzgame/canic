@@ -16,6 +16,7 @@ pub(in crate::fleet_ensure) fn compile(
     artifacts: &DesiredFleetArtifacts,
 ) -> Result<Option<FleetEnsurePlan>, EnsurePolicyError> {
     let RootStartPlanInput {
+        state,
         desired,
         desired_sha256,
         observation,
@@ -63,7 +64,7 @@ pub(in crate::fleet_ensure) fn compile(
             controllers: vec![desired.operator.clone()],
             module_sha256: binding.module_sha256.clone(),
             name: configured.name.clone(),
-            principal: configured.principal.clone().unwrap_or_default(),
+            principal: root_management_principal(configured, state, requested_fleet)?.to_string(),
             subnet: configured.subnet.clone(),
         };
         let desired_controllers_are_exact = expected_controllers == binding.controllers

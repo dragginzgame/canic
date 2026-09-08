@@ -23,7 +23,8 @@ use canic_core::{
     bootstrap::compiled::ConfigModel,
     role_contract::{
         BuiltInRoleKind, CanicFeatureKey, RoleContractFinding, RoleContractInput,
-        RoleContractResolution, RoleContractSource, resolve_role_contract,
+        RoleContractResolution, RoleContractSource, required_features_for_role,
+        resolve_role_contract,
     },
 };
 use std::{collections::BTreeSet, path::Path};
@@ -35,6 +36,9 @@ pub(crate) fn resolve_declared_role_contract(
     role: &canic_core::ids::CanisterRole,
     mode: PackageValidationMode,
 ) -> RoleContractResolution {
+    if role.is_root() {
+        return resolve_canonical_root_contract(config);
+    }
     match validate_declared_role_package(config_path, config, role, mode) {
         RolePackageValidation::Supported(evidence) => {
             resolve_declared_role_package_contract(config, &evidence)
@@ -43,6 +47,32 @@ pub(crate) fn resolve_declared_role_contract(
             errors: vec![finding],
         },
     }
+}
+
+/// Project the configured canonical Root contract without requiring build artifacts.
+/// Artifact construction separately validates the materialized Cargo package.
+#[must_use]
+pub fn resolve_canonical_root_contract(config: &ConfigModel) -> RoleContractResolution {
+    let role = canic_core::ids::CanisterRole::ROOT;
+    let requirements = match required_features_for_role(config, &role) {
+        Ok(requirements) => requirements,
+        Err(finding) => {
+            return RoleContractResolution::Rejected {
+                errors: vec![finding],
+            };
+        }
+    };
+    resolve_role_contract(RoleContractInput {
+        source: RoleContractSource::Declared {
+            config,
+            role: &role,
+        },
+        declared_features: requirements
+            .into_iter()
+            .map(|requirement| requirement.feature)
+            .collect(),
+        default_features_enabled: false,
+    })
 }
 
 #[must_use]

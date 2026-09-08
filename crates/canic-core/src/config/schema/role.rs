@@ -86,7 +86,7 @@ impl fmt::Display for AppRoleRef {
 ///
 /// RoleDeclaration
 ///
-/// Declarative package-backed role entry from `canic.toml`.
+/// Declarative role entry from `canic.toml`.
 /// Owned by config schema and validated before topology roles are trusted.
 ///
 
@@ -95,8 +95,8 @@ impl fmt::Display for AppRoleRef {
 pub struct RoleDeclaration {
     pub kind: RoleDeclarationKind,
 
-    /// Package path relative to the declaring canic.toml.
-    pub package: String,
+    /// Application package path relative to canic.toml; absent for canonical Root.
+    pub package: Option<String>,
 
     /// Enroll every managed instance of this role in Fleet admission convergence.
     #[serde(default)]

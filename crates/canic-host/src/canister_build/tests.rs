@@ -16,7 +16,7 @@ fn infrastructure_roles_use_the_canonical_built_in_artifact_sources() {
     );
     assert_eq!(
         CanisterArtifactSource::for_role("root"),
-        CanisterArtifactSource::DeclaredRole
+        CanisterArtifactSource::Root
     );
 }
 

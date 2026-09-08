@@ -135,7 +135,6 @@ name = "toko"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

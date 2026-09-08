@@ -1,6 +1,6 @@
 use crate::{
     dto::template::{
-        StoreCommand, StoreCommandResponse, StoreStatusRequest, StoreStatusResponse,
+        StoreCatalogRequest, StoreCatalogResponse, StoreCommand, StoreCommandResponse,
         TemplateChunkRequest, TemplateChunkResponse, TemplateChunkSetInfoResponse,
         TemplateChunkSetPrepareInput, TemplateLookupRequest, TemplateManifestInput,
         WasmStoreCatalogEntryResponse, WasmStoreDeletionCycleReclamationRequest,
@@ -30,7 +30,7 @@ impl WasmStoreInternalClient {
     const COMMAND: &str = protocol::CANIC_WASM_STORE_COMMAND;
     const CHUNK: &str = "canic_wasm_store_chunk";
     const PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
-    const STATUS: &str = protocol::CANIC_WASM_STORE_STATUS;
+    const STATUS: &str = protocol::CANIC_WASM_STORE_CATALOG;
     #[cfg(test)]
     const ENDPOINTS: &[&str] = &[
         Self::COMMAND,
@@ -46,8 +46,8 @@ impl WasmStoreInternalClient {
     pub(super) async fn catalog(
         &self,
     ) -> Result<Vec<WasmStoreCatalogEntryResponse>, InternalError> {
-        match self.status_request(StoreStatusRequest::Catalog).await? {
-            StoreStatusResponse::Catalog(catalog) => Ok(catalog),
+        match self.status_request(StoreCatalogRequest::Catalog).await? {
+            StoreCatalogResponse::Catalog(catalog) => Ok(catalog),
             _ => Err(InternalError::conflict()),
         }
     }
@@ -70,8 +70,8 @@ impl WasmStoreInternalClient {
     }
 
     pub(super) async fn status(&self) -> Result<WasmStoreStatusResponse, InternalError> {
-        match self.status_request(StoreStatusRequest::Storage).await? {
-            StoreStatusResponse::Storage(status) => Ok(status),
+        match self.status_request(StoreCatalogRequest::Storage).await? {
+            StoreCatalogResponse::Storage(status) => Ok(status),
             _ => Err(InternalError::conflict()),
         }
     }
@@ -176,13 +176,13 @@ impl WasmStoreInternalClient {
 
     async fn status_request(
         &self,
-        request: StoreStatusRequest,
-    ) -> Result<StoreStatusResponse, InternalError> {
+        request: StoreCatalogRequest,
+    ) -> Result<StoreCatalogResponse, InternalError> {
         let call = CallOps::bounded_wait(self.store_pid, Self::STATUS)
             .with_arg(request)?
             .execute()
             .await?;
-        let result: Result<StoreStatusResponse, Error> = call.candid()?;
+        let result: Result<StoreCatalogResponse, Error> = call.candid()?;
         result.map_err(InternalError::observed_public)
     }
 

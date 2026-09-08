@@ -25,8 +25,8 @@ use canic_core::{
             FleetRootFundingRequest, FleetRootFundingResponse,
         },
         fleet_registry::{
-            FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-            FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
+            FleetRegistryActivationRequest, FleetRegistryActivationResponse, FleetRegistryManifest,
+            FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
             FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
             FleetSubnetRootDeletionReadinessIntentResponse,
             FleetSubnetRootDeletionReadinessResponse, FleetSubnetRootDeletionResponse,
@@ -35,7 +35,7 @@ use canic_core::{
             FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationResponse,
             FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         },
-        role::{OperationReceipt, OperationStatusRequest, RoleOverviewResponse},
+        role::{OperationReceipt, OperationStatusRequest},
         state::{SetCyclesFundingRequest, SetStateResponse},
     },
     ids::{
@@ -98,15 +98,36 @@ pub enum CoordinatorCommandResponse {
     SetRootFunding(SetStateResponse<bool>),
 }
 
-/// Closed Coordinator observation selector carried by its single status query.
+/// Registry reads use the existing Coordinator registry-caller authority.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub enum CoordinatorStatusRequest {
+pub enum CoordinatorRegistryRequest {
+    Registry,
+}
+
+/// Registry snapshot returned to an authorized registry caller.
+#[derive(CandidType, Deserialize)]
+pub enum CoordinatorRegistryResponse {
+    Registry(canic_core::dto::fleet_registry::FleetRegistry),
+}
+
+/// Operation reads delegate authorization to the durable operation owner.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum CoordinatorOperationReadRequest {
+    Operation(OperationStatusRequest),
+}
+
+/// One durable operation result under its existing exact caller contract.
+#[derive(CandidType, Deserialize)]
+pub enum CoordinatorOperationReadResponse {
+    Operation(CoordinatorOperationStatusResponse),
+}
+
+/// Coordinator diagnostics selected under one observer authorization rule.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum CoordinatorObservabilityRequest {
     Admission(FleetAdmissionStatusRequest),
     AuthorityRestore,
     Funding,
-    Operation(OperationStatusRequest),
-    Overview,
-    Registry,
     RegistryManifest,
     RegistryVersion,
     RootAcknowledgements,
@@ -214,19 +235,12 @@ pub struct CoordinatorRootRemovalOperationStatus {
     pub completion: Option<FleetSubnetRootDeletionResponse>,
 }
 
-/// Closed response union for the Coordinator's single status query.
+/// Operational diagnostics returned only to authorized observers.
 #[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the accepted Candid union keeps each existing status DTO as its direct payload"
-)]
-pub enum CoordinatorStatusResponse {
+pub enum CoordinatorObservabilityResponse {
     Admission(FleetAdmissionStatusResponse),
     AuthorityRestore(AuthorityRestoreFenceStatusResponse),
     Funding(CoordinatorFundingStatusResponse),
-    Operation(CoordinatorOperationStatusResponse),
-    Overview(RoleOverviewResponse),
-    Registry(FleetRegistry),
     RegistryManifest(FleetRegistryManifest),
     RegistryVersion(FleetRegistryVersion),
     RootAcknowledgements(Vec<FleetSubnetRootSnapshotAcknowledgement>),
@@ -240,29 +254,24 @@ mod tests {
     #[test]
     fn coordinator_status_request_is_one_closed_candid_variant() {
         let requests = [
-            CoordinatorStatusRequest::Admission(FleetAdmissionStatusRequest {
+            CoordinatorObservabilityRequest::Admission(FleetAdmissionStatusRequest {
                 selector: canic_core::ids::FleetAdmissionSelector::Fleet,
                 page: canic_core::dto::page::PageRequest {
                     limit: 128,
                     offset: 0,
                 },
             }),
-            CoordinatorStatusRequest::AuthorityRestore,
-            CoordinatorStatusRequest::Funding,
-            CoordinatorStatusRequest::Operation(OperationStatusRequest {
-                operation_id: [4; 32],
-            }),
-            CoordinatorStatusRequest::Overview,
-            CoordinatorStatusRequest::Registry,
-            CoordinatorStatusRequest::RegistryManifest,
-            CoordinatorStatusRequest::RegistryVersion,
-            CoordinatorStatusRequest::RootAcknowledgements,
+            CoordinatorObservabilityRequest::AuthorityRestore,
+            CoordinatorObservabilityRequest::Funding,
+            CoordinatorObservabilityRequest::RegistryManifest,
+            CoordinatorObservabilityRequest::RegistryVersion,
+            CoordinatorObservabilityRequest::RootAcknowledgements,
         ];
 
         for request in requests {
             let bytes = Encode!(&request).expect("encode Coordinator status request");
             assert_eq!(
-                Decode!(&bytes, CoordinatorStatusRequest)
+                Decode!(&bytes, CoordinatorObservabilityRequest)
                     .expect("decode Coordinator status request"),
                 request
             );

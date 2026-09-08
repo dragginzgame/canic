@@ -22,6 +22,7 @@ pub mod candid_endpoints;
 pub mod canic_metadata;
 pub mod canister_build;
 mod canister_protocol;
+mod canonical_root;
 pub use canister_protocol::{
     CanisterProtocolError, call_with_arg as call_canister_with_arg,
     query_with_arg as query_canister_with_arg,

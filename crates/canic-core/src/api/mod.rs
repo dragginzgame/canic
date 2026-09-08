@@ -24,6 +24,7 @@ pub mod memory;
 pub mod metadata;
 pub mod observability;
 pub mod placement;
+pub mod public_status;
 pub mod ready;
 pub mod role;
 pub mod rpc;

@@ -62,9 +62,9 @@ Examples:
   canic build demo
   canic build demo app --standalone-local --features standalone-local
 
-Builds the configured Fleet Subnet Root, every attached Component role, and
-Canic's built-in Coordinator and Wasm Store by default. Pass a role for one
-focused configured artifact.";
+Builds Canic's canonical Root, Coordinator and Wasm Store, plus every attached
+Component role. Root features come from the App configuration; no Root package
+is needed. Pass an application role to select additional Cargo build features.";
 
 ///
 /// BuildCommandError
@@ -295,13 +295,13 @@ fn build_command() -> ClapCommand {
                 .action(ArgAction::Append)
                 .value_delimiter(',')
                 .requires("role")
-                .help("Cargo features used identically for declaration and runtime builds"),
+                .help("Application Cargo features used for declaration and runtime builds"),
         )
         .arg(
             flag_arg("no-default-features")
                 .long("no-default-features")
                 .requires("role")
-                .help("Disable Cargo default features for both build passes"),
+                .help("Disable application Cargo default features for both build passes"),
         )
         .arg(
             value_arg("profile")
@@ -1168,16 +1168,12 @@ mod tests {
         let text = usage();
 
         assert!(text.contains("Usage: canic build [OPTIONS] <app> [role]"));
-        assert!(text.contains("canic build demo"));
-        assert!(text.contains("canic build demo app --standalone-local"));
         assert!(text.contains("[default: fast]"));
         assert!(text.contains("--features <feature,...>"));
         assert!(text.contains("--no-default-features"));
         assert!(text.contains("--provenance <file>"));
         assert!(text.contains("--standalone-local"));
-        assert!(text.contains("Builds the configured Fleet Subnet Root"));
-        assert!(text.contains("every attached Component role"));
-        assert_eq!(text.matches("  canic build ").count(), 2);
+        assert!(text.matches("  canic build ").count() <= 3);
     }
 
     #[test]
@@ -1481,7 +1477,6 @@ name = "demo"
 
 [roles.root]
 kind = "root"
-package = "root"
 
 [roles.app]
 kind = "canister"

@@ -34,6 +34,7 @@ impl Default for CanisterArtifactBuildOptions {
 pub(super) enum CanisterArtifactSource {
     DeclaredRole,
     FleetCoordinator,
+    Root,
     WasmStore,
 }
 
@@ -42,6 +43,7 @@ impl CanisterArtifactSource {
     pub(super) fn for_role(role: &str) -> Self {
         match role {
             FLEET_COORDINATOR_ROLE => Self::FleetCoordinator,
+            "root" => Self::Root,
             WASM_STORE_ROLE => Self::WasmStore,
             _ => Self::DeclaredRole,
         }

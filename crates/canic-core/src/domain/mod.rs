@@ -12,6 +12,7 @@ pub mod icrc;
 pub mod memory;
 pub mod metrics;
 pub mod policy;
+pub mod public_metrics;
 pub mod runtime;
 pub mod state;
 pub mod value;

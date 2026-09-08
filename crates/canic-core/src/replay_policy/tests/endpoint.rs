@@ -6,8 +6,8 @@
 
 use super::*;
 use crate::protocol::{
-    CANIC_COMMAND, CANIC_COORDINATOR_COMMAND, CANIC_COORDINATOR_STATUS, CANIC_ROOT_COMMAND,
-    CANIC_ROOT_STATUS, CANIC_STATUS, CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
+    CANIC_COMMAND, CANIC_CONTROL_STATUS, CANIC_COORDINATOR_COMMAND, CANIC_OBSERVABILITY,
+    CANIC_ROOT_COMMAND, CANIC_ROOT_STATUS, CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
 };
 
 #[test]
@@ -42,12 +42,12 @@ fn common_role_command_dispatch_is_variant_manifest_owned() {
 
     let status = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
-        .find(|entry| entry.endpoint == CANIC_STATUS)
+        .find(|entry| entry.endpoint == CANIC_CONTROL_STATUS)
         .expect("common role status entry");
     assert_eq!(status.endpoint_kind, EndpointKind::Query);
     assert_eq!(status.replay_policy, ReplayPolicy::QueryOrReadOnly);
 
-    for endpoint in [CANIC_COORDINATOR_STATUS, CANIC_ROOT_STATUS] {
+    for endpoint in [CANIC_OBSERVABILITY, CANIC_ROOT_STATUS] {
         let status = ENDPOINT_REPLAY_POLICY_MANIFEST
             .iter()
             .find(|entry| entry.endpoint == endpoint)

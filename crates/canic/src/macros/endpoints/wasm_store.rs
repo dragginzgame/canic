@@ -17,9 +17,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 | ::canic::dto::template::StoreCommand::SynchronizeTopology(_) => {
                     ::canic::__internal::core::protocol::CASCADE_SNAPSHOT_MAX_BYTES
                 }
-                _ => {
-                    ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES
-                }
+                _ => ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES,
             }
         }
 
@@ -41,9 +39,8 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             if bytes.len() > ::canic::__internal::core::protocol::CASCADE_SNAPSHOT_MAX_BYTES {
                 return;
             }
-            let Ok(command) = ::canic::__internal::candid::decode_one::<
-                ::canic::dto::template::StoreCommand,
-            >(&bytes)
+            let Ok(command) =
+                ::canic::__internal::candid::decode_one::<::canic::dto::template::StoreCommand>(&bytes)
             else {
                 return;
             };
@@ -93,9 +90,9 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 let context = $crate::__internal::core::access::expr::AccessContext {
                     caller,
                     call: $crate::__internal::core::ids::EndpointCall {
-                            endpoint: $crate::__internal::core::ids::EndpointId::new(
-                                $crate::__internal::core::protocol::CANIC_WASM_STORE_COMMAND,
-                            ),
+                        endpoint: $crate::__internal::core::ids::EndpointId::new(
+                            $crate::__internal::core::protocol::CANIC_WASM_STORE_COMMAND,
+                        ),
                         kind: $crate::__internal::core::ids::EndpointCallKind::Update,
                     },
                 };
@@ -110,9 +107,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                     let operation_id = request.operation_id;
                     let transition = $crate::__internal::core::api::fleet_activation::FleetActivationApi::activate_nonroot(request)?;
                     if transition.transitioned {
-                        __canic_schedule_prepared_activation_init(
-                            transition.application_init_args,
-                        );
+                        __canic_schedule_prepared_activation_init(transition.application_init_args);
                     }
                     Ok(StoreCommandResponse::OperationAccepted(
                         ::canic::dto::role::OperationReceipt { operation_id },
@@ -150,7 +145,9 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 }
                 StoreCommand::RunGc(request) => {
                     let operation_id = request.operation_id;
-                    let should_advance = ::canic::api::canister::template::WasmStoreCanisterApi::status()?.gc.mode
+                    let should_advance = ::canic::api::canister::template::WasmStoreCanisterApi::status()?
+                        .gc
+                        .mode
                         != ::canic::ids::WasmStoreGcMode::Normal;
                     ::canic::api::canister::template::WasmStoreCanisterApi::prepare_gc(operation_id)?;
                     if should_advance {
@@ -171,91 +168,51 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                     Ok(StoreCommandResponse::StageManifest)
                 }
                 StoreCommand::SynchronizeState(snapshot) => {
-                    $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot).await?;
+                    $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot)
+                        .await?;
                     Ok(StoreCommandResponse::SynchronizeState)
                 }
                 StoreCommand::SynchronizeTopology(snapshot) => {
-                    $crate::__internal::core::api::cascade::CascadeApi::sync_topology(snapshot).await?;
+                    $crate::__internal::core::api::cascade::CascadeApi::sync_topology(
+                        snapshot,
+                    )
+                    .await?;
                     Ok(StoreCommandResponse::SynchronizeTopology)
                 }
             }
         }
 
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum PublicStatusRequest {
+            Health,
+            Metrics(::canic::dto::public_status::PublicMetricsRequest),
+            Overview,
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum PublicStatusResponse {
+            Health(::canic::dto::public_status::PublicHealth),
+            Metrics(::canic::dto::public_status::PublicMetricsSnapshot),
+            Overview(::canic::dto::role::RoleOverviewResponse),
+        }
         #[$crate::canic_query(public)]
-        async fn canic_wasm_store_status(
-            request: ::canic::dto::template::StoreStatusRequest,
-        ) -> Result<::canic::dto::template::StoreStatusResponse, ::canic::Error> {
-            use ::canic::dto::template::{StoreStatusRequest, StoreStatusResponse};
-
-            let caller = $crate::__internal::cdk::api::msg_caller();
-            match &request {
-                StoreStatusRequest::Authority => {
-                    $crate::__internal::core::access::auth::is_controller(caller)
-                        .await
-                        .map_err(::canic::Error::from)?;
-                }
-                StoreStatusRequest::Catalog
-                | StoreStatusRequest::Storage
-                | StoreStatusRequest::Template(_) => {
-                    use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
-                    let context = $crate::__internal::core::access::expr::AccessContext {
-                        caller,
-                        call: $crate::__internal::core::ids::EndpointCall {
-                            endpoint: $crate::__internal::core::ids::EndpointId::new(
-                                $crate::__internal::core::protocol::CANIC_WASM_STORE_STATUS,
-                            ),
-                            kind: $crate::__internal::core::ids::EndpointCallKind::Query,
-                        },
-                    };
-                    $crate::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate
-                        .eval(&context)
-                        .await
-                        .map_err(::canic::Error::from)?;
-                }
-                StoreStatusRequest::Operation(_) => {
-                    $crate::__internal::core::access::auth::is_controller(caller)
-                        .await
-                        .map_err(::canic::Error::from)?;
-                }
-                StoreStatusRequest::CycleBalance | StoreStatusRequest::CycleHistory(_) => {
-                    $crate::__internal::core::access::auth::is_controller(caller)
-                        .await
-                        .map_err(::canic::Error::from)?;
-                }
-                StoreStatusRequest::Overview => {}
-            }
-
+        async fn canic_public_status(
+            request: PublicStatusRequest,
+        ) -> Result<PublicStatusResponse, ::canic::Error> {
             match request {
-                StoreStatusRequest::Authority => {
-                    $crate::__internal::core::api::fleet_activation::FleetActivationApi::wasm_store_authority()
-                        .map(StoreStatusResponse::Authority)
-                }
-                StoreStatusRequest::Catalog => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::catalog()
-                        .map(StoreStatusResponse::Catalog)
-                }
-                StoreStatusRequest::CycleBalance => Ok(StoreStatusResponse::CycleBalance(
-                    ::canic::dto::role::CycleBalanceStatusResponse {
-                        cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
-                    },
+                PublicStatusRequest::Health => Ok(PublicStatusResponse::Health(
+                    ::canic::__internal::core::api::public_status::PublicStatusApi::health(),
                 )),
-                StoreStatusRequest::CycleHistory(page) => {
-                    Ok(StoreStatusResponse::CycleHistory(
-                        $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
-                    ))
-                }
-                StoreStatusRequest::Operation(request) => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::operation_status(
-                        request.operation_id,
-                    )
-                    .map(StoreStatusResponse::Operation)
-                }
-                StoreStatusRequest::Overview => {
+                PublicStatusRequest::Metrics(request) => Ok(PublicStatusResponse::Metrics(
+                    ::canic::__internal::core::api::public_status::PublicStatusApi::metrics(request),
+                )),
+                PublicStatusRequest::Overview => {
                     let capabilities =
                         $crate::__internal::core::role_contract::built_in_role_capabilities(
                             $crate::__internal::core::role_contract::BuiltInRoleKind::WasmStore,
                         );
-                    Ok(StoreStatusResponse::Overview(
+                    Ok(PublicStatusResponse::Overview(
                         $crate::__internal::core::api::role::RoleOverviewApi::overview(
                             $crate::__internal::core::ids::CanisterRole::from("wasm_store"),
                             &capabilities,
@@ -271,13 +228,96 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                         ),
                     ))
                 }
-                StoreStatusRequest::Storage => {
-                    ::canic::api::canister::template::WasmStoreCanisterApi::status()
-                        .map(StoreStatusResponse::Storage)
+            }
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum ObservabilityRequest {
+            CycleBalance,
+            CycleHistory(::canic::dto::page::PageRequest),
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum ObservabilityResponse {
+            CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
+            CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
+        }
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_observability(
+            request: ObservabilityRequest,
+        ) -> Result<ObservabilityResponse, ::canic::Error> {
+            match request {
+                ObservabilityRequest::CycleBalance => Ok(ObservabilityResponse::CycleBalance(
+                    ::canic::dto::role::CycleBalanceStatusResponse {
+                        cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
+                    },
+                )),
+                ObservabilityRequest::CycleHistory(page) => Ok(ObservabilityResponse::CycleHistory(
+                    $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
+                )),
+            }
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum StoreStatusRequest {
+            Authority,
+            Operation(::canic::dto::role::OperationStatusRequest),
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum StoreStatusResponse {
+            Authority(::canic::ids::FleetSubnetWasmStoreAuthority),
+            Operation(::canic::dto::template::StoreOperationStatusResponse),
+        }
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_wasm_store_status(
+            request: StoreStatusRequest,
+        ) -> Result<StoreStatusResponse, ::canic::Error> {
+            match request {
+                StoreStatusRequest::Authority => {
+                    $crate::__internal::core::api::fleet_activation::FleetActivationApi::wasm_store_authority()
+                        .map(StoreStatusResponse::Authority)
                 }
-                StoreStatusRequest::Template(request) => {
+                StoreStatusRequest::Operation(request) => {
+                    ::canic::api::canister::template::WasmStoreCanisterApi::operation_status(
+                        request.operation_id,
+                    )
+                    .map(StoreStatusResponse::Operation)
+                }
+            }
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum StoreCatalogReadRequest {
+            Catalog,
+            Storage,
+            Template(::canic::dto::template::TemplateLookupRequest),
+        }
+        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum StoreCatalogReadResponse {
+            Catalog(Vec<::canic::dto::template::WasmStoreCatalogEntryResponse>),
+            Storage(::canic::dto::template::WasmStoreStatusResponse),
+            Template(::canic::dto::template::TemplateStagingStatusResponse),
+        }
+        #[$crate::canic_query(requires(custom(
+            ::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate
+        )))]
+        async fn canic_wasm_store_catalog(
+            request: StoreCatalogReadRequest,
+        ) -> Result<StoreCatalogReadResponse, ::canic::Error> {
+            match request {
+                StoreCatalogReadRequest::Catalog => {
+                    ::canic::api::canister::template::WasmStoreCanisterApi::catalog()
+                        .map(StoreCatalogReadResponse::Catalog)
+                }
+                StoreCatalogReadRequest::Storage => {
+                    ::canic::api::canister::template::WasmStoreCanisterApi::status()
+                        .map(StoreCatalogReadResponse::Storage)
+                }
+                StoreCatalogReadRequest::Template(request) => {
                     ::canic::api::canister::template::WasmStoreCanisterApi::staging_status(request)
-                        .map(StoreStatusResponse::Template)
+                        .map(StoreCatalogReadResponse::Template)
                 }
             }
         }

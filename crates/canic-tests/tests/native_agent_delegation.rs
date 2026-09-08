@@ -638,7 +638,7 @@ fn application_session_status_as(
     let response: Result<CanisterStatusResponse, Error> = fixture.pic().query_candid_as_or_panic(
         canister_id,
         caller,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_AUTH_STATUS,
         (CanisterStatusRequest::ApplicationSession,),
     );
     match response.expect("application-session status must succeed") {
@@ -670,7 +670,7 @@ fn fleet_admission_status_as(
         fixture.pic().query_candid_as_or_panic(
             canister_id,
             caller,
-            protocol::CANIC_STATUS,
+            protocol::CANIC_ADMISSION_STATUS,
             (FleetAdmissionManagedStatusRequest::Admission(PageRequest {
                 offset: 0,
                 limit: u64::MAX,
@@ -1012,7 +1012,7 @@ async fn prepare_native_delegated_token(
     };
 
     let token_bytes = agent
-        .query(&fixture.issuer.canister_id, protocol::CANIC_STATUS)
+        .query(&fixture.issuer.canister_id, protocol::CANIC_AUTH_STATUS)
         .with_arg(
             Encode!(&CanisterStatusRequest::DelegatedToken(
                 DelegatedTokenGetRequest {
@@ -1223,7 +1223,7 @@ async fn application_session_status(
     canister_id: candid::Principal,
 ) -> ApplicationSessionStatus {
     let bytes = agent
-        .query(&canister_id, protocol::CANIC_STATUS)
+        .query(&canister_id, protocol::CANIC_AUTH_STATUS)
         .with_arg(
             Encode!(&CanisterStatusRequest::ApplicationSession)
                 .expect("encode application-session status"),
@@ -1249,7 +1249,7 @@ async fn application_session_audit(
     canister_id: candid::Principal,
 ) -> Result<ApplicationSessionAuditResponse, Error> {
     let bytes = agent
-        .query(&canister_id, protocol::CANIC_STATUS)
+        .query(&canister_id, protocol::CANIC_CONTROL_STATUS)
         .with_arg(
             Encode!(&CanisterStatusRequest::ApplicationSessionAudit(
                 PageRequest {
@@ -1288,7 +1288,7 @@ fn root_application_session_audit_for(
     let response: Result<CanisterStatusResponse, Error> = fixture.pic().query_candid_as_or_panic(
         canister_id,
         fixture.root,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_CONTROL_STATUS,
         (CanisterStatusRequest::ApplicationSessionAudit(
             PageRequest {
                 offset: 0,
@@ -1461,7 +1461,7 @@ fn role_metrics(
     let response: Result<CanisterStatusResponse, Error> = fixture.pic().query_candid_as_or_panic(
         fixture.verifier.canister_id,
         fixture.root,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_OBSERVABILITY,
         (CanisterStatusRequest::Metrics(MetricsStatusRequest {
             kind,
             page: PageRequest {
@@ -1615,7 +1615,7 @@ fn root_issuer_proof_is_installed(
 ) -> bool {
     let status: Result<RootStatusResponse, Error> = fixture.pic().query_candid_or_panic(
         fixture.root,
-        protocol::CANIC_STATUS,
+        protocol::CANIC_ROOT_STATUS,
         (RootStatusRequest::IssuerRenewal(
             RootIssuerRenewalStatusRequest {
                 issuer_pid: fixture.issuer.canister_id,

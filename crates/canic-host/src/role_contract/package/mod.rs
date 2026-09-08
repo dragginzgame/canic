@@ -135,7 +135,15 @@ pub fn declared_role_manifest_path(
         .roles
         .get(role)
         .ok_or_else(|| RoleContractFinding::RoleUnknown { role: role.clone() })?;
-    let manifest_path = package_manifest_path(config_path, &declaration.package);
+    let manifest_path = if role.is_root() {
+        crate::canonical_root::manifest_path(config_path)
+    } else {
+        let package = declaration
+            .package
+            .as_deref()
+            .ok_or_else(|| RoleContractFinding::PackageMissing { role: role.clone() })?;
+        package_manifest_path(config_path, package)
+    };
     if !manifest_path.is_file() {
         return Err(RoleContractFinding::PackageMissing { role: role.clone() });
     }
@@ -181,7 +189,19 @@ fn validate_declared_role_package_with_cache(
         });
     };
     let app = config.app_id().as_str();
-    let manifest_path = package_manifest_path(config_path, &declaration.package);
+    let manifest_path = if role.is_root() {
+        match crate::canonical_root::materialize(config_path, config, mode) {
+            Ok(path) => path,
+            Err(finding) => return RolePackageValidation::Unsupported(finding),
+        }
+    } else {
+        let Some(package) = declaration.package.as_deref() else {
+            return RolePackageValidation::Unsupported(RoleContractFinding::PackageMissing {
+                role: role.clone(),
+            });
+        };
+        package_manifest_path(config_path, package)
+    };
     if !manifest_path.is_file() {
         return RolePackageValidation::Unsupported(RoleContractFinding::PackageMissing {
             role: role.clone(),
@@ -270,12 +290,32 @@ pub fn validate_internal_test_wasm_packages(
             .map_err(|_| unsupported_finding("unable to read role configuration"))?;
         let config = parse_config_model(&config_source)
             .map_err(|_| unsupported_finding("invalid role configuration"))?;
-        let evidence = match validate_declared_role_package(
-            &config_path,
-            &config,
-            &role,
-            PackageValidationMode::LockedBuild,
-        ) {
+        let validation = if role.is_root() {
+            let internal_source = package
+                .manifest_path
+                .starts_with(normalized_manifest_path(workspace_root).join("canisters"))
+                || package.name == crate::canonical_root::PACKAGE;
+            if !internal_source {
+                return Err(unsupported_finding(
+                    "Root fixtures must be Canic-owned infrastructure or internal canisters",
+                ));
+            }
+            validate_package_manifest(
+                &package.manifest_path,
+                &app,
+                &role,
+                PackageValidationMode::LockedBuild,
+                None,
+            )
+        } else {
+            validate_declared_role_package(
+                &config_path,
+                &config,
+                &role,
+                PackageValidationMode::LockedBuild,
+            )
+        };
+        let evidence = match validation {
             RolePackageValidation::Supported(evidence) => evidence,
             RolePackageValidation::Unsupported(finding) => return Err(finding),
         };
@@ -347,8 +387,13 @@ fn package_role_config_path(
         let Some(declaration) = config.roles.get(expected_role) else {
             continue;
         };
-        if normalized_manifest_path(&package_manifest_path(&candidate, &declaration.package))
-            == normalized_manifest_path(&package.manifest_path)
+        if expected_role.is_root() {
+            return Some(candidate);
+        }
+        if normalized_manifest_path(&package_manifest_path(
+            &candidate,
+            declaration.package.as_deref()?,
+        )) == normalized_manifest_path(&package.manifest_path)
         {
             return Some(candidate);
         }

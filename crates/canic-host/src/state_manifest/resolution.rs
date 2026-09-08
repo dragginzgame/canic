@@ -10,8 +10,9 @@
 use crate::role_contract::{
     PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation,
     materialize_state_manifest, resolve_built_in_wasm_store_contract,
-    resolve_declared_role_package_contract, resolve_host_generated_fleet_coordinator_contract,
-    validate_built_in_wasm_store_package, validate_declared_role_package,
+    resolve_canonical_root_contract, resolve_declared_role_package_contract,
+    resolve_host_generated_fleet_coordinator_contract, validate_built_in_wasm_store_package,
+    validate_declared_role_package,
 };
 use canic_core::{
     bootstrap::parse_config_model,
@@ -71,6 +72,15 @@ pub fn resolve_workspace_state_manifest(
                     continue;
                 }
                 matched_declared_role = true;
+                if role.is_root() {
+                    collect_contract(
+                        role,
+                        resolve_canonical_root_contract(&config),
+                        &mut contracts,
+                        &mut errors,
+                    );
+                    continue;
+                }
                 match validate_declared_role_package(
                     config_path,
                     &config,
@@ -170,8 +180,8 @@ fn existing_built_in_wasm_store_manifest(
     evidence: &[RoleCargoGraphEvidence],
 ) -> Option<PathBuf> {
     for candidate in [
-        workspace_root.join("crates/canic-wasm-store/Cargo.toml"),
-        workspace_root.join(".icp/local/generated/canic-wasm-store/Cargo.toml"),
+        workspace_root.join("crates/canic-fleet-wasm-store/Cargo.toml"),
+        workspace_root.join(".icp/local/generated/canic-fleet-wasm-store/Cargo.toml"),
     ] {
         if candidate.is_file() {
             return Some(candidate);
@@ -182,9 +192,9 @@ fn existing_built_in_wasm_store_manifest(
         let canic_root = package.canic_manifest_path.parent()?;
         let sibling_root = canic_root.parent()?;
         for candidate in [
-            sibling_root.join("canic-wasm-store/Cargo.toml"),
+            sibling_root.join("canic-fleet-wasm-store/Cargo.toml"),
             sibling_root
-                .join(format!("canic-wasm-store-{}", package.canic_version))
+                .join(format!("canic-fleet-wasm-store-{}", package.canic_version))
                 .join("Cargo.toml"),
         ] {
             if candidate.is_file() {

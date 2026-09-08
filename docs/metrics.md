@@ -1,6 +1,6 @@
 # Canic Metrics Reference
 
-The role-owned status selector `Metrics { kind, page }` is controller-only and returns a
+The `canic_observability` selector `Metrics { kind, page }` is controller-only and returns a
 paginated `Page<MetricEntry>`. Rows are sorted by `labels`, then `principal`,
 before pagination. This guard is intentional: runtime rows include exact
 instruction totals, timer delays, cycle-funding values, and principal-scoped
@@ -10,7 +10,12 @@ For a managed Fleet, use `canic info metrics`. Human operators do not become
 controllers of every Component; the CLI authenticates to the Fleet Subnet
 Root, which relays the bounded observation to the Root-controlled target. A
 direct status query remains appropriate for a canister's own controller.
-Managed Components use `canic_status`; a Root uses `canic_root_status`.
+Managed Components and Roots use `canic_observability`.
+
+Optional public aggregates use the separate `canic_public_status` endpoint and
+are disabled by default. See [public metric publication](features/runtime/public-observability.md)
+for configuration, cached snapshots, units and staleness. Publication does not
+change the protected metrics contract described here.
 
 Each row has:
 

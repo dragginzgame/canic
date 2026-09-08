@@ -120,9 +120,9 @@ fn rejects_invalid_canister_scaffold_role_names() {
     }
 }
 
-// Ensure scaffold writes the expected minimal root and app files.
+// Scaffold retains application source and declares canonical infrastructure.
 #[test]
-fn scaffold_app_writes_root_and_app_files() {
+fn scaffold_app_writes_application_files_with_canonical_root() {
     let root = TempDir::new("canic-cli-scaffold");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
@@ -132,9 +132,6 @@ fn scaffold_app_writes_root_and_app_files() {
 
     let result = scaffold_app_at(&root, &options).expect("scaffold app");
     let config = fs::read_to_string(&result.config_path).expect("read config");
-    let root_lib = fs::read_to_string(result.root_dir.join("src/lib.rs")).expect("read root lib");
-    let root_manifest =
-        fs::read_to_string(result.root_dir.join("Cargo.toml")).expect("read root manifest");
     let app_lib = fs::read_to_string(result.app_dir.join("src/lib.rs")).expect("read app lib");
     let app_manifest =
         fs::read_to_string(result.app_dir.join("Cargo.toml")).expect("read app manifest");
@@ -151,15 +148,12 @@ fn scaffold_app_writes_root_and_app_files() {
     assert!(config.contains("maximum_instances = 1"));
     assert!(!config.contains("topup_policy"));
     assert!(!config.contains("[[canisters]]"));
-    assert!(root_manifest.contains("version = \"0.1.0\""));
-    assert!(root_manifest.contains("app = \"my_app\""));
-    assert!(root_manifest.contains("role = \"root\""));
-    assert!(root_manifest.contains("Add runtime Canic features here"));
-    assert!(root_manifest.contains("canic = \""));
-    assert!(root_manifest.contains("ic-cdk = \"0.20\""));
-    assert!(!root_manifest.contains("workspace = true"));
-    assert!(root_lib.contains("canic::start!();"));
-    assert!(root_lib.contains("canic::finish!();"));
+    let model = canic_core::bootstrap::parse_config_model(&config).expect("valid scaffold config");
+    assert!(
+        model.roles[&canic_core::ids::CanisterRole::ROOT]
+            .package
+            .is_none()
+    );
     assert!(app_manifest.contains("name = \"canister_my_app_app\""));
     assert!(app_manifest.contains("app = \"my_app\""));
     assert!(app_manifest.contains("role = \"app\""));
@@ -200,7 +194,7 @@ fn scaffold_canister_writes_declared_only_role_files() {
     fs::create_dir_all(&app_dir).expect("create app dir");
     fs::write(
         root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\n    \"apps/demo/root\",\n]\n",
+        "[workspace]\nmembers = [\n    \"apps/demo/app\",\n]\n",
     )
     .expect("write workspace manifest");
     fs::write(app_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
@@ -246,7 +240,7 @@ fn scaffold_canister_plan_does_not_write_files() {
     fs::create_dir_all(&app_dir).expect("create app dir");
     fs::write(
         root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\n    \"apps/demo/root\",\n]\n",
+        "[workspace]\nmembers = [\n    \"apps/demo/app\",\n]\n",
     )
     .expect("write workspace manifest");
     fs::write(app_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
@@ -283,12 +277,12 @@ fn scaffold_canister_plan_does_not_write_files() {
 #[test]
 fn append_workspace_member_source_updates_compact_members_array() {
     let updated = append_workspace_member_source(
-        "[workspace]\nmembers = [\"apps/demo/root\"]\n",
+        "[workspace]\nmembers = [\"apps/demo/app\"]\n",
         "apps/demo/store",
     )
     .expect("append member");
 
-    assert!(updated.contains("\"apps/demo/root\""));
+    assert!(updated.contains("\"apps/demo/app\""));
     assert!(updated.contains("\"apps/demo/store\""));
 }
 
@@ -296,7 +290,7 @@ fn append_workspace_member_source_updates_compact_members_array() {
 #[test]
 fn append_workspace_member_source_does_not_skip_unrelated_string_matches() {
     let updated = append_workspace_member_source(
-        "[package]\ndescription = \"apps/demo/store\"\n\n[workspace]\nmembers = [\"apps/demo/root\"]\n",
+        "[package]\ndescription = \"apps/demo/store\"\n\n[workspace]\nmembers = [\"apps/demo/app\"]\n",
         "apps/demo/store",
     )
     .expect("append member");
@@ -323,7 +317,7 @@ fn append_workspace_member_source_does_not_skip_unrelated_string_matches() {
 #[test]
 fn append_workspace_member_source_rejects_non_array_members() {
     let err = append_workspace_member_source(
-        "[workspace]\nmembers = \"apps/demo/root\"\n",
+        "[workspace]\nmembers = \"apps/demo/app\"\n",
         "apps/demo/store",
     )
     .expect_err("non-array members should fail");

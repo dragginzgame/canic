@@ -28,7 +28,7 @@ use super::fixture::{progress, progress_ready};
 
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
 #[cfg(test)]
-const INITIAL_SHARD_ROOT_CANISTER_PACKAGE: &str = "canister_root";
+const INITIAL_SHARD_ROOT_CANISTER_PACKAGE: &str = "canic-fleet-root";
 #[cfg(test)]
 const CYCLES_LEDGER_STUB_PACKAGE: &str = "cycles_ledger_stub";
 #[cfg(test)]
@@ -352,7 +352,7 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
     let cargo_build = WasmBuildSpec::new(
         workspace_root,
         target_dir,
-        &["canic-host", "canic-wasm-store"],
+        &["canic-host", "canic-fleet-wasm-store"],
         CanicWasmBuildProfile::Fast.target_dir_name(),
     )
     .with_cargo_profile_args(["--profile", "fast", "--locked"])
@@ -498,7 +498,7 @@ pub(super) fn five_trillion_component_root_canister_config_path(workspace_root: 
 fn read_built_wasm(target_dir: &Path, crate_name: &str) -> Vec<u8> {
     read_wasm(
         target_dir,
-        crate_name,
+        &crate_name.replace('-', "_"),
         CanicWasmBuildProfile::Fast.target_dir_name(),
     )
 }

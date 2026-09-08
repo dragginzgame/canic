@@ -354,7 +354,7 @@ Use this map for top-level ownership and package judgment:
 | `crates/canic-control-plane`           | root/store control-plane runtime            |
 | `crates/canic-host`                    | host-side build/install/deployment support  |
 | `crates/canic-macros`                  | proc-macro support for the public facade    |
-| `crates/canic-wasm-store`              | canonical publishable `wasm_store` canister |
+| `crates/canic-fleet-wasm-store`              | canonical publishable `wasm_store` canister |
 | `crates/canic-testing-internal`        | Canic-only internal test harnesses          |
 | `crates/canic-tests`                   | integration test entrypoints                |
 | sibling `../ic-testkit`                | public generic PocketIC/test infrastructure |
