@@ -50,6 +50,10 @@ The subsequent maintainer validation found one stale timer-owner inventory entry
 for CANIC-147. The exact owner is now registered in the guard; all 15 focused
 timer-inventory tests pass. That validation skipped serial PocketIC at the
 ordinary-test barrier; the earlier focused timer qualification remains separate.
+The next maintainer run exposed a shared Store artifact blocker: hand-edited
+history Candid was structurally equivalent but differed from the compiled profile
+bytes. Canonical regeneration corrects it; ordinary Store and Coordinator builds
+now pass without refresh. The full interrupted PocketIC run was not repeated.
 No new full-release duration is established; the serial
 PocketIC tier remains the largest cost. No version, Git publication, deployment
 or broad validation command was run.
