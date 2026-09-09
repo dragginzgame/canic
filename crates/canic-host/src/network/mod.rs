@@ -394,7 +394,7 @@ fn parse_fingerprint(value: &str) -> Result<[u8; 32], NetworkIdentityError> {
         return Err(NetworkIdentityError::InvalidFingerprint);
     }
     let mut digest = [0; 32];
-    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+    for (index, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         digest[index] = (decode_nibble(pair[0]) << 4) | decode_nibble(pair[1]);
     }
     Ok(digest)

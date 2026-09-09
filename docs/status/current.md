@@ -31,6 +31,19 @@ versions remain 0.110.12; the current source batch uses the open 0.110.13 draft.
 
 ## Release Preflight Rust Alignment
 
+The next maintainer validation passed workspace checking and stopped at the
+same Rust 1.98.1 `chunks_exact_to_as_chunks` lint in control-plane Root Store
+digest parsing. A repository-wide Rust source scan found two more sites in host
+network fingerprint parsing and its CBOR fixture helper. All three now use
+fixed-size byte pairs without changing input validation or serialized bytes.
+Warning-denied all-target/all-feature Clippy passes for `canic-control-plane`
+and `canic-host`; four Root Store and seventeen host network/CBOR regressions
+pass. Logs: `/tmp/canic-remaining-hex-clippy.log` and
+`/tmp/canic-remaining-hex-tests.log`. Targeted formatting, diff whitespace and
+the existing 0.110.13 changelog preflight pass. This resolves the reported lint
+failure and leaves the scoped batch/changelog ready for push/release review;
+the complete release gate has not been rerun by the agent.
+
 The maintainer's patch validation stopped at the release-integrity guard:
 `rust-toolchain.toml` used 1.98.1 while primary CI, scheduled security CI and
 developer setup still pinned 1.97.1. All three pins and the active README now
