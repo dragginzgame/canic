@@ -252,7 +252,7 @@ jobs:
         run: make test-pocketic
       - name: Save validated PocketIC test artifacts
         if: ${{ !cancelled() && steps.pocketic-test-artifacts.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/test-artifacts
           key: >-
