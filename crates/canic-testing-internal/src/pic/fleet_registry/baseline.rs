@@ -11716,9 +11716,8 @@ cycles = "80T"
 
     #[test]
     #[expect(
-        clippy::significant_drop_tightening,
         clippy::too_many_lines,
-        reason = "the pooled Fleet fixture lease and complete autonomous deletion journey stay together"
+        reason = "the complete autonomous deletion journey uses one exclusively owned fixture"
     )]
     fn published_draining_root_autonomously_reaches_external_deletion_readiness() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();

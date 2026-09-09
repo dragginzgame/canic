@@ -31,6 +31,17 @@ versions remain 0.110.12; the current source batch uses the open 0.110.13 draft.
 
 ## Release Preflight Rust Alignment
 
+The latest maintainer Clippy failure was one stale
+`significant_drop_tightening` expectation on the autonomous Root deletion test.
+Removed only that expectation and updated the remaining test-length exemption
+to describe its exclusively owned fixture. No test behavior changed.
+Warning-denied all-target/all-feature Clippy passes for
+`canic-testing-internal`, including governed PocketIC test compilation (59.24s).
+Log: `/tmp/canic-stale-expectation-clippy.log`. Targeted formatting, whitespace
+and 0.110.13 changelog preflight pass. The scoped correction and changelog are
+ready for release review; no PocketIC execution or full workspace validation
+was repeated for this annotation-only change.
+
 The subsequent full Clippy run exposed nine `redundant_pub_crate` warnings in
 the User Hub/User Shard reinstall fixtures and the runtime process fixture.
 Removed their redundant `pub(super)` restrictions while retaining private
