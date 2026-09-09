@@ -31,6 +31,18 @@ versions remain 0.110.12; the current source batch uses the open 0.110.13 draft.
 
 ## Release Preflight Rust Alignment
 
+The subsequent full Clippy run exposed nine `redundant_pub_crate` warnings in
+the User Hub/User Shard reinstall fixtures and the runtime process fixture.
+Removed their redundant `pub(super)` restrictions while retaining private
+containing modules and the same effective external visibility/Candid surface.
+All-target/all-feature warning-denied Clippy passes for `canister_user_hub`,
+`canister_user_shard` and `runtime_probe` (40.20s); log:
+`/tmp/canic-fixture-visibility-clippy.log`. Targeted formatting passes. This
+visibility-only correction adds no runtime behavior and does not repeat the
+PocketIC journeys. The open 0.110.13 notes include the correction. The scoped
+batch and changelog remain ready for release review; a successful complete
+workspace Clippy/release run is still unclaimed.
+
 The next maintainer validation passed workspace checking and stopped at the
 same Rust 1.98.1 `chunks_exact_to_as_chunks` lint in control-plane Root Store
 digest parsing. A repository-wide Rust source scan found two more sites in host

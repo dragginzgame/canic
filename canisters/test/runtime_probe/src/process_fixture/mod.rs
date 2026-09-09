@@ -9,7 +9,7 @@ use canic::__internal::core::api::lifecycle::metrics::{
     WasmStoreMetricsApi,
 };
 
-pub(super) fn record() {
+pub fn record() {
     WasmStoreMetricsApi::record(
         WasmStoreMetricOperation::SourceResolve,
         WasmStoreMetricSource::Bootstrap,

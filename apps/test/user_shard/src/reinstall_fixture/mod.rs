@@ -13,7 +13,7 @@ struct UserRows;
 
 /// One passive application row exposed by the disposable fixture.
 #[derive(candid::CandidType)]
-pub(super) struct UserRow {
+pub struct UserRow {
     pub id: u64,
     pub value: u64,
 }
@@ -24,15 +24,15 @@ thread_local! {
     );
 }
 
-pub(super) fn seed() {
+pub fn seed() {
     insert(0, 7);
 }
-pub(super) fn insert(id: u64, value: u64) {
+pub fn insert(id: u64, value: u64) {
     ROWS.with_borrow_mut(|rows| {
         rows.insert(id, value);
     });
 }
-pub(super) fn rows() -> Vec<UserRow> {
+pub fn rows() -> Vec<UserRow> {
     ROWS.with_borrow(|rows| {
         rows.iter()
             .map(|entry| {
