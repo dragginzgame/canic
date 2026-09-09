@@ -946,6 +946,12 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(desired.ledger_fee_cycles, "0.1B");
     assert_eq!(desired.management_creation_fee_cycles, "500B");
     assert_generated_retained_growth_fee(&root, &desired, &observed, &pool_one);
+    assert_reinstall_captures_additional_physical_pool_assets(&desired);
+    crate::fleet_ensure::policy::reinstall::activation::tests::assert_activation_reset_reviews(
+        &desired,
+        &crate::fleet_ensure::ops::resolve_desired_artifacts(&root, &desired)
+            .expect("review artifacts"),
+    );
     assert_eq!(desired.material_cycle_threshold, "0.001B");
     assert_eq!(desired.maximum_observation_burn_cycles, "1T");
     assert_eq!(desired.maximum_update_burn_cycles, "1T");
@@ -1118,6 +1124,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             protocol_ready: BTreeMap::new(),
         },
         1_800_000_000_000_000_000,
+        &"74".repeat(32),
+        None,
     )
     .expect_err("fresh pool funding without its execution margin rejects before effects");
     assert!(matches!(
@@ -1168,6 +1176,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             protocol_ready: BTreeMap::new(),
         },
         1_800_000_000_000_000_000,
+        &"74".repeat(32),
+        None,
     )
     .expect("compile fresh estate creation plan");
     let ordered_fresh_actions = workflow::ordered_actions(&fresh_plan);
@@ -2464,6 +2474,36 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert!(matches!(reinstall.plan.canisters[0].actions.as_slice(),
         [EnsureAction::Stop { .. }, EnsureAction::Install { mode: crate::fleet_ensure::model::InstallMode::Reinstall,
             wasm_sha256, .. }, EnsureAction::Start { .. }] if wasm_sha256 == &later_root_hash));
+    // A terminal inventory may grow beyond the original operator seed.
+    let original_state = read_state(&stopped_paths, &later.desired.fleet).unwrap();
+    let mut grown_state = original_state.clone();
+    let root_name = later.desired.bootstrap.as_ref().unwrap().roots[0]
+        .root
+        .clone();
+    let missing = principal_text(98);
+    grown_state
+        .principals
+        .insert("observed:grown-workload".into(), missing.clone());
+    grown_state.topology.insert(
+        "observed:grown-workload".into(),
+        crate::fleet_ensure::model::FleetEnsureTopologyRecord {
+            kind: DesiredCanisterKind::Component,
+            module_hash: None,
+            parent: Some(root_name),
+            protocol_binding: None,
+            role: None,
+        },
+    );
+    crate::fleet_ensure::ops::write_state(&stopped_paths, &grown_state).unwrap();
+    assert!(
+        matches!(workflow::plan(&root, &later.desired, &source_digest, &later.desired.fleet, 1_800_000_000_000_000_111, &mut reinstall_platform),
+        Err(workflow::EnsureWorkflowError::Policy(crate::fleet_ensure::policy::EnsurePolicyError::IncompleteRootEstate { missing_principals, .. })) if missing_principals == vec![missing])
+    );
+    assert_eq!(
+        read_state(&stopped_paths, &later.desired.fleet).unwrap(),
+        grown_state
+    );
+    crate::fleet_ensure::ops::write_state(&stopped_paths, &original_state).unwrap();
     let mut foreign = later.desired.clone();
     foreign
         .canisters
@@ -3540,6 +3580,7 @@ impl EnsurePlatform for RetainedEnsurePlatform {
             _ => return Err(io::Error::other("unexpected retained journey effect")),
         };
         Ok(EffectObservation {
+            provisioning_failure: None,
             applied,
             estate_funding_required: None,
             post_cycles: None,
@@ -4447,6 +4488,7 @@ fi
     });
     let inspection = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
         FixturePoolInspectionResponse::InspectCanister(FixturePoolInspection {
+            status: canic_core::dto::canister::CanisterStatusType::Running,
             cycles: Nat::from(6_000_000_000_000_u128),
             module_hash: None,
             settings: FixturePoolControllers {
@@ -4547,6 +4589,7 @@ enum FixturePoolInspectionResponse {
 }
 #[derive(candid::CandidType)]
 struct FixturePoolInspection {
+    status: canic_core::dto::canister::CanisterStatusType,
     cycles: Nat,
     module_hash: Option<Vec<u8>>,
     settings: FixturePoolControllers,
@@ -4738,4 +4781,136 @@ fn divergent_principal_order_pair() -> (Principal, Principal) {
         }
     }
     panic!("Principal fixture set did not contain divergent text and binary ordering")
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one generated-input regression keeps extra physical inventory and immutable authored inputs together"
+)]
+fn assert_reinstall_captures_additional_physical_pool_assets(desired: &DesiredFleet) {
+    use crate::fleet_ensure::{
+        model::{
+            CanisterRuntimeStatus, FleetObservation, FleetReinstallAssetRecord, LiveCanister,
+            RootManagementCanisterObservation,
+        },
+        ops::{FleetReinstallObservation, reinstall::capture_imports},
+    };
+    let original = desired.clone();
+    let bootstrap_root = &desired.bootstrap.as_ref().unwrap().roots[0];
+    let root_name = &bootstrap_root.root;
+    let root = desired
+        .canisters
+        .iter()
+        .find(|c| c.name == *root_name)
+        .unwrap();
+    let authorities = desired
+        .canisters
+        .iter()
+        .filter(|c| c.kind != DesiredCanisterKind::Pool)
+        .map(|c| {
+            (
+                c.name.clone(),
+                RootManagementCanisterObservation {
+                    name: c.name.clone(),
+                    subnet: c.subnet.clone(),
+                    live: LiveCanister {
+                        canister_version: Some(1),
+                        controllers: c.controllers.clone(),
+                        cycles: 1,
+                        module_sha256: None,
+                        principal: c.principal.clone().unwrap(),
+                        reinstall_required: false,
+                        root_owned_lifecycle: None,
+                        status: CanisterRuntimeStatus::Running,
+                    },
+                },
+            )
+        })
+        .collect();
+    let mut assets = desired
+        .canisters
+        .iter()
+        .filter(|c| c.kind == DesiredCanisterKind::Pool)
+        .map(|c| FleetReinstallAssetRecord {
+            controllers: vec![root.principal.clone().unwrap()],
+            module_sha256: None,
+            principal: c.principal.clone().unwrap(),
+            root: root_name.clone(),
+            subnet: c.subnet.clone(),
+        })
+        .collect::<Vec<_>>();
+    let extra = principal_text(55);
+    let mut additional = assets[0].clone();
+    additional.principal.clone_from(&extra);
+    additional.module_sha256 = Some("ab".repeat(32));
+    assets.push(additional);
+    let observation = FleetObservation {
+        additional_controlled_cycles: BTreeMap::new(),
+        estate_funding_domains: BTreeMap::new(),
+        ledger_fee_cycles: 0,
+        operator_cycles: 0,
+        protocol_ready: BTreeMap::new(),
+        canisters: desired
+            .canisters
+            .iter()
+            .map(|c| {
+                (
+                    c.name.clone(),
+                    Some(LiveCanister {
+                        canister_version: Some(1),
+                        controllers: c.controllers.clone(),
+                        cycles: 1,
+                        module_sha256: None,
+                        principal: c.principal.clone().unwrap(),
+                        reinstall_required: false,
+                        root_owned_lifecycle: None,
+                        status: CanisterRuntimeStatus::Running,
+                    }),
+                )
+            })
+            .collect(),
+    };
+    let inventory = FleetReinstallObservation {
+        authorities,
+        assets,
+        observation,
+    };
+    let captured = capture_imports(desired, &inventory).expect("capture the entire live pool");
+    assert_eq!(
+        *desired, original,
+        "authored desired input remains unchanged"
+    );
+    let captured_bootstrap = captured.bootstrap.as_ref().unwrap();
+    assert!(!captured_bootstrap.fresh_estate);
+    let imports = captured_bootstrap.roots[0]
+        .canister_pool_imports
+        .iter()
+        .map(|name| {
+            captured
+                .canisters
+                .iter()
+                .find(|c| c.name == *name)
+                .unwrap()
+                .principal
+                .clone()
+                .unwrap()
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        imports,
+        inventory
+            .assets
+            .iter()
+            .map(|a| a.principal.clone())
+            .collect()
+    );
+    let new = captured
+        .canisters
+        .iter()
+        .find(|c| c.principal.as_deref() == Some(&extra))
+        .unwrap();
+    assert_eq!(new.kind, DesiredCanisterKind::Pool);
+    assert_eq!(new.controller_canisters, std::slice::from_ref(root_name));
+    assert_eq!(new.parent.as_ref(), Some(root_name));
+    assert!(!new.replace);
 }

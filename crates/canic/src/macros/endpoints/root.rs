@@ -28,6 +28,7 @@ macro_rules! canic_emit_root_command_endpoint {
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffRequest),
             ImportPoolCanister(::canic::dto::pool::PoolCanisterRequest),
             InspectCanister(::canic::dto::canister::CanisterInspectionRequest),
+            InspectCanisterHistory(::canic::dto::canister::CanisterInspectionRequest),
             MaintainPool,
             ObserveCanister(::canic::dto::observability::FleetCanisterObservabilityRequest),
             OpenFleetAdmission(
@@ -95,6 +96,7 @@ macro_rules! canic_emit_root_command_endpoint {
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffResponse),
             ImportPoolCanister(::canic::dto::pool::PoolImportResponse),
             InspectCanister(::canic::dto::canister::CanisterStatusResponse),
+            InspectCanisterHistory(::canic::dto::canister::CanisterHistoryResponse),
             MaintainPool(::canic::dto::pool::PoolMaintenanceResponse),
             ObserveCanister(::canic::dto::observability::CanisterObservabilityResponse),
             OperationAccepted(::canic::dto::role::OperationReceipt),
@@ -201,6 +203,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::HandoffPoolCanister(_)
                     | RootCommand::ImportPoolCanister(_)
                     | RootCommand::InspectCanister(_)
+                    | RootCommand::InspectCanisterHistory(_)
                     | RootCommand::MaintainPool
                     | RootCommand::ObserveCanister(_)
                     | RootCommand::PrepareAuthoritySnapshot(_)
@@ -326,6 +329,8 @@ macro_rules! canic_emit_root_command_endpoint {
             let recovery_command = matches!(
                 &command,
                 RootCommand::PrepareAuthoritySnapshot(_) | RootCommand::ResumeAuthoritySnapshot(_)
+                    | RootCommand::InspectCanister(_)
+                    | RootCommand::InspectCanisterHistory(_)
             );
             $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(
                 recovery_command,
@@ -338,6 +343,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::HandoffPoolCanister(_)
                     | RootCommand::ImportPoolCanister(_)
                     | RootCommand::InspectCanister(_)
+                    | RootCommand::InspectCanisterHistory(_)
                     | RootCommand::MaintainPool
                     | RootCommand::PrepareComponentRegistry(_)
                     | RootCommand::PrepareFleetActivation
@@ -437,6 +443,11 @@ macro_rules! canic_emit_root_command_endpoint {
                     )
                     .await
                     .map(RootCommandResponse::InspectCanister)
+                }
+                RootCommand::InspectCanisterHistory(request) => {
+                    $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_history(request.canister_id)
+                        .await
+                        .map(RootCommandResponse::InspectCanisterHistory)
                 }
                 RootCommand::MaintainPool => {
                     let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(

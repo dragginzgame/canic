@@ -1,6 +1,6 @@
 //! Module: icp::management
 //!
-//! Responsibility: perform one typed management-canister update with the target
+//! Responsibility: perform typed management updates with the target
 //! canister as the HTTP effective canister ID.
 //! Does not own: install policy, durable effect intent, or effect reconciliation.
 //! Boundary: the selected ICP environment and identity are resolved through the
@@ -90,6 +90,7 @@ impl IcpCli {
     {
         let argument = candid::encode_one(input).map_err(IcpManagementCallError::CandidEncode)?;
         let agent = self.authenticated_agent()?;
+        self.record_remote_call();
         let response = call_management_update(
             &LiveAgentUpdateBoundary { agent: &agent },
             effective_canister_id,

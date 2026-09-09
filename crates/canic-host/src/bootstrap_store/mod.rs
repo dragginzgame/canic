@@ -9,8 +9,10 @@ use crate::{
     build_toolchain::BuildToolchain,
     canister_build::{
         CanisterArtifactBuildOutput, WorkspaceBuildContext,
-        cache::{canister_build_target_root, configure_canister_cargo_command},
-        extract_candid_bytes,
+        cache::{
+            canister_build_target_root, configure_canister_cargo_command,
+            configure_declaration_command, declaration_target_root,
+        },
     },
     cargo_command,
     cargo_metadata::cargo_metadata,
@@ -29,6 +31,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
+    time::Instant,
 };
 
 const WASM_STORE_ROLE: &str = "wasm_store";
@@ -53,14 +56,12 @@ pub fn build_bootstrap_wasm_store_artifact(
     let artifact_root = context.artifact_root().join(WASM_STORE_ROLE);
     fs::create_dir_all(&artifact_root)?;
 
-    run_wasm_store_cargo_build(context, &source.manifest_path, None, true)?;
-
     let target_root = canister_build_target_root(&context.workspace_root);
     let built_wasm_path = target_root
         .join("wasm32-unknown-unknown")
         .join(context.profile.target_dir_name())
         .join(format!("{CANONICAL_WASM_STORE_CRATE_NAME}.wasm"));
-    let candid = extract_candid_bytes(&built_wasm_path)?;
+    let candid = resolve_wasm_store_candid(context, &source)?;
     let capabilities = canic_core::role_contract::built_in_role_capabilities(
         canic_core::role_contract::BuiltInRoleKind::WasmStore,
     );
@@ -82,10 +83,6 @@ pub fn build_bootstrap_wasm_store_artifact(
     let did_path = artifact_root.join(format!("{WASM_STORE_ROLE}.did"));
     let profile_path = artifact_root.join(".build-profile");
     let embed_candid = should_embed_candid_metadata(context.build_network);
-    let artifact_candid = resolve_wasm_store_candid(context, &source, &candid)?;
-    if artifact_candid != candid {
-        return Err("Wasm Store materialized Candid differs from its compiled profile".into());
-    }
     let transforms = finalize_wasm_artifact(
         &WasmArtifactFinalization {
             profile: context.profile,
@@ -93,7 +90,7 @@ pub fn build_bootstrap_wasm_store_artifact(
             embed_candid,
             validate_sidecar_only: false,
             source_wasm_path: &built_wasm_path,
-            candid: &artifact_candid,
+            candid: &candid,
             wasm_path: &wasm_path,
             did_path: &did_path,
             wasm_gz_path: &wasm_gz_path,
@@ -154,7 +151,18 @@ fn run_wasm_store_cargo_build(
         );
     }
 
+    let started = Instant::now();
     let output = command.output()?;
+    eprintln!(
+        "Build phase {} bootstrap_store: {:.2}s",
+        if force_candid_export {
+            "declaration"
+        } else {
+            "runtime Cargo/link"
+        },
+        started.elapsed().as_secs_f64()
+    );
+
     if output.status.success() {
         return Ok(());
     }
@@ -192,7 +200,7 @@ fn wasm_store_cargo_build_command(
     append_infrastructure_profile_args(&mut command, context.profile);
     command.args(context.profile.cargo_args());
     if force_candid_export {
-        command.env(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1");
+        configure_declaration_command(&mut command, context);
     }
     command
 }
@@ -201,10 +209,8 @@ fn wasm_store_cargo_build_command(
 fn resolve_wasm_store_candid(
     context: &WorkspaceBuildContext,
     source: &BootstrapWasmStoreSource,
-    generated_candid: &[u8],
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let target_root = canister_build_target_root(&context.workspace_root);
-    let selected_wasm_path = target_root
+    let selected_wasm_path = declaration_target_root(&context.workspace_root)
         .join("wasm32-unknown-unknown")
         .join(context.profile.target_dir_name())
         .join(format!("{CANONICAL_WASM_STORE_CRATE_NAME}.wasm"));
@@ -213,9 +219,9 @@ fn resolve_wasm_store_candid(
         WASM_STORE_ROLE,
         &source.canonical_did_path,
         context.refresh_canonical_infrastructure_did,
-        Some(generated_candid),
+        None,
         &selected_wasm_path,
-        || Ok(()),
+        || run_wasm_store_cargo_build(context, &source.manifest_path, None, true),
     )
 }
 

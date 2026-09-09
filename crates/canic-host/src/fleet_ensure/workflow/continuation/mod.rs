@@ -129,7 +129,9 @@ pub(super) fn verify_canonical<P: EnsurePlatform>(
         // plan crosses its own intent boundary. Its phases belong to that prior plan.
         return match journal.completion {
             FleetEnsureCompletion::InProgress => Err(EnsureWorkflowError::JournalIntegrity),
-            FleetEnsureCompletion::Converged | FleetEnsureCompletion::ReplanRequired => Ok(()),
+            FleetEnsureCompletion::Converged
+            | FleetEnsureCompletion::Prepared
+            | FleetEnsureCompletion::ReplanRequired => Ok(()),
         };
     }
     if journal.operation_id != plan.operation_id {
@@ -191,6 +193,8 @@ pub(super) fn replay<P: EnsurePlatform>(
         &plan.fleet,
         &observation,
         plan.planned_at_time,
+        &plan.operation_id,
+        None,
     )?;
     if !ordered_actions(&current).is_empty() {
         return Err(review(FleetEnsureSuccessorReviewReason::AdditionalEffect));
@@ -205,6 +209,8 @@ pub(super) fn replay<P: EnsurePlatform>(
         .observe(&plan.operation_id, &verified_state)
         .map_err(EnsureWorkflowError::Platform)?;
     attach_terminal_cycles(&mut final_observation, cycles)?;
+    super::reinstall::verify_terminal_estate(plan, &final_observation)?;
+    super::reinstall::verify_terminal_authority(plan, &verified_state, platform)?;
     verify_terminal_conservation(plan, journal, &verified_state, &final_observation)
 }
 
@@ -222,13 +228,19 @@ pub(super) fn append<P: EnsurePlatform>(
     phase: FleetEnsurePlan,
     platform: &mut P,
 ) -> Result<(), EnsureWorkflowError<P::Error>> {
+    let pause = |reason| EnsureWorkflowError::SuccessorReviewRequired {
+        reason,
+        review: Some(Box::new(
+            crate::fleet_ensure::ops::recovery::review_details(&phase),
+        )),
+    };
     if !phase_binding_matches(plan, &phase) || !phase_effects_are_protocol_only(plan, &phase) {
-        return Err(review(FleetEnsureSuccessorReviewReason::AdditionalEffect));
+        return Err(pause(FleetEnsureSuccessorReviewReason::AdditionalEffect));
     }
     let authority = plan
         .continuation
         .as_ref()
-        .ok_or_else(|| review(FleetEnsureSuccessorReviewReason::PhaseBound))?;
+        .ok_or_else(|| pause(FleetEnsureSuccessorReviewReason::PhaseBound))?;
     let retained_actions = journal
         .successor_phases
         .iter()
@@ -241,24 +253,26 @@ pub(super) fn append<P: EnsurePlatform>(
         .saturating_add(phase.protocol_actions.len())
         > authority.maximum_successor_actions as usize
     {
-        return Err(review(FleetEnsureSuccessorReviewReason::PhaseBound));
+        return Err(pause(FleetEnsureSuccessorReviewReason::PhaseBound));
     }
     if phase
         .protocol_actions
         .iter()
         .any(|action| retained_actions.contains(&action_sha256(action)))
     {
-        return Err(review(FleetEnsureSuccessorReviewReason::ProtocolAuthority));
+        return Err(pause(FleetEnsureSuccessorReviewReason::ProtocolAuthority));
     }
     let actual = verify_terminal_conservation(plan, journal, state, observation)?;
-    let burn = successor_phase_burn(desired, &phase)?;
-    if actual
-        .measured_execution_burn_cycles
-        .checked_add(burn)
-        .is_none_or(|total| total > plan.conservation.maximum_execution_burn_cycles)
-    {
-        return Err(review(FleetEnsureSuccessorReviewReason::BudgetExceeded));
-    }
+    let remaining = plan
+        .conservation
+        .maximum_execution_burn_cycles
+        .saturating_sub(actual.measured_execution_burn_cycles);
+    let phase = crate::fleet_ensure::policy::recovery::affordable_successor(
+        desired,
+        phase.clone(),
+        remaining,
+    )?
+    .ok_or_else(|| pause(FleetEnsureSuccessorReviewReason::BudgetExceeded))?;
     let candidate = candidate_journal(journal, &phase, actual.measured_execution_burn_cycles);
     verify_records(plan, &candidate)?;
     verify_canonical(plan, &candidate, state, platform)?;
@@ -343,5 +357,8 @@ fn phase_effects_are_protocol_only(original: &FleetEnsurePlan, phase: &FleetEnsu
 const fn review<E: std::error::Error + 'static>(
     reason: FleetEnsureSuccessorReviewReason,
 ) -> EnsureWorkflowError<E> {
-    EnsureWorkflowError::SuccessorReviewRequired { reason }
+    EnsureWorkflowError::SuccessorReviewRequired {
+        reason,
+        review: None,
+    }
 }

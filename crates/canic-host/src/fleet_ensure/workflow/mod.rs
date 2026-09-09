@@ -8,6 +8,7 @@ mod continuation;
 mod funding;
 #[cfg(test)]
 mod funding_tests;
+mod reinstall;
 mod root_reinstall;
 
 use crate::fleet_ensure::{
@@ -38,6 +39,8 @@ use std::{
     path::Path,
 };
 use thiserror::Error as ThisError;
+
+pub use reinstall::plan_reinstall;
 
 /// Exact no-effect evidence that a fresh pool cannot retain its readiness floor.
 
@@ -125,6 +128,19 @@ pub enum EnsureWorkflowError<E>
 where
     E: std::error::Error + 'static,
 {
+    #[error(
+        "activation {operation_id} has an Issued provisioning action after its Applied host prefix (source document {source_document_sha256}); preserve the plan and journal: recovery of this partial activation is not yet qualified"
+    )]
+    PartialActivationResetUnavailable {
+        operation_id: String,
+        source_document_sha256: String,
+    },
+
+    #[error(
+        "a new reinstall requires the unchanged, fully converged Fleet; preserve the retained plan and journal if activation is blocked, because partial-activation reset is not yet supported"
+    )]
+    ReinstallConflict,
+
     #[error("reviewed Fleet plan digest changed before its first effect")]
     DriftedBeforeApply,
 
@@ -137,6 +153,11 @@ where
         "replan-required Fleet operation owns completed reinstall evidence for desired input {expected}; refusing alternate desired input {actual}"
     )]
     RetainedReinstallDesiredConflict { actual: String, expected: String },
+
+    #[error(
+        "Root prerequisite retains activation authority for desired input {expected}; refreshed input {actual} is refused before Store effects; preserve the retained plan and journal for recovery review"
+    )]
+    RootActivationDesiredConflict { actual: String, expected: String },
 
     #[error("reviewed Fleet plan {expected} does not match retained plan {actual}")]
     PlanDigestMismatch { actual: String, expected: String },
@@ -157,6 +178,17 @@ where
         action: String,
         observations: u32,
         progress_identity: String,
+    },
+
+    #[error("Root {root} provisioning has made no progress for {observations} observations: stage={stage:?}, target={target}, operation={operation}, diagnostic={diagnostic_code}, retry=Backoff, failed_at_ns={failed_at_ns}; the issued operation remains retained; resume the same reviewed apply after the dependency recovers", operation = canic_core::cdk::utils::hash::hex_bytes(.operation_id))]
+    ProvisioningRetryPending {
+        root: candid::Principal,
+        stage: canic_core::dto::component_provisioning::ProvisioningFailureStage,
+        target: candid::Principal,
+        operation_id: [u8; 32],
+        diagnostic_code: u16,
+        observations: u32,
+        failed_at_ns: u64,
     },
 
     #[error(
@@ -203,9 +235,10 @@ where
         requested_cycles: u128,
     },
 
-    #[error("Fleet successor requires a new review: {reason:?}")]
+    #[error("Fleet successor requires a new review: {reason:?}; {}", .review.as_deref().map(ToString::to_string).unwrap_or_default())]
     SuccessorReviewRequired {
         reason: crate::fleet_ensure::model::FleetEnsureSuccessorReviewReason,
+        review: Option<Box<crate::fleet_ensure::model::FleetSuccessorReview>>,
     },
 
     #[error(transparent)]
@@ -239,10 +272,19 @@ where
     validate_path_labels(environment, requested_fleet)?;
     let paths = EnsurePaths::under(root, environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
+    if let Some(review) = crate::fleet_ensure::ops::reinstall::adoption::review(&paths)? {
+        if review.environment != environment || review.fleet != requested_fleet {
+            return Err(EnsureWorkflowError::PlanIntegrity);
+        }
+        return Ok(Some(review));
+    }
     let Some(journal) = read_journal(&paths)? else {
         return Ok(None);
     };
-    if journal.completion != FleetEnsureCompletion::InProgress {
+    if !matches!(
+        journal.completion,
+        FleetEnsureCompletion::InProgress | FleetEnsureCompletion::Prepared
+    ) {
         return Ok(None);
     }
     let retained = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
@@ -250,7 +292,22 @@ where
         return Err(EnsureWorkflowError::PlanIntegrity);
     }
     let state = read_state(&paths, requested_fleet)?;
-    verify_journal(&journal, &retained, requested_fleet, &state)?;
+    let prepared_full = journal.completion == FleetEnsureCompletion::Prepared
+        && (retained.scope == FleetEnsurePlanScope::Full
+            || (retained.scope == FleetEnsurePlanScope::RootReinstallPrerequisite
+                && retained.reinstall.as_ref().is_some_and(|intent| {
+                    intent
+                        .activation_reset
+                        .as_ref()
+                        .is_some_and(|activation| activation.preparation.is_some())
+                })))
+        && retained.reinstall.as_ref().is_some_and(|intent| {
+            intent.operation_id == journal.operation_id
+                && intent.operation_id == retained.operation_id
+        });
+    if !prepared_full {
+        verify_journal(&journal, &retained, requested_fleet, &state)?;
+    }
     Ok(Some(retained))
 }
 
@@ -273,6 +330,18 @@ where
     validate_path_identity(desired, requested_fleet)?;
     let paths = EnsurePaths::under(root, &desired.environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
+    if let Some(review) = crate::fleet_ensure::ops::reinstall::adoption::review(&paths)? {
+        if review.desired_sha256 != desired_sha256 {
+            return Err(EnsureWorkflowError::DriftedBeforeApply);
+        }
+        return Ok(FleetEnsureReport {
+            funding_review: None,
+            actual_conservation: None,
+            effects_applied: 0,
+            plan: review,
+            terminal: false,
+        });
+    }
     if let Some(mut journal) = read_journal(&paths)?
         && journal.completion == FleetEnsureCompletion::InProgress
     {
@@ -310,6 +379,44 @@ where
     let mut state = read_state(&paths, requested_fleet)?;
     let prior_plan = read_plan(&paths)?.map(verified_plan).transpose()?;
     let prior_journal = read_journal(&paths)?;
+    if let Some(prior) = &prior_plan {
+        let activation_reset = prior
+            .reinstall
+            .as_ref()
+            .is_some_and(|intent| intent.activation_reset.is_some());
+        if activation_reset
+            && prior.scope == FleetEnsurePlanScope::RootReinstallPrerequisite
+            && let Some(journal) = prior_journal
+                .as_ref()
+                .filter(|journal| journal.completion == FleetEnsureCompletion::Converged)
+        {
+            verify_journal(journal, prior, requested_fleet, &state)?;
+            retain_completed_reinstalls(&mut state, prior, journal);
+            write_state(&paths, &state)?;
+        }
+        let unfinished_reset = prior.reinstall.is_some()
+            && !prior_journal.as_ref().is_some_and(|journal| {
+                journal.plan_sha256 == prior.plan_sha256
+                    && journal.completion == FleetEnsureCompletion::Converged
+            });
+        if prior.scope == FleetEnsurePlanScope::ReinstallPreparation
+            || unfinished_reset
+            || (activation_reset && prior.scope == FleetEnsurePlanScope::RootReinstallPrerequisite)
+        {
+            if prior.desired_sha256 != desired_sha256 {
+                return Err(EnsureWorkflowError::ReinstallConflict);
+            }
+            return reinstall::continue_plan(
+                root,
+                &paths,
+                desired,
+                prior,
+                prior_journal.as_ref(),
+                &state,
+                platform,
+            );
+        }
+    }
     let matching_prior = reconcile_retained_planning_state(
         &mut state,
         prior_plan.as_ref(),
@@ -324,7 +431,12 @@ where
             retain_completed_reinstalls(&mut state, prior, journal);
         }
     }
-    let operation_id = operation_id(desired_sha256, &desired.environment, requested_fleet);
+    let operation_id = matching_prior
+        .filter(|prior| prior.scope == FleetEnsurePlanScope::Full)
+        .map_or_else(
+            || operation_id(desired_sha256, &desired.environment, requested_fleet),
+            |prior| prior.operation_id.clone(),
+        );
     if let Some(management) = platform
         .observe_root_management(&state, &BTreeSet::new())
         .map_err(EnsureWorkflowError::Platform)?
@@ -400,6 +512,8 @@ where
             requested_fleet,
             &observation,
             created_at_time,
+            &operation_id,
+            None,
         ) {
             Ok(plan) => break plan,
             Err(EnsurePolicyError::PendingRootOwnedBalance { name }) => {
@@ -432,6 +546,9 @@ where
             Err(error) => return Err(error.into()),
         }
     };
+    for action in ordered_actions(&plan) {
+        verify_store_activation_binding(&plan, action, &state, platform)?;
+    }
     bind_terminal_inventory_operation(&mut plan, terminal_inventory_operation_id);
     write_plan(&paths, &plan)?;
     Ok(FleetEnsureReport {
@@ -502,6 +619,16 @@ where
         )
     {
         return Err(EnsureWorkflowError::RetainedReinstallDesiredConflict {
+            actual: desired_sha256.to_string(),
+            expected: prior.desired_sha256.clone(),
+        });
+    }
+    if let Some((prior, journal)) = prior_plan.zip(prior_journal)
+        && prior.scope == FleetEnsurePlanScope::RootReinstallPrerequisite
+        && prior.desired_sha256 != desired_sha256
+    {
+        verify_journal(journal, prior, requested_fleet, state)?;
+        return Err(EnsureWorkflowError::RootActivationDesiredConflict {
             actual: desired_sha256.to_string(),
             expected: prior.desired_sha256.clone(),
         });
@@ -679,8 +806,17 @@ where
     validate_path_identity(desired, requested_fleet)?;
     let paths = EnsurePaths::under(root, &desired.environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
-    let retained_plan = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
-    let retained_journal = read_journal(&paths)?;
+    let pending = crate::fleet_ensure::ops::reinstall::adoption::review(&paths)?;
+    let adopting = pending.is_some();
+    let retained_plan = verified_plan(match pending {
+        Some(plan) => plan,
+        None => read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?,
+    })?;
+    let retained_journal = if adopting {
+        None
+    } else {
+        read_journal(&paths)?
+    };
     if retained_plan.plan_sha256 != reviewed_plan_sha256
         && !retained_journal
             .as_ref()
@@ -699,7 +835,10 @@ where
         verify_journal(journal, &retained_plan, requested_fleet, &state)?;
         compact_inline_plan(&paths, &retained_plan)?;
     }
-    let operation_desired = if in_progress {
+    if !in_progress && retained_plan.desired_sha256 != desired_sha256 {
+        return Err(EnsureWorkflowError::DriftedBeforeApply);
+    }
+    let operation_desired = if in_progress || retained_plan.reinstall.is_some() {
         if let Some(reviewed) = retained_plan.reviewed_desired.as_deref() {
             let reviewed = reviewed.desired();
             validate_path_identity(reviewed, requested_fleet)?;
@@ -730,9 +869,23 @@ where
         continuation::verify_canonical(&retained_plan, journal, &state, platform)?;
     }
     let completed_journal = retained_journal.as_ref().filter(|journal| {
-        journal.completion == FleetEnsureCompletion::Converged
+        (journal.completion == FleetEnsureCompletion::Converged
+            || (journal.completion == FleetEnsureCompletion::Prepared
+                && retained_plan.scope == FleetEnsurePlanScope::ReinstallPreparation))
             && journal.plan_sha256 == retained_plan.plan_sha256
     });
+    if retained_plan.scope == FleetEnsurePlanScope::ReinstallPreparation
+        && let Some(journal) = completed_journal
+    {
+        let actual = reinstall::complete(&retained_plan, journal, &state, platform)?;
+        return Ok(FleetEnsureReport {
+            funding_review: None,
+            actual_conservation: Some(actual),
+            effects_applied: 0,
+            plan: retained_plan,
+            terminal: true,
+        });
+    }
     if retained_plan.scope == FleetEnsurePlanScope::RootReinstallPrerequisite
         && let Some(journal) = completed_journal
     {
@@ -846,7 +999,15 @@ where
                 stalled_observations: 0,
             };
             // Cross the nonterminal boundary before any effect-owned state can be retained.
-            write_journal(&paths, &journal)?;
+            if adopting {
+                crate::fleet_ensure::ops::reinstall::adoption::adopt(
+                    &paths,
+                    &retained_plan,
+                    &journal,
+                )?;
+            } else {
+                write_journal(&paths, &journal)?;
+            }
             journal
         }
     };
@@ -1177,6 +1338,13 @@ where
                                 platform,
                             )?;
                         }
+                        verify_store_activation_binding(&retained_plan, action, &state, platform)?;
+                        reinstall::verify_effect_authority(
+                            &retained_plan,
+                            action,
+                            &state,
+                            platform,
+                        )?;
                         let outcome =
                             match platform.apply(&journal.operation_id, action, record, &state) {
                                 Ok(outcome) => outcome,
@@ -1275,6 +1443,20 @@ where
                     if journal.stalled_observations
                         >= observation_policy.maximum_stalled_observations
                     {
+                        if let Some((failure, origin)) = observed
+                            .provisioning_failure
+                            .and_then(|failure| failure.origin.map(|origin| (failure, origin)))
+                        {
+                            return Err(EnsureWorkflowError::ProvisioningRetryPending {
+                                root: failure.fleet_subnet_root,
+                                stage: origin.stage,
+                                target: origin.target,
+                                operation_id: origin.operation_id,
+                                diagnostic_code: origin.diagnostic_code,
+                                observations: journal.stalled_observations,
+                                failed_at_ns: origin.failed_at_ns,
+                            });
+                        }
                         return Err(EnsureWorkflowError::Stalled {
                             action: action.name().to_string(),
                             observations: journal.stalled_observations,
@@ -1312,6 +1494,26 @@ where
             &journal,
             FleetEnsurePhase::TerminalVerification,
         );
+        if retained_plan.scope == FleetEnsurePlanScope::ReinstallPreparation {
+            let actual = reinstall::complete(&retained_plan, &journal, &state, platform)?;
+            journal.completion = FleetEnsureCompletion::Prepared;
+            journal.stalled_observations = 0;
+            write_journal(&paths, &journal)?;
+            report_progress_state(
+                platform,
+                &retained_plan,
+                &journal,
+                FleetEnsurePhase::Infrastructure,
+                FleetEnsureProgressState::PrerequisiteComplete,
+            );
+            return Ok(FleetEnsureReport {
+                funding_review: None,
+                actual_conservation: Some(actual),
+                effects_applied: applied_count(&journal),
+                plan: retained_plan,
+                terminal: true,
+            });
+        }
         if retained_plan.scope == FleetEnsurePlanScope::RootReinstallPrerequisite {
             let actual = root_reinstall::complete(&retained_plan, &journal, &state, platform)?;
             publish_terminal_state(operation_desired, &retained_plan, &journal, &mut state)
@@ -1394,6 +1596,8 @@ where
                     requested_fleet,
                     &terminal_observation,
                     retained_plan.planned_at_time,
+                    &retained_plan.operation_id,
+                    None,
                 ) {
                     Ok(plan) => {
                         if journal.stalled_observations != 0 {
@@ -1475,7 +1679,7 @@ where
                             );
                             continue;
                         }
-                        Err(error @ EnsureWorkflowError::SuccessorReviewRequired { reason }) => {
+                        Err(EnsureWorkflowError::SuccessorReviewRequired { reason, review }) => {
                             retain_observed_cycles(&mut terminal_state, &terminal_observation);
                             write_state(&paths, &terminal_state)?;
                             journal.completion = FleetEnsureCompletion::ReplanRequired;
@@ -1485,9 +1689,15 @@ where
                                 &retained_plan,
                                 &journal,
                                 FleetEnsurePhase::TerminalVerification,
-                                FleetEnsureProgressState::ReviewRequired { reason },
+                                FleetEnsureProgressState::ReviewRequired {
+                                    reason,
+                                    review: review.clone(),
+                                },
                             );
-                            return Err(error);
+                            return Err(EnsureWorkflowError::SuccessorReviewRequired {
+                                reason,
+                                review,
+                            });
                         }
                         Err(error) => return Err(error),
                     }
@@ -1498,7 +1708,22 @@ where
                 journal.completion = FleetEnsureCompletion::ReplanRequired;
                 journal.stalled_observations = 0;
                 write_journal(&paths, &journal)?;
-                return Err(EnsureWorkflowError::ConvergenceDrift);
+                let reason =
+                    crate::fleet_ensure::model::FleetEnsureSuccessorReviewReason::AdditionalEffect;
+                let review = Some(Box::new(
+                    crate::fleet_ensure::ops::recovery::review_details(&converged),
+                ));
+                report_progress_state(
+                    platform,
+                    &retained_plan,
+                    &journal,
+                    FleetEnsurePhase::TerminalVerification,
+                    FleetEnsureProgressState::ReviewRequired {
+                        reason,
+                        review: review.clone(),
+                    },
+                );
+                return Err(EnsureWorkflowError::SuccessorReviewRequired { reason, review });
             }
         }
         break;
@@ -1515,6 +1740,8 @@ where
         .observe(&retained_plan.operation_id, &terminal_state)
         .map_err(EnsureWorkflowError::Platform)?;
     attach_terminal_cycles(&mut final_observation, terminal_cycles)?;
+    reinstall::verify_terminal_estate(&retained_plan, &final_observation)?;
+    reinstall::verify_terminal_authority(&retained_plan, &terminal_state, platform)?;
     let actual_conservation = verify_terminal_conservation(
         &retained_plan,
         &journal,
@@ -1959,6 +2186,9 @@ fn verify_fresh_plan<P>(
 where
     P: EnsurePlatform,
 {
+    if retained_plan.reinstall.is_some() {
+        return reinstall::verify_before_apply(root, desired, retained_plan, platform, state);
+    }
     if retained_plan.scope == FleetEnsurePlanScope::RootReinstallPrerequisite {
         return root_reinstall::verify_before_apply(root, desired, retained_plan, platform, state);
     }
@@ -2008,6 +2238,8 @@ where
             requested_fleet,
             &observation,
             retained_plan.planned_at_time,
+            &retained_plan.operation_id,
+            None,
         ) {
             Ok(plan) => break plan,
             Err(EnsurePolicyError::PendingRootOwnedBalance { name }) => {
@@ -2642,6 +2874,14 @@ fn normalized_plan(plan: &FleetEnsurePlan) -> FleetEnsurePlan {
     let mut normalized = plan.clone();
     normalized.plan_sha256.clear();
     normalized.reviewed_desired = None;
+    if let Some(review) = &mut normalized.recovery_review {
+        // These estimates move with bounded observations; they grant no funding authority.
+        review.continuation_reserve_cycles = 0;
+        for funding in &mut review.known_pool_funding {
+            funding.amount_cycles = 0;
+            funding.funding_deficit_cycles = 0;
+        }
+    }
     normalized.conservation = CycleConservation {
         estate_funding_domains: plan
             .conservation
@@ -3779,6 +4019,32 @@ fn applied_count(journal: &FleetEnsureJournalRecord) -> u32 {
     .unwrap_or(u32::MAX)
 }
 
+fn verify_store_activation_binding<P: EnsurePlatform>(
+    plan: &FleetEnsurePlan,
+    action: &EnsureAction,
+    state: &FleetEnsureStateRecord,
+    platform: &mut P,
+) -> Result<(), EnsureWorkflowError<P::Error>> {
+    use crate::fleet_ensure::model::DesiredCanisterInit;
+    let EnsureAction::Install {
+        canic_init: Some(DesiredCanisterInit::Store { root }),
+        ..
+    } = action
+    else {
+        return Ok(());
+    };
+    let root_will_be_installed = plan.canisters.iter().flat_map(|canister| &canister.actions)
+        .any(|action| matches!(action,
+            EnsureAction::Install { name, canic_init: Some(DesiredCanisterInit::Root { root: installed_root }), .. }
+            if name == root && installed_root == root));
+    if !root_will_be_installed {
+        platform
+            .require_retained_root_activation(&plan.operation_id, root, state)
+            .map_err(EnsureWorkflowError::Platform)?;
+    }
+    Ok(())
+}
+
 pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
     let mut actions = plan
         .canisters
@@ -3786,6 +4052,16 @@ pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
         .flat_map(|canister| canister.actions.iter())
         .chain(plan.protocol_actions.iter())
         .collect::<Vec<_>>();
+    if plan.scope == FleetEnsurePlanScope::ReinstallPreparation
+        && plan
+            .reinstall
+            .as_ref()
+            .is_some_and(|intent| intent.activation_reset.is_some())
+    {
+        // Preserve the compiler's Coordinator-first order, then settle every Root before restart.
+        actions.sort_by_key(|action| matches!(action, EnsureAction::Start { .. }));
+        return actions;
+    }
     if plan.scope == FleetEnsurePlanScope::RootReinstallPrerequisite {
         return actions;
     }
@@ -3898,8 +4174,14 @@ fn deferred_create_observation_is_exact(
 
 pub(super) const fn action_order(action: &EnsureAction) -> u8 {
     match action {
-        EnsureAction::Create { .. } => 0,
-        EnsureAction::Fund { .. } | EnsureAction::FundEstate { .. } => 1,
+        EnsureAction::SealAuthority {
+            authority_kind: crate::fleet_ensure::model::DesiredCanisterKind::Root,
+            ..
+        }
+        | EnsureAction::Create { .. } => 0,
+        EnsureAction::SealAuthority { .. }
+        | EnsureAction::Fund { .. }
+        | EnsureAction::FundEstate { .. } => 1,
         EnsureAction::Install {
             canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Coordinator),
             ..
@@ -3921,6 +4203,119 @@ pub(super) const fn action_order(action: &EnsureAction) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn store_binding_requires_exact_retained_root_or_reviewed_root_install() {
+        use crate::fleet_ensure::{
+            model::{CanisterDisposition, CanisterPlan, DesiredCanisterInit, InstallMode},
+            tests::MockPlatform,
+        };
+        let (state, _) = retained_evidence();
+        let mut plan = estate_funding_plan();
+        let desired = serde_json::from_value(serde_json::json!({
+            "canisters": [], "cycles_ledger": "um5iw-rqaaa-aaaaq-qaaba-cai",
+            "environment": "local", "fleet": "fleet", "ledger_fee_cycles": "0",
+            "management_creation_fee_cycles": "0", "material_cycle_threshold": "1",
+            "maximum_observation_burn_cycles": "1", "maximum_stalled_observations": 2,
+            "maximum_update_burn_cycles": "2", "operator": "rrkah-fqaaa-aaaaa-aaaaq-cai",
+            "schema_version": FLEET_ENSURE_SCHEMA_VERSION, "treasury": "root"
+        }))
+        .unwrap();
+        let mut platform = MockPlatform::new(desired, []);
+        platform.rejected_activation_root = Some("root".into());
+        let store = EnsureAction::Install {
+            canic_init: Some(DesiredCanisterInit::Store {
+                root: "root".into(),
+            }),
+            reinstall_witness: None,
+            init_arg: None,
+            init_arg_sha256: None,
+            init_candid: None,
+            init_candid_sha256: None,
+            mode: InstallMode::Install,
+            name: "store".into(),
+            principal: "store-principal".into(),
+            wasm: "store.wasm".into(),
+            wasm_sha256: "store-hash".into(),
+        };
+        assert!(matches!(
+            verify_store_activation_binding(&plan, &store, &state, &mut platform),
+            Err(EnsureWorkflowError::Platform(_))
+        ));
+        assert_eq!(
+            platform.retained_activation_checks,
+            [(plan.operation_id.clone(), "root".into())]
+        );
+        let mut root_install = store.clone();
+        if let EnsureAction::Install {
+            name, canic_init, ..
+        } = &mut root_install
+        {
+            *name = "other-root".into();
+            *canic_init = Some(DesiredCanisterInit::Root {
+                root: "other-root".into(),
+            });
+        }
+        plan.canisters.push(CanisterPlan {
+            actions: vec![root_install],
+            disposition: CanisterDisposition::Create,
+            name: "root".into(),
+            observed_cycles: 0,
+            principal: None,
+        });
+        assert!(verify_store_activation_binding(&plan, &store, &state, &mut platform).is_err());
+        if let EnsureAction::Install {
+            name, canic_init, ..
+        } = &mut plan.canisters.last_mut().unwrap().actions[0]
+        {
+            *name = "root".into();
+            *canic_init = Some(DesiredCanisterInit::Root {
+                root: "root".into(),
+            });
+        }
+        let reads = platform.retained_activation_checks.len();
+        verify_store_activation_binding(&plan, &store, &state, &mut platform).unwrap();
+        assert_eq!(platform.retained_activation_checks.len(), reads);
+        plan.canisters.pop();
+        platform.rejected_activation_root = None;
+        verify_store_activation_binding(&plan, &store, &state, &mut platform).unwrap();
+        assert_eq!(platform.retained_activation_checks.len(), reads + 1);
+    }
+
+    #[test]
+    fn root_prerequisite_retains_activation_authority_across_desired_refresh() {
+        let (mut state, mut journal) = retained_evidence();
+        let mut plan = estate_funding_plan();
+        plan.scope = FleetEnsurePlanScope::RootReinstallPrerequisite;
+        plan.conservation.estate_funding_domains.clear();
+        journal.effects.clear();
+        journal.completion = FleetEnsureCompletion::Converged;
+        let before = state.clone();
+        assert!(matches!(
+            reconcile_retained_planning_state::<std::io::Error>(
+                &mut state,
+                Some(&plan),
+                Some(&journal),
+                "fleet",
+                "local",
+                "refreshed-imports"
+            ),
+            Err(EnsureWorkflowError::RootActivationDesiredConflict { .. })
+        ));
+        assert_eq!(state, before);
+        assert!(
+            reconcile_retained_planning_state::<std::io::Error>(
+                &mut state,
+                Some(&plan),
+                Some(&journal),
+                "fleet",
+                "local",
+                "desired"
+            )
+            .unwrap()
+            .is_some()
+        );
+    }
 
     fn terminal_component_entry(canister: &str, parent: &str) -> crate::registry::RegistryEntry {
         crate::registry::RegistryEntry {
@@ -4031,6 +4426,8 @@ mod tests {
             plan_sha256: "plan".to_string(),
             planned_at_time: 1,
             protocol_actions: Vec::new(),
+            recovery_review: None,
+            reinstall: None,
             root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,

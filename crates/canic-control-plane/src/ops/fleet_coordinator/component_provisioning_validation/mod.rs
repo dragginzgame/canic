@@ -1014,6 +1014,14 @@ fn validate_component_provisioning_root_failure(
     let Some(failure) = record.last_root_failure else {
         return Ok(());
     };
+    if failure.origin.is_some_and(|origin| {
+        origin.operation_id == [0; 32]
+            || origin.target == Principal::anonymous()
+            || origin.diagnostic_code == 0
+            || origin.failed_at_ns == 0
+    }) {
+        return Err(receipt_invariant("provisioning failure origin is invalid"));
+    }
     let root_is_bound = match failure.stage {
         FleetComponentProvisioningRetryStage::RootAcceptance
         | FleetComponentProvisioningRetryStage::RootProvisioning => record

@@ -524,6 +524,7 @@ impl CanisterPoolOps {
     }
 
     pub fn begin_creation(
+        config: &FleetSubnetCanisterPoolConfig,
         authority: CanisterPoolCreationAuthority,
         prepared_at_ns: u64,
     ) -> Result<(), InternalError> {
@@ -536,6 +537,11 @@ impl CanisterPoolOps {
                 return Ok(());
             }
             return Err(InternalError::conflict());
+        }
+        // Fee discovery may have yielded while another attempt filled the last slot.
+        // Reserve capacity atomically with the intent; exact replay above owns its slot.
+        if Self::asset_capacity_is_exhausted(config) {
+            return Err(InternalError::resource_exhausted());
         }
         if authority.created_at_time_ns <= state.last_creation_timestamp_ns {
             return Err(InternalError::conflict());
@@ -1852,9 +1858,9 @@ mod tests {
             quota_intent_id: IntentId(1),
             reservation_intent_id: IntentId(2),
         };
-        CanisterPoolOps::begin_creation(creation_authority_for(operation_id), 10)
+        CanisterPoolOps::begin_creation(&config(), creation_authority_for(operation_id), 10)
             .expect("begin creation");
-        CanisterPoolOps::begin_creation(creation_authority_for(operation_id), 11)
+        CanisterPoolOps::begin_creation(&config(), creation_authority_for(operation_id), 11)
             .expect("exact creation replay");
         CanisterPoolOps::begin_creation_attempt(operation_id, settlement, 11)
             .expect("begin ledger attempt");
@@ -1917,11 +1923,16 @@ mod tests {
 
         let next_operation_id = [8; 32];
         assert!(
-            CanisterPoolOps::begin_creation(creation_authority_for(next_operation_id), 14).is_err()
+            CanisterPoolOps::begin_creation(
+                &config(),
+                creation_authority_for(next_operation_id),
+                14
+            )
+            .is_err()
         );
         let mut next = creation_authority_for(next_operation_id);
         next.created_at_time_ns = 11;
-        CanisterPoolOps::begin_creation(next, 14).expect("begin monotonic refill");
+        CanisterPoolOps::begin_creation(&config(), next, 14).expect("begin monotonic refill");
         CanisterPoolStore::clear();
     }
 
@@ -1929,7 +1940,7 @@ mod tests {
     fn draining_cancels_only_known_unapplied_creation() {
         CanisterPoolStore::clear();
         let known_operation_id = [7; 32];
-        CanisterPoolOps::begin_creation(creation_authority_for(known_operation_id), 10)
+        CanisterPoolOps::begin_creation(&config(), creation_authority_for(known_operation_id), 10)
             .expect("begin known creation");
         let cancelled = CanisterPoolOps::cancel_known_unapplied_creation()
             .expect("cancel known-unapplied creation");
@@ -1939,7 +1950,8 @@ mod tests {
         let uncertain_operation_id = [6; 32];
         let mut uncertain = creation_authority_for(uncertain_operation_id);
         uncertain.created_at_time_ns = 11;
-        CanisterPoolOps::begin_creation(uncertain, 11).expect("begin uncertain creation");
+        CanisterPoolOps::begin_creation(&config(), uncertain, 11)
+            .expect("begin uncertain creation");
         let settlement = ReplayCostGuardSettlement {
             quota_intent_id: IntentId(3),
             reservation_intent_id: IntentId(4),
@@ -1954,7 +1966,7 @@ mod tests {
     fn underfunded_creation_pauses_and_resumes_the_same_operation() {
         CanisterPoolStore::clear();
         let operation_id = [11; 32];
-        CanisterPoolOps::begin_creation(creation_authority_for(operation_id), 10)
+        CanisterPoolOps::begin_creation(&config(), creation_authority_for(operation_id), 10)
             .expect("begin creation");
 
         CanisterPoolOps::wait_for_creation_funding(operation_id, 900, 20, 30)
@@ -1987,15 +1999,40 @@ mod tests {
     }
 
     #[test]
+    fn delayed_creation_authority_cannot_reserve_a_full_pool() {
+        CanisterPoolStore::clear();
+        let config = config();
+        let authority = creation_authority_for([7; 32]);
+        assert!(!CanisterPoolOps::asset_capacity_is_exhausted(&config));
+
+        // A suspended fee lookup resumes after other work consumed the capacity.
+        for index in 1..=4 {
+            imported_ready(principal(index), Cycles::new(100), u64::from(index));
+        }
+        let before = CanisterPoolOps::response(config.clone(), None, 256);
+        let error = CanisterPoolOps::begin_creation(&config, authority, 10)
+            .expect_err("a fresh intent cannot exceed the physical limit");
+        assert!(error.is_public_resource_exhausted());
+        assert_eq!(CanisterPoolOps::response(config, None, 256), before);
+        assert_eq!(
+            CanisterPoolOps::next_creation_timestamp(10).expect("timestamp"),
+            10
+        );
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
     fn pending_creation_reserves_one_standby_capacity_slot() {
         CanisterPoolStore::clear();
         imported_ready(principal(1), Cycles::new(100), 1);
         imported_ready(principal(2), Cycles::new(100), 2);
         imported_ready(principal(3), Cycles::new(100), 3);
-        CanisterPoolOps::begin_creation(creation_authority_for([5; 32]), 10)
+        CanisterPoolOps::begin_creation(&config(), creation_authority_for([5; 32]), 10)
             .expect("begin capacity-reserving creation");
 
         assert!(CanisterPoolOps::asset_capacity_is_exhausted(&config()));
+        CanisterPoolOps::begin_creation(&config(), creation_authority_for([5; 32]), 11)
+            .expect("the exact intent retains its reserved final slot");
         assert!(CanisterPoolOps::initialize_imports(&config(), &[principal(4)], 11).is_err());
         CanisterPoolStore::clear();
     }

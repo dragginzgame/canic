@@ -31,6 +31,11 @@ pub const IC_WASM_TOOL: &str = "ic-wasm";
 pub const IC_WASM_VERSION: &str = "0.11.1";
 pub const IC_WASM_VERSION_IDENTITY: &str = "ic-wasm 0.11.1";
 
+// Exact launcher from the integrity-verified @icp-sdk/ic-wasm 0.11.1 npm archive.
+// Bind the executable it selects rather than a script whose payload can change independently.
+const NPM_LAUNCHER_SHA256: &str =
+    "ff4f9bd1d3734f7aa69078ecd4c5716dbfaf67d094c69d5082b00bac5b8bf936";
+
 const DOWNLOAD_TOOL: &str = "curl";
 const EXTRACT_TOOL: &str = "tar";
 const TEMP_ATTEMPTS: usize = 64;
@@ -249,6 +254,7 @@ fn ic_wasm_authority_for(
 pub fn resolve_required_ic_wasm() -> Result<IcWasmExecutable, IcWasmToolError> {
     current_ic_wasm_authority()?;
     let path = resolve_selected_executable()?;
+    let path = resolve_distribution_executable(&path)?;
     admit_ic_wasm_executable(&path)
 }
 
@@ -276,6 +282,55 @@ pub fn default_ic_wasm_install_path() -> Result<PathBuf, IcWasmToolError> {
         .filter(|value| !value.is_empty())
         .ok_or(IcWasmToolError::MissingHome)?;
     Ok(PathBuf::from(home).join(".local/bin/ic-wasm"))
+}
+
+fn resolve_distribution_executable(path: &Path) -> Result<PathBuf, IcWasmToolError> {
+    if path.extension().and_then(|extension| extension.to_str()) != Some("js")
+        || sha256_file(path)? != NPM_LAUNCHER_SHA256
+    {
+        return Ok(path.to_path_buf());
+    }
+    let cwd = env::current_dir().map_err(|source| IcWasmToolError::Io {
+        operation: "resolve npm ic-wasm invocation directory",
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let candidates = npm_binary_candidates(path, &cwd, env::consts::OS, env::consts::ARCH)?;
+    for candidate in candidates {
+        if candidate.exists() {
+            return canonical_executable(&candidate);
+        }
+    }
+    Err(IcWasmToolError::RequestedExecutableMissing {
+        path: path.to_path_buf(),
+    })
+}
+
+fn npm_binary_candidates(
+    launcher: &Path,
+    cwd: &Path,
+    os: &'static str,
+    arch: &'static str,
+) -> Result<[PathBuf; 3], IcWasmToolError> {
+    let platform = match (os, arch) {
+        ("linux", "x86_64") => "linux-x64",
+        ("linux", "aarch64") => "linux-arm64",
+        ("macos", "x86_64") => "darwin-x64",
+        ("macos", "aarch64") => "darwin-arm64",
+        _ => return Err(IcWasmToolError::UnsupportedPlatform { os, arch }),
+    };
+    let directory =
+        launcher
+            .parent()
+            .ok_or_else(|| IcWasmToolError::RequestedExecutableMissing {
+                path: launcher.to_path_buf(),
+            })?;
+    let binary = format!("@icp-sdk/ic-wasm-{platform}/bin/ic-wasm");
+    Ok([
+        directory.join("../../..").join(&binary),
+        directory.join("../node_modules").join(&binary),
+        cwd.join("node_modules").join(binary),
+    ])
 }
 
 fn resolve_selected_executable() -> Result<PathBuf, IcWasmToolError> {

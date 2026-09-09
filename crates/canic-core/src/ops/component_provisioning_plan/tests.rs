@@ -618,6 +618,7 @@ fn assert_root_batch_candid_contracts(
         advance_request
     );
     let response = RootComponentProvisioningStatusResponse {
+        last_failure: None,
         operation_id: request.operation_id,
         plan_hash: request.plan_hash,
         fleet_registry: request.fleet_registry.clone(),

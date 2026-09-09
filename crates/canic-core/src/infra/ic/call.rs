@@ -154,6 +154,12 @@ pub struct CallResult {
 }
 
 impl CallResult {
+    /// Preserve the upstream wire response for a caller-owned projection.
+    #[must_use]
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.inner.into_bytes()
+    }
+
     /// Decode the response as a single Candid value.
     pub fn candid<R>(&self) -> Result<R, IcInfraError>
     where

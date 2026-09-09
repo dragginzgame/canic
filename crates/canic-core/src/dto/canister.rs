@@ -8,6 +8,13 @@ pub struct CanisterInspectionRequest {
     pub canister_id: Principal,
 }
 
+/// Replicated upstream management history for one exact inspection target.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct CanisterHistoryResponse {
+    pub canister_id: Principal,
+    pub history_candid: Vec<u8>,
+}
+
 //
 // CanisterInfo
 //

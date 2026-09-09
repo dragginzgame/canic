@@ -17,6 +17,10 @@ use crate::{
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
+pub use crate::domain::provisioning_failure::{
+    ProvisioningFailureStage, ProvisioningRetryCategory,
+};
+
 /// Complete canonical provisioning authority retained before any root effect.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -131,6 +135,7 @@ pub enum FleetComponentProvisioningRetryStage {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningRootFailure {
+    pub origin: Option<ProvisioningFailureOrigin>,
     pub fleet_subnet_root: Principal,
     pub stage: FleetComponentProvisioningRetryStage,
     pub diagnostic_code: u16,
@@ -416,6 +421,7 @@ pub enum RootComponentProvisioningPhase {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentProvisioningStatusResponse {
+    pub last_failure: Option<RootComponentProvisioningFailure>,
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
     pub fleet_registry: FleetRegistryVersion,
@@ -441,6 +447,32 @@ pub struct RootComponentProvisioningStatusResponse {
     pub activation_started_at_ns: Option<u64>,
     pub runtimes_activated_at_ns: Option<u64>,
     pub receipt_content_hash: [u8; 32],
+}
+
+/// Protected origin carried through outer provisioning stages without public error expansion.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProvisioningFailureOrigin {
+    pub failed_at_ns: u64,
+    pub stage: ProvisioningFailureStage,
+    pub target: Principal,
+    pub operation_id: [u8; 32],
+    pub diagnostic_code: u16,
+    pub retry_category: ProvisioningRetryCategory,
+}
+
+/// Latest protected originating failure and the existing scheduler's bounded retry state.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentProvisioningFailure {
+    pub stage: ProvisioningFailureStage,
+    pub target: Principal,
+    pub operation_id: [u8; 32],
+    pub diagnostic_code: u16,
+    pub retry_category: ProvisioningRetryCategory,
+    pub failed_at_ns: u64,
+    pub consecutive_failures: u32,
+    pub retry_at_ns: Option<u64>,
 }
 
 /// Exact durable funding pause for one Root-owned autonomous pool creation.

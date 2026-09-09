@@ -4,7 +4,7 @@
 //! Does not own: topology decisions, convergence sequencing, or historical installation state.
 //! Boundary: exact terminal Registry, Root children, and current release artifacts are required.
 
-mod bounded_observations;
+use crate::fleet_ensure::ops::bounded_observations;
 
 use super::TerminalFleetInventory;
 use super::current_protocol::{
@@ -544,16 +544,19 @@ fn query_entries(
             )?;
             pending.push((child, protocol));
         }
-        let observations = bounded_observations::collect(&pending, |(child, protocol)| {
-            let observed = inspect_root_controlled_canister(
-                icp,
-                &protocols.root.candid_path,
-                parent.root,
-                child.pid,
-            )?;
-            require_terminal_component_authority(parent.root, child.pid, &observed, protocol)?;
-            Ok(observed)
-        })?;
+        let observations = bounded_observations::collect::<_, _, CurrentProtocolError>(
+            &pending,
+            |(child, protocol)| {
+                let observed = inspect_root_controlled_canister(
+                    icp,
+                    &protocols.root.candid_path,
+                    parent.root,
+                    child.pid,
+                )?;
+                require_terminal_component_authority(parent.root, child.pid, &observed, protocol)?;
+                Ok(observed)
+            },
+        )?;
         for ((child, protocol), observed) in pending.into_iter().zip(observations) {
             let entry = registry_entry(child, protocol, observed.module_hash.as_deref())?;
             insert_controlled_cycles(
@@ -741,21 +744,24 @@ fn append_root_components(
             "Root Component result contains duplicate member identities",
         ));
     }
-    let observations = bounded_observations::collect(&pending, |(binding, protocol)| {
-        let observed = inspect_root_controlled_canister(
-            icp,
-            &protocols.root.candid_path,
-            authority.root.fleet_subnet_root,
-            binding.canister_id,
-        )?;
-        require_terminal_component_authority(
-            authority.root.fleet_subnet_root,
-            binding.canister_id,
-            &observed,
-            protocol,
-        )?;
-        Ok(observed)
-    })?;
+    let observations = bounded_observations::collect::<_, _, CurrentProtocolError>(
+        &pending,
+        |(binding, protocol)| {
+            let observed = inspect_root_controlled_canister(
+                icp,
+                &protocols.root.candid_path,
+                authority.root.fleet_subnet_root,
+                binding.canister_id,
+            )?;
+            require_terminal_component_authority(
+                authority.root.fleet_subnet_root,
+                binding.canister_id,
+                &observed,
+                protocol,
+            )?;
+            Ok(observed)
+        },
+    )?;
     for ((binding, protocol), observed) in pending.into_iter().zip(observations) {
         entries.push(RegistryEntry {
             pid: binding.canister_id.to_text(),
@@ -2661,6 +2667,7 @@ mod tests {
             source_fleet_registry: Box::leak(Box::new(source_fleet_registry.clone())),
         };
         let status = RootComponentProvisioningStatusResponse {
+            last_failure: None,
             operation_id,
             plan_hash,
             fleet_registry: source_fleet_registry,

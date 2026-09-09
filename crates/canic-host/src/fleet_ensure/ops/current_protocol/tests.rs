@@ -52,6 +52,191 @@ placement.minimum_distinct_roots = 2
 "#;
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the source evidence fixture binds a real typed provisioning plan to its issued prefix"
+)]
+fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
+    use crate::fleet_ensure::ops::{EnsurePaths, EnsureStateError, reinstall::source};
+    use canic_core::dto::component_registry::RootComponentRegistryPreparationRequest;
+
+    let config = parse_config_model(CONFIG).expect("config");
+    let registry = active_registry(&config);
+    let configuration = config
+        .compile_component_deployment_configuration()
+        .expect("configuration");
+    let desired = desired(vec![
+        placement("cells", 0, "root-one"),
+        placement("cells", 1, "root-two"),
+    ]);
+    let placements = resolve_placements(&desired, &state(), &registry).expect("placements");
+    let compiled =
+        compile_current_component_provisioning(&configuration, &registry, [42; 32], &placements)
+            .expect("provisioning");
+    let root = &registry.fleet_subnet_roots[0];
+    let expected = RootComponentRegistryStatusResponse {
+        fleet_subnet_root: root.fleet_subnet_root,
+        prepared_against_registry: compiled.request.plan.fleet_registry.clone(),
+        release_set: root.active_release_set,
+        component_topology_digest: root.component_topology_digest,
+        next_allocation_sequence: 1,
+        reserved_component_instances: 0,
+        committed_component_instances: 0,
+        managed_descendants: 0,
+        known_created_component_canisters: 0,
+        encoded_bytes: 0,
+        initial_inventory: None,
+    };
+    let prepare = CurrentFleetProtocolAction::PrepareComponentRegistry {
+        request: RootComponentRegistryPreparationRequest {
+            store_bootstrap: RootStoreBootstrapRequest {
+                operation_id: [43; 32],
+                manifest_payload_size_bytes: 1,
+            },
+            expected_fleet_registry: expected.prepared_against_registry.clone(),
+        },
+        expected,
+    };
+    let actions = [
+        prepare,
+        CurrentFleetProtocolAction::ProvisionComponents {
+            request: compiled.request,
+            plan_hash: compiled.plan_hash,
+        },
+        CurrentFleetProtocolAction::ObservePoolReadiness {
+            minimum_ready: 1,
+            readiness_floor: Cycles::new(1),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, action)| EnsureAction::FleetProtocol {
+        action: Box::new(action),
+        candid: "root.did".to_string(),
+        candid_sha256: "a".repeat(64),
+        maximum_execution_burn_cycles: 1,
+        name: format!("action-{index}"),
+        principal: root.fleet_subnet_root.to_text(),
+    })
+    .collect::<Vec<_>>();
+    let digest = "a".repeat(64);
+    let temp = crate::test_support::temp_dir("activation-source");
+    fs::create_dir_all(&temp).expect("source workspace");
+    let source_wasm = temp.join("source-root.wasm");
+    fs::write(&source_wasm, b"source module").expect("source artifact");
+    let plan = serde_json::json!({
+        "schema_version": 1, "scope": "full", "fleet": "source", "environment": "local",
+        "operation_id": canic_core::cdk::utils::hash::hex_bytes([42; 32]),
+        "plan_sha256": digest, "canisters": [{"actions": []}],
+        "conservation": { "maximum_new_funding_cycles": "0", "maximum_operator_debit_cycles": "0",
+            "maximum_unavoidable_fee_cycles": "0", "scheduled_transfer_cycles": "0", "maximum_execution_burn_cycles": "0" },
+        "protocol_actions": crate::fleet_ensure::json::to_value(&actions).expect("actions"),
+        "reviewed_desired": { "desired": {
+            "operator": desired.operator, "cycles_ledger": desired.cycles_ledger,
+            "canisters": [{ "name": "source-root", "kind": "root", "principal": root.fleet_subnet_root.to_text(),
+                "wasm": source_wasm, "subnet": "aaaaa-aa", "controllers": [desired.operator], "controller_canisters": [] }],
+        } },
+    });
+    let journal = serde_json::json!({
+        "schema_version": 1, "completion": "in_progress", "fleet": "source",
+        "operation_id": plan["operation_id"], "plan_sha256": digest,
+        "initial_controlled_cycles": "0", "initial_operator_cycles": "0",
+        "initial_estate_funding_cycles_by_root": {}, "stalled_observations": 0,
+        "successor_phases": [], "funding_reviews": [], "estate_funding_required": null,
+        "effects": actions[..2].iter().enumerate().map(|(index, action)| serde_json::json!({
+            "action_sha256": crate::fleet_ensure::ops::action_sha256(action),
+            "state": if index == 0 { "applied" } else { "issued" },
+            "maintenance_attempts": 0, "created_principal": null, "destination_post_cycles": null,
+            "destination_pre_cycles": null, "post_cycles": null, "pre_cycles": null,
+            "pre_canister_version": null, "progress_identity": null, "receipt": null,
+        })).collect::<Vec<_>>(),
+    });
+    let paths = EnsurePaths::under(&temp, "local", "source");
+    fs::create_dir_all(paths.plan.parent().expect("parent")).expect("directory");
+    fs::write(&paths.plan, serde_json::to_vec(&plan).expect("plan")).expect("write plan");
+    fs::write(
+        &paths.journal,
+        serde_json::to_vec(&journal).expect("journal"),
+    )
+    .expect("write journal");
+    let mut source_state =
+        crate::fleet_ensure::ops::read_state(&paths, "source").expect("empty source state");
+    source_state.topology.insert(
+        "source-root".to_string(),
+        crate::fleet_ensure::model::FleetEnsureTopologyRecord {
+            kind: DesiredCanisterKind::Root,
+            module_hash: Some(canic_core::cdk::utils::hash::sha256_hex(b"source module")),
+            parent: None,
+            protocol_binding: None,
+            role: None,
+        },
+    );
+    crate::fleet_ensure::ops::write_state(&paths, &source_state).expect("write source state");
+    let evidence = source::read(&paths, "local", "source").expect("source evidence");
+    assert_eq!(evidence.operation_id, plan["operation_id"]);
+    assert_eq!(evidence.plan_sha256, digest);
+    assert_eq!(evidence.provisioning, actions[1]);
+    assert_eq!(evidence.registry_preparations, [actions[0].clone()]);
+    assert_eq!(
+        evidence.plan_document_sha256,
+        canic_core::cdk::utils::hash::sha256_hex(&fs::read(&paths.plan).expect("plan bytes"))
+    );
+    assert_eq!(
+        evidence.journal_document_sha256,
+        canic_core::cdk::utils::hash::sha256_hex(&fs::read(&paths.journal).expect("journal bytes"))
+    );
+    let mut requested = desired;
+    crate::fleet_ensure::ops::reinstall::adoption::tests::assert_review_handoff(&paths, &evidence);
+    requested.fleet = "source".to_string();
+    requested.environment = "local".to_string();
+    let mut platform = crate::fleet_ensure::tests::MockPlatform::new(requested.clone(), []);
+    let error = crate::fleet_ensure::workflow::plan_reinstall(
+        &temp,
+        &requested,
+        &"b".repeat(64),
+        "source",
+        2,
+        &mut platform,
+    )
+    .expect_err("source evidence cannot authorize a reset");
+    assert!(matches!(
+        error,
+        crate::fleet_ensure::workflow::EnsureWorkflowError::PartialActivationResetUnavailable {
+            operation_id, source_document_sha256,
+        } if operation_id == evidence.operation_id && source_document_sha256 == evidence.plan_document_sha256
+    ));
+    assert_eq!(
+        fs::read(&paths.journal).expect("unchanged journal"),
+        serde_json::to_vec(&journal).expect("journal")
+    );
+    for pointer in [
+        "/effects/0/state",
+        "/effects/1/state",
+        "/effects/0/action_sha256",
+        "/effects/1/action_sha256",
+        "/operation_id",
+        "/plan_sha256",
+    ] {
+        let mut changed = journal.clone();
+        *changed.pointer_mut(pointer).expect("field") = "changed".into();
+        fs::write(
+            &paths.journal,
+            serde_json::to_vec(&changed).expect("changed journal"),
+        )
+        .expect("write changed journal");
+        assert!(matches!(
+            source::read(&paths, "local", "source"),
+            Err(EnsureStateError::InvalidActivationSource)
+        ));
+    }
+    assert_eq!(
+        fs::read(&paths.plan).expect("unchanged plan"),
+        serde_json::to_vec(&plan).expect("plan")
+    );
+    fs::remove_dir_all(temp).expect("remove fixture");
+}
+
+#[test]
 fn fresh_fleet_registry_prepare_classifies_typed_unavailable_status() {
     let error = CanisterProtocolError::Response {
         canister: Principal::anonymous(),
@@ -403,6 +588,14 @@ fn assert_retry_timestamp_is_not_durable_progress(
     first_failure.phase = FleetComponentProvisioningPhase::ActivatingRuntimes;
     first_failure.pending_root_failure = Some(
         canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure {
+            origin: Some(canic_core::dto::component_provisioning::ProvisioningFailureOrigin {
+                failed_at_ns: 9,
+                stage: canic_core::dto::component_provisioning::ProvisioningFailureStage::StoreCatalog,
+                target: principal(11),
+                operation_id: [9; 32],
+                diagnostic_code: 61,
+                retry_category: canic_core::dto::component_provisioning::ProvisioningRetryCategory::Backoff,
+            }),
             fleet_subnet_root: principal(10),
             stage: canic_core::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
             diagnostic_code: canic_core::diagnostics::codes::STATE_CONFLICT
@@ -417,6 +610,14 @@ fn assert_retry_timestamp_is_not_durable_progress(
         .as_mut()
         .expect("failure")
         .failed_at_ns = 20;
+    repeated_failure
+        .pending_root_failure
+        .as_mut()
+        .unwrap()
+        .origin
+        .as_mut()
+        .unwrap()
+        .failed_at_ns = 19;
     assert_eq!(
         component_provisioning_observation(false, &first_failure)
             .expect("first failure observation")
@@ -432,6 +633,39 @@ fn assert_retry_timestamp_is_not_durable_progress(
             .progress_identity,
     );
 
+    let mut permanent = repeated_failure.clone();
+    permanent.pending_root_failure.as_mut().unwrap().origin = Some(
+        canic_core::dto::component_provisioning::ProvisioningFailureOrigin {
+            failed_at_ns: 10,
+            stage: canic_core::dto::component_provisioning::ProvisioningFailureStage::StoreStatus,
+            target: principal(11),
+            operation_id: [9; 32],
+            diagnostic_code: 132,
+            retry_category:
+                canic_core::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired,
+        },
+    );
+    assert!(
+        matches!(component_provisioning_observation(false, &permanent),
+        Err(CurrentProtocolError::ProvisioningReviewRequired { target, diagnostic_code: 132, failed_at_ns: 10, .. })
+        if target == principal(11))
+    );
+    repeated_failure.pending_root_failure = None;
+    assert_eq!(
+        component_provisioning_observation(false, &first_failure)
+            .unwrap()
+            .progress_identity,
+        component_provisioning_observation(false, &repeated_failure)
+            .unwrap()
+            .progress_identity
+    );
+
+    assert_pool_funding_pause_preserves_exact_observation(status);
+}
+
+fn assert_pool_funding_pause_preserves_exact_observation(
+    status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+) {
     let funding = canic_core::dto::component_provisioning::RootEstateFundingRequired {
         available: Cycles::new(900),
         attempt_count: 1,

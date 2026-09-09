@@ -1,5 +1,10 @@
 pub mod error {
+    pub use crate::domain::provisioning_failure::{
+        MAX_PROVISIONING_BACKOFF_SECONDS, ProvisioningFailureStage, ProvisioningRetryCategory,
+        retry_delay_seconds,
+    };
     pub use crate::error::InternalError;
+    pub use crate::view::provisioning_failure::ProvisioningFailureView;
 }
 
 pub mod config {

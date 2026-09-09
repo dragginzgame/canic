@@ -21,7 +21,7 @@ pub enum FleetEnsurePhase {
 }
 
 /// Whether the named phase is advancing, waiting or requires operator action.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FleetEnsureProgressState {
     Advancing,
@@ -30,6 +30,7 @@ pub enum FleetEnsureProgressState {
     FundingRequired,
     ReviewRequired {
         reason: FleetEnsureSuccessorReviewReason,
+        review: Option<Box<crate::fleet_ensure::model::FleetSuccessorReview>>,
     },
     Complete,
 }

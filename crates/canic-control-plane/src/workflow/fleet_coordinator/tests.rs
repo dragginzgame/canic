@@ -1500,7 +1500,7 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
         .raw_code()
         .raw();
     let failed = crate::ops::fleet_coordinator::FleetCoordinatorOps::
-        record_component_provisioning_root_failure(status_request, diagnostic_code, 162)
+        record_component_provisioning_root_failure(status_request, diagnostic_code, None, 162)
         .expect("retain exact Root retry failure");
     let failure = failed
         .pending_root_failure
@@ -2873,6 +2873,7 @@ fn coordinator_accepts_terminal_directory_publication_after_missing_every_compon
             canic_core::diagnostics::codes::STATE_CONFLICT
                 .raw_code()
                 .raw(),
+            None,
             212,
         )
         .expect("retain the observed Directory confirmation failure");
@@ -4015,7 +4016,7 @@ fn assert_first_root_acceptance_replays(
     let FleetComponentProvisioningRootAcceptanceDisposition::Current(replayed) = replay else {
         panic!("committed root acceptance must replay current status")
     };
-    assert_eq!(replayed, *expected_status);
+    assert_eq!(*replayed, *expected_status);
 }
 
 fn root_acceptance_advance_request(
@@ -4043,7 +4044,7 @@ fn expect_root_acceptance_call(
 ) -> crate::view::fleet_coordinator::FleetComponentProvisioningRootAcceptanceCallView {
     match (disposition, reconcile) {
         (FleetComponentProvisioningRootAcceptanceDisposition::Invoke(call), false)
-        | (FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(call), true) => call,
+        | (FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(call), true) => *call,
         _ => panic!("root acceptance disposition differs from expected call boundary"),
     }
 }
@@ -4073,6 +4074,7 @@ fn accepted_root_response(
     )
     .expect("acceptance receipt hash");
     RootComponentProvisioningStatusResponse {
+        last_failure: None,
         operation_id: request.operation_id,
         plan_hash: request.plan_hash,
         fleet_registry: request.fleet_registry.clone(),
@@ -4339,6 +4341,7 @@ fn provisioned_root_response(
     )
     .expect("terminal receipt hash");
     RootComponentProvisioningStatusResponse {
+        last_failure: None,
         operation_id: record.operation_id,
         plan_hash: record.plan_hash,
         fleet_registry: record.plan.fleet_registry.clone(),
@@ -6950,5 +6953,40 @@ fn root_funding_request(
         observed_balance: Cycles::new(observed_balance),
         requested_cycles: Cycles::new(requested_cycles),
         policy_hash,
+    }
+}
+
+#[test]
+fn provisioning_wait_does_not_block_coordinator_publication() {
+    use canic_core::dto::component_provisioning::{
+        ProvisioningFailureStage, ProvisioningRetryCategory, RootComponentProvisioningFailure,
+    };
+    let failure = RootComponentProvisioningFailure {
+        stage: ProvisioningFailureStage::StoreStatus,
+        target: candid::Principal::from_slice(&[8]),
+        operation_id: [9; 32],
+        diagnostic_code: 61,
+        retry_category: ProvisioningRetryCategory::Backoff,
+        failed_at_ns: 100,
+        consecutive_failures: 1,
+        retry_at_ns: Some(1_000_000_100),
+    };
+    let error = FleetCoordinatorOps::observed_activation_failure(Some(failure))
+        .expect("specific activation failure remains actionable");
+    assert_eq!(error.provisioning_failure().unwrap().target, failure.target);
+    assert_eq!(
+        error.provisioning_failure().unwrap().recorded_at_ns,
+        Some(failure.failed_at_ns)
+    );
+    for stage in [
+        ProvisioningFailureStage::Provisioning,
+        ProvisioningFailureStage::CoordinatorStatus,
+    ] {
+        assert!(
+            FleetCoordinatorOps::observed_activation_failure(Some(
+                RootComponentProvisioningFailure { stage, ..failure }
+            ))
+            .is_none()
+        );
     }
 }

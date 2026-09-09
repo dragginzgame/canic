@@ -188,6 +188,80 @@ fn cargo_evidence_failure_preserves_phase_and_bounded_sanitized_cause() {
 }
 
 #[test]
+fn cargo_evidence_failure_retains_nested_offline_leaf_and_redacts_context() {
+    let source: Box<dyn std::error::Error> =
+        "cargo metadata failed: error: failed to load source for dependency `sample-db`\n\n\
+         Caused by:\n  Unable to update https://user:password@example.invalid/sample-db\n\n\
+         Caused by:\n  failed to clone into: /sample/role/cache\n\n\
+         Caused by:\n  unable to checkout from git in offline mode (--offline)\n\
+         CARGO_REGISTRIES_TOKEN = secret-token\n\
+         12 | secret manifest source\n"
+            .into();
+    let finding = CargoEvidenceFailure::new(
+        CargoEvidencePhase::WasmFilteredMetadata,
+        Path::new("/sample/role/Cargo.toml"),
+        source.as_ref(),
+    )
+    .into_finding();
+    let RoleContractFinding::CargoEvidenceUnavailable { phase, cause } = finding else {
+        panic!("typed evidence failure");
+    };
+    assert_eq!(phase, "wasm_filtered_metadata");
+    assert!(cause.contains("failed to load source for dependency `sample-db`"));
+    assert!(cause.contains("unable to checkout from git in offline mode (--offline)"));
+    for secret in [
+        "password",
+        "secret-token",
+        "secret manifest source",
+        "/sample/role",
+        "Caused by:",
+    ] {
+        assert!(!cause.contains(secret), "unexpected context: {secret}");
+    }
+    assert!(cause.chars().count() <= 768);
+}
+
+#[test]
+fn cargo_evidence_failure_retains_safe_process_and_json_details() {
+    let manifest = Path::new("/sample/role/Cargo.toml");
+    let error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "private-path");
+    let failure =
+        CargoEvidenceFailure::new(CargoEvidencePhase::WasmFilteredMetadata, manifest, &error);
+    assert_eq!(failure.cause, "Cargo command I/O failure: PermissionDenied");
+    let error = serde_json::from_str::<serde_json::Value>("{private-source}")
+        .expect_err("invalid metadata");
+    let failure = CargoEvidenceFailure::new(CargoEvidencePhase::CompleteCatalog, manifest, &error);
+    assert_eq!(
+        failure.cause,
+        "invalid Cargo metadata JSON: Syntax at line 1, column 2"
+    );
+}
+
+#[test]
+fn cargo_evidence_failure_reserves_space_for_deep_leaf_and_bounds_unicode() {
+    let source = format!(
+        "error: {}\nCaused by:\nfailed to resolve first\nCaused by:\nfailed to resolve second\nCaused by:\nfailed to resolve third\nCaused by:\nmissing package in offline cache",
+        "é".repeat(2_000),
+    );
+    let cause = bounded_cargo_cause(Path::new("/sample/role/Cargo.toml"), &source);
+    assert!(cause.starts_with("error: "));
+    assert!(cause.ends_with("missing package in offline cache"));
+    assert!(cause.chars().count() <= 768);
+}
+
+#[test]
+fn cargo_evidence_failure_does_not_echo_unrecognized_source() {
+    let cause = bounded_cargo_cause(
+        Path::new("/sample/role/Cargo.toml"),
+        "CARGO_REGISTRIES_TOKEN=secret-token",
+    );
+    assert_eq!(
+        cause,
+        "Cargo command failed without a recognized diagnostic"
+    );
+}
+
+#[test]
 fn isolated_role_workspace_rejects_unreviewed_resolver_three() {
     let fixture = FixtureWorkspace::materialize("supported");
     fixture.rewrite("Cargo.toml", "resolver = \"2\"", "resolver = \"3\"");

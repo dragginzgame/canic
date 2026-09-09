@@ -5,7 +5,9 @@
 //! Boundary: delegates management calls to ops and maps results into DTOs.
 
 use crate::{
-    InternalError, cdk::types::Principal, dto::canister::CanisterStatusResponse,
+    InternalError,
+    cdk::types::Principal,
+    dto::canister::{CanisterHistoryResponse, CanisterStatusResponse},
     ops::ic::mgmt::MgmtOps,
 };
 
@@ -18,6 +20,13 @@ use crate::{
 pub struct MgmtWorkflow;
 
 impl MgmtWorkflow {
+    /// Inspect the latest replicated management history of an authenticated target.
+    pub async fn canister_history(
+        pid: Principal,
+    ) -> Result<CanisterHistoryResponse, InternalError> {
+        MgmtOps::canister_history(pid).await
+    }
+
     pub async fn canister_status(pid: Principal) -> Result<CanisterStatusResponse, InternalError> {
         let status = MgmtOps::canister_status(pid).await?;
 

@@ -410,10 +410,10 @@ impl FleetCoordinatorWorkflow {
             IcOps::now_nanos(),
         )?;
         let acceptance_status = match disposition {
-            FleetComponentProvisioningRootAcceptanceDisposition::Current(status) => status,
+            FleetComponentProvisioningRootAcceptanceDisposition::Current(status) => *status,
             FleetComponentProvisioningRootAcceptanceDisposition::Invoke(call)
             | FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(call) => {
-                let response = accept_root_component_provisioning(call).await?;
+                let response = accept_root_component_provisioning(*call).await?;
                 return FleetCoordinatorOps::record_component_provisioning_root_acceptance(
                     request,
                     response,
@@ -923,6 +923,11 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
     if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
         return;
     }
+    if status.pending_root_failure.and_then(|failure| failure.origin).is_some_and(|origin|
+        origin.retry_category == canic_core::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
+    {
+        return;
+    }
     let request = component_provisioning_advance_request(&status);
     match FleetCoordinatorWorkflow::advance_component_provisioning(&request).await {
         Ok(status) if status.phase == FleetComponentProvisioningPhase::RuntimesActivated => {}
@@ -940,6 +945,7 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
                         plan_hash,
                     },
                     diagnostic_code,
+                    error.provisioning_failure(),
                     IcOps::now_nanos(),
                 )
             {
@@ -958,7 +964,11 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
                 hex_bytes(operation_id),
                 status.phase,
             );
-            schedule_component_provisioning(operation_id, plan_hash, Duration::from_secs(1));
+            if !error.provisioning_failure().is_some_and(|origin|
+                origin.retry_category == canic_core::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
+            {
+                schedule_component_provisioning(operation_id, plan_hash, Duration::from_secs(1));
+            }
         }
     }
 }
@@ -1280,6 +1290,11 @@ async fn query_root_component_provisioning(
         RemoteRootStatusResponse::Operation(
             RemoteRootOperationStatusResponse::ProvisionComponents(response),
         ) if response.operation_id == operation_id && response.plan_hash == plan_hash => {
+            if let Some(error) =
+                FleetCoordinatorOps::observed_activation_failure(response.last_failure)
+            {
+                return Err(error);
+            }
             Ok(*response)
         }
         RemoteRootStatusResponse::Operation(_) => Err(InternalError::conflict()),

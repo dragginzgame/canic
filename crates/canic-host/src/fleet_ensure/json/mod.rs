@@ -43,6 +43,8 @@ pub fn report_json_value(report: &FleetEnsureReport) -> Result<Value, serde_json
 
 fn plan_json_value(plan: &FleetEnsurePlan) -> Result<Value, serde_json::Error> {
     let mut projection = Map::new();
+    insert_serialized(&mut projection, "recovery_review", &plan.recovery_review)?;
+    insert_serialized(&mut projection, "reinstall", &plan.reinstall)?;
     projection.insert(
         "canisters".to_string(),
         Value::Array(

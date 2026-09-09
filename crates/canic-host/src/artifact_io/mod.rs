@@ -19,6 +19,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     sync::atomic::{AtomicU64, Ordering},
+    time::Instant,
 };
 
 use canic_core::ids::BuildNetwork;
@@ -68,11 +69,15 @@ pub fn finalize_wasm_artifact(
     toolchain: &BuildToolchain,
 ) -> Result<Vec<ArtifactTransformOutput>, Box<dyn std::error::Error>> {
     toolchain.require_profile(finalization.profile)?;
+    let total = Instant::now();
     stage_and_publish_artifact_set(finalization, |staged| {
+        let phase = Instant::now();
         let mut transforms = vec![shrink_wasm_artifact(
             toolchain.ic_wasm(),
             &staged.wasm_path,
         )?];
+        let shrink_elapsed = phase.elapsed();
+        let phase = Instant::now();
         if finalization.embed_candid {
             let metadata =
                 embed_candid_metadata(toolchain.ic_wasm(), &staged.wasm_path, &staged.did_path)?;
@@ -85,16 +90,29 @@ pub fn finalize_wasm_artifact(
                 ArtifactTransformKind::CandidMetadata,
             ));
         }
+        let candid_elapsed = phase.elapsed();
+        let phase = Instant::now();
         transforms.push(optimize_release_wasm_artifact(
             finalization.profile,
             toolchain.binaryen(),
             &staged.wasm_path,
         )?);
+        let binaryen_elapsed = phase.elapsed();
+        let phase = Instant::now();
         enforce_wasm_code_section_limit(finalization.build_network, &staged.wasm_path)?;
         write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)?;
         if finalization.validate_sidecar_only {
             validate_sidecar_only_candid_artifact(&staged.wasm_path, &staged.did_path)?;
         }
+        eprintln!(
+            "Build phase finalization {}: shrink={:.2}s candid={:.2}s binaryen={:.2}s gzip/validation={:.2}s total={:.2}s",
+            finalization.wasm_path.display(),
+            shrink_elapsed.as_secs_f64(),
+            candid_elapsed.as_secs_f64(),
+            binaryen_elapsed.as_secs_f64(),
+            phase.elapsed().as_secs_f64(),
+            total.elapsed().as_secs_f64()
+        );
         Ok(transforms)
     })
 }

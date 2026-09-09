@@ -1,5 +1,129 @@
 # Canic 0.110 Implementation Status
 
+## Build feedback 087 and 139
+
+The maintainer accepted these build-throughput follow-ups on 2026-09-09,
+extending the same open 0.110.13 batch. The host build owner now separates
+declarations from runtime linking, batches package-bound protocol contexts and
+verifies complete unchanged-build reuse before allocating a release identity.
+Changed inputs still rebuild the runtime set because every artifact embeds the
+complete release identity; cross-identity role reuse is outside this scope.
+
+| Batch | Outcome | Owner | Included evidence | Validation | Status |
+| --- | --- | --- | --- | --- | --- |
+| BF1 | Faster governed builds and verified no-op reuse | Host artifact/release owners and build macro | Input/output invalidation, exact role binding, Candid/features, managed lifecycle and measured cost | Focused native checks, controlled release comparison and scoped PocketIC evidence | Complete within recorded scope |
+
+The [build feedback report](../../audits/reports/2026-09/2026-09-09/build-feedback.md)
+owns qualification and its limits. The scoped build batch and open 0.110.13
+changelog are ready for push/release review. Unchanged replay is 2.83s; a warm
+one-role edit improves 477.10s to 291.03s; cold time is roughly unchanged.
+The managed/standalone lifecycle case passes. Mixed-topology startup, conservation
+and replay assertions completed before the extra reset exercises were stopped;
+the complete case is not marked passed. Precise per-role/cross-identity reuse,
+material cold improvement, full clean determinism and downstream qualification
+remain outside this completion claim. Earlier evidence below retains its scope.
+
+## Activation feedback 157–160
+
+The maintainer accepted these follow-ups with an explicit sanity and drift
+review. Existing Ensure, provisioning, protected-status and observation owners
+contain the changes. Root prerequisite identity and dependent Store admission
+now reject incompatible reuse; bounded retry state and originating failures
+remain in the existing operation. Observation timing and bounded independent
+reads retain the existing snapshot lifetime.
+
+Installed-source queries on 2026-09-09 confirm a sealed initial inventory and
+all 24 pool assets. Source evidence inspection does not make the old plan
+executable or supersede its journal. Refill-intent admission now rechecks full
+physical capacity after fee discovery, with 24 targeted pool cases passing.
+Lease takeover prevents using one successful maintenance pass as settlement
+proof. The single-Root preparation, Root reset and Full Ensure reviews now use
+the existing effect driver. Exact source archival and crash recovery precede
+the first remote effect; admission binds source modules/controllers, complete
+assets, unchanged Ledger accounts and bounded source debit. The immutable
+`v0.110.12` PocketIC journey passes controller-drift rejection without source
+replacement, stop/restart preparation, lost Root install response recovery,
+Full Ensure readiness, exact retained assets, conservation and effect-free
+replay. The proof also corrected changed-Wasm history reconciliation by binding
+both the prior and requested module. Three history regressions, 167 direct
+Fleet Ensure cases and focused host/CLI/fixture Clippy pass.
+
+The [activation feedback report](../../audits/reports/2026-09/2026-09-08/activation-feedback.md)
+owns the exact evidence and single-Root applicability boundary. The complete
+accepted 0.110.13 source batch and changelog are ready for push/release review;
+package versions remain 0.110.12. Live downstream adoption remains separate.
+Earlier OD1/RI1/RF2 results retain their completed scope.
+
+## RF2: Accepted upstream follow-ups 151–156
+
+The maintainer accepted all six follow-ups on 2026-09-08, extending the same
+0.110.13 batch after OD1/RI1. The launcher is aligned and qualified. Retained
+estate omission rejection, affordable continuation reserves/prefixes and typed
+dependent-funding review are implemented. The compiled-configuration fixture
+boundary and matching-build recipe are explicit. Bounded public process, timer
+and memory projections use the existing five-family sampler and history.
+
+The complete accepted OD1/RI1/RF2 batch is ready for push/release review.
+Qualification passes: 167 host and 51 CLI cases, 18 all-feature metrics cases,
+all eight timer PocketIC cases and the expanded 27-canister changed-release
+journey. The latter retains all 24 pool assets, rejects sixteen omitted imports
+before Root reset, reviews six low-balance top-ups, recovers lost install and
+funding responses, reaches 19 Workloads plus five Ready reserves, checks exact
+debit/controllers/conservation, and replays without effects. First/repeat/full
+scheduled public sampling remains below 20 million instructions. The open
+0.110.13 changelog is ready; package versions remain 0.110.12.
+
+CANIC-157–160 appeared in a later tracker refresh and are accepted separately
+above; RF2 does not claim their completion.
+
+## RI1: Explicit Same-Release Fleet Reinstall
+
+Accepted by the maintainer on 2026-09-08 after OD1. CANIC-149 adds one explicit
+operation-scoped `fleet ensure --reinstall` intent. Preparation durably seals
+Coordinator/Root allocation through the existing authority-snapshot owner;
+the following reviewed full plan resets the same-Wasm infrastructure and the
+complete sealed Root-owned pool, then reconstructs application fixtures and
+full Fleet readiness. Both phases retain the same operation identity. The
+network, controlled Principal set and cycle accounts remain controlled;
+logical pool role assignments may change. No permanent desired-state flag,
+new scheduler, cross-release compatibility or downstream executor is added.
+
+Host policy/ops/workflow, CLI, the existing authority inspection boundary and
+governed PocketIC fixtures own one complete batch. Required evidence covers
+controller/closure rejection, real Hub/Shard user-data erasure, fixture restore,
+interruption before/after effects, a second deliberate wipe, conservation and
+effect-free replay. Includes Candid/fixture/docs propagation and cleanup.
+Implementation, recovery evidence, propagation and cleanup are complete.
+The production-adapter journey passed two real database wipes, Coordinator
+before/after-response interruptions, a Root interruption after ordinary version
+advancement, retained estate/controller/cycle-account checks, conservation and
+both terminal/ordinary-ensure replays. Targeted native/interface checks and
+warning-denied affected-package Clippy pass. The combined OD1/RI1 batch is ready
+to push and the open 0.110.13 changelog is ready for release approval; package
+versions remain 0.110.12. Publication and deployment are separate.
+
+## OD1: Downstream Operator Diagnostics
+
+The 2026-09-08 request to work on Toko Miner upstream feedback selects reopened
+CANIC-042 and CANIC-150 as one bounded diagnostic correction. Host role evidence
+owns actionable Cargo causes; CLI Medic and Fleet rendering own advice, named
+budget terms, compact cycle values and action descriptions. Positive and invalid
+evidence includes nested offline failures, source/credential sanitization,
+bounded Unicode, pending/unknown funding observations, initial creation versus
+Root-funded capacity, reinstall and no-op presentation, and unchanged JSON and
+progress behavior. Targeted host/CLI tests and affected-target Clippy own
+qualification. OD1 is complete; the maintainer subsequently extended the
+0.110.13 batch with RI1 above. Its completed evidence is: five host evidence cases,
+thirteen Fleet CLI cases in the combined batch, the Medic advice case and all-target/all-feature Clippy
+for both affected packages pass. Downstream live-output adoption remains separate.
+Propagation includes the Fleet operations contract, changelogs and
+[feedback handoff](../../audits/reports/2026-09/2026-09-08/operator-feedback.md).
+
+Extend the affected 0.110 line with the 0.110.13 draft despite the soft release
+count guideline: these correct published diagnostics and complete the accepted
+reinstall operator workflow. CANIC-149 is complete as RI1 above. CANIC-141 stays
+deferred.
+
 ## PM1: Bounded Public Sampling
 
 Complete and ready for release approval after maintainer-pushed 0.110.10.

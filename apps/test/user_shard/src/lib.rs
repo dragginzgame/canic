@@ -1,5 +1,7 @@
 #![expect(clippy::unused_async)]
 
+mod reinstall_fixture;
+
 use candid::Principal;
 use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
 use std::cell::RefCell;
@@ -11,7 +13,9 @@ thread_local! {
 canic::start!();
 
 async fn canic_setup() {}
-async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_install(_: Option<Vec<u8>>) {
+    reinstall_fixture::seed();
+}
 async fn canic_upgrade() {}
 
 #[canic_query(requires(auth::authenticated(cap::VERIFY)))]
@@ -38,6 +42,19 @@ async fn test_set_recovery_generation(generation: String) -> Result<(), Error> {
 #[canic_query(public)]
 async fn test_recovery_generation() -> Result<String, Error> {
     Ok(RECOVERY_GENERATION.with_borrow(Clone::clone))
+}
+
+/// Write a user-owned stable row in the disposable reinstall fixture.
+#[canic_update(public)]
+async fn test_set_user_row(id: u64, value: u64) -> Result<(), Error> {
+    reinstall_fixture::insert(id, value);
+    Ok(())
+}
+
+/// Inspect application rows, including the authored system fixture at key zero.
+#[canic_query(public)]
+async fn test_user_rows() -> Result<Vec<reinstall_fixture::UserRow>, Error> {
+    Ok(reinstall_fixture::rows())
 }
 
 canic::finish!();

@@ -12,6 +12,62 @@ use std::collections::BTreeMap;
 
 const ROOT: &str = "rrkah-fqaaa-aaaaa-aaaaq-cai";
 
+#[test]
+fn recovery_preview_tolerates_bounded_balance_movement_but_preserves_authority() {
+    use crate::fleet_ensure::model::{FleetRecoveryReview, PoolRecoveryFunding, RecoveryDiscovery};
+
+    let (desired, mut retained, _, _) = fixture();
+    retained.recovery_review = Some(Box::new(FleetRecoveryReview {
+        base_execution_burn_cycles: 10,
+        continuation_reserve_cycles: 90,
+        whole_continuation_ceiling_cycles: 100,
+        discovery: RecoveryDiscovery::PendingCurrentProtocol,
+        known_pool_funding: vec![PoolRecoveryFunding {
+            principal: "pool".into(),
+            root: ROOT.into(),
+            amount_cycles: 4,
+            ledger_fee_cycles: 1,
+            funding_deficit_cycles: 1,
+            funding_margin_cycles: 3,
+            expected_post_cycles: 10,
+        }],
+    }));
+    let observation = super::super::tests::estate_funding_observation(None);
+    let mut current = retained.clone();
+    current.canisters[0].observed_cycles -= 1;
+    let review = current.recovery_review.as_mut().unwrap();
+    review.continuation_reserve_cycles -= 1;
+    review.known_pool_funding[0].amount_cycles += 1;
+    review.known_pool_funding[0].funding_deficit_cycles += 1;
+    let compatible = |current: &FleetEnsurePlan| {
+        super::super::compatible_after_bounded_observation(
+            &retained,
+            current,
+            &desired,
+            &observation,
+        )
+    };
+    assert!(compatible(&current));
+    let mut changed_target = current.clone();
+    changed_target
+        .recovery_review
+        .as_mut()
+        .unwrap()
+        .known_pool_funding[0]
+        .principal = "different-pool".into();
+    assert!(!compatible(&changed_target));
+    let mut changed_fee = current.clone();
+    changed_fee
+        .recovery_review
+        .as_mut()
+        .unwrap()
+        .known_pool_funding[0]
+        .ledger_fee_cycles += 1;
+    assert!(!compatible(&changed_fee));
+    current.canisters[0].observed_cycles -= 1;
+    assert!(!compatible(&current));
+}
+
 fn fixture() -> (
     DesiredFleet,
     FleetEnsurePlan,
@@ -62,6 +118,8 @@ fn fixture() -> (
         plan_sha256: String::new(),
         planned_at_time: 1,
         protocol_actions: Vec::new(),
+        recovery_review: None,
+        reinstall: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: Some(Box::new(ReviewedDesiredFleetRecord::capture(&desired))),
@@ -178,7 +236,8 @@ fn insufficient_remaining_budget_rejects_before_phase_or_intent_persistence() {
     assert!(matches!(
         error,
         EnsureWorkflowError::SuccessorReviewRequired {
-            reason: FleetEnsureSuccessorReviewReason::BudgetExceeded
+            reason: FleetEnsureSuccessorReviewReason::BudgetExceeded,
+            ..
         }
     ));
     assert!(journal.successor_phases.is_empty());
@@ -227,7 +286,7 @@ fn a_rehashed_successor_cannot_add_a_canister_effect_or_change_protocol_authorit
             FleetEnsureSuccessorReviewReason::ProtocolAuthority
         };
         assert!(
-            matches!(error, EnsureWorkflowError::SuccessorReviewRequired { reason } if reason == expected)
+            matches!(error, EnsureWorkflowError::SuccessorReviewRequired { reason, .. } if reason == expected)
         );
         assert!(journal.successor_phases.is_empty());
         assert!(!paths.journal.exists());
@@ -275,7 +334,7 @@ fn successor_rejects_changed_principal_and_exhausted_phase_authority() {
             FleetEnsureSuccessorReviewReason::ProtocolAuthority
         };
         assert!(
-            matches!(error, EnsureWorkflowError::SuccessorReviewRequired { reason } if reason == expected)
+            matches!(error, EnsureWorkflowError::SuccessorReviewRequired { reason, .. } if reason == expected)
         );
         assert!(journal.successor_phases.is_empty());
         assert!(!paths.journal.exists());
@@ -305,7 +364,8 @@ fn new_review_does_not_revalidate_the_previous_inactive_plans_phases() {
         assert!(matches!(
             verify_canonical(&original, &journal, &state, &mut platform),
             Err(EnsureWorkflowError::SuccessorReviewRequired {
-                reason: FleetEnsureSuccessorReviewReason::ProtocolAuthority
+                reason: FleetEnsureSuccessorReviewReason::ProtocolAuthority,
+                ..
             })
         ));
     }
@@ -314,4 +374,101 @@ fn new_review_does_not_revalidate_the_previous_inactive_plans_phases() {
         verify_canonical(&successor, &journal, &state, &mut platform),
         Err(EnsureWorkflowError::JournalIntegrity)
     ));
+}
+
+#[test]
+fn affordable_successor_retains_a_prefix_and_its_exact_conservation_bound() {
+    let (desired, _, mut phase, _) = fixture();
+    let first = phase.protocol_actions[0].clone();
+    let one_burn = successor_phase_burn(&desired, &phase).unwrap();
+    let mut second = first.clone();
+    if let EnsureAction::FleetProtocol { name, .. } = &mut second {
+        *name = "second".into();
+    }
+    phase.protocol_actions.push(second);
+    assert!(successor_phase_burn(&desired, &phase).unwrap() > one_burn);
+    let affordable =
+        crate::fleet_ensure::policy::recovery::affordable_successor(&desired, phase, one_burn)
+            .unwrap()
+            .unwrap();
+    assert_eq!(affordable.protocol_actions, vec![first]);
+    assert_eq!(
+        affordable.conservation.maximum_execution_burn_cycles,
+        one_burn
+    );
+    assert_eq!(
+        affordable.conservation.expected_post_operation_cycles,
+        1000 - one_burn
+    );
+    assert_eq!(affordable.plan_sha256, expected_plan_sha256(&affordable));
+}
+
+#[test]
+fn review_difference_exposes_targets_action_kinds_and_bounded_debit() {
+    let (_, _, mut phase, _) = fixture();
+    phase.conservation.maximum_operator_debit_cycles = 47;
+    let review = crate::fleet_ensure::ops::recovery::review_details(&phase);
+    assert_eq!(review.maximum_additional_debit_cycles, 47);
+    assert_eq!(review.actions[0].kind, "observe_pool_readiness");
+    assert_eq!(review.actions[0].principal.as_deref(), Some(ROOT));
+    assert_eq!(
+        review.next_review_command,
+        "canic fleet ensure 'fleet' --environment 'local'"
+    );
+    phase.environment = "local's".into();
+    assert!(
+        crate::fleet_ensure::ops::recovery::review_details(&phase)
+            .next_review_command
+            .contains("'local'\"'\"'s'")
+    );
+}
+
+#[test]
+fn affordable_prefix_is_durable_without_authorizing_the_unaffordable_tail() {
+    let (desired, original, mut phase, mut journal) = fixture();
+    let first = phase.protocol_actions[0].clone();
+    let mut second = first.clone();
+    if let EnsureAction::FleetProtocol {
+        name,
+        maximum_execution_burn_cycles,
+        ..
+    } = &mut second
+    {
+        *name = "later-readiness".into();
+        *maximum_execution_burn_cycles = 60;
+    }
+    phase.protocol_actions.push(second);
+    phase.plan_sha256 = expected_plan_sha256(&phase);
+    let root = crate::test_support::temp_dir("continuation-affordable-prefix");
+    std::fs::create_dir_all(&root).unwrap();
+    let paths = EnsurePaths::under(&root, "local", "fleet");
+    let mut state = read_state(&paths, "fleet").unwrap();
+    state.principals.insert("root".into(), ROOT.into());
+    let mut platform = MockPlatform::new(desired.clone(), []);
+    platform.set_fresh_protocol_actions(phase.protocol_actions.clone());
+    append(
+        &paths,
+        &desired,
+        &original,
+        &mut journal,
+        &state,
+        &observation(),
+        phase,
+        &mut platform,
+    )
+    .unwrap();
+    let restored = read_journal(&paths).unwrap().unwrap();
+    assert_eq!(restored, journal);
+    assert!(restored.effects.is_empty());
+    assert_eq!(
+        restored.successor_phases[0]
+            .plan
+            .as_ref()
+            .unwrap()
+            .protocol_actions,
+        vec![first]
+    );
+    assert_eq!(restored.operation_id, original.operation_id);
+    verify_records::<MockError>(&original, &restored).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
 }

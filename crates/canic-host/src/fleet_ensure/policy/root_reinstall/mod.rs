@@ -82,6 +82,7 @@ pub(in crate::fleet_ensure) fn compile(
             return Ok(None);
         }
         require_install_initializer(desired, configured)?;
+        require_complete_estate(state, desired, &configured.name)?;
         bindings.push(binding);
         observed_cycles = checked_add(observed_cycles, live.cycles, "Root reinstall cycles")?;
         canisters.push(CanisterPlan {
@@ -92,6 +93,7 @@ pub(in crate::fleet_ensure) fn compile(
                 },
                 EnsureAction::Install {
                     canic_init: configured.canic_init.clone(),
+                    reinstall_witness: None,
                     init_arg: configured.init_arg.clone(),
                     init_arg_sha256: optional_init_arg_sha256(artifacts, configured)?,
                     init_candid: configured.init_candid.clone(),
@@ -163,6 +165,14 @@ pub(in crate::fleet_ensure) fn compile(
         plan_sha256: String::new(),
         planned_at_time: created_at_time,
         protocol_actions: Vec::new(),
+        recovery_review: Some(Box::new(crate::fleet_ensure::model::FleetRecoveryReview {
+            base_execution_burn_cycles: burn,
+            continuation_reserve_cycles: 0,
+            whole_continuation_ceiling_cycles: 0,
+            known_pool_funding: Vec::new(),
+            discovery: crate::fleet_ensure::model::RecoveryDiscovery::PendingCurrentProtocol,
+        })),
+        reinstall: None,
         root_reinstall_bindings: bindings,
         root_start_authority: None,
         reviewed_desired: Some(Box::new(
@@ -174,4 +184,62 @@ pub(in crate::fleet_ensure) fn compile(
     };
     plan.plan_sha256 = expected_plan_sha256(&plan);
     Ok(Some(plan))
+}
+
+/// Retained identities are omission evidence, never authority to add an unverified asset.
+fn require_complete_estate(
+    state: &FleetEnsureStateRecord,
+    desired: &DesiredFleet,
+    root: &str,
+) -> Result<(), EnsurePolicyError> {
+    let imports = desired
+        .bootstrap
+        .as_ref()
+        .and_then(|bootstrap| bootstrap.roots.iter().find(|r| r.root == root));
+    let selected = imports
+        .into_iter()
+        .flat_map(|r| &r.canister_pool_imports)
+        .filter_map(|name| {
+            desired
+                .canisters
+                .iter()
+                .find(|c| &c.name == name)
+                .and_then(|c| c.principal.as_ref())
+                .or_else(|| state.principals.get(name))
+        })
+        .collect::<BTreeSet<_>>();
+    let mut missing_principals = Vec::new();
+    for (name, principal) in &state.principals {
+        let Some(topology) = state.topology.get(name) else {
+            continue;
+        };
+        if topology.kind == DesiredCanisterKind::Store
+            || name == root
+            || selected.contains(principal)
+        {
+            continue;
+        }
+        let mut parent = topology.parent.as_deref();
+        let mut visited = BTreeSet::new();
+        while let Some(name) = parent {
+            if name == root {
+                missing_principals.push(principal.clone());
+                break;
+            }
+            if !visited.insert(name) {
+                break;
+            }
+            parent = state.topology.get(name).and_then(|t| t.parent.as_deref());
+        }
+    }
+    missing_principals.sort();
+    missing_principals.dedup();
+    if missing_principals.is_empty() {
+        Ok(())
+    } else {
+        Err(EnsurePolicyError::IncompleteRootEstate {
+            root: root.into(),
+            missing_principals,
+        })
+    }
 }

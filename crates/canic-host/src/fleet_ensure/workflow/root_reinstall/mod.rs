@@ -93,7 +93,15 @@ pub(super) fn complete<P: EnsurePlatform>(
             return Err(EnsureWorkflowError::ConvergenceDrift);
         }
     }
-    let terminal = root_management_fleet_observation(&management, &targets)?;
+    let terminal = if plan
+        .reinstall
+        .as_ref()
+        .is_some_and(|intent| intent.activation_reset.is_some())
+    {
+        super::reinstall::activation::after_reset(plan, state, platform)?.observation
+    } else {
+        root_management_fleet_observation(&management, &targets)?
+    };
     verify_terminal_conservation(plan, journal, state, &terminal)
 }
 

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## Purpose
 
@@ -25,9 +25,155 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from maintainer-pushed `v0.110.11`. Its immutable
+Current development begins from tagged `v0.110.12`. Its immutable
 release details are in [the 0.110 changelog](../changelog/0.110.md). Package
-versions remain 0.110.11; the next source batch uses the open 0.110.12 draft.
+versions remain 0.110.12; the current source batch uses the open 0.110.13 draft.
+
+## Active IcyDB Update
+
+The maintainer requested the latest IcyDB on 2026-09-09. The official crates.io
+registry reports 0.257.2 as the latest published non-yanked release; the sibling
+checkout's 0.257.3 is not yet published. The workspace exact pin and all six
+IcyDB lockfile entries now use 0.257.2, with no unrelated dependency changes or
+source adaptation. The existing `icydb_lifecycle_composition` PocketIC target
+passes (one case, 40.40s; runner 56s), covering startup, timer custody,
+same-release upgrade and failed-upgrade retry. Log:
+`/tmp/canic-icydb-pocketic.log`. The runner cleaned its server and scratch.
+
+The maintainer then requested lint cleanup and changelog readiness. Fixed the
+five `chunks_exact_to_as_chunks` warnings in Component, Fleet, Network,
+ReleaseBuild and Operation ID parsers, plus two matching stable-byte test
+helpers exposed by all-target Clippy. Existing width/character validation and
+stable bytes remain unchanged. Warning-denied all-target/all-feature Clippy
+passes for `canic-core`, `canic_icydb_lifecycle_probe` and
+`canic-icydb-lifecycle-schema`; 48 selected ID, replay and serialization tests
+pass. Logs: `/tmp/canic-lint-cleanup-clippy.log` and
+`/tmp/canic-lint-cleanup-tests.log`. Targeted Rust formatting, diff whitespace
+and the 0.110.13 release-notes preflight pass.
+
+The previously recorded lint blocker is resolved. The complete accepted scoped
+batch is ready for push/release review, and both open 0.110.13 changelog surfaces
+are prepared for the governed publication flow. Earlier build/performance
+evidence retains its original dependency and toolchain scope; the prior IcyDB
+PocketIC result predates this behavior-preserving parser cleanup. Package
+versions remain 0.110.12. No broad gate, Git publication or sibling mutation
+was performed; the recorded deferred upstream criteria remain open.
+
+## Active Build Feedback 087 and 139
+
+The maintainer accepted CANIC-087 and CANIC-139 on 2026-09-09. The
+[build feedback owner](../audits/reports/2026-09/2026-09-09/build-feedback.md)
+tracks declaration/runtime build separation, package-bound runtime batching,
+exact artifact reuse and measured qualification. This extends the open 0.110.13
+batch; package versions remain 0.110.12. The scoped implementation and
+qualification are complete and the combined source batch/open changelog are
+ready for push/release review. Unchanged complete builds return in 2.83s; a
+warm one-role edit improves from 477.10s to 291.03s. Cold time is roughly unchanged.
+Feature-preserving batches retain fat LTO after measuring Thin's size tradeoff.
+The focused managed/standalone initialization and same-release upgrade case
+passes. The mixed-topology case completed fresh readiness, conservation and
+terminal replay assertions, then was interrupted during its extra reset exercises;
+it is not recorded as a full case pass. Full upstream closure remains open for
+precise per-role/cross-identity reuse, cold improvement, clean determinism and
+Toko qualification. Earlier recovery/operator evidence retains its scope.
+Toko Miner remains read-only; no broad gate, version bump or publication.
+
+## Active Activation Feedback 157–160
+
+The maintainer accepted working through CANIC-157–160 with an explicit sanity
+and drift review. The [scope and evidence owner](../audits/reports/2026-09/2026-09-08/activation-feedback.md)
+confirms the activation-authority, retry and originating-failure gaps, and
+keeps planning latency measurement separate from unproven optimization.
+Existing Ensure, provisioning, protected-status and observation owners remain
+authoritative. Prevention, bounded retries, originating diagnostics and measured
+observation concurrency are complete. The installed-release recovery now passes
+PocketIC against immutable `v0.110.12` runtime: an Issued operation reaches
+Published/inactive Root, source-bound preparation rejects controller drift,
+stop/restart settles the source, a separately reviewed Root reinstall reconciles
+a lost response, and Full Ensure reaches readiness with the exact retained pool,
+bounded native debit, unchanged Root/operator Ledger accounts and effect-free
+replay. Exact source plan/journal/state bytes are archived before the recoverable
+local replacement; the source journal is never marked Converged.
+
+The proof exposed and corrected a changed-Wasm history assumption: reinstalls
+now bind the reviewed prior module as well as the requested module. Three history
+regressions, 167 direct host Fleet Ensure cases, 52 CLI cases and focused
+host/CLI/fixture Clippy pass. Earlier 63 core/control-plane provisioning and
+24 pool cases retain their scoped evidence. The final recovery log is
+`/tmp/canic157-installed-recovery4.log` (731.72s test, including 301s artifact
+build; 810s runner including native compilation). Source integrity checks match
+all 3,738 snapshot files to commit `95c6caa03867cd68b3bc57ba88c02b961251460b`.
+
+The recovery is bounded to one Root, complete inventory and successful settlement;
+changed membership, pending paid work or missing authority prevents reset.
+The smaller recovery fixture is separate from the earlier 24-asset RF2 proof
+and from live Toko adoption. The complete accepted OD1/RI1/RF2/157–160 batch and
+open 0.110.13 changelog are ready for push and release review. Package versions
+remain 0.110.12. No broad gate, Git publication, deployment or sibling mutation.
+
+## Active Upstream Follow-ups 151–156
+
+The maintainer accepted all six follow-ups on 2026-09-08. Sequence: launcher
+alignment (152), complete retained-estate review before Root reset (154),
+affordable continuation phases and dependent funding review (155/156), exact
+qualification configuration (151), then bounded public process coverage (153).
+These extend the existing 0.110.13 draft. Implementation, targeted recovery
+qualification, propagation and cleanup are complete. The isolated CLI/launcher
+probe passes. The 27-canister changed-release journey passes omission rejection,
+reviewed reuse of all 24 pool assets, affordable continuation admission, six
+explicit top-ups, lost install/funding response recovery, terminal conservation
+and effect-free replay. All eight timer PocketIC cases, 18 all-feature metrics
+cases, 167 host and 51 CLI cases pass. The sampling bound remains 20 million
+instructions. Final affected-package hygiene is recorded in the
+[feedback handoff](../audits/reports/2026-09/2026-09-08/operator-feedback.md).
+The accepted OD1/RI1/follow-up source batch and open 0.110.13 changelog are ready
+for push/release review; package versions remain 0.110.12. No broad gate,
+publication, deployment or sibling mutation was performed.
+
+A later read-only tracker refresh found CANIC-157–160: activation identity
+coherence, bounded autonomous retries, originating failure diagnostics and
+planning latency measurement. These are new follow-up scope, outside the six
+accepted here; none is claimed fixed by this qualification. The 154 proof
+refreshes authority before Root reset; it does not reproduce 157's changed
+inputs between Root and Store effects. CANIC-141 remains deferred.
+
+## Active Same-Release Fleet Reinstall
+
+The maintainer accepted CANIC-149 on 2026-09-08. RI1 extends the open
+0.110.13 batch with explicit `fleet ensure --reinstall` preparation, a sealed
+physical-inventory reset review and same-operation recovery. The operation
+retains physical canisters and cycle accounts while wiping application data.
+Implementation, recovery evidence, Candid/fixture propagation and cleanup are
+complete. Targeted native/interface checks, affected-package Clippy and the
+production-adapter PocketIC journey pass. The journey proves two actual database
+wipes, before/after-response recovery, ordinary Root-version advancement,
+retained estate/controllers/cycle accounts, conservation and effect-free replay.
+The OD1/RI1 scope is complete; the expanded 0.110.13 batch now depends on the
+accepted follow-ups above. CANIC-141 remains deferred.
+
+## Active Downstream Diagnostic Feedback
+
+The maintainer requested the upstream feedback from Toko Miner. The bounded
+diagnostic batch addresses reopened CANIC-042 and CANIC-150: retain actionable
+nested Cargo causes and correct Medic advice, then explain Fleet plan actions,
+creation counts and cycle allowances. Host role evidence and CLI presentation
+own these corrections; the JSON and progress contracts remain unchanged.
+The diagnostic slice is complete. Its 0.110.13 draft now also contains the
+completed RI1 batch. Five host evidence tests,
+thirteen Fleet CLI tests, the Medic advice regression and all-target/all-feature
+Clippy for both affected packages pass. Formatting, changelog governance and
+document checks pass.
+The [feedback handoff](../audits/reports/2026-09/2026-09-08/operator-feedback.md)
+records scope and implementation/qualification evidence for the combined batch.
+The downstream live-output demonstration remains adoption evidence.
+CANIC-149 is complete as RI1 above; CANIC-141 remains deferred. No downstream files,
+package versions, Git publication or deployment were changed.
+
+The proposed 0.110.13 exceeds the soft twelve-release minor guideline. It
+includes corrections to the published build/operator diagnostics, the
+maintainer-selected CANIC-149 operator workflow and accepted CANIC-151–156
+recovery/tooling/opt-in diagnostic follow-ups. These form one accepted batch
+on the affected 0.110 line; they do not promote another minor or close this one.
 
 ## Active Release Turnaround Correction
 

@@ -36,6 +36,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+canic-cli = { path = "../canic-cli" }
 ic-query = { workspace = true }
 toml = { workspace = true }
 

@@ -20,6 +20,11 @@ thread_local! {
 pub struct SystemMetrics;
 
 impl SystemMetrics {
+    /// Read one fixed aggregate without visiting target or method identities.
+    pub(crate) fn count(kind: SystemMetricKind) -> u64 {
+        SYSTEM_METRICS.with_borrow(|counts| counts.get(&kind).copied().unwrap_or_default())
+    }
+
     /// Increment a counter and return the new value.
     pub fn increment(kind: SystemMetricKind) {
         SYSTEM_METRICS.with_borrow_mut(|counts| {

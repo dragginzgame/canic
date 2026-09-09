@@ -645,6 +645,10 @@ impl ManagedComponentGroupFixture {
 
 /// Install one exact Component Group and its configured initial placement children.
 ///
+/// The caller validates that the supplied source and role bytes belong to the same build.
+/// Use separately compiled enabled/disabled artifacts for publication qualification; changing
+/// `app_config_source` cannot alter runtime configuration already embedded in a Wasm.
+///
 /// # Panics
 ///
 /// Panics only if PocketIC rejects primitive canister creation or installation before

@@ -1,0 +1,609 @@
+{
+  "schema_version": 1,
+  "fixture": "apps/test/test-configs/generated-mixed-topology.toml",
+  "runtime_source_files": 3768,
+  "tool_evidence": {
+    "baseline_cli": {
+      "path": "/home/adam/.cargo/bin/canic",
+      "sha256": "ea169ea0564f269f18b9e46a3b06ec4e53e431bacebe3ff097dacef9c0ae8aa4"
+    },
+    "candidate_cli": {
+      "path": "/home/adam/projects/canic/target/debug/canic",
+      "sha256": "c8abe16259e7a45d5ad62d126536fff5d00e5e88ff00ca53b29d61ad15531d3b"
+    },
+    "ic_wasm": {
+      "path": "/home/adam/.local/lib/node_modules/@icp-sdk/ic-wasm/node_modules/@icp-sdk/ic-wasm-linux-x64/bin/ic-wasm",
+      "sha256": "204dad3ad59b78a46fad559dfefcdcaee3609433e5e4e6d81bda5e051a2bc0bc"
+    },
+    "binaryen": {
+      "path": "/home/adam/.local/bin/wasm-opt",
+      "sha256": "1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725"
+    },
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)\n",
+    "frozen_source_manifest_sha256": "8b573602e2680dfbfce219113f9756c738d27ec5e3d37c4aa38d3ea2896b5e89",
+    "candid_extractor": {
+      "path": "/home/adam/.cargo/bin/candid-extractor",
+      "sha256": "6f8d7681095dad13fe2b8b337620b5e7d01c7bdd8a6c9f5487d6912d197bbbdc"
+    }
+  },
+  "conditions": {
+    "rustc_wrapper": "disabled",
+    "initial_cargo_targets": "separate and empty",
+    "os_file_cache": "not flushed",
+    "cpu_isolation": false,
+    "peak_memory_metric": "GNU time maximum child RSS; not aggregate concurrent process RSS"
+  },
+  "baseline": {
+    "cli_release": "0.110.12",
+    "cli_release_commit": "95c6caa03867cd68b3bc57ba88c02b961251460b",
+    "wall_seconds": 794.55,
+    "user_seconds": 1216.01,
+    "system_seconds": 112.84,
+    "maximum_child_rss_kib": 2440256,
+    "coordinator_total_seconds": 132.31,
+    "store_total_seconds": 105.71,
+    "configured_total_seconds": 556.09,
+    "artifact_metrics": {
+      "fleet_coordinator": {
+        "raw_before_bytes": 4271682,
+        "raw_bytes": 4013890,
+        "gzip_before_bytes": 1358504,
+        "gzip_bytes": 1393031,
+        "code_before_bytes": 3991654,
+        "code_bytes": 3737123,
+        "data_before_bytes": 222453,
+        "data_bytes": 220073,
+        "functions_before": 6119,
+        "functions": 5185
+      },
+      "wasm_store": {
+        "raw_before_bytes": 2440829,
+        "raw_bytes": 2292312,
+        "gzip_before_bytes": 815200,
+        "gzip_bytes": 830439,
+        "code_before_bytes": 2233300,
+        "code_bytes": 2087547,
+        "data_before_bytes": 182781,
+        "data_bytes": 180586,
+        "functions_before": 4732,
+        "functions": 4093
+      },
+      "scale_replica": {
+        "raw_before_bytes": 2481145,
+        "raw_bytes": 2329605,
+        "gzip_before_bytes": 827493,
+        "gzip_bytes": 845999,
+        "code_before_bytes": 2250556,
+        "code_bytes": 2101647,
+        "data_before_bytes": 188089,
+        "data_bytes": 186012,
+        "functions_before": 4559,
+        "functions": 3937
+      },
+      "app": {
+        "raw_before_bytes": 2469563,
+        "raw_bytes": 2318219,
+        "gzip_before_bytes": 822794,
+        "gzip_bytes": 841288,
+        "code_before_bytes": 2239901,
+        "code_bytes": 2091291,
+        "data_before_bytes": 187825,
+        "data_bytes": 185644,
+        "functions_before": 4530,
+        "functions": 3910
+      },
+      "scale_hub": {
+        "raw_before_bytes": 2676176,
+        "raw_bytes": 2511988,
+        "gzip_before_bytes": 888439,
+        "gzip_bytes": 904831,
+        "code_before_bytes": 2437661,
+        "code_bytes": 2276192,
+        "data_before_bytes": 194417,
+        "data_bytes": 192302,
+        "functions_before": 4883,
+        "functions": 4211
+      },
+      "user_hub": {
+        "raw_before_bytes": 2773658,
+        "raw_bytes": 2603537,
+        "gzip_before_bytes": 923816,
+        "gzip_bytes": 940128,
+        "code_before_bytes": 2530866,
+        "code_bytes": 2363501,
+        "data_before_bytes": 197253,
+        "data_bytes": 195117,
+        "functions_before": 5119,
+        "functions": 4431
+      },
+      "user_shard": {
+        "raw_before_bytes": 3002986,
+        "raw_bytes": 2819912,
+        "gzip_before_bytes": 987272,
+        "gzip_bytes": 1006897,
+        "code_before_bytes": 2750331,
+        "code_bytes": 2570390,
+        "data_before_bytes": 203649,
+        "data_bytes": 201125,
+        "functions_before": 5384,
+        "functions": 4692
+      },
+      "root": {
+        "raw_before_bytes": 8062525,
+        "raw_bytes": 7591961,
+        "gzip_before_bytes": 2612981,
+        "gzip_bytes": 2682696,
+        "code_before_bytes": 7593899,
+        "code_bytes": 7128048,
+        "data_before_bytes": 353805,
+        "data_bytes": 350470,
+        "functions_before": 11249,
+        "functions": 9841
+      }
+    },
+    "log": "/tmp/canic87-release-baseline1.log"
+  },
+  "candidate": {
+    "wall_seconds": 787.38,
+    "user_seconds": 1380.19,
+    "system_seconds": 196.85,
+    "maximum_child_rss_kib": 2582108,
+    "release_build_id": "7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616",
+    "artifact_metrics": {
+      "fleet_coordinator": {
+        "raw_before_bytes": 4271682,
+        "raw_bytes": 4013890,
+        "gzip_before_bytes": 1358508,
+        "gzip_bytes": 1393037,
+        "code_before_bytes": 3991654,
+        "code_bytes": 3737123,
+        "data_before_bytes": 222453,
+        "data_bytes": 220073,
+        "functions_before": 6119,
+        "functions": 5185
+      },
+      "wasm_store": {
+        "raw_before_bytes": 2440829,
+        "raw_bytes": 2292312,
+        "gzip_before_bytes": 815203,
+        "gzip_bytes": 830446,
+        "code_before_bytes": 2233300,
+        "code_bytes": 2087547,
+        "data_before_bytes": 182781,
+        "data_bytes": 180586,
+        "functions_before": 4732,
+        "functions": 4093
+      },
+      "app": {
+        "raw_before_bytes": 2469563,
+        "raw_bytes": 2318219,
+        "gzip_before_bytes": 822803,
+        "gzip_bytes": 841292,
+        "code_before_bytes": 2239901,
+        "code_bytes": 2091291,
+        "data_before_bytes": 187825,
+        "data_bytes": 185644,
+        "functions_before": 4530,
+        "functions": 3910
+      },
+      "scale_replica": {
+        "raw_before_bytes": 2481145,
+        "raw_bytes": 2329605,
+        "gzip_before_bytes": 827499,
+        "gzip_bytes": 845996,
+        "code_before_bytes": 2250556,
+        "code_bytes": 2101647,
+        "data_before_bytes": 188089,
+        "data_bytes": 186012,
+        "functions_before": 4559,
+        "functions": 3937
+      },
+      "scale_hub": {
+        "raw_before_bytes": 2676176,
+        "raw_bytes": 2511996,
+        "gzip_before_bytes": 888522,
+        "gzip_bytes": 904906,
+        "code_before_bytes": 2437661,
+        "code_bytes": 2276192,
+        "data_before_bytes": 194417,
+        "data_bytes": 192310,
+        "functions_before": 4883,
+        "functions": 4211
+      },
+      "user_hub": {
+        "raw_before_bytes": 2773658,
+        "raw_bytes": 2603537,
+        "gzip_before_bytes": 923819,
+        "gzip_bytes": 940125,
+        "code_before_bytes": 2530866,
+        "code_bytes": 2363501,
+        "data_before_bytes": 197253,
+        "data_bytes": 195117,
+        "functions_before": 5119,
+        "functions": 4431
+      },
+      "user_shard": {
+        "raw_before_bytes": 3002986,
+        "raw_bytes": 2819920,
+        "gzip_before_bytes": 987229,
+        "gzip_bytes": 1006861,
+        "code_before_bytes": 2750331,
+        "code_bytes": 2570390,
+        "data_before_bytes": 203649,
+        "data_bytes": 201133,
+        "functions_before": 5384,
+        "functions": 4692
+      },
+      "root": {
+        "raw_before_bytes": 8062525,
+        "raw_bytes": 7591961,
+        "gzip_before_bytes": 2613010,
+        "gzip_bytes": 2682720,
+        "code_before_bytes": 7593899,
+        "code_bytes": 7128048,
+        "data_before_bytes": 353805,
+        "data_bytes": 350470,
+        "functions_before": 11249,
+        "functions": 9841
+      }
+    },
+    "comparison": {
+      "app": {
+        "candid_sha256": true,
+        "protocol_profile_digest": true,
+        "raw_size_delta": 0
+      },
+      "scale_hub": {
+        "candid_sha256": true,
+        "protocol_profile_digest": true,
+        "raw_size_delta": 8
+      },
+      "scale_replica": {
+        "candid_sha256": true,
+        "protocol_profile_digest": true,
+        "raw_size_delta": 0
+      },
+      "user_hub": {
+        "candid_sha256": true,
+        "protocol_profile_digest": true,
+        "raw_size_delta": 0
+      },
+      "user_shard": {
+        "candid_sha256": true,
+        "protocol_profile_digest": true,
+        "raw_size_delta": 8
+      },
+      "fleet_coordinator": {
+        "candid_sha256": true,
+        "protocol_profile_digest": true,
+        "raw_size_delta": 0
+      },
+      "fleet_subnet_root": {
+        "candid_sha256": true,
+        "protocol_profile_digest": true,
+        "raw_size_delta": 0
+      },
+      "wasm_store": {
+        "candid_sha256": true,
+        "protocol_profile_digest": true,
+        "raw_size_delta": 0
+      }
+    },
+    "phases": {
+      "Build phase input/output verification": [
+        "3.21s"
+      ],
+      "Build phase runtime Cargo/link bootstrap_coordinator": [
+        "113.97s"
+      ],
+      "Build phase finalization /home/adam/projects/canic/.tmp/canic87-139-candidate4/.canic/release-builds/7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616/artifacts/fleet_coordinator/fleet_coordinator.wasm": [
+        "shrink=0.74s candid=0.68s binaryen=33.50s gzip/validation=0.25s total=35.19s"
+      ],
+      "Build phase runtime Cargo/link bootstrap_store": [
+        "76.17s"
+      ],
+      "Build phase finalization /home/adam/projects/canic/.tmp/canic87-139-candidate4/.canic/release-builds/7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616/artifacts/wasm_store/wasm_store.wasm": [
+        "shrink=0.42s candid=0.38s binaryen=3.97s gzip/validation=0.15s total=4.95s"
+      ],
+      "Build phase dependency feature admission": [
+        "2.56s (4 compatible batches)"
+      ],
+      "Build phase declaration": [
+        "134.60s"
+      ],
+      "Build phase Candid extraction": [
+        "4.66s"
+      ],
+      "Build phase runtime Cargo/link": [
+        "376.69s"
+      ],
+      "Build phase finalization /home/adam/projects/canic/.tmp/canic87-139-candidate4/.canic/release-builds/7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616/artifacts/app/app.wasm": [
+        "shrink=0.44s candid=0.40s binaryen=5.17s gzip/validation=0.19s total=6.25s"
+      ],
+      "Build phase finalization /home/adam/projects/canic/.tmp/canic87-139-candidate4/.canic/release-builds/7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616/artifacts/scale_replica/scale_replica.wasm": [
+        "shrink=0.44s candid=0.42s binaryen=5.33s gzip/validation=0.18s total=6.41s"
+      ],
+      "Build phase finalization /home/adam/projects/canic/.tmp/canic87-139-candidate4/.canic/release-builds/7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616/artifacts/scale_hub/scale_hub.wasm": [
+        "shrink=0.49s candid=0.44s binaryen=5.67s gzip/validation=0.16s total=6.81s"
+      ],
+      "Build phase finalization /home/adam/projects/canic/.tmp/canic87-139-candidate4/.canic/release-builds/7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616/artifacts/user_hub/user_hub.wasm": [
+        "shrink=0.50s candid=0.48s binaryen=5.64s gzip/validation=0.17s total=6.83s"
+      ],
+      "Build phase finalization /home/adam/projects/canic/.tmp/canic87-139-candidate4/.canic/release-builds/7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616/artifacts/user_shard/user_shard.wasm": [
+        "shrink=0.55s candid=0.50s binaryen=5.58s gzip/validation=0.18s total=6.85s"
+      ],
+      "Build phase finalization /home/adam/projects/canic/.tmp/canic87-139-candidate4/.canic/release-builds/7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616/artifacts/root/root.wasm": [
+        "shrink=1.62s candid=1.68s binaryen=14.31s gzip/validation=0.49s total=18.16s"
+      ]
+    },
+    "log": "/tmp/canic87-release-candidate4.log"
+  },
+  "repeat": {
+    "wall_seconds": 2.83,
+    "verification_seconds": 2.81,
+    "retained_files_verified": 29,
+    "cache_hits": 8,
+    "same_release_id": true,
+    "log": "/tmp/canic87-release-noop3.log"
+  },
+  "rejected_candidates": [
+    {
+      "reason": "combined Cargo dependency features changed application artifact sizes",
+      "wall_seconds": 547.88,
+      "repeat_wall_seconds": 2.76,
+      "repeat_retained_files_verified": 29,
+      "all_candid_and_protocol_digests_match": true,
+      "candidate_cli": {
+        "path": "/home/adam/projects/canic/target/debug/canic",
+        "sha256": "a7cf3acdcbd99cdfa211e152c968ccef51f33b63121672006a205444ada8fb22"
+      },
+      "log": "/tmp/canic87-release-candidate2.log"
+    }
+  ],
+  "intermediate_candidates": [
+    {
+      "reason": "feature-preserving grouping; declaration cost still too high",
+      "wall_seconds": 800.15,
+      "user_seconds": 1521.83,
+      "system_seconds": 174.98,
+      "maximum_child_rss_kib": 2438748,
+      "declaration_seconds": 162.52,
+      "runtime_configured_seconds": 384.7,
+      "repeat_wall_seconds": 2.9,
+      "repeat_retained_files_verified": 29,
+      "all_candid_and_protocol_digests_match": true,
+      "comparison": {
+        "app": {
+          "raw_size_delta": 0,
+          "identical_except_release_id": false,
+          "candid_exact": true,
+          "protocol_digest_exact": true
+        },
+        "scale_hub": {
+          "raw_size_delta": 8,
+          "identical_except_release_id": false,
+          "candid_exact": true,
+          "protocol_digest_exact": true
+        },
+        "scale_replica": {
+          "raw_size_delta": 0,
+          "identical_except_release_id": false,
+          "candid_exact": true,
+          "protocol_digest_exact": true
+        },
+        "user_hub": {
+          "raw_size_delta": 0,
+          "identical_except_release_id": false,
+          "candid_exact": true,
+          "protocol_digest_exact": true
+        },
+        "user_shard": {
+          "raw_size_delta": 8,
+          "identical_except_release_id": false,
+          "candid_exact": true,
+          "protocol_digest_exact": true
+        },
+        "fleet_coordinator": {
+          "raw_size_delta": 0,
+          "identical_except_release_id": true,
+          "candid_exact": true,
+          "protocol_digest_exact": true
+        },
+        "fleet_subnet_root": {
+          "raw_size_delta": 0,
+          "identical_except_release_id": false,
+          "candid_exact": true,
+          "protocol_digest_exact": true
+        },
+        "wasm_store": {
+          "raw_size_delta": 0,
+          "identical_except_release_id": true,
+          "candid_exact": true,
+          "protocol_digest_exact": true
+        }
+      },
+      "log": "/tmp/canic87-release-candidate3.log"
+    }
+  ],
+  "cross_target_reproducibility": {
+    "same_release_id": true,
+    "candid_exact": true,
+    "wasm_exact": false,
+    "gzip_exact": false,
+    "embedded_generated_source_paths": {
+      "canic87-139-candidate4": [
+        "/home/adam/projects/canic/target/canic87-release-candidate4/wasm32-unknown-unknown/release/build/canic-fleet-root-3e88a1494fac6644/out/canic.compiled.rs"
+      ],
+      "canic87-root-fat": [
+        "/home/adam/projects/canic/target/canic87-root-fat/wasm32-unknown-unknown/release/build/canic-fleet-root-3e88a1494fac6644/out/canic.compiled.rs"
+      ]
+    },
+    "interpretation": "Target paths differ and are embedded; not a fixed-input determinism comparison."
+  },
+  "root_lto_comparison": {
+    "fat": {
+      "wall_seconds": 210.93,
+      "user_seconds": 486.59,
+      "system_seconds": 94.26,
+      "maximum_child_rss_kib": 2491740,
+      "raw_bytes": 7591953,
+      "code_bytes": 7128048,
+      "gzip_bytes": 2682707,
+      "binaryen_seconds": 14.31,
+      "log": "/tmp/canic87-root-fat1.log"
+    },
+    "thin": {
+      "wall_seconds": 124.07,
+      "user_seconds": 540.29,
+      "system_seconds": 108.74,
+      "maximum_child_rss_kib": 2523064,
+      "raw_bytes": 8407864,
+      "code_bytes": 7812428,
+      "gzip_bytes": 2860880,
+      "binaryen_seconds": 12.17,
+      "candid_matches_fat": true,
+      "log": "/tmp/canic87-root-thin1.log"
+    },
+    "decision": "Retain fat LTO: Thin improves this cold Root time but grows final code 9.6% and gzip 6.6%; no complete runtime-instruction/determinism qualification for a policy switch.",
+    "conditions": {
+      "targets": "separate and initially empty",
+      "release_build_id": "same",
+      "wrapper": "disabled",
+      "other_repositories_compiling": true,
+      "scope": "single generated Root, not complete App or runtime-instruction benchmark"
+    }
+  },
+  "one_role_edit": {
+    "source": "apps/test/app/src/lib.rs",
+    "before_sha256": "ac30b9b8762539f8f1f4c7b7812e157be116c48055957cd2662f84c1f2a12d8b",
+    "after_sha256": "d70dce5a68e3815c32167859f3db9f09631ff5a6b652e47877f46af6492b5254",
+    "description": "Insert core::hint::black_box(1_u8) into the empty async setup body. Same edited snapshot, each builder retains its own warm Cargo target.",
+    "baseline": {
+      "wall_seconds": 477.1,
+      "user_seconds": 796.81,
+      "system_seconds": 59.25,
+      "maximum_child_rss_kib": 2431180,
+      "release_build_id": "c8211a9bb1b8d1db17797a7a3b84b7e8f81ff9a6c064832b416359bf0303d47b",
+      "log": "/tmp/canic87-role-edit-baseline1.log"
+    },
+    "candidate": {
+      "wall_seconds": 291.03,
+      "user_seconds": 586.2,
+      "system_seconds": 56.76,
+      "maximum_child_rss_kib": 2418996,
+      "release_build_id": "ab52ff2db8b64aa6a781015eac3208e4c0098a2fa59195b315ab7a099704a647",
+      "declaration_seconds": 7.15,
+      "candid_extraction_seconds": 4.33,
+      "configured_runtime_seconds": 140.31,
+      "comparison": {
+        "app": {
+          "candid_sha256": true,
+          "protocol_profile_digest": true,
+          "raw_size_delta": 0
+        },
+        "scale_hub": {
+          "candid_sha256": true,
+          "protocol_profile_digest": true,
+          "raw_size_delta": 8
+        },
+        "scale_replica": {
+          "candid_sha256": true,
+          "protocol_profile_digest": true,
+          "raw_size_delta": 0
+        },
+        "user_hub": {
+          "candid_sha256": true,
+          "protocol_profile_digest": true,
+          "raw_size_delta": 0
+        },
+        "user_shard": {
+          "candid_sha256": true,
+          "protocol_profile_digest": true,
+          "raw_size_delta": 8
+        },
+        "fleet_coordinator": {
+          "candid_sha256": true,
+          "protocol_profile_digest": true,
+          "raw_size_delta": 0
+        },
+        "fleet_subnet_root": {
+          "candid_sha256": true,
+          "protocol_profile_digest": true,
+          "raw_size_delta": 0
+        },
+        "wasm_store": {
+          "candid_sha256": true,
+          "protocol_profile_digest": true,
+          "raw_size_delta": 0
+        }
+      },
+      "log": "/tmp/canic87-role-edit-candidate1.log"
+    },
+    "snapshot_restored": true,
+    "repeat": {
+      "wall_seconds": 3.09,
+      "cache_hits": 8,
+      "retained_files_verified": 29,
+      "same_release_id": true,
+      "log": "/tmp/canic87-role-edit-noop1.log"
+    },
+    "restored_repeat": {
+      "wall_seconds": 2.79,
+      "release_build_id": "7a262f9133db652e0322ad436765fb38f63fc42f24d8fa5a8d720d5dbd59f616",
+      "cache_hits": 8,
+      "log": "/tmp/canic87-restored-noop1.log"
+    }
+  },
+  "runtime_qualification": {
+    "mixed_topology": {
+      "case": "pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation",
+      "result": "interrupted",
+      "exit_code": 143,
+      "completed_assertions": "Fresh infrastructure, configured runtime admission, full readiness, conservation, effect-free terminal replay; then entered the additional same-release reset helper.",
+      "reason": "Selected case also runs two extended reset/recovery exercises. Stopped the additional portion to bound this build-feedback qualification after the maintainer asked about elapsed time. Not a full case pass.",
+      "owned_server_cleanup_verified": true,
+      "log": "/tmp/canic87-139-mixed-pocketic1.log"
+    },
+    "lifecycle": {
+      "case": "pic::lifecycle::tests::published_managed_app_support_drives_composed_lifecycle",
+      "result": "passed",
+      "log": "/tmp/canic87-139-lifecycle-pocketic1.log",
+      "test_seconds": 147.23,
+      "runner_seconds": 267,
+      "profile": "fast",
+      "coverage": [
+        "managed initialization and admission",
+        "same-release managed upgrade",
+        "standalone initialization",
+        "same-release standalone upgrade"
+      ]
+    }
+  },
+  "readiness": {
+    "scoped_source_batch": "ready_for_push_and_release_review",
+    "open_changelog": "0.110.13",
+    "workspace_package_version": "0.110.12",
+    "upstream_087": "partially_resolved",
+    "upstream_139": "partially_resolved",
+    "remaining": [
+      "material cold-build improvement not demonstrated",
+      "full fixed-input clean-build determinism qualification not completed",
+      "precise per-role invalidation and cross-release-identity artifact composition not implemented",
+      "Toko Miner adoption and downstream qualification not performed"
+    ],
+    "broad_gate_run": false,
+    "publication_performed": false
+  },
+  "native_checks": {
+    "canister_build_tests": {
+      "passed": 31,
+      "log": "/tmp/canic87-139-declaration-cfg1.log"
+    },
+    "build_cli_and_native_tool_tests_log": "/tmp/canic87-139-native-final2.log",
+    "macro_core_and_initial_host_tests_log": "/tmp/canic87-139-native-final1.log",
+    "host_cli_clippy_log": "/tmp/canic87-139-clippy13.log",
+    "macro_core_clippy_log": "/tmp/canic87-139-clippy6.log",
+    "targeted_format_check_log": "/tmp/canic87-format-check1.log"
+  }
+}

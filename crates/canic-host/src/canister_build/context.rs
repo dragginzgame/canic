@@ -91,6 +91,7 @@ impl WorkspaceBuildContext {
         command
             .env_remove(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
             .env_remove(RELEASE_BUILD_ID_ENV)
+            .env_remove(canic_core::role_contract::build_context::PROTOCOL_BUILD_CONTEXT_ENV)
             .env("ICP_ENVIRONMENT", self.build_network.as_str())
             .env(
                 canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV,

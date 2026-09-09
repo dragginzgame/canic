@@ -7,7 +7,7 @@
 use crate::{
     canister_protocol::{CanisterProtocolError, call_with_candid, query_with_candid},
     fleet_ensure::{
-        dto::FleetEnsureProgress,
+        dto::{FleetEnsureProgress, FleetObservationStage, FleetObservationTiming},
         model::{
             CanisterRuntimeStatus, DesiredCanisterKind, DesiredFleet, EffectRecord, EnsureAction,
             EstateFundingDomainObservation, EstatePoolAssetLifecycle, EstatePoolAssetObservation,
@@ -368,6 +368,31 @@ fn pool_configuration_error(reason: String) -> IcpEnsurePlatformError {
     current_protocol::CurrentProtocolError::Configuration(reason).into()
 }
 
+// Inventory is not callback-settlement evidence: an expired maintenance lease can be taken over.
+fn inactive_source_pool_has_full_inventory(
+    pool: &CanisterPoolResponse,
+    root: &crate::fleet_ensure::model::RootActivationResetRecord,
+) -> bool {
+    [
+        pool.config.maximum_size > 0,
+        pool.ready.checked_add(pool.workload) == Some(pool.config.maximum_size),
+        pool.config.maximum_size.checked_add(1) == Some(pool.tracked),
+        pool.ready >= pool.config.minimum_size,
+        root.component_count.checked_add(root.managed_descendants) == Some(pool.workload),
+        pool.store == 1,
+        pool.store_deletion_pending == 0,
+        pool.pending_reset == 0,
+        pool.claimed == 0,
+        pool.recycling == 0,
+        pool.handing_off == 0,
+        pool.failed == 0,
+        pool.pending_creation.is_none(),
+        pool.pending_handoff.is_none(),
+    ]
+    .into_iter()
+    .all(|fact| fact)
+}
+
 const fn pool_policy_is_current(
     observed: &EstatePoolInventoryObservation,
     desired: &canic_core::ids::FleetSubnetCanisterPoolConfig,
@@ -487,6 +512,7 @@ enum RootFundingInspectionResponse {
 
 #[derive(CandidType, Deserialize)]
 struct RootFundingInspectionStatus {
+    status: canic_core::dto::canister::CanisterStatusType,
     settings: ManagementCanisterObservationSettings,
     module_hash: Option<Vec<u8>>,
     cycles: Nat,
@@ -625,6 +651,11 @@ enum RejectionCode {
 pub enum IcpEnsurePlatformError {
     #[error("cycle arithmetic overflow while executing {0}")]
     Arithmetic(&'static str),
+
+    #[error(
+        "management history does not prove the issued reinstall of {canister}; refusing another reset"
+    )]
+    ReinstallHistoryConflict { canister: String },
 
     #[error("configured Candid file is not a regular file: {}", .0.display())]
     CandidUnavailable(PathBuf),
@@ -801,6 +832,12 @@ struct FleetObservationSnapshot {
     statuses: BTreeMap<String, Option<LiveCanister>>,
 }
 
+/// Distinguish an unobserved identity from an observed missing canister.
+enum StatusCacheEntry {
+    Miss,
+    Hit(Option<LiveCanister>),
+}
+
 /// Production ICP adapter for the current desired Fleet.
 pub struct IcpEnsurePlatform {
     desired: DesiredFleet,
@@ -809,6 +846,7 @@ pub struct IcpEnsurePlatform {
     maximum_observation_delay: Duration,
     observation_snapshot: RefCell<Option<FleetObservationSnapshot>>,
     progress_handler: Option<Box<dyn FnMut(FleetEnsureProgress)>>,
+    observation_handler: Option<Box<dyn FnMut(FleetObservationTiming)>>,
     estate_observations: BTreeMap<String, EstateFundingDomainObservation>,
     root: PathBuf,
 }
@@ -842,6 +880,7 @@ impl IcpEnsurePlatform {
             maximum_observation_delay: MAXIMUM_PROTOCOL_OBSERVATION_DELAY,
             observation_snapshot: RefCell::new(None),
             progress_handler: None,
+            observation_handler: None,
             estate_observations: BTreeMap::new(),
             root: root.to_path_buf(),
         }
@@ -855,6 +894,46 @@ impl IcpEnsurePlatform {
     ) -> Self {
         self.progress_handler = Some(Box::new(handler));
         self
+    }
+
+    /// Attach informational stage timings without retaining observations across boundaries.
+    #[must_use]
+    pub fn with_observation_handler(
+        mut self,
+        handler: impl FnMut(FleetObservationTiming) + 'static,
+    ) -> Self {
+        self.observation_handler = Some(Box::new(handler));
+        self
+    }
+
+    fn finish_observation_timing(
+        &mut self,
+        stage: FleetObservationStage,
+        started: std::time::Instant,
+        calls_before: u64,
+        succeeded: bool,
+    ) {
+        let timing = FleetObservationTiming {
+            stage,
+            elapsed_millis: started.elapsed().as_millis(),
+            remote_call_attempts: self.icp.remote_call_count().saturating_sub(calls_before),
+            succeeded,
+        };
+        if let Some(handler) = &mut self.observation_handler {
+            handler(timing);
+        }
+    }
+
+    fn timed_observation<T>(
+        &mut self,
+        stage: FleetObservationStage,
+        observe: impl FnOnce(&mut Self) -> Result<T, IcpEnsurePlatformError>,
+    ) -> Result<T, IcpEnsurePlatformError> {
+        let started = std::time::Instant::now();
+        let calls = self.icp.remote_call_count();
+        let result = observe(self);
+        self.finish_observation_timing(stage, started, calls, result.is_ok());
+        result
     }
 
     /// Return this adapter bound to one explicit local replica endpoint.
@@ -1145,6 +1224,156 @@ impl IcpEnsurePlatform {
         Ok(*page)
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one inspection binds each source asset to exact management authority and cycles"
+    )]
+    fn inspect_reinstall_assets(
+        &self,
+        state: &FleetEnsureStateRecord,
+        authorities: &BTreeMap<String, RootManagementCanisterObservation>,
+        observation: &mut FleetObservation,
+        candid_by_root: &BTreeMap<String, PathBuf>,
+        allow_pending_reset: bool,
+    ) -> Result<Vec<crate::fleet_ensure::model::FleetReinstallAssetRecord>, IcpEnsurePlatformError>
+    {
+        let mut assets = Vec::new();
+        let mut seen = BTreeSet::new();
+        for (root_name, domain) in &observation.estate_funding_domains {
+            let root = domain.root_principal.as_deref().ok_or_else(|| {
+                IcpEnsurePlatformError::RootManagement("missing Root principal".to_string())
+            })?;
+            let pool = domain.pool.as_ref().ok_or_else(|| {
+                IcpEnsurePlatformError::RootManagement("missing complete pool".to_string())
+            })?;
+            if pool.pending_creation.is_some() {
+                return Err(IcpEnsurePlatformError::RootManagement(
+                    "pool creation is still in flight".to_string(),
+                ));
+            }
+            let root_authority = authorities.get(root_name).ok_or_else(|| {
+                IcpEnsurePlatformError::RootManagement("missing Root binding".to_string())
+            })?;
+            for asset in &pool.assets {
+                if !seen.insert(asset.principal.clone())
+                    || !(matches!(
+                        asset.lifecycle,
+                        EstatePoolAssetLifecycle::Ready | EstatePoolAssetLifecycle::Workload
+                    ) || (allow_pending_reset
+                        && matches!(
+                            asset.lifecycle,
+                            EstatePoolAssetLifecycle::PendingReset
+                                | EstatePoolAssetLifecycle::Failed
+                        )))
+                {
+                    return Err(IcpEnsurePlatformError::RootManagement(
+                        "pool asset is duplicated or not terminal".to_string(),
+                    ));
+                }
+                let target = parse_principal("reset pool asset", &asset.principal)?;
+                let RootFundingInspectionResponse::InspectCanister(response) = call_with_candid(
+                    &self.icp,
+                    candid_by_root.get(root_name).ok_or_else(|| {
+                        pool_configuration_error("missing reset read contract".to_string())
+                    })?,
+                    parse_principal("reset Root", root)?,
+                    canic_protocol::CANIC_ROOT_COMMAND,
+                    &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                        canister_id: target,
+                    }),
+                )
+                .map_err(current_protocol::CurrentProtocolError::from)?;
+                if !response
+                    .settings
+                    .controllers
+                    .iter()
+                    .any(|controller| controller.to_text() == root)
+                {
+                    return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                        canister: asset.principal.clone(),
+                        field: "Root controller",
+                    });
+                }
+                let cycles = validate_inspected_cycles(
+                    &asset.principal,
+                    InspectedModule::Any,
+                    response.module_hash.as_deref(),
+                    &response.cycles,
+                )?;
+                let mut controllers = response
+                    .settings
+                    .controllers
+                    .iter()
+                    .map(Principal::to_text)
+                    .collect::<Vec<_>>();
+                controllers.sort();
+                if controllers != [root.to_string()] {
+                    return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                        canister: asset.principal.clone(),
+                        field: "exact Root controllers",
+                    });
+                }
+
+                let module_sha256 = response
+                    .module_hash
+                    .as_ref()
+                    .map(canic_core::cdk::utils::hash::hex_bytes);
+                let configured_name = self
+                    .desired
+                    .canisters
+                    .iter()
+                    .find(|c| {
+                        c.principal.as_deref() == Some(&asset.principal)
+                            || self.current_principal(state, &c.name) == Some(&asset.principal)
+                    })
+                    .map(|c| c.name.clone());
+                let name = configured_name
+                    .unwrap_or_else(|| format!("reinstall-pool-{}", asset.principal));
+                observation.canisters.insert(
+                    name,
+                    Some(LiveCanister {
+                        canister_version: None,
+                        controllers: controllers.clone(),
+                        cycles,
+                        module_sha256: module_sha256.clone(),
+                        principal: asset.principal.clone(),
+                        reinstall_required: false,
+                        root_owned_lifecycle: Some(match asset.lifecycle {
+                            EstatePoolAssetLifecycle::Ready => RootOwnedCanisterLifecycle::Idle,
+                            EstatePoolAssetLifecycle::Workload => {
+                                RootOwnedCanisterLifecycle::Workload
+                            }
+                            _ => RootOwnedCanisterLifecycle::Retained,
+                        }),
+                        status: match response.status {
+                            canic_core::dto::canister::CanisterStatusType::Running => {
+                                CanisterRuntimeStatus::Running
+                            }
+                            canic_core::dto::canister::CanisterStatusType::Stopped => {
+                                CanisterRuntimeStatus::Stopped
+                            }
+                            canic_core::dto::canister::CanisterStatusType::Stopping => {
+                                CanisterRuntimeStatus::Stopping
+                            }
+                        },
+                    }),
+                );
+                observation
+                    .additional_controlled_cycles
+                    .remove(&asset.principal);
+                assets.push(crate::fleet_ensure::model::FleetReinstallAssetRecord {
+                    controllers,
+                    module_sha256,
+                    principal: asset.principal.clone(),
+                    root: root_name.clone(),
+                    subnet: root_authority.subnet.clone(),
+                });
+            }
+        }
+        assets.sort_by(|a, b| a.principal.cmp(&b.principal));
+        Ok(assets)
+    }
+
     fn resolved_controllers(
         &self,
         state: &FleetEnsureStateRecord,
@@ -1231,10 +1460,17 @@ impl IcpEnsurePlatform {
         &self,
         principal: &str,
     ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
-        if self.icp.uses_direct_local_replica() {
-            return self.direct_local_status_optional(principal);
+        Self::read_status_with(&self.icp, principal)
+    }
+
+    fn read_status_with(
+        icp: &IcpCli,
+        principal: &str,
+    ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        if icp.uses_direct_local_replica() {
+            return Self::direct_local_status_optional(icp, principal);
         }
-        let report = match self.icp.canister_status_report(principal) {
+        let report = match icp.canister_status_report(principal) {
             Ok(report) => report,
             Err(error)
                 if matches!(
@@ -1299,12 +1535,11 @@ impl IcpEnsurePlatform {
     }
 
     fn direct_local_status_optional(
-        &self,
+        icp: &IcpCli,
         principal: &str,
     ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
         let canister_id = parse_principal("local canister status target", principal)?;
-        let response = self
-            .icp
+        let response = icp
             .management_canister_status_candid::<_, ManagementCanisterObservationResponse>(
                 canister_id,
                 &ManagementCanisterStatusRequest { canister_id },
@@ -1525,7 +1760,18 @@ impl IcpEnsurePlatform {
         if configured.kind == DesiredCanisterKind::Pool {
             return self.observe_root_owned_canister(configured, principal, state);
         }
-        match self.status_optional(principal) {
+        let status = self.status_optional(principal);
+        self.configured_status_or_root(configured, principal, state, status)
+    }
+
+    fn configured_status_or_root(
+        &self,
+        configured: &crate::fleet_ensure::model::DesiredCanister,
+        principal: &str,
+        state: &FleetEnsureStateRecord,
+        status: Result<Option<LiveCanister>, IcpEnsurePlatformError>,
+    ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        match status {
             Ok(observed) => Ok(observed),
             Err(error)
                 if matches!(
@@ -2191,51 +2437,72 @@ impl IcpEnsurePlatform {
         state: &FleetEnsureStateRecord,
     ) -> Result<FleetObservation, IcpEnsurePlatformError> {
         self.require_operator()?;
-        let mut canisters = self.observe_configured_canisters(state)?;
+        let mut canisters = self
+            .timed_observation(FleetObservationStage::ConfiguredCanisters, |platform| {
+                platform.observe_configured_canisters(state)
+            })?;
         self.reconcile_completed_reinstalls(state, &mut canisters)?;
-        let mut estate_funding_domains = self.observe_estate_funding_domains(state)?;
-        for domain in estate_funding_domains.values_mut() {
-            if let (Some(root), Some(pool)) = (&domain.root_principal, &mut domain.pool) {
-                for asset in &mut pool.assets {
-                    if matches!(
-                        asset.lifecycle,
-                        EstatePoolAssetLifecycle::PendingReset | EstatePoolAssetLifecycle::Failed
-                    ) {
-                        asset.cycles = self.inspect_pool_balance(
-                            &asset.principal,
-                            root,
-                            &asset.principal,
-                            InspectedModule::Any,
-                        )?;
-                        for live in canisters.values_mut().filter_map(Option::as_mut) {
-                            if live.principal == asset.principal {
-                                live.cycles = asset.cycles;
+        let mut estate_funding_domains = self
+            .timed_observation(FleetObservationStage::EstateFunding, |platform| {
+                platform.observe_estate_funding_domains(state)
+            })?;
+        self.timed_observation(FleetObservationStage::PoolBalances, |platform| {
+            for domain in estate_funding_domains.values_mut() {
+                if let (Some(root), Some(pool)) = (&domain.root_principal, &mut domain.pool) {
+                    for asset in &mut pool.assets {
+                        if matches!(
+                            asset.lifecycle,
+                            EstatePoolAssetLifecycle::PendingReset
+                                | EstatePoolAssetLifecycle::Failed
+                        ) {
+                            asset.cycles = platform.inspect_pool_balance(
+                                &asset.principal,
+                                root,
+                                &asset.principal,
+                                InspectedModule::Any,
+                            )?;
+                            for live in canisters.values_mut().filter_map(Option::as_mut) {
+                                if live.principal == asset.principal {
+                                    live.cycles = asset.cycles;
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+            Ok(())
+        })?;
         self.estate_observations.clone_from(&estate_funding_domains);
         self.require_current_pool_policy(&estate_funding_domains)?;
         self.reconcile_completed_reinstalls(state, &mut canisters)?;
         let additional_controlled_cycles =
             Self::additional_pool_cycles(&canisters, &estate_funding_domains)?;
-        let protocol_ready = self.observe_protocol_readiness(operation_id, state, &canisters)?;
+        let protocol_ready = self
+            .timed_observation(FleetObservationStage::ProtocolReadiness, |platform| {
+                platform.observe_protocol_readiness(operation_id, state, &canisters)
+            })?;
+        let ledger_fee_cycles =
+            self.timed_observation(FleetObservationStage::LedgerFee, |platform| {
+                ledger_fee_cycles(platform.icp.canister_query_candid(
+                    &platform.desired.cycles_ledger,
+                    "icrc1_fee",
+                    &(),
+                    None,
+                )?)
+            })?;
+        let operator_cycles =
+            self.timed_observation(FleetObservationStage::OperatorBalance, |platform| {
+                platform
+                    .icp
+                    .identity_cycles_balance()
+                    .map_err(|error| IcpEnsurePlatformError::LedgerWithdraw(error.to_string()))
+            })?;
         Ok(FleetObservation {
             additional_controlled_cycles,
             canisters,
             estate_funding_domains,
-            ledger_fee_cycles: ledger_fee_cycles(self.icp.canister_query_candid(
-                &self.desired.cycles_ledger,
-                "icrc1_fee",
-                &(),
-                None,
-            )?)?,
-            operator_cycles: self
-                .icp
-                .identity_cycles_balance()
-                .map_err(|error| IcpEnsurePlatformError::LedgerWithdraw(error.to_string()))?,
+            ledger_fee_cycles,
+            operator_cycles,
             protocol_ready,
         })
     }
@@ -2244,18 +2511,86 @@ impl IcpEnsurePlatform {
         &self,
         state: &FleetEnsureStateRecord,
     ) -> Result<BTreeMap<String, Option<LiveCanister>>, IcpEnsurePlatformError> {
-        self.desired
-            .canisters
-            .iter()
-            .map(|configured| {
-                let observed = self
-                    .current_principal(state, &configured.name)
-                    .map(|principal| self.observe_configured_canister(configured, principal, state))
+        let configured = &self.desired.canisters;
+        let mut observed = BTreeMap::new();
+        let mut cursor = 0;
+        while cursor < configured.len() {
+            if configured[cursor].kind == DesiredCanisterKind::Pool {
+                let canister = &configured[cursor];
+                let live = self
+                    .current_principal(state, &canister.name)
+                    .map(|principal| self.observe_root_owned_canister(canister, principal, state))
                     .transpose()?
                     .flatten();
-                Ok((configured.name.clone(), observed))
-            })
-            .collect()
+                observed.insert(canister.name.clone(), live);
+                cursor += 1;
+                continue;
+            }
+            // Only consecutive independent management reads may overlap. Pool dependencies
+            // remain ordered, and every started batch drains before exposing an error.
+            let end = configured[cursor..]
+                .iter()
+                .take(super::bounded_observations::MAX_IN_FLIGHT)
+                .take_while(|canister| canister.kind != DesiredCanisterKind::Pool)
+                .count()
+                + cursor;
+            self.observe_configured_status_batch(&configured[cursor..end], state, &mut observed)?;
+            cursor = end;
+        }
+        Ok(observed)
+    }
+
+    fn observe_configured_status_batch(
+        &self,
+        configured: &[crate::fleet_ensure::model::DesiredCanister],
+        state: &FleetEnsureStateRecord,
+        observed: &mut BTreeMap<String, Option<LiveCanister>>,
+    ) -> Result<(), IcpEnsurePlatformError> {
+        let mut seen = BTreeSet::new();
+        let requests = configured
+            .iter()
+            .filter_map(|canister| self.current_principal(state, &canister.name))
+            .filter(|principal| seen.insert(*principal))
+            .filter(|principal| matches!(self.cached_status(principal), StatusCacheEntry::Miss))
+            .collect::<Vec<_>>();
+        let icp = &self.icp;
+        let mut results = super::bounded_observations::collect(&requests, |principal| {
+            Ok::<_, std::convert::Infallible>((*principal, Self::read_status_with(icp, principal)))
+        })
+        .expect("read outcomes are retained for ordered authority decisions")
+        .into_iter()
+        .collect::<BTreeMap<_, _>>();
+        for canister in configured {
+            let Some(principal) = self.current_principal(state, &canister.name) else {
+                observed.insert(canister.name.clone(), None);
+                continue;
+            };
+            let status = if let StatusCacheEntry::Hit(cached) = self.cached_status(principal) {
+                Ok(cached)
+            } else {
+                results
+                    .remove(principal)
+                    .unwrap_or_else(|| self.status_optional(principal))
+            };
+            if let Ok(live) = &status
+                && let Some(snapshot) = self.observation_snapshot.borrow_mut().as_mut()
+            {
+                snapshot
+                    .statuses
+                    .insert(principal.to_string(), live.clone());
+            }
+            let live = self.configured_status_or_root(canister, principal, state, status)?;
+            observed.insert(canister.name.clone(), live);
+        }
+        Ok(())
+    }
+
+    fn cached_status(&self, principal: &str) -> StatusCacheEntry {
+        self.observation_snapshot
+            .borrow()
+            .as_ref()
+            .and_then(|snapshot| snapshot.statuses.get(principal).cloned())
+            .map_or(StatusCacheEntry::Miss, StatusCacheEntry::Hit)
     }
 
     fn reconcile_completed_reinstalls(
@@ -2432,6 +2767,31 @@ impl EnsurePlatform for IcpEnsurePlatform {
         }
     }
 
+    fn require_retained_root_activation(
+        &mut self,
+        operation_id: &str,
+        root: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<(), Self::Error> {
+        let authorities = canic_init::compile_root_authorities(
+            &self.root,
+            &self.desired,
+            &self.protocol_principals(state),
+        )?;
+        let (_, authority) = authorities
+            .iter()
+            .find(|(name, _)| name == root)
+            .ok_or_else(|| canic_init::CanicInitError::MissingRoot(root.to_string()))?;
+        current_protocol::require_store_installation_binding(
+            &self.icp,
+            &self.root_protocol_candid()?,
+            root,
+            authority,
+            operation_id,
+        )?;
+        Ok(())
+    }
+
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
         self.desired = desired.clone();
         Ok(())
@@ -2461,47 +2821,65 @@ impl EnsurePlatform for IcpEnsurePlatform {
         ));
     }
 
-    fn observe_root_management(
+    fn authority_sealed(
+        &mut self,
+        operation_id: &str,
+        action: &EnsureAction,
+    ) -> Result<bool, Self::Error> {
+        Ok(super::authority_seal::observe(&self.icp, &self.root, operation_id, action)?.applied)
+    }
+
+    fn reinstall_assets_match(
+        &mut self,
+        intent: &crate::fleet_ensure::model::FleetReinstallRecord,
+        root_name: &str,
+        check: super::ReinstallAssetCheck,
+    ) -> Result<bool, Self::Error> {
+        let binding = intent
+            .authorities
+            .iter()
+            .find(|binding| binding.name == root_name)
+            .ok_or_else(|| {
+                IcpEnsurePlatformError::RootManagement("missing reset Root".to_string())
+            })?;
+        let principal = parse_principal("reset Root", &binding.principal)?;
+        let candid = self.root_protocol_candid()?;
+        for asset in intent.assets.iter().filter(|asset| asset.root == root_name) {
+            let RootFundingInspectionResponse::InspectCanister(status) = call_with_candid(
+                &self.icp,
+                &candid,
+                principal,
+                canic_protocol::CANIC_ROOT_COMMAND,
+                &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                    canister_id: parse_principal("reset asset", &asset.principal)?,
+                }),
+            )
+            .map_err(current_protocol::CurrentProtocolError::from)?;
+            let mut controllers = status
+                .settings
+                .controllers
+                .iter()
+                .map(Principal::to_text)
+                .collect::<Vec<_>>();
+            controllers.sort();
+            let module = status
+                .module_hash
+                .as_ref()
+                .map(canic_core::cdk::utils::hash::hex_bytes);
+            let module_matches =
+                check == super::ReinstallAssetCheck::Terminal || module == asset.module_sha256;
+            if controllers != asset.controllers || !module_matches {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn reinstall_authorities(
         &mut self,
         state: &FleetEnsureStateRecord,
-        reviewed_targets: &BTreeSet<String>,
-    ) -> Result<Option<RootManagementObservation>, Self::Error> {
-        let configured_roots = self
-            .desired
-            .canisters
-            .iter()
-            .filter(|configured| {
-                configured.kind == DesiredCanisterKind::Root
-                    && configured.presence == crate::fleet_ensure::model::DesiredPresence::Present
-            })
-            .collect::<Vec<_>>();
-        if configured_roots.is_empty() {
-            return Ok(None);
-        }
+    ) -> Result<Option<BTreeMap<String, RootManagementCanisterObservation>>, Self::Error> {
         self.require_operator()?;
-        let mut observed_roots = Vec::new();
-        for configured in configured_roots {
-            let Some(principal) = self.current_principal(state, &configured.name) else {
-                if is_unallocated_fresh_root(&self.desired, configured, reviewed_targets) {
-                    continue;
-                }
-                return Err(IcpEnsurePlatformError::RootManagement(format!(
-                    "configured Root {} has no exact Principal",
-                    configured.name
-                )));
-            };
-            let live = self.status_optional(principal)?.ok_or_else(|| {
-                IcpEnsurePlatformError::RootManagement(format!(
-                    "configured Root {} is unavailable",
-                    configured.name
-                ))
-            })?;
-            observed_roots.push((configured, live));
-        }
-        let all_current = self.management_roots_are_current(&observed_roots, reviewed_targets)?;
-        if reviewed_targets.is_empty() && all_current {
-            return Ok(None);
-        }
         let network = resolve_icp_build_network_from_root(&self.root, &self.desired.environment)
             .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))?;
         let catalog = if network == BuildNetwork::Ic {
@@ -2520,40 +2898,417 @@ impl EnsurePlatform for IcpEnsurePlatform {
         } else {
             None
         };
-        let mut roots = BTreeMap::new();
-        for (configured, live) in observed_roots {
-            let principal = live.principal.clone();
-            let subnet = catalog.as_ref().map_or_else(
-                || Ok(configured.subnet.clone()),
-                |catalog| {
-                    catalog
-                        .catalog
-                        .resolve_canister_route(&principal)
-                        .map(|route| route.subnet.to_text())
-                        .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))
-                },
-            )?;
-            let name = configured.name.clone();
-            if roots
-                .insert(
-                    name.clone(),
-                    RootManagementCanisterObservation { live, name, subnet },
-                )
-                .is_some()
-            {
-                return Err(IcpEnsurePlatformError::RootManagement(
-                    "configured Root names are not unique".to_string(),
-                ));
+        let mut authorities = BTreeMap::new();
+        let root_targets = self
+            .desired
+            .canisters
+            .iter()
+            .filter(|c| c.kind == DesiredCanisterKind::Root)
+            .map(|c| c.name.clone())
+            .collect();
+        let roots = self
+            .observe_root_management(state, &root_targets)?
+            .ok_or_else(|| {
+                IcpEnsurePlatformError::RootManagement("missing Root authority".to_string())
+            })?;
+        for configured in &self.desired.canisters {
+            if configured.kind == DesiredCanisterKind::Pool {
+                continue;
             }
+            let principal = self
+                .current_principal(state, &configured.name)
+                .ok_or_else(|| {
+                    IcpEnsurePlatformError::UnresolvedCreated(configured.name.clone())
+                })?;
+            let live = self.install_status_optional(principal)?.ok_or_else(|| {
+                IcpEnsurePlatformError::RootManagement("missing infrastructure".to_string())
+            })?;
+            let subnet = if let Some(root) = roots.roots.get(&configured.name) {
+                root.subnet.clone()
+            } else if let Some(catalog) = &catalog {
+                catalog
+                    .catalog
+                    .resolve_canister_route(principal)
+                    .map(|route| route.subnet.to_text())
+                    .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))?
+            } else {
+                configured.subnet.clone()
+            };
+            authorities.insert(
+                configured.name.clone(),
+                RootManagementCanisterObservation {
+                    live,
+                    name: configured.name.clone(),
+                    subnet,
+                },
+            );
         }
-        let operator_cycles = self
-            .icp
-            .identity_cycles_balance()
-            .map_err(|error| IcpEnsurePlatformError::LedgerWithdraw(error.to_string()))?;
-        Ok(Some(RootManagementObservation {
-            operator_cycles,
+        Ok(Some(authorities))
+    }
+
+    fn reinstall_inventory(
+        &mut self,
+        source_operation_id: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<super::FleetReinstallObservation>, Self::Error> {
+        let authorities = self.reinstall_authorities(state)?.ok_or_else(|| {
+            IcpEnsurePlatformError::RootManagement("missing infrastructure".to_string())
+        })?;
+        let terminal = self.terminal_inventory(source_operation_id, state)?;
+        let mut observation = self.observe(source_operation_id, state)?;
+        for (name, observed) in &authorities {
+            observation
+                .canisters
+                .insert(name.clone(), Some(observed.live.clone()));
+        }
+        let candid = self.root_protocol_candid()?;
+        let candid_by_root = observation
+            .estate_funding_domains
+            .keys()
+            .map(|name| (name.clone(), candid.clone()))
+            .collect();
+        let assets = self.inspect_reinstall_assets(
+            state,
+            &authorities,
+            &mut observation,
+            &candid_by_root,
+            false,
+        )?;
+        let seen = assets
+            .iter()
+            .map(|asset| asset.principal.clone())
+            .collect::<BTreeSet<_>>();
+        let infrastructure = authorities
+            .values()
+            .map(|a| a.live.principal.as_str())
+            .collect::<BTreeSet<_>>();
+        if terminal
+            .controlled_cycles_by_principal
+            .keys()
+            .any(|pid| !infrastructure.contains(pid.as_str()) && !seen.contains(pid))
+        {
+            return Err(IcpEnsurePlatformError::RootManagement(
+                "terminal inventory escapes the reviewed reset estate".to_string(),
+            ));
+        }
+        Ok(Some(super::FleetReinstallObservation {
+            authorities,
+            assets,
+            observation,
+        }))
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one source observation binds old protocol receipts, full pagination and physical management inspection"
+    )]
+    fn activation_reset_inventory(
+        &mut self,
+        source: &crate::fleet_ensure::model::FleetActivationSourceRecord,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<super::FleetActivationResetObservation>, Self::Error> {
+        if source.operator != self.desired.operator
+            || source.cycles_ledger != self.desired.cycles_ledger
+        {
+            return Err(pool_configuration_error(
+                "source operator or Cycles Ledger differs from the requested reset".to_string(),
+            ));
+        }
+        let authorities = self
+            .reinstall_authorities(state)?
+            .ok_or_else(|| pool_configuration_error("missing source infrastructure".to_string()))?;
+        let mut observation = FleetObservation {
+            additional_controlled_cycles: BTreeMap::new(),
+            canisters: authorities
+                .iter()
+                .map(|(name, observed)| (name.clone(), Some(observed.live.clone())))
+                .collect(),
+            estate_funding_domains: BTreeMap::new(),
+            ledger_fee_cycles: self
+                .desired
+                .ledger_fee_cycles
+                .parse::<Cycles>()
+                .map_err(|_| pool_configuration_error("invalid source fee bound".to_string()))?
+                .to_u128(),
+            operator_cycles: 0,
+            protocol_ready: BTreeMap::new(),
+        };
+        let mut roots = Vec::new();
+        let mut candid_by_root = BTreeMap::new();
+        for configured in &self.desired.canisters {
+            if configured.kind != DesiredCanisterKind::Root {
+                continue;
+            }
+            let live = &authorities
+                .get(&configured.name)
+                .ok_or_else(|| pool_configuration_error("missing source Root".to_string()))?
+                .live;
+            let root = parse_principal("source Root", &live.principal)?;
+            let evidence = current_protocol::observe_inactive_activation(
+                &self.icp,
+                &self.root,
+                source,
+                &configured.name,
+                root,
+            )?;
+            let candid = source
+                .registry_preparations
+                .iter()
+                .find_map(|action| match action {
+                    EnsureAction::FleetProtocol {
+                        principal, candid, ..
+                    } if principal == &live.principal => Some(self.root.join(candid)),
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    pool_configuration_error("missing source Root read contract".to_string())
+                })?;
+            let mut inventory = EstatePoolInventoryAccumulator::default();
+            let mut cursor = None;
+            loop {
+                let page = self.query_estate_pool_page(&candid, root, cursor)?;
+                if !inactive_source_pool_has_full_inventory(&page, &evidence) {
+                    return Err(pool_configuration_error(
+                        "source pool has unsettled work or spare creation capacity".to_string(),
+                    ));
+                }
+                let next = inventory.observe_page(&configured.name, page)?;
+                if next.is_none() {
+                    break;
+                }
+                if next == cursor {
+                    return Err(pool_configuration_error(
+                        "source pool cursor did not advance".to_string(),
+                    ));
+                }
+                cursor = next;
+            }
+            observation.estate_funding_domains.insert(
+                configured.name.clone(),
+                EstateFundingDomainObservation {
+                    balance_cycles: Some(self.cycles_ledger_balance(&live.principal)?),
+                    cycles_ledger: self.desired.cycles_ledger.clone(),
+                    pool: Some(inventory.finish(&configured.name)?),
+                    root_principal: Some(live.principal.clone()),
+                },
+            );
+            candid_by_root.insert(configured.name.clone(), candid);
+            roots.push(evidence);
+        }
+        if roots.is_empty() || roots.len() != source.registry_preparations.len() {
+            return Err(pool_configuration_error(
+                "source Root inventory is incomplete".to_string(),
+            ));
+        }
+        let assets = self.inspect_reinstall_assets(
+            state,
+            &authorities,
+            &mut observation,
+            &candid_by_root,
+            false,
+        )?;
+        Ok(Some(super::FleetActivationResetObservation {
+            inventory: super::FleetReinstallObservation {
+                authorities,
+                assets,
+                observation,
+            },
             roots,
         }))
+    }
+
+    fn activation_reset_inventory_after_reset(
+        &mut self,
+        intent: &crate::fleet_ensure::model::FleetReinstallRecord,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<super::FleetReinstallObservation>, Self::Error> {
+        let authorities = self
+            .reinstall_authorities(state)?
+            .ok_or_else(|| pool_configuration_error("missing reset infrastructure".to_string()))?;
+        let mut observation = FleetObservation {
+            canisters: authorities
+                .iter()
+                .map(|(name, entry)| (name.clone(), Some(entry.live.clone())))
+                .collect(),
+            additional_controlled_cycles: BTreeMap::new(),
+            estate_funding_domains: BTreeMap::new(),
+            ledger_fee_cycles: self
+                .desired
+                .ledger_fee_cycles
+                .parse::<Cycles>()
+                .map_err(|_| pool_configuration_error("invalid reset Ledger fee".to_string()))?
+                .to_u128(),
+            operator_cycles: 0,
+            protocol_ready: BTreeMap::new(),
+        };
+        let candid = self.root_protocol_candid()?;
+        let mut candid_by_root = BTreeMap::new();
+        for configured in &self.desired.canisters {
+            if configured.kind != DesiredCanisterKind::Root {
+                continue;
+            }
+            let binding = authorities
+                .get(&configured.name)
+                .ok_or_else(|| pool_configuration_error("missing reset Root".to_string()))?;
+            let root = parse_principal("reset Root", &binding.live.principal)?;
+            let mut inventory = EstatePoolInventoryAccumulator::default();
+            let mut cursor = None;
+            loop {
+                let page = self.query_estate_pool_page(&candid, root, cursor)?;
+                let next = inventory.observe_page(&configured.name, page)?;
+                if next.is_none() {
+                    break;
+                }
+                if next == cursor {
+                    return Err(pool_configuration_error(
+                        "reset inventory cursor did not advance".to_string(),
+                    ));
+                }
+                cursor = next;
+            }
+            let pool = inventory.finish(&configured.name)?;
+            let expected = intent
+                .assets
+                .iter()
+                .filter(|asset| asset.root == configured.name)
+                .map(|asset| asset.principal.as_str())
+                .collect::<BTreeSet<_>>();
+            let observed = pool
+                .assets
+                .iter()
+                .map(|asset| asset.principal.as_str())
+                .collect::<BTreeSet<_>>();
+            if observed != expected || pool.pending_creation.is_some() {
+                return Err(pool_configuration_error(
+                    "reset changed the complete physical estate".to_string(),
+                ));
+            }
+            observation.estate_funding_domains.insert(
+                configured.name.clone(),
+                EstateFundingDomainObservation {
+                    balance_cycles: Some(self.cycles_ledger_balance(&binding.live.principal)?),
+                    cycles_ledger: self.desired.cycles_ledger.clone(),
+                    pool: Some(pool),
+                    root_principal: Some(binding.live.principal.clone()),
+                },
+            );
+            candid_by_root.insert(configured.name.clone(), candid.clone());
+        }
+        let assets = self.inspect_reinstall_assets(
+            state,
+            &authorities,
+            &mut observation,
+            &candid_by_root,
+            true,
+        )?;
+        Ok(Some(super::FleetReinstallObservation {
+            authorities,
+            assets,
+            observation,
+        }))
+    }
+
+    fn observe_root_management(
+        &mut self,
+        state: &FleetEnsureStateRecord,
+        reviewed_targets: &BTreeSet<String>,
+    ) -> Result<Option<RootManagementObservation>, Self::Error> {
+        self.timed_observation(FleetObservationStage::RootManagement, |platform| {
+            let configured_roots = platform
+                .desired
+                .canisters
+                .iter()
+                .filter(|configured| {
+                    configured.kind == DesiredCanisterKind::Root
+                        && configured.presence
+                            == crate::fleet_ensure::model::DesiredPresence::Present
+                })
+                .collect::<Vec<_>>();
+            if configured_roots.is_empty() {
+                return Ok(None);
+            }
+            platform.require_operator()?;
+            let mut observed_roots = Vec::new();
+            for configured in configured_roots {
+                let Some(principal) = platform.current_principal(state, &configured.name) else {
+                    if is_unallocated_fresh_root(&platform.desired, configured, reviewed_targets) {
+                        continue;
+                    }
+                    return Err(IcpEnsurePlatformError::RootManagement(format!(
+                        "configured Root {} has no exact Principal",
+                        configured.name
+                    )));
+                };
+                let live = platform.status_optional(principal)?.ok_or_else(|| {
+                    IcpEnsurePlatformError::RootManagement(format!(
+                        "configured Root {} is unavailable",
+                        configured.name
+                    ))
+                })?;
+                observed_roots.push((configured, live));
+            }
+            let all_current =
+                platform.management_roots_are_current(&observed_roots, reviewed_targets)?;
+            if reviewed_targets.is_empty() && all_current {
+                return Ok(None);
+            }
+            let network =
+                resolve_icp_build_network_from_root(&platform.root, &platform.desired.environment)
+                    .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))?;
+            let catalog = if network == BuildNetwork::Ic {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|_| {
+                        IcpEnsurePlatformError::RootManagement(
+                            "system clock is before the Unix epoch".to_string(),
+                        )
+                    })?
+                    .as_secs();
+                Some(
+                    load_mainnet_subnet_catalog(&platform.root, now).map_err(|error| {
+                        IcpEnsurePlatformError::RootManagement(error.to_string())
+                    })?,
+                )
+            } else {
+                None
+            };
+            let mut roots = BTreeMap::new();
+            for (configured, live) in observed_roots {
+                let principal = live.principal.clone();
+                let subnet = catalog.as_ref().map_or_else(
+                    || Ok(configured.subnet.clone()),
+                    |catalog| {
+                        catalog
+                            .catalog
+                            .resolve_canister_route(&principal)
+                            .map(|route| route.subnet.to_text())
+                            .map_err(|error| {
+                                IcpEnsurePlatformError::RootManagement(error.to_string())
+                            })
+                    },
+                )?;
+                let name = configured.name.clone();
+                if roots
+                    .insert(
+                        name.clone(),
+                        RootManagementCanisterObservation { live, name, subnet },
+                    )
+                    .is_some()
+                {
+                    return Err(IcpEnsurePlatformError::RootManagement(
+                        "configured Root names are not unique".to_string(),
+                    ));
+                }
+            }
+            let operator_cycles = platform
+                .icp
+                .identity_cycles_balance()
+                .map_err(|error| IcpEnsurePlatformError::LedgerWithdraw(error.to_string()))?;
+            Ok(Some(RootManagementObservation {
+                operator_cycles,
+                roots,
+            }))
+        })
     }
 
     fn observe(
@@ -2571,24 +3326,32 @@ impl EnsurePlatform for IcpEnsurePlatform {
         operation_id: &str,
         state: &FleetEnsureStateRecord,
     ) -> Result<Vec<EnsureAction>, Self::Error> {
-        if self.desired.protocol.is_none() {
-            return Ok(Vec::new());
-        }
-        current_protocol::validate_component_pool_capacity(&self.root, &self.desired)?;
-        if !self.current_protocol_owners_are_ready(state)? {
-            return Ok(Vec::new());
-        }
-        let reconciliation = current_protocol::compile_pool_reconciliation(
-            &self.root,
-            &self.desired,
-            state,
-            &self.estate_observations,
-        )?;
-        if !reconciliation.is_empty() {
-            return Ok(reconciliation);
-        }
-        current_protocol::compile(&self.icp, &self.root, &self.desired, operation_id, state)
+        self.timed_observation(FleetObservationStage::ProtocolActions, |platform| {
+            if platform.desired.protocol.is_none() {
+                return Ok(Vec::new());
+            }
+            current_protocol::validate_component_pool_capacity(&platform.root, &platform.desired)?;
+            if !platform.current_protocol_owners_are_ready(state)? {
+                return Ok(Vec::new());
+            }
+            let reconciliation = current_protocol::compile_pool_reconciliation(
+                &platform.root,
+                &platform.desired,
+                state,
+                &platform.estate_observations,
+            )?;
+            if !reconciliation.is_empty() {
+                return Ok(reconciliation);
+            }
+            current_protocol::compile(
+                &platform.icp,
+                &platform.root,
+                &platform.desired,
+                operation_id,
+                state,
+            )
             .map_err(Into::into)
+        })
     }
 
     fn fresh_protocol_actions(
@@ -2605,23 +3368,25 @@ impl EnsurePlatform for IcpEnsurePlatform {
         operation_id: &str,
         state: &FleetEnsureStateRecord,
     ) -> Result<TerminalFleetInventory, Self::Error> {
-        if self.desired.protocol.is_none() {
-            if state.active_registry.is_some() {
-                return Err(current_protocol::CurrentProtocolError::Configuration(
-                    "managed terminal Fleet cannot drop its typed protocol intent".to_string(),
-                )
-                .into());
+        self.timed_observation(FleetObservationStage::TerminalInventory, |platform| {
+            if platform.desired.protocol.is_none() {
+                if state.active_registry.is_some() {
+                    return Err(current_protocol::CurrentProtocolError::Configuration(
+                        "managed terminal Fleet cannot drop its typed protocol intent".to_string(),
+                    )
+                    .into());
+                }
+                return Ok(TerminalFleetInventory::default());
             }
-            return Ok(TerminalFleetInventory::default());
-        }
-        super::current_inventory::terminal_inventory(
-            &self.icp,
-            &self.root,
-            &self.desired,
-            operation_id,
-            state,
-        )
-        .map_err(Into::into)
+            super::current_inventory::terminal_inventory(
+                &platform.icp,
+                &platform.root,
+                &platform.desired,
+                operation_id,
+                state,
+            )
+            .map_err(Into::into)
+        })
     }
 
     #[expect(
@@ -2635,9 +3400,16 @@ impl EnsurePlatform for IcpEnsurePlatform {
         record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectObservation, Self::Error> {
+        if matches!(action, EnsureAction::SealAuthority { .. }) {
+            return super::authority_seal::observe(&self.icp, &self.root, operation_id, action)
+                .map_err(Into::into);
+        }
         let mut retry = EffectRetry::None;
         let mut post_cycles = None;
         let (applied, progress_identity) = match action {
+            EnsureAction::SealAuthority { .. } => {
+                unreachable!("authority seals use their typed observer")
+            }
             EnsureAction::Create {
                 name,
                 requested_initial_cycles,
@@ -2741,21 +3513,68 @@ impl EnsurePlatform for IcpEnsurePlatform {
             }
             EnsureAction::Install {
                 mode,
+                reinstall_witness,
                 principal,
                 wasm_sha256,
                 ..
             } => {
                 let live =
                     self.install_status_optional(Self::action_principal(state, principal)?)?;
-                let applied = live.as_ref().is_some_and(|live| {
-                    install_effect_applied(
-                        *mode,
+                let applied = if let Some(witness) = reinstall_witness {
+                    let current = self.reinstall_authorities(state)?;
+                    let authority = current
+                        .as_ref()
+                        .and_then(|a| a.get(&witness.authority.name))
+                        .and_then(super::reinstall::authority_binding);
+                    if authority.as_ref() != Some(&witness.authority) {
+                        return Err(IcpEnsurePlatformError::ReinstallHistoryConflict {
+                            canister: witness.authority.principal.clone(),
+                        });
+                    }
+                    let live = live.as_ref().ok_or_else(|| {
+                        IcpEnsurePlatformError::ReinstallHistoryConflict {
+                            canister: principal.clone(),
+                        }
+                    })?;
+                    let before = record.pre_canister_version.ok_or_else(|| {
+                        IcpEnsurePlatformError::ReinstallHistoryConflict {
+                            canister: principal.clone(),
+                        }
+                    })?;
+                    let history = super::install_history::observe(
+                        &self.icp,
+                        &self.root,
+                        witness,
+                        parse_principal("operator", &self.desired.operator)?,
+                        before,
+                        live,
+                    )?;
+                    match super::install_history::reconcile(
+                        history,
                         wasm_sha256,
-                        live.module_sha256.as_deref(),
-                        record.pre_canister_version,
-                        live.canister_version,
-                    )
-                });
+                        &witness.prior_module_sha256,
+                        before,
+                        live,
+                    ) {
+                        super::install_history::HistoryEffect::Applied => true,
+                        super::install_history::HistoryEffect::NotApplied => false,
+                        super::install_history::HistoryEffect::Conflict => {
+                            return Err(IcpEnsurePlatformError::ReinstallHistoryConflict {
+                                canister: live.principal.clone(),
+                            });
+                        }
+                    }
+                } else {
+                    live.as_ref().is_some_and(|live| {
+                        install_effect_applied(
+                            *mode,
+                            wasm_sha256,
+                            live.module_sha256.as_deref(),
+                            record.pre_canister_version,
+                            live.canister_version,
+                        )
+                    })
+                };
                 let progress_identity = live.as_ref().map_or_else(
                     || "install:missing".to_string(),
                     |live| {
@@ -2781,6 +3600,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                         ) && recoverable_current_protocol_error(&error) =>
                     {
                         EffectObservation {
+                            provisioning_failure: None,
                             applied: false,
                             estate_funding_required: None,
                             post_cycles: None,
@@ -2941,6 +3761,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             }
         };
         Ok(EffectObservation {
+            provisioning_failure: None,
             applied,
             estate_funding_required: None,
             post_cycles,
@@ -2962,6 +3783,10 @@ impl EnsurePlatform for IcpEnsurePlatform {
     ) -> Result<EffectOutcome, Self::Error> {
         self.require_operator()?;
         match action {
+            EnsureAction::SealAuthority { .. } => {
+                super::authority_seal::apply(&self.icp, &self.root, operation_id, action)
+                    .map_err(Into::into)
+            }
             EnsureAction::Create {
                 controller_canisters,
                 controllers,
@@ -3140,7 +3965,10 @@ impl EnsurePlatform for IcpEnsurePlatform {
         }
         let (name, principal) = match action {
             EnsureAction::Create { .. } => return Ok(None),
-            EnsureAction::Delete {
+            EnsureAction::SealAuthority {
+                name, principal, ..
+            }
+            | EnsureAction::Delete {
                 name, principal, ..
             }
             | EnsureAction::FleetProtocol {
@@ -3778,6 +4606,113 @@ mod tests {
     use canic_core::dto::pool::CanisterPoolAssetStatus;
 
     #[test]
+    fn inactive_source_inventory_rejects_spare_capacity_pending_work_and_omissions() {
+        let root = crate::fleet_ensure::model::RootActivationResetRecord {
+            root: "root".to_string(),
+            activation_operation_id: [1; 32],
+            inventory_hash: [2; 32],
+            provisioning_receipt_hash: [3; 32],
+            component_count: 1,
+            managed_descendants: 2,
+        };
+        let page = inactive_source_pool_page();
+        assert!(inactive_source_pool_has_full_inventory(&page, &root));
+        let mut complete = EstatePoolInventoryAccumulator::default();
+        assert_eq!(
+            complete.observe_page("root", page.clone()).expect("page"),
+            None
+        );
+        assert_eq!(complete.finish("root").expect("complete").assets.len(), 4);
+
+        let mut spare = page.clone();
+        spare.config.maximum_size += 1;
+        let mut insufficient_reserve = page.clone();
+        insufficient_reserve.config.minimum_size = 2;
+        let mut pending = page.clone();
+        pending.pending_reset = 1;
+        let mut wrong_workload = page.clone();
+        wrong_workload.workload -= 1;
+        wrong_workload.ready += 1;
+        let mut overflow = page.clone();
+        overflow.workload = u32::MAX;
+        for changed in [
+            spare,
+            insufficient_reserve,
+            pending,
+            wrong_workload,
+            overflow,
+        ] {
+            assert!(!inactive_source_pool_has_full_inventory(&changed, &root));
+        }
+
+        let mut omitted = page;
+        omitted.entries.pop();
+        let mut inventory = EstatePoolInventoryAccumulator::default();
+        inventory
+            .observe_page("root", omitted)
+            .expect("bounded page");
+        assert!(matches!(
+            inventory.finish("root"),
+            Err(IcpEnsurePlatformError::CurrentProtocol(
+                current_protocol::CurrentProtocolError::Configuration(_)
+            ))
+        ));
+    }
+
+    fn inactive_source_pool_page() -> CanisterPoolResponse {
+        let claim = canic_core::dto::pool::CanisterPoolClaim {
+            component: canic_core::ids::ComponentInstanceId::from_generated_bytes([4; 32]),
+            operation_id: [5; 32],
+        };
+        let entries = (0..5)
+            .map(|index| CanisterPoolAsset {
+                canister_id: Principal::from_slice(&[index]),
+                creation_receipt: None,
+                cycles: Cycles::new(100),
+                origin: if index == 0 {
+                    CanisterPoolAssetOrigin::InfrastructureStore
+                } else {
+                    CanisterPoolAssetOrigin::Imported
+                },
+                status: match index {
+                    0 => CanisterPoolAssetStatus::Store,
+                    1 => CanisterPoolAssetStatus::Ready,
+                    _ => CanisterPoolAssetStatus::Workload {
+                        claim: claim.clone(),
+                    },
+                },
+                added_at_ns: 1,
+                updated_at_ns: 1,
+            })
+            .collect();
+        CanisterPoolResponse {
+            config: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                minimum_size: 1,
+                maximum_size: 4,
+                canister_cycles: Cycles::new(100),
+                creation_execution_margin: Cycles::new(1),
+            },
+            tracked: 5,
+            store: 1,
+            store_deletion_pending: 0,
+            pooled: 1,
+            workload: 3,
+            surplus: 0,
+            ready: 1,
+            pending_reset: 0,
+            claimed: 0,
+            recycling: 0,
+            handing_off: 0,
+            failed: 0,
+            completed_handoffs: 0,
+            pending_creation: None,
+            pending_handoff: None,
+            entries,
+            next_start_after: None,
+        }
+    }
+
+    #[test]
     fn pool_funding_binds_reset_lifecycle_without_weakening_ready_inspection() {
         let failed = CanisterPoolAssetStatus::Failed {
             reason: "reset stopped".to_string(),
@@ -3862,6 +4797,7 @@ mod tests {
             )
             .unwrap();
             let mut observed = EffectObservation {
+                provisioning_failure: None,
                 applied: false,
                 estate_funding_required: Some(pause.clone()),
                 post_cycles: None,
@@ -3891,6 +4827,7 @@ mod tests {
             changed.root = root;
             changed.cycles_ledger = ledger;
             let mut observed = EffectObservation {
+                provisioning_failure: None,
                 applied: false,
                 estate_funding_required: Some(changed),
                 post_cycles: None,
@@ -4007,6 +4944,171 @@ mod tests {
             )
             .unwrap();
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one measured transport fixture keeps equivalent retained inventories and call accounting together"
+    )]
+    fn configured_observation_benchmark_retains_snapshot_call_bound() {
+        use std::{
+            fs,
+            os::unix::fs::PermissionsExt,
+            sync::{Arc, Mutex},
+        };
+        for pool_count in [0_u32, 8, 24, 96] {
+            let mut fixture = ProtocolOwnersFixture::new();
+            let root_pid = Principal::from_slice(&[2]);
+            for (index, canister) in fixture.platform.desired.canisters.iter_mut().enumerate() {
+                let pid = Principal::from_slice(&[u8::try_from(index + 1).unwrap()]).to_text();
+                let mut status: serde_json::Value = serde_json::from_slice(
+                    &fs::read(fixture.root.join(format!("{}.json", canister.name))).unwrap(),
+                )
+                .unwrap();
+                status["id"] = serde_json::Value::String(pid.clone());
+                fs::write(fixture.root.join(format!("{pid}.json")), status.to_string()).unwrap();
+                canister.principal = Some(pid);
+            }
+            fixture.platform.desired.protocol =
+                Some(crate::fleet_ensure::model::DesiredFleetProtocol {
+                    app_config: "unused.toml".to_string(),
+                    component_group_placements: Vec::new(),
+                    root_candid: "root.did".to_string(),
+                    coordinator_candid: "unused.did".to_string(),
+                    store_candid: "unused.did".to_string(),
+                });
+            fs::write(fixture.root.join("root.did"), "service : {}").unwrap();
+            let mut entries = Vec::new();
+            for index in 0..pool_count {
+                let pid = Principal::from_slice(&[u8::try_from(index + 10).unwrap()]);
+                let mut configured = fixture.platform.desired.canisters[0].clone();
+                configured.name = format!("pool-{index:03}");
+                configured.kind = DesiredCanisterKind::Pool;
+                configured.principal = Some(pid.to_text());
+                configured.parent = Some("root".to_string());
+                fixture.platform.desired.canisters.push(configured);
+                entries.push(CanisterPoolAsset {
+                    canister_id: pid,
+                    creation_receipt: None,
+                    cycles: Cycles::new(1_000_000_000_000),
+                    origin: CanisterPoolAssetOrigin::Imported,
+                    status: CanisterPoolAssetStatus::Ready,
+                    added_at_ns: 1,
+                    updated_at_ns: 1,
+                });
+            }
+            let page = CanisterPoolResponse {
+                config: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                    minimum_size: 5,
+                    maximum_size: 128,
+                    canister_cycles: Cycles::new(1_000_000_000_000),
+                    creation_execution_margin: Cycles::new(1_000_000_000),
+                },
+                tracked: pool_count,
+                store: 0,
+                store_deletion_pending: 0,
+                pooled: pool_count,
+                workload: 0,
+                surplus: 0,
+                ready: pool_count,
+                pending_reset: 0,
+                claimed: 0,
+                recycling: 0,
+                handing_off: 0,
+                failed: 0,
+                completed_handoffs: 0,
+                pending_creation: None,
+                pending_handoff: None,
+                entries,
+                next_start_after: None,
+            };
+            let response = Ok::<_, canic_core::dto::error::Error>(RootPoolStatusResponse::Pool(
+                Box::new(page),
+            ));
+            fs::write(fixture.root.join("pool.json"), serde_json::json!({"response_bytes": hex_bytes(candid::encode_one(response).unwrap())}).to_string()).unwrap();
+            let executable = fixture.root.join("icp");
+            fs::write(&executable, format!(
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.3.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ]; do shift; done\nshift\nsleep 0.05\ncase \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) cat '{}'/pool.json;;\n*) exit 1;;\nesac\n",
+                fixture.root.display(), fixture.root.display())).unwrap();
+            fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+            let timings = Arc::new(Mutex::new(Vec::new()));
+            let sink = Arc::clone(&timings);
+            fixture.platform = fixture
+                .platform
+                .with_observation_handler(move |timing| sink.lock().unwrap().push(timing));
+            let observed = fixture
+                .platform
+                .with_observation_snapshot(|platform| {
+                    platform
+                        .timed_observation(FleetObservationStage::ConfiguredCanisters, |platform| {
+                            platform.observe_configured_canisters(&fixture.state)
+                        })
+                })
+                .unwrap();
+            assert_eq!(observed.len(), usize::try_from(pool_count).unwrap() + 3);
+            assert!(observed.values().all(Option::is_some));
+            assert_eq!(
+                observed["root"].as_ref().unwrap().principal,
+                root_pid.to_text()
+            );
+            let timing = timings.lock().unwrap().pop().unwrap();
+            assert_eq!(timing.remote_call_attempts, 3 + u64::from(pool_count > 0));
+            assert!(timing.succeeded);
+            println!(
+                "configured_observation pool_assets={pool_count} elapsed_ms={} calls={}",
+                timing.elapsed_millis, timing.remote_call_attempts
+            );
+            fs::remove_dir_all(fixture.root).unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn configured_observation_failure_drains_batch_and_keeps_first_error() {
+        use std::{
+            fs,
+            sync::{Arc, Mutex},
+        };
+        let mut fixture = ProtocolOwnersFixture::new();
+        let timings = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&timings);
+        fixture.platform = fixture
+            .platform
+            .with_observation_handler(move |timing| sink.lock().unwrap().push(timing));
+        let mut first: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.root.join("coordinator.json")).unwrap())
+                .unwrap();
+        first["id"] = serde_json::json!("different-principal");
+        fs::write(fixture.root.join("coordinator.json"), first.to_string()).unwrap();
+        fs::remove_file(fixture.root.join("root.json")).unwrap();
+        let failure = fixture.platform.with_observation_snapshot(|platform| {
+            platform.timed_observation(FleetObservationStage::ConfiguredCanisters, |platform| {
+                platform.observe_configured_canisters(&fixture.state)
+            })
+        });
+        assert!(
+            matches!(failure, Err(IcpEnsurePlatformError::StatusIdentityMismatch { expected, .. }) if expected == "coordinator")
+        );
+        let timing = timings.lock().unwrap().pop().unwrap();
+        assert!(!timing.succeeded);
+        assert_eq!(timing.remote_call_attempts, 3);
+        assert!(fixture.platform.observation_snapshot.borrow().is_none());
+        fixture.status("coordinator", "Running", true);
+        fixture.status("root", "Running", true);
+        assert_eq!(
+            fixture
+                .platform
+                .with_observation_snapshot(
+                    |platform| platform.observe_configured_canisters(&fixture.state)
+                )
+                .unwrap()
+                .len(),
+            3
+        );
+        assert_eq!(fixture.platform.icp.remote_call_count(), 6);
+        fs::remove_dir_all(fixture.root).unwrap();
     }
 
     #[cfg(unix)]

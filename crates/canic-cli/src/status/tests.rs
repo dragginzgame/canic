@@ -334,6 +334,8 @@ fn retain_terminal_fleet(root: &Path, environment: &str, fleet_name: &str) {
             plan_sha256: plan_sha256.clone(),
             planned_at_time: 1,
             protocol_actions: Vec::new(),
+            recovery_review: None,
+            reinstall: None,
             root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,

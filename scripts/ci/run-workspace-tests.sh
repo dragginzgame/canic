@@ -626,7 +626,8 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
             --lib \
             "$TARGETED_POCKETIC_TEST" \
             -- \
-            --exact
+            --exact \
+            --include-ignored
     else
         echo "targeted PocketIC test is not a classified integration target or exact lib test: $TARGETED_POCKETIC_TEST" >&2
         exit 2

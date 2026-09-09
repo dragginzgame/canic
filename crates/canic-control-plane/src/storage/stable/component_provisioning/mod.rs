@@ -143,6 +143,7 @@ impl_storable_bounded!(RootComponentProvisioningPlacementKey, 256, false);
 /// Durable aggregate root operation and immutable accepted batch.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentProvisioningRecord {
+    pub last_failure: Option<RootComponentProvisioningFailureRecord>,
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
     pub fleet_registry: FleetRegistryVersion,
@@ -150,6 +151,19 @@ pub struct RootComponentProvisioningRecord {
     pub batch: FleetSubnetRootProvisioningBatch,
     pub runtime_mode: RootComponentProvisioningRuntimeModeRecord,
     pub state: RootComponentProvisioningStateRecordPhase,
+}
+
+/// One bounded failure retained with the provisioning operation across interruption.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentProvisioningFailureRecord {
+    pub stage: canic_core::dto::component_provisioning::ProvisioningFailureStage,
+    pub target: candid::Principal,
+    pub operation_id: [u8; 32],
+    pub diagnostic_code: u16,
+    pub retry_category: canic_core::dto::component_provisioning::ProvisioningRetryCategory,
+    pub failed_at_ns: u64,
+    pub consecutive_failures: u32,
+    pub retry_at_ns: Option<u64>,
 }
 
 /// Protected root runtime state observed before one batch was accepted.

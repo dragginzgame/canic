@@ -537,7 +537,7 @@ fn decode_sha256(value: &str, role: &str) -> Result<[u8; 32], CanicInitError> {
     })
 }
 
-fn install_id(operation_id: &str, role: &str, name: &str) -> [u8; 32] {
+pub(super) fn install_id(operation_id: &str, role: &str, name: &str) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(b"canic:fleet-ensure:infrastructure-install:v1\0");
     hasher.update(operation_id.as_bytes());

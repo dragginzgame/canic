@@ -65,7 +65,7 @@ canisters:
 networks:
   - name: local
     mode: managed
-    version: "v13.0.0-2026-05-07-04-27"
+    version: "v15.0.0-2026-08-13-03-55"
     gateway:
       bind: 127.0.0.1
       port: 8001

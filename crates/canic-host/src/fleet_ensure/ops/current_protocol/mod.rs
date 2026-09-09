@@ -5,6 +5,7 @@
 //! Boundary: the reviewed action binds one exact Coordinator, Candid contract, Registry, and plan.
 
 mod fresh;
+mod inactive_activation;
 #[cfg(test)]
 mod tests;
 
@@ -93,6 +94,7 @@ use std::{
 use thiserror::Error as ThisError;
 
 pub(super) use fresh::compile as compile_fresh_protocol;
+pub(super) use inactive_activation::observe as observe_inactive_activation;
 
 const COMPONENT_PROVISIONING_ACTION: &str = "fleet-component-provisioning";
 const CURRENT_PROTOCOL_OPERATION_DOMAIN: &[u8] = b"canic.fleet-ensure.current-protocol.v1\0";
@@ -237,6 +239,27 @@ pub enum CurrentProtocolError {
         "current Fleet protocol Registry Store {store} controller {controller} has no exact Principal"
     )]
     RegistryStoreControllerPrincipalMissing { store: String, controller: String },
+
+    #[error(
+        "Root {root} provisioning suspended: stage={stage:?}, target={target}, operation={operation}, diagnostic={diagnostic_code}, retry=ReviewRequired, failed_at_ns={failed_at_ns}; preserve the retained plan and journal for activation recovery review; repeating apply does not repair a binding conflict"
+    )]
+    ProvisioningReviewRequired {
+        failed_at_ns: u64,
+        root: Principal,
+        stage: canic_core::dto::component_provisioning::ProvisioningFailureStage,
+        target: Principal,
+        operation: String,
+        diagnostic_code: u16,
+    },
+
+    #[error(
+        "Root {root} does not retain the reviewed activation operation {root_operation} required by Store operation {store_operation}; Store installation is refused; preserve the retained plan and journal for recovery review"
+    )]
+    ActivationBindingMismatch {
+        root: Principal,
+        root_operation: String,
+        store_operation: String,
+    },
 
     #[error("current Fleet protocol response does not match its reviewed action")]
     ResponseMismatch,
@@ -1173,16 +1196,28 @@ fn component_provisioning_observation(
     applied: bool,
     status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
 ) -> Result<EffectObservation, CurrentProtocolError> {
-    let mut durable_progress = status.clone();
-    if let Some(failure) = &mut durable_progress.pending_root_failure {
-        failure.failed_at_ns = 0;
+    if let Some((failure, origin)) = status.pending_root_failure.and_then(|failure|
+        failure.origin.map(|origin| (failure, origin)))
+        .filter(|(_, origin)| origin.retry_category == canic_core::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
+    {
+        return Err(CurrentProtocolError::ProvisioningReviewRequired {
+            failed_at_ns: origin.failed_at_ns,
+            root: failure.fleet_subnet_root,
+            stage: origin.stage,
+            target: origin.target,
+            operation: canic_core::cdk::utils::hash::hex_bytes(origin.operation_id),
+            diagnostic_code: origin.diagnostic_code,
+        });
     }
+    let mut durable_progress = status.clone();
+    durable_progress.pending_root_failure = None;
     let mut observation = observation(applied, &durable_progress)?;
+    observation.provisioning_failure = status.pending_root_failure;
     observation
         .estate_funding_required
         .clone_from(&status.estate_funding_required);
     observation.progress_identity = format!(
-        "component-provisioning:phase={:?}:accepted_roots={}/{}:provisioned_roots={}:directory_roots={}/{}:runtime_roots={}/{}:components={}:pending_failure={:?}:sha256={}",
+        "component-provisioning:phase={:?}:accepted_roots={}/{}:provisioned_roots={}:directory_roots={}/{}:runtime_roots={}/{}:components={}:sha256={}",
         status.phase,
         status.accepted_root_count,
         status.root_batch_count,
@@ -1192,11 +1227,6 @@ fn component_provisioning_observation(
         status.runtime_activated_root_count,
         status.root_batch_count,
         status.component_count,
-        status.pending_root_failure.map(|failure| (
-            failure.fleet_subnet_root,
-            failure.stage,
-            failure.diagnostic_code
-        )),
         observation.progress_identity,
     );
     if !applied && status.pending_root_failure.is_some() {
@@ -1540,6 +1570,7 @@ fn observation<T: CandidType>(
     let bytes = candid::encode_one(value)
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     Ok(EffectObservation {
+        provisioning_failure: None,
         applied,
         estate_funding_required: None,
         post_cycles: None,
@@ -1550,6 +1581,7 @@ fn observation<T: CandidType>(
 
 fn unavailable_observation() -> EffectObservation {
     EffectObservation {
+        provisioning_failure: None,
         applied: false,
         estate_funding_required: None,
         post_cycles: None,
@@ -2543,4 +2575,45 @@ fn resolve_path(root: &Path, configured: &str) -> PathBuf {
     } else {
         root.join(configured)
     }
+}
+
+/// Prove generated Root activation authority before a dependent Store install can run.
+pub(super) fn require_store_installation_binding(
+    icp: &IcpCli,
+    candid_path: &Path,
+    root_name: &str,
+    authority: &FleetSubnetRootAuthority,
+    operation_id: &str,
+) -> Result<(), CurrentProtocolError> {
+    let root = authority.binding.fleet_subnet_root;
+    let expected = canic_core::dto::fleet_activation::FleetActivationIdentity {
+        fleet: authority.binding.authority.binding.fleet.clone(),
+        operation_id: canic_init::install_id(operation_id, "root", root_name),
+        release_build_id: authority.initial_release_set.release_build_id,
+    };
+    let observed = query_root_operation(icp, candid_path, root, expected.operation_id)?;
+    if !matches!(observed, Some(RootOperationStatusResponse::FleetActivation(ref status)) if status.identity == expected)
+    {
+        return Err(CurrentProtocolError::ActivationBindingMismatch {
+            root,
+            root_operation: canic_core::cdk::utils::hash::hex_bytes(expected.operation_id),
+            store_operation: canic_core::cdk::utils::hash::hex_bytes(canic_init::install_id(
+                operation_id,
+                "store",
+                root_name,
+            )),
+        });
+    }
+    let response: RootStatusResponseFragment = query_with_candid(
+        icp,
+        candid_path,
+        root,
+        protocol::CANIC_ROOT_STATUS,
+        &RootStatusRequestFragment::FleetAuthority,
+    )?;
+    if !matches!(response, RootStatusResponseFragment::FleetAuthority(ref observed) if observed == authority)
+    {
+        return Err(CurrentProtocolError::ResponseMismatch);
+    }
+    Ok(())
 }

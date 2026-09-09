@@ -4,6 +4,8 @@
 //! Does not own: storage, clocks, transport, live observation, or effects.
 //! Boundary: workflow supplies exact desired/live inputs and persists the returned immutable plan.
 
+pub(super) mod recovery;
+pub(super) mod reinstall;
 pub(in crate::fleet_ensure) mod root_reinstall;
 
 use crate::{
@@ -39,6 +41,14 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum EnsurePolicyError {
+    #[error(
+        "Root {root} reset omits known controlled assets {missing_principals:?}; refresh the estate seed and matching policy imports, regenerate desired state, and review before reinstall"
+    )]
+    IncompleteRootEstate {
+        root: String,
+        missing_principals: Vec<String>,
+    },
+
     #[error(
         "Root {root} requires {workloads} Workloads plus {ready_floor} Ready assets, exceeding pool maximum {maximum_size}"
     )]
@@ -274,6 +284,10 @@ impl PlanAccumulator {
     clippy::too_many_lines,
     reason = "one pure compiler keeps the complete reviewed conservation and action authority visible"
 )]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit operation identity also binds deliberate same-release resets"
+)]
 pub fn compile_plan(
     desired: &DesiredFleet,
     artifacts: &DesiredFleetArtifacts,
@@ -282,6 +296,8 @@ pub fn compile_plan(
     requested_fleet: &str,
     observation: &FleetObservation,
     created_at_time: u64,
+    operation_id: &str,
+    reinstall: Option<&crate::fleet_ensure::model::FleetReinstallRecord>,
 ) -> Result<FleetEnsurePlan, EnsurePolicyError> {
     validate_authority(desired, requested_fleet)?;
     validate_observation_authority(desired, observation)?;
@@ -292,9 +308,13 @@ pub fn compile_plan(
             expected: bounds.ledger_fee,
         });
     }
-    let operation_id = operation_id(desired_sha256, &desired.environment, requested_fleet);
+    let operation_id = operation_id.to_string();
     let mut accumulator = PlanAccumulator::new();
-    let reviewed_reinstalls = reviewed_reinstall_canisters(desired, observation)?;
+    let reviewed_reinstalls = if let Some(intent) = reinstall {
+        reinstall::validate_reset(desired, artifacts, observation, intent, &operation_id)?
+    } else {
+        reviewed_reinstall_canisters(desired, observation)?
+    };
 
     for (index, configured) in desired.canisters.iter().enumerate() {
         let observed = observation
@@ -310,7 +330,7 @@ pub fn compile_plan(
             .ok_or(EnsurePolicyError::ArithmeticOverflow {
                 field: "action timestamp",
             })?;
-        let plan = compile_canister(
+        let mut plan = compile_canister(
             desired,
             artifacts,
             configured,
@@ -322,6 +342,9 @@ pub fn compile_plan(
             reviewed_reinstalls.contains(&configured.name),
             &mut accumulator,
         )?;
+        if let Some(intent) = reinstall {
+            reinstall::bind_history_witness(desired, artifacts, intent, configured, &mut plan)?;
+        }
         accumulator.canisters.push(plan);
     }
     for name in &reviewed_reinstalls {
@@ -610,23 +633,6 @@ pub fn compile_plan(
             })?,
     )?;
 
-    if let Some(authority) = &continuation {
-        let per_step = bounds
-            .observation_burn
-            .checked_mul(3)
-            .and_then(|burn| burn.checked_add(bounds.update_burn))
-            .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                field: "successor burn bound",
-            })?;
-        accumulator.add_burn(
-            per_step
-                .checked_mul(u128::from(authority.maximum_successor_actions))
-                .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                    field: "successor burn bound",
-                })?,
-        )?;
-    }
-
     let observed_estate_funding_cycles =
         estate_funding_domains
             .iter()
@@ -671,6 +677,22 @@ pub fn compile_plan(
         .ok_or(EnsurePolicyError::ArithmeticOverflow {
             field: "estate creation fees",
         })?;
+    let recovery_review = continuation
+        .as_ref()
+        .map(|authority| {
+            recovery::review(
+                observation,
+                bounds,
+                authority.maximum_successor_actions,
+                accumulator.execution_burn,
+                available_after_estate_fees,
+            )
+        })
+        .transpose()?
+        .map(Box::new);
+    if let Some(review) = &recovery_review {
+        accumulator.add_burn(review.continuation_reserve_cycles)?;
+    }
     let expected_post_operation_cycles = available_after_estate_fees
         .checked_sub(accumulator.execution_burn)
         .ok_or_else(|| {
@@ -703,6 +725,8 @@ pub fn compile_plan(
         plan_sha256: String::new(),
         planned_at_time: created_at_time,
         protocol_actions,
+        recovery_review,
+        reinstall: reinstall.cloned().map(Box::new),
         root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: Some(Box::new(
@@ -779,23 +803,13 @@ fn append_pool_reconciliation_funding(
             .iter()
             .find(|asset| asset.principal == principal)
             .ok_or_else(|| EnsurePolicyError::InvalidProtocolStep(name.clone()))?;
-        let minimum = checked_add(
-            pool.readiness_floor_cycles,
-            pool.creation_execution_margin_cycles,
-            "pool recovery target",
-        )?;
-        if asset.cycles >= minimum {
+        let Some(funding) = recovery::pool_funding(pool, asset, root, bounds)? else {
             continue;
-        }
-        let margin = checked_add(
-            bounds.observation_burn,
-            bounds.update_burn,
-            "pool reconciliation burn",
-        )?;
-        let deficit = minimum - asset.cycles;
-        let amount = checked_add(deficit, margin, "pool reconciliation funding")?;
-        let expected_post_cycles =
-            checked_add(asset.cycles, amount, "pool reconciliation post balance")?;
+        };
+        let amount = funding.amount_cycles;
+        let deficit = funding.funding_deficit_cycles;
+        let margin = funding.funding_margin_cycles;
+        let expected_post_cycles = funding.expected_post_cycles;
         let offset = desired
             .canisters
             .len()
@@ -1153,6 +1167,8 @@ fn compile_root_start_plan(
         plan_sha256: String::new(),
         planned_at_time: created_at_time,
         protocol_actions: Vec::new(),
+        recovery_review: None,
+        reinstall: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: retained_authority.map(|authority| Box::new(authority.clone())),
         reviewed_desired: Some(Box::new(
@@ -1442,6 +1458,7 @@ fn create_plan(
         let wasm_sha256 = wasm_sha256(artifacts, &configured.name)?;
         actions.push(EnsureAction::Install {
             canic_init: configured.canic_init.clone(),
+            reinstall_witness: None,
             init_arg: configured.init_arg.clone(),
             init_arg_sha256: optional_init_arg_sha256(artifacts, configured)?,
             init_candid: configured.init_candid.clone(),
@@ -1557,6 +1574,7 @@ fn reuse_plan(
             require_install_initializer(desired, configured)?;
             actions.push(EnsureAction::Install {
                 canic_init: configured.canic_init.clone(),
+                reinstall_witness: None,
                 init_arg: configured.init_arg.clone(),
                 init_arg_sha256: optional_init_arg_sha256(artifacts, configured)?,
                 init_candid: configured.init_candid.clone(),
@@ -3125,7 +3143,8 @@ fn maximum_observation_count(
                 EnsureAction::Fund { .. }
                 | EnsureAction::FundEstate { .. }
                 | EnsureAction::Transfer { .. } => 2,
-                EnsureAction::Install { .. }
+                EnsureAction::SealAuthority { .. }
+                | EnsureAction::Install { .. }
                 | EnsureAction::FleetProtocol { .. }
                 | EnsureAction::Protocol { .. }
                 | EnsureAction::SetControllers { .. }
@@ -3591,6 +3610,36 @@ mod tests {
     };
 
     #[test]
+    fn continuation_review_reserves_only_available_headroom_and_exposes_pending_discovery() {
+        let observation = FleetObservation {
+            additional_controlled_cycles: BTreeMap::new(),
+            canisters: BTreeMap::new(),
+            estate_funding_domains: BTreeMap::new(),
+            ledger_fee_cycles: 0,
+            operator_cycles: 0,
+            protocol_ready: BTreeMap::new(),
+        };
+        let bounds = CycleBounds {
+            observation_burn: 3,
+            update_burn: 5,
+            ledger_fee: 1,
+            management_creation_fee: 0,
+            material_threshold: 1,
+        };
+        let review = super::recovery::review(&observation, bounds, 32, 41, 369).unwrap();
+        assert_eq!(review.base_execution_burn_cycles, 41);
+        assert_eq!(review.whole_continuation_ceiling_cycles, 448);
+        assert_eq!(review.continuation_reserve_cycles, 328);
+        assert!(review.known_pool_funding.is_empty());
+        assert_eq!(
+            review.discovery,
+            crate::fleet_ensure::model::RecoveryDiscovery::PendingCurrentProtocol
+        );
+        let no_headroom = super::recovery::review(&observation, bounds, 32, 41, 40).unwrap();
+        assert_eq!(no_headroom.continuation_reserve_cycles, 0);
+    }
+
+    #[test]
     fn estate_workload_forecast_includes_recursive_initial_children() {
         let mut spec = ComponentSpec {
             component_spec: ComponentSpecId::try_from(String::from("hub"))
@@ -3916,6 +3965,37 @@ mod tests {
             &mut accumulator,
         )
         .expect("review recovery funding");
+        let preview = super::recovery::review(
+            &observation,
+            CycleBounds {
+                ledger_fee: 5,
+                management_creation_fee: 500,
+                material_threshold: 1,
+                observation_burn: 10,
+                update_burn: 20,
+            },
+            32,
+            40,
+            10_000,
+        )
+        .unwrap();
+        assert_eq!(preview.known_pool_funding.len(), 4);
+        assert_eq!(
+            preview
+                .known_pool_funding
+                .iter()
+                .map(|funding| funding.amount_cycles)
+                .sum::<u128>(),
+            accumulator.new_funding
+        );
+        assert_eq!(
+            preview
+                .known_pool_funding
+                .iter()
+                .map(|funding| funding.ledger_fee_cycles)
+                .sum::<u128>(),
+            accumulator.fees
+        );
         assert_eq!(accumulator.new_funding, 4 * 131);
         assert_eq!(accumulator.fees, 4 * 5);
         for plan in &accumulator.canisters {

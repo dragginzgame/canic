@@ -1,9 +1,11 @@
 mod artifact;
+mod batch;
 pub(crate) mod cache;
 mod candid;
 mod context;
 mod model;
 mod process;
+mod reuse;
 
 pub use crate::build_profile::CanisterBuildProfile;
 pub use artifact::{
@@ -28,3 +30,5 @@ use process::parse_parent_process_id;
 
 #[cfg(test)]
 mod tests;
+
+pub use reuse::{BuildReuseError, CompleteBuildReuse, ReusedCompleteBuild};

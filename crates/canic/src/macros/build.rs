@@ -74,7 +74,17 @@ macro_rules! __canic_build_internal {
         let __canic_protocol_profile_digest_env =
             $crate::__internal::core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV;
         println!("cargo:rerun-if-env-changed={__canic_protocol_profile_digest_env}");
-        if let Ok(value) = std::env::var(__canic_protocol_profile_digest_env) {
+        let __canic_context_env = $crate::__internal::core::role_contract::build_context::PROTOCOL_BUILD_CONTEXT_ENV;
+        println!("cargo:rerun-if-env-changed={__canic_context_env}");
+        let __canic_digest = if let Ok(value) = std::env::var(__canic_context_env) {
+            let package = std::env::var("CARGO_PKG_NAME").expect("CARGO_PKG_NAME must be set");
+            Some($crate::__internal::core::role_contract::build_context::select_protocol_build_context(
+                &value, &package, &__canic_role_name,
+            ).expect("exact package/role protocol build context").to_string())
+        } else {
+            std::env::var(__canic_protocol_profile_digest_env).ok()
+        };
+        if let Some(value) = __canic_digest {
             let digest = value
                 .parse::<$crate::__internal::core::role_contract::ProtocolProfileDigest>()
                 .expect("CANIC_PROTOCOL_PROFILE_DIGEST must be one canonical lowercase SHA-256");

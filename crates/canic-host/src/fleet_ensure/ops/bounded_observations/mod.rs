@@ -1,18 +1,17 @@
-//! Module: fleet_ensure::ops::current_inventory::bounded_observations
+//! Module: fleet_ensure::ops::bounded_observations
 //!
-//! Responsibility: collect independent terminal reads with bounded concurrency.
+//! Responsibility: collect independent reads with bounded concurrency.
 //! Does not own: effects, retries, authority decisions, or observation caching.
 //! Boundary: join each issued batch before returning or scheduling more reads.
 
-use super::CurrentProtocolError;
 use std::{panic::resume_unwind, thread};
 
-const MAX_IN_FLIGHT: usize = 4;
+pub(super) const MAX_IN_FLIGHT: usize = 4;
 
-pub(super) fn collect<T: Sync, U: Send>(
+pub(super) fn collect<T: Sync, U: Send, E: Send>(
     inputs: &[T],
-    observe: impl Fn(&T) -> Result<U, CurrentProtocolError> + Sync,
-) -> Result<Vec<U>, CurrentProtocolError> {
+    observe: impl Fn(&T) -> Result<U, E> + Sync,
+) -> Result<Vec<U>, E> {
     let mut observations = Vec::with_capacity(inputs.len());
     for batch in inputs.chunks(MAX_IN_FLIGHT) {
         let results = thread::scope(|scope| {
@@ -42,6 +41,7 @@ pub(super) fn collect<T: Sync, U: Send>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fleet_ensure::ops::current_protocol::CurrentProtocolError;
     use std::sync::{
         Barrier,
         atomic::{AtomicUsize, Ordering},
@@ -54,7 +54,7 @@ mod tests {
         let maximum = AtomicUsize::new(0);
         let calls = AtomicUsize::new(0);
         let inputs = (0..MAX_IN_FLIGHT * 2).collect::<Vec<_>>();
-        let observations = collect(&inputs, |input| {
+        let observations = collect::<_, _, CurrentProtocolError>(&inputs, |input| {
             let count = active.fetch_add(1, Ordering::SeqCst) + 1;
             maximum.fetch_max(count, Ordering::SeqCst);
             calls.fetch_add(1, Ordering::SeqCst);
@@ -96,12 +96,14 @@ mod tests {
     #[test]
     fn empty_and_partial_batches_do_not_reuse_previous_observations() {
         let calls = AtomicUsize::new(0);
-        let observe = |input: &usize| Ok(input + calls.fetch_add(1, Ordering::SeqCst));
+        let observe = |input: &usize| {
+            Ok::<_, CurrentProtocolError>(input + calls.fetch_add(1, Ordering::SeqCst))
+        };
         assert!(collect(&[], observe).expect("empty batch").is_empty());
         assert_eq!(collect(&[10], observe).expect("first read"), vec![10]);
         assert_eq!(collect(&[10], observe).expect("fresh read"), vec![11]);
         assert_eq!(
-            collect(&[10, 20, 30], |_| Ok(7)).expect("partial batch"),
+            collect::<_, _, CurrentProtocolError>(&[10, 20, 30], |_| Ok(7)).expect("partial batch"),
             vec![7; 3]
         );
         assert_eq!(calls.load(Ordering::SeqCst), 2);

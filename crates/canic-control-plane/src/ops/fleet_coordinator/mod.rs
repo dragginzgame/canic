@@ -155,6 +155,37 @@ const COMPONENT_SCALE_OUT_RECEIPT_HASH_DOMAIN: &[u8] =
 pub struct FleetCoordinatorOps;
 
 impl FleetCoordinatorOps {
+    /// Keep Coordinator-dependent waits readable so publication can advance.
+    pub(crate) fn observed_activation_failure(
+        failure: Option<canic_core::dto::component_provisioning::RootComponentProvisioningFailure>,
+    ) -> Option<InternalError> {
+        failure
+            .filter(|failure| {
+                !matches!(
+                    failure.stage,
+                    canic_core::dto::component_provisioning::ProvisioningFailureStage::Provisioning
+                        | canic_core::dto::component_provisioning::ProvisioningFailureStage::CoordinatorStatus
+                )
+            })
+            .map(Self::observed_failure_error)
+    }
+
+    /// Convert protected remote evidence without manufacturing a new public diagnostic.
+    pub(crate) fn observed_failure_error(
+        failure: canic_core::dto::component_provisioning::RootComponentProvisioningFailure,
+    ) -> InternalError {
+        InternalError::unavailable().with_observed_provisioning_failure(
+            canic_core::control_plane_support::error::ProvisioningFailureView {
+                recorded_at_ns: Some(failure.failed_at_ns),
+                stage: failure.stage,
+                target: failure.target,
+                operation_id: failure.operation_id,
+                diagnostic_code: failure.diagnostic_code,
+                retry_category: failure.retry_category,
+            },
+        )
+    }
+
     /// Return whether another Coordinator operation domain retains this exact identity.
     pub(crate) fn retains_operation_id(operation_id: [u8; 32]) -> Result<bool, InternalError> {
         if operation_id == [0; 32] {
@@ -720,6 +751,7 @@ impl FleetCoordinatorOps {
     pub(crate) fn record_component_provisioning_root_failure(
         request: FleetComponentProvisioningStatusRequest,
         diagnostic_code: u16,
+        origin: Option<canic_core::control_plane_support::error::ProvisioningFailureView>,
         failed_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         if diagnostic_code == 0 || failed_at_ns == 0 {
@@ -739,6 +771,16 @@ impl FleetCoordinatorOps {
             return Err(InternalError::invalid_input());
         }
         let failure = FleetComponentProvisioningRootFailure {
+            origin: origin.map(|origin| {
+                canic_core::dto::component_provisioning::ProvisioningFailureOrigin {
+                    failed_at_ns: origin.recorded_at_ns.unwrap_or(failed_at_ns),
+                    stage: origin.stage,
+                    target: origin.target,
+                    operation_id: origin.operation_id,
+                    diagnostic_code: origin.diagnostic_code,
+                    retry_category: origin.retry_category,
+                }
+            }),
             fleet_subnet_root: authority.fleet_subnet_root,
             stage: authority.stage,
             diagnostic_code,
@@ -769,11 +811,14 @@ impl FleetCoordinatorOps {
         match classify_root_acceptance_advance(request, &progress)? {
             RootAcceptanceAdvance::Current => {
                 return component_provisioning_status_response(record)
+                    .map(Box::new)
                     .map(FleetComponentProvisioningRootAcceptanceDisposition::Current);
             }
             RootAcceptanceAdvance::Reconcile => {
                 let call = root_acceptance_call(record, progress.accepted_root_count)?;
-                return Ok(FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(call));
+                return Ok(
+                    FleetComponentProvisioningRootAcceptanceDisposition::Reconcile(Box::new(call)),
+                );
             }
             RootAcceptanceAdvance::Begin => {}
         }
@@ -794,7 +839,9 @@ impl FleetCoordinatorOps {
                 component_provisioning_operation_record(&next, request.operation_id)?,
             )?;
             Self::commit_transition(&current, next)?;
-            return Ok(FleetComponentProvisioningRootAcceptanceDisposition::Current(response));
+            return Ok(
+                FleetComponentProvisioningRootAcceptanceDisposition::Current(Box::new(response)),
+            );
         }
         let call = root_acceptance_call(record, progress.accepted_root_count)?;
         let intent = FleetComponentProvisioningRootAcceptanceIntentRecord {
@@ -812,7 +859,7 @@ impl FleetCoordinatorOps {
         let next = Self::validate_current(next)?;
         Self::commit_transition(&current, next)?;
         Ok(FleetComponentProvisioningRootAcceptanceDisposition::Invoke(
-            call,
+            Box::new(call),
         ))
     }
 

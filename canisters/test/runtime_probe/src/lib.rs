@@ -1,5 +1,7 @@
 #![expect(clippy::unused_async)]
 
+mod process_fixture;
+
 use canic::{
     Error,
     api::intent::{BeginLocalIntentInput, IntentResourceKey, LocalIntentApi},
@@ -311,6 +313,7 @@ async fn qualify_public_metrics_sampling(
     if reject_family {
         canic::api::ops::perf::record_checkpoint(&"a".repeat(128), "accepted_label", 7);
     }
+    process_fixture::record();
     let start = ic_cdk::api::performance_counter(0);
     let sample = canic::api::public_status::PublicStatusApi::sample_metrics();
     let sample_instructions = ic_cdk::api::performance_counter(0).saturating_sub(start);

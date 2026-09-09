@@ -1,0 +1,81 @@
+[app]
+name = "standalone"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+package = "../leaf_probe"
+
+[auth.delegated_tokens]
+enabled = false
+
+[component_specs.default]
+component_role = "app"
+maximum_instances = 19
+initial_cycles = "1.9T"
+
+[component_groups.qualification.components.member_00]
+component_spec = "default"
+
+[component_groups.qualification.components.member_01]
+component_spec = "default"
+
+[component_groups.qualification.components.member_02]
+component_spec = "default"
+
+[component_groups.qualification.components.member_03]
+component_spec = "default"
+
+[component_groups.qualification.components.member_04]
+component_spec = "default"
+
+[component_groups.qualification.components.member_05]
+component_spec = "default"
+
+[component_groups.qualification.components.member_06]
+component_spec = "default"
+
+[component_groups.qualification.components.member_07]
+component_spec = "default"
+
+[component_groups.qualification.components.member_08]
+component_spec = "default"
+
+[component_groups.qualification.components.member_09]
+component_spec = "default"
+
+[component_groups.qualification.components.member_10]
+component_spec = "default"
+
+[component_groups.qualification.components.member_11]
+component_spec = "default"
+
+[component_groups.qualification.components.member_12]
+component_spec = "default"
+
+[component_groups.qualification.components.member_13]
+component_spec = "default"
+
+[component_groups.qualification.components.member_14]
+component_spec = "default"
+
+[component_groups.qualification.components.member_15]
+component_spec = "default"
+
+[component_groups.qualification.components.member_16]
+component_spec = "default"
+
+[component_groups.qualification.components.member_17]
+component_spec = "default"
+
+[component_groups.qualification.components.member_18]
+component_spec = "default"
+
+[component_group_deployments.qualification]
+component_group = "qualification"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1

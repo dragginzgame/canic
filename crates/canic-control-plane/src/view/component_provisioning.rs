@@ -88,6 +88,7 @@ pub enum RootComponentProvisioningRuntimeMode {
 /// Read-only accepted root batch and its exact replay receipt.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentProvisioningView {
+    pub last_failure: Option<RootComponentProvisioningFailureView>,
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
     pub fleet_registry: FleetRegistryVersion,
@@ -115,6 +116,15 @@ pub struct RootComponentProvisioningView {
     pub activation_started_at_ns: Option<u64>,
     pub runtimes_activated_at_ns: Option<u64>,
     pub receipt_content_hash: [u8; 32],
+}
+
+/// Read-only latest failure and retry state, independent of provisioning progress.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootComponentProvisioningFailureView {
+    pub origin: canic_core::control_plane_support::error::ProvisioningFailureView,
+    pub failed_at_ns: u64,
+    pub consecutive_failures: u32,
+    pub retry_at_ns: Option<u64>,
 }
 
 /// Read-only pre-call intent for one exact Component Directory delivery.

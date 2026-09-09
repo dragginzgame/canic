@@ -53,9 +53,9 @@ pub struct FleetComponentProvisioningRootAcceptanceCallView {
 
 /// Coordinator decision for one expected root-acceptance cursor.
 pub enum FleetComponentProvisioningRootAcceptanceDisposition {
-    Current(FleetComponentProvisioningStatusResponse),
-    Invoke(FleetComponentProvisioningRootAcceptanceCallView),
-    Reconcile(FleetComponentProvisioningRootAcceptanceCallView),
+    Current(Box<FleetComponentProvisioningStatusResponse>),
+    Invoke(Box<FleetComponentProvisioningRootAcceptanceCallView>),
+    Reconcile(Box<FleetComponentProvisioningRootAcceptanceCallView>),
 }
 
 /// One exact root advance call derived only from durable Coordinator progress.

@@ -31,6 +31,7 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Update,
         );
+        self.record_remote_call();
         run_output(&mut command)
     }
 
@@ -51,6 +52,7 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Query,
         );
+        self.record_remote_call();
         run_output(&mut command)
     }
 
@@ -95,6 +97,7 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Update,
         );
+        self.record_remote_call();
         run_output(&mut command)
     }
 
@@ -114,6 +117,7 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Query,
         );
+        self.record_remote_call();
         run_output(&mut command)
     }
 
@@ -134,6 +138,7 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Query,
         );
+        self.record_remote_call();
         run_output(&mut command)
     }
 
@@ -169,6 +174,7 @@ impl IcpCli {
         let mut command = self.canister_command();
         command.args(["metadata", canister, metadata_name]);
         self.add_target_args(&mut command);
+        self.record_remote_call();
         run_output(&mut command)
     }
 
@@ -195,6 +201,7 @@ impl IcpCli {
         command.args(["status", canister]);
         command.arg("--json");
         self.add_target_args(&mut command);
+        self.record_remote_call();
         run_json(&mut command)
     }
 

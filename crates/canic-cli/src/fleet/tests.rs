@@ -105,6 +105,10 @@ fn ensure_requires_canonical_apply_digest() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one retained fixture compares ordinary resume with explicit reset input selection"
+)]
 fn ensure_reopens_retained_reviewed_input_when_working_toml_is_missing() {
     let root = temp_dir("canic-cli-retained-desired");
     let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
@@ -165,6 +169,8 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
             protocol_ready: BTreeMap::new(),
         },
         1,
+        &"36".repeat(32),
+        None,
     )
     .expect("compile retained desired authority");
     let paths = EnsurePaths::under(&root, "local", "retained");
@@ -189,6 +195,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     )
     .expect("retain in-progress journal");
     let options = EnsureOptions {
+        reinstall: false,
         apply: Some(plan.plan_sha256),
         desired: PathBuf::from("missing.toml"),
         environment: Some("local".to_string()),
@@ -201,6 +208,22 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         .expect("load exact retained desired without working TOML");
     assert_eq!(loaded.desired, desired);
     assert_eq!(loaded.sha256, desired_sha256);
+
+    let mut reset_options = options;
+    reset_options.reinstall = true;
+    reset_options.apply = None;
+    let current_path = root.join("current.toml");
+    fs::write(
+        &current_path,
+        toml::to_string(&desired).expect("current desired"),
+    )
+    .expect("write current desired");
+    // Deliberate reset diagnoses the source independently; its old plan need not
+    // deserialize as an executable current plan merely to load today's request.
+    fs::write(&paths.plan, br#"{"source_evidence_only":true}"#).expect("opaque source plan");
+    let loaded = load_ensure_authority(&root, &current_path, &reset_options)
+        .expect("load the explicit reset request independently of source execution");
+    assert_eq!(loaded.desired, desired);
 
     fs::remove_dir_all(root).expect("remove test directory");
 }
@@ -325,6 +348,8 @@ fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
             plan_sha256: "plan".to_string(),
             planned_at_time: 1,
             protocol_actions: Vec::new(),
+            recovery_review: None,
+            reinstall: None,
             root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,
@@ -348,6 +373,7 @@ fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
              \nplan_sha256: plan\
              \nplan_scope: full\
              \nterminal: false\
+             \ncycle_budget: planning allowances; maximums are not measured expenditure\
              \nobserved_controlled_cycles: 0.000B\
              \nretained_in_reused_canisters_cycles: 0.000B\
              \nscheduled_transfer_cycles: 0.000B\
@@ -359,15 +385,111 @@ fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
              \nmaximum_estate_creation_fee_cycles: 1.000T\
              \nexpected_post_operation_cycles: 101.600T\
              \nestate_funding_domains:\
-             \n  root-0: root_principal={principal} ledger=estate-ledger balance=4000000000000 workloads=0/2 pool=0/2 ready=0 pending=0 pending_detail=none available_slots=2 creations=2 creation_amount=6500000000000 readiness_floor=5000000000000 management_creation_fee=500000000000 execution_margin=1000000000000 ledger_fee=100000000 maximum_debit=13000200000000 funding=9000200000000 shortfall=9000200000000\
+             \n  root-0: root_principal={principal} ledger=estate-ledger balance=4.000T workloads=0/2 pool=0/2 ready=0 pending=0 pending_detail=none available_slots=2 root_funded_creations=2 creation_amount=6.500T readiness_floor=5.000T management_creation_fee=500.000B execution_margin=1.000T ledger_fee=0.100B maximum_debit=13.000T funding=9.000T shortfall=9.000T\
+             \nhost_create_actions: 0 (initial or replacement canisters; separate from Root-funded pool creations)\
              \ncanisters:\
-             \n  app: disposition=Reuse principal={principal} observed_cycles=1.250B effects=1\
+             \n  app: disposition=Reuse principal={principal} observed_cycles=1.250B effects=1 actions=[native_topup]\
              \n  native_topup app: cycles_ledger_withdraw=1.000Q ledger=ledger target={principal} deficit=2.000B margin=0.500B expected_native_post=1.002T\
-             \nconservation_equation: 0.000B + 179.101T - 3.501T - 1.000T - 82.000T = 101.600T\
+             \nconservation_equation: 0.000B observed controlled + 179.101T maximum operator debit - 3.501T maximum unavoidable fees - 1.000T maximum Root-funded creation fees - 82.000T maximum execution burn = 101.600T expected remaining\
              \nmeasured_estate_funding_cycles: 10.000T\
-             \nmeasured_conservation: 1.000Q + 1.500T - 500.000B - 2.000B = 1.001Q"
+             \nmeasured_conservation: 1.000Q observed starting + 1.500T received funding - 500.000B exact Root-funded creation fees - 2.000B measured execution burn = 1.001Q final controlled"
         )
     );
+}
+
+#[test]
+fn text_report_distinguishes_host_creates_and_ordered_reinstall_actions() {
+    let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+    let mut report = cycle_quantity_report(principal);
+    report.actual_conservation = None;
+    report.plan.conservation.estate_funding_domains[0].required_creation_count = 0;
+    report.plan.canisters[0].actions = vec![
+        EnsureAction::Create {
+            controller_canisters: Vec::new(),
+            controllers: Vec::new(),
+            created_at_time: 1,
+            ledger: "ledger".to_string(),
+            name: "pool-0".to_string(),
+            requested_initial_cycles: 5 * TC,
+            subnet: "subnet".to_string(),
+        },
+        EnsureAction::Stop {
+            name: "app".to_string(),
+            principal: principal.to_string(),
+        },
+        EnsureAction::Install {
+            canic_init: None,
+            reinstall_witness: None,
+            init_arg: None,
+            init_arg_sha256: None,
+            init_candid: None,
+            init_candid_sha256: None,
+            mode: InstallMode::Reinstall,
+            name: "app".to_string(),
+            principal: principal.to_string(),
+            wasm: "app.wasm".to_string(),
+            wasm_sha256: "00".repeat(32),
+        },
+        EnsureAction::SetControllers {
+            controller_canisters: Vec::new(),
+            controllers: Vec::new(),
+            name: "app".to_string(),
+            principal: principal.to_string(),
+        },
+        EnsureAction::Start {
+            name: "app".to_string(),
+            principal: principal.to_string(),
+        },
+    ];
+    let text = render_text_report(&report);
+    assert!(text.contains("host_create_actions: 1"));
+    assert!(text.contains("root_funded_creations=0"));
+    assert!(text.contains("actions=[create, stop, reinstall, set_controllers, start]"));
+    assert!(!text.contains("measured_conservation:"));
+    let json = report_json_value(&report).expect("structured report");
+    assert_eq!(
+        json["plan"]["canisters"][0]["actions"][0]["requested_initial_cycles"],
+        "5000000000000"
+    );
+    assert_eq!(
+        json["plan"]["canisters"][0]["actions"][2]["mode"],
+        "reinstall"
+    );
+    report.plan.canisters[0].actions.clear();
+    let text = render_text_report(&report);
+    assert!(text.contains("host_create_actions: 0"));
+    assert!(text.contains("effects=0 actions=[]"));
+}
+
+#[test]
+fn text_report_formats_pending_funding_and_unobserved_balances() {
+    let mut report = cycle_quantity_report("rrkah-fqaaa-aaaaa-aaaaq-cai");
+    let domain = &mut report.plan.conservation.estate_funding_domains[0];
+    domain.available_cycles = None;
+    domain.pending_creation = Some(
+        canic_host::fleet_ensure::model::EstatePoolPendingCreationObservation {
+            attempt_count: 2,
+            available_cycles: Some(4 * TC),
+            creation_amount_cycles: 6 * TC,
+            created_principal: None,
+            diagnostic: None,
+            last_attempt_at_ns: None,
+            operation_id: "pending".to_string(),
+            required_cycles: Some(6 * TC),
+            retry_at_ns: None,
+            shortfall_cycles: Some(2 * TC),
+            uncertain_result: false,
+        },
+    );
+    let text = render_text_report(&report);
+    assert!(text.contains("balance=unobserved"));
+    assert!(text.contains("available:4.000T required:6.000T shortfall:2.000T"));
+    report.plan.conservation.estate_funding_domains[0]
+        .pending_creation
+        .as_mut()
+        .expect("pending")
+        .available_cycles = None;
+    assert!(render_text_report(&report).contains("available:unobserved"));
 }
 
 #[test]
@@ -390,4 +512,94 @@ fn phase_progress_json_has_exact_operation_authority_and_numeric_counts() {
     assert_eq!(value["progress"]["state"]["kind"], "prerequisite_complete");
     assert_eq!(value["progress"]["applied_effects"], 17);
     assert_eq!(value["progress"]["reviewed_effects"], 22);
+}
+
+#[test]
+fn deliberate_reinstall_cannot_replace_a_reviewed_apply_digest() {
+    let args = [
+        OsString::from("ensure"),
+        OsString::from("staging"),
+        OsString::from("--reinstall"),
+    ];
+    assert!(EnsureOptions::parse(args.clone()).unwrap().reinstall);
+    let conflicting = args
+        .into_iter()
+        .chain([OsString::from("--apply"), OsString::from("11".repeat(32))]);
+    assert!(matches!(
+        EnsureOptions::parse(conflicting),
+        Err(FleetCommandError::Usage(_))
+    ));
+}
+
+#[test]
+fn recovery_review_is_visible_in_text_json_and_typed_progress() {
+    use canic_host::fleet_ensure::model::{
+        FleetEnsureSuccessorReviewReason, FleetRecoveryReview, FleetReviewAction,
+        FleetSuccessorReview, RecoveryDiscovery,
+    };
+    let mut report = cycle_quantity_report("rrkah-fqaaa-aaaaa-aaaaq-cai");
+    report.plan.recovery_review = Some(Box::new(FleetRecoveryReview {
+        base_execution_burn_cycles: 40,
+        continuation_reserve_cycles: 60,
+        whole_continuation_ceiling_cycles: 120,
+        known_pool_funding: Vec::new(),
+        discovery: RecoveryDiscovery::PendingCurrentProtocol,
+    }));
+    let value = report_json_value(&report).unwrap();
+    assert_eq!(
+        value["plan"]["recovery_review"]["continuation_reserve_cycles"],
+        "60"
+    );
+    assert_eq!(
+        value["plan"]["recovery_review"]["discovery"],
+        "pending_current_protocol"
+    );
+    assert!(render_text_report(&report).contains("base_execution_burn_cycles:"));
+    assert!(render_text_report(&report).contains("continuation_reserve_cycles:"));
+    let progress = FleetEnsureProgress {
+        operation_id: "operation".into(),
+        plan_sha256: "plan".into(),
+        phase: FleetEnsurePhase::TerminalVerification,
+        state: FleetEnsureProgressState::ReviewRequired {
+            reason: FleetEnsureSuccessorReviewReason::AdditionalEffect,
+            review: Some(Box::new(FleetSuccessorReview {
+                actions: vec![FleetReviewAction {
+                    name: "pool-1".into(),
+                    principal: Some("asset".into()),
+                    kind: "fund".into(),
+                }],
+                maximum_additional_debit_cycles: 47,
+                next_review_command: "canic fleet ensure 'demo' --desired 'custom.toml'".into(),
+            })),
+        },
+        applied_effects: 2,
+        reviewed_effects: 2,
+    };
+    let value: serde_json::Value = serde_json::from_str(&render_progress(&progress, true)).unwrap();
+    assert_eq!(
+        value["progress"]["state"]["review"]["actions"][0]["kind"],
+        "fund"
+    );
+    assert_eq!(
+        value["progress"]["state"]["review"]["maximum_additional_debit_cycles"],
+        "47"
+    );
+    assert!(render_progress(&progress, false).contains("--desired 'custom.toml'"));
+    assert_eq!(quote_review_argument("a'b"), "'a'\"'\"'b'");
+}
+
+#[test]
+fn observation_timing_is_informational_and_preserves_failed_call_counts() {
+    let timing = canic_host::fleet_ensure::dto::FleetObservationTiming {
+        stage: canic_host::fleet_ensure::dto::FleetObservationStage::ConfiguredCanisters,
+        elapsed_millis: 111,
+        remote_call_attempts: 4,
+        succeeded: false,
+    };
+    let json: serde_json::Value =
+        serde_json::from_str(&render_observation_timing(&timing, true)).unwrap();
+    assert_eq!(json["event"], "fleet_ensure_observation");
+    assert_eq!(json["observation"]["remote_call_attempts"], 4);
+    assert_eq!(json["observation"]["succeeded"], false);
+    assert!(json.get("progress").is_none());
 }

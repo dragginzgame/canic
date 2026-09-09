@@ -5,6 +5,39 @@ convergence workflow. It reads one current desired-state document, observes the
 configured controlled estate, and either writes a reviewed plan or applies the
 exact retained plan digest.
 
+Human-readable reports describe a **planning budget**: maximum operator debit,
+unavoidable fees, Root-funded creation fees and execution burn are allowances,
+not measured expenditure. The conservation equation names each term; measured
+conservation appears separately when terminal evidence is available. Cycle
+amounts use compact `B`, `T` and `Q` units rounded to three decimals; use JSON for
+exact integer amounts.
+
+Each canister row lists its action kinds in plan order. `host_create_actions`
+counts direct initial or replacement creation actions in that plan. Funding
+domains report `root_funded_creations` for additional pool capacity created by
+the Root; zero does not mean the host will create no canisters. Progress remains
+on stderr with the current phase and applied/reviewed effect counts. Preserve
+that stream when capturing stdout in a wrapper; these counts do not estimate
+remaining time or indicate full-Fleet readiness before terminal verification.
+
+Observation diagnostics also use stderr. JSON emits
+`event: "fleet_ensure_observation"`, `schema_version: 1`, and an `observation`
+containing `stage`, `elapsed_millis`, `remote_call_attempts` and `succeeded`.
+Counts represent logical remote-call attempts, including failures, rather than
+transport packets or handshake traffic. Independent infrastructure reads may
+overlap up to four at a time. Pool reads and error precedence retain configured
+order; every issued batch drains before an error returns. The existing snapshot
+expires after the observation, including failed observations, before effects.
+
+Protected provisioning status retains one latest failure with stage, target,
+operation, diagnostic, retry category and the originating timestamp. Transient
+Root retries use delays of 1, 2, 4, 8, 16, 32 and then 60 seconds, capped at 60;
+remote execution takes additional time. Durable work progress clears that
+backoff. A proved Store activation
+binding conflict suspends retries for review; exact acceptance replay does not
+clear it. Failure timestamps and attempt counts do not count as work progress
+or bypass host stall detection. Issued effects remain in their existing records.
+
 > Development status: canister/code/controller/cycle convergence and the typed
 > Store, Registry, Root-mirror, local Component Registry and Component action
 > graph are implemented. A fresh-estate governed PocketIC journey traverses the
@@ -91,6 +124,29 @@ that plan to stop the Root, reinstall its sealed current initializer and start
 it again. The same journal records intent and the pre-install canister version;
 a lost response resumes observation instead of repeating an already completed
 reset.
+
+Root prerequisite activation authority remains bound to its desired input until
+the dependent Fleet finishes. A changed input after that prerequisite is refused
+before Store effects. Reusing a Root module alone does not prove that its
+activation operation matches a new Store install.
+
+CANIC-157's single-Root partial-activation recovery is qualified against the
+affected 0.110.12 runtime. Preserve the source plan, journal, paid
+receipts, artifacts and complete estate seed. An explicit `--reinstall` review
+inspects the issued source prefix without executing the old plan. It requires
+exact source modules/controllers, complete physical assets, unchanged Root
+Ledger balances, bounded prior debit and a corrected Root module. Preview keeps
+the active source files intact; applying its digest archives them before
+adopting the new journal. The preparation stops the Coordinator, stops and
+restarts the unchanged Root, then checks fresh inventory. A separate review
+reinstalls the Root; the next Full Ensure review resets remaining infrastructure
+and completes readiness. The Coordinator remains stopped between preparation
+and Full Ensure. Multi-Root partial activation is not admitted by this bounded
+path. Existing converged same-release reinstall remains separate.
+The installed-release proof covers controller-drift rejection, lost install
+response recovery, retained assets, conservation and effect-free replay. Exact
+evidence and the separate live-adoption boundary are in the
+[activation feedback report](../../audits/reports/2026-09/2026-09-08/activation-feedback.md).
 
 After a completed fresh installation, the original symbolic fresh seed may be
 used again. Ensure resolves its Root name through the existing Fleet state
@@ -638,3 +694,70 @@ Fleet. The replacement Fleet uses a separately reviewed current plan. Exact
 controlled canister identities and their cycle accounts may remain in place;
 identity reuse is not promised. Same-release interruption recovery retains its exact current plan,
 journal, installed artifact and paid-effect receipts.
+
+## Deliberate same-release database wipe
+
+`canic fleet ensure <fleet> --reinstall` requests a new wipe of a fully converged
+Fleet using the same desired input and installed release. The request retains
+its own operation identity; it is not a persistent desired-state flag.
+
+1. Review the `reinstall_preparation` plan and apply its `plan_sha256`. This
+   seals Root and Coordinator allocation and maintenance.
+2. Run ordinary `fleet ensure` again. Review the `full` reset plan, including
+   every physical pool asset captured after sealing, then apply its digest.
+3. If interrupted, apply the retained digest again. The journal reconciles
+   completed effects and continues that same wipe.
+
+After sealing, the journal records `prepared`; current-Fleet reads reject it
+until the full reset converges. Preparation completion applies only to the
+`reinstall_preparation` scope. Reinstall recovery checks management deployment
+history through a reviewed Root witness against the issued effect, installed
+hash, operator and observed version. The controller-only call uses replicated
+management history, so ordinary inspection or timer version advances permit
+retry when no newer deployment exists; conflicting history fails closed.
+
+Completion requires full Fleet readiness and conservation of the complete
+physical estate. Application stable data is discarded; authored installation
+fixtures and current framework authority are rebuilt. Physical identities,
+cycle balances and Root-owned Ledger account identities are retained, with
+observed execution charges accounted for by the reviewed bounds. Logical pool
+role assignments may change. No partial reset is reported as full convergence.
+
+After completion, ordinary ensure is a no-op. A new `--reinstall` request creates
+a new intentional wipe. A conflicting new request cannot replace an unfinished
+wipe, and `--reinstall` cannot be combined with `--apply`.
+
+## Retained growth and dependent recovery review
+
+Before a changed-release Root reinstall, Ensure compares retained descendant
+identities with the selected Root pool imports. Known assets missing from that
+selection cause typed `IncompleteRootEstate` rejection before Stop or Install.
+Refresh the existing operator seed and matching policy imports from terminal
+Fleet evidence, regenerate desired state while the current Root is still
+observable, and review the exact live controller/subnet bindings. The host never
+silently promotes retained identities into import authority. Preserve the active
+state and journal until terminal completion; deleting them removes useful
+omission evidence and is not a seed-refresh procedure.
+
+Infrastructure reviews expose `recovery_review`: base execution burn, the
+reserved continuation allowance, the complete successor-catalogue ceiling and
+currently known pool-reset top-ups. The reserve is capped by available cycle
+headroom after the base allowance. It is a conservative maximum, not expected
+expenditure. A first phase that cannot afford its own bound still rejects.
+Automatic protocol successors retain the longest affordable ordered prefix under
+the original sealed budget; each immutable phase is durable before its first
+intent. Another phase or new debit beyond that authority requires fresh review.
+
+Known reset top-ups use the same calculation as executable pool funding actions,
+including the funding margin and exact configured Ledger fee. Their presence in
+`recovery_review` grants no debit authority. `pending_current_protocol` explicitly
+marks work that can only be resolved after installation and fresh observation.
+A zero-funding infrastructure phase is therefore not a complete deployment quote.
+
+Typed `SuccessorReviewRequired` errors and `review_required` progress include the
+newly observed target/action list, maximum additional debit including fees and
+the next read-only review command. Completed infrastructure receipts and the
+operation identity remain available through that review boundary; reviewed
+funding still requires fresh authority, fee and balance revalidation before any
+debit. The same informative pause also applies after an explicitly reviewed
+recovery phase when activation work remains.

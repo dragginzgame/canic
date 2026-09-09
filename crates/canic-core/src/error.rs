@@ -27,6 +27,7 @@ use std::fmt;
 pub struct InternalError {
     code: RegisteredDiagnosticCode,
     projection: PublicProjection,
+    provisioning_failure: Option<crate::view::provisioning_failure::ProvisioningFailureView>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -40,6 +41,7 @@ impl InternalError {
         Self {
             code,
             projection: PublicProjection::Registered(public_code),
+            provisioning_failure: None,
         }
     }
 
@@ -56,6 +58,7 @@ impl InternalError {
         Self {
             code,
             projection: PublicProjection::Registered(public_code),
+            provisioning_failure: None,
         }
     }
 
@@ -66,7 +69,49 @@ impl InternalError {
         Self {
             code: codes::PLATFORM_FAILED,
             projection: PublicProjection::Forwarded(err),
+            provisioning_failure: None,
         }
+    }
+
+    /// Attach only the first originating owner; outer workflows preserve its exact context.
+    #[must_use]
+    pub const fn with_provisioning_failure(
+        mut self,
+        stage: crate::domain::provisioning_failure::ProvisioningFailureStage,
+        target: candid::Principal,
+        operation_id: [u8; 32],
+        retry_category: crate::domain::provisioning_failure::ProvisioningRetryCategory,
+    ) -> Self {
+        if self.provisioning_failure.is_none() {
+            self.provisioning_failure =
+                Some(crate::view::provisioning_failure::ProvisioningFailureView {
+                    recorded_at_ns: None,
+                    stage,
+                    target,
+                    operation_id,
+                    diagnostic_code: self.public_error().raw_code(),
+                    retry_category,
+                });
+        }
+        self
+    }
+
+    /// Preserve an already observed protected origin without changing the public envelope.
+    #[must_use]
+    pub fn with_observed_provisioning_failure(
+        mut self,
+        origin: crate::view::provisioning_failure::ProvisioningFailureView,
+    ) -> Self {
+        self.provisioning_failure.get_or_insert(origin);
+        self
+    }
+
+    /// Return protected context independently of the bounded public error envelope.
+    #[must_use]
+    pub const fn provisioning_failure(
+        &self,
+    ) -> Option<crate::view::provisioning_failure::ProvisioningFailureView> {
+        self.provisioning_failure
     }
 
     #[must_use]

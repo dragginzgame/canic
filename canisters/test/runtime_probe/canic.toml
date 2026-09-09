@@ -1,4 +1,4 @@
-public_metrics = ["application", "cycles", "performance", "shard_occupancy"]
+public_metrics = ["application", "cycles", "operations", "performance", "shard_occupancy"]
 
 [app]
 name = "runtime_probe"

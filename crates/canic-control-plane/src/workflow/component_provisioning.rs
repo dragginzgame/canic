@@ -29,7 +29,7 @@ use candid::{CandidType, Principal};
 use canic_core::{
     api::timer::TimerApi,
     control_plane_support::{
-        error::InternalError,
+        error::{InternalError, ProvisioningFailureStage, ProvisioningRetryCategory},
         ops::{
             component_provisioning_plan::{
                 ComponentProvisioningPlanOps, RootComponentProvisioningBatchValidation,
@@ -189,6 +189,9 @@ fn schedule_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32], delay: Dur
     reason = "one private phase dispatcher advances the sole durable Root provisioning operation"
 )]
 async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32]) {
+    if TimerApi::require_active().is_err() {
+        return;
+    }
     let Ok(current) =
         RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
             operation_id,
@@ -197,6 +200,20 @@ async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 
     else {
         return;
     };
+    if let Some(failure) = current.last_failure {
+        let Some(retry_at_ns) = failure.retry_at_ns else {
+            return;
+        };
+        let now_ns = IcOps::now_nanos();
+        if retry_at_ns > now_ns {
+            schedule_provisioning(
+                operation_id,
+                plan_hash,
+                Duration::from_nanos(retry_at_ns - now_ns),
+            );
+            return;
+        }
+    }
     let coordinator = match validated_root_authority() {
         Ok((authority, _root)) => authority.binding.authority.binding.coordinator,
         Err(_) => return,
@@ -274,21 +291,68 @@ async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 
         }
         RootComponentProvisioningPhase::RuntimesActive => return,
     };
-    match result {
-        Ok(status) if status.phase == RootComponentProvisioningPhase::RuntimesActive => {}
-        Ok(_) => schedule_provisioning(operation_id, plan_hash, Duration::ZERO),
-        Err(error) => {
-            canic_core::log!(
-                Topic::Fleet,
-                Warn,
-                "Root Component provisioning retry: operation_id={operation_id:?} phase={:?} activated_components={}/{} diagnostic={}",
-                current.phase,
-                current.activated_component_count,
-                current.component_count,
-                error.code()
-            );
-            schedule_provisioning(operation_id, plan_hash, Duration::from_secs(1));
+    if TimerApi::require_active().is_err() {
+        return;
+    }
+    // An older callback must not overwrite a newer receipt or permanent failure.
+    let Ok(latest) = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+        operation_id,
+        plan_hash,
+    }) else {
+        return;
+    };
+    let latest = crate::ops::component_provisioning::status_response(latest);
+    let complete = latest.phase == RootComponentProvisioningPhase::RuntimesActive;
+    if !complete && RootComponentProvisioningOps::failure_changed(&current, &latest) {
+        return;
+    }
+    if complete || RootComponentProvisioningOps::progress_changed(&current, &latest) {
+        RootComponentProvisioningOps::clear_failure(operation_id, plan_hash).unwrap_or_else(
+            |error| ic_cdk::trap(format!("provisioning progress evidence: {error}")),
+        );
+        if !complete {
+            schedule_provisioning(operation_id, plan_hash, Duration::ZERO);
         }
+        return;
+    }
+    if latest
+        .last_failure
+        .is_some_and(|failure| failure.retry_category == ProvisioningRetryCategory::ReviewRequired)
+    {
+        return;
+    }
+    let error = result
+        .err()
+        .unwrap_or_else(InternalError::unavailable)
+        .with_provisioning_failure(
+            ProvisioningFailureStage::Provisioning,
+            IcOps::canister_self(),
+            operation_id,
+            ProvisioningRetryCategory::Backoff,
+        );
+    let now_ns = IcOps::now_nanos();
+    let failure = RootComponentProvisioningOps::record_failure(
+        operation_id,
+        plan_hash,
+        error.provisioning_failure().expect("failure context"),
+        now_ns,
+    )
+    .unwrap_or_else(|error| ic_cdk::trap(format!("provisioning failure evidence: {error}")));
+    canic_core::log!(
+        Topic::Fleet,
+        Warn,
+        "Root Component provisioning retry: operation_id={operation_id:?} phase={:?} activated_components={}/{} diagnostic={}",
+        current.phase,
+        current.activated_component_count,
+        current.component_count,
+        error.code()
+    );
+    if let Some(retry_at_ns) = failure.retry_at_ns {
+        schedule_provisioning(
+            operation_id,
+            plan_hash,
+            Duration::from_nanos(retry_at_ns.saturating_sub(now_ns)),
+        );
     }
 }
 
@@ -452,11 +516,18 @@ async fn activate_component_step(
     request: &RootComponentActivationRequest,
     member: crate::view::component_provisioning::RootComponentPublicationMemberView,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let provisioning_origin = activation_member_origin(request, &member)
-        .map_err(|error| activation_member_failure("origin", &member, error))?;
+    let provisioning_origin = activation_member_origin(request, &member).map_err(|error| {
+        activation_member_failure(ProvisioningFailureStage::ComponentOrigin, &member, error)
+    })?;
     let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
         .ok_or_else(InternalError::unavailable)
-        .map_err(|error| activation_member_failure("allocation", &member, error))?;
+        .map_err(|error| {
+            activation_member_failure(
+                ProvisioningFailureStage::ComponentAllocation,
+                &member,
+                error,
+            )
+        })?;
     let runtime_active = match &allocation.progress {
         crate::view::component_registry::RootComponentAllocationProgressView::Committed {
             commitment,
@@ -474,7 +545,9 @@ async fn activate_component_step(
             &member.component_group,
         ))
         .await
-        .map_err(|error| activation_member_failure("runtime", &member, error))?;
+        .map_err(|error| {
+            activation_member_failure(ProvisioningFailureStage::ComponentRuntime, &member, error)
+        })?;
     }
     Box::pin(super::component_registry::activate_group_member_membership(
         RootComponentMembershipActivationRequest {
@@ -485,27 +558,40 @@ async fn activate_component_step(
         &member.component_group,
     ))
     .await
-    .map_err(|error| activation_member_failure("membership", &member, error))?;
+    .map_err(|error| {
+        activation_member_failure(
+            ProvisioningFailureStage::ComponentMembership,
+            &member,
+            error,
+        )
+    })?;
     RootComponentProvisioningOps::mark_member_activated(request, &member)
-        .map_err(|error| activation_member_failure("commit", &member, error))
+        .map_err(|error| {
+            activation_member_failure(ProvisioningFailureStage::ComponentCommit, &member, error)
+        })
         .map(crate::ops::component_provisioning::status_response)
 }
 
 fn activation_member_failure(
-    stage: &'static str,
+    stage: ProvisioningFailureStage,
     member: &crate::view::component_provisioning::RootComponentPublicationMemberView,
     error: InternalError,
 ) -> InternalError {
     canic_core::log!(
         Topic::Fleet,
         Error,
-        "Root Component activation failed stage={stage} component_index={} canister={} operation_id={:?} diagnostic={}",
+        "Root Component activation failed stage={stage:?} component_index={} canister={} operation_id={:?} diagnostic={}",
         member.component_index,
         member.binding.canister_id,
         member.member_operation_id,
         error.code()
     );
-    error
+    error.with_provisioning_failure(
+        stage,
+        member.binding.canister_id,
+        member.member_operation_id,
+        ProvisioningRetryCategory::Backoff,
+    )
 }
 
 fn activation_member_origin(
@@ -552,14 +638,23 @@ async fn activate_root_runtime(
     }
 }
 
-fn activation_root_failure(stage: &'static str, error: InternalError) -> InternalError {
+fn activation_root_failure(
+    stage: ProvisioningFailureStage,
+    operation_id: [u8; 32],
+    error: InternalError,
+) -> InternalError {
     canic_core::log!(
         Topic::Fleet,
         Error,
-        "Root runtime activation failed stage={stage} diagnostic={}",
+        "Root runtime activation failed stage={stage:?} diagnostic={}",
         error.code()
     );
-    error
+    error.with_provisioning_failure(
+        stage,
+        IcOps::canister_self(),
+        operation_id,
+        ProvisioningRetryCategory::Backoff,
+    )
 }
 
 async fn activate_fresh_root_runtime(
@@ -567,11 +662,18 @@ async fn activate_fresh_root_runtime(
     provisioning: &RootComponentProvisioningView,
     observed: FleetActivationStatusResponse,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let root_activation_id = observed.identity.operation_id;
     let prepared =
         if observed.phase == FleetActivationPhase::Prepared && observed.credential.is_none() {
             root_fleet_activation::prepare_root()
                 .await
-                .map_err(|error| activation_root_failure("prepare", error))?
+                .map_err(|error| {
+                    activation_root_failure(
+                        ProvisioningFailureStage::RootPreparation,
+                        root_activation_id,
+                        error,
+                    )
+                })?
         } else {
             observed
         };
@@ -584,7 +686,13 @@ async fn activate_fresh_root_runtime(
             },
         ))
         .await
-        .map_err(|error| activation_root_failure("resume", error))?
+        .map_err(|error| {
+            activation_root_failure(
+                ProvisioningFailureStage::RootActivation,
+                root_activation_id,
+                error,
+            )
+        })?
         .status
     } else {
         prepared
