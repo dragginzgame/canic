@@ -8,7 +8,7 @@
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
-[![Internal Rust](https://img.shields.io/badge/internal%20rust-1.97.1-orange.svg)](rust-toolchain.toml)
+[![Internal Rust](https://img.shields.io/badge/internal%20rust-1.98.1-orange.svg)](rust-toolchain.toml)
 
 Canic is a Rust toolkit and operator CLI for building and running Internet
 Computer canister fleets. Its capabilities are deliberately separable: use the
@@ -45,7 +45,7 @@ Canic uses the installed `icp` binary for replica, canister, snapshot, and
 restore operations. Supported versions and upgrade guidance are maintained in
 [INSTALLING.md](INSTALLING.md#icp-cli-compatibility).
 
-[rust-toolchain.toml](rust-toolchain.toml) pins internal Rust `1.97.1`;
+[rust-toolchain.toml](rust-toolchain.toml) pins internal Rust `1.98.1`;
 published crates declare MSRV `1.91.0` in [Cargo.toml](Cargo.toml).
 
 ## Features

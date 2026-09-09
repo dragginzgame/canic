@@ -14,7 +14,7 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.13` introduces breaking Fleet review-record changes for safer reinstall
   and recovery, improves provisioning diagnostics and public metrics, reduces
-  repeat build work, and updates IcyDB to 0.257.2 with Rust 1.98.1 lint fixes.
+  repeat build work, updates IcyDB to 0.257.2 and aligns Rust 1.98.1 tooling.
 - `0.110.12` adds optional bounded public chart history, labels public health as
   responding, consolidates ordinary test compilation and reuses Fleet fixture
   build-tool preflight.
