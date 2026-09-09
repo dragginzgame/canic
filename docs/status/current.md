@@ -29,6 +29,24 @@ Current development begins from tagged `v0.110.12`. Its immutable
 release details are in [the 0.110 changelog](../changelog/0.110.md). Package
 versions remain 0.110.12; the current source batch uses the open 0.110.13 draft.
 
+## Release Preflight Rust Alignment
+
+The maintainer's patch validation stopped at the release-integrity guard:
+`rust-toolchain.toml` used 1.98.1 while primary CI, scheduled security CI and
+developer setup still pinned 1.97.1. All three pins and the active README now
+match 1.98.1. The accompanying `validated source changed` output came from the
+guard's intentional source-drift fixture, not a detected change to this checkout.
+That fixture now captures its expected diagnostic and prints it only on an
+unexpected exit status; its no-version-bump assertion remains intact.
+
+The exact release-integrity guard passes, as do the release-validation-lane
+regression, actionlint for both workflows, ShellCheck for both edited scripts,
+diff whitespace and the 0.110.13 release-notes preflight. Guard log:
+`/tmp/canic-rust-pin-integrity.log`. The scoped correction and root/detailed
+changelog are ready for push/release review. The maintainer's complete gate
+still needs its release-flow rerun; this correction did not run broad validation,
+change package versions or publish Git state.
+
 ## Active IcyDB Update
 
 The maintainer requested the latest IcyDB on 2026-09-09. The official crates.io

@@ -103,8 +103,10 @@ assert_no_bump
 reset_fixture
 status=0
 FAKE_SOURCE_DRIFT=1 \
-    bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete minor || status=$?
+    bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete minor \
+    >"$FIXTURE/source-drift.log" 2>&1 || status=$?
 [[ "$status" -eq 1 ]] || {
+    cat "$FIXTURE/source-drift.log" >&2
     echo "release validation lane test failed: source drift status was $status" >&2
     exit 1
 }
