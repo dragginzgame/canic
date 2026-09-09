@@ -529,7 +529,6 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.7.0"]);
     assert_eq!(locked_package_versions(&lock, "ic-cdk-timers"), ["1.0.0"]);
-    assert_eq!(locked_package_versions(&lock, "icydb"), ["0.253.0"]);
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
     let workspace_dependencies = workspace_dependencies(&workspace_manifest);
@@ -537,10 +536,11 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
         dependency_version(&workspace_dependencies, "ic-timers"),
         "=0.7.0"
     );
-    assert_eq!(
-        dependency_version(&workspace_dependencies, "icydb"),
-        "=0.253.0"
-    );
+    let icydb_version = dependency_version(&workspace_dependencies, "icydb")
+        .strip_prefix('=')
+        .filter(|version| !version.is_empty())
+        .expect("IcyDB must use an exact workspace version pin");
+    assert_eq!(locked_package_versions(&lock, "icydb"), [icydb_version]);
     assert_eq!(
         workspace_dependencies["icydb"]
             .as_table()

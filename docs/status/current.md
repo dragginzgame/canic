@@ -29,6 +29,26 @@ Current development begins from tagged `v0.110.12`. Its immutable
 release details are in [the 0.110 changelog](../changelog/0.110.md). Package
 versions remain 0.110.12; the current source batch uses the open 0.110.13 draft.
 
+## Integration Guard Corrections
+
+The maintainer's ordinary integration run failed three targets: workspace
+manifest inheritance, managed stable-memory ABI ownership and timer dependency
+inventory. The internal fixture now inherits `canic-cli` from an exact workspace
+dependency declaration. Public stable-memory extent observation goes through
+the existing memory boundary; its size conversion and allocation behavior are
+unchanged. The timer guard verifies the locked IcyDB version against the exact
+workspace pin instead of retaining a second obsolete version literal.
+
+All 23 cases across `workspace_manifest`, `stable_memory_abi_guard` and
+`timer_inventory_guard` pass (`/tmp/canic-integration-guards-tests.log`). Native
+all-target/all-feature core Clippy and Wasm32 all-feature library Clippy pass
+(`...-clippy.log` and `...-wasm-clippy.log` with the same prefix). The Wasm check
+also exposed two enum-size expectations that now apply only on 64-bit targets;
+DTO and stable-record layouts remain unchanged. Formatting, whitespace,
+document checks and 0.110.13 changelog preflight pass. The accepted scoped batch
+and changelog are ready for release review; complete release validation remains
+the maintainer's rerun. No broad suite, version bump or Git publication ran here.
+
 ## Release Preflight Rust Alignment
 
 The latest maintainer Clippy failure was one stale
