@@ -110,7 +110,7 @@ pub(super) fn memory() -> Vec<PublicMetricSample> {
         ),
         sample(
             "memory.stable_extent".into(),
-            ic_cdk::api::stable_size().saturating_mul(65_536),
+            crate::memory::stable_extent_bytes(),
             "bytes",
         ),
     ]

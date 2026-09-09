@@ -62,6 +62,7 @@ candid = { version = "0.10", default-features = false }
 candid_parser = "0.4.0"
 canic = { version = "0.110.12", path = "crates/canic", default-features = false }
 canic-backup = { version = "0.110.12", path = "crates/canic-backup" }
+canic-cli = { version = "0.110.12", path = "crates/canic-cli" }
 canic-control-plane = { version = "0.110.12", path = "crates/canic-control-plane", default-features = false }
 canic-core = { version = "0.110.12", path = "crates/canic-core" }
 canic-host = { version = "0.110.12", path = "crates/canic-host" }

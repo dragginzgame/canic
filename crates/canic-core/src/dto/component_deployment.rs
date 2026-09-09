@@ -25,9 +25,12 @@ pub use crate::config::{
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the bounded protected boundary intentionally preserves the design's direct field shape"
+#[cfg_attr(
+    target_pointer_width = "64",
+    expect(
+        clippy::large_enum_variant,
+        reason = "the bounded protected boundary intentionally preserves the design's direct field shape"
+    )
 )]
 pub enum ProtectedComponentDeployment {
     UngroupedOrdinary {

@@ -182,9 +182,12 @@ pub struct FleetSubnetWasmStoreAuthorityRecord {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the bounded reinstall-only record preserves the protected context's direct field shape"
+#[cfg_attr(
+    target_pointer_width = "64",
+    expect(
+        clippy::large_enum_variant,
+        reason = "the bounded reinstall-only record preserves the protected context's direct field shape"
+    )
 )]
 pub enum ProtectedComponentDeploymentRecord {
     UngroupedOrdinary {
