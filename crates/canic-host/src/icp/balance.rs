@@ -38,6 +38,7 @@ impl IcpCli {
         let mut command = self.command();
         command.args(["cycles", "balance", "--json"]);
         self.add_target_args(&mut command);
+        self.record_remote_call();
         let output = run_json::<BalanceOutput>(&mut command)?;
         parse_cycles(&output.balance)
     }
@@ -47,6 +48,7 @@ impl IcpCli {
         let mut command = self.command();
         command.args(["token", "balance", "--json"]);
         self.add_target_args(&mut command);
+        self.record_remote_call();
         let output = run_json::<BalanceOutput>(&mut command)?;
         parse_icp_e8s(&output.balance)
     }

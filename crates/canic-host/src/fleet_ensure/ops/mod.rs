@@ -4,14 +4,19 @@
 //! Does not own: plan decisions or multi-step orchestration.
 //! Boundary: workflow persists an intent here before invoking one platform effect.
 
+mod authority_seal;
+mod bounded_observations;
 mod canic_init;
 pub(super) mod continuation;
 mod current_inventory;
 pub(super) mod current_protocol;
 pub(super) mod funding;
+mod install_history;
 mod plan_content;
 mod platform;
 mod protocol;
+pub(super) mod recovery;
+pub(super) mod reinstall;
 
 use crate::{
     durable_io::{
@@ -92,6 +97,9 @@ pub struct EffectOutcome {
 /// One exact live observation of whether an issued effect reached its terminal state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EffectObservation {
+    /// Latest protected failure, excluded from work-progress identity.
+    pub provisioning_failure:
+        Option<canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure>,
     pub applied: bool,
     /// Exact Root-owned Cycles Ledger pause returned by current Component provisioning.
     pub estate_funding_required:
@@ -130,12 +138,105 @@ pub struct TerminalFleetInventory {
     pub entries: Vec<crate::registry::RegistryEntry>,
 }
 
+/// Exact current infrastructure status and sealed physical reset closure.
+#[derive(Clone, Debug)]
+pub struct FleetReinstallObservation {
+    pub authorities:
+        BTreeMap<String, crate::fleet_ensure::model::RootManagementCanisterObservation>,
+    pub assets: Vec<crate::fleet_ensure::model::FleetReinstallAssetRecord>,
+    pub observation: FleetObservation,
+}
+
+/// Installed inactive-activation receipts and the complete physical source estate.
+#[derive(Clone, Debug)]
+pub struct FleetActivationResetObservation {
+    pub inventory: FleetReinstallObservation,
+    pub roots: Vec<crate::fleet_ensure::model::RootActivationResetRecord>,
+}
+
+/// The authority evidence required at a physical-pool verification boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReinstallAssetCheck {
+    /// Preserve the captured module and controllers before resetting Root records.
+    BeforeReset,
+    /// Preserve controllers after pool roles and current modules are reassigned.
+    Terminal,
+}
+
 /// Platform boundary used by the workflow and deterministic test adapters.
 pub trait EnsurePlatform {
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Report informational progress without changing operation authority or effects.
     fn report_progress(&mut self, _progress: crate::fleet_ensure::dto::FleetEnsureProgress) {}
+
+    /// Observe whether this exact operation owns the durable authority seal.
+    fn authority_sealed(
+        &mut self,
+        _operation_id: &str,
+        _action: &EnsureAction,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
+    /// Reinspect the reviewed pool closure immediately before its Root loses old records.
+    fn reinstall_assets_match(
+        &mut self,
+        _intent: &crate::fleet_ensure::model::FleetReinstallRecord,
+        _root: &str,
+        _check: ReinstallAssetCheck,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
+    /// Observe exact management authority for all infrastructure reset targets.
+    fn reinstall_authorities(
+        &mut self,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<
+        Option<BTreeMap<String, crate::fleet_ensure::model::RootManagementCanisterObservation>>,
+        Self::Error,
+    > {
+        Ok(None)
+    }
+
+    /// Capture the complete controlled pool after the existing authority seal.
+    fn reinstall_inventory(
+        &mut self,
+        _source_operation_id: &str,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Option<FleetReinstallObservation>, Self::Error> {
+        Ok(None)
+    }
+
+    /// Observe source activation receipts and every controlled physical asset before supersession.
+    fn activation_reset_inventory(
+        &mut self,
+        _source: &crate::fleet_ensure::model::FleetActivationSourceRecord,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Option<FleetActivationResetObservation>, Self::Error> {
+        Ok(None)
+    }
+
+    /// Observe the exact retained physical closure through newly installed current Roots.
+    fn activation_reset_inventory_after_reset(
+        &mut self,
+        _intent: &crate::fleet_ensure::model::FleetReinstallRecord,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Option<FleetReinstallObservation>, Self::Error> {
+        Ok(None)
+    }
+
+    /// Require exact retained Root activation authority before a dependent Store install.
+    /// A reviewed Root install in the same closure supplies its own new authority.
+    fn require_retained_root_activation(
+        &mut self,
+        _operation_id: &str,
+        _root: &str,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     /// Bind every observation and effect to the desired input retained by the
     /// reviewed operation. Production adapters must replace any newer caller
@@ -254,6 +355,7 @@ pub trait EnsurePlatform {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnsurePaths {
+    pub workspace: PathBuf,
     pub content: PathBuf,
     pub journal: PathBuf,
     pub lock: PathBuf,
@@ -271,6 +373,7 @@ impl EnsurePaths {
             .join(environment)
             .join(fleet);
         Self {
+            workspace: root.to_path_buf(),
             content: root
                 .join(".canic")
                 .join("fleet-ensure")
@@ -289,6 +392,16 @@ impl EnsurePaths {
 
 #[derive(Debug, ThisError)]
 pub enum EnsureStateError {
+    #[error(
+        "retained activation source does not prove an Applied host prefix followed by Issued provisioning"
+    )]
+    InvalidActivationSource,
+
+    #[error(
+        "activation reset review or local adoption documents changed; preserve the retained evidence"
+    )]
+    ActivationResetAdoptionConflict,
+
     #[error("Fleet ensure continuation authority is invalid: {reason}")]
     ContinuationAuthority { reason: String },
     #[error("Fleet ensure document is invalid at {}: {source}", path.display())]
@@ -345,7 +458,7 @@ pub enum EnsureStateError {
 }
 
 pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
-    lock_regular_file_with_parents(&paths.lock).map_err(|error| match error {
+    let lock = lock_regular_file_with_parents(&paths.lock).map_err(|error| match error {
         RegularFileLockError::Io(source) => EnsureStateError::Io {
             path: paths.lock.clone(),
             source,
@@ -357,7 +470,9 @@ pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
         RegularFileLockError::UnsupportedPlatform => EnsureStateError::Lock {
             path: paths.lock.clone(),
         },
-    })
+    })?;
+    reinstall::adoption::recover(paths)?;
+    Ok(lock)
 }
 
 pub fn read_journal(

@@ -488,6 +488,7 @@ type FleetComponentProvisioningRetryStage = variant {
 };
 // Bounded typed diagnostic retained for the Root call that remains retryable.
 type FleetComponentProvisioningRootFailure = record {
+  origin : opt ProvisioningFailureOrigin;
   stage : FleetComponentProvisioningRetryStage;
   fleet_subnet_root : principal;
   failed_at_ns : nat64;
@@ -1252,6 +1253,34 @@ type ObservabilityResponse = variant {
 type OperationReceipt = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec principal };
 type PageRequest = record { offset : nat64; limit : nat64 };
+// Protected origin carried through outer provisioning stages without public error expansion.
+type ProvisioningFailureOrigin = record {
+  retry_category : ProvisioningRetryCategory;
+  operation_id : blob;
+  stage : ProvisioningFailureStage;
+  target : principal;
+  failed_at_ns : nat64;
+  diagnostic_code : nat16;
+};
+// Exact owner stage of the latest provisioning failure.
+type ProvisioningFailureStage = variant {
+  ComponentRuntime;
+  RootActivation;
+  ComponentMembership;
+  StoreCatalog;
+  ComponentAllocation;
+  StoreStatus;
+  CoordinatorStatus;
+  ComponentOrigin;
+  StoreActivation;
+  StoreIdentity;
+  RootPreparation;
+  Provisioning;
+  StoreCredential;
+  ComponentCommit;
+};
+// Whether another active attempt is justified by the originating failure.
+type ProvisioningRetryCategory = variant { ReviewRequired; Backoff };
 // Local identity and responsiveness without diagnostic checks or Fleet readiness.
 type PublicHealth = record {
   role : opt text;

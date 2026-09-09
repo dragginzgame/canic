@@ -77,6 +77,7 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         Some(DEPLOYMENT_RESERVE_V1),
     ),
     query_or_read_only("InspectCanister"),
+    query_or_read_only("InspectCanisterHistory"),
     snapshot_convergent(
         "MaintainPool",
         "canister_pool.maintain.v1",

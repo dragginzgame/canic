@@ -305,6 +305,10 @@ fn receipts(
     provisioned_receipts(config, plan, operation_id, plan_hash, 20)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the fixture constructs complete protected provisioning receipts"
+)]
 fn provisioned_receipts(
     config: &ConfigModel,
     plan: &FleetComponentProvisioningPlan,
@@ -384,6 +388,7 @@ fn provisioned_receipts(
                 )
                 .expect("receipt hash");
             RootComponentProvisioningStatusResponse {
+                last_failure: None,
                 operation_id,
                 plan_hash,
                 fleet_registry: plan.fleet_registry.clone(),

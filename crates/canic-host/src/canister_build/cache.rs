@@ -29,6 +29,34 @@ pub fn configure_canister_cargo_command(command: &mut Command, workspace_root: &
     );
 }
 
+/// Declaration passes retain runtime cfg/profile semantics without paying for LTO.
+pub fn configure_declaration_command(
+    command: &mut Command,
+    context: &crate::canister_build::WorkspaceBuildContext,
+) {
+    let profile = match context.profile {
+        crate::canister_build::CanisterBuildProfile::Debug => "DEV",
+        crate::canister_build::CanisterBuildProfile::Fast => "FAST",
+        crate::canister_build::CanisterBuildProfile::Release => "RELEASE",
+    };
+    command
+        .env(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1")
+        .env_remove(canic_core::ids::RELEASE_BUILD_ID_ENV)
+        .env_remove(canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV)
+        .env_remove(canic_core::role_contract::build_context::PROTOCOL_BUILD_CONTEXT_ENV)
+        .env(format!("CARGO_PROFILE_{profile}_LTO"), "off")
+        .env(format!("CARGO_PROFILE_{profile}_OPT_LEVEL"), "0")
+        .env(format!("CARGO_PROFILE_{profile}_CODEGEN_UNITS"), "16")
+        .env(
+            "CARGO_TARGET_DIR",
+            declaration_target_root(&context.workspace_root),
+        );
+}
+
+pub fn declaration_target_root(workspace_root: &Path) -> PathBuf {
+    canister_build_target_root(workspace_root).join("declarations")
+}
+
 #[must_use]
 pub fn canister_build_target_root(workspace_root: &Path) -> PathBuf {
     resolve_canister_build_target_root(
@@ -137,6 +165,146 @@ mod tests {
     use super::*;
     use crate::test_support::temp_dir;
     use std::{ffi::OsString, sync::mpsc, thread, time::Duration};
+
+    #[test]
+    fn release_declarations_disable_lto_without_changing_runtime_profile() {
+        let context = crate::canister_build::WorkspaceBuildContext {
+            role: "app".into(),
+            profile: crate::canister_build::CanisterBuildProfile::Release,
+            environment: "local".into(),
+            build_network: canic_core::ids::BuildNetwork::Local,
+            workspace_root: "/workspace".into(),
+            icp_root: "/workspace".into(),
+            config_path: "/workspace/canic.toml".into(),
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: None,
+        };
+        let mut command = Command::new("cargo");
+        configure_declaration_command(&mut command, &context);
+        let environment = command
+            .get_envs()
+            .collect::<std::collections::BTreeMap<_, _>>();
+        assert_eq!(
+            environment[OsStr::new("CARGO_PROFILE_RELEASE_LTO")],
+            Some(OsStr::new("off"))
+        );
+        assert_eq!(
+            environment[OsStr::new("CARGO_PROFILE_RELEASE_CODEGEN_UNITS")],
+            Some(OsStr::new("16"))
+        );
+        assert_eq!(
+            environment[OsStr::new("CARGO_TARGET_DIR")],
+            Some(declaration_target_root(&context.workspace_root).as_os_str())
+        );
+        assert_eq!(
+            environment[OsStr::new("CARGO_PROFILE_RELEASE_OPT_LEVEL")],
+            Some(OsStr::new("0"))
+        );
+        assert_eq!(
+            context.profile,
+            crate::canister_build::CanisterBuildProfile::Release
+        );
+    }
+
+    #[test]
+    fn declaration_and_runtime_preserve_cfg_with_distinct_final_outputs() {
+        let root = temp_dir("declaration-profile-cfg");
+        fs::create_dir_all(root.join("helper/src")).unwrap();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("Cargo.toml"), "[workspace]\n[package]\nname=\"cache_probe\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[build-dependencies]\ncache_helper={path=\"helper\"}\n[profile.release]\nlto=true\ncodegen-units=1\n").unwrap();
+        fs::write(
+            root.join("helper/Cargo.toml"),
+            "[package]\nname=\"cache_helper\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
+        )
+        .unwrap();
+        fs::write(root.join("helper/src/lib.rs"), "pub fn mode() -> &'static str { if std::env::var(\"CANIC_INTERNAL_CANDID_BUILD\").as_deref() == Ok(\"1\") { \"declaration\" } else { \"runtime\" } }\n").unwrap();
+        fs::write(root.join("build.rs"), "fn main() { println!(\"cargo:rerun-if-env-changed=CANIC_INTERNAL_CANDID_BUILD\"); println!(\"cargo:rustc-env=MODE={}\", cache_helper::mode()); }\n").unwrap();
+        fs::write(
+            root.join("src/main.rs"),
+            "fn main() { println!(\"{} {}\", env!(\"MODE\"), cfg!(debug_assertions)); }\n",
+        )
+        .unwrap();
+        fs::write(root.join("Cargo.lock"), "version=4\n[[package]]\nname=\"cache_helper\"\nversion=\"0.1.0\"\n[[package]]\nname=\"cache_probe\"\nversion=\"0.1.0\"\ndependencies=[\"cache_helper\"]\n").unwrap();
+        let context = crate::canister_build::WorkspaceBuildContext {
+            role: "app".into(),
+            profile: crate::canister_build::CanisterBuildProfile::Release,
+            environment: "local".into(),
+            build_network: canic_core::ids::BuildNetwork::Local,
+            workspace_root: root.clone(),
+            icp_root: root.clone(),
+            config_path: root.join("Cargo.toml"),
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: None,
+        };
+        let declaration = run_intermediate_probe(&context, true);
+        let runtime = run_intermediate_probe(&context, false);
+        assert_ne!(declaration, runtime);
+        assert_eq!(
+            Command::new(declaration).output().unwrap().stdout,
+            b"declaration false\n"
+        );
+        assert_eq!(
+            Command::new(runtime).output().unwrap().stdout,
+            b"runtime false\n"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn run_intermediate_probe(
+        context: &crate::canister_build::WorkspaceBuildContext,
+        declaration: bool,
+    ) -> PathBuf {
+        let mut command = crate::cargo_command();
+        command.current_dir(&context.workspace_root).args([
+            "build",
+            "--locked",
+            "--offline",
+            "--release",
+            "--message-format=json",
+        ]);
+        context.apply_to_command(&mut command);
+        configure_canister_cargo_command(&mut command, &context.workspace_root);
+        if declaration {
+            configure_declaration_command(&mut command, context);
+        }
+        let host = Command::new("rustc")
+            .args(["--print", "host-tuple"])
+            .output()
+            .unwrap();
+        assert!(host.status.success());
+        let host = String::from_utf8(host.stdout).unwrap();
+        command.arg("--target").arg(host.trim());
+        // Keep nested Cargo out of any target selected for the enclosing test runner.
+        command.env_remove("CARGO_BUILD_BUILD_DIR");
+        command.env(
+            "CARGO_TARGET_DIR",
+            context.workspace_root.join(if declaration {
+                "declarations"
+            } else {
+                "runtime"
+            }),
+        );
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let records = String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+        let binary = records
+            .iter()
+            .find(|value| {
+                value["reason"] == "compiler-artifact" && value["target"]["name"] == "cache_probe"
+            })
+            .unwrap();
+        PathBuf::from(binary["executable"].as_str().unwrap())
+    }
 
     #[test]
     fn default_target_is_a_dedicated_reusable_workspace_cache() {

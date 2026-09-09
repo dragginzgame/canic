@@ -6,7 +6,10 @@
 
 use crate::{
     cdk::candid::Principal,
-    infra::ic::{IcInfraError, call::Call},
+    infra::ic::{
+        IcInfraError,
+        call::{Call, CallResult},
+    },
 };
 
 use super::{
@@ -18,6 +21,17 @@ use super::{
 };
 
 impl MgmtInfra {
+    /// Observe the latest history entry through a replicated management call.
+    pub async fn canister_history(canister_pid: Principal) -> Result<CallResult, IcInfraError> {
+        Call::bounded_wait(Principal::management_canister(), "canister_info")
+            .with_arg(InfraCanisterInfoArgs {
+                canister_id: canister_pid,
+                num_requested_changes: Some(1),
+            })?
+            .execute()
+            .await
+    }
+
     /// Read one canister's monotonic management-history change count.
     pub async fn canister_history_total_changes(
         canister_pid: Principal,

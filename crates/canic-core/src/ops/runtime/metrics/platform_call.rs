@@ -39,6 +39,22 @@ pub struct PlatformCallMetricKey {
 pub struct PlatformCallMetrics;
 
 impl PlatformCallMetrics {
+    /// Bound source visits before allocating an optional anonymous aggregate.
+    pub(crate) fn bounded_snapshot(
+        limit: usize,
+    ) -> Result<Vec<(PlatformCallMetricKey, u64)>, crate::InternalError> {
+        PLATFORM_CALL_METRICS.with_borrow(|counts| {
+            if counts.len() > limit {
+                return Err(crate::InternalError::invalid_input());
+            }
+            Ok(counts
+                .iter()
+                .take(limit)
+                .map(|(key, count)| (*key, *count))
+                .collect())
+        })
+    }
+
     /// Record one platform call event.
     pub fn record(
         surface: PlatformCallMetricSurface,

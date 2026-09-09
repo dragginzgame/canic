@@ -137,4 +137,11 @@ fn audit_page_generic_cohort(slot: u8, value: u64) -> Result<GenericPageCohortRe
     Ok(response)
 }
 
+/// Spend fixture cycles before reviewing a later release's recovery funding.
+#[canic_update(requires(env::build_local_only(), caller::is_controller()))]
+async fn audit_recovery_balance(retain: u128) -> Result<u128, Error> {
+    let excess = ic_cdk::api::canister_cycle_balance().saturating_sub(retain);
+    Ok(ic_cdk::api::cycles_burn(excess))
+}
+
 canic::finish!();

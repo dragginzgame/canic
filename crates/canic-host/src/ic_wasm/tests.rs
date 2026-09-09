@@ -164,3 +164,35 @@ fn write_executable(path: &Path, contents: &str) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))
         .expect("make fake executable executable");
 }
+
+#[test]
+fn npm_distribution_binds_exact_platform_and_preserves_launcher_search_order() {
+    let paths = npm_binary_candidates(
+        Path::new("/tools/node_modules/@icp-sdk/ic-wasm/bin/ic-wasm.js"),
+        Path::new("/workspace"),
+        "linux",
+        "x86_64",
+    )
+    .unwrap();
+    assert_eq!(
+        paths,
+        [
+            PathBuf::from(
+                "/tools/node_modules/@icp-sdk/ic-wasm/bin/../../../@icp-sdk/ic-wasm-linux-x64/bin/ic-wasm"
+            ),
+            PathBuf::from(
+                "/tools/node_modules/@icp-sdk/ic-wasm/bin/../node_modules/@icp-sdk/ic-wasm-linux-x64/bin/ic-wasm"
+            ),
+            PathBuf::from("/workspace/node_modules/@icp-sdk/ic-wasm-linux-x64/bin/ic-wasm"),
+        ]
+    );
+    assert!(matches!(
+        npm_binary_candidates(
+            Path::new("/tool.js"),
+            Path::new("/workspace"),
+            "unknown",
+            "unknown"
+        ),
+        Err(IcWasmToolError::UnsupportedPlatform { .. })
+    ));
+}

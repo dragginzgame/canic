@@ -13,7 +13,10 @@ use crate::{
     build_toolchain::BuildToolchain,
     canister_build::{
         CanisterArtifactBuildOutput, WorkspaceBuildContext,
-        cache::{canister_build_target_root, configure_canister_cargo_command},
+        cache::{
+            canister_build_target_root, configure_canister_cargo_command,
+            configure_declaration_command, declaration_target_root,
+        },
     },
     cargo_command,
     cargo_metadata::cargo_metadata,
@@ -31,6 +34,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
+    time::Instant,
 };
 
 const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
@@ -56,7 +60,7 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
         .join("wasm32-unknown-unknown")
         .join(context.profile.target_dir_name())
         .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
-    let candid = resolve_fleet_coordinator_candid(context, &source, &built_wasm_path)?;
+    let candid = resolve_fleet_coordinator_candid(context, &source)?;
     let capabilities = canic_core::role_contract::built_in_role_capabilities(
         canic_core::role_contract::BuiltInRoleKind::FleetCoordinator,
     );
@@ -181,7 +185,18 @@ fn run_coordinator_cargo_build(
             digest.to_string(),
         );
     }
+    let started = Instant::now();
     let output = command.output()?;
+    eprintln!(
+        "Build phase {} bootstrap_coordinator: {:.2}s",
+        if force_candid_export {
+            "declaration"
+        } else {
+            "runtime Cargo/link"
+        },
+        started.elapsed().as_secs_f64()
+    );
+
     if output.status.success() {
         return Ok(());
     }
@@ -219,7 +234,7 @@ fn coordinator_cargo_build_command(
     append_infrastructure_profile_args(&mut command, context.profile);
     command.args(context.profile.cargo_args());
     if force_candid_export {
-        command.env(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1");
+        configure_declaration_command(&mut command, context);
         command.args([
             "--lib",
             "--",
@@ -234,14 +249,16 @@ fn coordinator_cargo_build_command(
 fn resolve_fleet_coordinator_candid(
     context: &WorkspaceBuildContext,
     source: &BootstrapFleetCoordinatorSource,
-    built_wasm_path: &Path,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     resolve_infrastructure_candid(
         FLEET_COORDINATOR_ROLE,
         &source.canonical_did_path,
         context.refresh_canonical_infrastructure_did,
         None,
-        built_wasm_path,
+        &declaration_target_root(&context.workspace_root)
+            .join("wasm32-unknown-unknown")
+            .join(context.profile.target_dir_name())
+            .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm")),
         || run_coordinator_cargo_build(context, &source.manifest_path, None, true),
     )
 }

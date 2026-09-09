@@ -400,11 +400,29 @@ pub struct CanisterCyclePolicy {
     pub minimum_cycles: u128,
 }
 
-/// Exact effect kind retained before execution.
+/// Exact Root authority and Candid contract for replicated reinstall observations.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReinstallHistoryWitness {
+    /// Exact installed module retained before this reviewed reinstall.
+    pub prior_module_sha256: String,
+    pub authority: RootManagementBinding,
+    pub candid: String,
+    pub candid_sha256: String,
+}
 
+/// Exact effect kind retained before execution.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum EnsureAction {
+    /// Seal one authority's mutation and timer owners before inventory capture.
+    SealAuthority {
+        candid: String,
+        candid_sha256: String,
+        authority_kind: DesiredCanisterKind,
+        name: String,
+        principal: String,
+    },
     Create {
         controller_canisters: Vec<String>,
         controllers: Vec<String>,
@@ -452,6 +470,8 @@ pub enum EnsureAction {
     },
     Install {
         canic_init: Option<DesiredCanisterInit>,
+        #[serde(deserialize_with = "serialization::required_option")]
+        reinstall_witness: Option<Box<ReinstallHistoryWitness>>,
         init_arg: Option<String>,
         init_arg_sha256: Option<String>,
         init_candid: Option<String>,
@@ -519,7 +539,8 @@ impl EnsureAction {
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            Self::Create { name, .. }
+            Self::SealAuthority { name, .. }
+            | Self::Create { name, .. }
             | Self::Delete { name, .. }
             | Self::FleetProtocol { name, .. }
             | Self::Fund { name, .. }
@@ -885,6 +906,12 @@ impl<'de> Deserialize<'de> for ReviewedDesiredFleetRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsurePlan {
+    /// Informational dependent work; grants no funding or effect authority.
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub recovery_review: Option<Box<FleetRecoveryReview>>,
+    /// One explicit same-release wipe, retained through preparation and full convergence.
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub reinstall: Option<Box<FleetReinstallRecord>>,
     #[serde(deserialize_with = "serialization::required_option")]
     pub continuation: Option<FleetEnsureContinuationAuthority>,
     pub canisters: Vec<CanisterPlan>,
@@ -916,6 +943,8 @@ pub enum FleetEnsurePlanScope {
     /// Complete desired-state convergence after all protected roles are observable.
     #[default]
     Full,
+    /// Seal current allocation before reviewing the complete physical reset closure.
+    ReinstallPreparation,
     /// Exact reviewed Root reset before current protected interfaces become available.
     RootReinstallPrerequisite,
     /// Exact management-authorized Root Start prerequisite.
@@ -928,10 +957,114 @@ impl FleetEnsurePlanScope {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Full => "full",
+            Self::ReinstallPreparation => "reinstall_preparation",
             Self::RootReinstallPrerequisite => "root_reinstall_prerequisite",
             Self::RootStartPrerequisite => "root_start_prerequisite",
         }
     }
+}
+
+/// Exact operation-scoped authority for one requested same-release database wipe.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetReinstallRecord {
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub activation_reset: Option<Box<FleetActivationResetRecord>>,
+    pub operation_id: String,
+    pub source_operation_id: String,
+    pub authorities: Vec<RootManagementBinding>,
+    /// Empty during preparation; the full plan binds every sealed physical asset.
+    pub assets: Vec<FleetReinstallAssetRecord>,
+}
+
+/// Exact retained source bytes and issued protocol effects inspected for activation recovery.
+/// The source plan label is a journal reference, not executable replacement authority.
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetActivationSourceRecord {
+    pub infrastructure: Vec<RootManagementBinding>,
+    pub operator: String,
+    pub cycles_ledger: String,
+    #[serde(with = "u128_text")]
+    pub initial_controlled_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub maximum_execution_burn_cycles: u128,
+    #[serde(with = "u128_text_map")]
+    pub initial_estate_funding_cycles_by_root: BTreeMap<String, u128>,
+    pub operation_id: String,
+    pub plan_sha256: String,
+    pub plan_document_sha256: String,
+    pub journal_document_sha256: String,
+    pub state_document_sha256: String,
+    pub provisioning: EnsureAction,
+    pub registry_preparations: Vec<EnsureAction>,
+    pub stores: Vec<FleetProtocolReadRecord>,
+}
+
+/// Reviewed inactive activation evidence retained through preparation and reset.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetActivationResetRecord {
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub preparation: Option<ActivationPreparationEvidenceRecord>,
+    pub source: FleetActivationSourceRecord,
+    pub roots: Vec<RootActivationResetRecord>,
+}
+
+/// Exact completed preparation documents retained before the separate Root-reset review.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ActivationPreparationEvidenceRecord {
+    pub plan_document_sha256: String,
+    pub journal_document_sha256: String,
+}
+
+/// Durable local handoff intent; completion is recorded before remote effects can run.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ActivationResetAdoptionRecord {
+    pub source_plan_sha256: String,
+    pub source_journal_sha256: String,
+    pub source_state_sha256: String,
+    pub replacement_plan_sha256: String,
+    pub replacement_journal_sha256: String,
+    pub complete: bool,
+}
+
+/// Exact retained Candid and target used only to observe a source protocol owner.
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetProtocolReadRecord {
+    pub candid: String,
+    pub candid_sha256: String,
+    pub principal: String,
+}
+
+/// Inactive Root identity and sealed initial membership observed before a reset.
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootActivationResetRecord {
+    pub root: String,
+    pub activation_operation_id: [u8; 32],
+    pub inventory_hash: [u8; 32],
+    pub provisioning_receipt_hash: [u8; 32],
+    pub component_count: u32,
+    pub managed_descendants: u32,
+}
+
+/// One controlled physical asset in the sealed reset closure.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetReinstallAssetRecord {
+    pub controllers: Vec<String>,
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub module_sha256: Option<String>,
+    pub principal: String,
+    pub root: String,
+    pub subnet: String,
 }
 
 /// Exact management-canister observation of one configured Fleet Subnet Root.
@@ -1011,6 +1144,8 @@ pub enum EffectState {
 #[serde(rename_all = "snake_case")]
 pub enum FleetEnsureCompletion {
     Converged,
+    /// Authorities are sealed; the full reset still requires review and execution.
+    Prepared,
     InProgress,
     ReplanRequired,
 }
@@ -1303,5 +1438,85 @@ mod u128_text_map {
                     .map_err(serde::de::Error::custom)
             })
             .collect()
+    }
+}
+
+/// Conservative base and continuation allowances, with separately reviewed dependent funding.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetRecoveryReview {
+    #[serde(with = "u128_text")]
+    pub base_execution_burn_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub continuation_reserve_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub whole_continuation_ceiling_cycles: u128,
+    pub known_pool_funding: Vec<PoolRecoveryFunding>,
+    /// Current protocol installation and fresh inventory may reveal more work or debit.
+    pub discovery: RecoveryDiscovery,
+}
+
+/// Availability of authoritative dependent-work observations at review time.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecoveryDiscovery {
+    PendingCurrentProtocol,
+}
+
+/// Exact current pool reset top-up estimate; execution requires its own reviewed Fund action.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PoolRecoveryFunding {
+    pub principal: String,
+    pub root: String,
+    #[serde(with = "u128_text")]
+    pub amount_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub ledger_fee_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub funding_deficit_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub funding_margin_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub expected_post_cycles: u128,
+}
+
+/// Informational difference requiring another plan review; never grants effect authority.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct FleetSuccessorReview {
+    pub actions: Vec<FleetReviewAction>,
+    #[serde(with = "u128_text")]
+    pub maximum_additional_debit_cycles: u128,
+    pub next_review_command: String,
+}
+
+/// Exact target and current action kind in a newly observed phase.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct FleetReviewAction {
+    pub name: String,
+    pub principal: Option<String>,
+    pub kind: String,
+}
+
+impl std::fmt::Display for FleetSuccessorReview {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "remaining actions: ")?;
+        for (index, action) in self.actions.iter().enumerate() {
+            if index > 0 {
+                write!(f, ", ")?;
+            }
+            write!(
+                f,
+                "{} {} ({})",
+                action.kind,
+                action.name,
+                action.principal.as_deref().unwrap_or("not yet created")
+            )?;
+        }
+        write!(
+            f,
+            "; maximum additional debit including fees: {} cycles; next review: {}",
+            self.maximum_additional_debit_cycles, self.next_review_command
+        )
     }
 }

@@ -122,8 +122,8 @@ Collection bounds apply before formatting and sorting. Operations read at most
 257 entries from each of four counter owners and each of the three ICP-refill
 aggregate indexes. Each target entry yields at most two refill rows. Performance
 reads at most 129 recorded counters plus the upstream timer inventory, capped by
-ic-timers at 64 registrations with bounded identities; it builds no intent or
-timer-diagnostic projection. Occupancy reads at most 129 bounded shard records
+ic-timers at 64 registrations with bounded identities; the performance path builds no protected intent or
+timer-diagnostic projection. Bounded operations aggregates are described below. Occupancy reads at most 129 bounded shard records
 and no assignment keys. These ordered prefixes are independent of insertion
 order. Performance and occupancy emit two public rows per input; a sentinel row
 signals truncation. Each family retains the first 256 selected rows and sorts
@@ -203,3 +203,43 @@ rendering charts. Regenerate method bindings, update authentication and control
 read routes, enable only the intended families, and connect any application
 sampling or aggregate producers. App-specific dashboards and live timing
 qualification belong in the consuming repository.
+
+## Public process aggregates
+
+The existing `operations` selection also includes anonymous
+`process.platform_call`, `process.inter_canister_call`, `process.intent`,
+`process.placement_index` and `process.wasm_store` aggregates. Platform, intent,
+placement and Store rows sum recorded event counts by outcome across the owning
+metric table. Inter-canister `started` reads the existing fixed system counter;
+it never enumerates target/method identities. Unobserved outcome combinations
+have no row. These are instrumentation events, not proof of Fleet readiness or
+an inventory of all outstanding work. Store and placement activity appears only
+on roles that execute those owners. No security records, callers, credentials,
+raw intents, canister targets or application row contents are published by these
+new projections.
+
+Each of the four enum-keyed owners admits at most 256 source rows for a sample.
+An oversized owner rejects the operations sample before allocation or scanning;
+previous cached data ages and other selected families continue. Aggregation uses
+fixed outcome labels and saturating counts. Counts use the existing heap counter
+window (`window_id = 0`); heap coverage and canister version delimit resets.
+The common 256-row snapshot and global history budgets still apply.
+
+`operations` also includes `timer.state.{disabled,idle,active,retrying,failed}`
+counts and `timer.events` scheduling, work, retryable/invariant failure,
+unacknowledged and coalescing totals. Collection visits the existing inventory's
+maximum 64 registrations. These aggregates are gauges because cancellation and
+registration changes can reset individual source counters. Missing state rows
+mean no currently observed declaration in that state. They describe timer work,
+not every durable application intent. Timer inventory failure rejects only the
+operations sample.
+
+`performance` adds `memory.wasm_extent` and `memory.stable_extent`, both gauges
+in bytes, obtained from the executing canister's memory page counts. Wasm extent
+is allocated linear memory, not live Rust heap occupancy; stable extent is the
+allocated stable memory, not application data size. Native hosts omit these IC
+measurements. All added rows use the sampling observation timestamp. They share
+the single five-minute sampler, default-off family selection and bounded history.
+
+See [matching-build qualification](public-metrics-qualification.md) before
+measuring enabled versus disabled publication or an application participant.

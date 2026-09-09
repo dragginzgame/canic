@@ -4,6 +4,8 @@
 //! Does not own: timers, endpoint authorization, or application metric semantics.
 //! Boundary: public query projection reads cached values only.
 
+mod process;
+
 use crate::{
     InternalError,
     config::{Config, RoleRuntimeConfig},
@@ -259,8 +261,16 @@ impl PublicMetricsOps {
                 observed_at_ns: 0,
                 kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
             }],
-            PublicMetricFamily::Operations => operation_metrics()?,
-            PublicMetricFamily::Performance => performance_metrics()?,
+            PublicMetricFamily::Operations => {
+                let mut rows = process::operations()?;
+                rows.extend(operation_metrics()?);
+                rows
+            }
+            PublicMetricFamily::Performance => {
+                let mut rows = process::memory();
+                rows.extend(performance_metrics()?);
+                rows
+            }
             PublicMetricFamily::ShardOccupancy => shard_metrics(),
         };
         for row in &mut rows {
@@ -268,9 +278,11 @@ impl PublicMetricsOps {
             // Timers expose lifetime summaries without a per-registration reset identity.
             // Keep these raw observations out of counter delta/rate calculations.
             let counter = (family == PublicMetricFamily::Operations
-                && !row.name.starts_with("cycles_funding.icp_refill."))
+                && !row.name.starts_with("cycles_funding.icp_refill.")
+                && !row.name.starts_with("timer."))
                 || (family == PublicMetricFamily::Performance
-                    && !row.name.starts_with("perf.timer."));
+                    && !row.name.starts_with("perf.timer.")
+                    && !row.name.starts_with("memory."));
             if counter {
                 row.kind = PublicMetricKind::Counter {
                     window_id: 0,

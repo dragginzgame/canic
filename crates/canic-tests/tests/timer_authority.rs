@@ -111,8 +111,9 @@ fn public_snapshots_preserve_observer_authority() {
     assert_eq!(snapshot.metrics.entries[0].value, 7);
     assert_eq!(
         query(published, PublicMetricFamily::Operations).state,
-        PublicSnapshotState::Disabled
+        PublicSnapshotState::Fresh
     );
+    assert_anonymous_public_boundary(&fixture.pic, published, fixture.root);
     let cycles = query(published, PublicMetricFamily::Cycles);
     assert_eq!(cycles.state, PublicSnapshotState::Fresh);
     assert_eq!(cycles.metrics.entries[0].unit, "cycles");
@@ -191,7 +192,9 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     full.cycle_tracking.unwrap();
     assert_explicit_sampling_cost(baseline.sample_instructions, full.sample_instructions);
     assert_periodic_sampling_cost(&fixture.pic, canister);
+    let operations = query(PublicMetricFamily::Operations);
     let performance = query(PublicMetricFamily::Performance);
+    assert_public_process_projection(&operations, &performance);
     assert!(performance.truncated);
     assert_eq!(performance.metrics.entries.len(), 256);
     fixture.pic.advance_time(Duration::from_secs(361));
@@ -206,6 +209,9 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     rejected
         .cycle_tracking
         .expect("optional family rejection must preserve cycle tracking");
+    let operations_after_failure = query(PublicMetricFamily::Operations);
+    assert_eq!(operations_after_failure.state, PublicSnapshotState::Fresh);
+    assert!(operations_after_failure.sampled_at_ns > operations.sampled_at_ns);
     let retained = query(PublicMetricFamily::Performance);
     assert_eq!(retained.sampled_at_ns, performance.sampled_at_ns);
     assert_eq!(retained.metrics.entries, performance.metrics.entries);
@@ -915,4 +921,62 @@ fn assert_explicit_sampling_cost(baseline: u64, full: u64) {
         full <= baseline.saturating_mul(2),
         "sampling cost must remain bounded beyond the retained-series ceiling"
     );
+}
+
+fn assert_anonymous_public_boundary(pic: &PocketIc, published: Principal, controller: Principal) {
+    pic.set_controllers(published, None, vec![controller])
+        .unwrap();
+    let anonymous_public: Result<PublicStatusResponse, Error> = pic.query_candid_as_or_panic(
+        published,
+        Principal::anonymous(),
+        protocol::CANIC_PUBLIC_STATUS,
+        (PublicStatusRequest::Health,),
+    );
+    assert!(anonymous_public.is_ok());
+    for request in sensitive_observability_requests(false) {
+        let denied: Result<RoleStatusResponse, Error> = pic.query_candid_as_or_panic(
+            published,
+            Principal::anonymous(),
+            protocol::CANIC_OBSERVABILITY,
+            (request,),
+        );
+        assert!(
+            matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+        );
+    }
+    pic.set_controllers(published, Some(controller), vec![Principal::anonymous()])
+        .unwrap();
+}
+
+fn assert_public_process_projection(
+    operations: &canic::dto::public_status::PublicMetricsSnapshot,
+    performance: &canic::dto::public_status::PublicMetricsSnapshot,
+) {
+    for name in [
+        "process.inter_canister_call.started",
+        "process.wasm_store.completed",
+        "timer.events.schedule_requests",
+        "timer.events.retryable_failure",
+        "timer.events.invariant_failure",
+    ] {
+        let row = operations
+            .metrics
+            .entries
+            .iter()
+            .find(|row| row.name == name)
+            .expect("bounded public process aggregate");
+        assert_eq!(row.unit, "count");
+        assert_eq!(row.canister_id, None);
+        assert!(row.observed_at_ns > 0);
+    }
+    for name in ["memory.wasm_extent", "memory.stable_extent"] {
+        let row = performance
+            .metrics
+            .entries
+            .iter()
+            .find(|row| row.name == name)
+            .expect("public memory extent");
+        assert_eq!(row.unit, "bytes");
+        assert_eq!(row.kind, canic::dto::public_status::PublicMetricKind::Gauge);
+    }
 }

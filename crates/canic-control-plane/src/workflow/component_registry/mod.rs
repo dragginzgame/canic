@@ -84,7 +84,7 @@ use canic_core::api::{runtime::install::ApprovedModuleSource, timer::TimerApi};
 use canic_core::{
     control_plane_support::{
         config::schema::ComponentChildKind,
-        error::InternalError,
+        error::{InternalError, ProvisioningFailureStage, ProvisioningRetryCategory},
         ops::{
             component_runtime::ComponentRuntimeOps,
             config::ConfigOps,
@@ -3325,7 +3325,16 @@ pub async fn seal_root_activation_inventory(
         store_bootstrap: prepared.store_bootstrap.clone(),
         expected_fleet_registry: prepared.prepared_against_registry.clone(),
     };
-    root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    root_store::status(preparation_request.store_bootstrap.clone())
+        .await
+        .map_err(|error| {
+            error.with_provisioning_failure(
+                ProvisioningFailureStage::StoreCatalog,
+                authority.wasm_store_authority.wasm_store,
+                fleet_activation_operation_id,
+                ProvisioningRetryCategory::Backoff,
+            )
+        })?;
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
     let plan = ComponentRegistryOps::seal_initial_inventory(
         fleet_activation_operation_id,

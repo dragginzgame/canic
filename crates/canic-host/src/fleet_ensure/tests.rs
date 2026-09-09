@@ -100,6 +100,8 @@ enum MockRootOwnedTopologyPolicy {
 }
 
 pub(super) struct MockPlatform {
+    pub(super) retained_activation_checks: Vec<(String, String)>,
+    pub(super) rejected_activation_root: Option<String>,
     completed: BTreeMap<String, EffectOutcome>,
     created_principals: BTreeMap<String, String>,
     duplicate_create_responses: BTreeMap<String, u32>,
@@ -142,6 +144,8 @@ impl MockPlatform {
             .map(|cycles| cycles.to_u128())
             .expect("fixture ledger fee");
         Self {
+            retained_activation_checks: Vec::new(),
+            rejected_activation_root: None,
             completed: BTreeMap::new(),
             created_principals: BTreeMap::new(),
             duplicate_create_responses: BTreeMap::new(),
@@ -287,6 +291,9 @@ impl MockPlatform {
         action: &'a EnsureAction,
     ) -> Option<&'a str> {
         let principal = match action {
+            EnsureAction::SealAuthority { .. } => {
+                panic!("authority sealing uses the production PocketIC adapter")
+            }
             EnsureAction::Create { .. } => return None,
             EnsureAction::Delete { principal, .. }
             | EnsureAction::FleetProtocol { principal, .. }
@@ -362,6 +369,7 @@ impl MockPlatform {
                 .is_none_or(|live| live.module_sha256.is_none())
         {
             return Some(EffectObservation {
+                provisioning_failure: None,
                 applied: false,
                 estate_funding_required: None,
                 post_cycles: None,
@@ -383,6 +391,7 @@ impl MockPlatform {
             maximum_observation_burn_cycles,
         );
         Some(EffectObservation {
+            provisioning_failure: None,
             applied,
             estate_funding_required: None,
             post_cycles,
@@ -411,6 +420,7 @@ impl MockPlatform {
         };
         let destination_after = self.estate_funding_balance_cycles.unwrap_or_default();
         Some(EffectObservation {
+            provisioning_failure: None,
             applied: record.receipt.is_some()
                 && crate::fleet_ensure::ops::estate_funding_applied(
                     crate::fleet_ensure::ops::EstateFundingObservation {
@@ -438,6 +448,9 @@ impl MockPlatform {
     ) -> bool {
         let principal = Self::principal(state, action);
         match action {
+            EnsureAction::SealAuthority { .. } => {
+                panic!("authority sealing uses the production PocketIC adapter")
+            }
             EnsureAction::Delete { .. } => {
                 principal.is_none_or(|value| !self.live.contains_key(value))
             }
@@ -533,6 +546,9 @@ impl MockPlatform {
     fn mutate(&mut self, action: &EnsureAction, state: &FleetEnsureStateRecord) -> EffectOutcome {
         let principal = Self::principal(state, action).map(str::to_string);
         match action {
+            EnsureAction::SealAuthority { .. } => {
+                panic!("authority sealing uses the production PocketIC adapter")
+            }
             EnsureAction::Create {
                 controller_canisters,
                 controllers,
@@ -737,6 +753,21 @@ impl EnsurePlatform for MockPlatform {
         self.progress.push(progress);
     }
 
+    fn require_retained_root_activation(
+        &mut self,
+        operation_id: &str,
+        root: &str,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<(), Self::Error> {
+        self.retained_activation_checks
+            .push((operation_id.to_string(), root.to_string()));
+        if self.rejected_activation_root.as_deref() == Some(root) {
+            Err(MockError)
+        } else {
+            Ok(())
+        }
+    }
+
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
         self.desired = desired.clone();
         Ok(())
@@ -925,6 +956,7 @@ impl EnsurePlatform for MockPlatform {
         }
         if matches!(action, EnsureAction::Fund { .. }) {
             return Ok(EffectObservation {
+                provisioning_failure: None,
                 applied: record.receipt.is_some(),
                 estate_funding_required: None,
                 post_cycles: Self::principal(state, action)
@@ -939,6 +971,7 @@ impl EnsurePlatform for MockPlatform {
         }
         let applied = self.effect_is_applied(action, record, state);
         Ok(EffectObservation {
+            provisioning_failure: None,
             applied,
             estate_funding_required: None,
             post_cycles: None,
@@ -2663,6 +2696,9 @@ fn funding_margin_is_bounded_by_the_target_observation_only() {
         .find(|canister| canister.name == "app")
         .and_then(|canister| {
             canister.actions.iter().find_map(|action| match action {
+                EnsureAction::SealAuthority { .. } => {
+                    panic!("authority sealing uses the production PocketIC adapter")
+                }
                 EnsureAction::Fund {
                     amount,
                     expected_post_cycles,
@@ -3822,6 +3858,8 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
         plan_sha256: String::new(),
         planned_at_time: 1,
         protocol_actions: actions,
+        recovery_review: None,
+        reinstall: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: None,
@@ -3924,6 +3962,8 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         plan_sha256: String::new(),
         planned_at_time: 1,
         protocol_actions: actions,
+        recovery_review: None,
+        reinstall: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: None,
@@ -4092,6 +4132,9 @@ fn retained_current_plan_and_issued_journal_round_trip_from_an_isolated_copy() {
         .protocol_actions
         .iter()
         .find_map(|action| match action {
+            EnsureAction::SealAuthority { .. } => {
+                panic!("authority sealing uses the production PocketIC adapter")
+            }
             EnsureAction::FleetProtocol { action, .. } => match action.as_ref() {
                 CurrentFleetProtocolAction::JoinRoot {
                     expected_registry,
@@ -4107,6 +4150,9 @@ fn retained_current_plan_and_issued_journal_round_trip_from_an_isolated_copy() {
         .protocol_actions
         .iter()
         .find_map(|action| match action {
+            EnsureAction::SealAuthority { .. } => {
+                panic!("authority sealing uses the production PocketIC adapter")
+            }
             EnsureAction::FleetProtocol { action, .. } => match action.as_ref() {
                 CurrentFleetProtocolAction::BootstrapStore { expected, .. } => {
                     Some(expected.clone())
@@ -4387,6 +4433,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                     maximum_observation_burn_cycles,
                 );
                 return Ok(EffectObservation {
+                    provisioning_failure: None,
                     applied,
                     estate_funding_required: None,
                     post_cycles,
@@ -4400,6 +4447,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
             }
             if matches!(action, EnsureAction::Fund { .. }) {
                 return Ok(EffectObservation {
+                    provisioning_failure: None,
                     applied: record.receipt.is_some(),
                     estate_funding_required: None,
                     post_cycles: None,
@@ -4408,6 +4456,9 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 });
             }
             let principal = match action {
+                EnsureAction::SealAuthority { .. } => {
+                    panic!("authority sealing uses the production PocketIC adapter")
+                }
                 EnsureAction::Delete { principal, .. }
                 | EnsureAction::FleetProtocol { principal, .. }
                 | EnsureAction::FundEstate { principal, .. }
@@ -4420,6 +4471,9 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 EnsureAction::Create { .. } | EnsureAction::Fund { .. } => None,
             };
             let applied = match action {
+                EnsureAction::SealAuthority { .. } => {
+                    panic!("authority sealing uses the production PocketIC adapter")
+                }
                 EnsureAction::Install {
                     mode, wasm_sha256, ..
                 } => principal
@@ -4454,6 +4508,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 | EnsureAction::Transfer { .. } => false,
             };
             Ok(EffectObservation {
+                provisioning_failure: None,
                 applied,
                 estate_funding_required: None,
                 post_cycles: None,
@@ -4468,6 +4523,9 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
             state: &FleetEnsureStateRecord,
         ) -> Result<Option<u128>, Self::Error> {
             let principal = match action {
+                EnsureAction::SealAuthority { .. } => {
+                    panic!("authority sealing uses the production PocketIC adapter")
+                }
                 EnsureAction::Create { .. } => return Ok(None),
                 EnsureAction::Delete { principal, .. }
                 | EnsureAction::FleetProtocol { principal, .. }
@@ -4497,6 +4555,9 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
             state: &FleetEnsureStateRecord,
         ) -> Result<Option<u64>, Self::Error> {
             let principal = match action {
+                EnsureAction::SealAuthority { .. } => {
+                    panic!("authority sealing uses the production PocketIC adapter")
+                }
                 EnsureAction::Install { principal, .. } => Self::principal(state, principal),
                 _ => None,
             };
@@ -4523,6 +4584,9 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 return Ok(outcome.clone());
             }
             let outcome = match action {
+                EnsureAction::SealAuthority { .. } => {
+                    panic!("authority sealing uses the production PocketIC adapter")
+                }
                 EnsureAction::Create {
                     requested_initial_cycles,
                     ..
@@ -4955,7 +5019,10 @@ fn protocol_planning_selects_the_largest_ordered_prefix_with_cycle_headroom() {
         .expect_err("the completed prefix requires one reviewed successor plan");
     assert!(matches!(
         first,
-        workflow::EnsureWorkflowError::ConvergenceDrift
+        workflow::EnsureWorkflowError::SuccessorReviewRequired {
+            reason: crate::fleet_ensure::model::FleetEnsureSuccessorReviewReason::AdditionalEffect,
+            review: Some(_)
+        }
     ));
     assert_eq!(
         fixture.platform.mutations.get(&first_action_sha256),
@@ -5332,6 +5399,9 @@ fn current_protocol_variants(plan: &FleetEnsurePlan) -> BTreeSet<&'static str> {
     plan.protocol_actions
         .iter()
         .filter_map(|action| match action {
+            EnsureAction::SealAuthority { .. } => {
+                panic!("authority sealing uses the production PocketIC adapter")
+            }
             EnsureAction::FleetProtocol { action, .. } => Some(match action.as_ref() {
                 CurrentFleetProtocolAction::ReconcilePoolAsset { .. } => "reconcile_pool_asset",
                 CurrentFleetProtocolAction::ObservePoolReadiness { .. } => "observe_pool_readiness",
@@ -5511,6 +5581,7 @@ fn install_action(
 ) -> EnsureAction {
     EnsureAction::Install {
         canic_init: Some(canic_init),
+        reinstall_witness: None,
         init_arg: None,
         init_arg_sha256: None,
         init_candid: None,
@@ -5529,4 +5600,94 @@ fn empty_outcome() -> EffectOutcome {
         post_cycles: None,
         receipt: None,
     }
+}
+
+#[test]
+fn reinstall_preparation_binds_exact_running_authority_before_sealing() {
+    use crate::fleet_ensure::{
+        model::{
+            DesiredFleetArtifacts, RootManagementCanisterObservation, RootManagementObservation,
+        },
+        policy::{
+            EnsurePolicyError,
+            reinstall::{PreparationInput, preparation},
+        },
+    };
+    let fixture = protocol_tranche_fixture(Vec::new());
+    let hash = sha256_hex(b"current-wasm");
+    let artifacts = DesiredFleetArtifacts {
+        wasm_sha256_by_canister: BTreeMap::from([("treasury".to_string(), hash.clone())]),
+        ..DesiredFleetArtifacts::default()
+    };
+    let observed = RootManagementCanisterObservation {
+        live: live(TREASURY, 500, Some(&hash), true, &[CONTROLLER]),
+        name: "treasury".to_string(),
+        subnet: SUBNET.to_string(),
+    };
+    let candid_hashes = BTreeMap::from([("coordinator.did".to_string(), "11".repeat(32))]);
+    let plan = |observed: RootManagementCanisterObservation| {
+        preparation(PreparationInput {
+            desired: &fixture.desired,
+            artifacts: &artifacts,
+            observation: &RootManagementObservation {
+                operator_cycles: 0,
+                roots: BTreeMap::from([("treasury".to_string(), observed)]),
+            },
+            candid_hashes: &candid_hashes,
+            source_operation_id: &"21".repeat(32),
+            desired_sha256: &"22".repeat(32),
+            operation_id: &"23".repeat(32),
+            time: 100,
+        })
+    };
+    let accepted = plan(observed.clone()).expect("exact current authority");
+    assert!(matches!(
+        accepted.canisters[0].actions.as_slice(),
+        [EnsureAction::SealAuthority { .. }]
+    ));
+    assert_eq!(
+        accepted.reinstall.as_ref().unwrap().authorities[0].principal,
+        TREASURY
+    );
+    let mut conflicts = Vec::new();
+    let mut changed = observed.clone();
+    changed.live.controllers = vec![OLD_APP.to_string()];
+    conflicts.push(changed);
+    let mut changed = observed.clone();
+    changed.live.principal = OLD_APP.to_string();
+    conflicts.push(changed);
+    let mut changed = observed.clone();
+    changed.subnet = OLD_APP.to_string();
+    conflicts.push(changed);
+    let mut changed = observed.clone();
+    changed.live.module_sha256 = Some("ff".repeat(32));
+    conflicts.push(changed);
+    let mut changed = observed.clone();
+    changed.live.status = CanisterRuntimeStatus::Stopped;
+    conflicts.push(changed);
+    let mut changed = observed;
+    changed.name = "foreign".to_string();
+    conflicts.push(changed);
+    for changed in conflicts {
+        assert!(matches!(
+            plan(changed),
+            Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
+        ));
+    }
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn reinstall_seals_roots_before_coordinator_to_finish_inflight_funding() {
+    let seal = |authority_kind| EnsureAction::SealAuthority {
+        authority_kind,
+        candid: "root.did".into(),
+        candid_sha256: "11".repeat(32),
+        name: "authority".into(),
+        principal: Principal::anonymous().to_text(),
+    };
+    assert!(
+        workflow::action_order(&seal(DesiredCanisterKind::Root))
+            < workflow::action_order(&seal(DesiredCanisterKind::Coordinator))
+    );
 }

@@ -32,8 +32,9 @@ use canic_host::{
         FleetGenerateRequest, FreshEstateSeedRequest, IcpEnsurePlatform, IcpEnsurePlatformError,
         LoadedDesiredFleet, apply,
         dto::{FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState},
-        generate_desired_fleet, initialize_fresh_estate_seed, load_desired_fleet, plan,
-        report_json_value, retained_in_progress_plan,
+        generate_desired_fleet, initialize_fresh_estate_seed, load_desired_fleet,
+        model::{EnsureAction, InstallMode},
+        plan, plan_reinstall, report_json_value, retained_in_progress_plan,
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
@@ -202,6 +203,7 @@ impl GenerateOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct EnsureOptions {
+    reinstall: bool,
     apply: Option<String>,
     desired: PathBuf,
     environment: Option<String>,
@@ -226,6 +228,7 @@ impl EnsureOptions {
             PathBuf::from,
         );
         Ok(Self {
+            reinstall: ensure.get_flag("reinstall"),
             apply: string_option(ensure, "apply"),
             desired,
             environment: string_option(ensure, "environment"),
@@ -350,6 +353,16 @@ fn ensure_command() -> Command {
                 .num_args(0)
                 .help("Print the JSON report to stdout and JSON phase events to stderr"),
         )
+        .arg(
+            value_arg("reinstall")
+                .long("reinstall")
+                .action(ArgAction::SetTrue)
+                .num_args(0)
+                .conflicts_with("apply")
+                .help(
+                    "Review a new same-release Fleet database wipe; preparation seals allocation",
+                ),
+        )
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
@@ -385,10 +398,28 @@ where
     };
     let loaded = load_ensure_authority(&root, &desired_path, &options)?;
     let json_progress = options.json;
-    let mut platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root)
-        .with_progress_handler(move |progress| {
+    let next_review = format!(
+        "canic fleet ensure {} --environment {} --desired {} --icp {}",
+        quote_review_argument(&options.fleet),
+        quote_review_argument(&loaded.desired.environment),
+        quote_review_argument(&desired_path.to_string_lossy()),
+        quote_review_argument(&options.icp)
+    );
+    let progress_review = next_review.clone();
+    let platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root)
+        .with_progress_handler(move |mut progress| {
+            if let FleetEnsureProgressState::ReviewRequired {
+                review: Some(review),
+                ..
+            } = &mut progress.state
+            {
+                review.next_review_command.clone_from(&progress_review);
+            }
             eprintln!("{}", render_progress(&progress, json_progress));
         });
+    let mut platform = platform.with_observation_handler(move |timing| {
+        eprintln!("{}", render_observation_timing(&timing, json_progress));
+    });
     let report = if let Some(digest) = &options.apply {
         apply(
             &root,
@@ -396,6 +427,18 @@ where
             &loaded.sha256,
             &options.fleet,
             digest,
+            &mut platform,
+        ).map_err(|mut error| {
+            if let canic_host::fleet_ensure::workflow::EnsureWorkflowError::SuccessorReviewRequired { review: Some(review), .. } = &mut error { review.next_review_command = next_review; }
+            error
+        })?
+    } else if options.reinstall {
+        plan_reinstall(
+            &root,
+            &loaded.desired,
+            &loaded.sha256,
+            &options.fleet,
+            now_nanoseconds()?,
             &mut platform,
         )?
     } else {
@@ -411,12 +454,17 @@ where
     render_report(&report, options.json)
 }
 
+fn quote_review_argument(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
 fn load_ensure_authority(
     root: &std::path::Path,
     desired_path: &std::path::Path,
     options: &EnsureOptions,
 ) -> Result<LoadedDesiredFleet, FleetCommandError> {
-    if let Some(environment) = options.environment.as_deref()
+    if !options.reinstall
+        && let Some(environment) = options.environment.as_deref()
         && let Some(plan) =
             retained_in_progress_plan::<IcpEnsurePlatformError>(root, environment, &options.fleet)?
         && let Some(desired) = plan.reviewed_desired
@@ -435,11 +483,13 @@ fn load_ensure_authority(
             selected: selected.clone(),
         });
     }
-    if let Some(plan) = retained_in_progress_plan::<IcpEnsurePlatformError>(
-        root,
-        &current.desired.environment,
-        &options.fleet,
-    )? && let Some(desired) = plan.reviewed_desired
+    if !options.reinstall
+        && let Some(plan) = retained_in_progress_plan::<IcpEnsurePlatformError>(
+            root,
+            &current.desired.environment,
+            &options.fleet,
+        )?
+        && let Some(desired) = plan.reviewed_desired
     {
         return Ok(LoadedDesiredFleet {
             desired: desired.into_desired(),
@@ -533,6 +583,23 @@ fn publish_generated(
     Ok(())
 }
 
+fn render_observation_timing(
+    timing: &canic_host::fleet_ensure::dto::FleetObservationTiming,
+    json: bool,
+) -> String {
+    if json {
+        serde_json::json!({"event": "fleet_ensure_observation", "schema_version": 1, "observation": timing}).to_string()
+    } else {
+        format!(
+            "Fleet observation {:?}: {} ms, {} remote call attempts{}",
+            timing.stage,
+            timing.elapsed_millis,
+            timing.remote_call_attempts,
+            if timing.succeeded { "" } else { ", failed" }
+        )
+    }
+}
+
 fn render_progress(progress: &FleetEnsureProgress, json: bool) -> String {
     if json {
         return serde_json::json!({
@@ -551,7 +618,7 @@ fn render_progress(progress: &FleetEnsureProgress, json: bool) -> String {
         FleetEnsurePhase::TerminalVerification => "terminal verification",
         FleetEnsurePhase::Complete => "complete",
     };
-    let state = match progress.state {
+    let state = match &progress.state {
         FleetEnsureProgressState::Advancing => "advancing",
         FleetEnsureProgressState::AwaitingProgress => "awaiting progress",
         FleetEnsureProgressState::PrerequisiteComplete => "prerequisite complete",
@@ -559,8 +626,15 @@ fn render_progress(progress: &FleetEnsureProgress, json: bool) -> String {
         FleetEnsureProgressState::ReviewRequired { .. } => "new review required",
         FleetEnsureProgressState::Complete => "complete",
     };
+    let details = match &progress.state {
+        FleetEnsureProgressState::ReviewRequired {
+            review: Some(review),
+            ..
+        } => format!("; {review}"),
+        _ => String::new(),
+    };
     format!(
-        "Fleet ensure: {phase}: {state} ({}/{} reviewed effects applied)",
+        "Fleet ensure: {phase}: {state} ({}/{} reviewed effects applied){details}",
         progress.applied_effects, progress.reviewed_effects
     )
 }
@@ -582,6 +656,7 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
         format!("plan_sha256: {}", report.plan.plan_sha256),
         format!("plan_scope: {}", report.plan.scope.as_str()),
         format!("terminal: {}", report.terminal),
+        "cycle_budget: planning allowances; maximums are not measured expenditure".to_string(),
         format!(
             "observed_controlled_cycles: {}",
             format_cycles(conservation.observed_controlled_cycles)
@@ -624,6 +699,8 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
         ),
         "estate_funding_domains:".to_string(),
     ];
+    append_recovery_review(&mut lines, report);
+    append_reinstall_guidance(&mut lines, report);
     append_estate_funding_domains(&mut lines, conservation);
     append_canister_summaries(&mut lines, report);
     if let Some(review) = &report.funding_review {
@@ -643,7 +720,7 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
         ]);
     }
     lines.push(format!(
-        "conservation_equation: {} + {} - {} - {} - {} = {}",
+        "conservation_equation: {} observed controlled + {} maximum operator debit - {} maximum unavoidable fees - {} maximum Root-funded creation fees - {} maximum execution burn = {} expected remaining",
         format_cycles(conservation.observed_controlled_cycles),
         format_cycles(conservation.maximum_operator_debit_cycles),
         format_cycles(conservation.maximum_unavoidable_fee_cycles),
@@ -657,7 +734,7 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
             format_cycles(actual.estate_funding_cycles)
         ));
         lines.push(format!(
-            "measured_conservation: {} + {} - {} - {} = {}",
+            "measured_conservation: {} observed starting + {} received funding - {} exact Root-funded creation fees - {} measured execution burn = {} final controlled",
             format_cycles(actual.observed_starting_cycles),
             format_cycles(actual.received_new_funding_cycles),
             format_cycles(actual.exact_estate_creation_fee_cycles),
@@ -668,16 +745,74 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
     lines.join("\n")
 }
 
+fn append_recovery_review(lines: &mut Vec<String>, report: &FleetEnsureReport) {
+    if let Some(review) = &report.plan.recovery_review {
+        lines.extend([
+            format!("base_execution_burn_cycles: {}", format_cycles(review.base_execution_burn_cycles)),
+            format!("continuation_reserve_cycles: {}", format_cycles(review.continuation_reserve_cycles)),
+            format!("whole_continuation_ceiling_cycles: {}", format_cycles(review.whole_continuation_ceiling_cycles)),
+            "recovery_discovery: pending current protocol; this phase is not a complete deployment funding quote".into(),
+        ]);
+        for funding in &review.known_pool_funding {
+            lines.push(format!("dependent_native_topup: {} via Root {}; {} cycles plus {} ledger fee; requires fresh review", funding.principal, funding.root, funding.amount_cycles, funding.ledger_fee_cycles));
+        }
+    }
+}
+
+fn append_reinstall_guidance(lines: &mut Vec<String>, report: &FleetEnsureReport) {
+    if let Some(intent) = &report.plan.reinstall {
+        lines.push(
+            "reinstall: application data will be discarded; logical pool roles may be reassigned"
+                .to_string(),
+        );
+        if let Some(activation) = &intent.activation_reset {
+            lines.push(format!(
+                "activation recovery: source_operation={} source_plan_document_sha256={}",
+                activation.source.operation_id, activation.source.plan_document_sha256
+            ));
+            if report.plan.scope
+                == canic_host::fleet_ensure::model::FleetEnsurePlanScope::ReinstallPreparation
+            {
+                lines.push(if report.terminal {
+                    "next: run fleet ensure again to review the Root reset; the Coordinator remains stopped"
+                } else {
+                    "next: apply this stop/restart preparation digest, then review the Root reset"
+                }.to_string());
+                return;
+            }
+        }
+        if report.plan.scope
+            == canic_host::fleet_ensure::model::FleetEnsurePlanScope::ReinstallPreparation
+        {
+            lines.push(if report.terminal { "next: run fleet ensure again to review the sealed inventory reset; the Fleet remains sealed" } else { "next: apply this preparation digest, then run fleet ensure again to review the reset" }.to_string());
+        }
+    }
+}
+
 fn append_canister_summaries(lines: &mut Vec<String>, report: &FleetEnsureReport) {
+    let initial_creations = report
+        .plan
+        .canisters
+        .iter()
+        .flat_map(|canister| &canister.actions)
+        .filter(|action| matches!(action, EnsureAction::Create { .. }))
+        .count();
+    lines.push(format!("host_create_actions: {initial_creations} (initial or replacement canisters; separate from Root-funded pool creations)"));
     lines.push("canisters:".to_string());
     lines.extend(report.plan.canisters.iter().map(|canister| {
         format!(
-            "  {}: disposition={:?} principal={} observed_cycles={} effects={}",
+            "  {}: disposition={:?} principal={} observed_cycles={} effects={} actions=[{}]",
             canister.name,
             canister.disposition,
             canister.principal.as_deref().unwrap_or("unallocated"),
             format_cycles(canister.observed_cycles),
-            canister.actions.len()
+            canister.actions.len(),
+            canister
+                .actions
+                .iter()
+                .map(action_label)
+                .collect::<Vec<_>>()
+                .join(", ")
         )
     }));
     lines.extend(report.plan.canisters.iter().flat_map(|canister| {
@@ -732,6 +867,30 @@ fn append_canister_summaries(lines: &mut Vec<String>, report: &FleetEnsureReport
     }));
 }
 
+const fn action_label(action: &EnsureAction) -> &'static str {
+    match action {
+        EnsureAction::SealAuthority { .. } => "seal authority",
+        EnsureAction::Create { .. } => "create",
+        EnsureAction::Delete { .. } => "delete",
+        EnsureAction::FleetProtocol { .. } => "fleet_protocol",
+        EnsureAction::Fund { .. } => "native_topup",
+        EnsureAction::FundEstate { .. } => "estate_funding",
+        EnsureAction::Install {
+            mode: InstallMode::Install,
+            ..
+        } => "install",
+        EnsureAction::Install {
+            mode: InstallMode::Reinstall,
+            ..
+        } => "reinstall",
+        EnsureAction::Protocol { .. } => "protocol",
+        EnsureAction::SetControllers { .. } => "set_controllers",
+        EnsureAction::Start { .. } => "start",
+        EnsureAction::Stop { .. } => "stop",
+        EnsureAction::Transfer { .. } => "transfer",
+    }
+}
+
 fn estate_funding_totals(
     conservation: &canic_host::fleet_ensure::model::CycleConservation,
 ) -> (u128, u128) {
@@ -755,11 +914,11 @@ fn append_estate_funding_domains(
 ) {
     lines.extend(conservation.estate_funding_domains.iter().map(|domain| {
         format!(
-            "  {}: root_principal={} ledger={} balance={} workloads={}/{} pool={}/{} ready={} pending={} pending_detail={} available_slots={} creations={} creation_amount={} readiness_floor={} management_creation_fee={} execution_margin={} ledger_fee={} maximum_debit={} funding={} shortfall={}",
+            "  {}: root_principal={} ledger={} balance={} workloads={}/{} pool={}/{} ready={} pending={} pending_detail={} available_slots={} root_funded_creations={} creation_amount={} readiness_floor={} management_creation_fee={} execution_margin={} ledger_fee={} maximum_debit={} funding={} shortfall={}",
             domain.root,
             domain.root_principal.as_deref().unwrap_or("unallocated"),
             domain.cycles_ledger,
-            domain.available_cycles.map_or_else(|| "unobserved".to_string(), |cycles| cycles.to_string()),
+            format_optional_cycles(domain.available_cycles),
             domain.allocated_workloads,
             domain.planned_initial_workloads,
             domain.occupied_pool_assets,
@@ -769,29 +928,33 @@ fn append_estate_funding_domains(
             domain.pending_creation.as_ref().map_or_else(
                 || "none".to_string(),
                 |pending| format!(
-                    "operation:{} diagnostic:{:?} attempts:{} available:{:?} required:{:?} shortfall:{:?} last_attempt:{:?} retry_at:{:?}",
+                    "operation:{} diagnostic:{:?} attempts:{} available:{} required:{} shortfall:{} last_attempt:{:?} retry_at:{:?}",
                     pending.operation_id,
                     pending.diagnostic,
                     pending.attempt_count,
-                    pending.available_cycles,
-                    pending.required_cycles,
-                    pending.shortfall_cycles,
+                    format_optional_cycles(pending.available_cycles),
+                    format_optional_cycles(pending.required_cycles),
+                    format_optional_cycles(pending.shortfall_cycles),
                     pending.last_attempt_at_ns,
                     pending.retry_at_ns,
                 ),
             ),
             domain.available_pool_slots,
             domain.required_creation_count,
-            domain.creation_amount_cycles,
-            domain.readiness_floor_cycles,
-            domain.management_creation_fee_cycles,
-            domain.creation_execution_margin_cycles,
-            domain.ledger_fee_cycles,
-            domain.maximum_creation_debit_cycles,
-            domain.maximum_funding_cycles,
-            domain.shortfall_cycles,
+            format_cycles(domain.creation_amount_cycles),
+            format_cycles(domain.readiness_floor_cycles),
+            format_cycles(domain.management_creation_fee_cycles),
+            format_cycles(domain.creation_execution_margin_cycles),
+            format_cycles(domain.ledger_fee_cycles),
+            format_cycles(domain.maximum_creation_debit_cycles),
+            format_cycles(domain.maximum_funding_cycles),
+            format_cycles(domain.shortfall_cycles),
         )
     }));
+}
+
+fn format_optional_cycles(cycles: Option<u128>) -> String {
+    cycles.map_or_else(|| "unobserved".to_string(), format_cycles)
 }
 
 fn format_cycles(cycles: u128) -> String {

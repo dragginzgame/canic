@@ -201,7 +201,7 @@ where
     };
     let config_path = resolve_build_config_path(&options)?.canonicalize()?;
     let roles = selected_build_roles(&options, &config_path)?;
-    let mut context = resolve_build_context(&options, config_path, &roles[0])?;
+    let context = resolve_build_context(&options, config_path, &roles[0])?;
 
     if let Some(role) = &options.role {
         if options.standalone_local && context.build_network != BuildNetwork::Local {
@@ -236,15 +236,101 @@ where
         );
         println!("{}", output.wasm_gz_path.display());
     } else {
-        let release = plan_release_build_for_profile_and_network(
-            &context.icp_root,
-            context.profile,
-            context.build_network,
-        )
-        .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
-        context = context.with_release_build_id(release.record.release_build_id);
-        build_app(&options, &context, &roles, &builder, started_at)?;
+        build_complete_app(&options, context, &roles, &builder, started_at)?;
     }
+    Ok(())
+}
+
+fn build_complete_app(
+    options: &BuildOptions,
+    mut context: WorkspaceBuildContext,
+    roles: &[String],
+    builder: &CanisterArtifactBuilder,
+    started_at: Instant,
+) -> Result<(), BuildCommandError> {
+    let lookup_started = Instant::now();
+    let reuse = match builder.prepare_complete_build_reuse(&context) {
+        Ok(reuse) => Some(reuse),
+        Err(error) => {
+            eprintln!("Build reuse unavailable: {error}");
+            None
+        }
+    };
+    if let Some(reuse) = &reuse {
+        match reuse.load() {
+            Ok(Some(hit)) => {
+                for role in &hit.roles {
+                    eprintln!("Build cache {role}: hit (verified complete release)");
+                }
+                eprintln!(
+                    "Build phase input/output verification: {:.2}s",
+                    lookup_started.elapsed().as_secs_f64()
+                );
+                TerminalStyle::detected().print_section(
+                    "Build complete",
+                    &build_completion_detail(
+                        hit.roles.len(),
+                        "artifact",
+                        "artifacts",
+                        started_at.elapsed(),
+                    ),
+                );
+                println!(
+                    "Release build: {}\nRelease manifest: {}",
+                    hit.release_build_id,
+                    hit.manifest_path.display()
+                );
+                return Ok(());
+            }
+            Ok(None) => {}
+            Err(error) => eprintln!("Build cache rejected: {error}"),
+        }
+    }
+    let all_roles = ["fleet_coordinator".to_string(), "wasm_store".to_string()]
+        .into_iter()
+        .chain(roles.iter().cloned())
+        .collect::<Vec<_>>();
+    for role in &all_roles {
+        eprintln!("Build cache {role}: miss (new complete release identity)");
+    }
+    eprintln!(
+        "Build phase input/output verification: {:.2}s",
+        lookup_started.elapsed().as_secs_f64()
+    );
+    let release = plan_release_build_for_profile_and_network(
+        &context.icp_root,
+        context.profile,
+        context.build_network,
+    )
+    .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    context = context.with_release_build_id(release.record.release_build_id);
+    let manifest_path = build_app(options, &context, roles, builder)?;
+    let artifact_count = all_roles.len();
+    if let Some(reuse) = reuse {
+        reuse
+            .record(release.record.release_build_id, all_roles)
+            .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    }
+    TerminalStyle::detected().print_section(
+        "Build complete",
+        &build_completion_detail(
+            artifact_count,
+            "artifact",
+            "artifacts",
+            started_at.elapsed(),
+        ),
+    );
+    println!(
+        "Release build: {}\nArtifacts: {}\nRelease manifest: {}",
+        release.record.release_build_id,
+        context
+            .icp_root
+            .join(".canic/release-builds")
+            .join(release.record.release_build_id.to_string())
+            .join("artifacts")
+            .display(),
+        manifest_path.display()
+    );
     Ok(())
 }
 
@@ -373,8 +459,7 @@ fn build_app(
     context: &WorkspaceBuildContext,
     roles: &[String],
     builder: &CanisterArtifactBuilder,
-    started_at: Instant,
-) -> Result<(), BuildCommandError> {
+) -> Result<PathBuf, BuildCommandError> {
     let style = TerminalStyle::detected();
     style.print_section(
         "Build App",
@@ -442,26 +527,7 @@ fn build_app(
     println!("{}", render_app_build_table(&artifacts.application, style)?);
     println!();
 
-    style.print_section(
-        "Build complete",
-        &build_completion_detail(
-            artifacts.application.len() + infrastructure.len(),
-            "artifact",
-            "artifacts",
-            started_at.elapsed(),
-        ),
-    );
-    println!(
-        "Release build: {release_build_id}\nArtifacts: {}",
-        context
-            .icp_root
-            .join(".canic/release-builds")
-            .join(release_build_id.to_string())
-            .join("artifacts")
-            .display()
-    );
-    println!("Release manifest: {}", release_manifest.display());
-    Ok(())
+    Ok(release_manifest)
 }
 
 fn persist_complete_release_set(

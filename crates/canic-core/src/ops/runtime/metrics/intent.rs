@@ -146,6 +146,22 @@ pub struct IntentMetricKey {
 pub struct IntentMetrics;
 
 impl IntentMetrics {
+    /// Bound source visits before allocating an optional anonymous aggregate.
+    pub(crate) fn bounded_snapshot(
+        limit: usize,
+    ) -> Result<Vec<(IntentMetricKey, u64)>, crate::InternalError> {
+        INTENT_METRICS.with_borrow(|counts| {
+            if counts.len() > limit {
+                return Err(crate::InternalError::invalid_input());
+            }
+            Ok(counts
+                .iter()
+                .take(limit)
+                .map(|(key, count)| (*key, *count))
+                .collect())
+        })
+    }
+
     /// Record one intent event.
     pub fn record(
         surface: IntentMetricSurface,

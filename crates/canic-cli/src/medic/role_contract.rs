@@ -295,6 +295,9 @@ fn check_role_package_contract(
     }
 
     let next = match finding {
+        RoleContractFinding::CargoEvidenceUnavailable { .. } => {
+            "resolve the reported Cargo dependency/cache failure; run cargo fetch --locked for this workspace, then rerun canic medic (metadata checks are locked and offline)"
+        }
         RoleContractFinding::AllocationDescriptorDuplicate { .. }
         | RoleContractFinding::AllocationDescriptorIdMismatch { .. }
         | RoleContractFinding::AllocationDescriptorMissing { .. } => {
@@ -344,4 +347,38 @@ fn check_declared_role_not_deployable(
         ),
         MedicSource::AppConfig,
     )
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::medic::report::MedicStatus;
+
+    #[test]
+    fn cargo_evidence_failure_recommends_cache_preparation_and_retains_cause() {
+        let role = ConfiguredRoleLifecycle {
+            app: "demo".to_string(),
+            role: "hub".to_string(),
+            display: "demo/hub".to_string(),
+            declaration_kind: "managed".to_string(),
+            package: "hub".to_string(),
+            attached: true,
+            state: "configured".to_string(),
+            topology: None,
+        };
+        let finding = RoleContractFinding::CargoEvidenceUnavailable {
+            phase: "wasm_filtered_metadata".to_string(),
+            cause: "unable to checkout from git in offline mode (--offline)".to_string(),
+        };
+        let check = check_role_package_contract(&role, &finding).expect("evidence check");
+        assert_eq!(check.status, MedicStatus::Fail);
+        assert_eq!(check.code, finding.code());
+        assert_eq!(check.detail, finding_detail(&finding));
+        assert!(check.next.contains("cargo fetch --locked"));
+        assert!(check.next.contains("locked and offline"));
+    }
 }

@@ -39,7 +39,10 @@ impl ManagedRoleQualificationArtifact {
 pub struct ManagedComponentGroupQualificationInput<'a> {
     /// Fleet-admitted callers embedded in every enrolled local projection.
     pub admitted_principals: Vec<Principal>,
-    /// Checked-in Canic configuration source compiled into every tested Wasm.
+    /// Exact Canic configuration source compiled into every tested Wasm.
+    /// The caller must retain and compare these build-input bytes before constructing this input;
+    /// the release manifest binds artifacts and topology, not every runtime publication setting.
+    /// This source never overrides configuration embedded in the supplied Wasms.
     pub app_config_source: &'a str,
     /// Exact Component Group deployment materialized by the fixture.
     pub component_group_deployment: &'a str,

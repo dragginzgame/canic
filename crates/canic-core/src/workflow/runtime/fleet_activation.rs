@@ -4,6 +4,7 @@
 //! Does not own: stable conversion, endpoint authorization, or activation mutation.
 //! Boundary: the runtime role selects root-only projection before ops validates the record.
 
+use crate::domain::provisioning_failure::{ProvisioningFailureStage, ProvisioningRetryCategory};
 #[cfg(any(test, feature = "auth-root-delegation-state"))]
 use crate::ops::storage::auth::RootDelegationStateOps;
 use crate::{
@@ -139,7 +140,15 @@ impl FleetActivationWorkflow {
         let observed =
             query_store_fleet_activation_status(wasm_store.pid, child.authority.operation_id)
                 .await?;
-        validate_nonroot_activation_identity(&current, &observed, child.authority.operation_id)?;
+        validate_nonroot_activation_identity(&current, &observed, child.authority.operation_id)
+            .map_err(|error| {
+                error.with_provisioning_failure(
+                    ProvisioningFailureStage::StoreIdentity,
+                    wasm_store.pid,
+                    child.authority.operation_id,
+                    ProvisioningRetryCategory::ReviewRequired,
+                )
+            })?;
 
         let state_snapshot = StateSnapshotBuilder::new()?.with_fleet_state().build();
         let state_input = StateSnapshotAdapter::to_input(&state_snapshot);
@@ -585,11 +594,31 @@ async fn submit_store_fleet_command(
     command: StoreCommandFragment,
     operation_id: [u8; 32],
 ) -> Result<FleetActivationStatusResponse, InternalError> {
+    let stage = match &command {
+        StoreCommandFragment::PrepareFleetCredential(_) => {
+            ProvisioningFailureStage::StoreCredential
+        }
+        StoreCommandFragment::ActivateFleet(_) => ProvisioningFailureStage::StoreActivation,
+    };
     let response: StoreCommandResponseFragment =
-        RpcOps::call_rpc_result(pid, protocol::CANIC_WASM_STORE_COMMAND, command).await?;
+        RpcOps::call_rpc_result(pid, protocol::CANIC_WASM_STORE_COMMAND, command)
+            .await
+            .map_err(|error| {
+                error.with_provisioning_failure(
+                    stage,
+                    pid,
+                    operation_id,
+                    ProvisioningRetryCategory::Backoff,
+                )
+            })?;
     let StoreCommandResponseFragment::OperationAccepted(receipt) = response;
     if receipt.operation_id != operation_id {
-        return Err(InternalError::conflict());
+        return Err(InternalError::conflict().with_provisioning_failure(
+            stage,
+            pid,
+            operation_id,
+            ProvisioningRetryCategory::ReviewRequired,
+        ));
     }
     query_store_fleet_activation_status(pid, operation_id).await
 }
@@ -603,14 +632,48 @@ async fn query_store_fleet_activation_status(
         protocol::CANIC_WASM_STORE_STATUS,
         StoreStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
     )
-    .await?;
+    .await
+    .map_err(|error| store_status_failure(error, pid, operation_id))?;
     let StoreStatusResponseFragment::Operation(StoreOperationStatusFragment::FleetActivation(
         status,
     )) = response;
     if status.identity.operation_id != operation_id {
-        return Err(InternalError::conflict());
+        return Err(InternalError::conflict().with_provisioning_failure(
+            ProvisioningFailureStage::StoreIdentity,
+            pid,
+            operation_id,
+            ProvisioningRetryCategory::ReviewRequired,
+        ));
     }
     Ok(status)
+}
+
+fn store_status_failure(
+    error: InternalError,
+    target: Principal,
+    operation_id: [u8; 32],
+) -> InternalError {
+    // A decoded rejection of the exact installed Store operation is distinct from
+    // an uncertain transport failure. Repeating a missing binding cannot create it.
+    let code = error.public_error().code();
+    let exact_binding_rejected = error.public_code().is_none()
+        && [
+            crate::diagnostics::codes::STATE_UNAVAILABLE.raw_code(),
+            crate::diagnostics::codes::STATE_CONFLICT.raw_code(),
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code(),
+        ]
+        .contains(&code);
+    let retry = if exact_binding_rejected {
+        ProvisioningRetryCategory::ReviewRequired
+    } else {
+        ProvisioningRetryCategory::Backoff
+    };
+    error.with_provisioning_failure(
+        ProvisioningFailureStage::StoreStatus,
+        target,
+        operation_id,
+        retry,
+    )
 }
 
 fn validate_nonroot_activation_status(
@@ -718,6 +781,35 @@ mod tests {
         AppId, CanonicalNetworkId, EndpointCallKind, EndpointId, FleetBinding, FleetId, FleetKey,
         ReleaseBuildId, ReleaseBuildNonce,
     };
+
+    #[test]
+    fn provisioning_store_rejection_retains_origin_but_transport_failure_retries() {
+        let target = Principal::from_slice(&[8]);
+        let operation_id = [9; 32];
+        let public = crate::dto::error::Error::from(InternalError::unavailable());
+        let error =
+            store_status_failure(InternalError::observed_public(public), target, operation_id)
+                .with_provisioning_failure(
+                    ProvisioningFailureStage::RootPreparation,
+                    Principal::from_slice(&[7]),
+                    [6; 32],
+                    ProvisioningRetryCategory::Backoff,
+                );
+        let origin = error.provisioning_failure().expect("origin retained");
+        assert_eq!(origin.stage, ProvisioningFailureStage::StoreStatus);
+        assert_eq!(origin.target, target);
+        assert_eq!(origin.operation_id, operation_id);
+        assert_eq!(
+            origin.retry_category,
+            ProvisioningRetryCategory::ReviewRequired
+        );
+        assert_eq!(error.public_error(), public);
+        let transport = store_status_failure(InternalError::unavailable(), target, operation_id);
+        assert_eq!(
+            transport.provisioning_failure().unwrap().retry_category,
+            ProvisioningRetryCategory::Backoff
+        );
+    }
 
     fn call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
         EndpointCall {

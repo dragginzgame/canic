@@ -1810,3 +1810,80 @@ fn member_origin_is_valid_only_under_exact_accepted_authority() {
         .is_err()
     );
 }
+
+#[test]
+fn provisioning_failure_backoff_survives_restart_without_changing_work_receipts() {
+    use canic_core::control_plane_support::error::{
+        ProvisioningFailureStage, ProvisioningFailureView, ProvisioningRetryCategory,
+    };
+    let fixture = fixture();
+    let accepted = accept_fresh_fixture(&fixture, 100);
+    let initial = status_response(accepted.clone());
+    let origin = ProvisioningFailureView {
+        recorded_at_ns: None,
+        stage: ProvisioningFailureStage::StoreStatus,
+        target: principal(8),
+        operation_id: [9; 32],
+        diagnostic_code: 61,
+        retry_category: ProvisioningRetryCategory::Backoff,
+    };
+    let mut now = 100;
+    for delay in [1, 2, 4, 8, 16, 32, 60, 60] {
+        let failure = RootComponentProvisioningOps::record_failure(
+            accepted.operation_id,
+            accepted.plan_hash,
+            origin,
+            now,
+        )
+        .unwrap();
+        assert_eq!(failure.retry_at_ns, Some(now + delay * 1_000_000_000));
+        let snapshot = RootComponentProvisioningStore::export();
+        RootComponentProvisioningStore::import(snapshot.clone());
+        assert_eq!(RootComponentProvisioningStore::export(), snapshot);
+        let view = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+            operation_id: accepted.operation_id,
+            plan_hash: accepted.plan_hash,
+        })
+        .unwrap();
+        let response = status_response(view.clone());
+        assert_eq!(response.receipt_content_hash, initial.receipt_content_hash);
+        assert!(!RootComponentProvisioningOps::progress_changed(
+            &accepted, &response
+        ));
+        assert!(RootComponentProvisioningOps::failure_changed(
+            &accepted, &response
+        ));
+        assert!(!RootComponentProvisioningOps::failure_changed(
+            &view, &response
+        ));
+        assert_eq!(view.last_failure, Some(failure));
+        now = failure.retry_at_ns.unwrap();
+    }
+    let permanent = ProvisioningFailureView {
+        retry_category: ProvisioningRetryCategory::ReviewRequired,
+        ..origin
+    };
+    let failure = RootComponentProvisioningOps::record_failure(
+        accepted.operation_id,
+        accepted.plan_hash,
+        permanent,
+        now,
+    )
+    .unwrap();
+    assert_eq!(failure.retry_at_ns, None);
+    let replay = RootComponentProvisioningOps::acceptance_replay(&fixture.request)
+        .unwrap()
+        .unwrap();
+    assert_eq!(replay.last_failure, Some(failure));
+    assert!(RootComponentProvisioningOps::clear_failure(accepted.operation_id, [88; 32]).is_err());
+    RootComponentProvisioningOps::clear_failure(accepted.operation_id, accepted.plan_hash).unwrap();
+    let reset = RootComponentProvisioningOps::record_failure(
+        accepted.operation_id,
+        accepted.plan_hash,
+        origin,
+        now,
+    )
+    .unwrap();
+    assert_eq!(reset.consecutive_failures, 1);
+    assert_eq!(reset.retry_at_ns, Some(now + 1_000_000_000));
+}

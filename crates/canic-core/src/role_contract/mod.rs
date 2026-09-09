@@ -11,6 +11,7 @@ pub const CANONICAL_BUILD_CONFIG_PATH_ENV: &str = "CANIC_INTERNAL_BUILD_CONFIG_P
 pub const CANONICAL_BUILD_ICP_ROOT_ENV: &str = "CANIC_INTERNAL_BUILD_ICP_ROOT";
 
 pub mod allocation;
+pub mod build_context;
 pub mod catalog;
 mod model;
 mod policy;

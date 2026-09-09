@@ -27,6 +27,7 @@ impl IcpCli {
     #[must_use]
     pub fn new(executable: impl Into<String>, environment: Option<String>) -> Self {
         Self {
+            remote_calls: std::sync::Arc::default(),
             executable: executable.into(),
             environment,
             cwd: None,
@@ -34,6 +35,18 @@ impl IcpCli {
             inherited_fd: None,
             identity_password_file: configured_identity_password_file(),
         }
+    }
+
+    /// Count logical remote transport attempts, including failures, across this context's clones.
+    /// Replica handshakes and local CLI metadata discovery are excluded.
+    #[must_use]
+    pub(crate) fn remote_call_count(&self) -> u64 {
+        self.remote_calls.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub(super) fn record_remote_call(&self) {
+        self.remote_calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Return a copy of this ICP CLI context rooted at one project directory.

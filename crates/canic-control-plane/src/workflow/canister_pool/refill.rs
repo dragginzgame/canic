@@ -53,6 +53,7 @@ pub(super) async fn start(
     let now_ns = IcOps::now_nanos();
     let created_at_time_ns = CanisterPoolOps::next_creation_timestamp(now_ns)?;
     CanisterPoolOps::begin_creation(
+        config,
         CanisterPoolCreationAuthority {
             operation_id,
             created_at_time_ns,
@@ -489,6 +490,12 @@ mod tests {
         let root = Principal::from_slice(&[1; 29]);
         let operation_id = creation_operation_id(root, 0);
         CanisterPoolOps::begin_creation(
+            &FleetSubnetCanisterPoolConfig {
+                minimum_size: 1,
+                maximum_size: 1,
+                canister_cycles: Cycles::new(8),
+                creation_execution_margin: Cycles::new(1),
+            },
             CanisterPoolCreationAuthority {
                 creation_execution_margin: Cycles::new(1),
                 operation_id,

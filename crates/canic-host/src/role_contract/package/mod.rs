@@ -528,10 +528,19 @@ impl CargoEvidenceFailure {
         manifest_path: &Path,
         source: &(dyn std::error::Error + 'static),
     ) -> Self {
-        Self {
-            phase,
-            cause: bounded_cargo_cause(manifest_path, &source.to_string()),
-        }
+        let cause = if let Some(error) = source.downcast_ref::<std::io::Error>() {
+            format!("Cargo command I/O failure: {:?}", error.kind())
+        } else if let Some(error) = source.downcast_ref::<serde_json::Error>() {
+            format!(
+                "invalid Cargo metadata JSON: {:?} at line {}, column {}",
+                error.classify(),
+                error.line(),
+                error.column()
+            )
+        } else {
+            bounded_cargo_cause(manifest_path, &source.to_string())
+        };
+        Self { phase, cause }
     }
 
     fn into_finding(self) -> RoleContractFinding {
@@ -612,35 +621,95 @@ fn bounded_cargo_cause(manifest_path: &Path, source: &str) -> String {
         .replace(&manifest, "<role-manifest>")
         .replace(&workspace, "<role-workspace>")
         .replace(&canic_workspace, "<canic-workspace>");
-    let mut selected = scrubbed
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .filter(|line| {
-            let lower = line.to_ascii_lowercase();
-            lower.starts_with("error:")
-                || lower.starts_with("caused by:")
-                || lower.starts_with("failed to")
-                || lower.starts_with("could not")
-                || lower.starts_with("no matching package")
-                || lower.starts_with("perhaps")
+    let mut causes = VecDeque::new();
+    let mut in_cause = false;
+    for line in scrubbed.lines().map(str::trim) {
+        let line = if let Some(cause) = line.strip_prefix("Caused by:") {
+            in_cause = true;
+            cause.trim()
+        } else {
+            line
+        };
+        if line.is_empty() {
+            continue;
+        }
+        // Cargo source excerpts are not diagnostic causes and may contain secrets.
+        if cargo_source_excerpt(line) {
+            in_cause = false;
+            continue;
+        }
+        if !cargo_diagnostic_line(line) && !in_cause {
+            continue;
+        }
+        // Keep the outer failure and the deepest causes, with room for each leaf.
+        let line_limit = MAX_CAUSE_CHARS / MAX_CAUSE_LINES - 1;
+        if causes.len() == MAX_CAUSE_LINES {
+            causes.remove(1);
+        }
+        causes.push_back(bounded_cargo_line(line, line_limit));
+    }
+    if causes.is_empty() {
+        return "Cargo command failed without a recognized diagnostic".to_string();
+    }
+    causes.into_iter().collect::<Vec<_>>().join(" ")
+}
+
+fn cargo_diagnostic_line(line: &str) -> bool {
+    let lower = line.to_ascii_lowercase();
+    [
+        "error:",
+        "cargo metadata failed:",
+        "cargo tree failed:",
+        "failed to",
+        "could not",
+        "no matching package",
+        "perhaps",
+    ]
+    .iter()
+    .any(|prefix| lower.starts_with(prefix))
+}
+
+fn cargo_source_excerpt(line: &str) -> bool {
+    line.starts_with(['|', '^'])
+        || line.starts_with("-->")
+        || line.starts_with(":::")
+        || line.split_once('|').is_some_and(|(prefix, _)| {
+            prefix
+                .trim()
+                .chars()
+                .all(|character| character.is_ascii_digit())
         })
-        .take(MAX_CAUSE_LINES)
+}
+
+fn bounded_cargo_line(line: &str, limit: usize) -> String {
+    let assignment = line.split_once('=').is_some_and(|(key, _)| {
+        !key.trim().is_empty()
+            && key
+                .trim()
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '_')
+    });
+    if assignment {
+        return "<redacted assignment>".to_string();
+    }
+    let sanitized = line
+        .split_whitespace()
+        .map(|word| {
+            if word.contains("://") || word.contains('=') {
+                "<redacted>".to_string()
+            } else {
+                word.chars()
+                    .filter(|character| !character.is_control())
+                    .collect()
+            }
+        })
         .collect::<Vec<_>>()
         .join(" ");
-    if selected.is_empty() {
-        selected = scrubbed
-            .lines()
-            .next()
-            .unwrap_or("Cargo command failed")
-            .trim()
-            .to_string();
+    let mut bounded = sanitized.chars().take(limit - 3).collect::<String>();
+    if sanitized.chars().count() > limit - 3 {
+        bounded.push_str("...");
     }
-    if selected.chars().count() > MAX_CAUSE_CHARS {
-        selected = selected.chars().take(MAX_CAUSE_CHARS - 3).collect();
-        selected.push_str("...");
-    }
-    selected
+    bounded
 }
 
 fn validate_role_declaration<'a>(

@@ -50,6 +50,43 @@ profile digest remain bound before optimization. The builder keeps Wasm
 compilation non-incremental. An explicit
 `RUSTC_WRAPPER` wins; otherwise an executable `sccache` on `PATH` is used.
 
+### Complete build reuse and compilation phases
+
+`canic build <app>` verifies inputs before allocating another release identity.
+An unchanged complete build returns its original finalized release after checking
+all retained artifact and manifest bytes. Source, configuration, lockfile,
+environment, compiler/target-library and admitted tool changes invalidate reuse.
+The input set includes Cargo-declared target files and recorded dependency paths,
+including shared build scripts and includes outside package directories. Build
+scripts must declare external inputs to Cargo. A newly discovered or changed
+input set during compilation cannot establish a reusable build. Input collection
+is conservative across the complete Cargo catalog, rather than a minimal
+per-role dependency cache.
+Cache metadata lives under `.canic/build-reuse`; release manifests and artifact
+bytes remain under the existing `.canic/release-builds/<id>` owner. Cache hits do
+not compile, link, optimize or compress Wasm. Corrupt output evidence is rejected
+and a new build is selected.
+
+Every runtime embeds the complete release identity. Changed inputs therefore
+still rebuild those runtimes for the new identity; this surface does not compose
+a new release from artifacts embedding different identities. Reuse never grants
+authority to resume or change a Fleet operation.
+
+Configured declarations use the selected profile with optimization level zero,
+LTO explicitly off and 16 codegen units in a separate `declarations` Cargo
+target. They omit the release nonce and retain exact features, configuration
+and build network. Runtime compilation batches compatible packages by workspace
+with an exact package/role protocol-digest context. Combined Cargo resolution must preserve each package's isolated
+normal/build dependency tree and feature sets; conflicting packages split into
+separate batches. Canonical Coordinator and Store sidecars avoid ordinary
+declaration builds. Production runtime LTO remains the existing release policy.
+
+Stderr reports each role's cache decision and the observed compilation and
+finalization phases. Runtime Cargo/link time includes linking; it is not a
+separately measured LLVM LTO duration. Known npm `ic-wasm` distribution launchers
+resolve to their native executable before admission and hashing. An unrecognized
+scripted tool cannot establish a cache hit; ordinary compilation remains usable.
+
 ### Standalone-local runtime
 
 A canister using `canic::start_local!` can select its local-only Cargo surface

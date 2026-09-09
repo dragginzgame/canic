@@ -178,6 +178,22 @@ pub struct PlacementIndexMetricKey {
 pub struct PlacementIndexMetrics;
 
 impl PlacementIndexMetrics {
+    /// Bound source visits before allocating an optional anonymous aggregate.
+    pub(crate) fn bounded_snapshot(
+        limit: usize,
+    ) -> Result<Vec<(PlacementIndexMetricKey, u64)>, crate::InternalError> {
+        PLACEMENT_INDEX_METRICS.with_borrow(|counts| {
+            if counts.len() > limit {
+                return Err(crate::InternalError::invalid_input());
+            }
+            Ok(counts
+                .iter()
+                .take(limit)
+                .map(|(key, count)| (*key, *count))
+                .collect())
+        })
+    }
+
     /// Record one index placement event.
     pub fn record(
         operation: PlacementIndexMetricOperation,

@@ -5,8 +5,24 @@
 //! Boundary: `MgmtOps` extension for status/settings calls and DTO projection.
 
 use super::*;
+use crate::dto::canister::CanisterHistoryResponse;
 
 impl MgmtOps {
+    /// Preserve replicated history and its exact requested target for host recovery.
+    pub async fn canister_history(
+        canister_pid: Principal,
+    ) -> Result<CanisterHistoryResponse, InternalError> {
+        let response = management_call(
+            ManagementCallMetricOperation::CanisterInfo,
+            MgmtInfra::canister_history(canister_pid),
+        )
+        .await?;
+        Ok(CanisterHistoryResponse {
+            canister_id: canister_pid,
+            history_candid: response.into_bytes(),
+        })
+    }
+
     /// Observe the independent monotonic management-history count for one Canister.
     pub async fn canister_history_total_changes(
         canister_pid: Principal,

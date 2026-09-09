@@ -38,6 +38,22 @@ pub struct WasmStoreMetricKey {
 pub struct WasmStoreMetrics;
 
 impl WasmStoreMetrics {
+    /// Bound source visits before allocating an optional anonymous aggregate.
+    pub(crate) fn bounded_snapshot(
+        limit: usize,
+    ) -> Result<Vec<(WasmStoreMetricKey, u64)>, crate::InternalError> {
+        WASM_STORE_METRICS.with_borrow(|counts| {
+            if counts.len() > limit {
+                return Err(crate::InternalError::invalid_input());
+            }
+            Ok(counts
+                .iter()
+                .take(limit)
+                .map(|(key, count)| (*key, *count))
+                .collect())
+        })
+    }
+
     /// Record one wasm-store operation event.
     pub fn record(
         operation: WasmStoreMetricOperation,

@@ -4,6 +4,7 @@
 //! Does not own: policy, persistence, observations, or effects.
 //! Boundary: returns passive model input plus the canonical source digest.
 
+mod observation;
 mod progress;
 
 use crate::fleet_ensure::model::DesiredFleet;
@@ -11,6 +12,7 @@ use canic_core::cdk::utils::hash::sha256_hex;
 use std::{fs, io, path::Path};
 use thiserror::Error as ThisError;
 
+pub use observation::{FleetObservationStage, FleetObservationTiming};
 pub use progress::{FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState};
 
 /// Parsed current desired state and its exact source identity.

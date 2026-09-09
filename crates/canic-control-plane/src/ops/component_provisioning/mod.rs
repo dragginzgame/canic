@@ -5,6 +5,7 @@
 //! Boundary: workflow supplies a validated batch; ops derives immutable member context only from
 //! that durable record.
 
+mod failure;
 #[cfg(test)]
 mod tests;
 
@@ -71,6 +72,7 @@ use canic_core::{
     },
     ids::{ComponentBinding, ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentSpecId},
 };
+use failure::{failure_response, failure_view};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -334,6 +336,7 @@ impl RootComponentProvisioningOps {
         let registry_cursor =
             registry_cursor_record(request.operation_id, request.plan_hash, 0, 0, 0)?;
         let record = RootComponentProvisioningRecord {
+            last_failure: None,
             operation_id: request.operation_id,
             plan_hash: request.plan_hash,
             fleet_registry: request.fleet_registry,
@@ -1560,6 +1563,7 @@ fn validated_record(
 ) -> Result<RootComponentProvisioningView, InternalError> {
     validate_operation_and_plan_hash(record.operation_id, record.plan_hash)?;
     let state = validated_record_state(&record)?;
+    failure::validate_failure(record.last_failure, state.accepted_at_ns)?;
     let validation = RootComponentProvisioningBatchValidation {
         placement_count: state.placement_count,
         component_count: state.component_count,
@@ -1584,6 +1588,7 @@ fn validated_record(
     validate_record_placement_index(record.operation_id, record.plan_hash, &record.batch)?;
     validate_aggregate_operation(&record, state.phase, validated_aggregate_state()?)?;
     Ok(RootComponentProvisioningView {
+        last_failure: record.last_failure.map(failure_view),
         operation_id: record.operation_id,
         plan_hash: record.plan_hash,
         fleet_registry: record.fleet_registry,
@@ -3439,6 +3444,7 @@ pub fn status_response(
     view: RootComponentProvisioningView,
 ) -> RootComponentProvisioningStatusResponse {
     RootComponentProvisioningStatusResponse {
+        last_failure: view.last_failure.map(failure_response),
         operation_id: view.operation_id,
         plan_hash: view.plan_hash,
         fleet_registry: view.fleet_registry,

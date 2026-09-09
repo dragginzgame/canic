@@ -104,6 +104,7 @@ fn canonical_root_acceptance_response(
         },
     )?;
     Ok(RootComponentProvisioningStatusResponse {
+        last_failure: None,
         operation_id: record.operation_id,
         plan_hash: record.plan_hash,
         fleet_registry: record.plan.fleet_registry.clone(),

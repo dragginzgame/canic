@@ -30,8 +30,9 @@ pub struct IcpRawOutput {
 /// IcpCli
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct IcpCli {
+    pub(super) remote_calls: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub(super) executable: String,
     pub(super) environment: Option<String>,
     pub(super) cwd: Option<PathBuf>,
@@ -98,3 +99,34 @@ pub struct IcpCanisterStatusSettings {
     pub wasm_memory_threshold: Option<String>,
     pub log_memory_limit: Option<String>,
 }
+
+/// Transport context identity excludes informational counters.
+#[derive(Eq, PartialEq)]
+struct IcpCommandIdentity<'a> {
+    executable: &'a str,
+    environment: Option<&'a str>,
+    cwd: Option<&'a std::path::Path>,
+    local_replica: Option<&'a LocalReplicaTarget>,
+    inherited_fd: Option<i32>,
+    identity_password_file: Option<&'a std::path::Path>,
+}
+
+impl IcpCli {
+    fn command_identity(&self) -> IcpCommandIdentity<'_> {
+        IcpCommandIdentity {
+            executable: &self.executable,
+            environment: self.environment.as_deref(),
+            cwd: self.cwd.as_deref(),
+            local_replica: self.local_replica.as_ref(),
+            inherited_fd: self.inherited_fd,
+            identity_password_file: self.identity_password_file.as_deref(),
+        }
+    }
+}
+
+impl PartialEq for IcpCli {
+    fn eq(&self, other: &Self) -> bool {
+        self.command_identity() == other.command_identity()
+    }
+}
+impl Eq for IcpCli {}
