@@ -26,3 +26,21 @@ f41ed0461bc77fe09bcc0becbe47ef99eb6d17e1:docs/audits/reports/2026-09/2026-09-01/
 c563de9b596fd1ff9a7a663836bb1c64360e7d38:docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/method.json:generic-api-key:8
 c563de9b596fd1ff9a7a663836bb1c64360e7d38:docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/method.json:generic-api-key:9
 c563de9b596fd1ff9a7a663836bb1c64360e7d38:docs/audits/reports/2026-09/2026-09-03/wasm-footprint-v6.md:generic-api-key:57
+# CANIC-162 retained source inventory: each reviewed value is the SHA-256 of
+# the named source file in this exact commit (see canic162-memory.md).
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:574
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:621
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:787
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:799
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:879
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:887
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:940
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1033
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1060
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1067
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1068
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1082
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1170
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1178
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1653
+bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1818
