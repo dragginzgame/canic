@@ -24,6 +24,10 @@ const READY_TICK_LIMIT: usize = 120;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 
+// Historical comparison point, not an execution or release limit.
+// See docs/features/runtime/public-observability.md#sampling-cost-qualification.
+const SAMPLING_INSTRUCTION_REFERENCE: u64 = 20_000_000;
+
 #[derive(CandidType, Clone)]
 enum RoleStatusRequest {
     CycleBalance,
@@ -798,6 +802,8 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     assert_eq!(rejected.sampled_at_ns, supplied.sampled_at_ns);
     assert_eq!(rejected.metrics.entries, supplied.metrics.entries);
     assert_eq!(rejected.state, PublicSnapshotState::Stale);
+    let recovered_history =
+        assert_sampling_recovers_after_rejection(&fixture, canister, &supplied, &delayed);
     fixture
         .pic
         .update_candid::<Result<(), Error>, _>(canister, "suspend_public_sampler_fixture", ())
@@ -806,7 +812,7 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     fixture.pic.advance_time(Duration::from_secs(601));
     tick(&fixture.pic, 8);
     let suspended = history();
-    assert_eq!(suspended.points.entries, delayed.points.entries);
+    assert_eq!(suspended.points.entries, recovered_history.points.entries);
     assert_eq!(suspended.state, PublicSnapshotState::Stale);
     assert!(delayed.canister_version >= before.canister_version);
     fixture
@@ -831,6 +837,44 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     assert_eq!(resumed.points.entries.len(), 1);
     assert_eq!(resumed.state, PublicSnapshotState::Fresh);
     assert_eq!(sampler_count(canister), 1);
+}
+
+fn assert_sampling_recovers_after_rejection(
+    fixture: &canic_testing_internal::pic::LifecycleBoundaryFixture,
+    canister: Principal,
+    supplied: &canic::dto::public_status::PublicMetricsSnapshot,
+    delayed: &canic::dto::public_status::PublicHistorySnapshot,
+) -> canic::dto::public_status::PublicHistorySnapshot {
+    use canic::dto::public_status::PublicSnapshotState;
+    // Repeated provider failures retain the prior sample without stopping other families.
+    fixture.pic.advance_time(Duration::from_secs(301));
+    tick(&fixture.pic, 8);
+    let isolated = cached_cycle_history(&fixture.pic, canister, fixture.root);
+    assert_eq!(isolated.state, PublicSnapshotState::Fresh);
+    assert_eq!(
+        isolated.points.entries.len(),
+        delayed.points.entries.len() + 1
+    );
+    assert_eq!(
+        cached_application_metrics(&fixture.pic, canister, fixture.root).sampled_at_ns,
+        supplied.sampled_at_ns
+    );
+    fixture
+        .pic
+        .update_candid::<Result<(), Error>, _>(canister, "configure_public_sampler", (false,))
+        .unwrap()
+        .unwrap();
+    fixture.pic.advance_time(Duration::from_secs(301));
+    tick(&fixture.pic, 8);
+    let recovered = cached_application_metrics(&fixture.pic, canister, fixture.root);
+    assert_eq!(recovered.state, PublicSnapshotState::Fresh);
+    assert!(recovered.sampled_at_ns > supplied.sampled_at_ns);
+    let recovered_history = cached_cycle_history(&fixture.pic, canister, fixture.root);
+    assert_eq!(
+        recovered_history.points.entries.len(),
+        isolated.points.entries.len() + 1
+    );
+    recovered_history
 }
 
 fn cached_cycle_history(
@@ -900,26 +944,29 @@ fn assert_periodic_sampling_cost(pic: &PocketIc, canister: Principal) {
         .work_performance
         .instructions_maximum
         .expect("scheduled sample completed");
-    println!("periodic public sampling maximum instructions: {instructions}");
-    assert!(
-        instructions < 20_000_000,
-        "bounded scheduled sampling instruction budget"
-    );
+    report_sampling_cost("scheduled maximum", instructions);
 }
 
 fn assert_explicit_sampling_cost(baseline: u64, full: u64) {
-    println!("public sampling instructions: 256 checkpoints={baseline}, 4096 checkpoints={full}");
-    assert!(
-        baseline < 20_000_000,
-        "bounded first-sample allocation instruction budget"
-    );
-    assert!(
-        full < 20_000_000,
-        "bounded public sampling instruction budget"
-    );
+    report_sampling_cost("first sample, 256 checkpoints", baseline);
+    report_sampling_cost("repeat sample, 4096 checkpoints", full);
+    // Sixteen times the source entries must not cause proportional work once
+    // the retained prefix is full. Allow twofold variation between these samples.
     assert!(
         full <= baseline.saturating_mul(2),
         "sampling cost must remain bounded beyond the retained-series ceiling"
+    );
+}
+
+fn report_sampling_cost(label: &str, instructions: u64) {
+    assert!(
+        instructions > 0,
+        "sampling must have a real Wasm measurement"
+    );
+    println!(
+        "public sampling {label}: {instructions} instructions; advisory reference: \
+         {SAMPLING_INSTRUCTION_REFERENCE}; above reference: {}",
+        instructions > SAMPLING_INSTRUCTION_REFERENCE
     );
 }
 

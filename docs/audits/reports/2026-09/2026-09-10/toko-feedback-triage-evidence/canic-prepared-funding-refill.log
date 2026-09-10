@@ -1,0 +1,43 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:43011/
+==> targeted canic-testing-internal PocketIC proof
+   Compiling canic-host v0.110.7 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.7 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 28.80s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::four_workloads_refill_four_ready_with_lost_funding_and_creation_responses ... [WASM]       SIZE   fleet_coordinator/candidate.wasm  code=4.27 MiB (4479609 B)  headroom=5.73 MiB (6006151 B)
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.52 MiB (2638262 B)  headroom=7.48 MiB (7847498 B)
+[WASM]       SIZE   app/candidate.wasm  code=2.53 MiB (2652541 B)  headroom=7.47 MiB (7833219 B)
+[WASM]       SIZE   root/candidate.wasm  code=7.65 MiB (8019530 B)  headroom=2.35 MiB (2466230 B)
+[FLEET]      DONE   literal-zero release artifacts (16)                  29.12s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.58s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET]      DONE   funding infrastructure prepared                      16.73s
+[FLEET]      RUN    establishing four Workloads before reserve funding
+[FLEET]      DONE   four Workloads active with no Ready reserve          27.65s
+[FLEET]      DONE   funded autonomous production-adapter journey complete   3m 28s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 208.90s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=440628 kB high_water=456980 kB threads=23
+==> targeted canic-testing-internal PocketIC proof done in 238s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  238s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 239s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.n6aDhm

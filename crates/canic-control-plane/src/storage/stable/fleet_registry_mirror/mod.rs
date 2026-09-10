@@ -11,7 +11,7 @@ use canic_core::dto::fleet_registry::{
 use canic_core::dto::root_store::RootStoreBootstrapRequest;
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
     eager_static, impl_storable_bounded,
     role_contract::allocation::memory::control_plane::ROOT_FLEET_REGISTRY_MIRROR_ID,
 };
@@ -28,7 +28,7 @@ struct RootFleetRegistryMirrorState;
 #[cfg(feature = "root-control-plane")]
 eager_static! {
     static ROOT_FLEET_REGISTRY_MIRROR:
-        RefCell<Cell<RootFleetRegistryMirrorStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<RootFleetRegistryMirrorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,

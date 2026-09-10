@@ -1,0 +1,17 @@
+Set default identity to toko-miner-local
+Resuming the retained local wipe; no new reinstall intent will be issued.
+Planning local Fleet changes (pass 1/20).
+plan_sha256: dc27eb7d9f53145d13322a1ab9d056326f20b51eb3497bba51ffc2f86726a403
+Applying local Fleet plan dc27eb7d9f53145d13322a1ab9d056326f20b51eb3497bba51ffc2f86726a403; live Canic progress follows.
+Fleet ensure: infrastructure: advancing (0/3 reviewed effects applied)
+Fleet observation RootManagement: 762 ms, 2 remote call attempts
+Fleet observation RootManagement: 879 ms, 2 remote call attempts
+Fleet observation RootManagement: 725 ms, 2 remote call attempts
+Fleet observation RootManagement: 739 ms, 2 remote call attempts
+Fleet observation RootManagement: 735 ms, 2 remote call attempts
+Fleet observation RootManagement: 733 ms, 2 remote call attempts
+fleet: Fleet platform operation failed: icp command failed: icp --project-root-override /tmp/toko-feedback-fleet canister install lefxa-wl777-77774-qaaka-cai --mode reinstall --yes --wasm /tmp/toko-feedback-fleet/.canic/release-builds/43e2cf9b9258fea38f9c10d000621fe28a3f179a0baa2f72ddacd70c22e24b4f/artifacts/root/root.wasm --args-file /tmp/canic-fleet-ensure-protocol-45896-1.bin --args-format bin -e toko_miner
+
+
+local development failed: Canic could not apply the reviewed managed local Fleet plan
+Set default identity to anonymous

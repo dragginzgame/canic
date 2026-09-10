@@ -6,7 +6,7 @@ use crate::role_contract::allocation::memory::auth::LOCAL_APPLICATION_AUTHORIZAT
 #[cfg(any(test, feature = "auth-root-delegation-state"))]
 use crate::role_contract::allocation::memory::auth::ROOT_DELEGATION_STATE_ID;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -29,22 +29,22 @@ pub use records::{
 };
 
 thread_local! {
-    pub(super) static LOCAL_APPLICATION_AUTHORIZATION_STATE: RefCell<Cell<LocalApplicationAuthorizationStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+    pub(super) static LOCAL_APPLICATION_AUTHORIZATION_STATE: RefCell<Cell<LocalApplicationAuthorizationStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(init_local_application_authorization_state());
 }
 
 thread_local! {
-    pub(super) static DELEGATED_TOKEN_ISSUER_STATE: RefCell<Cell<DelegatedTokenIssuerStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+    pub(super) static DELEGATED_TOKEN_ISSUER_STATE: RefCell<Cell<DelegatedTokenIssuerStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(init_delegated_token_issuer_state());
 }
 
 thread_local! {
-    pub(super) static ROOT_DELEGATION_STATE: RefCell<Cell<RootDelegationStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+    pub(super) static ROOT_DELEGATION_STATE: RefCell<Cell<RootDelegationStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(init_root_delegation_state());
 }
 
 fn init_local_application_authorization_state()
--> Cell<LocalApplicationAuthorizationStateRecord, VirtualMemory<DefaultMemoryImpl>> {
+-> Cell<LocalApplicationAuthorizationStateRecord, RuntimeMemory<DefaultMemoryImpl>> {
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     {
         Cell::init(
@@ -63,7 +63,7 @@ fn init_local_application_authorization_state()
 }
 
 fn init_delegated_token_issuer_state()
--> Cell<DelegatedTokenIssuerStateRecord, VirtualMemory<DefaultMemoryImpl>> {
+-> Cell<DelegatedTokenIssuerStateRecord, RuntimeMemory<DefaultMemoryImpl>> {
     #[cfg(any(test, feature = "auth-delegated-token-issuer-state"))]
     {
         Cell::init(
@@ -81,7 +81,7 @@ fn init_delegated_token_issuer_state()
     panic!("delegated-token issuer state requires its compile-time capability");
 }
 
-fn init_root_delegation_state() -> Cell<RootDelegationStateRecord, VirtualMemory<DefaultMemoryImpl>>
+fn init_root_delegation_state() -> Cell<RootDelegationStateRecord, RuntimeMemory<DefaultMemoryImpl>>
 {
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
     {

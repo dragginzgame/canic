@@ -1,0 +1,262 @@
+{
+  "ic_memory_packages": [
+    {
+      "name": "ic-memory",
+      "version": "0.12.3",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "7c66256c945be302111688ebcf1d19d505b272f43f897a62739903b476c65236"
+    },
+    {
+      "name": "ic-memory",
+      "version": "0.13.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "43534430545ba0eab9f9712e7ad0ef661c0e7af1600cfbdca6c336d7d0a602b0"
+    }
+  ],
+  "selected_source_sha256": {
+    "Cargo.toml": "6c920f24faef6e3faae3df45452529064b231f6e11c8c0c7477754dc4806c13a",
+    "Cargo.lock": "601ce6655c7f02a92a27c750f382576471cf943dcbafcbdf874911017a13ae89",
+    "crates/canic-core/src/cdk/structures.rs": "fbc54fe3088cc951b467a7cbd45c0ee1346e710c85cb070722202693916f1225",
+    "crates/canic-core/src/ops/runtime/memory/mod.rs": "923f1bbaf04fcdc16afe7cb8525f1c4d9bcf0ec0f244e1d655f9394fb5c43a51",
+    "crates/canic-core/src/ops/runtime/memory/tests.rs": "0fe17cbda929c999dcd79bf1f62f50cbd0261809cea7a7225770fa573f16833e",
+    "crates/canic-core/src/dto/memory.rs": "f40a9435357f9d22a7c3d65a393297b677bf6827a03fa5e2b4db780b3709c2d3",
+    "crates/canic-core/tests/stable_memory_abi_guard.rs": "f2d9f23fd073ba3b328a81e70acdebf80322383af4d7888d4f3acd9be545bf14",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "d601abbfbeb590293f316b565f3d7d344ebf954d88b093eb0000c5b40dc79095",
+    "apps/test/user_hub/src/reinstall_fixture/mod.rs": "9bc2b5f1b34550aee0e4487203cf387d99d731b60601a4492536f98fe921b7b7",
+    "apps/test/user_shard/src/reinstall_fixture/mod.rs": "9bc2b5f1b34550aee0e4487203cf387d99d731b60601a4492536f98fe921b7b7"
+  },
+  "package_identity_guard": "FAIL: IcyDB still requires ic-memory 0.12.3",
+  "memory_unit_tests": "PASS: 8",
+  "managed_memory_access_guards": "PASS: 2",
+  "scoped_clippy": "PASS",
+  "application_role_builds": "PASS: user_hub, user_shard",
+  "pocketic_case": "PASS: protected_memory_allocations_preserve_stable_state_and_root_authority"
+}
+
+=== unit ===
+   Compiling ic-memory v0.13.1
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 37s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-971df8e9f6182ee0)
+
+running 8 tests
+test ops::runtime::memory::tests::allocation_snapshot_requires_existing_bootstrap ... ok
+test ops::runtime::memory::tests::commit_slot_response_maps_runtime_variants_exactly ... ok
+test ops::runtime::memory::tests::commit_recovery_response_maps_invalid_slots_without_unknown_fallback ... ok
+test ops::runtime::memory::tests::memory_allocation_record_response_omits_failed_size_measurements ... ok
+test ops::runtime::memory::tests::memory_allocation_record_response_includes_live_backing_memory_size ... ok
+test ops::runtime::memory::tests::allocation_projection_preserves_unknown_owners_and_measured_nondefault_buckets ... ok
+test ops::runtime::memory::tests::ledger_snapshot_reads_the_bootstrapped_ic_memory_runtime ... ok
+test ops::runtime::memory::tests::allocation_snapshot_preserves_unopened_memories_and_ledger_generation ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 1334 filtered out; finished in 0.01s
+
+
+=== abi ===
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 56.09s
+     Running tests/stable_memory_abi_guard.rs (target/debug/deps/stable_memory_abi_guard-6b896e2d9451c26c)
+
+running 3 tests
+test managed_memory_guard_matches_calls_without_rejecting_observation_names ... ok
+test composed_memory_runtime_has_one_package_identity ... FAILED
+test canic_managed_runtime_code_uses_managed_explicit_stable_keys ... ok
+
+failures:
+
+---- composed_memory_runtime_has_one_package_identity stdout ----
+
+thread 'composed_memory_runtime_has_one_package_identity' (115) panicked at crates/canic-core/tests/stable_memory_abi_guard.rs:21:5:
+assertion `left == right` failed: Canic and IcyDB must share one ic-memory package identity; align the published dependencies before release: [Table({"checksum": String("7c66256c945be302111688ebcf1d19d505b272f43f897a62739903b476c65236"), "dependencies": Array([String("ciborium"), String("ctor"), String("ic-stable-structures"), String("serde"), String("thiserror 2.0.18")]), "name": String("ic-memory"), "source": String("registry+https://github.com/rust-lang/crates.io-index"), "version": String("0.12.3")}), Table({"checksum": String("43534430545ba0eab9f9712e7ad0ef661c0e7af1600cfbdca6c336d7d0a602b0"), "dependencies": Array([String("ciborium"), String("ctor"), String("ic-stable-structures"), String("serde"), String("thiserror 2.0.18")]), "name": String("ic-memory"), "source": String("registry+https://github.com/rust-lang/crates.io-index"), "version": String("0.13.1")})]
+  left: 2
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    composed_memory_runtime_has_one_package_identity
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p canic-core --test stable_memory_abi_guard`
+
+=== clippy ===
+   Compiling canic v0.110.13 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-macros v0.110.13 (/home/adam/projects/canic/crates/canic-macros)
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-backup v0.110.13 (/home/adam/projects/canic/crates/canic-backup)
+    Checking canic-control-plane v0.110.13 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic-host v0.110.13 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-cli v0.110.13 (/home/adam/projects/canic/crates/canic-cli)
+    Checking canic-testing-internal v0.110.13 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 08s
+
+=== integration-clippy ===
+   Compiling canic v0.110.13 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.13 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic-host v0.110.13 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-testing-internal v0.110.13 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Checking canic-tests v0.110.13 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 00s
+
+=== apps ===
+   Compiling serde_core v1.0.229
+   Compiling serde v1.0.229
+   Compiling ic-cdk-executor v2.0.0
+   Compiling zerocopy v0.8.57
+   Compiling thiserror v2.0.18
+   Compiling ctor v1.0.13
+   Compiling canic v0.110.13 (/home/adam/projects/canic/crates/canic)
+   Compiling slotmap v1.1.1
+   Compiling ic-cdk-timers v1.0.0
+   Compiling syn v3.0.5
+   Compiling strum v0.26.3
+   Compiling ic-timers v0.7.0
+   Compiling serde_bytes v0.11.19
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling serde_spanned v1.1.1
+   Compiling serde_path_to_error v0.1.20
+   Compiling toml v1.1.5+spec-1.1.0
+   Compiling half v2.7.1
+   Compiling ciborium-ll v0.2.2
+   Compiling serde_derive v1.0.229
+   Compiling remain v0.2.16
+   Compiling async-trait v0.1.92
+   Compiling canic-macros v0.110.13 (/home/adam/projects/canic/crates/canic-macros)
+    Checking ic_principal v0.1.5
+    Checking num-bigint v0.4.8
+    Checking ic-certification v3.2.0
+    Checking serde_cbor v0.11.2
+    Checking ciborium v0.2.2
+    Checking ic-error-types v0.2.0
+    Checking ic-stable-structures v0.7.2
+    Checking ic-memory v0.13.1
+    Checking candid v0.10.35
+    Checking ic-canister-sig-creation v1.3.1
+    Checking ic-signature-verification v0.3.0
+   Compiling ic-cdk-macros v0.20.2
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+   Compiling ic-cdk v0.20.2
+   Compiling canister_user_hub v0.110.13 (/home/adam/projects/canic/apps/test/user_hub)
+   Compiling canister_user_shard v0.110.13 (/home/adam/projects/canic/apps/test/user_shard)
+error: failed to run custom build command for `canister_user_hub v0.110.13 (/home/adam/projects/canic/apps/test/user_hub)`
+
+Caused by:
+  process didn't exit successfully: `/home/adam/projects/canic/target/debug/build/canister_user_hub-25b3fedba4be8591/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:rerun-if-env-changed=CANIC_ROLE_CONTRACT_VALIDATED
+
+  --- stderr
+
+  thread 'main' (1286) panicked at crates/canic/src/build_support/config.rs:79:5:
+  authoritative Canic wasm builds must use `canic build <app>` or `canic build <app> <role>`; direct `cargo build --target wasm32-unknown-unknown` is unsupported
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: build failed, waiting for other jobs to finish...
+
+=== user-hub ===
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+   Compiling ic-memory v0.13.1
+   Compiling canic-control-plane v0.110.13 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.13 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.13 (/home/adam/projects/canic/crates/canic-cli)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 37s
+     Running `target/debug/canic build test user_hub --profile fast`
+Canic build tools:
+ic-wasm: /home/adam/.local/lib/node_modules/@icp-sdk/ic-wasm/node_modules/@icp-sdk/ic-wasm-linux-x64/bin/ic-wasm (ic-wasm 0.11.1)
+Canic build:
+role: user_hub
+profile: fast
+environment: local
+build network: local
+workspace: /home/adam/projects/canic
+Build declaration cache user_hub: miss (extracted current Wasm)
+[WASM]       SIZE   user_hub/candidate.wasm  code=3.36 MiB (3521397 B)  headroom=6.64 MiB (6964363 B)
+Build phase finalization /home/adam/projects/canic/.icp/local/canisters/user_hub/user_hub.wasm: shrink=0.72s candid=0.65s binaryen=0.00s gzip/validation=0.22s total=1.61s
+==> Build complete  1 role | 91.48s elapsed
+/home/adam/projects/canic/.icp/local/canisters/user_hub/user_hub.wasm.gz
+
+=== user-shard ===
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.43s
+     Running `target/debug/canic build test user_shard --profile fast`
+Canic build tools:
+ic-wasm: /home/adam/.local/lib/node_modules/@icp-sdk/ic-wasm/node_modules/@icp-sdk/ic-wasm-linux-x64/bin/ic-wasm (ic-wasm 0.11.1)
+Canic build:
+role: user_shard
+profile: fast
+environment: local
+build network: local
+workspace: /home/adam/projects/canic
+Build declaration cache user_shard: miss (extracted current Wasm)
+[WASM]       SIZE   user_shard/candidate.wasm  code=3.67 MiB (3849404 B)  headroom=6.33 MiB (6636356 B)
+Build phase finalization /home/adam/projects/canic/.icp/local/canisters/user_shard/user_shard.wasm: shrink=0.75s candid=0.69s binaryen=0.00s gzip/validation=0.24s total=1.70s
+==> Build complete  1 role | 70.72s elapsed
+/home/adam/projects/canic/.icp/local/canisters/user_shard/user_shard.wasm.gz
+
+=== pocketic ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:45547/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic v0.110.13 (/home/adam/projects/canic/crates/canic)
+   Compiling ic-memory v0.13.1
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.13 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.13 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.13 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.13 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 48s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-aca009122cf2d0f6)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.39s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-aca009122cf2d0f6)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::protected_memory_allocations_preserve_stable_state_and_root_authority ... [FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             1m 52s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 56.15s
+[FLEET]      RUN    finished PIC wasm build
+[FLEET]      DONE   root artifacts ready                                 2m 50s
+[WASM]       DONE   Fleet Coordinator artifact                           47.00s
+[FLEET]      DONE   Coordinator artifact ready                           47.47s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       DONE   delegation_issuer_stub                               38.28s
+[FLEET]      DONE   Store and Component artifacts ready                  39.50s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.11s
+[FLEET]      DONE   Root and Store installed                              4.38s
+[FLEET]      DONE   Coordinator installed                                 1.60s
+[FLEET]      DONE   Root joined and synchronized                          0.13s
+[FLEET]      DONE   Component Registry activated                          3.11s
+[FLEET]      DONE   fresh Fleet validated                                 0.01s
+[FLEET]      DONE   fresh Fleet setup complete                           4m 26s
+[FLEET]      READY  active baseline (slot 0)                             4m 26s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 271.03s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=377388 kB high_water=1218712 kB threads=133
+==> targeted canic-testing-internal PocketIC proof done in 380s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  380s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 381s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.ozOy9X
+
+=== documents ===
+current document semantics guard passed (0 advisory layout warning(s))
+
+=== release-notes ===
+✅ Release-notes preflight passed for 0.110.14

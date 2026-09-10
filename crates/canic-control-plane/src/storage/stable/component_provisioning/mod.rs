@@ -6,7 +6,7 @@
 
 use canic_core::{
     cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::VirtualMemory,
+        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::RuntimeMemory,
     },
     dto::{
         component_deployment::{ComponentDeploymentLimits, ComponentDeploymentPurpose},
@@ -49,7 +49,7 @@ eager_static! {
         StableBtreeMap<
             RootComponentOperationKey,
             RootComponentOperationRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
@@ -66,7 +66,7 @@ eager_static! {
         StableBtreeMap<
             RootComponentProvisioningPlacementKey,
             RootComponentProvisioningPlacementRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
@@ -80,7 +80,7 @@ eager_static! {
 
 eager_static! {
     static ROOT_COMPONENT_PROVISIONING_STATE: RefCell<
-        Cell<RootComponentProvisioningStateRecord, VirtualMemory<DefaultMemoryImpl>>,
+        Cell<RootComponentProvisioningStateRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(Cell::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,

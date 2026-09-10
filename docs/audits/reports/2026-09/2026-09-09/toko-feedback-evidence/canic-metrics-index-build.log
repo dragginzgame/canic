@@ -1,0 +1,62 @@
+Canic build tools:
+ic-wasm: /home/adam/.local/lib/node_modules/@icp-sdk/ic-wasm/node_modules/@icp-sdk/ic-wasm-linux-x64/bin/ic-wasm (ic-wasm 0.11.1)
+Build cache fleet_coordinator: miss (new complete release identity)
+Build cache wasm_store: miss (new complete release identity)
+Build cache root: miss (new complete release identity)
+Build cache game_hub: miss (new complete release identity)
+Build cache game_shard: miss (new complete release identity)
+Build cache translation: miss (new complete release identity)
+Build cache user_hub: miss (new complete release identity)
+Build cache user_shard: miss (new complete release identity)
+Build phase input/output verification: 2.16s
+==> Build App  toko_miner | fast profile | local network
+App config: apps/toko_miner/canic.toml
+Root Wasm: App-config-bound | Subnet-unbound until Fleet ensure
+
+  .. 6 configured roles plus infrastructure | fast profile
+Build phase runtime Cargo/link bootstrap_coordinator: 3.93s
+[WASM]       SIZE   fleet_coordinator/candidate.wasm  code=4.61 MiB (4832147 B)  headroom=5.39 MiB (5653613 B)
+Build phase finalization /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/artifacts/fleet_coordinator/fleet_coordinator.wasm: shrink=0.82s candid=0.75s binaryen=0.00s gzip/validation=0.28s total=1.87s
+Build phase runtime Cargo/link bootstrap_store: 2.24s
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.66 MiB (2789410 B)  headroom=7.34 MiB (7696350 B)
+Build phase finalization /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/artifacts/wasm_store/wasm_store.wasm: shrink=0.49s candid=0.45s binaryen=0.00s gzip/validation=0.18s total=1.14s
+Build phase dependency feature admission: 4.91s (5 compatible batches)
+Build phase declaration: 59.56s
+Build phase Candid extraction: 6.83s
+Build phase runtime Cargo/link: 84.27s
+[WASM]       SIZE   game_hub/candidate.wasm  code=2.98 MiB (3127202 B)  headroom=7.02 MiB (7358558 B)
+Build phase finalization /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/artifacts/game_hub/game_hub.wasm: shrink=0.60s candid=0.53s binaryen=0.00s gzip/validation=0.19s total=1.35s
+[WASM]       SIZE   user_shard/candidate.wasm  code=5.73 MiB (6006523 B)  headroom=4.27 MiB (4479237 B)
+[WASM]       SIZE   translation/candidate.wasm  code=5.76 MiB (6042474 B)  headroom=4.24 MiB (4443286 B)
+[WASM]       SIZE   user_hub/candidate.wasm  code=6.11 MiB (6405188 B)  headroom=3.89 MiB (4080572 B)
+Build phase finalization /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/artifacts/user_shard/user_shard.wasm: shrink=1.17s candid=1.04s binaryen=0.00s gzip/validation=0.40s total=2.64s
+[WASM]       SIZE   game_shard/candidate.wasm  code=7.09 MiB (7437587 B)  headroom=2.91 MiB (3048173 B)
+Build phase finalization /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/artifacts/translation/translation.wasm: shrink=1.17s candid=1.06s binaryen=0.00s gzip/validation=0.45s total=2.71s
+Build phase finalization /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/artifacts/user_hub/user_hub.wasm: shrink=1.22s candid=1.11s binaryen=0.00s gzip/validation=0.42s total=2.79s
+[WASM]       SIZE   root/candidate.wasm  code=8.19 MiB (8585133 B)  headroom=1.81 MiB (1900627 B)
+Build phase finalization /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/artifacts/game_shard/game_shard.wasm: shrink=1.39s candid=1.23s binaryen=0.00s gzip/validation=0.50s total=3.16s
+Build phase finalization /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/artifacts/root/root.wasm: shrink=1.49s candid=1.32s binaryen=0.00s gzip/validation=0.50s total=3.34s
+==> Infrastructure Wasm  placement comes from current desired Fleet state during ensure
++-------------------+----------+------------------+--------+--------------------------+----------------+
+| CANISTER          | VERSION  | INSTANCES        | STATUS |                     WASM |        ELAPSED |
++===================+==========+==================+========+==========================+================+
+| fleet_coordinator | 0.110.13 | 1 / Fleet        | done   |   4.98 MiB (gz 1.25 MiB) |          6.54s |
+| root              | 0.110.13 | 1 / Fleet Subnet | done   |   8.75 MiB (gz 2.23 MiB) | 165.12s shared |
+| wasm_store        | 0.110.13 | 1 / Fleet Subnet | done   | 2.91 MiB (gz 784.79 KiB) |          4.10s |
++-------------------+----------+------------------+--------+--------------------------+----------------+
+
+==> Application Wasm  toko_miner | 5 Component artifacts | 165.12s shared batch
++-------------+---------+--------+--------------------------+
+| ROLE        | VERSION | STATUS |                     WASM |
++=============+=========+========+==========================+
+| game_hub    | 0.2.7   | done   | 3.27 MiB (gz 868.85 KiB) |
+| game_shard  | 0.2.7   | done   |   7.82 MiB (gz 2.21 MiB) |
+| translation | 0.2.7   | done   |   7.88 MiB (gz 2.04 MiB) |
+| user_hub    | 0.2.7   | done   |   6.51 MiB (gz 1.89 MiB) |
+| user_shard  | 0.2.7   | done   |   6.11 MiB (gz 1.79 MiB) |
++-------------+---------+--------+--------------------------+
+
+==> Build complete  8 artifacts | 177.42s elapsed
+Release build: 35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857
+Artifacts: /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/artifacts
+Release manifest: /tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/current-release-set-manifest.json

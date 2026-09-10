@@ -1,0 +1,73 @@
+Set default identity to toko-miner-local
+Resuming the retained local wipe; no new reinstall intent will be issued.
+Planning local Fleet changes (pass 1/20).
+plan_sha256: dc27eb7d9f53145d13322a1ab9d056326f20b51eb3497bba51ffc2f86726a403
+Applying local Fleet plan dc27eb7d9f53145d13322a1ab9d056326f20b51eb3497bba51ffc2f86726a403; live Canic progress follows.
+Fleet ensure: infrastructure: advancing (2/3 reviewed effects applied)
+Fleet observation RootManagement: 746 ms, 2 remote call attempts
+Fleet observation RootManagement: 749 ms, 2 remote call attempts
+Fleet observation RootManagement: 738 ms, 2 remote call attempts
+Fleet ensure: terminal verification: advancing (3/3 reviewed effects applied)
+Fleet observation ConfiguredCanisters: 21317 ms, 28 remote call attempts
+Fleet observation EstateFunding: 340 ms, 1 remote call attempts
+Fleet observation PoolBalances: 20408 ms, 24 remote call attempts
+Fleet observation ProtocolReadiness: 0 ms, 0 remote call attempts
+Fleet observation LedgerFee: 356 ms, 1 remote call attempts
+Fleet observation OperatorBalance: 258 ms, 1 remote call attempts
+Fleet observation ProtocolActions: 1101 ms, 3 remote call attempts
+Fleet ensure: terminal verification: prerequisite complete (3/27 reviewed effects applied)
+Fleet ensure: import reconciliation: advancing (3/27 reviewed effects applied)
+Fleet observation ConfiguredCanisters: 24628 ms, 28 remote call attempts
+Fleet observation EstateFunding: 291 ms, 1 remote call attempts
+Fleet observation PoolBalances: 21154 ms, 24 remote call attempts
+Fleet observation ProtocolReadiness: 0 ms, 0 remote call attempts
+Fleet observation LedgerFee: 255 ms, 1 remote call attempts
+Fleet observation OperatorBalance: 246 ms, 1 remote call attempts
+Fleet ensure: terminal verification: advancing (27/27 reviewed effects applied)
+Fleet observation ConfiguredCanisters: 571 ms, 4 remote call attempts
+Fleet observation EstateFunding: 250 ms, 1 remote call attempts
+Fleet observation PoolBalances: 0 ms, 0 remote call attempts
+Fleet observation ProtocolReadiness: 0 ms, 0 remote call attempts
+Fleet observation LedgerFee: 253 ms, 1 remote call attempts
+Fleet observation OperatorBalance: 236 ms, 1 remote call attempts
+Fleet observation ProtocolActions: 10699 ms, 38 remote call attempts
+Fleet ensure: terminal verification: prerequisite complete (27/59 reviewed effects applied)
+Fleet ensure: control plane: advancing (27/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: advancing (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+fleet: Fleet ensure action fleet-component-provisioning made no progress for 33 consecutive observations (last progress: component-provisioning:phase=ProvisioningRoots:accepted_roots=1/1:provisioned_roots=0:directory_roots=0/1:runtime_roots=0/1:components=3:sha256=e3b223912baaac796dffd53f9c473bb6dc8323cf021f0da2d9f5e4c7d3ee0263); operation remains resumable
+
+local development failed: Canic could not apply the reviewed managed local Fleet plan
+Set default identity to anonymous

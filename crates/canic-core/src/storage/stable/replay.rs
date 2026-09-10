@@ -8,7 +8,7 @@ use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 #[cfg(test)]
 use crate::cdk::types::Principal;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
+    cdk::structures::{DefaultMemoryImpl, Storable, memory::RuntimeMemory, storable::Bound},
     eager_static,
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
@@ -22,7 +22,7 @@ use std::{borrow::Cow, cell::RefCell};
 
 eager_static! {
     static REPLAY_RECEIPTS: RefCell<
-        StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.replay.receipts.v1", ty = ReplayReceiptStore, id = REPLAY_RECEIPTS_ID)),
     );

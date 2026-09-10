@@ -1,0 +1,146 @@
+{
+  "date": "2026-09-10",
+  "batch": "BF4",
+  "feedback": [
+    "CANIC-087",
+    "CANIC-139"
+  ],
+  "base_commit": "5250d69186047bc373db7cdc7b7680c3aad031d0",
+  "scope": "Compiled declaration extraction reuse; runtime release identity remains unchanged",
+  "status": "complete_within_recorded_scope",
+  "cross_identity_runtime_reuse": false,
+  "sources": [
+    {
+      "path": "crates/canic-host/src/canister_build/candid.rs",
+      "sha256": "bbfb14ab34a2c28e47fb39f7d219de8acd1fa5a9b8b278fdd6b0f7dd88c23776",
+      "bytes": 2229
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/candid_cache/mod.rs",
+      "sha256": "f6eed987596b0add316dabbd9062006b2c1b219aa387c113d2cd0cb387931042",
+      "bytes": 6321
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/candid_cache/tests.rs",
+      "sha256": "5e6ce868d45f9b53d6865bb16d647877587595090284620345c8f28f40ff1879",
+      "bytes": 12656
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/artifact.rs",
+      "sha256": "71bf29f780e862c0763cc04bcf0e23dda3249b666e354ea28f529a26e20a74b1",
+      "bytes": 42222
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/reuse/mod.rs",
+      "sha256": "482a47898b2d19f1dc864a6ceb72062f7e214572533d9c5f82fd6c4b5f6d51b3",
+      "bytes": 19920
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/mod.rs",
+      "sha256": "e31ead5742c8a88549162b9072d509ef199929825839d7546fa24d2fe6aee80f",
+      "bytes": 1104
+    }
+  ],
+  "inputs": [
+    {
+      "path": "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_user_hub.wasm",
+      "sha256": "3811521eab9088f8c27201c9c910c9b527cfcc996a7b1c8c5e42453b925ad5f4",
+      "bytes": 4180168
+    },
+    {
+      "path": "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_user_shard.wasm",
+      "sha256": "9812ad8a4c253d169e0e4042fa5b69fcfeafdd3a178d56866e0022836f672b50",
+      "bytes": 4126598
+    },
+    {
+      "path": "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_scale_hub.wasm",
+      "sha256": "bb307d542d0cfeeccfd555664512e8976ead8945a4cc7fac1e285c66023a21d9",
+      "bytes": 4093826
+    },
+    {
+      "path": "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_scale.wasm",
+      "sha256": "fecfb4b726b1e439866b465519ffca7d4b073cbd900705162d5c2a44f95ff6c1",
+      "bytes": 3841763
+    },
+    {
+      "path": "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canic_fleet_root.wasm",
+      "sha256": "e1db292356577e3691eca532f56be2f917276b7159aedf7289d935971516b20a",
+      "bytes": 10267918
+    },
+    {
+      "path": "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_app.wasm",
+      "sha256": "154af8acf1dcb0b0ae63707c9cd54c36c3a6c9f0d0b2994aa6605008e0036855",
+      "bytes": 3822926
+    }
+  ],
+  "measurement": {
+    "candid_sha256": [
+      "11d0ea492b8eaed3a307272d23b9383ef0163b65165f7f3cbaf4bf4d3d85e0e6",
+      "ec8bd23c01d0507156517efe2c8729b170d7186a5740cdf0b1f7ad80ca1dd253",
+      "104c51c1994c7169db8da995d465fe13f9126a244d80df3f51f14a201aed7da2",
+      "6211b4e106464c0bc8f51ed91b57c8b2baf6629a4b3ea198ef1beab87db7545e",
+      "ce1f57d45c8202a8853b5d521897d228a609f5b4a99cce596374fdeb53ee6d46",
+      "1dbfb61d996ae3c46dd8b22eb541dd4fe7f1d83b6b3f34884c4e24b6d5ddab15"
+    ],
+    "cold_cache_millis": 2234,
+    "extractor_sha256": "6f8d7681095dad13fe2b8b337620b5e7d01c7bdd8a6c9f5487d6912d197bbbdc",
+    "fresh_extraction_millis": 1922,
+    "inputs": [
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_user_hub.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_user_shard.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_scale_hub.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_scale.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canic_fleet_root.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_app.wasm"
+    ],
+    "reused_millis": 87
+  },
+  "validation_environment": {
+    "RUSTC_WRAPPER": "",
+    "CARGO_NET_OFFLINE": "true",
+    "CANIC_CANDID_QUALIFICATION_INPUTS": [
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_user_hub.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_user_shard.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_scale_hub.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_scale.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canic_fleet_root.wasm",
+      "/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_app.wasm"
+    ]
+  },
+  "validation": [
+    {
+      "command": "cargo test --locked -p canic-host --lib canister_build",
+      "exit_code": 0,
+      "passed_tests": 39,
+      "log": {
+        "path": "docs/audits/reports/2026-09/2026-09-10/build-declaration-reuse-evidence/canic-bf4-build-tests.log",
+        "sha256": "4633f04db7f352759e75652b744bea198673c0531d756745942a42d4a103a08c",
+        "bytes": 4548
+      }
+    },
+    {
+      "command": "cargo test --locked -p canic-host --lib canister_build::candid_cache::tests::real_extractor_reuse_matches_fresh_declarations -- --exact --ignored --nocapture",
+      "exit_code": 0,
+      "passed_tests": 1,
+      "log": {
+        "path": "docs/audits/reports/2026-09/2026-09-10/build-declaration-reuse-evidence/canic-bf4-real-extractor.log",
+        "sha256": "0a9cc0c2d08c68b0a4f993717a1586472bf037f37bdb2b39b67af706204626e7",
+        "bytes": 1612
+      }
+    },
+    {
+      "command": "cargo clippy --locked -p canic-host -p canic-cli --all-targets --all-features -- -D warnings",
+      "exit_code": 0,
+      "passed_tests": null,
+      "log": {
+        "path": "docs/audits/reports/2026-09/2026-09-10/build-declaration-reuse-evidence/canic-bf4-clippy.log",
+        "sha256": "ff19f1ee3dd5b42db7c0c90c72c2fd057a5ef4df1864e2b5f2fdb9cabbbc307e",
+        "bytes": 229
+      }
+    }
+  ],
+  "external_repository_changes": false,
+  "broad_validation": false,
+  "runtime_install_tests_repeated": false,
+  "whole_build_speedup_measured": false
+}

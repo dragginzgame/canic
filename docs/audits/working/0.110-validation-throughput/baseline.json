@@ -1,0 +1,308 @@
+{
+  "schema_version": 1,
+  "purpose": "Historical routing evidence for the VS1 design, not current-source qualification",
+  "source_log": "target/validation-runs/20260909T141422Z-62946.0DXd6B/0.log",
+  "source_log_sha256": "3cf3476b65ba3ff5bbd31aa2d27f1017eeef25d427962c3787bf9875d1f77500",
+  "source_log_bytes": 506409,
+  "reported_package_version": "0.110.12",
+  "source_commit": null,
+  "initial_cache_state": null,
+  "runner_elapsed_seconds": 6322,
+  "outer_test_timer_seconds": 6323,
+  "internal_suite_elapsed_seconds": 5564,
+  "internal_harness_elapsed_seconds": 5501.66,
+  "dominant_cases": [
+    {
+      "name": "generated mixed topology and Ready reserve retain one reviewed operation",
+      "displayed_elapsed_seconds": 1578
+    },
+    {
+      "name": "generated reinstall recovers and converges",
+      "displayed_elapsed_seconds": 1028
+    }
+  ],
+  "limits": [
+    "Case durations include artifact builds, setup, simulation, transport, pacing and verification.",
+    "Displayed case durations are rounded; stages include nested work.",
+    "This retained run predates the current 0.110.14 source batch.",
+    "ANSI formatting alone has been removed from the retained excerpts."
+  ],
+  "excerpts": [
+    {
+      "line": 3956,
+      "text": "    Finished `test` profile [optimized + debuginfo] target(s) in 1m 02s"
+    },
+    {
+      "line": 3989,
+      "text": "[SUITE]      PASS   Fleet deployment restore                             2m 52s"
+    },
+    {
+      "line": 4009,
+      "text": "[SUITE]      PASS   autonomous Root removal                              1m 39s"
+    },
+    {
+      "line": 4011,
+      "text": "[SUITE]      PASS   reinstall fixture release-cache identity              9.97s"
+    },
+    {
+      "line": 4025,
+      "text": "[SUITE]      PASS   explicit Root reinstall preserves cycle control      10.94s"
+    },
+    {
+      "line": 4029,
+      "text": "[SUITE]      PASS   prepared mainnet Root automatic refill                4.57s"
+    },
+    {
+      "line": 4033,
+      "text": "[SUITE]      PASS   uncertain mainnet refill replay                       4.46s"
+    },
+    {
+      "line": 4037,
+      "text": "[SUITE]      PASS   autonomous refill margin and exact replay             4.70s"
+    },
+    {
+      "line": 4045,
+      "text": "[SUITE]      PASS   topped-up imported pool asset refresh                26.60s"
+    },
+    {
+      "line": 4056,
+      "text": "[SUITE]      PASS   fresh provisioning automatic pool readiness          25.80s"
+    },
+    {
+      "line": 4075,
+      "text": "[SUITE]      PASS   Prepared Root initial-Shard bootstrap                5m 06s"
+    },
+    {
+      "line": 4081,
+      "text": "[SUITE]      PASS   application Store bootstrap and replay               10.77s"
+    },
+    {
+      "line": 4085,
+      "text": "[SUITE]      PASS   fresh provisioning terminal runtime activation       20.43s"
+    },
+    {
+      "line": 4089,
+      "text": "[SUITE]      PASS   inactive Root preserves and suspends permanent activation failure   16.81s"
+    },
+    {
+      "line": 4108,
+      "text": "[SUITE]      PASS   auth-free Root preserves ordinary Fleet activation   2m 57s"
+    },
+    {
+      "line": 4112,
+      "text": "[SUITE]      PASS   live management gateway preserves fresh creation headroom    0.41s"
+    },
+    {
+      "line": 4118,
+      "text": "[SUITE]      PASS   Coordinator attached-cycle grant                     10.93s"
+    },
+    {
+      "line": 4122,
+      "text": "[SUITE]      PASS   two-Root independent funding limits                  14.55s"
+    },
+    {
+      "line": 4126,
+      "text": "[SUITE]      PASS   non-renewing automatic grant cap                      8.85s"
+    },
+    {
+      "line": 4130,
+      "text": "[SUITE]      PASS   explicit funding-policy rotation                     11.80s"
+    },
+    {
+      "line": 4134,
+      "text": "[SUITE]      PASS   Coordinator reserve-denial ICP fallback              11.24s"
+    },
+    {
+      "line": 4138,
+      "text": "[SUITE]      PASS   real ICP rate denial                                 11.05s"
+    },
+    {
+      "line": 4142,
+      "text": "[SUITE]      PASS   insufficient real ICP denial                         11.06s"
+    },
+    {
+      "line": 4146,
+      "text": "[SUITE]      PASS   uncertain grant fallback suppression                 11.03s"
+    },
+    {
+      "line": 4150,
+      "text": "[SUITE]      PASS   production Ledger and CMC replay                      1.90s"
+    },
+    {
+      "line": 4162,
+      "text": "[SUITE]      PASS   qualification Ledger cohort isolation                 3.63s"
+    },
+    {
+      "line": 4186,
+      "text": "[SUITE]      PASS   qualification reset cohort isolation                 17.30s"
+    },
+    {
+      "line": 4188,
+      "text": "[SUITE]      PASS   qualification effect arithmetic                       0.00s"
+    },
+    {
+      "line": 4192,
+      "text": "[SUITE]      PASS   qualification controller transition                   0.34s"
+    },
+    {
+      "line": 4196,
+      "text": "[SUITE]      PASS   prepared Root local Store                             4.41s"
+    },
+    {
+      "line": 4200,
+      "text": "[SUITE]      PASS   co-located Fleet isolation                            7.57s"
+    },
+    {
+      "line": 4204,
+      "text": "[SUITE]      PASS   active Component Registry attestations                2.60s"
+    },
+    {
+      "line": 4219,
+      "text": "[SUITE]      PASS   Fleet admission add/remove convergence                2.00s"
+    },
+    {
+      "line": 4227,
+      "text": "[SUITE]      PASS   Fleet admission unavailable participant recovery      3.32s"
+    },
+    {
+      "line": 4240,
+      "text": "[SUITE]      PASS   Fleet admission stale-catalog release                 2.82s"
+    },
+    {
+      "line": 4250,
+      "text": "[SUITE]      PASS   Fleet admission two-Root convergence                 16.84s"
+    },
+    {
+      "line": 4252,
+      "text": "[SUITE]      PASS   Coordinator joining-root replay                       2.17s"
+    },
+    {
+      "line": 4254,
+      "text": "[SUITE]      PASS   Coordinator durable compiled configuration            1.78s"
+    },
+    {
+      "line": 4258,
+      "text": "[SUITE]      PASS   composed-framework direct ingress                    41.86s"
+    },
+    {
+      "line": 4260,
+      "text": "[SUITE]      PASS   managed admission target transition                   2.03s"
+    },
+    {
+      "line": 4292,
+      "text": "[SUITE]      PASS   published managed-App support                        2m 04s"
+    },
+    {
+      "line": 4353,
+      "text": "[SUITE]      PASS   published managed Component Group support            42.59s"
+    },
+    {
+      "line": 4505,
+      "text": "[SUITE]      PASS   generated reinstall recovers and converges          17m 08s"
+    },
+    {
+      "line": 4526,
+      "text": "[SUITE]      PASS   four initial Shards preserve sealed Root activation   5m 16s"
+    },
+    {
+      "line": 4554,
+      "text": "[SUITE]      PASS   funded Failed imports recover withdrawal and reset responses   3m 48s"
+    },
+    {
+      "line": 4576,
+      "text": "[SUITE]      PASS   funded estate recovers transfer and autonomous creation responses   5m 53s"
+    },
+    {
+      "line": 4584,
+      "text": "[SUITE]      PASS   issued creation funding pause resumes reviewed transfer   2m 39s"
+    },
+    {
+      "line": 4608,
+      "text": "[SUITE]      PASS   four Workloads refill four Ready assets with lost funding and creation responses   3m 23s"
+    },
+    {
+      "line": 4624,
+      "text": "[SUITE]      PASS   four Workloads and four Failed assets repair without new creation   3m 06s"
+    },
+    {
+      "line": 4779,
+      "text": "[SUITE]      PASS   generated mixed topology and Ready reserve retain one reviewed operation  26m 18s"
+    },
+    {
+      "line": 4781,
+      "text": "[SUITE]      SLOW   generated mixed topology and Ready reserve retain one reviewed operation  26m 18s"
+    },
+    {
+      "line": 4782,
+      "text": "[SUITE]      SLOW   generated reinstall recovers and converges          17m 08s"
+    },
+    {
+      "line": 4783,
+      "text": "[SUITE]      SLOW   funded estate recovers transfer and autonomous creation responses   5m 53s"
+    },
+    {
+      "line": 4784,
+      "text": "[SUITE]      SLOW   four initial Shards preserve sealed Root activation   5m 16s"
+    },
+    {
+      "line": 4785,
+      "text": "[SUITE]      SLOW   Prepared Root initial-Shard bootstrap                5m 06s"
+    },
+    {
+      "line": 4786,
+      "text": "[SUITE]      SLOW   funded Failed imports recover withdrawal and reset responses   3m 48s"
+    },
+    {
+      "line": 4787,
+      "text": "[SUITE]      SLOW   four Workloads refill four Ready assets with lost funding and creation responses   3m 23s"
+    },
+    {
+      "line": 4788,
+      "text": "[SUITE]      SLOW   four Workloads and four Failed assets repair without new creation   3m 06s"
+    },
+    {
+      "line": 4789,
+      "text": "[SUITE]      SLOW   auth-free Root preserves ordinary Fleet activation   2m 57s"
+    },
+    {
+      "line": 4790,
+      "text": "[SUITE]      SLOW   Fleet deployment restore                             2m 52s"
+    },
+    {
+      "line": 4793,
+      "text": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 5501.66s"
+    },
+    {
+      "line": 5098,
+      "text": "libtest-parallel 237s     PASS   workspace parallel lib/bin tests"
+    },
+    {
+      "line": 5099,
+      "text": "libtest-parallel 148s     PASS   ordinary integration tests"
+    },
+    {
+      "line": 5100,
+      "text": "pocketic-serial  5564s    PASS   canic-testing-internal ordered PocketIC suite"
+    },
+    {
+      "line": 5101,
+      "text": "pocketic-serial  141s     PASS   canic-host governed PocketIC proofs"
+    },
+    {
+      "line": 5102,
+      "text": "pocketic-serial  170s     PASS   canic-tests runtime PocketIC suite"
+    },
+    {
+      "line": 5103,
+      "text": "pocketic-serial  54s      PASS   canic-tests blob-storage PocketIC suite"
+    },
+    {
+      "line": 5104,
+      "text": "pocketic-serial  6s       PASS   canic-tests payload-limit PocketIC suite"
+    },
+    {
+      "line": 5105,
+      "text": "workspace runner wall time: 6322s"
+    }
+  ]
+}

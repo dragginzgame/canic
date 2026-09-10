@@ -38,6 +38,8 @@ mod lifecycle;
 mod progress;
 mod root;
 mod startup;
+#[cfg(test)]
+mod timing;
 
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 type GovernedTestCase = (&'static str, fn());
@@ -157,7 +159,12 @@ fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
     for (name, test) in cases {
         let started_at = Instant::now();
         progress::event("SUITE", progress::ProgressStatus::Run, name);
-        let failed = std::panic::catch_unwind(AssertUnwindSafe(test)).is_err();
+        let failed = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let span = timing::Span::start(name);
+            test();
+            span.finish();
+        }))
+        .is_err();
         let elapsed = started_at.elapsed().as_secs_f64();
         timings.push((name, elapsed));
         if failed {

@@ -1,0 +1,2594 @@
+{
+  "actual_conservation": null,
+  "effects_applied": 0,
+  "funding_review": null,
+  "plan": {
+    "canisters": [
+      {
+        "actions": [
+          {
+            "kind": "stop",
+            "name": "coordinator",
+            "principal": "jesds-iaaaa-aaaar-qcbgq-cai"
+          }
+        ],
+        "disposition": "reuse",
+        "name": "coordinator",
+        "observed_cycles": "360185036360387",
+        "principal": "jesds-iaaaa-aaaar-qcbgq-cai"
+      },
+      {
+        "actions": [
+          {
+            "kind": "stop",
+            "name": "root-0",
+            "principal": "2ydug-eaaaa-aaaab-qhfca-cai"
+          },
+          {
+            "kind": "start",
+            "name": "root-0",
+            "principal": "2ydug-eaaaa-aaaab-qhfca-cai"
+          }
+        ],
+        "disposition": "reuse",
+        "name": "root-0",
+        "observed_cycles": "14092810052494",
+        "principal": "2ydug-eaaaa-aaaab-qhfca-cai"
+      },
+      {
+        "actions": [],
+        "disposition": "reuse",
+        "name": "store-0",
+        "observed_cycles": "7834374656731",
+        "principal": "27css-jyaaa-aaaab-qhfcq-cai"
+      }
+    ],
+    "conservation": {
+      "estate_funding_domains": [
+        {
+          "allocated_workloads": 9,
+          "available_cycles": "0",
+          "available_pool_slots": 0,
+          "creation_amount_cycles": "3400000000000",
+          "creation_execution_margin_cycles": "1000000000000",
+          "cycles_ledger": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "eligible_ready_pool_assets": 15,
+          "initial_pool_assets": [
+            "2ra72-siaaa-aaaab-qhfdq-cai",
+            "2wbzo-7qaaa-aaaab-qhfda-cai",
+            "3jjkz-4iaaa-aaaab-qhfhq-cai",
+            "kdjdc-hiaaa-aaaab-qhgnq-cai",
+            "keifw-kqaaa-aaaab-qhgna-cai",
+            "knlok-4yaaa-aaaab-qhgmq-cai",
+            "krpu3-lyaaa-aaaab-qhgoq-cai",
+            "kwosp-gaaaa-aaaab-qhgoa-cai",
+            "m2gcm-riaaa-aaaab-qhgzq-cai",
+            "m5hey-4qaaa-aaaab-qhgza-cai",
+            "miavv-5yaaa-aaaab-qhg2q-cai",
+            "mpbtb-qaaaa-aaaab-qhg2a-cai",
+            "mtfjq-haaaa-aaaab-qhgya-cai",
+            "muepe-kyaaa-aaaab-qhgyq-cai",
+            "o37wv-vaaaa-aaaab-qhgua-cai",
+            "o46qb-yyaaa-aaaab-qhguq-cai",
+            "oa2kq-pyaaa-aaaab-qhgwq-cai",
+            "oh3me-caaaa-aaaab-qhgwa-cai",
+            "ojzbm-zqaaa-aaaab-qhgxa-cai",
+            "ooyhy-uiaaa-aaaab-qhgxq-cai",
+            "os45j-diaaa-aaaab-qhgvq-cai",
+            "ov535-oqaaa-aaaab-qhgva-cai",
+            "prqup-xqaaa-aaaab-qhgta-cai",
+            "pwrs3-2iaaa-aaaab-qhgtq-cai"
+          ],
+          "ledger_fee_cycles": "100000000",
+          "management_creation_fee_cycles": "500000000000",
+          "maximum_creation_debit_cycles": "0",
+          "maximum_creation_fee_cycles": "0",
+          "maximum_funding_cycles": "0",
+          "occupied_pool_assets": 24,
+          "pending_creation": null,
+          "pending_creation_count": 0,
+          "planned_initial_workloads": 9,
+          "pool_maximum_size": 24,
+          "readiness_floor_cycles": "1900000000000",
+          "required_creation_count": 0,
+          "root": "root-0",
+          "root_principal": "2ydug-eaaaa-aaaab-qhfca-cai",
+          "shortfall_cycles": "0"
+        }
+      ],
+      "expected_post_operation_cycles": "239841010958386",
+      "maximum_execution_burn_cycles": "219000000000000",
+      "maximum_new_funding_cycles": "0",
+      "maximum_operator_debit_cycles": "0",
+      "maximum_unavoidable_fee_cycles": "0",
+      "observed_controlled_cycles": "458841010958386",
+      "retained_in_reused_canisters_cycles": "458841010958386",
+      "scheduled_transfer_cycles": "0"
+    },
+    "continuation": null,
+    "desired_sha256": "23d996e8ee46de0d39860ce6ea588b4d75974641fbd00922b0c952883c04877b",
+    "environment": "staging",
+    "fleet": "toko-miner-staging-001",
+    "operation_id": "adfcd680239cc77fba8c64790e5c384292728869edf5b3a30438416ebd5aea0f",
+    "plan_sha256": "aecbab3d33f9a1247cc46e3c4610901d61ddaa91d902cd6c063d36a871265283",
+    "planned_at_time": 1788977635653926554,
+    "protocol_actions": [],
+    "recovery_review": null,
+    "reinstall": {
+      "activation_reset": {
+        "preparation": null,
+        "roots": [
+          {
+            "activation_operation_id": [
+              161,
+              132,
+              125,
+              112,
+              54,
+              62,
+              19,
+              243,
+              236,
+              20,
+              230,
+              56,
+              189,
+              19,
+              127,
+              234,
+              181,
+              243,
+              2,
+              101,
+              62,
+              220,
+              186,
+              4,
+              155,
+              179,
+              130,
+              178,
+              242,
+              133,
+              145,
+              90
+            ],
+            "component_count": 3,
+            "inventory_hash": [
+              248,
+              8,
+              0,
+              35,
+              157,
+              231,
+              116,
+              15,
+              220,
+              165,
+              225,
+              30,
+              114,
+              57,
+              127,
+              241,
+              214,
+              114,
+              62,
+              191,
+              187,
+              160,
+              20,
+              194,
+              208,
+              81,
+              62,
+              77,
+              120,
+              48,
+              178,
+              72
+            ],
+            "managed_descendants": 6,
+            "provisioning_receipt_hash": [
+              60,
+              117,
+              97,
+              97,
+              93,
+              142,
+              201,
+              221,
+              254,
+              163,
+              40,
+              199,
+              133,
+              163,
+              70,
+              0,
+              107,
+              31,
+              167,
+              223,
+              212,
+              166,
+              15,
+              170,
+              22,
+              223,
+              114,
+              120,
+              95,
+              189,
+              195,
+              223
+            ],
+            "root": "root-0"
+          }
+        ],
+        "source": {
+          "cycles_ledger": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "infrastructure": [
+            {
+              "controllers": [
+                "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe"
+              ],
+              "module_sha256": "c745a6699c7e285d17699e4ad5a9552ea19c072b954c42ab735102e165636324",
+              "name": "coordinator",
+              "principal": "jesds-iaaaa-aaaar-qcbgq-cai",
+              "subnet": "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+            },
+            {
+              "controllers": [
+                "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe"
+              ],
+              "module_sha256": "56602bd315e3c2a908e4563ec7575686fd993fe10c6a84966cc8602fa4740871",
+              "name": "root-0",
+              "principal": "2ydug-eaaaa-aaaab-qhfca-cai",
+              "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+            },
+            {
+              "controllers": [
+                "2ydug-eaaaa-aaaab-qhfca-cai",
+                "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe"
+              ],
+              "module_sha256": "cf192c4959bdcad34925d5de205d4b4db675a574f3779b2df7ee28634a22473f",
+              "name": "store-0",
+              "principal": "27css-jyaaa-aaaab-qhfcq-cai",
+              "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+            }
+          ],
+          "initial_controlled_cycles": "507422861709065",
+          "initial_estate_funding_cycles_by_root": {
+            "root-0": "0"
+          },
+          "journal_document_sha256": "46bf831e876bcd0d9134b529236e390c100f60f770c938179af5723422d2f91f",
+          "maximum_execution_burn_cycles": "375000000000000",
+          "operation_id": "aed7d8545e4722930c1b500fde05b87c4ba07e4e63088ebbd54593d7b2ab8895",
+          "operator": "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe",
+          "plan_document_sha256": "22618ec59cf19283ae62edb5808ddbe54bf22426b553045cae9f16fd0151d89b",
+          "plan_sha256": "5714f60182f51fff270478361b9dafd96222c417cb084ccf67e2a5118b419407",
+          "provisioning": {
+            "action": {
+              "kind": "provision_components",
+              "plan_hash": [
+                197,
+                248,
+                241,
+                11,
+                217,
+                255,
+                35,
+                205,
+                102,
+                132,
+                186,
+                81,
+                234,
+                149,
+                116,
+                90,
+                62,
+                194,
+                62,
+                205,
+                44,
+                186,
+                236,
+                110,
+                236,
+                22,
+                63,
+                147,
+                119,
+                159,
+                63,
+                197
+              ],
+              "request": {
+                "operation_id": [
+                  174,
+                  215,
+                  216,
+                  84,
+                  94,
+                  71,
+                  34,
+                  147,
+                  12,
+                  27,
+                  80,
+                  15,
+                  222,
+                  5,
+                  184,
+                  124,
+                  75,
+                  160,
+                  126,
+                  78,
+                  99,
+                  8,
+                  142,
+                  187,
+                  213,
+                  69,
+                  147,
+                  215,
+                  178,
+                  171,
+                  136,
+                  149
+                ],
+                "plan": {
+                  "batches": [
+                    {
+                      "active_release_set": {
+                        "manifest_digest": [
+                          236,
+                          28,
+                          61,
+                          229,
+                          80,
+                          18,
+                          194,
+                          108,
+                          176,
+                          221,
+                          29,
+                          38,
+                          151,
+                          223,
+                          171,
+                          50,
+                          38,
+                          69,
+                          206,
+                          57,
+                          34,
+                          70,
+                          243,
+                          231,
+                          180,
+                          215,
+                          99,
+                          219,
+                          54,
+                          211,
+                          254,
+                          27
+                        ],
+                        "release_build_id": "4396a73edd70475918cf762643b8dbb4a46547050e202faf2f3f4e8aba03fae5"
+                      },
+                      "placements": [
+                        {
+                          "component_group": "game",
+                          "entries": [
+                            {
+                              "component_spec": "games",
+                              "labels": [],
+                              "limits": {
+                                "maximum_descendants": 20000,
+                                "maximum_registry_bytes": 16777216,
+                                "spawn_grant_reductions": []
+                              },
+                              "member_path": [
+                                "games"
+                              ],
+                              "purpose": "Ordinary",
+                              "spec_hash": [
+                                71,
+                                155,
+                                101,
+                                252,
+                                21,
+                                127,
+                                24,
+                                197,
+                                196,
+                                186,
+                                120,
+                                56,
+                                151,
+                                0,
+                                225,
+                                5,
+                                150,
+                                241,
+                                243,
+                                188,
+                                21,
+                                35,
+                                16,
+                                49,
+                                183,
+                                28,
+                                152,
+                                252,
+                                159,
+                                59,
+                                119,
+                                205
+                              ]
+                            },
+                            {
+                              "component_spec": "translations",
+                              "labels": [],
+                              "limits": {
+                                "maximum_descendants": 20000,
+                                "maximum_registry_bytes": 16777216,
+                                "spawn_grant_reductions": []
+                              },
+                              "member_path": [
+                                "translations"
+                              ],
+                              "purpose": "Ordinary",
+                              "spec_hash": [
+                                151,
+                                248,
+                                202,
+                                82,
+                                101,
+                                98,
+                                172,
+                                39,
+                                156,
+                                105,
+                                118,
+                                19,
+                                75,
+                                28,
+                                169,
+                                102,
+                                251,
+                                133,
+                                146,
+                                52,
+                                36,
+                                68,
+                                54,
+                                225,
+                                225,
+                                151,
+                                238,
+                                66,
+                                250,
+                                29,
+                                125,
+                                118
+                              ]
+                            },
+                            {
+                              "component_spec": "users",
+                              "labels": [],
+                              "limits": {
+                                "maximum_descendants": 20000,
+                                "maximum_registry_bytes": 16777216,
+                                "spawn_grant_reductions": []
+                              },
+                              "member_path": [
+                                "users"
+                              ],
+                              "purpose": "Ordinary",
+                              "spec_hash": [
+                                42,
+                                40,
+                                110,
+                                31,
+                                230,
+                                95,
+                                193,
+                                19,
+                                2,
+                                242,
+                                79,
+                                155,
+                                171,
+                                19,
+                                29,
+                                237,
+                                213,
+                                82,
+                                87,
+                                164,
+                                226,
+                                83,
+                                84,
+                                142,
+                                46,
+                                205,
+                                254,
+                                14,
+                                197,
+                                237,
+                                65,
+                                166
+                              ]
+                            }
+                          ],
+                          "group_placement": {
+                            "deployment": "game",
+                            "ordinal": 0
+                          }
+                        }
+                      ],
+                      "root": {
+                        "authority": {
+                          "binding": {
+                            "coordinator": "jesds-iaaaa-aaaar-qcbgq-cai",
+                            "coordinator_subnet": "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae",
+                            "fleet": {
+                              "app": "toko_miner",
+                              "fleet": {
+                                "canonical_network_id": "402b3681453fb9cfa356b6ea7abde2de53cc4c665caaf438535bddc1e1679f60",
+                                "fleet_id": "52bb332658845c13f3dd460bdb9daed2a3772b8d1b60307badbbc9d4d047318b"
+                              }
+                            }
+                          },
+                          "epoch": 1
+                        },
+                        "component_admissions": [
+                          {
+                            "component_spec": "games",
+                            "maximum_root_instances": 1,
+                            "spec_hash": [
+                              71,
+                              155,
+                              101,
+                              252,
+                              21,
+                              127,
+                              24,
+                              197,
+                              196,
+                              186,
+                              120,
+                              56,
+                              151,
+                              0,
+                              225,
+                              5,
+                              150,
+                              241,
+                              243,
+                              188,
+                              21,
+                              35,
+                              16,
+                              49,
+                              183,
+                              28,
+                              152,
+                              252,
+                              159,
+                              59,
+                              119,
+                              205
+                            ]
+                          },
+                          {
+                            "component_spec": "translations",
+                            "maximum_root_instances": 1,
+                            "spec_hash": [
+                              151,
+                              248,
+                              202,
+                              82,
+                              101,
+                              98,
+                              172,
+                              39,
+                              156,
+                              105,
+                              118,
+                              19,
+                              75,
+                              28,
+                              169,
+                              102,
+                              251,
+                              133,
+                              146,
+                              52,
+                              36,
+                              68,
+                              54,
+                              225,
+                              225,
+                              151,
+                              238,
+                              66,
+                              250,
+                              29,
+                              125,
+                              118
+                            ]
+                          },
+                          {
+                            "component_spec": "users",
+                            "maximum_root_instances": 1,
+                            "spec_hash": [
+                              42,
+                              40,
+                              110,
+                              31,
+                              230,
+                              95,
+                              193,
+                              19,
+                              2,
+                              242,
+                              79,
+                              155,
+                              171,
+                              19,
+                              29,
+                              237,
+                              213,
+                              82,
+                              87,
+                              164,
+                              226,
+                              83,
+                              84,
+                              142,
+                              46,
+                              205,
+                              254,
+                              14,
+                              197,
+                              237,
+                              65,
+                              166
+                            ]
+                          }
+                        ],
+                        "component_topology_digest": [
+                          32,
+                          45,
+                          158,
+                          127,
+                          106,
+                          60,
+                          243,
+                          45,
+                          76,
+                          117,
+                          56,
+                          41,
+                          69,
+                          236,
+                          47,
+                          141,
+                          79,
+                          57,
+                          154,
+                          205,
+                          164,
+                          165,
+                          250,
+                          215,
+                          245,
+                          64,
+                          6,
+                          215,
+                          51,
+                          72,
+                          225,
+                          170
+                        ],
+                        "fleet_subnet_root": "2ydug-eaaaa-aaaab-qhfca-cai",
+                        "funding": {
+                          "icp_refill": null,
+                          "root_funding": {
+                            "budget": {
+                              "maximum_cycles": "30000000000000",
+                              "window_secs": 7776000
+                            },
+                            "cooldown_secs": 2592000,
+                            "funding_profile": "preview_multi_subnet",
+                            "maximum_automatic_cycles": "60000000000000",
+                            "maximum_automatic_grants": 2,
+                            "request_threshold": "10000000000000",
+                            "target_balance": "30000000000000"
+                          }
+                        },
+                        "limits": {
+                          "canister_pool": {
+                            "canister_cycles": "1900000000000",
+                            "creation_execution_margin": "1000000000000",
+                            "maximum_size": 24,
+                            "minimum_size": 5
+                          },
+                          "cycles_funding": {
+                            "maximum_cycles": "15000000000000",
+                            "window_secs": 3600
+                          },
+                          "maximum_component_instances": 19,
+                          "maximum_group_placements": 1,
+                          "maximum_registry_bytes": 16777216,
+                          "maximum_wasm_store_bytes": 40000000
+                        },
+                        "placement_subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+                      }
+                    }
+                  ],
+                  "configuration_digest": [
+                    88,
+                    152,
+                    114,
+                    222,
+                    85,
+                    161,
+                    44,
+                    86,
+                    66,
+                    18,
+                    106,
+                    61,
+                    8,
+                    185,
+                    63,
+                    138,
+                    111,
+                    222,
+                    13,
+                    143,
+                    99,
+                    224,
+                    85,
+                    167,
+                    39,
+                    69,
+                    239,
+                    186,
+                    225,
+                    251,
+                    197,
+                    119
+                  ],
+                  "directory_confirmation_roots": [
+                    "2ydug-eaaaa-aaaab-qhfca-cai"
+                  ],
+                  "fleet": {
+                    "app": "toko_miner",
+                    "fleet": {
+                      "canonical_network_id": "402b3681453fb9cfa356b6ea7abde2de53cc4c665caaf438535bddc1e1679f60",
+                      "fleet_id": "52bb332658845c13f3dd460bdb9daed2a3772b8d1b60307badbbc9d4d047318b"
+                    }
+                  },
+                  "fleet_registry": {
+                    "authority": {
+                      "binding": {
+                        "coordinator": "jesds-iaaaa-aaaar-qcbgq-cai",
+                        "coordinator_subnet": "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae",
+                        "fleet": {
+                          "app": "toko_miner",
+                          "fleet": {
+                            "canonical_network_id": "402b3681453fb9cfa356b6ea7abde2de53cc4c665caaf438535bddc1e1679f60",
+                            "fleet_id": "52bb332658845c13f3dd460bdb9daed2a3772b8d1b60307badbbc9d4d047318b"
+                          }
+                        }
+                      },
+                      "epoch": 1
+                    },
+                    "content_hash": [
+                      69,
+                      193,
+                      37,
+                      6,
+                      9,
+                      88,
+                      118,
+                      245,
+                      141,
+                      209,
+                      214,
+                      171,
+                      21,
+                      49,
+                      218,
+                      4,
+                      76,
+                      146,
+                      220,
+                      174,
+                      162,
+                      109,
+                      217,
+                      245,
+                      220,
+                      133,
+                      247,
+                      16,
+                      209,
+                      118,
+                      81,
+                      213
+                    ],
+                    "revision": 3
+                  },
+                  "operation": "FreshInstall"
+                }
+              }
+            },
+            "candid": ".canic/release-builds/4396a73edd70475918cf762643b8dbb4a46547050e202faf2f3f4e8aba03fae5/artifacts/fleet_coordinator/fleet_coordinator.did",
+            "candid_sha256": "8bb1d6d7c9740c4fd98c1ed289740999330ebb6651e15151404501108f2182bf",
+            "kind": "fleet_protocol",
+            "maximum_execution_burn_cycles": "1000000000000",
+            "name": "fleet-component-provisioning",
+            "principal": "jesds-iaaaa-aaaar-qcbgq-cai"
+          },
+          "registry_preparations": [
+            {
+              "action": {
+                "expected": {
+                  "committed_component_instances": 0,
+                  "component_topology_digest": [
+                    32,
+                    45,
+                    158,
+                    127,
+                    106,
+                    60,
+                    243,
+                    45,
+                    76,
+                    117,
+                    56,
+                    41,
+                    69,
+                    236,
+                    47,
+                    141,
+                    79,
+                    57,
+                    154,
+                    205,
+                    164,
+                    165,
+                    250,
+                    215,
+                    245,
+                    64,
+                    6,
+                    215,
+                    51,
+                    72,
+                    225,
+                    170
+                  ],
+                  "encoded_bytes": 0,
+                  "fleet_subnet_root": "2ydug-eaaaa-aaaab-qhfca-cai",
+                  "initial_inventory": null,
+                  "known_created_component_canisters": 0,
+                  "managed_descendants": 0,
+                  "next_allocation_sequence": 1,
+                  "prepared_against_registry": {
+                    "authority": {
+                      "binding": {
+                        "coordinator": "jesds-iaaaa-aaaar-qcbgq-cai",
+                        "coordinator_subnet": "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae",
+                        "fleet": {
+                          "app": "toko_miner",
+                          "fleet": {
+                            "canonical_network_id": "402b3681453fb9cfa356b6ea7abde2de53cc4c665caaf438535bddc1e1679f60",
+                            "fleet_id": "52bb332658845c13f3dd460bdb9daed2a3772b8d1b60307badbbc9d4d047318b"
+                          }
+                        }
+                      },
+                      "epoch": 1
+                    },
+                    "content_hash": [
+                      69,
+                      193,
+                      37,
+                      6,
+                      9,
+                      88,
+                      118,
+                      245,
+                      141,
+                      209,
+                      214,
+                      171,
+                      21,
+                      49,
+                      218,
+                      4,
+                      76,
+                      146,
+                      220,
+                      174,
+                      162,
+                      109,
+                      217,
+                      245,
+                      220,
+                      133,
+                      247,
+                      16,
+                      209,
+                      118,
+                      81,
+                      213
+                    ],
+                    "revision": 3
+                  },
+                  "release_set": {
+                    "manifest_digest": [
+                      236,
+                      28,
+                      61,
+                      229,
+                      80,
+                      18,
+                      194,
+                      108,
+                      176,
+                      221,
+                      29,
+                      38,
+                      151,
+                      223,
+                      171,
+                      50,
+                      38,
+                      69,
+                      206,
+                      57,
+                      34,
+                      70,
+                      243,
+                      231,
+                      180,
+                      215,
+                      99,
+                      219,
+                      54,
+                      211,
+                      254,
+                      27
+                    ],
+                    "release_build_id": "4396a73edd70475918cf762643b8dbb4a46547050e202faf2f3f4e8aba03fae5"
+                  },
+                  "reserved_component_instances": 0
+                },
+                "kind": "prepare_component_registry",
+                "request": {
+                  "expected_fleet_registry": {
+                    "authority": {
+                      "binding": {
+                        "coordinator": "jesds-iaaaa-aaaar-qcbgq-cai",
+                        "coordinator_subnet": "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae",
+                        "fleet": {
+                          "app": "toko_miner",
+                          "fleet": {
+                            "canonical_network_id": "402b3681453fb9cfa356b6ea7abde2de53cc4c665caaf438535bddc1e1679f60",
+                            "fleet_id": "52bb332658845c13f3dd460bdb9daed2a3772b8d1b60307badbbc9d4d047318b"
+                          }
+                        }
+                      },
+                      "epoch": 1
+                    },
+                    "content_hash": [
+                      69,
+                      193,
+                      37,
+                      6,
+                      9,
+                      88,
+                      118,
+                      245,
+                      141,
+                      209,
+                      214,
+                      171,
+                      21,
+                      49,
+                      218,
+                      4,
+                      76,
+                      146,
+                      220,
+                      174,
+                      162,
+                      109,
+                      217,
+                      245,
+                      220,
+                      133,
+                      247,
+                      16,
+                      209,
+                      118,
+                      81,
+                      213
+                    ],
+                    "revision": 3
+                  },
+                  "store_bootstrap": {
+                    "manifest_payload_size_bytes": 5283,
+                    "operation_id": [
+                      58,
+                      130,
+                      127,
+                      129,
+                      117,
+                      151,
+                      162,
+                      58,
+                      180,
+                      121,
+                      107,
+                      228,
+                      133,
+                      43,
+                      232,
+                      7,
+                      246,
+                      108,
+                      250,
+                      47,
+                      182,
+                      41,
+                      40,
+                      194,
+                      10,
+                      0,
+                      170,
+                      230,
+                      47,
+                      86,
+                      25,
+                      159
+                    ]
+                  }
+                }
+              },
+              "candid": ".canic/release-builds/4396a73edd70475918cf762643b8dbb4a46547050e202faf2f3f4e8aba03fae5/artifacts/root/root.did",
+              "candid_sha256": "e97966419c8c067fa591053a992a24ae8e5214089d09eb8748c9e432cbefdef5",
+              "kind": "fleet_protocol",
+              "maximum_execution_burn_cycles": "1000000000000",
+              "name": "component-registry:2ydug-eaaaa-aaaab-qhfca-cai",
+              "principal": "2ydug-eaaaa-aaaab-qhfca-cai"
+            }
+          ],
+          "state_document_sha256": "155a523c1bcd084e3bc35eff8704de6610494c1ceffdb9cfd1a17430202a958f",
+          "stores": [
+            {
+              "candid": ".canic/release-builds/4396a73edd70475918cf762643b8dbb4a46547050e202faf2f3f4e8aba03fae5/artifacts/wasm_store/wasm_store.did",
+              "candid_sha256": "48d82eca36b235d128ca41ad91ed2924409cddb2eca69085426bbb6ebc4453f7",
+              "principal": "27css-jyaaa-aaaab-qhfcq-cai"
+            }
+          ]
+        }
+      },
+      "assets": [
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "2ra72-siaaa-aaaab-qhfdq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "2wbzo-7qaaa-aaaab-qhfda-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "3jjkz-4iaaa-aaaab-qhfhq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "kdjdc-hiaaa-aaaab-qhgnq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "keifw-kqaaa-aaaab-qhgna-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "knlok-4yaaa-aaaab-qhgmq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "krpu3-lyaaa-aaaab-qhgoq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "kwosp-gaaaa-aaaab-qhgoa-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "m2gcm-riaaa-aaaab-qhgzq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "m5hey-4qaaa-aaaab-qhgza-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "miavv-5yaaa-aaaab-qhg2q-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "mpbtb-qaaaa-aaaab-qhg2a-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "mtfjq-haaaa-aaaab-qhgya-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "muepe-kyaaa-aaaab-qhgyq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": "2d0b8cb4501a52fe2ea25642fb613b5c36f0cfe00f7be93d22a2679e1b28aa7a",
+          "principal": "o37wv-vaaaa-aaaab-qhgua-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": "e39da1b9b53237b4d9426d6dc8ee1845e11b31ceb2efe4075b8c2e641a396a0f",
+          "principal": "o46qb-yyaaa-aaaab-qhguq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": null,
+          "principal": "oa2kq-pyaaa-aaaab-qhgwq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": "8d6dbc770b5d2cdd52c791179b3b1a632a06f62f408f0dc565c2b2c5811b4253",
+          "principal": "oh3me-caaaa-aaaab-qhgwa-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": "8d6dbc770b5d2cdd52c791179b3b1a632a06f62f408f0dc565c2b2c5811b4253",
+          "principal": "ojzbm-zqaaa-aaaab-qhgxa-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": "2d0b8cb4501a52fe2ea25642fb613b5c36f0cfe00f7be93d22a2679e1b28aa7a",
+          "principal": "ooyhy-uiaaa-aaaab-qhgxq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": "2d0b8cb4501a52fe2ea25642fb613b5c36f0cfe00f7be93d22a2679e1b28aa7a",
+          "principal": "os45j-diaaa-aaaab-qhgvq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": "8d6dbc770b5d2cdd52c791179b3b1a632a06f62f408f0dc565c2b2c5811b4253",
+          "principal": "ov535-oqaaa-aaaab-qhgva-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": "2493982e707481459e973b14123dc8beb931cab92ae7eb9c796a6ce4088b568e",
+          "principal": "prqup-xqaaa-aaaab-qhgta-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai"
+          ],
+          "module_sha256": "8914d1b64e67b8013cb201a46709c48b247e644e893ed42afb43304f5b23e4ec",
+          "principal": "pwrs3-2iaaa-aaaab-qhgtq-cai",
+          "root": "root-0",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        }
+      ],
+      "authorities": [
+        {
+          "controllers": [
+            "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe"
+          ],
+          "module_sha256": "c745a6699c7e285d17699e4ad5a9552ea19c072b954c42ab735102e165636324",
+          "name": "coordinator",
+          "principal": "jesds-iaaaa-aaaar-qcbgq-cai",
+          "subnet": "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+        },
+        {
+          "controllers": [
+            "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe"
+          ],
+          "module_sha256": "56602bd315e3c2a908e4563ec7575686fd993fe10c6a84966cc8602fa4740871",
+          "name": "root-0",
+          "principal": "2ydug-eaaaa-aaaab-qhfca-cai",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        },
+        {
+          "controllers": [
+            "2ydug-eaaaa-aaaab-qhfca-cai",
+            "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe"
+          ],
+          "module_sha256": "cf192c4959bdcad34925d5de205d4b4db675a574f3779b2df7ee28634a22473f",
+          "name": "store-0",
+          "principal": "27css-jyaaa-aaaab-qhfcq-cai",
+          "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe"
+        }
+      ],
+      "operation_id": "adfcd680239cc77fba8c64790e5c384292728869edf5b3a30438416ebd5aea0f",
+      "source_operation_id": "aed7d8545e4722930c1b500fde05b87c4ba07e4e63088ebbd54593d7b2ab8895"
+    },
+    "reviewed_desired": {
+      "desired": {
+        "bootstrap": {
+          "admission": {
+            "fleet_principals": [
+              "dk5t4-dzfia-dkei6-b3ry5-znwei-7bpsc-lye3r-g6nw4-odwk7-fgqtq-lqe",
+              "b2nr4-bji6n-bsnfl-wp73f-fiv3x-xfndr-oohkm-wqfym-527tm-4tshb-5ae",
+              "ji5b4-7jzjp-2mp36-vyofn-lyzon-cfnru-t4eej-nodyq-w72im-tjkct-aqe",
+              "rfi6r-uz4nh-33z7c-axya3-f72mj-hplje-f4hgg-rmwgm-33s26-mtujt-cqe",
+              "xxd56-vdnms-aipkq-a3uas-3qasb-2aatp-t2sqv-6eelu-ds67b-tfdjh-wae",
+              "bcogs-bltc4-4aod7-2un6w-yz7wi-q7fr6-2jibf-wy2k2-yht3t-7k7bl-yqe",
+              "m6hwe-lguhc-bepth-kynq2-bhzl7-o7hkz-5i6dh-nul3n-vhesg-rrqj4-kae",
+              "qhg5k-x74tn-vo4yr-hjqxo-npx3u-2h4c2-ozocu-4qvfx-cmddv-i6org-cae"
+            ],
+            "rules": [],
+            "schema_version": 1,
+            "template_digest": [
+              192,
+              224,
+              164,
+              112,
+              167,
+              66,
+              73,
+              76,
+              207,
+              153,
+              197,
+              92,
+              102,
+              237,
+              176,
+              22,
+              5,
+              207,
+              33,
+              144,
+              223,
+              212,
+              38,
+              252,
+              135,
+              53,
+              236,
+              20,
+              102,
+              45,
+              31,
+              232
+            ]
+          },
+          "app": "toko_miner",
+          "canonical_network_id": "402b3681453fb9cfa356b6ea7abde2de53cc4c665caaf438535bddc1e1679f60",
+          "component_deployment_configuration": {
+            "component_group_topology": {
+              "component_groups": [
+                {
+                  "component_group": "game",
+                  "members": [
+                    {
+                      "Component": {
+                        "component_spec": "games",
+                        "kind": "Ordinary",
+                        "labels": [],
+                        "member": "games",
+                        "service_purpose": null
+                      }
+                    },
+                    {
+                      "Component": {
+                        "component_spec": "translations",
+                        "kind": "Ordinary",
+                        "labels": [],
+                        "member": "translations",
+                        "service_purpose": null
+                      }
+                    },
+                    {
+                      "Component": {
+                        "component_spec": "users",
+                        "kind": "Ordinary",
+                        "labels": [],
+                        "member": "users",
+                        "service_purpose": null
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "component_topology": {
+              "component_specs": [
+                {
+                  "children": [
+                    {
+                      "cycles_funding": {
+                        "cooldown_secs": 60,
+                        "max_per_child": "100000000000000",
+                        "max_per_request": "5000000000000"
+                      },
+                      "kind": "shard",
+                      "role": "game_shard"
+                    }
+                  ],
+                  "component_role": "game_hub",
+                  "component_spec": "games",
+                  "limits": {
+                    "cycles_funding": {
+                      "maximum_cycles": "1000000000000000",
+                      "window_secs": 3600
+                    },
+                    "maximum_descendants": 20000,
+                    "maximum_registry_bytes": 16777216
+                  },
+                  "maximum_fleet_instances": 1,
+                  "spawn_grants": [
+                    {
+                      "child_role": "game_shard",
+                      "initial_instances_per_parent": 3,
+                      "maximum_instances_per_parent": 64,
+                      "parent_role": "game_hub"
+                    }
+                  ],
+                  "spec_hash": [
+                    71,
+                    155,
+                    101,
+                    252,
+                    21,
+                    127,
+                    24,
+                    197,
+                    196,
+                    186,
+                    120,
+                    56,
+                    151,
+                    0,
+                    225,
+                    5,
+                    150,
+                    241,
+                    243,
+                    188,
+                    21,
+                    35,
+                    16,
+                    49,
+                    183,
+                    28,
+                    152,
+                    252,
+                    159,
+                    59,
+                    119,
+                    205
+                  ]
+                },
+                {
+                  "children": [],
+                  "component_role": "translation",
+                  "component_spec": "translations",
+                  "limits": {
+                    "cycles_funding": {
+                      "maximum_cycles": "1000000000000000",
+                      "window_secs": 3600
+                    },
+                    "maximum_descendants": 20000,
+                    "maximum_registry_bytes": 16777216
+                  },
+                  "maximum_fleet_instances": 1,
+                  "spawn_grants": [],
+                  "spec_hash": [
+                    151,
+                    248,
+                    202,
+                    82,
+                    101,
+                    98,
+                    172,
+                    39,
+                    156,
+                    105,
+                    118,
+                    19,
+                    75,
+                    28,
+                    169,
+                    102,
+                    251,
+                    133,
+                    146,
+                    52,
+                    36,
+                    68,
+                    54,
+                    225,
+                    225,
+                    151,
+                    238,
+                    66,
+                    250,
+                    29,
+                    125,
+                    118
+                  ]
+                },
+                {
+                  "children": [
+                    {
+                      "cycles_funding": {
+                        "cooldown_secs": 60,
+                        "max_per_child": "100000000000000",
+                        "max_per_request": "5000000000000"
+                      },
+                      "kind": "shard",
+                      "role": "user_shard"
+                    }
+                  ],
+                  "component_role": "user_hub",
+                  "component_spec": "users",
+                  "limits": {
+                    "cycles_funding": {
+                      "maximum_cycles": "1000000000000000",
+                      "window_secs": 3600
+                    },
+                    "maximum_descendants": 20000,
+                    "maximum_registry_bytes": 16777216
+                  },
+                  "maximum_fleet_instances": 1,
+                  "spawn_grants": [
+                    {
+                      "child_role": "user_shard",
+                      "initial_instances_per_parent": 3,
+                      "maximum_instances_per_parent": 64,
+                      "parent_role": "user_hub"
+                    }
+                  ],
+                  "spec_hash": [
+                    42,
+                    40,
+                    110,
+                    31,
+                    230,
+                    95,
+                    193,
+                    19,
+                    2,
+                    242,
+                    79,
+                    155,
+                    171,
+                    19,
+                    29,
+                    237,
+                    213,
+                    82,
+                    87,
+                    164,
+                    226,
+                    83,
+                    84,
+                    142,
+                    46,
+                    205,
+                    254,
+                    14,
+                    197,
+                    237,
+                    65,
+                    166
+                  ]
+                }
+              ],
+              "provisioning_grants": []
+            },
+            "deployment_topology": {
+              "component_group_deployments": [
+                {
+                  "component_group": "game",
+                  "deployment": "game",
+                  "initial_placements": 1,
+                  "labels": [],
+                  "maximum_placements": 1,
+                  "member_limits": [],
+                  "members": [
+                    {
+                      "component_spec": "games",
+                      "component_spec_hash": [
+                        71,
+                        155,
+                        101,
+                        252,
+                        21,
+                        127,
+                        24,
+                        197,
+                        196,
+                        186,
+                        120,
+                        56,
+                        151,
+                        0,
+                        225,
+                        5,
+                        150,
+                        241,
+                        243,
+                        188,
+                        21,
+                        35,
+                        16,
+                        49,
+                        183,
+                        28,
+                        152,
+                        252,
+                        159,
+                        59,
+                        119,
+                        205
+                      ],
+                      "labels": [],
+                      "limits": {
+                        "maximum_descendants": 20000,
+                        "maximum_registry_bytes": 16777216,
+                        "spawn_grant_reductions": []
+                      },
+                      "member_path": [
+                        "games"
+                      ],
+                      "purpose": "Ordinary"
+                    },
+                    {
+                      "component_spec": "translations",
+                      "component_spec_hash": [
+                        151,
+                        248,
+                        202,
+                        82,
+                        101,
+                        98,
+                        172,
+                        39,
+                        156,
+                        105,
+                        118,
+                        19,
+                        75,
+                        28,
+                        169,
+                        102,
+                        251,
+                        133,
+                        146,
+                        52,
+                        36,
+                        68,
+                        54,
+                        225,
+                        225,
+                        151,
+                        238,
+                        66,
+                        250,
+                        29,
+                        125,
+                        118
+                      ],
+                      "labels": [],
+                      "limits": {
+                        "maximum_descendants": 20000,
+                        "maximum_registry_bytes": 16777216,
+                        "spawn_grant_reductions": []
+                      },
+                      "member_path": [
+                        "translations"
+                      ],
+                      "purpose": "Ordinary"
+                    },
+                    {
+                      "component_spec": "users",
+                      "component_spec_hash": [
+                        42,
+                        40,
+                        110,
+                        31,
+                        230,
+                        95,
+                        193,
+                        19,
+                        2,
+                        242,
+                        79,
+                        155,
+                        171,
+                        19,
+                        29,
+                        237,
+                        213,
+                        82,
+                        87,
+                        164,
+                        226,
+                        83,
+                        84,
+                        142,
+                        46,
+                        205,
+                        254,
+                        14,
+                        197,
+                        237,
+                        65,
+                        166
+                      ],
+                      "labels": [],
+                      "limits": {
+                        "maximum_descendants": 20000,
+                        "maximum_registry_bytes": 16777216,
+                        "spawn_grant_reductions": []
+                      },
+                      "member_path": [
+                        "users"
+                      ],
+                      "purpose": "Ordinary"
+                    }
+                  ],
+                  "placement": {
+                    "maximum_per_root": 1,
+                    "minimum_distinct_roots": 1
+                  },
+                  "service_purpose": null
+                }
+              ]
+            },
+            "fleet_service_topology": {
+              "targets": []
+            }
+          },
+          "coordinator": "coordinator",
+          "coordinator_subnet": "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae",
+          "fleet_id": "52bb332658845c13f3dd460bdb9daed2a3772b8d1b60307badbbc9d4d047318b",
+          "fresh_estate": false,
+          "release_build_id": "65773024643542bea6a0115d1a189bea64d37283e6cd46db714021c8297a90f2",
+          "root_funding": {
+            "budget": {
+              "maximum_cycles": "30000000000000",
+              "window_secs": 7776000
+            },
+            "funding_profile": "preview_multi_subnet",
+            "maximum_automatic_cycles": "60000000000000",
+            "maximum_automatic_grants": 2,
+            "minimum_reserve_cycles": "270000000000000"
+          },
+          "roots": [
+            {
+              "canister_pool_imports": [
+                "root-0-pool-0",
+                "root-0-pool-1",
+                "root-0-pool-10",
+                "root-0-pool-11",
+                "root-0-pool-12",
+                "root-0-pool-13",
+                "root-0-pool-14",
+                "root-0-pool-15",
+                "root-0-pool-16",
+                "root-0-pool-17",
+                "root-0-pool-18",
+                "root-0-pool-19",
+                "root-0-pool-2",
+                "root-0-pool-20",
+                "root-0-pool-21",
+                "root-0-pool-22",
+                "root-0-pool-23",
+                "root-0-pool-3",
+                "root-0-pool-4",
+                "root-0-pool-5",
+                "root-0-pool-6",
+                "root-0-pool-7",
+                "root-0-pool-8",
+                "root-0-pool-9"
+              ],
+              "component_admissions": [
+                {
+                  "component_spec": "games",
+                  "maximum_root_instances": 1,
+                  "spec_hash": [
+                    71,
+                    155,
+                    101,
+                    252,
+                    21,
+                    127,
+                    24,
+                    197,
+                    196,
+                    186,
+                    120,
+                    56,
+                    151,
+                    0,
+                    225,
+                    5,
+                    150,
+                    241,
+                    243,
+                    188,
+                    21,
+                    35,
+                    16,
+                    49,
+                    183,
+                    28,
+                    152,
+                    252,
+                    159,
+                    59,
+                    119,
+                    205
+                  ]
+                },
+                {
+                  "component_spec": "translations",
+                  "maximum_root_instances": 1,
+                  "spec_hash": [
+                    151,
+                    248,
+                    202,
+                    82,
+                    101,
+                    98,
+                    172,
+                    39,
+                    156,
+                    105,
+                    118,
+                    19,
+                    75,
+                    28,
+                    169,
+                    102,
+                    251,
+                    133,
+                    146,
+                    52,
+                    36,
+                    68,
+                    54,
+                    225,
+                    225,
+                    151,
+                    238,
+                    66,
+                    250,
+                    29,
+                    125,
+                    118
+                  ]
+                },
+                {
+                  "component_spec": "users",
+                  "maximum_root_instances": 1,
+                  "spec_hash": [
+                    42,
+                    40,
+                    110,
+                    31,
+                    230,
+                    95,
+                    193,
+                    19,
+                    2,
+                    242,
+                    79,
+                    155,
+                    171,
+                    19,
+                    29,
+                    237,
+                    213,
+                    82,
+                    87,
+                    164,
+                    226,
+                    83,
+                    84,
+                    142,
+                    46,
+                    205,
+                    254,
+                    14,
+                    197,
+                    237,
+                    65,
+                    166
+                  ]
+                }
+              ],
+              "component_topology_digest": [
+                32,
+                45,
+                158,
+                127,
+                106,
+                60,
+                243,
+                45,
+                76,
+                117,
+                56,
+                41,
+                69,
+                236,
+                47,
+                141,
+                79,
+                57,
+                154,
+                205,
+                164,
+                165,
+                250,
+                215,
+                245,
+                64,
+                6,
+                215,
+                51,
+                72,
+                225,
+                170
+              ],
+              "funding": {
+                "icp_refill": null,
+                "root_funding": {
+                  "budget": {
+                    "maximum_cycles": "30000000000000",
+                    "window_secs": 7776000
+                  },
+                  "cooldown_secs": 2592000,
+                  "funding_profile": "preview_multi_subnet",
+                  "maximum_automatic_cycles": "60000000000000",
+                  "maximum_automatic_grants": 2,
+                  "request_threshold": "10000000000000",
+                  "target_balance": "30000000000000"
+                }
+              },
+              "limits": {
+                "canister_pool": {
+                  "canister_cycles": "1900000000000",
+                  "creation_execution_margin": "1000000000000",
+                  "maximum_size": 24,
+                  "minimum_size": 5
+                },
+                "cycles_funding": {
+                  "maximum_cycles": "15000000000000",
+                  "window_secs": 3600
+                },
+                "maximum_component_instances": 19,
+                "maximum_group_placements": 1,
+                "maximum_registry_bytes": 16777216,
+                "maximum_wasm_store_bytes": 40000000
+              },
+              "placement_subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+              "root": "root-0",
+              "store": "store-0"
+            }
+          ]
+        },
+        "canisters": [
+          {
+            "canic_init": {
+              "role": "coordinator"
+            },
+            "controller_canisters": [],
+            "controllers": [
+              "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "330T",
+            "kind": "coordinator",
+            "minimum_cycles": "270T",
+            "name": "coordinator",
+            "parent": null,
+            "presence": "present",
+            "principal": "jesds-iaaaa-aaaar-qcbgq-cai",
+            "replace": false,
+            "subnet": "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae",
+            "wasm": ".canic/release-builds/65773024643542bea6a0115d1a189bea64d37283e6cd46db714021c8297a90f2/artifacts/fleet_coordinator/fleet_coordinator.wasm"
+          },
+          {
+            "canic_init": {
+              "role": "root",
+              "root": "root-0"
+            },
+            "controller_canisters": [],
+            "controllers": [
+              "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "30T",
+            "kind": "root",
+            "minimum_cycles": "10T",
+            "name": "root-0",
+            "parent": "coordinator",
+            "presence": "present",
+            "principal": "2ydug-eaaaa-aaaab-qhfca-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": ".canic/release-builds/65773024643542bea6a0115d1a189bea64d37283e6cd46db714021c8297a90f2/artifacts/root/root.wasm"
+          },
+          {
+            "canic_init": {
+              "role": "store",
+              "root": "root-0"
+            },
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai",
+              "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "10T",
+            "kind": "store",
+            "minimum_cycles": "0B",
+            "name": "store-0",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "27css-jyaaa-aaaab-qhfcq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": ".canic/release-builds/65773024643542bea6a0115d1a189bea64d37283e6cd46db714021c8297a90f2/artifacts/wasm_store/wasm_store.wasm"
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-0",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "2wbzo-7qaaa-aaaab-qhfda-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-1",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "2ra72-siaaa-aaaab-qhfdq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-2",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "3jjkz-4iaaa-aaaab-qhfhq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-3",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "knlok-4yaaa-aaaab-qhgmq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-4",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "keifw-kqaaa-aaaab-qhgna-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-5",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "kdjdc-hiaaa-aaaab-qhgnq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-6",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "kwosp-gaaaa-aaaab-qhgoa-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-7",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "krpu3-lyaaa-aaaab-qhgoq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-8",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "m2gcm-riaaa-aaaab-qhgzq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-9",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "m5hey-4qaaa-aaaab-qhgza-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-10",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "miavv-5yaaa-aaaab-qhg2q-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-11",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "mpbtb-qaaaa-aaaab-qhg2a-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-12",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "mtfjq-haaaa-aaaab-qhgya-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-13",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "muepe-kyaaa-aaaab-qhgyq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-14",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "o37wv-vaaaa-aaaab-qhgua-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-15",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "o46qb-yyaaa-aaaab-qhguq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-16",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "oa2kq-pyaaa-aaaab-qhgwq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-17",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "oh3me-caaaa-aaaab-qhgwa-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-18",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "ojzbm-zqaaa-aaaab-qhgxa-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-19",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "ooyhy-uiaaa-aaaab-qhgxq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-20",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "os45j-diaaa-aaaab-qhgvq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-21",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "ov535-oqaaa-aaaab-qhgva-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-22",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "prqup-xqaaa-aaaab-qhgta-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          },
+          {
+            "canic_init": null,
+            "controller_canisters": [],
+            "controllers": [
+              "2ydug-eaaaa-aaaab-qhfca-cai"
+            ],
+            "drain": null,
+            "init_arg": null,
+            "init_candid": null,
+            "initial_cycles": "1.9T",
+            "kind": "pool",
+            "minimum_cycles": "1.9T",
+            "name": "root-0-pool-23",
+            "parent": "root-0",
+            "presence": "present",
+            "principal": "pwrs3-2iaaa-aaaab-qhgtq-cai",
+            "replace": false,
+            "subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
+            "wasm": null
+          }
+        ],
+        "cycles_ledger": "um5iw-rqaaa-aaaaq-qaaba-cai",
+        "environment": "staging",
+        "fleet": "toko-miner-staging-001",
+        "ledger_fee_cycles": "0.1B",
+        "management_creation_fee_cycles": "500B",
+        "material_cycle_threshold": "0.001B",
+        "maximum_observation_burn_cycles": "1T",
+        "maximum_stalled_observations": 8,
+        "maximum_update_burn_cycles": "1T",
+        "operator": "yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe",
+        "protocol": {
+          "app_config": "apps/toko_miner/canic.toml",
+          "component_group_placements": [
+            {
+              "deployment": "game",
+              "ordinal": 0,
+              "root": "root-0"
+            }
+          ],
+          "coordinator_candid": ".canic/release-builds/65773024643542bea6a0115d1a189bea64d37283e6cd46db714021c8297a90f2/artifacts/fleet_coordinator/fleet_coordinator.did",
+          "root_candid": ".canic/release-builds/65773024643542bea6a0115d1a189bea64d37283e6cd46db714021c8297a90f2/artifacts/root/root.did",
+          "store_candid": ".canic/release-builds/65773024643542bea6a0115d1a189bea64d37283e6cd46db714021c8297a90f2/artifacts/wasm_store/wasm_store.did"
+        },
+        "schema_version": 1,
+        "treasury": "coordinator"
+      },
+      "protocol_steps": []
+    },
+    "root_reinstall_bindings": [],
+    "root_start_authority": null,
+    "schema_version": 1,
+    "scope": "reinstall_preparation",
+    "terminal_inventory_operation_id": null
+  },
+  "terminal": false
+}

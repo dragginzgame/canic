@@ -1,0 +1,22 @@
+   Compiling memchr v2.8.3
+   Compiling generic-array v0.14.9
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+   Compiling serde_json v1.0.151
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.6
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling ic_principal v0.1.5
+   Compiling candid v0.10.35
+   Compiling ic-stable-structures v0.7.2
+   Compiling ic-memory v0.12.3
+   Compiling ic-cdk v0.20.2
+   Compiling canic-control-plane v0.110.13 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 50s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-a807ea3b1415e236)
+
+running 1 test
+test workflow::fleet_coordinator::tests::provisioning_wait_does_not_block_coordinator_publication ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 247 filtered out; finished in 0.00s
+

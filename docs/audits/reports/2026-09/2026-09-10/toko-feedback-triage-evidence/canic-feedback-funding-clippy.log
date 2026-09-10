@@ -1,0 +1,6 @@
+    Checking group v0.13.0
+    Checking canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+    Checking elliptic-curve v0.13.8
+    Checking ecdsa v0.16.9
+    Checking k256 v0.13.4
+    Finished `dev` profile [optimized + debuginfo] target(s) in 37.02s

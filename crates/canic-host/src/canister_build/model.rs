@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{collections::BTreeSet, path::PathBuf, time::Duration};
 
 use canic_core::{
     ids::CanisterRole,
@@ -8,6 +8,20 @@ use canic_core::{
 pub(super) const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 pub(super) const WASM_STORE_ROLE: &str = "wasm_store";
 pub(super) const WASM_TARGET: &str = "wasm32-unknown-unknown";
+
+/// One qualified artifact and its elapsed compilation/finalization time.
+pub struct TimedCanisterArtifactBuildOutput {
+    pub output: CanisterArtifactBuildOutput,
+    pub elapsed: Duration,
+}
+
+/// Complete App compilation results; release manifests are sealed by the existing caller.
+pub struct AppCanisterArtifactBuildOutput {
+    pub coordinator: TimedCanisterArtifactBuildOutput,
+    pub store: TimedCanisterArtifactBuildOutput,
+    pub configured: Vec<ConfiguredCanisterArtifactBuildOutput>,
+    pub configured_elapsed: Duration,
+}
 
 /// Caller-selected Cargo and Candid policy for one focused canister build.
 #[derive(Clone, Debug, Eq, PartialEq)]

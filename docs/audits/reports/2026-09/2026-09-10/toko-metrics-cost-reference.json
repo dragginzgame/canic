@@ -1,0 +1,7 @@
+{
+  "status": "prepared_not_applied",
+  "path": "apps/toko_miner/user_hub/src/qualification/metrics.rs",
+  "base_sha256": "bd5121228095e73783f6f8d894dd356ec2a6d69f9fbe6bf758036d043d7d1ea3",
+  "proposed_sha256": "dcb6592f7fd7bf19bb4ebeddf144b418af1430d5aaf3a2deea66cf90cf56abfa",
+  "reason": "20M is an advisory historical comparison; keep real Wasm measurement and behavioural qualification"
+}

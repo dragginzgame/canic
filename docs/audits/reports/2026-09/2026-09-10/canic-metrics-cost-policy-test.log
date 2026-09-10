@@ -1,0 +1,11 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:36901/
+targeted PocketIC test is not a classified integration target or exact lib test: optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_tracking
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.lu8e6t
+make: *** [Makefile:425: test-pocketic-case] Error 2

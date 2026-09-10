@@ -1,0 +1,48 @@
+   Compiling canic-host v0.110.13 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 32.40s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-87b779c1ec38a5fc)
+
+running 40 tests
+test canister_build::artifact::tests::configured_batch_command_selects_every_group_package_once ... ok
+test canister_build::artifact::tests::declaration_and_runtime_passes_share_exact_cargo_features ... ok
+test canister_build::artifact::tests::configured_specs_group_into_one_cargo_command_per_workspace ... ok
+test canister_build::artifact::tests::profile_candid_pass_is_explicit_for_nonlocal_binding_derivation ... ok
+test canister_build::batch::tests::feature_assignment_order_is_retained_for_host_and_wasm_instances ... ok
+test canister_build::artifact::tests::configured_spec_resolution_reports_every_invalid_role ... ok
+test canister_build::batch::tests::shared_feature_growth_rejects_a_batch_but_disjoint_dependencies_do_not ... ok
+test canister_build::cache::tests::configured_relative_target_remains_workspace_relative ... ok
+test canister_build::cache::tests::default_target_is_a_dedicated_reusable_workspace_cache ... ok
+test canister_build::cache::tests::release_declarations_disable_lto_without_changing_runtime_profile ... ok
+test canister_build::candid::tests::extracted_candid_has_one_terminal_newline_and_no_trailing_whitespace ... ok
+test canister_build::candid_cache::tests::real_extractor_reuse_matches_fresh_declarations ... ignored, requires installed candid-extractor; ordinary CI uses a native extractor fixture
+test canister_build::reuse::dependencies::tests::cargo_paths_preserve_escaped_names_and_continuations ... ok
+test canister_build::tests::build_context_applies_exact_child_build_network ... ok
+test canister_build::tests::build_context_distinguishes_environment_from_build_network ... ok
+test canister_build::tests::configured_canister_build_uses_the_locked_resolver ... ok
+test canister_build::tests::infrastructure_roles_use_the_canonical_built_in_artifact_sources ... ok
+test canister_build::tests::parse_parent_process_id_accepts_proc_stat_shape ... ok
+test canister_build::tests::release_build_artifacts_use_one_immutable_identity_namespace ... ok
+test canister_build::tests::unqualified_artifacts_keep_the_local_icp_build_surface ... ok
+test canister_build::tests::unqualified_build_context_removes_an_ambient_release_build_id ... ok
+test canister_build::reuse::snapshot::tests::replaced_dependency_inventory_rechecks_dropped_source_bytes ... ok
+test canister_build::cache::tests::install_build_discovers_sccache_without_overriding_explicit_wrapper ... ok
+test canister_build::reuse::tests::executable_launchers_do_not_claim_their_delegated_tool_bytes ... ok
+test canister_build::reuse::tests::output_snapshot_detects_corruption_missing_and_extra_files ... ok
+test canister_build::reuse::snapshot::tests::real_source_edits_and_inventory_growth_are_distinct_failures ... ok
+test canister_build::reuse::tests::cache_never_follows_a_replaced_output_symlink ... ok
+test canister_build::tests::remove_stale_icp_candid_sidecars_keeps_primary_role_did ... ok
+test canister_build::reuse::tests::source_bytes_additions_deletions_and_renames_change_the_input_set ... ok
+test canister_build::cache::tests::artifact_materialization_lock_excludes_a_second_builder ... ok
+test canister_build::candid_cache::tests::failed_extraction_does_not_create_a_cache_record ... ok
+test canister_build::candid_cache::tests::symlink_inputs_are_refused_and_cache_symlinks_do_not_modify_their_target ... ok
+test canister_build::candid_cache::tests::changed_extractor_refuses_even_a_cached_result ... ok
+test canister_build::candid_cache::tests::corrupt_or_misbound_cache_records_reextract_current_candid ... ok
+test canister_build::batch::tests::real_cargo_resolution_batches_peers_and_splits_feature_growth ... ok
+test canister_build::candid_cache::tests::changed_role_and_shared_input_reuse_only_unchanged_compiled_declarations ... ok
+test canister_build::artifact::tests::configured_specs_bind_canonical_root_and_application_workspace ... ok
+test canister_build::cache::tests::declaration_and_runtime_preserve_cfg_with_distinct_final_outputs ... ok
+test canister_build::reuse::tests::first_infrastructure_build_and_replaced_cargo_records_preserve_source_authority ... ok
+test canister_build::reuse::tests::governed_inputs_invalidate_reuse_even_when_file_lengths_are_unchanged ... ok
+
+test result: ok. 39 passed; 0 failed; 1 ignored; 0 measured; 513 filtered out; finished in 7.11s
+

@@ -1,0 +1,16 @@
+    Blocking waiting for file lock on build directory
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 21s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-be90d7741bd6194b)
+
+running 7 tests
+test ops::runtime::memory::tests::allocation_snapshot_requires_existing_bootstrap ... ok
+test ops::runtime::memory::tests::commit_recovery_response_maps_invalid_slots_without_unknown_fallback ... ok
+test ops::runtime::memory::tests::commit_slot_response_maps_ic_memory_012_variants_exactly ... ok
+test ops::runtime::memory::tests::memory_allocation_record_response_includes_live_backing_memory_size ... ok
+test ops::runtime::memory::tests::memory_allocation_record_response_omits_failed_size_measurements ... ok
+test ops::runtime::memory::tests::ledger_snapshot_reads_the_bootstrapped_ic_memory_runtime ... ok
+test ops::runtime::memory::tests::allocation_snapshot_preserves_unopened_memories_and_ledger_generation ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 1262 filtered out; finished in 0.01s
+

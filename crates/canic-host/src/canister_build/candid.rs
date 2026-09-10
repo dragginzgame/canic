@@ -1,7 +1,14 @@
 use std::{fs, path::Path, process::Command};
 
 pub fn extract_candid_bytes(debug_wasm_path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let output = Command::new("candid-extractor")
+    extract_candid_with_tool(debug_wasm_path, Path::new("candid-extractor"))
+}
+
+pub(super) fn extract_candid_with_tool(
+    debug_wasm_path: &Path,
+    extractor: &Path,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let output = Command::new(extractor)
         .arg(debug_wasm_path)
         .output()
         .map_err(|err| {

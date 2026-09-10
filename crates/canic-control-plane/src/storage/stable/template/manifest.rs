@@ -3,7 +3,7 @@ use crate::ids::{
     WasmStoreBinding,
 };
 use canic_core::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
-use canic_core::cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory, storable::Storable};
+use canic_core::cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory, storable::Storable};
 use canic_core::eager_static;
 use canic_core::{
     impl_storable_bounded, role_contract::allocation::memory::control_plane::TEMPLATE_MANIFESTS_ID,
@@ -13,7 +13,7 @@ use std::cell::RefCell;
 
 eager_static! {
     static TEMPLATE_MANIFESTS: RefCell<
-        StableBtreeMap<TemplateReleaseKey, TemplateManifestRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateReleaseKey, TemplateManifestRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.manifests.v1", ty = TemplateManifestStateStore, id = TEMPLATE_MANIFESTS_ID)),
     );

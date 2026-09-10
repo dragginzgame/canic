@@ -1,6 +1,6 @@
 use crate::ids::WasmStoreGcMode;
 #[cfg(feature = "wasm-store-canister")]
-use canic_core::cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory};
+use canic_core::cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory};
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::eager_static;
 use canic_core::impl_storable_bounded;
@@ -13,7 +13,7 @@ use std::cell::RefCell;
 #[cfg(feature = "wasm-store-canister")]
 eager_static! {
     static WASM_STORE_GC_STATE: RefCell<
-        Cell<WasmStoreGcStateRecord, VirtualMemory<DefaultMemoryImpl>>
+        Cell<WasmStoreGcStateRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(
         canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.wasm_store.gc_state.v1", ty = WasmStoreGcStateRecord, id = WASM_STORE_GC_STATE_ID),
         WasmStoreGcStateRecord::default(),

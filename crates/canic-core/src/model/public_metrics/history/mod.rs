@@ -11,7 +11,7 @@ use crate::{
 };
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, VecDeque, btree_map::Entry},
+    collections::{HashMap, VecDeque, hash_map::Entry},
     mem::size_of,
 };
 
@@ -39,7 +39,7 @@ pub struct PublicHistorySeries {
     pub latest_observed_at_ns: u64,
 }
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct SeriesKey {
     family: PublicMetricFamily,
     name: String,
@@ -48,7 +48,8 @@ struct SeriesKey {
 
 #[derive(Default)]
 struct History {
-    series: BTreeMap<SeriesKey, PublicHistorySeries>,
+    // Admission follows validated input order; index iteration never decides publication.
+    series: HashMap<SeriesKey, PublicHistorySeries>,
     heap_started_at_ns: Option<u64>,
     reserved_bytes: usize,
     truncated: bool,
@@ -79,6 +80,7 @@ impl PublicHistoryCache {
                 let latest_slot = series.latest_observed_at_ns / PUBLIC_METRICS_CADENCE_NS;
                 slot.saturating_sub(latest_slot) < PUBLIC_HISTORY_SLOTS as u64
             });
+            history.series.shrink_to_fit();
             history.reserved_bytes = history
                 .series
                 .iter()
@@ -162,6 +164,7 @@ impl PublicHistoryCache {
                 }
                 series.latest_observed_at_ns = metric.observed_at_ns;
             }
+            history.series.shrink_to_fit();
         });
     }
 
@@ -199,7 +202,7 @@ impl PublicHistoryCache {
     }
 }
 
-// Reserve full ring capacity, copied labels and an entire sparse tree node per series.
+// Reserve full ring capacity, copied labels and a conservative sparse index allowance.
 const fn reservation(key: &SeriesKey, unit: &str) -> usize {
     PUBLIC_HISTORY_SLOTS * size_of::<PublicHistorySample>()
         + size_of::<SeriesKey>()
@@ -237,6 +240,53 @@ mod tests {
         let mut points: Vec<_> = series.slots.into_iter().collect();
         points.sort_by_key(|point| point.slot);
         points
+    }
+
+    #[test]
+    fn history_lookup_binds_family_name_and_canister() {
+        let principal = Principal::from_slice(&[1]);
+        let cases = [
+            (PublicMetricFamily::Application, "same", None, 11),
+            (PublicMetricFamily::Application, "same", Some(principal), 12),
+            (PublicMetricFamily::Application, "other", None, 13),
+            (PublicMetricFamily::Cycles, "same", None, 14),
+        ];
+        for (family, name, canister_id, value) in cases {
+            let mut row = sample(1, value);
+            row.name = name.into();
+            row.canister_id = canister_id;
+            PublicMetricsCache::replace(family, row.observed_at_ns, [row]).unwrap();
+        }
+        for (family, name, canister_id, value) in cases {
+            let series = PublicHistoryCache::series(family, name.into(), canister_id).unwrap();
+            assert_eq!(series.slots.back().unwrap().value, value);
+        }
+    }
+
+    #[test]
+    fn history_expiration_releases_sparse_index_capacity() {
+        let rows = (0..MAX_HISTORY_SERIES - 1).map(|index| {
+            let mut row = sample(1, 7);
+            row.name = format!("expired_{index}");
+            row
+        });
+        PublicMetricsCache::replace(
+            PublicMetricFamily::Application,
+            sample(1, 7).observed_at_ns,
+            rows,
+        )
+        .unwrap();
+        publish(sample(2, 19));
+        PublicHistoryCache::expire((PUBLIC_HISTORY_SLOTS as u64 + 1) * PUBLIC_METRICS_CADENCE_NS);
+        assert_eq!(points().last().unwrap().value, 19);
+        HISTORY.with_borrow(|history| {
+            assert_eq!(history.series.len(), 1);
+            let index_slot_bytes = size_of::<(SeriesKey, PublicHistorySeries)>();
+            assert!(history.series.capacity() * index_slot_bytes <= 2048);
+        });
+        PublicHistoryCache::expire((PUBLIC_HISTORY_SLOTS as u64 + 2) * PUBLIC_METRICS_CADENCE_NS);
+        assert_eq!(PublicHistoryCache::reserved_bytes(), 0);
+        HISTORY.with_borrow(|history| assert_eq!(history.series.capacity(), 0));
     }
 
     #[test]

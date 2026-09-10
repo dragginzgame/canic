@@ -1,0 +1,49 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:40461/
+==> targeted canic-tests PocketIC integration proof
+   Compiling canic-tests v0.110.13 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.49s
+     Running tests/timer_authority.rs (target/debug/deps/timer_authority-477e402c154aa17e)
+
+running 8 tests
+test application_timers_cancel_and_recur_only_after_completion ... [WASM]       RUN    canister_test (1/1)
+[WASM]       CACHE  canister_test                                         0.77s
+[WASM]       RUN    intent_authority (1/2)
+[WASM]       RUN    runtime_probe (2/2)
+[WASM]       CACHE  intent_authority                                      0.63s
+[WASM]       CACHE  runtime_probe                                         0.02s
+[WASM]       DONE   batch: 0 built, 2 cached, 0 failed                    0.65s
+runtime-probe timer inventory: declared=5 scheduled=2
+runtime-probe interval performance: scheduler_samples=0 work_samples=2 latest=Some(104188) maximum=Some(104188) total=208081 max_wasm_growth=Some(0) max_stable_growth=Some(0)
+ok
+test exact_cycles_and_runtime_metrics_require_controller ... [WASM]       RUN    canister_test (1/1)
+[WASM]       CACHE  canister_test                                         0.45s
+ok
+test finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work ... ok
+test lifecycle_participant_reconstructs_native_timers_before_deferred_hooks ... ok
+test optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_tracking ... public sampling first sample, 256 checkpoints: 15497186 instructions; advisory reference: 20000000; above reference: false
+public sampling repeat sample, 4096 checkpoints: 15547635 instructions; advisory reference: 20000000; above reference: false
+public sampling scheduled maximum: 16586795 instructions; advisory reference: 20000000; above reference: false
+ok
+test public_history_samples_without_readers_and_resets_after_restoration ... ok
+test public_snapshots_preserve_observer_authority ... ok
+test timer_registration_capacity_and_invalid_identity_are_leak_free ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.51s
+
+==> shared PocketIC resources after targeted canic-tests PocketIC integration proof: rss=446092 kB high_water=449596 kB threads=19
+==> targeted canic-tests PocketIC integration proof done in 27s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  27s      PASS   targeted canic-tests PocketIC integration proof
+workspace runner wall time: 29s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.MrI9hg

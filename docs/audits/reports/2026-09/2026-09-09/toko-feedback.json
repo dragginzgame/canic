@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-09",
+  "metrics": {
+    "ordinary_all_roles": "pass_after_translation_ready",
+    "roles": 5,
+    "nodes": 9,
+    "ceiling_entities": 64,
+    "ceiling_application_rows": 194,
+    "maximum_entity_name_bytes": 64,
+    "budget_instructions": 20000000,
+    "published_producer_maximum": 22151949,
+    "allocation_experiment_maximum": 21745176,
+    "allocation_experiment_adopted": false,
+    "budget_status": "pass_frozen_index_candidate_minimal_headroom",
+    "published_failure_recovery": "fail_timer_stops",
+    "candidate_failure_recovery": "pass_three_game_shards",
+    "candidate_runtime_core": "local Canic core with retryable sampling completion",
+    "candidate_release": "8bfd44f0ebbb3a85240a0b8185b8aae2119e4177a14378c9c748c2d9b87259ac",
+    "candidate_core_sha256": "702fdadbf52fd800ac58d9d05700938fa6f1902be25de063365d3b1b044cfc36",
+    "candidate_peak_instructions": 21745173,
+    "history_index_candidate": {
+      "release": "35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857",
+      "initial_sample_periods": 300,
+      "history_slots": 288,
+      "maximum_instructions": 19963567,
+      "headroom_instructions": 36433,
+      "failure_recovery": "pass_three_game_shards",
+      "producer_allocation_experiment": false,
+      "runtime_adopted": false,
+      "report": "metrics-history-index.md"
+    }
+  },
+  "local_reset": {
+    "status": "pass_actual_wrapper_functions",
+    "full_vite_dispatch_tested": false,
+    "physical_identities_retained": 27,
+    "retained_pool_assets": 24,
+    "old_user_data_wiped": true,
+    "completed_replay_preserves_new_user_data": true,
+    "infrastructure_installs_across_attempts": 3,
+    "terminal_journal_effects": 59,
+    "zero_new_funding": true,
+    "owned_network_stopped": true
+  },
+  "origin": {
+    "published": "missing_at_coordinator_for_accepted_root_provisioning",
+    "root_diagnostic": 66,
+    "coordinator_diagnostic": 132,
+    "candidate_phase_regression": "pass",
+    "candidate_runtime_adopted": false,
+    "candidate_runtime_qualification": "pass_accepted_store_outage_same_operation_recovery_and_replay",
+    "runtime_report": "../2026-09-10/canic159-runtime.md"
+  },
+  "first_build": {
+    "status": "pass_candidate",
+    "first_seconds": 355.98,
+    "reuse_seconds": 3.4,
+    "reused_artifacts": 8,
+    "source_inventory_equal": true,
+    "historical_failed_inputs_available": false
+  },
+  "staging": {
+    "status": "review_only",
+    "effects_applied": 0,
+    "scope": "reinstall_preparation",
+    "plan_sha256": "aecbab3d33f9a1247cc46e3c4610901d61ddaa91d902cd6c063d36a871265283",
+    "full_reset_review_available": false
+  },
+  "downstream_patch": "applied",
+  "overall_acceptance": "open",
+  "checks": {
+    "timer_authority": "8 passed after history index change; governed targeted runner, 192 seconds",
+    "root_provisioning_origin": "1 passed; exact phase regression",
+    "core_clippy": "all-target/all-feature warnings denied passed after history index change",
+    "control_plane_clippy": "all-target/all-feature warnings denied passed",
+    "timer_authority_clippy": "warnings denied passed",
+    "downstream_shell_contracts": "2 passed",
+    "downstream_shell_syntax_and_shellcheck": "passed",
+    "downstream_patch_application_check": "passed; all six reviewed base and proposed hashes verified; applied with explicit maintainer approval",
+    "broad_validation_run": false,
+    "public_metrics_unit": "18 passed; exact keys, capacity release, bounded admission and history semantics",
+    "release_notes_preflight": "0.110.14 passed",
+    "documents_and_evidence": "current-document guard, local links, retained SHA-256 hashes and diff whitespace passed"
+  }
+}

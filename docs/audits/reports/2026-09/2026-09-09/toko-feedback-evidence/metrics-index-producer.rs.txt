@@ -1,0 +1,201 @@
+//! Bounded IcyDB cost projection into Canic's opt-in application snapshot.
+//! Canic owns the sampling timer, publication and bounded history.
+
+#[cfg(not(test))]
+use canic::api::public_status::{ApplicationMetricsSampler, PublicStatusApi};
+use canic::dto::public_status::{PublicMetric, PublicMetricKind};
+use icydb::metrics::MetricsReport;
+
+const MAX_ENTITIES: usize = 64;
+const PREFIX: &str = "icydb.entity.";
+const SUFFIXES: [(&str, &str); 3] = [
+    (".hits", "executions"),
+    (".instructions_total", "instructions"),
+    (".instructions_max", "instructions"),
+];
+
+#[derive(Debug, Eq, PartialEq)]
+enum ProjectionError {
+    Capacity,
+    Name,
+}
+
+/// Register the sole bounded provider after IcyDB initialisation and restoration.
+#[cfg(not(test))]
+pub(super) fn initialize() {
+    PublicStatusApi::set_application_sampler(Some(ApplicationMetricsSampler::new(sample)));
+}
+
+#[cfg(not(test))]
+fn sample() -> Result<Vec<PublicMetric>, canic::Error> {
+    if !crate::startup::system_fixtures_are_ready() {
+        return Err(canic::Error::from_registered(
+            canic::diagnostics::codes::REQUEST_INVALID_STATE,
+        ));
+    }
+    project(&icydb::metrics::metrics_report())
+        .map_err(|_| canic::Error::from_registered(canic::diagnostics::codes::REQUEST_INVALID))
+}
+
+fn project(report: &MetricsReport) -> Result<Vec<PublicMetric>, ProjectionError> {
+    if report.entities().len() > MAX_ENTITIES
+        || report.total_entities() != report.entities().len() as u64
+    {
+        return Err(ProjectionError::Capacity);
+    }
+    // Entity paths come from the compiled IcyDB model, never user labels.
+    // Validate the complete selection before allocating any public rows.
+    for entity in report.entities() {
+        if entity.path().is_empty()
+            || SUFFIXES
+                .iter()
+                .any(|(suffix, _)| PREFIX.len() + entity.path().len() + suffix.len() > 128)
+        {
+            return Err(ProjectionError::Name);
+        }
+    }
+    let observed_at_ns = report
+        .window_end_ms()
+        .checked_mul(1_000_000)
+        .ok_or(ProjectionError::Name)?;
+    let mut rows = Vec::with_capacity(report.entities().len() * 3 + 2);
+    rows.push(metric(
+        "icydb.window_start_ms".into(),
+        report.window_start_ms(),
+        "milliseconds",
+        observed_at_ns,
+    ));
+    rows.push(metric(
+        "icydb.window_end_ms".into(),
+        report.window_end_ms(),
+        "milliseconds",
+        observed_at_ns,
+    ));
+    for entity in report.entities() {
+        let values = [
+            entity.hits(),
+            entity.instructions_total(),
+            entity.instructions_max(),
+        ];
+        for ((suffix, unit), value) in SUFFIXES.iter().zip(values) {
+            rows.push(metric(
+                format!("{PREFIX}{}{suffix}", entity.path()),
+                value,
+                unit,
+                observed_at_ns,
+            ));
+        }
+    }
+    Ok(rows)
+}
+
+fn metric(name: String, value: u64, unit: &str, observed_at_ns: u64) -> PublicMetric {
+    PublicMetric {
+        name,
+        value: u128::from(value),
+        unit: unit.into(),
+        canister_id: None,
+        observed_at_ns,
+        // These are independent window observations, never counter deltas.
+        // IcyDB's optional reset ID cannot establish continuity across heaps.
+        kind: PublicMetricKind::Gauge,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::CandidType;
+
+    #[derive(CandidType)]
+    struct Entity {
+        path: String,
+        hits: u64,
+        instructions_total: u64,
+        instructions_max: u64,
+    }
+
+    #[derive(CandidType)]
+    struct Report {
+        window_start_ms: u64,
+        window_end_ms: u64,
+        window_id: Option<u64>,
+        total_entities: u64,
+        entities: Vec<Entity>,
+    }
+
+    fn report(count: usize, path: &str) -> MetricsReport {
+        report_with_coverage(count, path, count as u64, Some(0))
+    }
+
+    fn report_with_coverage(
+        count: usize,
+        path: &str,
+        total_entities: u64,
+        window_id: Option<u64>,
+    ) -> MetricsReport {
+        let source = Report {
+            window_start_ms: 10,
+            window_end_ms: 20,
+            window_id,
+            total_entities,
+            entities: (0..count)
+                .map(|index| Entity {
+                    path: format!("{path}{index}"),
+                    hits: 2,
+                    instructions_total: 30,
+                    instructions_max: 20,
+                })
+                .collect(),
+        };
+        candid::decode_one(&candid::encode_one(source).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn publishes_complete_window_and_entity_measurements_without_identity_labels() {
+        let rows = project(&report(1, "accepted.entity")).unwrap();
+        assert_eq!(rows.len(), 5);
+        assert_eq!(rows[0].value, 10);
+        assert_eq!(rows[1].value, 20);
+        assert_eq!(rows[2].value, 2);
+        assert_eq!(rows[3].value, 30);
+        assert_eq!(rows[4].value, 20);
+        assert!(rows.iter().all(|row| row.canister_id.is_none()));
+        assert!(rows.iter().all(|row| row.observed_at_ns == 20_000_000));
+        assert!(rows.iter().all(|row| row.kind == PublicMetricKind::Gauge));
+    }
+
+    #[test]
+    fn rejects_incomplete_source_coverage_before_publishing_rows() {
+        for (selected, total) in [(64, 65), (1, 2), (0, 1), (2, 1)] {
+            assert_eq!(
+                project(&report_with_coverage(selected, "entity", total, Some(0))),
+                Err(ProjectionError::Capacity)
+            );
+        }
+        assert_eq!(project(&report(0, "entity")).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn reset_identity_never_enables_counter_deltas() {
+        let expected = project(&report(1, "entity")).unwrap();
+        for window_id in [Some(0), Some(1), Some(u64::MAX), None] {
+            let source = report_with_coverage(1, "entity", 1, window_id);
+            assert_eq!(source.window_id(), window_id);
+            assert_eq!(project(&source).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn rejects_oversized_selection_without_publishing_partial_results() {
+        assert_eq!(
+            project(&report(65, "entity")),
+            Err(ProjectionError::Capacity)
+        );
+        assert_eq!(
+            project(&report(1, &"x".repeat(128))),
+            Err(ProjectionError::Name)
+        );
+        assert_eq!(project(&report(64, "entity")).unwrap().len(), 194);
+    }
+}

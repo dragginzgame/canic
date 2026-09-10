@@ -13,6 +13,7 @@ use crate::{
     durable_io::write_bytes,
 };
 use std::{
+    collections::BTreeMap,
     fmt::Write as _,
     fs,
     path::{Path, PathBuf},
@@ -213,41 +214,42 @@ pub fn dependency_patch_table(
     canic_manifest_path: &Path,
     canic_version: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let canic_root = canic_manifest_path
-        .parent()
-        .expect("canic manifest path must have parent");
-    let sibling_root = canic_root.parent().expect("canic root must have parent");
-    let registry_version = registry_package_version_suffix(canic_manifest_path, "canic")
-        .filter(|version| *version == canic_version);
     let mut rendered = String::new();
-
-    for crate_name in CANIC_FAMILY_CRATES {
-        let sibling_dir = registry_version.map_or_else(
-            || (*crate_name).to_string(),
-            |version| format!("{crate_name}-{version}"),
-        );
-        let manifest_path = sibling_root.join(sibling_dir).join("Cargo.toml");
-
-        if !manifest_path.is_file() {
-            continue;
-        }
-        require_package_manifest_identity(&manifest_path, crate_name, canic_version)?;
-
-        let crate_root = manifest_path
-            .parent()
-            .expect("manifest path must have parent");
-        let _ = writeln!(
-            rendered,
-            "{crate_name} = {{ path = \"{}\" }}",
-            crate_root.display()
-        );
+    for (name, root) in resolved_family_roots(canic_manifest_path, canic_version)? {
+        let _ = writeln!(rendered, "{name} = {{ path = \"{}\" }}", root.display());
     }
-
     if rendered.is_empty() {
         Ok(String::new())
     } else {
         Ok(format!("[patch.crates-io]\n{rendered}"))
     }
+}
+
+/// Exact source roots selected for the generated infrastructure's family patches.
+pub fn resolved_family_roots(
+    canic_manifest_path: &Path,
+    canic_version: &str,
+) -> Result<BTreeMap<&'static str, PathBuf>, Box<dyn std::error::Error>> {
+    let canic_root = canic_manifest_path
+        .parent()
+        .ok_or("Canic manifest has no parent")?;
+    let sibling_root = canic_root.parent().ok_or("Canic source has no parent")?;
+    let registry_version = registry_package_version_suffix(canic_manifest_path, "canic")
+        .filter(|version| *version == canic_version);
+    let mut roots = BTreeMap::new();
+    for crate_name in CANIC_FAMILY_CRATES {
+        let sibling_dir = registry_version.map_or_else(
+            || (*crate_name).to_string(),
+            |version| format!("{crate_name}-{version}"),
+        );
+        let root = sibling_root.join(sibling_dir);
+        let manifest = root.join("Cargo.toml");
+        if manifest.is_file() {
+            require_package_manifest_identity(&manifest, crate_name, canic_version)?;
+            roots.insert(*crate_name, root);
+        }
+    }
+    Ok(roots)
 }
 
 pub fn require_package_manifest_identity(

@@ -6,7 +6,7 @@
 
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, Memory, memory::RuntimeMemory},
     role_contract::allocation::memory::sharding::SHARDING_ACTIVE_SET_ID,
     storage::{
         prelude::*,
@@ -22,7 +22,7 @@ const PRESENT: u8 = 1;
 //
 
 eager_static! {
-    static SHARDING_LIFECYCLE: RefCell<ShardingLifecycleCore<VirtualMemory<DefaultMemoryImpl>>> =
+    static SHARDING_LIFECYCLE: RefCell<ShardingLifecycleCore<RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(ShardingLifecycleCore::new(
             StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.sharding.active_set.v1", ty = ShardingActiveSet, id = SHARDING_ACTIVE_SET_ID)),
         ));
@@ -39,14 +39,14 @@ pub struct ShardingLifecycle;
 impl ShardingLifecycle {
     pub(crate) fn with<F, R>(f: F) -> R
     where
-        F: FnOnce(&ShardingLifecycleCore<VirtualMemory<DefaultMemoryImpl>>) -> R,
+        F: FnOnce(&ShardingLifecycleCore<RuntimeMemory<DefaultMemoryImpl>>) -> R,
     {
         SHARDING_LIFECYCLE.with_borrow(f)
     }
 
     pub(crate) fn with_mut<F, R>(f: F) -> R
     where
-        F: FnOnce(&mut ShardingLifecycleCore<VirtualMemory<DefaultMemoryImpl>>) -> R,
+        F: FnOnce(&mut ShardingLifecycleCore<RuntimeMemory<DefaultMemoryImpl>>) -> R,
     {
         SHARDING_LIFECYCLE.with_borrow_mut(f)
     }

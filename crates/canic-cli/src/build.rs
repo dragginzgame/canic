@@ -480,19 +480,30 @@ fn build_app(
     let release_build_id = context
         .release_build_id
         .expect("complete App builds own one durable release-build identity");
-    let mut infrastructure = build_builtin_infrastructure(context, builder)?;
-
-    let configured_started_at = Instant::now();
     let activity = TerminalActivity::start(format!(
-        "{} configured roles | {} profile | shared Cargo batch",
+        "{} configured roles plus infrastructure | {} profile",
         roles.len(),
         context.profile.target_dir_name()
     ));
-    let build = builder.build_workspace_configured_canister_artifacts(context, roles);
+    let build = builder.build_workspace_app_artifacts(context, roles);
     activity.finish();
     let outputs = build?;
-    let configured_elapsed = configured_started_at.elapsed();
-    let artifacts = classify_configured_artifacts(outputs)?;
+    let configured_elapsed = outputs.configured_elapsed;
+    let mut infrastructure = vec![
+        InfrastructureCanisterArtifactBuildOutput {
+            role: "fleet_coordinator".to_string(),
+            deployment_scope: InfrastructureDeploymentScope::Fleet,
+            output: outputs.coordinator.output,
+            timing: InfrastructureArtifactTiming::Dedicated(outputs.coordinator.elapsed),
+        },
+        InfrastructureCanisterArtifactBuildOutput {
+            role: "wasm_store".to_string(),
+            deployment_scope: InfrastructureDeploymentScope::FleetSubnet,
+            output: outputs.store.output,
+            timing: InfrastructureArtifactTiming::Dedicated(outputs.store.elapsed),
+        },
+    ];
+    let artifacts = classify_configured_artifacts(outputs.configured)?;
     infrastructure.insert(
         1,
         InfrastructureCanisterArtifactBuildOutput {
@@ -639,36 +650,6 @@ fn artifact_relative_path(icp_root: &Path, path: &Path) -> Result<String, BuildC
                 format!("build artifact path is not UTF-8: {}", path.display()).into(),
             )
         })
-}
-
-fn build_builtin_infrastructure(
-    context: &WorkspaceBuildContext,
-    builder: &CanisterArtifactBuilder,
-) -> Result<Vec<InfrastructureCanisterArtifactBuildOutput>, BuildCommandError> {
-    const BUILT_INS: [(&str, InfrastructureDeploymentScope); 2] = [
-        ("fleet_coordinator", InfrastructureDeploymentScope::Fleet),
-        ("wasm_store", InfrastructureDeploymentScope::FleetSubnet),
-    ];
-
-    let mut outputs = Vec::with_capacity(BUILT_INS.len());
-    for (index, (role, deployment_scope)) in BUILT_INS.iter().enumerate() {
-        let activity = TerminalActivity::start(format!(
-            "[{}/{} infrastructure] {role} | {} profile",
-            index + 1,
-            BUILT_INS.len(),
-            context.profile.target_dir_name()
-        ));
-        let started_at = Instant::now();
-        let build = builder.build_workspace_canister_artifact(&context.with_role(*role));
-        activity.finish();
-        outputs.push(InfrastructureCanisterArtifactBuildOutput {
-            role: (*role).to_string(),
-            deployment_scope: *deployment_scope,
-            output: build?,
-            timing: InfrastructureArtifactTiming::Dedicated(started_at.elapsed()),
-        });
-    }
-    Ok(outputs)
 }
 
 fn build_completion_detail(

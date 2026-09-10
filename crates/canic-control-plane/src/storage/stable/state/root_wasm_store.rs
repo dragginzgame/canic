@@ -7,7 +7,7 @@
 use crate::ids::{WasmStoreBinding, WasmStoreGcMode};
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
     eager_static,
     role_contract::allocation::memory::control_plane::ROOT_WASM_STORE_STATE_ID,
 };
@@ -20,7 +20,7 @@ use std::cell::RefCell;
 
 #[cfg(feature = "root-control-plane")]
 eager_static! {
-    static ROOT_WASM_STORE_STATE: RefCell<Cell<RootWasmStoreStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+    static ROOT_WASM_STORE_STATE: RefCell<Cell<RootWasmStoreStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.root.wasm_store.state.v1", ty = RootWasmStoreState, id = ROOT_WASM_STORE_STATE_ID),
             RootWasmStoreStateRecord::default(),

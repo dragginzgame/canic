@@ -130,6 +130,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
             CycleTopups(::canic::dto::page::PageRequest),
             Health,
             Logs(::canic::dto::role::LogStatusRequest),
+            MemoryAllocations,
             Metrics(::canic::dto::role::MetricsStatusRequest),
             Readiness,
             Runtime,
@@ -144,6 +145,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
             CycleTopups(::canic::dto::page::Page<::canic::dto::cycles::CycleTopupEvent>),
             Health(::canic::dto::runtime::CanicHealthStatus),
             Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
+            MemoryAllocations(::canic::dto::memory::MemoryAllocationsResponse),
             Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
             Readiness(::canic::dto::runtime::CanicReadinessStatus),
             Runtime(::canic::dto::runtime::CanicRuntimeStatus),
@@ -189,6 +191,10 @@ macro_rules! __canic_emit_managed_status_endpoint {
                             request.page,
                         ),
                     ))
+                }
+                ObservabilityRequest::MemoryAllocations => {
+                    $crate::__internal::core::api::memory::MemoryQuery::allocations()
+                        .map(ObservabilityResponse::MemoryAllocations)
                 }
                 ObservabilityRequest::Metrics(request) => {
                     $crate::__canic_role_metrics_status!(request)
@@ -775,6 +781,11 @@ macro_rules! __canic_sensitive_observability_response {
                         ::canic::diagnostics::codes::REQUEST_INVALID,
                     ))
                 }
+            }
+            ::canic::dto::observability::CanisterObservabilityRequest::MemoryAllocations => {
+                $crate::__internal::core::api::memory::MemoryQuery::allocations().map(
+                    ::canic::dto::observability::CanisterObservabilityResponse::MemoryAllocations,
+                )
             }
             ::canic::dto::observability::CanisterObservabilityRequest::Metrics(request) => {
                 $crate::__canic_role_metrics_status!(request)

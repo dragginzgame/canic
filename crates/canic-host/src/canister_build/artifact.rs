@@ -10,8 +10,10 @@ use std::{
 
 use crate::{
     artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
-    bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
-    bootstrap_store::build_bootstrap_wasm_store_artifact,
+    bootstrap_coordinator::{
+        build_bootstrap_fleet_coordinator_artifact, compile_bootstrap_fleet_coordinator_artifact,
+    },
+    bootstrap_store::{build_bootstrap_wasm_store_artifact, compile_bootstrap_wasm_store_artifact},
     build_toolchain::BuildToolchain,
     cargo_command,
     release_set::AppConfigSnapshot,
@@ -24,12 +26,14 @@ use crate::{
 };
 
 use super::{
-    CanisterBuildProfile, WorkspaceBuildContext,
+    AppCanisterArtifactBuildOutput, CanisterBuildProfile, TimedCanisterArtifactBuildOutput,
+    WorkspaceBuildContext,
     cache::{
         canister_build_target_root, configure_canister_cargo_command,
         configure_declaration_command, declaration_target_root, lock_canister_build_target,
     },
-    candid::{extract_candid_bytes, remove_stale_icp_candid_sidecars},
+    candid::remove_stale_icp_candid_sidecars,
+    candid_cache::{CandidExtractionCache, extract_configured_candid},
     model::{
         CanisterArtifactBuildOptions, CanisterArtifactBuildOutput, CanisterArtifactBuildSpec,
         CanisterArtifactSource, ConfiguredCanisterArtifactBuildOutput, FLEET_COORDINATOR_ROLE,
@@ -118,6 +122,55 @@ impl CanisterArtifactBuilder {
         build_workspace_canister_artifact_from_spec(context, &spec, options, &self.toolchain)
     }
 
+    /// Keep Cargo serial while up to two captured infrastructure artifacts finish in parallel.
+    pub fn build_workspace_app_artifacts(
+        &self,
+        context: &WorkspaceBuildContext,
+        roles: &[String],
+    ) -> Result<AppCanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
+        self.toolchain.require_profile(context.profile)?;
+        let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
+        std::thread::scope(|scope| {
+            let coordinator_started = Instant::now();
+            let coordinator = compile_bootstrap_fleet_coordinator_artifact(context)?;
+            let coordinator = scope.spawn(move || {
+                coordinator
+                    .finish(&self.toolchain)
+                    .map(|output| TimedCanisterArtifactBuildOutput {
+                        output,
+                        elapsed: coordinator_started.elapsed(),
+                    })
+                    .map_err(|error| error.to_string())
+            });
+            let store_started = Instant::now();
+            let store = compile_bootstrap_wasm_store_artifact(context)?;
+            let store = scope.spawn(move || {
+                store
+                    .finish(&self.toolchain)
+                    .map(|output| TimedCanisterArtifactBuildOutput {
+                        output,
+                        elapsed: store_started.elapsed(),
+                    })
+                    .map_err(|error| error.to_string())
+            });
+            let configured_started = Instant::now();
+            let configured = build_configured_artifacts(context, roles, &self.toolchain);
+            let configured_elapsed = configured_started.elapsed();
+            let coordinator = coordinator
+                .join()
+                .map_err(|_| "Coordinator finalization thread panicked")?;
+            let store = store
+                .join()
+                .map_err(|_| "Store finalization thread panicked")?;
+            Ok(AppCanisterArtifactBuildOutput {
+                coordinator: coordinator?,
+                store: store?,
+                configured: configured?,
+                configured_elapsed,
+            })
+        })
+    }
+
     /// Build every requested configured role through this preflighted tool session.
     pub fn build_workspace_configured_canister_artifacts(
         &self,
@@ -126,20 +179,7 @@ impl CanisterArtifactBuilder {
     ) -> Result<Vec<ConfiguredCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
         self.toolchain.require_profile(context.profile)?;
         let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
-        let config = AppConfigSnapshot::load(&context.config_path)?;
-        let specs = resolve_canister_artifact_build_specs(context, config.model(), roles)?;
-        let outputs = build_workspace_canister_artifacts_from_specs_with_toolchain(
-            context,
-            &specs,
-            &self.toolchain,
-        )?;
-
-        Ok(roles
-            .iter()
-            .cloned()
-            .zip(outputs)
-            .map(|(role, output)| ConfiguredCanisterArtifactBuildOutput { role, output })
-            .collect())
+        build_configured_artifacts(context, roles, &self.toolchain)
     }
 }
 
@@ -148,6 +188,24 @@ pub fn build_workspace_canister_artifact(
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     CanisterArtifactBuilder::for_profile(context.profile)?
         .build_workspace_canister_artifact(context)
+}
+
+fn build_configured_artifacts(
+    context: &WorkspaceBuildContext,
+    roles: &[String],
+    toolchain: &BuildToolchain,
+) -> Result<Vec<ConfiguredCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
+    let config = AppConfigSnapshot::load(&context.config_path)?;
+    let specs = resolve_canister_artifact_build_specs(context, config.model(), roles)?;
+    let outputs =
+        build_workspace_canister_artifacts_from_specs_with_toolchain(context, &specs, toolchain)?;
+
+    Ok(roles
+        .iter()
+        .cloned()
+        .zip(outputs)
+        .map(|(role, output)| ConfiguredCanisterArtifactBuildOutput { role, output })
+        .collect())
 }
 
 /// Build one configured role with caller-selected Cargo features and Candid retention.
@@ -232,7 +290,8 @@ fn build_workspace_canister_artifact_from_spec(
         &spec.package_name,
         options,
     )?;
-    let candid = extract_candid_bytes(&release_wasm_path)?;
+    let cache = CandidExtractionCache::prepare(context);
+    let candid = extract_configured_candid(cache.as_ref(), &spec.role, &release_wasm_path)?;
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
         &spec.canic_version,
         &canic_core::ids::CanisterRole::owned(spec.role.clone()),
@@ -291,12 +350,13 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
     );
     let started = Instant::now();
     let mut profiles = BTreeMap::new();
+    let cache = CandidExtractionCache::prepare(context);
     for spec in specs {
         let declaration_wasm = declaration_target_root(&context.workspace_root)
             .join(WASM_TARGET)
             .join(context.profile.target_dir_name())
             .join(format!("{}.wasm", spec.package_name.replace('-', "_")));
-        let candid = extract_candid_bytes(&declaration_wasm)?;
+        let candid = extract_configured_candid(cache.as_ref(), &spec.role, &declaration_wasm)?;
         let profile = canic_core::role_contract::derive_protocol_profile_hashes(
             &spec.canic_version,
             &canic_core::ids::CanisterRole::owned(spec.role.clone()),

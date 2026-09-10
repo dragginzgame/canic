@@ -1,0 +1,83 @@
+{
+  "Ok": {
+    "Operation": {
+      "ComponentProvisioning": {
+        "service_topology_published_at_ns": null,
+        "planned_at_ns": "1_788_977_420_379_455_552 : nat64",
+        "operation_id": "blob \"\\f3\\e9\\9f\\5f\\11\\94\\74\\de\\08\\04\\fe\\fb\\68\\96\\2c\\15\\95\\c5\\80\\eb\\f1\\fb\\32\\db\\7d\\35\\77\\62\\c4\\0d\\bf\\21\"",
+        "runtimes_activated_at_ns": null,
+        "runtime_activated_root_count": "0 : nat32",
+        "directory_confirmed_root_count": "0 : nat32",
+        "acceptance_in_flight_root": null,
+        "roots_accepted_at_ns": {
+          "Some": "1_788_977_420_514_849_824 : nat64"
+        },
+        "published_fleet_registry": null,
+        "operation": {
+          "FreshInstall": null
+        },
+        "accepted_root_count": "1 : nat32",
+        "current_root": {
+          "Some": {
+            "claimed_component_count": "0 : nat32",
+            "installed_component_count": "0 : nat32",
+            "fleet_subnet_root": "lefxa-wl777-77774-qaaka-cai",
+            "reserved_component_count": "3 : nat32",
+            "registry_committed_component_count": "0 : nat32",
+            "component_count": "3 : nat32"
+          }
+        },
+        "estate_funding_required": null,
+        "current_publication": null,
+        "phase": {
+          "ProvisioningRoots": null
+        },
+        "root_batch_count": "1 : nat32",
+        "provisioned_root_count": "0 : nat32",
+        "activation_in_flight_root": null,
+        "directories_confirmed_at_ns": null,
+        "directory_confirmation_root_count": "1 : nat32",
+        "current_synchronization": null,
+        "configuration_digest": "blob \"\\58\\98\\72\\de\\55\\a1\\2c\\56\\42\\12\\6a\\3d\\08\\b9\\3f\\8a\\6f\\de\\0d\\8f\\63\\e0\\55\\a7\\27\\45\\ef\\ba\\e1\\fb\\c5\\77\"",
+        "component_count": "3 : nat32",
+        "publication_in_flight_root": null,
+        "plan_hash": "blob \"\\8a\\e8\\5f\\e2\\99\\48\\e1\\c0\\7b\\78\\c5\\11\\7e\\f6\\2f\\91\\c0\\c5\\f6\\4c\\77\\89\\7a\\b8\\7c\\3b\\c2\\79\\4a\\66\\51\\0d\"",
+        "current_activation": null,
+        "components_provisioned_at_ns": null,
+        "group_placement_count": "1 : nat32",
+        "fleet_registry": {
+          "content_hash": "blob \"\\78\\d8\\49\\c7\\de\\d7\\94\\3c\\a9\\b3\\53\\fc\\2b\\15\\a8\\e0\\2d\\7f\\f0\\17\\f0\\22\\ef\\74\\48\\c5\\0a\\d1\\18\\35\\11\\56\"",
+          "authority": {
+            "epoch": "1 : nat64",
+            "binding": {
+              "coordinator_subnet": "srkif-m33vd-rsyll-hrrsp-o6jlq-a6ad4-7pyvj-hi6b5-ncfgy-qdn5s-tqe",
+              "coordinator": "lrcgn-xd777-77774-qaajq-cai",
+              "fleet": {
+                "fleet": {
+                  "canonical_network_id": "d2cb955be48b53ea077d2f8d17476682ae143319557b2f0a9b8bef31c66b9b01",
+                  "fleet_id": "3a630a3ace1792d8b9fb51cea65d02426637aa54c380e10264b7223cbe9b17ef"
+                },
+                "app": "toko_miner"
+              }
+            }
+          },
+          "revision": "3 : nat64"
+        },
+        "pending_root_failure": {
+          "Some": {
+            "origin": null,
+            "stage": {
+              "RootProvisioning": null
+            },
+            "fleet_subnet_root": "lefxa-wl777-77774-qaaka-cai",
+            "failed_at_ns": "1_788_977_827_383_464_752 : nat64",
+            "diagnostic_code": "132 : nat16"
+          }
+        },
+        "provisioning_in_flight_root": {
+          "Some": "lefxa-wl777-77774-qaaka-cai"
+        }
+      }
+    }
+  }
+}

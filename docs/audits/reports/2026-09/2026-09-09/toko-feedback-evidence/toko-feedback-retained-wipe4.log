@@ -1,0 +1,103 @@
+Set default identity to toko-miner-local
+Resuming the retained local wipe; no new reinstall intent will be issued.
+Planning local Fleet changes (pass 1/20).
+plan_sha256: dc27eb7d9f53145d13322a1ab9d056326f20b51eb3497bba51ffc2f86726a403
+Applying local Fleet plan dc27eb7d9f53145d13322a1ab9d056326f20b51eb3497bba51ffc2f86726a403; live Canic progress follows.
+Fleet ensure: Workload provisioning: advancing (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: Workload provisioning: awaiting progress (57/59 reviewed effects applied)
+Fleet ensure: pool readiness: advancing (58/59 reviewed effects applied)
+Fleet ensure: terminal verification: advancing (59/59 reviewed effects applied)
+Fleet observation ConfiguredCanisters: 660 ms, 4 remote call attempts
+Fleet observation EstateFunding: 269 ms, 1 remote call attempts
+Fleet observation PoolBalances: 0 ms, 0 remote call attempts
+Fleet observation ProtocolReadiness: 0 ms, 0 remote call attempts
+Fleet observation LedgerFee: 302 ms, 1 remote call attempts
+Fleet observation OperatorBalance: 266 ms, 1 remote call attempts
+Fleet observation ProtocolActions: 10357 ms, 35 remote call attempts
+Fleet observation TerminalInventory: 15619 ms, 26 remote call attempts
+Fleet observation ConfiguredCanisters: 601 ms, 4 remote call attempts
+Fleet observation EstateFunding: 267 ms, 1 remote call attempts
+Fleet observation PoolBalances: 0 ms, 0 remote call attempts
+Fleet observation ProtocolReadiness: 0 ms, 0 remote call attempts
+Fleet observation LedgerFee: 281 ms, 1 remote call attempts
+Fleet observation OperatorBalance: 357 ms, 1 remote call attempts
+Fleet observation RootManagement: 847 ms, 2 remote call attempts
+Fleet ensure: complete: complete (59/59 reviewed effects applied)
+fleet: toko-miner-retained-qualification
+operation_id: f3e99f5f119474de0804fefb68962c1595c580ebf1fb32db7d357762c40dbf21
+plan_sha256: dc27eb7d9f53145d13322a1ab9d056326f20b51eb3497bba51ffc2f86726a403
+plan_scope: full
+terminal: true
+cycle_budget: planning allowances; maximums are not measured expenditure
+observed_controlled_cycles: 706.814T
+retained_in_reused_canisters_cycles: 706.814T
+scheduled_transfer_cycles: 0.000B
+maximum_unavoidable_fee_cycles: 0.000B
+maximum_execution_burn_cycles: 497.000T
+maximum_new_funding_cycles: 0.000B
+maximum_operator_debit_cycles: 0.000B
+maximum_estate_funding_cycles: 0.000B
+maximum_estate_creation_fee_cycles: 0.000B
+expected_post_operation_cycles: 209.814T
+estate_funding_domains:
+base_execution_burn_cycles: 213.000T
+continuation_reserve_cycles: 284.000T
+whole_continuation_ceiling_cycles: 284.000T
+recovery_discovery: pending current protocol; this phase is not a complete deployment funding quote
+reinstall: application data will be discarded; logical pool roles may be reassigned
+  root-0: root_principal=lefxa-wl777-77774-qaaka-cai ledger=um5iw-rqaaa-aaaaq-qaaba-cai balance=0.000B workloads=9/9 pool=24/24 ready=15 pending=0 pending_detail=none available_slots=0 root_funded_creations=0 creation_amount=3.400T readiness_floor=1.900T management_creation_fee=500.000B execution_margin=1.000T ledger_fee=0.100B maximum_debit=0.000B funding=0.000B shortfall=0.000B
+host_create_actions: 0 (initial or replacement canisters; separate from Root-funded pool creations)
+canisters:
+  coordinator: disposition=Reinstall principal=lrcgn-xd777-77774-qaajq-cai observed_cycles=499.938T effects=1 actions=[reinstall]
+  root-0: disposition=Reinstall principal=lefxa-wl777-77774-qaaka-cai observed_cycles=79.880T effects=1 actions=[reinstall]
+  store-0: disposition=Reinstall principal=lderu-3t777-77774-qaakq-cai observed_cycles=9.952T effects=1 actions=[reinstall]
+  root-0-pool-0: disposition=Reuse principal=lkh2i-n3777-77774-qaala-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-1: disposition=Reuse principal=lng44-ad777-77774-qaalq-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-2: disposition=Reuse principal=kaiys-pl777-77774-qaama-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-3: disposition=Reuse principal=khj6g-ct777-77774-qaamq-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-4: disposition=Reuse principal=kokv2-u3777-77774-qaana-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-5: disposition=Reuse principal=kjlto-zd777-77774-qaanq-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-6: disposition=Reuse principal=k4mcd-yl777-77774-qaaoa-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-7: disposition=Reuse principal=k3nex-vt777-77774-qaaoq-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-8: disposition=Reuse principal=ksopl-d3777-77774-qaapa-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-9: disposition=Reuse principal=kvpj7-od777-77774-qaapq-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-10: disposition=Reuse principal=pjut2-fl777-77774-qaaqa-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-11: disposition=Reuse principal=povvo-it777-77774-qaaqq-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-12: disposition=Reuse principal=phw6s-63777-77774-qaara-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-13: disposition=Reuse principal=paxyg-td777-77774-qaarq-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-14: disposition=Reuse principal=pvqjl-sl777-77774-qaasa-cai observed_cycles=4.900T effects=0 actions=[]
+  root-0-pool-15: disposition=Reuse principal=psrp7-7t777-77774-qaasq-cai observed_cycles=4.899T effects=0 actions=[]
+  root-0-pool-16: disposition=Reuse principal=p3sed-j3777-77774-qaata-cai observed_cycles=4.773T effects=0 actions=[]
+  root-0-pool-17: disposition=Reuse principal=p4tcx-ed777-77774-qaatq-cai observed_cycles=4.885T effects=0 actions=[]
+  root-0-pool-18: disposition=Reuse principal=or5gz-ll777-77774-qaaua-cai observed_cycles=4.822T effects=0 actions=[]
+  root-0-pool-19: disposition=Reuse principal=ow4an-gt777-77774-qaauq-cai observed_cycles=4.744T effects=0 actions=[]
+  root-0-pool-20: disposition=Reuse principal=o77lr-q3777-77774-qaava-cai observed_cycles=4.877T effects=0 actions=[]
+  root-0-pool-21: disposition=Reuse principal=oy6nf-5d777-77774-qaavq-cai observed_cycles=4.774T effects=0 actions=[]
+  root-0-pool-22: disposition=Reuse principal=onz4i-4l777-77774-qaawa-cai observed_cycles=4.872T effects=0 actions=[]
+  root-0-pool-23: disposition=Reuse principal=oky24-rt777-77774-qaawq-cai observed_cycles=4.899T effects=0 actions=[]
+conservation_equation: 706.814T observed controlled + 0.000B maximum operator debit - 0.000B maximum unavoidable fees - 0.000B maximum Root-funded creation fees - 497.000T maximum execution burn = 209.814T expected remaining
+measured_estate_funding_cycles: 0.000B
+measured_conservation: 706.781T observed starting + 0.000B received funding - 0.000B exact Root-funded creation fees - 907.887B measured execution burn = 705.873T final controlled
+Set default identity to anonymous

@@ -1,0 +1,53 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:44019/
+==> targeted canic-tests PocketIC integration proof
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.13 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic v0.110.13 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-host v0.110.13 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.13 (/home/adam/projects/canic/crates/canic-testing-internal)
+   Compiling canic-tests v0.110.13 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 07s
+     Running tests/timer_authority.rs (target/debug/deps/timer_authority-477e402c154aa17e)
+
+running 8 tests
+test application_timers_cancel_and_recur_only_after_completion ... [WASM]       RUN    canister_test (1/1)
+[WASM]       DONE   canister_test                                        40.89s
+[WASM]       RUN    intent_authority (1/2)
+[WASM]       RUN    runtime_probe (2/2)
+[WASM]       DONE   intent_authority                                     32.26s
+[WASM]       DONE   runtime_probe                                        29.08s
+[WASM]       DONE   batch: 2 built, 0 cached, 0 failed                   1m 01s
+runtime-probe timer inventory: declared=5 scheduled=2
+runtime-probe interval performance: scheduler_samples=0 work_samples=2 latest=Some(104188) maximum=Some(104188) total=208081 max_wasm_growth=Some(0) max_stable_growth=Some(0)
+ok
+test exact_cycles_and_runtime_metrics_require_controller ... [WASM]       RUN    canister_test (1/1)
+[WASM]       DONE   canister_test                                         4.87s
+ok
+test finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work ... ok
+test lifecycle_participant_reconstructs_native_timers_before_deferred_hooks ... ok
+test optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_tracking ... public sampling instructions: 256 checkpoints=15497186, 4096 checkpoints=15547635
+periodic public sampling maximum instructions: 16586795
+ok
+test public_history_samples_without_readers_and_resets_after_restoration ... ok
+test public_snapshots_preserve_observer_authority ... ok
+test timer_registration_capacity_and_invalid_identity_are_leak_free ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 122.92s
+
+==> shared PocketIC resources after targeted canic-tests PocketIC integration proof: rss=446200 kB high_water=449932 kB threads=19
+==> targeted canic-tests PocketIC integration proof done in 191s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  191s     PASS   targeted canic-tests PocketIC integration proof
+workspace runner wall time: 192s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.EBN3EF

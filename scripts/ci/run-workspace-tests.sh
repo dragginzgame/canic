@@ -165,6 +165,17 @@ start_owned_pocketic_server() {
         return 1
     fi
 
+    # Keep tool selection local to this invocation and out of ordinary lanes.
+    # shellcheck source=./scripts/ci/native-icp-lib.sh
+    source "$ROOT/scripts/ci/native-icp-lib.sh"
+    local required_icp_version
+    required_icp_version="$(
+        # shellcheck source=/dev/null
+        source "$ROOT/tool-versions.env"
+        printf '%s' "$CANIC_ICP_CLI_VERSION"
+    )"
+    use_native_test_icp "$CANIC_TEST_SCRATCH" "$required_icp_version"
+
     "$POCKET_IC_BIN" \
         --ttl "$POCKET_IC_SERVER_TTL_SECONDS" \
         --hard-ttl "$POCKET_IC_SERVER_TTL_SECONDS" \

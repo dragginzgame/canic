@@ -92,7 +92,7 @@ struct ManagementCanisterStatusResponse {
     module_hash: Option<Vec<u8>>,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Clone, Deserialize)]
 struct ManagementCanisterObservationSettings {
     controllers: Vec<Principal>,
 }
@@ -510,7 +510,7 @@ enum RootFundingInspectionResponse {
     InspectCanister(RootFundingInspectionStatus),
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Clone, Deserialize)]
 struct RootFundingInspectionStatus {
     status: canic_core::dto::canister::CanisterStatusType,
     settings: ManagementCanisterObservationSettings,
@@ -828,8 +828,16 @@ pub enum IcpEnsurePlatformError {
 /// Read evidence shared only by projections of one Fleet observation.
 #[derive(Default)]
 struct FleetObservationSnapshot {
+    pool_inspections: BTreeMap<PoolInspectionAuthority, RootFundingInspectionStatus>,
     pool_pages: BTreeMap<(Principal, Option<Principal>), CanisterPoolResponse>,
     statuses: BTreeMap<String, Option<LiveCanister>>,
+}
+
+/// An inspection response belongs to the exact protected Root and requested asset.
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+struct PoolInspectionAuthority {
+    root: Principal,
+    target: Principal,
 }
 
 /// Distinguish an unobserved identity from an observed missing canister.
@@ -1918,26 +1926,43 @@ impl IcpEnsurePlatform {
             });
         }
         self.require_operator()?;
-        let target = parse_principal("Root-owned funding target", principal)?;
-        let response: RootFundingInspectionResponse = call_with_candid(
-            &self.icp,
-            &self.root_protocol_candid()?,
-            parse_principal("Fleet Subnet Root", root)?,
-            canic_protocol::CANIC_ROOT_COMMAND,
-            &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
-                canister_id: target,
-            }),
-        )
-        .map_err(current_protocol::CurrentProtocolError::from)?;
-        let RootFundingInspectionResponse::InspectCanister(response) = response;
-        validate_root_controlled_inspection(
+        let authority = PoolInspectionAuthority {
+            target: parse_principal("Root-owned funding target", principal)?,
+            root: parse_principal("Fleet Subnet Root", root)?,
+        };
+        let cached = self
+            .observation_snapshot
+            .borrow()
+            .as_ref()
+            .and_then(|snapshot| snapshot.pool_inspections.get(&authority).cloned());
+        let response = if let Some(response) = cached {
+            response
+        } else {
+            let RootFundingInspectionResponse::InspectCanister(response) = call_with_candid(
+                &self.icp,
+                &self.root_protocol_candid()?,
+                authority.root,
+                canic_protocol::CANIC_ROOT_COMMAND,
+                &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                    canister_id: authority.target,
+                }),
+            )
+            .map_err(current_protocol::CurrentProtocolError::from)?;
+            response
+        };
+        // Consumers keep their own module/controller checks over the same observed response.
+        let cycles = validate_root_controlled_inspection(
             name,
             module,
             root,
             &response.settings.controllers,
             response.module_hash.as_deref(),
             &response.cycles,
-        )
+        )?;
+        if let Some(snapshot) = self.observation_snapshot.borrow_mut().as_mut() {
+            snapshot.pool_inspections.insert(authority, response);
+        }
+        Ok(cycles)
     }
 
     fn pool_funding_module(
@@ -4944,6 +4969,236 @@ mod tests {
             )
             .unwrap();
         }
+    }
+
+    #[cfg(unix)]
+    struct PoolInspectionFixture {
+        owners: ProtocolOwnersFixture,
+        root_id: Principal,
+        target: Principal,
+    }
+
+    #[cfg(unix)]
+    impl PoolInspectionFixture {
+        fn new() -> Self {
+            let mut owners = ProtocolOwnersFixture::new();
+            let root_id = Principal::from_slice(&[2]);
+            let operator = Principal::from_slice(&[9]);
+            owners.platform.desired.operator = operator.to_text();
+            owners.platform.desired.protocol =
+                Some(crate::fleet_ensure::model::DesiredFleetProtocol {
+                    app_config: "unused.toml".to_string(),
+                    component_group_placements: Vec::new(),
+                    root_candid: "root.did".to_string(),
+                    coordinator_candid: "unused.did".to_string(),
+                    store_candid: "unused.did".to_string(),
+                });
+            std::fs::write(owners.root.join("root.did"), "service : {}").unwrap();
+            std::fs::write(owners.root.join("operator"), operator.to_text()).unwrap();
+            for id in [root_id, Principal::from_slice(&[3])] {
+                std::fs::write(
+                    owners.root.join(format!("{id}.json")),
+                    serde_json::json!({
+                        "id": id.to_text(), "status": "Running", "settings": {"controllers": []},
+                        "module_hash": null, "cycles": "10000",
+                    })
+                    .to_string(),
+                )
+                .unwrap();
+            }
+            std::fs::write(owners.root.join("icp"), format!(
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.3.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ] && [ \"$1\" != identity ]; do shift; done\ncase \"$1\" in\nidentity) cat '{}'/operator;;\ncanister) shift; case \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) if [ -e '{}'/fail ]; then exit 1; fi; cat '{}'/inspection.json;;\n*) exit 1;;\nesac;;\n*) exit 1;;\nesac\n",
+                owners.root.display(), owners.root.display(), owners.root.display(), owners.root.display(),
+            )).unwrap();
+            Self::response(&owners.root, root_id, 1_000);
+            Self {
+                owners,
+                root_id,
+                target: Principal::from_slice(&[4]),
+            }
+        }
+
+        fn response(path: &Path, controller: Principal, cycles: u128) {
+            let response = Ok::<_, canic_core::dto::error::Error>(
+                RootFundingInspectionResponse::InspectCanister(RootFundingInspectionStatus {
+                    status: canic_core::dto::canister::CanisterStatusType::Running,
+                    settings: ManagementCanisterObservationSettings {
+                        controllers: vec![controller],
+                    },
+                    module_hash: Some(vec![1; 32]),
+                    cycles: Nat::from(cycles),
+                }),
+            );
+            std::fs::write(
+                path.join("inspection.json"),
+                serde_json::json!({
+                    "response_bytes": hex_bytes(candid::encode_one(response).unwrap()),
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_inspection_snapshot_expires_after_success_and_failure() {
+        let mut fixture = PoolInspectionFixture::new();
+        let root = fixture.root_id.to_text();
+        let target = fixture.target.to_text();
+        let path = &fixture.owners.root;
+        let inspect = |platform: &IcpEnsurePlatform| {
+            platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any)
+        };
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                assert_eq!(inspect(platform)?, 1_000);
+                PoolInspectionFixture::response(path, fixture.root_id, 900);
+                assert_eq!(inspect(platform)?, 1_000);
+                // One Root status and one protected asset inspection serve both projections.
+                assert_eq!(platform.icp.remote_call_count(), 2);
+                Ok(())
+            })
+            .unwrap();
+        assert!(
+            fixture
+                .owners
+                .platform
+                .observation_snapshot
+                .borrow()
+                .is_none()
+        );
+        assert_eq!(inspect(&fixture.owners.platform).unwrap(), 900);
+        let failed: Result<(), IcpEnsurePlatformError> = fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                assert_eq!(inspect(platform)?, 900);
+                PoolInspectionFixture::response(path, fixture.root_id, 800);
+                Err(IcpEnsurePlatformError::Arithmetic(
+                    "injected observation failure",
+                ))
+            });
+        assert!(matches!(failed, Err(IcpEnsurePlatformError::Arithmetic(_))));
+        assert!(
+            fixture
+                .owners
+                .platform
+                .observation_snapshot
+                .borrow()
+                .is_none()
+        );
+        assert_eq!(inspect(&fixture.owners.platform).unwrap(), 800);
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                assert_eq!(inspect(platform)?, 800);
+                Ok(())
+            })
+            .unwrap();
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_inspection_snapshot_binds_root_target_module_and_operator() {
+        let mut fixture = PoolInspectionFixture::new();
+        let root = fixture.root_id.to_text();
+        let target = fixture.target.to_text();
+        let other_root = Principal::from_slice(&[3]);
+        let other_target = Principal::from_slice(&[5]).to_text();
+        let path = &fixture.owners.root;
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                assert_eq!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any)?,
+                    1_000
+                );
+                assert!(matches!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Empty),
+                    Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                        field: "module-free pool asset",
+                        ..
+                    })
+                ));
+                PoolInspectionFixture::response(path, fixture.root_id, 900);
+                assert_eq!(
+                    platform.inspect_pool_balance(
+                        "other asset",
+                        &root,
+                        &other_target,
+                        InspectedModule::Any
+                    )?,
+                    900
+                );
+                PoolInspectionFixture::response(path, other_root, 800);
+                assert_eq!(
+                    platform.inspect_pool_balance(
+                        "other Root",
+                        &other_root.to_text(),
+                        &target,
+                        InspectedModule::Any
+                    )?,
+                    800
+                );
+                assert_eq!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any)?,
+                    1_000
+                );
+                // Cached data cannot authorize an operator selected after the first inspection.
+                std::fs::write(path.join("operator"), other_root.to_text()).unwrap();
+                assert!(matches!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any),
+                    Err(IcpEnsurePlatformError::OperatorMismatch { .. })
+                ));
+                Ok(())
+            })
+            .unwrap();
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_inspection_snapshot_does_not_retain_transport_or_authority_failures() {
+        let mut fixture = PoolInspectionFixture::new();
+        let root = fixture.root_id.to_text();
+        let target = fixture.target.to_text();
+        let path = &fixture.owners.root;
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                std::fs::write(path.join("fail"), []).unwrap();
+                assert!(matches!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any),
+                    Err(IcpEnsurePlatformError::CurrentProtocol(
+                        current_protocol::CurrentProtocolError::Transport(_)
+                    ))
+                ));
+                std::fs::remove_file(path.join("fail")).unwrap();
+                PoolInspectionFixture::response(path, Principal::from_slice(&[3]), 900);
+                assert!(matches!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any),
+                    Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                        field: "Root-only controllers",
+                        ..
+                    })
+                ));
+                PoolInspectionFixture::response(path, fixture.root_id, 800);
+                assert_eq!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any)?,
+                    800
+                );
+                assert_eq!(platform.icp.remote_call_count(), 4);
+                Ok(())
+            })
+            .unwrap();
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[cfg(unix)]

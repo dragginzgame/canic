@@ -145,6 +145,27 @@ struct StagedArtifactSet {
     wasm_gz_path: PathBuf,
 }
 
+/// Private copy of one completed Cargo output, retained across later compilations.
+pub struct CapturedWasmArtifact {
+    staged: StagedArtifactSet,
+}
+
+impl CapturedWasmArtifact {
+    /// Copy the selected output before another Cargo command can replace it.
+    pub(crate) fn capture(
+        source: &Path,
+        destination: &Path,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let staged = StagedArtifactSet::create(destination)?;
+        write_wasm_artifact(source, &staged.wasm_path)?;
+        Ok(Self { staged })
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.staged.wasm_path
+    }
+}
+
 impl StagedArtifactSet {
     fn create(final_wasm_path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let parent = final_wasm_path.parent().ok_or_else(|| {

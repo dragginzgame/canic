@@ -2,6 +2,151 @@ use super::*;
 use crate::test_support::temp_dir;
 use std::io::Write as _;
 
+fn infrastructure_build_fixture() -> (PathBuf, WorkspaceBuildContext) {
+    let root = temp_dir("reuse-first-infrastructure");
+    let app = root.join("app");
+    let canic = root.join("upstream/canic");
+    let control = root.join("upstream/canic-control-plane");
+    for directory in [&app, &canic, &control] {
+        fs::create_dir_all(directory.join("src")).unwrap();
+    }
+    fs::write(
+        app.join("Cargo.toml"),
+        r#"
+[workspace]
+[package]
+name = "reuse-app"
+version = "0.1.0"
+edition = "2024"
+[lib]
+crate-type = ["cdylib"]
+[dependencies]
+canic = { path = "../upstream/canic", default-features = false }
+[profile.fast]
+inherits = "release"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        canic.join("Cargo.toml"),
+        r#"
+[package]
+name = "canic"
+version = "0.1.0"
+edition = "2024"
+[features]
+fleet = ["dep:canic-control-plane"]
+[dependencies]
+canic-control-plane = { path = "../canic-control-plane", optional = true }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        control.join("Cargo.toml"),
+        "[package]\nname = \"canic-control-plane\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .unwrap();
+    fs::write(
+        app.join("src/lib.rs"),
+        "pub fn value() -> u8 { canic::value() }\n",
+    )
+    .unwrap();
+    fs::write(canic.join("src/lib.rs"), "pub fn value() -> u8 { 1 }\n#[cfg(feature = \"fleet\")] pub use canic_control_plane::CONTROL;\n").unwrap();
+    let control_source = control.join("src/lib.rs");
+    fs::write(&control_source, "pub const CONTROL: u8 = 1;\n").unwrap();
+    fs::write(app.join("canic.toml"), "fixture = true\n").unwrap();
+    let lock = crate::cargo_command()
+        .args(["generate-lockfile", "--offline", "--manifest-path"])
+        .arg(app.join("Cargo.toml"))
+        .output()
+        .unwrap();
+    assert!(
+        lock.status.success(),
+        "{}",
+        String::from_utf8_lossy(&lock.stderr)
+    );
+    let context = WorkspaceBuildContext {
+        role: "root".into(),
+        profile: crate::canister_build::CanisterBuildProfile::Fast,
+        environment: "local".into(),
+        build_network: canic_core::ids::BuildNetwork::Local,
+        workspace_root: app.clone(),
+        icp_root: app.clone(),
+        config_path: app.join("canic.toml"),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    (root, context)
+}
+
+fn compile_infrastructure_fixture(context: &WorkspaceBuildContext) {
+    let output = crate::cargo_command()
+        .args(["build", "--locked", "--offline", "--manifest-path"])
+        .arg(context.workspace_root.join("Cargo.toml"))
+        .args([
+            "--target",
+            "wasm32-unknown-unknown",
+            "--profile",
+            "fast",
+            "--features",
+            "canic/fleet",
+        ])
+        .env(
+            "CARGO_TARGET_DIR",
+            crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
+        )
+        .env("RUSTC_WRAPPER", "")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn first_infrastructure_build_and_replaced_cargo_records_preserve_source_authority() {
+    let (root, context) = infrastructure_build_fixture();
+    let control_source = root.join("upstream/canic-control-plane/src/lib.rs");
+    let metadata =
+        cargo_metadata_catalog_for_manifest(&context.workspace_root.join("Cargo.toml"), true, true)
+            .unwrap();
+    assert!(
+        !metadata
+            .packages
+            .iter()
+            .any(|package| package.name == "canic-control-plane")
+    );
+    let before = input_snapshot(&context, &[]).unwrap();
+    assert!(before.files.contains_key(control_source.to_str().unwrap()));
+    let target = crate::canister_build::cache::canister_build_target_root(&context.workspace_root);
+    compile_infrastructure_fixture(&context);
+    let after = input_snapshot(&context, &[]).unwrap();
+    before.validate_after(&after).unwrap();
+    assert_eq!(before.digest(), after.digest());
+
+    // An earlier build may have recorded a now-unused external source.
+    let old = root.join("previous.rs");
+    fs::write(&old, "pub const PREVIOUS: u8 = 1;\n").unwrap();
+    let record = target.join("wasm32-unknown-unknown/fast/reuse_app.d");
+    assert!(record.is_file());
+    fs::write(&record, format!("/unused.wasm: {}\n", old.display())).unwrap();
+    let stale = input_snapshot(&context, &[]).unwrap();
+    fs::remove_file(&record).unwrap();
+    compile_infrastructure_fixture(&context);
+    let refreshed = input_snapshot(&context, &[]).unwrap();
+    stale.validate_after(&refreshed).unwrap();
+    assert_ne!(stale.digest(), refreshed.digest());
+    assert_eq!(after.digest(), refreshed.digest());
+    fs::write(&control_source, "pub const CONTROL: u8 = 2;\n").unwrap();
+    assert!(
+        matches!(refreshed.validate_after(&input_snapshot(&context, &[]).unwrap()), Err(BuildReuseError::ChangedInput(path)) if path == control_source)
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn governed_inputs_invalidate_reuse_even_when_file_lengths_are_unchanged() {
     let root = temp_dir("build-reuse-inputs");

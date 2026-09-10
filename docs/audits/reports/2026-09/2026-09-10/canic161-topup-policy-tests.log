@@ -1,0 +1,13 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.29s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-be90d7741bd6194b)
+
+running 6 tests
+test workflow::runtime::cycles::tests::automatic_topup_deadline_overflow_fails_closed ... ok
+test workflow::runtime::cycles::tests::automatic_topup_spacing_never_undercuts_the_observation_floor ... ok
+test workflow::runtime::cycles::tests::root_automatic_topup_uses_protected_schedule_and_runtime_switch ... ok
+test workflow::runtime::cycles::tests::nonroot_automatic_topup_remains_parent_funded ... ok
+test workflow::runtime::cycles::tests::automatic_topup_retry_backoff_is_bounded_and_deterministic ... ok
+test role_contract::tests::automatic_topup_is_derived_only_from_the_exact_configured_role ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1260 filtered out; finished in 0.01s
+

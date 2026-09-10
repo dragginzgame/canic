@@ -24,10 +24,72 @@ The report identifies the exact Coordinator and Root Principals and shows:
   and
 - each exact Root placement Subnet from the protected Registry.
 
-Automatic funding is the normal path. Do not start a competing recovery action
+Automatic Root funding is the normal path. Do not start a competing recovery action
 while a Root reports `pending=true` or a refill reports `recovery_required`.
 First reconcile the existing operation under the
 [recovery and retry runbooks](recovery-retry-runbooks.md).
+
+## Funding Event Counts
+
+Automatic grants count funding events, not Components, Shards or installed
+canisters. Adding an application role does not require adding a grant.
+The current protected policy permits at most four automatic grants per Root.
+Coordinator's lifetime grant and cycle allowances must fit the combined
+allowances of its Roots; it does not have a universal four-grant limit.
+Each Root and the Coordinator must also satisfy their independent reserve,
+target, cooldown, window and cycle limits. A larger combined allowance does
+not guarantee a particular request will succeed.
+
+Generation, Fleet Ensure admission and Medic use the same protected funding
+validation authority as the runtime. Invalid funding policy must be corrected
+before paid effects; do not infer validity from application canister count.
+
+## Workload Funding And Application Failures
+
+Workload replenishment is separately opt-in. `initial_cycles` funds creation;
+it does not enable later requests. A Component selects replenishment through
+`component_specs.<spec>.topup`; each child selects it independently through
+`component_specs.<spec>.children.<role>.topup`. Without that exact role's
+`topup` policy, Canic does not schedule its automatic replenishment. Funding a
+Root or enabling a parent's policy does not enable a child's policy.
+
+The policy's `threshold` selects when to request and `amount` selects the
+requested cycles. Choose them from measured application consumption, expected
+bursts and replenishment delay, within the parent's funding limits and reserves.
+Configuration validation requires `amount` to be at most half `threshold`.
+Requests remain subject to funding policy, cooldown and retry timing. Automatic
+replenishment is not a guarantee against an application rapidly consuming its
+balance, and supplying cycles does not repair an instruction-limit loop.
+
+For an exhausted Workload:
+
+1. Retain the exact environment, Fleet, canister Principal, installed release,
+   failing method and platform rejection. Public `PLATFORM_UNAVAILABLE` alone
+   does not identify cycle exhaustion or an instruction-limit failure.
+2. Use the current Fleet's controller-authorized observation route:
+   `canic info cycles <fleet> --subtree <workload-principal> --verbose --json`.
+   This uses Root's protected relay for descendants. Inspect sample timestamps,
+   coverage, balance and top-up outcomes; missing history is not evidence of
+   zero burn. If the observation is unavailable or unauthorized, retain that
+   result and involve the existing authorized operator. Do not change access
+   policy to obtain diagnostics. `canic cycles funding` reports infrastructure
+   headroom and does not establish that Workload replenishment is enabled.
+3. Compare the installed release's exact configuration with its role policy.
+   The current checkout alone cannot prove what was installed. With no `topup`
+   policy, continued operation needs explicitly supplied cycles. With a policy,
+   inspect the parent's limits, reserve and request outcomes before diagnosing
+   a scheduling defect.
+4. Correct the application path responsible for excessive work before resuming
+   that traffic. If immediate balance recovery is needed, review the exact
+   canister, network and a bounded deposit with the authorized operator's ICP
+   CLI canister top-up facility. The Canic `cycles topup` command accepts only
+   Coordinator or exact current Root targets; `cycles transfer` credits a
+   ledger recipient and is not a Workload canister deposit.
+5. After recovery, repeat the failed application call and observe balance and
+   replenishment over representative traffic. Record the deposit and outcomes.
+   A successful retry proves restored availability, not that the loop is fixed
+   or that long-running funding is qualified. Keep manually supplied cycles
+   explicit until an application funding policy is reviewed and installed.
 
 ## Bounded Two-Subnet Staging Profile
 

@@ -1,5 +1,5 @@
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
     storage::{
         prelude::*,
         stable::sharding::{
@@ -26,14 +26,14 @@ impl ShardingRegistry {
 
     pub(crate) fn with<F, R>(f: F) -> R
     where
-        F: FnOnce(&ShardingCore<VirtualMemory<DefaultMemoryImpl>>) -> R,
+        F: FnOnce(&ShardingCore<RuntimeMemory<DefaultMemoryImpl>>) -> R,
     {
         SHARDING_CORE.with_borrow(f)
     }
 
     pub(crate) fn with_mut<F, R>(f: F) -> R
     where
-        F: FnOnce(&mut ShardingCore<VirtualMemory<DefaultMemoryImpl>>) -> R,
+        F: FnOnce(&mut ShardingCore<RuntimeMemory<DefaultMemoryImpl>>) -> R,
     {
         SHARDING_CORE.with_borrow_mut(f)
     }

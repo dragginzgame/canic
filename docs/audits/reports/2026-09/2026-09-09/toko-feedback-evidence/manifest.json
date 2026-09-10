@@ -1,0 +1,242 @@
+{
+  "toko-feedback-metrics-settled.log": {
+    "sha256": "0c59600910ba70c9c0df576e04d86963ef9335fee40b7b63064d6e9ede9f1a47",
+    "source": "/tmp/toko-feedback-metrics-settled.log"
+  },
+  "toko-feedback-metrics-accepted-ceiling.log": {
+    "sha256": "23ddf99ad845796da98fc15d700d4e62263fa55c476dd29ff51b411291b05b7b",
+    "source": "/tmp/toko-feedback-metrics-accepted-ceiling.log"
+  },
+  "toko-feedback-metrics-allocation-test.log": {
+    "sha256": "a3112df2d1984eafed2553138781ddf58dff7042fc58b9a1c59f6a1912de4a84",
+    "source": "/tmp/toko-feedback-metrics-allocation-test.log"
+  },
+  "toko-feedback-retained-wipe1.log": {
+    "sha256": "05ba1afec3fbc1fabc3f177df8650cb924bd81f2870abb13dba4b8ceb846e85b",
+    "source": "/tmp/toko-feedback-retained-wipe1.log"
+  },
+  "toko-feedback-retained-wipe2.log": {
+    "sha256": "216eadb99f3789893054b3124b0d24097347570328ca1e3b7a66ef377ebf5ddc",
+    "source": "/tmp/toko-feedback-retained-wipe2.log"
+  },
+  "toko-feedback-retained-wipe3.log": {
+    "sha256": "b1d2e6f9c52eb5cc4ab8a4a44481177e167d64795fc0b8cf0c5e53ca17f718ea",
+    "source": "/tmp/toko-feedback-retained-wipe3.log"
+  },
+  "toko-feedback-retained-wipe4.log": {
+    "sha256": "b01baa19214b6e4037709d0f0cfadee35f70fd7b39d995d671bd201d082a5c2f",
+    "source": "/tmp/toko-feedback-retained-wipe4.log"
+  },
+  "toko-feedback-retained-data-replay.log": {
+    "sha256": "70d208026e10b604b2827b1ef473567b2bf5e0c8b045806c0891cc4b2bd4089b",
+    "source": "/tmp/toko-feedback-retained-data-replay.log"
+  },
+  "toko-feedback-retained-authority-refresh.log": {
+    "sha256": "610c87607fb9fa90f841b1740b3671977569488b1b7f523ea81e4dcefaea1b8a",
+    "source": "/tmp/toko-feedback-retained-authority-refresh.log"
+  },
+  "toko-feedback-staging-recovery-review.json": {
+    "sha256": "62c064a8dde6dddb01a79358f7db061ad21229c44af2df1df3018cf9e02316ff",
+    "source": "/tmp/toko-feedback-staging-recovery-review.json"
+  },
+  "toko-feedback-root-failure-named.json": {
+    "sha256": "282b486f0005ffb7f3219a006839a12a79eb174799aa970dd6276fd4a9f66640",
+    "source": "/tmp/toko-feedback-root-failure-named.json"
+  },
+  "toko-feedback-root-failure2-named.json": {
+    "sha256": "dc4f5090d7e387d7d0b7a48f9976f01e36888765e1e4196097b403eef229e237",
+    "source": "/tmp/toko-feedback-root-failure2-named.json"
+  },
+  "toko-feedback-coordinator-failure-named.json": {
+    "sha256": "0069e36b282c7f6292a4c2e1c34eafd2811a36abfc224e0c70e795c915fc77c3",
+    "source": "/tmp/toko-feedback-coordinator-failure-named.json"
+  },
+  "canic159-provisioning-origin.log": {
+    "sha256": "1ebb56d2719e1a97db04195f90c84fe67fc19244ce42fd835d875bce0092277e",
+    "source": "/tmp/canic159-provisioning-origin.log"
+  },
+  "canic159-clippy.log": {
+    "sha256": "a0b040a506962ce29f1342d1943a6b61f53aca34fa9524bd900b6db3ac5d0ef3",
+    "source": "/tmp/canic159-clippy.log"
+  },
+  "qualification-retained-state-before.json": {
+    "sha256": "eafffe8b4725b37b9862146ee22801fb5c008080c0327226c6dc0bcd32959579",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-state-before.json"
+  },
+  "qualification-retained-state-after.json": {
+    "sha256": "84e09dde34120520fe933262e68119110b80b1db6eede5a68642aa30bcdaf178",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-state-after.json"
+  },
+  "qualification-retained-user-before.json": {
+    "sha256": "4ce87ebf5befd4f9f0c556f2111cf66bbeafb0fb3690f578883b7a31ecc28218",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-user-before.json"
+  },
+  "qualification-retained-user-after.json": {
+    "sha256": "356ed839a8a111abf9c6bb174d171f616e8319b1109111d37805259fc4deb272",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-user-after.json"
+  },
+  "qualification-retained-robot-new.json": {
+    "sha256": "277f1da9b671e866038046f53526513cff07a1ba7fa687bed77f0eddd1781c7c",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-robot-new.json"
+  },
+  "qualification-retained-robot-replay.json": {
+    "sha256": "277f1da9b671e866038046f53526513cff07a1ba7fa687bed77f0eddd1781c7c",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-robot-replay.json"
+  },
+  "qualification-retained-membership-new.json": {
+    "sha256": "a2ebaf74d3ebcf807b556b3cbd520795fa63df54c3ca640272daa7ca868c72e9",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-membership-new.json"
+  },
+  "qualification-retained-membership-replay.json": {
+    "sha256": "a2ebaf74d3ebcf807b556b3cbd520795fa63df54c3ca640272daa7ca868c72e9",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-membership-replay.json"
+  },
+  "qualification-retained-data-replay.sh": {
+    "sha256": "4e2147a38b9751797438a47a94c906989d67b300ec126622e8ca21762b72349b",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-data-replay.sh"
+  },
+  "qualification-retained-context.sh": {
+    "sha256": "c3fa3b23745cfbac29aecd1484956d049d4e7807f9d815daf59751b2e7d0fea3",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-context.sh"
+  },
+  "qualification-retained-wipe.sh": {
+    "sha256": "6c20853cc0db843b1337e272c2a7114c185a997e1746dfdc5f43065bab5de5a7",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-wipe.sh"
+  },
+  "qualification-retained-empty-CANIC_GAME_SHARD_1.json": {
+    "sha256": "b2fda39915206c615c0be8b1b7ad279af8278345ca102e8e338bdc0d7762063c",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-empty-CANIC_GAME_SHARD_1.json"
+  },
+  "qualification-retained-empty-CANIC_GAME_SHARD_2.json": {
+    "sha256": "b2fda39915206c615c0be8b1b7ad279af8278345ca102e8e338bdc0d7762063c",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-empty-CANIC_GAME_SHARD_2.json"
+  },
+  "qualification-retained-empty-CANIC_USER_SHARD_3.json": {
+    "sha256": "814bac7762dda4c3c56ebe2a3abe82d8e3d5b845214dd34444d28663b033522d",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-empty-CANIC_USER_SHARD_3.json"
+  },
+  "qualification-retained-empty-CANIC_USER_SHARD_1.json": {
+    "sha256": "814bac7762dda4c3c56ebe2a3abe82d8e3d5b845214dd34444d28663b033522d",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-empty-CANIC_USER_SHARD_1.json"
+  },
+  "qualification-retained-empty-CANIC_USER_SHARD_2.json": {
+    "sha256": "814bac7762dda4c3c56ebe2a3abe82d8e3d5b845214dd34444d28663b033522d",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-empty-CANIC_USER_SHARD_2.json"
+  },
+  "qualification-retained-empty-CANIC_GAME_SHARD_3.json": {
+    "sha256": "b2fda39915206c615c0be8b1b7ad279af8278345ca102e8e338bdc0d7762063c",
+    "source": "/tmp/toko-feedback-fleet/qualification-retained-empty-CANIC_GAME_SHARD_3.json"
+  },
+  "install-effects.log": {
+    "sha256": "b7daf7176f5e7df6f5d00b6bea1298b8adc35eaaf442f8e386f84542a81244e5",
+    "source": "/tmp/toko-feedback-fleet/.tools/retained-qualification/install-effects.log"
+  },
+  "retained-terminal-journal.json": {
+    "sha256": "a64c0106ac348e32c56f34c8465a8e13d5c8f8d4068f0eee1f94007725098384"
+  },
+  "metrics-isolation-published.log": {
+    "sha256": "53840bd249900cb55f34c284ebeb968437696b799f4c9c318e3c6515930b928a"
+  },
+  "metrics-allocation-experiment.patch": {
+    "sha256": "336dfaac04b52013916c0b905d539e4e29ec7fbd4ca9f7da122f10d9d106ea8a"
+  },
+  "metrics-ceiling-fixture.patch": {
+    "sha256": "1fe90d0e7c6ba353b85d033f27b66e0fda84101ced746943d860d58fcf359a91"
+  },
+  "metrics-isolation-test.rs.txt": {
+    "sha256": "1c437fd694234fed433c67334a7645468f3d40e622634d7b689ca45fcb2cca87"
+  },
+  "metrics-ceiling-test.rs.txt": {
+    "sha256": "0d1b4d9ab35b62ac9530d8b3ee4b9568d2656be5a51a883d77d3d1f2e3a270ed"
+  },
+  "toko-feedback-metrics-isolation-candidate.log": {
+    "sha256": "a807cd1679da48dcccaabf6235503aed2cb47e59b15d6b570f5ccae43991ef35"
+  },
+  "canic148-timer-authority.log": {
+    "sha256": "a9c5c3056a87ba0ec09fd5158451365f9e1ac02ab54fe4a35297eb88043f0201"
+  },
+  "toko-feedback-metrics-timer-build.log": {
+    "sha256": "07ce1585bbedc23a3a065a7a221fdb447288b44d669385992811ac2bf6eee99a"
+  },
+  "canic148-test-clippy.log": {
+    "sha256": "4abb216305e6189b3ff762265739d1ac087041b5027aa6e992ffd68599ec28ca"
+  },
+  "canic148-core-clippy.log": {
+    "sha256": "609a6f2d6ce829c8fae3a131ee9983cce19c1167d4824d36deb454463162520c"
+  },
+  "canic-metrics-index-build.log": {
+    "sha256": "623291b7e79feda96b6766f6fcbb95d8feacfbba212e806eb04625f4efd6f187",
+    "source": "/tmp/canic-metrics-index-build.log"
+  },
+  "canic-metrics-index-test.log": {
+    "sha256": "096e32a7460e976d232e555ee828e325547dd9967607c93b6e1479778c5fe01b",
+    "source": "/tmp/canic-metrics-index-test.log"
+  },
+  "canic-metrics-index-sustained.log": {
+    "sha256": "817eb45b216ecd27bf2db1e81cbf15df120a665b469f73d265c7a7b9d408e82b",
+    "source": "/tmp/canic-metrics-index-sustained.log"
+  },
+  "canic-metrics-index-retention.log": {
+    "sha256": "12c95d95454d3b2f29162d6b5b1082330911e46cbb882545c7454c12087cd781",
+    "source": "/tmp/canic-metrics-index-retention.log"
+  },
+  "canic-metrics-profile-build.log": {
+    "sha256": "52c76f941d0a99db46c9e759f1cd3dd6c8a1cb3e53f8a3df74f8b8db5b343cd0",
+    "source": "/tmp/canic-metrics-profile-build.log"
+  },
+  "canic-metrics-profile-test.log": {
+    "sha256": "68799116cfb739f9d5944448e7f4bd0678066cbef629068cd5035421ead500b0",
+    "source": "/tmp/canic-metrics-profile-test.log"
+  },
+  "canic-metrics-profile-phases.json": {
+    "sha256": "7f629bf1ea924a5b39644e3c7240f8b9811dd3b815036b1062ee194f474a9e24",
+    "source": "/tmp/canic-metrics-profile-phases.json"
+  },
+  "metrics-index-retention-test.rs.txt": {
+    "sha256": "cf2e055fd7b4cb883cedfb34b51ab1364c2829e826004ab95ab965d39989dc31",
+    "source": "/tmp/toko-feedback-fleet/apps/toko_miner/user_hub/src/qualification/metrics.rs"
+  },
+  "metrics-index-producer.rs.txt": {
+    "sha256": "ba63f096e6cc1326da9e21c91828d3fac999b706f78abc9d99096b1e2e7a3bc9",
+    "source": "/tmp/toko-feedback-metrics/apps/toko_miner/game_shard/src/observability/database_metrics.rs"
+  },
+  "metrics-index-current-release-set-manifest.json": {
+    "sha256": "ae58d8fc2a2506d3d88334ca0e49d1204f6ed491701ec4ba386d2247cb4986b4",
+    "source": "/tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/current-release-set-manifest.json"
+  },
+  "metrics-index-infrastructure-artifact-manifest.json": {
+    "sha256": "34eec3d037a633ec121910d10456f04a7afb2e947810d086e1380d562f518b20",
+    "source": "/tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/infrastructure-artifact-manifest.json"
+  },
+  "metrics-index-application-artifact-union.json": {
+    "sha256": "e74c3fd423f356a9608a9dbe3e13f13b6865e84a017fd310f9d894f60198702c",
+    "source": "/tmp/toko-feedback-metrics/.canic/release-builds/35a269ebe02694e9c247b1476333ce092be67d8eb3e943e4fe4bb8fe60337857/application-artifact-union.json"
+  },
+  "metrics-index-core-domain-public_metrics-mod.rs.txt": {
+    "sha256": "efcab32545684e7ef9a05bdbf420bff5369b8d3aa5566ce7cd21216f9f7b9e6b",
+    "source": "/tmp/canic-metrics-profile/crates/canic-core/src/domain/public_metrics/mod.rs",
+    "runtime_matches_worktree_ignoring_comments": true
+  },
+  "metrics-index-core-model-public_metrics-history-mod.rs.txt": {
+    "sha256": "d64b40194d95c1daa2031af94cefcf87a5a9405e89d5bced3b5902bdfc96fd51",
+    "source": "/tmp/canic-metrics-profile/crates/canic-core/src/model/public_metrics/history/mod.rs",
+    "runtime_matches_worktree_ignoring_comments": true
+  },
+  "metrics-index-core-workflow-metrics-publication-timer-mod.rs.txt": {
+    "sha256": "702fdadbf52fd800ac58d9d05700938fa6f1902be25de063365d3b1b044cfc36",
+    "source": "/tmp/canic-metrics-profile/crates/canic-core/src/workflow/metrics/publication/timer/mod.rs",
+    "runtime_matches_worktree_ignoring_comments": true
+  },
+  "canic-metrics-index-unit.log": {
+    "sha256": "f1716525c3c69379946241e34baf18ec301503f9a0f1a637275bc7fd15b824b4",
+    "source": "/tmp/canic-metrics-index-unit.log"
+  },
+  "canic-metrics-index-clippy.log": {
+    "sha256": "8f5d7999904ca24a11133c6e64d229e59bff5fe28c76817a5a2127d1aad2f96e",
+    "source": "/tmp/canic-metrics-index-clippy.log"
+  },
+  "canic-metrics-index-timer.log": {
+    "sha256": "272d5a25f8f81e2541fbd9e478b1e65c78b0e06683bce3f31f7ce955746b7f3c",
+    "source": "/tmp/canic-metrics-index-timer.log"
+  }
+}

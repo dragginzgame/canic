@@ -1,0 +1,321 @@
+--- a/scripts/dev/local-dev.sh
++++ b/scripts/dev/local-dev.sh
+@@ -391,7 +391,8 @@
+         "${FLEET_SOURCE}" \
+         "${FLEET_SEED}" \
+         "${FLEET_DESIRED}" \
+-        "${ROOT_KEY_FILE}"
++        "${ROOT_KEY_FILE}" \
++        "${RUNTIME_DIR}/reinstall-request.json"
+ }
+ 
+ require_managed_local_state() {
+@@ -747,10 +748,15 @@
+     local shard_id
+     local wasm_store_id
+ 
+-    if [[ "${state_mode}" != reinstall && -f "${RUNTIME_DIR}/reinstall-request.json" ]]; then
+-        fail "finish the retained wipe with make local-reinstall before starting another local operation"
++    if [[ "${state_mode}" == preserve && -f "${RUNTIME_DIR}/reinstall-request.json" ]]; then
++        fail "finish the retained wipe with make local-reinstall before preserving local state"
+     fi
+     require_canic_cli
++    if [[ "${state_mode}" == reinstall ]]; then
++        [[ -f "${FLEET_SEED}" && -f "${FLEET_DESIRED}" ]] ||
++            fail "local reinstall requires the retained seed and desired Fleet from a completed local start"
++        local_reinstall_plan
++    fi
+     ensure_local_identity
+     select_local_identity
+     if [[ "${state_mode}" == "reset" ]]; then
+--- a/docs/upstream/canic.md
++++ b/docs/upstream/canic.md
+@@ -13056,7 +13056,7 @@
+ 
+ ## CANIC-139: Reuse exact unchanged artefacts for managed local convergence
+ 
+-- **Status:** Confirmed — complete unchanged reuse verified; original criteria and first-adoption investigation remain open
++- **Status:** Candidate-qualified — unchanged cold build and complete replay pass; adoption and changed-role reuse remain open.
+ - **Latest review:** [0.110.13 publication and adoption](#current-adoption-011013).
+ - **Current release:** published Canic v0.110.13 at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; earlier pin/snapshot fields
+@@ -13074,6 +13074,12 @@
+ - **Upstream snapshot:** annotated tag object
+   `fdddbe43b1332ba7840f9b23044b1ebc2025671d` peels to the dependency commit.
+ - **Related:** [`CANIC-087`](#canic-087-collapse-redundant-and-serial-release-profile-lto-passes)
++
++### Additional controlled qualification — 2026-09-09
++
++A disposable source copy starts with no target/dependency records and builds eight artifacts in 355.98s. An unchanged repeat reuses all eight in 3.40s. All 26,768 source entries match, including 143 newly recorded control-plane inputs already observed before compilation. This validates the unpublished BF3 candidate; the original failed invocation has no retained inventory, so its exact cause is not reconstructed.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
+ 
+ ### Application impact and evidence
+ 
+@@ -13859,7 +13865,7 @@
+ 
+ ## CANIC-148: Bound and isolate optional public metrics sampling
+ 
+-- **Status:** Adopted; current all-role sampling exceeds the downstream budget, ceiling stress proof pending.
++- **Status:** Open — real ceiling exceeds the 20M budget; candidate timer recovery passes.
+ - **Priority:** Medium; address before enabling broad periodic publication.
+ - **First observed / last checked:** 2026-09-08 / 2026-09-09.
+ - **Affected pin / upstream snapshot:** published `v0.110.10`,
+@@ -13869,6 +13875,12 @@
+ - **Latest upstream snapshot / adopted pin:** published `v0.110.13` at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; sibling `main`, package 0.110.13
+   with 22 dirty build/documentation entries excluded from qualification.
++
++### Additional controlled qualification — 2026-09-09
++
++All nine nodes/five roles pass ordinary coverage after Translation initialization; that setup correction does not prove startup-load cost. The real 64-entity/194-row ceiling reaches 22,151,949 instructions. Exact-capacity metric names reduce the peak to 21,745,176 but still fail; that experiment is not adopted. A 65-entity rejected sample preserves prior application data and allows other families once, but the published timer then stops because rejection is classified as an invariant failure. The Canic candidate changes it to a retryable failure. All eight governed timer-authority cases and a real 64→65→64 source sequence on all three Game Shards pass. The ceiling remains 21.75M and the candidate is not adopted.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
+ 
+ ### Evidence and application impact
+ 
+@@ -13980,7 +13992,7 @@
+ 
+ ## CANIC-149: Request a one-shot managed Fleet reinstall with unchanged Wasms
+ 
+-- **Status:** Available — published CLI seam; local wrapper integration remains pending
++- **Status:** Implemented — disposable reset/data/replay proof passes; full Vite dispatch remains unqualified.
+ - **Latest review:** [0.110.13 publication and adoption](#current-adoption-011013).
+ - **Current release:** published Canic v0.110.13 at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; earlier pin/snapshot fields
+@@ -13993,6 +14005,12 @@
+   `fb39a7e0bfae40cc15d8b7a21d9aff48f6ca13f0`, matching installed CLI.
+   Read-only sibling main has the same HEAD/package and 16 dirty paths in
+   testing, CI and documentation; no dirty work is adopted.
++
++### Additional controlled qualification — 2026-09-09
++
++The actual wrapper functions reset a disposable 27-canister estate (24 pool assets), with all physical identities retained. Old robot/membership/enrolment data is wiped. Lost Coordinator install reply, pre-Root interruption and Store outage resume the same operation with exactly three infrastructure installs. Re-enrolling and replaying the completed reset preserves new data. Full Vite dispatch was not exercised; shell contracts cover acknowledgement ordering. The final cleanup/preflight patch is prepared separately.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
+ 
+ ### Evidence and application impact
+ 
+@@ -14320,7 +14338,7 @@
+ 
+ ## CANIC-153: Extend bounded public process coverage
+ 
+-- **Status:** Adopted — Game Shard projections and budget pass; complete owner/role coverage remains pending
++- **Status:** All-role process coverage qualified — ceiling budget and runtime adoption remain open.
+ - **Latest review:** [0.110.13 publication and adoption](#current-adoption-011013).
+ - **Current release:** published Canic v0.110.13 at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; earlier pin/snapshot fields
+@@ -14334,6 +14352,12 @@
+   commit, with 41 dirty operator/reinstall paths excluded. The immutable Cargo
+   checkout supplies the released source evidence below.
+ 
++### Additional controlled qualification — 2026-09-09
++
++The current protected-boundary, public process, cycle, timer and memory checks cover all nine nodes and five application roles. See CANIC-148 for the independently failing ceiling and the candidate-qualified sampling-timer recovery correction.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
++
+ ### Evidence and application impact
+ 
+ Toko Miner selects all five public families and renders every returned row, but
+@@ -14390,7 +14414,7 @@
+ 
+ ## CANIC-154: Refresh retained estate seeds after managed growth
+ 
+-- **Status:** Adopted — retained-estate refresh/reinstall verification remains pending
++- **Status:** Disposable retention qualified — staging preparation reviewed, not applied.
+ - **Latest review:** [0.110.13 publication and adoption](#current-adoption-011013).
+ - **Current release:** published Canic v0.110.13 at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; earlier pin/snapshot fields
+@@ -14460,9 +14484,15 @@
+ See the [0.110.13 adoption assessment](#current-adoption-011013) for release
+ authority, application validation and remaining acceptance boundaries.
+ 
++### Additional controlled qualification — 2026-09-09
++
++The controlled estate grows beyond its original 15-slot seed to 24 pool assets. Explicit retained-seed generation observes all 27 physical identities. Ordinary application of changed Root authority refuses E132 before effects; exact accepted input permits reviewed same-release reset retaining the full estate. The staging preparation review also captures all 24 live pool assets.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
++
+ ## CANIC-155: Tranche infrastructure reinstall continuations within available cycles
+ 
+-- **Status:** Adopted — downstream affordable-tranche verification remains pending
++- **Status:** Partially qualified — zero-funding local recovery passes; staging/funding tranches remain unproved.
+ - **Latest review:** [0.110.13 publication and adoption](#current-adoption-011013).
+ - **Current release:** published Canic v0.110.13 at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; earlier pin/snapshot fields
+@@ -14537,9 +14567,15 @@
+ See the [0.110.13 adoption assessment](#current-adoption-011013) for release
+ authority, application validation and remaining acceptance boundaries.
+ 
++### Additional controlled qualification — 2026-09-09
++
++The disposable 59-effect wipe converges with zero new funding and valid measured cycle conservation. This does not exercise every low-headroom/funding continuation. Staging preparation proposes zero new funding with an explicit conservative execution bound; its later full reset review is not yet available.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
++
+ ## CANIC-156: Expose dependent recovery funding before infrastructure apply
+ 
+-- **Status:** Adopted — downstream dependent-recovery review remains pending
++- **Status:** Review prepared — staging dependent apply and subsequent funding review remain pending.
+ - **Latest review:** [0.110.13 publication and adoption](#current-adoption-011013).
+ - **Current release:** published Canic v0.110.13 at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; earlier pin/snapshot fields
+@@ -14604,9 +14640,15 @@
+ See the [0.110.13 adoption assessment](#current-adoption-011013) for release
+ authority, application validation and remaining acceptance boundaries.
+ 
++### Additional controlled qualification — 2026-09-09
++
++Read-only staging preparation review aecbab3d33f9a1247cc46e3c4610901d61ddaa91d902cd6c063d36a871265283 records 458.841T observed controlled cycles, 219T maximum execution burn, 239.841T expected remaining and zero operator debit. This is preparation only; it cannot preapprove the subsequent full reset/funding review.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
++
+ ## CANIC-157: Keep Root and Store activation identities coherent across desired refresh
+ 
+-- **Status:** Adopted — published repair; retained staging estate recovery remains unverified
++- **Status:** Disposable interrupted recovery qualified — actual staging recovery not applied.
+ - **Latest review:** [0.110.13 publication and adoption](#current-adoption-011013).
+ - **Current release:** published Canic v0.110.13 at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; earlier pin/snapshot fields
+@@ -14618,6 +14660,12 @@
+   `95c6caa03867cd68b3bc57ba88c02b961251460b`.
+ - **Upstream snapshot:** read-only sibling main/package 0.110.12 at that
+   commit; 50 dirty paths excluded. Published Cargo sources inspected.
++
++### Additional controlled qualification — 2026-09-09
++
++A same-release reset resumes lost replies, a pre-install interruption and a stopped Store without duplicate infrastructure installs. It converges with all 27 physical identities retained. Proposed staging preparation stops Coordinator and stops/starts Root; no such live action has run.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
+ 
+ ### Reproduction and evidence
+ 
+@@ -14778,7 +14826,7 @@
+ 
+ ## CANIC-158: Bound autonomous provisioning retries by typed failure and progress
+ 
+-- **Status:** Adopted — downstream failure/retry injection remains pending
++- **Status:** Disposable retry observation qualified — staging recovery pending.
+ - **Latest review:** [0.110.13 publication and adoption](#current-adoption-011013).
+ - **Current release:** published Canic v0.110.13 at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; earlier pin/snapshot fields
+@@ -14827,9 +14875,15 @@
+ See the [0.110.13 adoption assessment](#current-adoption-011013) for release
+ authority, application validation and remaining acceptance boundaries.
+ 
++### Additional controlled qualification — 2026-09-09
++
++During the disposable Store outage, Root retains Provisioning code 66 with Backoff, a 60-second retry deadline and unchanged receipt. Two observations advance consecutive failures from 10 to 12 over roughly 120 seconds. Restarting Store resumes the same journal to convergence.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
++
+ ## CANIC-159: Carry originating activation failures through protected operation status
+ 
+-- **Status:** Adopted — downstream protected originating-failure verification remains pending
++- **Status:** Defect reproduced and Canic correction prepared — candidate runtime adoption pending.
+ - **Latest review:** [0.110.13 publication and adoption](#current-adoption-011013).
+ - **Current release:** published Canic v0.110.13 at
+   `5250d69186047bc373db7cdc7b7680c3aad031d0`; earlier pin/snapshot fields
+@@ -14879,6 +14933,12 @@
+ 2026-09-09 — published changes are adopted; named downstream acceptance is not inferred from publication.
+ See the [0.110.13 adoption assessment](#current-adoption-011013) for release
+ authority, application validation and remaining acceptance boundaries.
++
++### Additional controlled qualification — 2026-09-09
++
++Root retains code 66 while Accepted, but Coordinator reports code 132 / RootProvisioning with origin absent. The generic wait filter suppressed all Provisioning failures. The Canic correction preserves Accepted-phase failures while still ignoring Coordinator-dependent publication waits. The focused phase regression and strict control-plane Clippy pass; the disposable runtime proof demonstrates the published defect, not adoption of the fix.
++
++Evidence and limits: [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md).
+ 
+ ## CANIC-160: Measure and reduce retained-estate planning latency
+ 
+--- a/docs/status/current.md
++++ b/docs/status/current.md
+@@ -1,6 +1,17 @@
+ # Current status
+ 
+ Last updated: 2026-09-09
++
++## Controlled Canic feedback qualification — 2026-09-09
++
++The [four-item qualification](../audits/reports/2026/09/09/canic-feedback/summary.md)
++proves disposable local reset/data/replay and the Canic first-build candidate.
++Metrics ceiling remains over budget and the published sampling timer fails to
++recover after rejection; the Canic candidate corrects the timer outcome. Staging
++has a concrete read-only preparation review, with no recovery effects applied.
++Local-wrapper cleanup accompanies these evidence updates. No pin is changed or
++unpublished runtime adopted; the full four-item acceptance set is not closed.
++
+ 
+ ## At a glance
+ 
+--- a/docs/changelog/0.2.md
++++ b/docs/changelog/0.2.md
+@@ -121,9 +121,14 @@
+   retries, and acknowledges completion only after frontend startup succeeds.
+   Canic owns reset effects and conservation; local commands are serialised.
+   Focused shell contracts cover lost review responses, retry, changed inputs
+-  and completion acknowledgement. Actual database-wipe qualification remains
+-  pending; `make local` preserves state and `make local-reset` replaces the
+-  entire local network.
++  and completion acknowledgement. A disposable 27-canister reset wipes user
++  data, retains physical identities and preserves new data on completed replay.
++  Final preflight checks require retained inputs before network work; an explicit
++  full `local-reset` can clear an abandoned local acknowledgement receipt.
++- Extend metrics qualification across nine nodes and five roles after completing
++  Translation startup. Real 64-entity ceiling measurement exceeds the unchanged
++  20M instruction budget; sustained failure exposes a Canic timer-recovery defect.
++  Neither issue is marked closed by ordinary-load coverage.
+ 
+ ### Validation and release boundary
+ 
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -17,6 +17,9 @@
+ joins the world catalogue with Ribbon Shoals and Scute, alongside smoother
+ movement, safer player admission, clearer Metrics and updated Canic/IcyDB
+ integration.
++
++The local reinstall wrapper gains disposable reset/retry qualification. Expanded
++metrics qualification records remaining ceiling and timer-recovery failures.
+ 
+ ### 0.2.7 — [Canonical Ownership and Localisation](docs/changelog/0.2.md#027--canonical-ownership-and-localisation--2026-09-07) — 2026-09-07
+ 
+--- /dev/null
++++ b/docs/audits/reports/2026/09/09/canic-feedback/summary.md
+@@ -0,0 +1,34 @@
++# Controlled Canic feedback qualification — 2026-09-09
++
++Canic owns the full evidence and hashes in its sibling checkout at
++`docs/audits/reports/2026-09/2026-09-09/toko-feedback.md` and
++`toko-feedback-evidence/manifest.json`. This is a scoped downstream handoff,
++not a publication or staging-apply receipt. The source snapshot precedes
++concurrent gameplay edits and uses Canic 0.110.13 / IcyDB 0.257.3.
++
++- CANIC-149: all 27 physical identities retained, old user data wiped, same caller
++  re-enrolled with new identity, completed replay preserves the new robot and
++  membership. Lost install reply, pre-Root interruption and Store outage recover
++  with three exact infrastructure installs total. Full Vite dispatch is not
++  included; shell contracts cover acknowledgement ordering.
++- CANIC-148/153: ordinary all-role coverage passes after Translation startup.
++  Real 64-entity/194-row maximum is 22,151,949 instructions, above 20,000,000.
++  Allocation experiment reaches 21,745,176 and is not adopted. A rejected source
++  stops the published Canic sampling timer; the Canic candidate changes rejection
++  to a retryable completion. All eight timer-authority cases and the real
++  64→65→64 sequence on all three Game Shards pass against the candidate.
++- CANIC-139: clean candidate first build 355.98s; eight verified hits 3.40s;
++  26,768 source inventory entries unchanged. The historical failed invocation
++  lacks retained before/after evidence; changed-role reuse remains open.
++- CANIC-154–159: 24 retained pool assets captured beyond the original seed;
++  same-operation interrupted recovery/conservation/replay pass. Root code 66
++  is lost by Coordinator's wait filter; the upstream candidate fixes the
++  Accepted-phase origin without blocking publication. Full live staging and
++  all funding-tranche cases remain open.
++
++Staging preparation review digest:
++`aecbab3d33f9a1247cc46e3c4610901d61ddaa91d902cd6c063d36a871265283`.
++Proposed actions stop Coordinator and stop/start Root. The review records
++zero new funding, 458.841T observed controlled, 219T maximum burn and 239.841T
++expected remaining. No preparation effect ran. The subsequent full reset and
++funding review cannot be approved before it exists.

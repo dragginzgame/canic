@@ -1,9 +1,43 @@
 # Canic 0.110 Implementation Status
 
+## Validation throughput before push
+
+The maintainer's pre-push VS1 outcome is qualified at the recorded ic-memory
+0.13.1 checkpoint. BF2-BF4 and the other feedback corrections retain their scope.
+Published IcyDB 0.257.4 now shares ic-memory 0.13.2, so the maintainer requested
+adoption and CANIC-162 is restored. Fresh aligned lifecycle/allocation PocketIC
+proofs, eight memory cases, three ABI guards, 15 timer guards, the catalogue
+regression and affected-target warning-denied Clippy pass. The complete scoped
+.14 batch and changelog are ready for release review; package versions remain
+0.110.13.
+
+| Batch | Outcome | Owner | Included evidence | Validation | Status |
+| --- | --- | --- | --- | --- | --- |
+| VS1 | Reduce dominant release-test work while preserving distributed invariants | Internal fixture/runner and host observation owners | Phase attribution, exact artifact reuse, native CLI selection, authority/retry/conservation and final-source timing | Both dominant exact PocketIC journeys, 23 host cases, timing/catalogue regressions, scoped lint and runner guards | Qualified; same open 0.110.14; complete release gate remains maintainer-directed |
+
+The [final report](../../audits/working/0.110-validation-throughput/report.md)
+records 1,153.72s for mixed topology plus two resets and 575.12s for retained-estate
+recovery. Both run with an unchanged 1,686-file source inventory. All 144 duplicate
+balance calls disappear; fresh authority, recovery and replay checks remain.
+Native regressions and warning-denied all-target/all-feature host/internal-fixture
+Clippy pass. Both test invocations clean their owned servers and scratch.
+
+The [VS1 amendment](0.110-design.md#validation-throughput-amendment-vs1)
+retains serial Cargo and PocketIC ownership. Existing verified artifact reuse
+already works across invocation roots; sub-second replica setup does not justify
+new mutable fixture pooling or catalogue splitting. This measured disposition
+completes the artifact/setup slice without a speculative runtime-identity change.
+
+The [historical baseline](../../audits/working/0.110-validation-throughput/baseline.json)
+records a 6,322s older runner. Earlier attribution and final runs differ in
+memory dependencies and cache warmth, so no isolated whole-journey percentage,
+new complete-gate duration or sub-hour result is claimed. The open changelog
+records the completed scope; no version or publication ran.
+
 ## Build feedback 087 and 139
 
-The maintainer accepted these build-throughput follow-ups on 2026-09-09,
-extending the same open 0.110.13 batch. The host build owner now separates
+The maintainer accepted these build-throughput follow-ups on 2026-09-09.
+BF1 shipped in 0.110.13. The host build owner now separates
 declarations from runtime linking, batches package-bound protocol contexts and
 verifies complete unchanged-build reuse before allocating a release identity.
 Changed inputs still rebuild the runtime set because every artifact embeds the
@@ -12,16 +46,85 @@ complete release identity; cross-identity role reuse is outside this scope.
 | Batch | Outcome | Owner | Included evidence | Validation | Status |
 | --- | --- | --- | --- | --- | --- |
 | BF1 | Faster governed builds and verified no-op reuse | Host artifact/release owners and build macro | Input/output invalidation, exact role binding, Candid/features, managed lifecycle and measured cost | Focused native checks, controlled release comparison and scoped PocketIC evidence | Complete within recorded scope |
+| BF2 | Overlap infrastructure finalization with subsequent compilation | Host artifact owner and CLI build orchestration | Exact captured inputs, output/provenance parity, failed-build cleanup and valid retry | 53 host cases, 25 CLI cases, affected-package Clippy and controlled two-artifact comparison | Complete; open 0.110.14 |
+| BF3 | Admit unchanged first builds without confusing Cargo inventory changes with source drift | Host build reuse and generated-package owners | Infrastructure source coverage before compilation, stale-record replacement, real source changes and unknown-input refusal | 58 combined focused host cases and affected-package Clippy | Complete; same open 0.110.14 |
+| BF4 | Reuse unchanged compiled declaration extraction across backend edits | Host artifact and Candid extraction owners | Role/shared-input changes, corrupted records, exact native tool identity, failed extraction and real-tool byte parity | Focused build regressions, six-role extraction comparison and affected-package Clippy | Complete within recorded scope; same open 0.110.14 |
+
+The maintainer selected changed-input reuse on 2026-09-10. Every runtime's
+embedded complete release identity is itself a changed dependency, so BF4
+preserves that contract and reuses the independent declaration extraction
+stage. Cargo remains the dependency owner; there is no second source inventory
+or per-role cache claiming runtime reuse across identities. A six-role real-tool
+comparison reports 1.922s fresh extraction versus 0.087s verified reuse with exact
+Candid parity (2.234s first cache population). Complete-build speedup and
+cross-identity runtime reuse remain unclaimed.
 
 The [build feedback report](../../audits/reports/2026-09/2026-09-09/build-feedback.md)
-owns qualification and its limits. The scoped build batch and open 0.110.13
-changelog are ready for push/release review. Unchanged replay is 2.83s; a warm
+owns BF1 qualification and its limits. Its unchanged replay is 2.83s; a warm
 one-role edit improves 477.10s to 291.03s; cold time is roughly unchanged.
 The managed/standalone lifecycle case passes. Mixed-topology startup, conservation
 and replay assertions completed before the extra reset exercises were stopped;
 the complete case is not marked passed. Precise per-role/cross-identity reuse,
 material cold improvement, full clean determinism and downstream qualification
 remain outside this completion claim. Earlier evidence below retains its scope.
+
+After publishing 0.110.13, the maintainer prioritized another bounded build-speed
+batch. BF2 retains serial Cargo and existing release settings while captured
+Coordinator and Store outputs finalize in scoped workers. The controlled
+comparison improves two-artifact wall time from 112.89s to 85.03s (24.68%);
+Wasm, gzip, Candid, protocol hashes and transform provenance match exactly.
+Configured-admission failure drains workers without staging leftovers, and a
+following valid request with the same release identity reproduces the artifacts.
+The [scheduling report](../../audits/reports/2026-09/2026-09-09/build-pipeline.md)
+owns the evidence and its limits. BF2 and its open 0.110.14 notes are complete;
+VS1 is qualified; restored CANIC-162 shares the published IcyDB memory
+runtime and passes fresh qualification. The .14 batch is ready for release review.
+Package versions remain 0.110.13. No full downstream, broad
+workspace or aggregate-memory qualification is claimed. CANIC-087/139 stay
+partial and CANIC-141 stays deferred. Continue this maintainer-selected feedback
+on the published 0.110 line despite the soft release-count guideline, rather
+than allocate a new minor for the bounded follow-up.
+
+The maintainer then selected CANIC-139's first-build refusal for BF3. Current
+downstream dependency records name 143 control-plane files outside the initial
+App package scan. Reuse now includes the exact generated-infrastructure family
+roots before compiling, retains file-level evidence through Cargo record
+replacement, and records the verified final inventory key. Real mutations and
+unobserved external inputs still fail, with distinct path-specific diagnostics.
+The [first-build report](../../audits/reports/2026-09/2026-09-09/build-reuse-first-build.md)
+records the tiny real Cargo/Wasm regression and its limits. BF2/BF3 remain one
+completed 0.110.14 batch; full downstream qualification and changed-input
+per-role reuse remain outside its completion claim.
+
+## Sampling cost reference clarification
+
+On 2026-09-10 the maintainer directed that the unexplained 20M instruction
+threshold must not become a future blocker. Canic now reports it as an advisory
+reference and keeps structural, relative source-growth and recovery checks.
+The [cost policy record](../../audits/reports/2026-09/2026-09-10/metrics-cost-policy.md)
+links the maintained evidence requirements for any future absolute threshold.
+This is an open 0.110.14 test/documentation correction, with no runtime budget
+or protocol change. A matching Toko test patch is prepared but unapplied.
+
+## Additional downstream qualification
+
+CANIC-159's corrected runtime now passes the existing five-component PocketIC
+journey with a Store outage during Root Accepted. Exact origin fields reach
+Coordinator; same-operation recovery clears failures and immediate replay
+requires no updates. The [runtime report](../../audits/reports/2026-09/2026-09-10/canic159-runtime.md)
+retains the candidate evidence separately from downstream adoption.
+
+The maintainer's four-item Toko Miner request extends open 0.110.14 with
+corrections for Root Accepted-phase provisioning origins, optional public
+sampling after rejected producer data, and metric history lookup cost. The
+[four-item report](../../audits/reports/2026-09/2026-09-09/toko-feedback.md)
+records disposable retained reset/data/replay, a controlled downstream first
+build, and an unapplied staging preparation review. The corrected history index
+passes the real metrics ceiling through 300 periods and rejection/recovery, with
+19,963,567 peak instructions against 20M (0.18% headroom). Downstream runtime
+adoption and staging recovery remain explicit acceptance boundaries. The
+approved wrapper cleanup is applied. No protocol generation,
+compatibility layer, version bump or new minor is introduced.
 
 ## Activation feedback 157–160
 
@@ -426,6 +529,13 @@ Current canonical-role evidence:
 - The generic runtime Observatory is an unnumbered idea.
 
 ## Next Authorized Action
+
+VS1 throughput, the restored CANIC-162 allocation report and published IcyDB
+0.257.4 / ic-memory 0.13.2 composition are qualified. The same open .14 batch
+and changelog are ready for the maintainer-selected release gate. Do not infer
+broad validation or publication authority.
+The contraction work below remains sequenced separately and gains no completion
+credit from faster tests.
 
 Finish focused review of the explicitly authorized authorization-persistence
 slice and keep its targeted optimized-artifact evidence separate from complete

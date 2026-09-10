@@ -1,0 +1,9 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.35s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-87b779c1ec38a5fc)
+
+running 1 test
+{"candid_sha256":["11d0ea492b8eaed3a307272d23b9383ef0163b65165f7f3cbaf4bf4d3d85e0e6","ec8bd23c01d0507156517efe2c8729b170d7186a5740cdf0b1f7ad80ca1dd253","104c51c1994c7169db8da995d465fe13f9126a244d80df3f51f14a201aed7da2","6211b4e106464c0bc8f51ed91b57c8b2baf6629a4b3ea198ef1beab87db7545e","ce1f57d45c8202a8853b5d521897d228a609f5b4a99cce596374fdeb53ee6d46","1dbfb61d996ae3c46dd8b22eb541dd4fe7f1d83b6b3f34884c4e24b6d5ddab15"],"cold_cache_millis":2234,"extractor_sha256":"6f8d7681095dad13fe2b8b337620b5e7d01c7bdd8a6c9f5487d6912d197bbbdc","fresh_extraction_millis":1922,"inputs":["/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_user_hub.wasm","/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_user_shard.wasm","/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_scale_hub.wasm","/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_scale.wasm","/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canic_fleet_root.wasm","/home/adam/projects/canic/target/canic-wasm/declarations/wasm32-unknown-unknown/fast/canister_app.wasm"],"reused_millis":87}
+test canister_build::candid_cache::tests::real_extractor_reuse_matches_fresh_declarations ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 552 filtered out; finished in 4.25s
+

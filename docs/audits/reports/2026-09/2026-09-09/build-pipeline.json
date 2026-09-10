@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-09",
+  "candidate": "open 0.110.14",
+  "base_commit": "5250d69186047bc373db7cdc7b7680c3aad031d0",
+  "fixture": "apps/test/test-configs/generated-mixed-topology.toml",
+  "release_build_id": "1141141141141141141141141141141141141141141141141141141141141141",
+  "conditions": {
+    "profile": "release",
+    "build_network": "local",
+    "rustc_wrapper": "disabled",
+    "cargo_offline": true,
+    "cargo_target": ".tmp/canic114-pipeline-target",
+    "cache_warmup": "one serial two-artifact pass from empty target",
+    "measured_relinks": "touch generated Coordinator and Store src/lib.rs before each measured pass; bytes unchanged",
+    "configured_roles_in_measured_passes": [],
+    "os_file_cache_flushed": false,
+    "cpu_isolation": false,
+    "memory_metric": "GNU time maximum child RSS, not aggregate concurrent RSS"
+  },
+  "tools": {
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+    "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)\n",
+    "ic_wasm": {
+      "version": "0.11.1",
+      "sha256": "204dad3ad59b78a46fad559dfefcdcaee3609433e5e4e6d81bda5e051a2bc0bc"
+    },
+    "binaryen": {
+      "version": "132",
+      "sha256": "1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725"
+    }
+  },
+  "source_evidence": {
+    "unchanged_file_count": 1507,
+    "input_manifest_sha256": "3e552369617427ffddb896c4eef28324d957bfbe6cb58d53faf436bd24371829",
+    "changed_rust_files": {
+      "crates/canic-cli/src/build.rs": "c87d1cf3796073701ba7a867feb0478c52d613607aecdcd2beeb356a77addfff",
+      "crates/canic-host/src/artifact_io/mod.rs": "62e078cd95a9026a71d7b5eaac810e60ea1d21dd7232350520bd498d1a338adb",
+      "crates/canic-host/src/artifact_io/tests.rs": "332e4887b2decabe1830c99e5fcc14a176cd8630e5c9cf8c2b9c08f39ec3430b",
+      "crates/canic-host/src/bootstrap_coordinator/mod.rs": "1d0592ccfa9f1f68b23f3f76a97b852f7c42e96aa3ab6532c5db443e8b941c9c",
+      "crates/canic-host/src/bootstrap_store/mod.rs": "334bb14aec8bbb6274244eda3395845b53380f89f936f83054182f7b82a4e4be",
+      "crates/canic-host/src/canister_build/artifact.rs": "196e27a37d782e05c2efee37a163942f56438f6ed93d2f4af4aec9929615d03b",
+      "crates/canic-host/src/canister_build/mod.rs": "083c720fb2d8d2df82bb85ad455793200e07aeb9d65de5785cd5252d3db06a11",
+      "crates/canic-host/src/canister_build/model.rs": "accc257aa38bfb4c1657f9682ee166beb850e0a54df86b83e8d1312c068908b5",
+      "crates/canic-host/src/canister_build/compiled/mod.rs": "5ff0b37f2314cfa2c74ebd61a9b98e2bb56cf81bc6def4c8633479ee62986d8a"
+    },
+    "governed_inputs": "50064fb32e5de7e09020f426a1c4b873de0dd5a149df3f760ea025c02a6999fa  Cargo.toml\ne35f792e3cdc4cd34fdca233fd92f93b9b6c6660f14d70be1dcc155ee7ce034a  Cargo.lock\n7553618f800829444096beea3dce84c3d07585efda504c19adb6787369bbd9e8  rust-toolchain.toml\na99d6ffd92c91fa0eabc34de4ea18c532ea21ad9415b7842db4d9f03f01a1449  apps/test/test-configs/generated-mixed-topology.toml\nb5b90447c6bc5c745376510abfd5c430835b1f6af860cdf86990fba07df43dd2  /tmp/canic114-driver.rs\n",
+    "generated_inputs": "3b5aa619f5472bd12634f6ee46145a8814ebd033c476126226c2fca7340e104c  apps/test/test-configs/.canic/generated/canic-fleet-coordinator/Cargo.toml\nf310300c2f6f7e81126b8f2c5c10b152a2b31a3c3476aa5fa1f4967011bfe949  apps/test/test-configs/.canic/generated/canic-fleet-coordinator/Cargo.lock\n772a9968a2a2b144fddf55922456a35d92b0279e3c1fbd4b17d1d38997758ae7  apps/test/test-configs/.canic/generated/canic-fleet-coordinator/src/lib.rs\nfc42ddb2e6cdb7caf18d96a2b48ea06fedef22a48d8871037dfc091a1162a399  apps/test/test-configs/.canic/generated/canic-fleet-wasm-store/Cargo.toml\n483f3c2743fe4be624901c9f79b96001fc1e56b9c72cbda621b6b585db385b04  apps/test/test-configs/.canic/generated/canic-fleet-wasm-store/Cargo.lock\n7fcefeb197296586528d499900eb806e71fdf5472dac1ad525f97d7ced159b38  apps/test/test-configs/.canic/generated/canic-fleet-wasm-store/src/lib.rs\n66b88eb5b10595b6e131b01ac821c449e610963eb904ec36e7fab43c89a840f6  apps/test/test-configs/.canic/generated/canic-fleet-wasm-store/build.rs\n"
+  },
+  "driver_source": "use canic_core::ids::BuildNetwork;\nuse canic_host::canister_build::{CanisterArtifactBuilder, CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext};\nuse std::{fs, path::PathBuf, time::Instant};\n\nfn record(role: &str, output: &CanisterArtifactBuildOutput) {\n    println!(\"ARTIFACT {role} {} {} {}\", output.wasm_path.display(), output.wasm_gz_path.display(), output.did_path.display());\n    println!(\"TRANSFORMS {role} {:?}\", output.transforms);\n    println!(\"PROFILE {role} {:?} {:?}\", output.candid_sha256, output.protocol_profile_digest);\n}\n\nfn main() -> Result<(), Box<dyn std::error::Error>> {\n    let mode = std::env::args().nth(1).ok_or(\"mode required\")?;\n    let workspace_root = PathBuf::from(\"/home/adam/projects/canic\");\n    let icp_root = workspace_root.join(\".tmp/canic114-pipeline-evidence\");\n    fs::create_dir_all(&icp_root)?;\n    let context = WorkspaceBuildContext {\n        role: \"app\".into(), profile: CanisterBuildProfile::Release,\n        environment: \"local\".into(), build_network: BuildNetwork::Local,\n        config_path: workspace_root.join(\"apps/test/test-configs/generated-mixed-topology.toml\"),\n        workspace_root, icp_root, local_replica: None,\n        refresh_canonical_infrastructure_did: false,\n        release_build_id: Some(\"1141141141141141141141141141141141141141141141141141141141141141\".parse()?),\n    };\n    let builder = CanisterArtifactBuilder::for_profile(context.profile)?;\n    for line in builder.diagnostic_lines() { println!(\"{line}\"); }\n    let started = Instant::now();\n    match mode.as_str() {\n        \"serial\" => for role in [\"fleet_coordinator\", \"wasm_store\"] {\n            let output = builder.build_workspace_canister_artifact(&context.with_role(role))?;\n            record(role, &output);\n        },\n        \"pipeline\" => {\n            let result = builder.build_workspace_app_artifacts(&context, &[])?;\n            assert!(result.configured.is_empty());\n            record(\"fleet_coordinator\", &result.coordinator.output);\n            record(\"wasm_store\", &result.store.output);\n        },\n        \"fail-configured\" => {\n            assert!(builder.build_workspace_app_artifacts(&context, &[\"missing-role\".into()]).is_err());\n            println!(\"EXPECTED_CONFIGURED_FAILURE\");\n        },\n        _ => return Err(\"unknown mode\".into()),\n    }\n    println!(\"WALL {mode} {:.3}\", started.elapsed().as_secs_f64());\n    Ok(())\n}\n",
+  "driver_compile_command": "rustc --edition=2024 /tmp/canic114-driver.rs --extern canic_host=target/debug/deps/libcanic_host-8c86e00920a58b62.rlib --extern canic_core=target/debug/deps/libcanic_core-5e5f421fd9d1bca8.rlib -L dependency=target/debug/deps -o /tmp/canic114-driver",
+  "measurement_shell": "#!/usr/bin/env bash\nset -euo pipefail\nmode=${1:?mode}\nlabel=${2:?label}\nexport RUSTC_WRAPPER=\nexport ICP_ENVIRONMENT=local\nexport CARGO_NET_OFFLINE=true\nexport CARGO_TARGET_DIR=/home/adam/projects/canic/.tmp/canic114-pipeline-target\n/usr/bin/time -v -o \"/tmp/canic114-${label}.time\" /tmp/canic114-driver \"$mode\" > \"/tmp/canic114-${label}.log\" 2>&1\n",
+  "runs": {
+    "warmup": {
+      "wall_seconds": 224.395,
+      "user_seconds": 346.36,
+      "system_seconds": 47.05,
+      "maximum_child_rss_kib": 2222384,
+      "driver_exit_status": 0,
+      "phase_lines": [
+        "Build phase runtime Cargo/link bootstrap_coordinator: 105.12s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/fleet_coordinator/fleet_coordinator.wasm: shrink=0.73s candid=0.67s binaryen=33.77s gzip/validation=0.27s total=35.45s",
+        "Build phase runtime Cargo/link bootstrap_store: 76.26s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/wasm_store/wasm_store.wasm: shrink=0.44s candid=0.41s binaryen=4.76s gzip/validation=0.20s total=5.82s"
+      ],
+      "log_path": "/tmp/canic114-warmup.log",
+      "log_sha256": "4c0e0272c7c01f3c400e9a792dc7811dfcfeac15646ccd099ac91c0c0a24ff24"
+    },
+    "serial": {
+      "wall_seconds": 112.893,
+      "user_seconds": 148.26,
+      "system_seconds": 9.86,
+      "maximum_child_rss_kib": 1664492,
+      "driver_exit_status": 0,
+      "phase_lines": [
+        "Build phase runtime Cargo/link bootstrap_coordinator: 48.10s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/fleet_coordinator/fleet_coordinator.wasm: shrink=0.73s candid=0.65s binaryen=33.92s gzip/validation=0.26s total=35.58s",
+        "Build phase runtime Cargo/link bootstrap_store: 22.36s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/wasm_store/wasm_store.wasm: shrink=0.41s candid=0.37s binaryen=4.10s gzip/validation=0.17s total=5.09s"
+      ],
+      "log_path": "/tmp/canic114-serial.log",
+      "log_sha256": "cee4dc10e305948de62b499b1d0dcac2db33fdeecc8f080553f3eb26c278aa32"
+    },
+    "pipeline": {
+      "wall_seconds": 85.032,
+      "user_seconds": 147.72,
+      "system_seconds": 13.23,
+      "maximum_child_rss_kib": 1669212,
+      "driver_exit_status": 0,
+      "phase_lines": [
+        "Build phase runtime Cargo/link bootstrap_coordinator: 46.79s",
+        "Build phase runtime Cargo/link bootstrap_store: 25.87s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/wasm_store/wasm_store.wasm: shrink=0.43s candid=0.39s binaryen=3.94s gzip/validation=0.16s total=4.97s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/fleet_coordinator/fleet_coordinator.wasm: shrink=0.71s candid=0.66s binaryen=35.74s gzip/validation=0.25s total=37.37s"
+      ],
+      "log_path": "/tmp/canic114-pipeline.log",
+      "log_sha256": "6612bac784eb2c21a88eceaecb63344b5355002ca6da7aca86ecf22081d44b52"
+    },
+    "failure": {
+      "wall_seconds": 38.728,
+      "user_seconds": 106.46,
+      "system_seconds": 6.15,
+      "maximum_child_rss_kib": 927824,
+      "driver_exit_status": 0,
+      "phase_lines": [
+        "Build phase runtime Cargo/link bootstrap_coordinator: 0.27s",
+        "Build phase runtime Cargo/link bootstrap_store: 22.33s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/wasm_store/wasm_store.wasm: shrink=0.48s candid=0.42s binaryen=5.05s gzip/validation=0.15s total=6.13s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/fleet_coordinator/fleet_coordinator.wasm: shrink=0.71s candid=0.64s binaryen=35.84s gzip/validation=0.26s total=37.47s"
+      ],
+      "log_path": "/tmp/canic114-failure.log",
+      "log_sha256": "992d58f5a60cee4f3878d80f9cfb3767c9cd61d3e4bbb87361063485ab43dab3"
+    },
+    "retry": {
+      "wall_seconds": 34.271,
+      "user_seconds": 99.59,
+      "system_seconds": 5.77,
+      "maximum_child_rss_kib": 933200,
+      "driver_exit_status": 0,
+      "phase_lines": [
+        "Build phase runtime Cargo/link bootstrap_coordinator: 0.19s",
+        "Build phase runtime Cargo/link bootstrap_store: 22.06s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/wasm_store/wasm_store.wasm: shrink=0.41s candid=0.38s binaryen=3.94s gzip/validation=0.17s total=4.91s",
+        "Build phase finalization /home/adam/projects/canic/.tmp/canic114-pipeline-evidence/.canic/release-builds/1141141141141141141141141141141141141141141141141141141141141141/artifacts/fleet_coordinator/fleet_coordinator.wasm: shrink=0.70s candid=0.66s binaryen=31.52s gzip/validation=0.25s total=33.16s"
+      ],
+      "log_path": "/tmp/canic114-retry.log",
+      "log_sha256": "8eb1e9035064ec0f4da16a2712fd3d2dae2a6603045feca43d96033cb067c1db"
+    }
+  },
+  "wall_saved_seconds": 27.861000000000004,
+  "wall_reduction_percent": 24.679120937524917,
+  "artifacts": {
+    "fleet_coordinator/fleet_coordinator.did": {
+      "sha256": "78785672fb33f8dd1030f4f48c69d97ca0cf16b52052752476a230253c28e25a",
+      "bytes": 47438
+    },
+    "fleet_coordinator/fleet_coordinator.wasm": {
+      "sha256": "233d510c69bab9d6a8a100b09374c5a2a82bb354c5092f89a864f1ef8ba3aff3",
+      "bytes": 4040451
+    },
+    "fleet_coordinator/fleet_coordinator.wasm.gz": {
+      "sha256": "2cd1b71d3d3dc61ca0730a8e64343d1c58ab795403b6d38939179fa68cdbbcf0",
+      "bytes": 1400291
+    },
+    "wasm_store/.build-profile": {
+      "sha256": "a4d451ec23463726f72c43d64c710968f6b602cd653b4de8adee1b556240a829",
+      "bytes": 7
+    },
+    "wasm_store/wasm_store.did": {
+      "sha256": "48d82eca36b235d128ca41ad91ed2924409cddb2eca69085426bbb6ebc4453f7",
+      "bytes": 16221
+    },
+    "wasm_store/wasm_store.wasm": {
+      "sha256": "d2c491083c78c81c44a7d3adab4d0772a4a7333faec40e6cde8a321866c215db",
+      "bytes": 2307787
+    },
+    "wasm_store/wasm_store.wasm.gz": {
+      "sha256": "f7dd0884d77dfad414015658ff9d6bb315218297affdcf30a46e852ca1a42919",
+      "bytes": 833643
+    }
+  },
+  "parity": {
+    "serial_pipeline_bytes_equal": true,
+    "protocol_and_transform_records_equal": true,
+    "failure_and_valid_retry_bytes_equal": true,
+    "capture_stages_after_each_run": [],
+    "failure_case": "missing configured role, after both infrastructure compilations",
+    "retry_case": "valid empty configured-role selection with the same release-build identity"
+  },
+  "validation": {
+    "host_cases": 53,
+    "cli_build_cases": 25,
+    "clippy": "--locked -p canic-host -p canic-cli --all-targets --all-features --keep-going -- -D warnings",
+    "broad_gate_run": false,
+    "pocketic_run": false
+  },
+  "feedback": {
+    "CANIC-087": "partial; infrastructure scheduling qualified, full downstream criteria open",
+    "CANIC-139": "partial; existing whole-build reuse unchanged; changed-input per-role reuse not implemented"
+  }
+}

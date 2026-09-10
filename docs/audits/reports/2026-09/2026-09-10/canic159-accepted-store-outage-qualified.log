@@ -1,0 +1,45 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:40771/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-testing-internal v0.110.13 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 15.91s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-5d509623fcc1d42e)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-5d509623fcc1d42e)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog ... [WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 47.92s
+[WASM]       DONE   Fleet Coordinator artifact                           1m 42s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       DONE   delegation_issuer_stub                               36.42s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             40.87s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                  5.52s
+[FLEET]      RUN    finished PIC wasm build
+CANIC-159 Accepted Root failure retained by Coordinator: FleetComponentProvisioningRootFailure { origin: Some(ProvisioningFailureOrigin { failed_at_ns: 1620328636000000146, stage: Provisioning, target: Principal { len: 10, bytes: [127, 255, 255, 255, 255, 208, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, operation_id: [110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110], diagnostic_code: 66, retry_category: Backoff }), fleet_subnet_root: Principal { len: 10, bytes: [127, 255, 255, 255, 255, 208, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, stage: RootProvisioning, diagnostic_code: 140, failed_at_ns: 1620328636000000146 }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 257.30s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=357180 kB high_water=373468 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 274s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  274s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 275s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.PdnAb6

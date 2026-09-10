@@ -44,6 +44,7 @@ enum RootCommandResponseFragment {
 enum RootStatusRequestFragment {
     CycleBalance,
     CycleHistory(canic_core::dto::page::PageRequest),
+    MemoryAllocations,
     Metrics(canic_core::dto::role::MetricsStatusRequest),
 }
 
@@ -51,6 +52,7 @@ enum RootStatusRequestFragment {
 enum RootStatusResponseFragment {
     CycleBalance(canic_core::dto::role::CycleBalanceStatusResponse),
     CycleHistory(Page<canic_core::dto::cycles::CycleTrackerEntry>),
+    MemoryAllocations(canic_core::dto::memory::MemoryAllocationsResponse),
     Metrics(Page<canic_core::dto::metrics::MetricEntry>),
 }
 
@@ -92,6 +94,9 @@ pub enum FleetObservabilityError {
 
     #[error("Wasm Store does not expose cycle top-up history")]
     StoreCycleTopupsUnsupported,
+
+    #[error("Wasm Store does not expose current memory allocations")]
+    StoreMemoryAllocationsUnsupported,
 
     #[error("Wasm Store does not expose runtime metrics")]
     StoreMetricsUnsupported,
@@ -178,6 +183,9 @@ fn observe_store(
         CanisterObservabilityRequest::Metrics(_) => {
             return Err(FleetObservabilityError::StoreMetricsUnsupported);
         }
+        CanisterObservabilityRequest::MemoryAllocations => {
+            return Err(FleetObservabilityError::StoreMemoryAllocationsUnsupported);
+        }
         CanisterObservabilityRequest::CycleBalance => {
             unreachable!("Store CycleBalance uses Root management inspection");
         }
@@ -213,6 +221,9 @@ fn observe_root(
         CanisterObservabilityRequest::Metrics(request) => {
             RootStatusRequestFragment::Metrics(request)
         }
+        CanisterObservabilityRequest::MemoryAllocations => {
+            RootStatusRequestFragment::MemoryAllocations
+        }
     };
     let binding = resolve_registry_protocol_binding(icp_root, environment, root)?;
     let root_canister = parse_principal("Fleet Subnet Root", &root.pid)?;
@@ -232,6 +243,9 @@ fn observe_root(
         }
         RootStatusResponseFragment::Metrics(response) => {
             CanisterObservabilityResponse::Metrics(response)
+        }
+        RootStatusResponseFragment::MemoryAllocations(response) => {
+            CanisterObservabilityResponse::MemoryAllocations(response)
         }
     })
 }

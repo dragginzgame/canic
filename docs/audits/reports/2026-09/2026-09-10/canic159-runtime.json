@@ -1,0 +1,60 @@
+{
+  "date": "2026-09-10",
+  "base_commit": "5250d69186047bc373db7cdc7b7680c3aad031d0",
+  "package_version": "0.110.13",
+  "open_changelog": "0.110.14",
+  "test": "pic::fleet_registry::baseline::tests::fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog",
+  "result": "passed",
+  "executed_cases": 1,
+  "runtime_origin": {
+    "phase": "Accepted",
+    "stage": "Provisioning",
+    "diagnostic_code": 66,
+    "retry_category": "Backoff",
+    "coordinator_stage": "RootProvisioning",
+    "coordinator_outer_diagnostic_code": 140,
+    "failed_at_ns": 1620328636000000146,
+    "all_origin_fields_equal": true
+  },
+  "same_operation_recovery": true,
+  "terminal_failure_cleared": true,
+  "terminal_replay_has_no_updates": true,
+  "broad_suite_run": false,
+  "sibling_mutation": false,
+  "live_deployment": false,
+  "source_sha256": {
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "c76d1c8603df5825e1400d489a42f018454b17e7062f9fc5c01b1e2c6a77ee59",
+    "crates/canic-control-plane/src/ops/fleet_coordinator/mod.rs": "c835c1a60b7f2e01db62774d484c080a4de47310f8b42ac991789a325b093dba",
+    "crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs": "0f3900217b2f4c00e3a32de5bfa0f5d3ef1c07e875d0e9bbdc6b93d2cb4109f1"
+  },
+  "logs": {
+    "canic159-accepted-store-outage.log": {
+      "sha256": "200aee058b62df79ad702245f6a9a7647f5fe15bfe9cfc66163e397f8e3d7ec3",
+      "source": "/tmp/canic159-accepted-store-outage.log"
+    },
+    "canic159-accepted-store-outage-qualified.log": {
+      "sha256": "98906228b0c2f22c97eff2808deba949290d036275a7d221256e4c1e86110f7a",
+      "source": "/tmp/canic159-accepted-store-outage-qualified.log"
+    },
+    "canic159-activation-clippy.log": {
+      "sha256": "7ce36937a7557ede315a43e7c4e7ae8784d820189e18a3e7f8c97fb435d84a0d",
+      "source": "/tmp/canic159-activation-clippy.log"
+    },
+    "canic159-activation-clippy-qualified.log": {
+      "sha256": "937dd603dc3ce3e13e9df47762f6daa5aad0b56ee816e5748fa74aed6f59231f",
+      "source": "/tmp/canic159-activation-clippy-qualified.log"
+    }
+  },
+  "checks": {
+    "test_package_clippy": "all targets and all features; warnings denied; passed",
+    "formatting": "passed",
+    "diff_whitespace": "passed",
+    "edited_document_links": "passed",
+    "current_document_semantics": "passed",
+    "release_notes_preflight": "0.110.14 passed"
+  },
+  "resolved_validation_failures": [
+    "Test assertion compared u16 with DiagnosticCode; converted the registered code explicitly to its wire value.",
+    "Import cleanup displaced an existing test-only annotation; restored the grouped test-only import and reran strict lint."
+  ]
+}

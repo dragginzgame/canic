@@ -6971,8 +6971,11 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
         consecutive_failures: 1,
         retry_at_ns: Some(1_000_000_100),
     };
-    let error = FleetCoordinatorOps::observed_activation_failure(Some(failure))
-        .expect("specific activation failure remains actionable");
+    let error = FleetCoordinatorOps::observed_root_failure(
+        RootComponentProvisioningPhase::Published,
+        Some(failure),
+    )
+    .expect("specific activation failure remains actionable");
     assert_eq!(error.provisioning_failure().unwrap().target, failure.target);
     assert_eq!(
         error.provisioning_failure().unwrap().recorded_at_ns,
@@ -6983,10 +6986,30 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
         ProvisioningFailureStage::CoordinatorStatus,
     ] {
         assert!(
-            FleetCoordinatorOps::observed_activation_failure(Some(
-                RootComponentProvisioningFailure { stage, ..failure }
-            ))
+            FleetCoordinatorOps::observed_root_failure(
+                RootComponentProvisioningPhase::Published,
+                Some(RootComponentProvisioningFailure { stage, ..failure }),
+            )
             .is_none()
         );
     }
+    let provisioning_failure = RootComponentProvisioningFailure {
+        stage: ProvisioningFailureStage::Provisioning,
+        diagnostic_code: 66,
+        ..failure
+    };
+    let error = FleetCoordinatorOps::observed_root_failure(
+        RootComponentProvisioningPhase::Accepted,
+        Some(provisioning_failure),
+    )
+    .expect("failed provisioning must retain its origin before publication can advance");
+    let origin = error.provisioning_failure().unwrap();
+    assert_eq!(origin.diagnostic_code, provisioning_failure.diagnostic_code);
+    assert_eq!(origin.operation_id, provisioning_failure.operation_id);
+    assert_eq!(origin.target, provisioning_failure.target);
+    assert_eq!(
+        origin.recorded_at_ns,
+        Some(provisioning_failure.failed_at_ns)
+    );
+    assert_eq!(origin.retry_category, provisioning_failure.retry_category);
 }

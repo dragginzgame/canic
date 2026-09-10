@@ -56,12 +56,23 @@ compilation non-incremental. An explicit
 An unchanged complete build returns its original finalized release after checking
 all retained artifact and manifest bytes. Source, configuration, lockfile,
 environment, compiler/target-library and admitted tool changes invalidate reuse.
-The input set includes Cargo-declared target files and recorded dependency paths,
-including shared build scripts and includes outside package directories. Build
-scripts must declare external inputs to Cargo. A newly discovered or changed
-input set during compilation cannot establish a reusable build. Input collection
-is conservative across the complete Cargo catalog, rather than a minimal
-per-role dependency cache.
+The input set includes Cargo-declared target files, the exact family source roots
+selected by generated infrastructure, and recorded dependency paths, including
+shared build scripts and includes outside package directories. Infrastructure
+sources are included before compilation even when their features are absent
+from the App's ordinary Cargo graph. Build scripts must declare external inputs
+to Cargo. Input collection is conservative across the complete Cargo catalog,
+rather than a minimal per-role dependency cache.
+
+The invocation retains file-level source evidence as well as configuration,
+environment and tool identity. Replaced Cargo records may stop naming unchanged
+inputs; those files and directories are rechecked before accepting the refreshed
+inventory. The cache record uses the verified final inventory's digest so the
+next invocation can find it. Real edits, additions, deletions and unsupported
+file types still refuse recording. An external input first observed after
+compilation also refuses recording: its earlier bytes cannot be proved. Typed
+diagnostics distinguish a changed input from an unobserved input and include
+the affected path.
 Cache metadata lives under `.canic/build-reuse`; release manifests and artifact
 bytes remain under the existing `.canic/release-builds/<id>` owner. Cache hits do
 not compile, link, optimize or compress Wasm. Corrupt output evidence is rejected
@@ -80,6 +91,35 @@ with an exact package/role protocol-digest context. Combined Cargo resolution mu
 normal/build dependency tree and feature sets; conflicting packages split into
 separate batches. Canonical Coordinator and Store sidecars avoid ordinary
 declaration builds. Production runtime LTO remains the existing release policy.
+
+After Cargo validates declaration dependencies, unchanged declaration Wasm can
+reuse its normalized Candid extraction across new complete release identities.
+The host keys this optional result by exact Wasm bytes, native extractor bytes,
+the compiled extraction implementation and environment. The result's byte hash
+and input bindings are checked on every hit. A changed role misses when its
+compiled declaration changes; an unaffected role may hit. Shared inputs remain
+Cargo dependencies and changed compiled outputs miss independently.
+
+This cache lives under `.canic/build-reuse/declarations`. Corrupt or oversized
+records cause ordinary extraction, and inability to retain a cache record does
+not reject an otherwise successful extraction. The cache I/O size bound does
+not impose a Candid size limit. Extractor or Wasm changes during extraction
+refuse the result. Current role capabilities, protocol-profile hashes and
+runtime outputs are still derived afterward; no finalized runtime is copied
+between release identities. Stderr distinguishes each role's declaration hit
+or miss from its complete-release cache decision.
+
+Complete App builds hold one artifact-build lock across compilation and
+finalization. Immediately after each Coordinator or Store compilation, the host
+captures that exact Wasm in a private staging directory. Up to two infrastructure
+workers run the existing finalizers while subsequent Cargo commands execute
+serially. Scoped workers finish and discard their captured inputs before the
+build returns, including when a later step fails. Single-role builds stay
+synchronous. Release manifests are sealed only after all requested outputs pass
+qualification; a failed build may leave qualified individual artifacts, but
+cannot return a successful complete build. Infrastructure elapsed times can
+overlap each other and configured-role time; they must not be added to infer
+total build wall time.
 
 Stderr reports each role's cache decision and the observed compilation and
 finalization phases. Runtime Cargo/link time includes linking; it is not a

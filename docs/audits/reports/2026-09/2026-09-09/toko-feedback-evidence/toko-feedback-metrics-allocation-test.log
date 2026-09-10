@@ -1,0 +1,142 @@
+   Compiling canister_toko_miner_user_hub v0.2.7 (/tmp/toko-feedback-fleet/apps/toko_miner/user_hub)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.24s
+     Running unittests src/lib.rs (/tmp/toko-feedback-native-target/debug/deps/canister_toko_miner_user_hub-b3b6a35658e8c997)
+
+running 1 test
+2026-09-09T18:26:12.003406Z  INFO pocket_ic_server: The PocketIC server is listening on port 44349
+2021-05-06 19:17:10.000000015 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: game_hub
+2021-05-06 19:17:10.000000015 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:10.000000025 UTC: [Canister xbze6-vd777-77777-aaaba-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: translation
+2021-05-06 19:17:10.000000025 UTC: [Canister xbze6-vd777-77777-aaaba-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:10.000000034 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: user_hub
+2021-05-06 19:17:10.000000034 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:10.000000036 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|  game_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:10.000000037 UTC: [Canister xbze6-vd777-77777-aaaba-cai] [34mINFO [0m|translation | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:10.000000037 UTC: [Canister xbze6-vd777-77777-aaaba-cai] [34mINFO [0m|translation | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:10.000000037 UTC: [Canister xbze6-vd777-77777-aaaba-cai] [34mINFO [0m|translation | [Init] canister marked READY
+2021-05-06 19:17:10.000000038 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [32m OK  [0m|  game_hub  | [Sharding] ✨ shard.create: xt7th-zt777-77777-aaaca-cai pool=games slot=0
+2021-05-06 19:17:10.000000038 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [32m OK  [0m|  game_hub  | [Sharding] ✨ shard.bootstrap: xt7th-zt777-77777-aaaca-cai pool=games slot=0
+2021-05-06 19:17:10.000000040 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [32m OK  [0m|  game_hub  | [Sharding] ✨ shard.create: xu6vt-ul777-77777-aaacq-cai pool=games slot=1
+2021-05-06 19:17:10.000000040 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [32m OK  [0m|  game_hub  | [Sharding] ✨ shard.bootstrap: xu6vt-ul777-77777-aaacq-cai pool=games slot=1
+2021-05-06 19:17:10.000000042 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [32m OK  [0m|  game_hub  | [Sharding] ✨ shard.create: x556p-cd777-77777-aaada-cai pool=games slot=2
+2021-05-06 19:17:10.000000042 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [32m OK  [0m|  game_hub  | [Sharding] ✨ shard.bootstrap: x556p-cd777-77777-aaada-cai pool=games slot=2
+2021-05-06 19:17:10.000000042 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|  game_hub  | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:10.000000042 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|  game_hub  | [Init] canister marked READY
+2021-05-06 19:17:10.000000047 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:10.000000049 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.create: x24y3-p3777-77777-aaadq-cai pool=users slot=0
+2021-05-06 19:17:10.000000049 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.bootstrap: x24y3-p3777-77777-aaadq-cai pool=users slot=0
+2021-05-06 19:17:10.000000051 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.create: wxs4v-at777-77777-aaaea-cai pool=users slot=1
+2021-05-06 19:17:10.000000051 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.bootstrap: wxs4v-at777-77777-aaaea-cai pool=users slot=1
+2021-05-06 19:17:10.000000053 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.create: wqt2b-nl777-77777-aaaeq-cai pool=users slot=2
+2021-05-06 19:17:10.000000053 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.bootstrap: wqt2b-nl777-77777-aaaeq-cai pool=users slot=2
+2021-05-06 19:17:10.000000053 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:10.000000053 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [34mINFO [0m|  user_hub  | [Init] canister marked READY
+2021-05-06 19:17:10.000000057 UTC: [Canister xt7th-zt777-77777-aaaca-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: game_shard
+2021-05-06 19:17:10.000000057 UTC: [Canister xt7th-zt777-77777-aaaca-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:10.000000071 UTC: [Canister xt7th-zt777-77777-aaaca-cai] [34mINFO [0m| game_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:10.000000071 UTC: [Canister xt7th-zt777-77777-aaaca-cai] [34mINFO [0m| game_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:10.000000071 UTC: [Canister xt7th-zt777-77777-aaaca-cai] [34mINFO [0m| game_shard | [Init] canister marked READY
+2021-05-06 19:17:10.000000082 UTC: [Canister xu6vt-ul777-77777-aaacq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: game_shard
+2021-05-06 19:17:10.000000082 UTC: [Canister xu6vt-ul777-77777-aaacq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:10.000000084 UTC: [Canister xu6vt-ul777-77777-aaacq-cai] [34mINFO [0m| game_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:10.000000084 UTC: [Canister xu6vt-ul777-77777-aaacq-cai] [34mINFO [0m| game_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:10.000000084 UTC: [Canister xu6vt-ul777-77777-aaacq-cai] [34mINFO [0m| game_shard | [Init] canister marked READY
+2021-05-06 19:17:10.000000096 UTC: [Canister x556p-cd777-77777-aaada-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: game_shard
+2021-05-06 19:17:10.000000096 UTC: [Canister x556p-cd777-77777-aaada-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:10.000000098 UTC: [Canister x556p-cd777-77777-aaada-cai] [34mINFO [0m| game_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:10.000000098 UTC: [Canister x556p-cd777-77777-aaada-cai] [34mINFO [0m| game_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:10.000000098 UTC: [Canister x556p-cd777-77777-aaada-cai] [34mINFO [0m| game_shard | [Init] canister marked READY
+2021-05-06 19:17:11.000000110 UTC: [Canister x24y3-p3777-77777-aaadq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: user_shard
+2021-05-06 19:17:11.000000110 UTC: [Canister x24y3-p3777-77777-aaadq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:11.000000122 UTC: [Canister x24y3-p3777-77777-aaadq-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:11.000000122 UTC: [Canister x24y3-p3777-77777-aaadq-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:11.000000122 UTC: [Canister x24y3-p3777-77777-aaadq-cai] [34mINFO [0m| user_shard | [Init] canister marked READY
+2021-05-06 19:17:11.000000132 UTC: [Canister wxs4v-at777-77777-aaaea-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: user_shard
+2021-05-06 19:17:11.000000132 UTC: [Canister wxs4v-at777-77777-aaaea-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:11.000000134 UTC: [Canister wxs4v-at777-77777-aaaea-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:11.000000134 UTC: [Canister wxs4v-at777-77777-aaaea-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:11.000000134 UTC: [Canister wxs4v-at777-77777-aaaea-cai] [34mINFO [0m| user_shard | [Init] canister marked READY
+2021-05-06 19:17:11.000000145 UTC: [Canister wqt2b-nl777-77777-aaaeq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: user_shard
+2021-05-06 19:17:11.000000145 UTC: [Canister wqt2b-nl777-77777-aaaeq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:11.000000147 UTC: [Canister wqt2b-nl777-77777-aaaeq-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:11.000000147 UTC: [Canister wqt2b-nl777-77777-aaaeq-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:11.000000147 UTC: [Canister wqt2b-nl777-77777-aaaeq-cai] [34mINFO [0m| user_shard | [Init] canister marked READY
+Translation catalogue is ready before scheduled sampling
+ceiling source: 64 total, 64 selected, longest path 64 bytes
+2021-05-06 19:33:09.000000294 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [33mWARN [0m|  game_hub  | [Auth] access denied code=E31 public_code=E31 kind=auth predicate=caller_is_controller context=Some("all")
+Toko Miner complete public sampling maximum: 2593641 instructions; 0 application rows
+sampler performance: TimerCallbackPerformanceStatus { instruction_samples_since_runtime_start: 3, instructions_latest: Some(2440049), instructions_maximum: Some(2593641), instructions_total_since_runtime_start: 7344207, memory_page_samples_since_runtime_start: 3, memory_pages_latest: Some(TimerMemoryPageSampleStatus { start: TimerMemoryPageExtentStatus { wasm_pages: 31, stable_pages: 3713 }, end: TimerMemoryPageExtentStatus { wasm_pages: 31, stable_pages: 3713 } }), maximum_wasm_memory_growth_pages: Some(7), maximum_stable_memory_growth_pages: Some(0) }
+sampler checkpoint: MetricEntry { labels: ["perf", "checkpoint", "canic", "public_metrics_sample"], principal: None, value: CountAndU64 { count: 3, value_u64: 6529287 } }
+family Operations: 19 rows
+family Performance: 16 rows
+metrics role game_hub: application Unavailable, 0 rows
+2021-05-06 19:33:09.000000294 UTC: [Canister xbze6-vd777-77777-aaaba-cai] [33mWARN [0m|translation | [Auth] access denied code=E31 public_code=E31 kind=auth predicate=caller_is_controller context=Some("all")
+Toko Miner complete public sampling maximum: 16062610 instructions; 0 application rows
+sampler performance: TimerCallbackPerformanceStatus { instruction_samples_since_runtime_start: 3, instructions_latest: Some(15588394), instructions_maximum: Some(16062610), instructions_total_since_runtime_start: 46580069, memory_page_samples_since_runtime_start: 3, memory_pages_latest: Some(TimerMemoryPageSampleStatus { start: TimerMemoryPageExtentStatus { wasm_pages: 214, stable_pages: 14721 }, end: TimerMemoryPageExtentStatus { wasm_pages: 214, stable_pages: 14721 } }), maximum_wasm_memory_growth_pages: Some(0), maximum_stable_memory_growth_pages: Some(0) }
+sampler checkpoint: MetricEntry { labels: ["perf", "checkpoint", "canic", "public_metrics_sample"], principal: None, value: CountAndU64 { count: 3, value_u64: 44094200 } }
+family Operations: 16 rows
+family Performance: 16 rows
+metrics role translation: application Unavailable, 0 rows
+2021-05-06 19:33:09.000000294 UTC: [Canister xgyck-y3777-77777-aaabq-cai] [33mWARN [0m|  user_hub  | [Auth] access denied code=E31 public_code=E31 kind=auth predicate=caller_is_controller context=Some("all")
+Toko Miner complete public sampling maximum: 2659513 instructions; 0 application rows
+sampler performance: TimerCallbackPerformanceStatus { instruction_samples_since_runtime_start: 3, instructions_latest: Some(2659513), instructions_maximum: Some(2659513), instructions_total_since_runtime_start: 7836399, memory_page_samples_since_runtime_start: 3, memory_pages_latest: Some(TimerMemoryPageSampleStatus { start: TimerMemoryPageExtentStatus { wasm_pages: 34, stable_pages: 11393 }, end: TimerMemoryPageExtentStatus { wasm_pages: 34, stable_pages: 11393 } }), maximum_wasm_memory_growth_pages: Some(8), maximum_stable_memory_growth_pages: Some(0) }
+sampler checkpoint: MetricEntry { labels: ["perf", "checkpoint", "canic", "public_metrics_sample"], principal: None, value: CountAndU64 { count: 3, value_u64: 7501639 } }
+family Operations: 19 rows
+family Performance: 18 rows
+metrics role user_hub: application Unavailable, 0 rows
+2021-05-06 19:33:09.000000294 UTC: [Canister xt7th-zt777-77777-aaaca-cai] [33mWARN [0m| game_shard | [Auth] access denied code=E31 public_code=E31 kind=auth predicate=caller_is_controller context=Some("all")
+Toko Miner complete public sampling maximum: 21487116 instructions; 194 application rows
+sampler performance: TimerCallbackPerformanceStatus { instruction_samples_since_runtime_start: 3, instructions_latest: Some(20758167), instructions_maximum: Some(21487116), instructions_total_since_runtime_start: 63105962, memory_page_samples_since_runtime_start: 3, memory_pages_latest: Some(TimerMemoryPageSampleStatus { start: TimerMemoryPageExtentStatus { wasm_pages: 120, stable_pages: 11649 }, end: TimerMemoryPageExtentStatus { wasm_pages: 120, stable_pages: 11649 } }), maximum_wasm_memory_growth_pages: Some(41), maximum_stable_memory_growth_pages: Some(0) }
+sampler checkpoint: MetricEntry { labels: ["perf", "checkpoint", "canic", "public_metrics_sample"], principal: None, value: CountAndU64 { count: 3, value_u64: 61101569 } }
+family Operations: 16 rows
+family Performance: 20 rows
+metrics role game_shard: application Fresh, 194 rows
+2021-05-06 19:33:09.000000294 UTC: [Canister xu6vt-ul777-77777-aaacq-cai] [33mWARN [0m| game_shard | [Auth] access denied code=E31 public_code=E31 kind=auth predicate=caller_is_controller context=Some("all")
+Toko Miner complete public sampling maximum: 21511778 instructions; 194 application rows
+sampler performance: TimerCallbackPerformanceStatus { instruction_samples_since_runtime_start: 3, instructions_latest: Some(20838962), instructions_maximum: Some(21511778), instructions_total_since_runtime_start: 63174550, memory_page_samples_since_runtime_start: 3, memory_pages_latest: Some(TimerMemoryPageSampleStatus { start: TimerMemoryPageExtentStatus { wasm_pages: 119, stable_pages: 11649 }, end: TimerMemoryPageExtentStatus { wasm_pages: 120, stable_pages: 11649 } }), maximum_wasm_memory_growth_pages: Some(41), maximum_stable_memory_growth_pages: Some(0) }
+sampler checkpoint: MetricEntry { labels: ["perf", "checkpoint", "canic", "public_metrics_sample"], principal: None, value: CountAndU64 { count: 3, value_u64: 61250037 } }
+family Operations: 16 rows
+family Performance: 20 rows
+metrics role game_shard: application Fresh, 194 rows
+2021-05-06 19:33:09.000000294 UTC: [Canister x556p-cd777-77777-aaada-cai] [33mWARN [0m| game_shard | [Auth] access denied code=E31 public_code=E31 kind=auth predicate=caller_is_controller context=Some("all")
+Toko Miner complete public sampling maximum: 21745176 instructions; 194 application rows
+sampler performance: TimerCallbackPerformanceStatus { instruction_samples_since_runtime_start: 3, instructions_latest: Some(21178617), instructions_maximum: Some(21745176), instructions_total_since_runtime_start: 64106996, memory_page_samples_since_runtime_start: 3, memory_pages_latest: Some(TimerMemoryPageSampleStatus { start: TimerMemoryPageExtentStatus { wasm_pages: 120, stable_pages: 11649 }, end: TimerMemoryPageExtentStatus { wasm_pages: 120, stable_pages: 11649 } }), maximum_wasm_memory_growth_pages: Some(41), maximum_stable_memory_growth_pages: Some(0) }
+sampler checkpoint: MetricEntry { labels: ["perf", "checkpoint", "canic", "public_metrics_sample"], principal: None, value: CountAndU64 { count: 3, value_u64: 62422605 } }
+family Operations: 16 rows
+family Performance: 20 rows
+metrics role game_shard: application Fresh, 194 rows
+2021-05-06 19:33:09.000000294 UTC: [Canister x24y3-p3777-77777-aaadq-cai] [33mWARN [0m| user_shard | [Auth] access denied code=E31 public_code=E31 kind=auth predicate=caller_is_controller context=Some("all")
+Toko Miner complete public sampling maximum: 2007925 instructions; 0 application rows
+sampler performance: TimerCallbackPerformanceStatus { instruction_samples_since_runtime_start: 3, instructions_latest: Some(2007925), instructions_maximum: Some(2007925), instructions_total_since_runtime_start: 5750664, memory_page_samples_since_runtime_start: 3, memory_pages_latest: Some(TimerMemoryPageSampleStatus { start: TimerMemoryPageExtentStatus { wasm_pages: 31, stable_pages: 11009 }, end: TimerMemoryPageExtentStatus { wasm_pages: 31, stable_pages: 11009 } }), maximum_wasm_memory_growth_pages: Some(5), maximum_stable_memory_growth_pages: Some(0) }
+sampler checkpoint: MetricEntry { labels: ["perf", "checkpoint", "canic", "public_metrics_sample"], principal: None, value: CountAndU64 { count: 3, value_u64: 5424582 } }
+family Operations: 16 rows
+family Performance: 14 rows
+metrics role user_shard: application Unavailable, 0 rows
+2021-05-06 19:33:09.000000294 UTC: [Canister wxs4v-at777-77777-aaaea-cai] [33mWARN [0m| user_shard | [Auth] access denied code=E31 public_code=E31 kind=auth predicate=caller_is_controller context=Some("all")
+Toko Miner complete public sampling maximum: 2005710 instructions; 0 application rows
+sampler performance: TimerCallbackPerformanceStatus { instruction_samples_since_runtime_start: 3, instructions_latest: Some(2005710), instructions_maximum: Some(2005710), instructions_total_since_runtime_start: 5750076, memory_page_samples_since_runtime_start: 3, memory_pages_latest: Some(TimerMemoryPageSampleStatus { start: TimerMemoryPageExtentStatus { wasm_pages: 31, stable_pages: 11009 }, end: TimerMemoryPageExtentStatus { wasm_pages: 31, stable_pages: 11009 } }), maximum_wasm_memory_growth_pages: Some(5), maximum_stable_memory_growth_pages: Some(0) }
+sampler checkpoint: MetricEntry { labels: ["perf", "checkpoint", "canic", "public_metrics_sample"], principal: None, value: CountAndU64 { count: 3, value_u64: 5343709 } }
+family Operations: 16 rows
+family Performance: 14 rows
+metrics role user_shard: application Unavailable, 0 rows
+2021-05-06 19:33:09.000000294 UTC: [Canister wqt2b-nl777-77777-aaaeq-cai] [33mWARN [0m| user_shard | [Auth] access denied code=E31 public_code=E31 kind=auth predicate=caller_is_controller context=Some("all")
+Toko Miner complete public sampling maximum: 2000640 instructions; 0 application rows
+sampler performance: TimerCallbackPerformanceStatus { instruction_samples_since_runtime_start: 3, instructions_latest: Some(1846478), instructions_maximum: Some(2000640), instructions_total_since_runtime_start: 5592114, memory_page_samples_since_runtime_start: 3, memory_pages_latest: Some(TimerMemoryPageSampleStatus { start: TimerMemoryPageExtentStatus { wasm_pages: 31, stable_pages: 11009 }, end: TimerMemoryPageExtentStatus { wasm_pages: 31, stable_pages: 11009 } }), maximum_wasm_memory_growth_pages: Some(5), maximum_stable_memory_growth_pages: Some(0) }
+sampler checkpoint: MetricEntry { labels: ["perf", "checkpoint", "canic", "public_metrics_sample"], principal: None, value: CountAndU64 { count: 3, value_u64: 5266032 } }
+family Operations: 16 rows
+family Performance: 14 rows
+metrics role user_shard: application Unavailable, 0 rows
+
+thread 'qualification::metrics::managed_public_metrics_qualifies_sampling_and_history' (11623) panicked at apps/toko_miner/user_hub/src/qualification/metrics.rs:108:5:
+sampler budgets: [("game_hub", 2593641), ("translation", 16062610), ("user_hub", 2659513), ("game_shard", 21487116), ("game_shard", 21511778), ("game_shard", 21745176), ("user_shard", 2007925), ("user_shard", 2005710), ("user_shard", 2000640)]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test qualification::metrics::managed_public_metrics_qualifies_sampling_and_history ... FAILED
+
+failures:
+
+failures:
+    qualification::metrics::managed_public_metrics_qualifies_sampling_and_history
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 24.41s
+
+error: test failed, to rerun pass `-p canister_toko_miner_user_hub --lib`

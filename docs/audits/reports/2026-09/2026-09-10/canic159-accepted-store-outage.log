@@ -1,0 +1,37 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:37895/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic v0.110.13 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-backup v0.110.13 (/home/adam/projects/canic/crates/canic-backup)
+   Compiling canic-cli v0.110.13 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.13 (/home/adam/projects/canic/crates/canic-testing-internal)
+error[E0277]: can't compare `u16` with `DiagnosticCode`
+    --> crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:3585:17
+     |
+3585 | /                 assert_eq!(
+3586 | |                     failure.diagnostic_code,
+3587 | |                     canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE.raw_code()
+3588 | |                 );
+     | |_________________^ no implementation for `u16 == DiagnosticCode`
+     |
+     = help: the trait `PartialEq<DiagnosticCode>` is not implemented for `u16`
+     = help: `u16` implements trait `PartialEq<Rhs>`:
+               PartialEq<candid::Int>
+               PartialEq<candid::Nat>
+               PartialEq<http::status::StatusCode>
+               PartialEq<http::uri::port::Port<T>>
+               PartialEq<serde_json::Value>
+               PartialEq
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `canic-testing-internal` (lib test) due to 1 previous error
+cannot list the selected PocketIC test: pic::fleet_registry::baseline::tests::fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.A6KVlr
+make: *** [Makefile:425: test-pocketic-case] Error 1

@@ -1,0 +1,49 @@
+{
+  "status": "applied",
+  "files": {
+    "scripts/dev/local-dev.sh": {
+      "base_sha256": "afabc362d173dcfb118549784c3b67cb76e95149ba6c2bbf4d44cf5cc2fb9345",
+      "proposed_sha256": "90bd6c896f28a308a2b7769d0efc19cb499f8c71a8294d4f0e2da44e88488d0a",
+      "verified_current_sha256": "90bd6c896f28a308a2b7769d0efc19cb499f8c71a8294d4f0e2da44e88488d0a"
+    },
+    "docs/upstream/canic.md": {
+      "base_sha256": "5ff07a6b3885ce3fa36d8de856c51cbfda39ba8c986aaffe011111a49fe000a9",
+      "proposed_sha256": "d8bb4a59a7a654c1a98f874632e5d2dc751640fbb64f34860e76f400bbe42cc1",
+      "verified_current_sha256": "70f7e13a4bd13a49d96ebcdcdb887ae5a2e153d0e773ff1226a2c58426ea3ecb"
+    },
+    "docs/status/current.md": {
+      "base_sha256": "c62826c6315920a0410bbb01d202bf9c3e792bbe70d61e6cb02bcd3805eb7274",
+      "proposed_sha256": "9fc5a1cbf75dd48525efa65057e0db1aa601347111448dfdf00e0b0442a84ded",
+      "verified_current_sha256": "9fc5a1cbf75dd48525efa65057e0db1aa601347111448dfdf00e0b0442a84ded"
+    },
+    "docs/changelog/0.2.md": {
+      "base_sha256": "d49c5802c5d6bf60fa3440fd05026c459775b329adb8250707b416c8bf18970b",
+      "proposed_sha256": "238a59c1aa6d1c78b536e608b7f0a894b495ef4a69d6275f391876aab369e68f",
+      "verified_current_sha256": "238a59c1aa6d1c78b536e608b7f0a894b495ef4a69d6275f391876aab369e68f"
+    },
+    "CHANGELOG.md": {
+      "base_sha256": "e0d454dcce98085972a502b4d2bb5f796a78d7879553529a989c2c4b1fa9d6d3",
+      "proposed_sha256": "3a91f3ca2e70b5ff3280a233e6a1f1f64c6b5e1144468b5f2e2ecb3ee3df0fce",
+      "verified_current_sha256": "3a91f3ca2e70b5ff3280a233e6a1f1f64c6b5e1144468b5f2e2ecb3ee3df0fce"
+    },
+    "docs/audits/reports/2026/09/09/canic-feedback/summary.md": {
+      "base_sha256": null,
+      "proposed_sha256": "06d02f8e8c2531be115df47d7b48ef1d25fe6a8b50d1b1c4887acbc696cf5c42",
+      "verified_current_sha256": "06d02f8e8c2531be115df47d7b48ef1d25fe6a8b50d1b1c4887acbc696cf5c42"
+    }
+  },
+  "applied_date": "2026-09-09",
+  "authorization": "Maintainer explicitly approved applying the prepared six-file cleanup/docs patch to ../toko-miner.",
+  "verification": {
+    "reviewed_base_hashes": "all matched immediately before application",
+    "applied_patch_hashes": "all six matched proposed hashes immediately after application",
+    "shell_syntax": "pass",
+    "shellcheck": "pass",
+    "local_reinstall_contract": "pass",
+    "local_fleet_policy_contract": "pass"
+  },
+  "followup_documentation": [
+    "docs/upstream/canic.md",
+    "docs/upstream/scan-log.md"
+  ]
+}
