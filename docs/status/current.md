@@ -77,6 +77,15 @@ The complete scoped .14 batch and changelog are **ready for push/release review*
 Package versions remain 0.110.13. The maintainer selects the release gate;
 no version, publication, deployment or sibling-repository mutation ran.
 
+The reported host-library release failure is reproduced with Make's exported
+shared Cargo target: concurrent reuse fixtures discover each other's dependency
+records and reject the changed source inventory. Both fixtures now run in child
+processes with private absolute Cargo target/intermediate directories, retaining
+all source-change and first-build assertions. All 11 focused reuse/canonical Root
+cases pass with the triggering shared-target setting; existing shared dependency
+records remain unchanged. This is a test-isolation correction, not relaxed build
+authority. The open .14 notes include the repair; no full gate was rerun.
+
 ## Current Toko Feedback Disposition
 
 CANIC-162 now uses one ic-memory 0.13.2 runtime shared with published IcyDB

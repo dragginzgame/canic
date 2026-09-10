@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.14` improves build and validation speed, metrics and Fleet recovery,
+- `0.110.14` improves build/validation speed and reliability, metrics and Fleet recovery,
   and adds protected allocation diagnostics with aligned IcyDB/memory dependencies.
 - `0.110.13` introduces breaking Fleet review-record changes for safer reinstall
   and recovery, improves provisioning diagnostics and public metrics, reduces
