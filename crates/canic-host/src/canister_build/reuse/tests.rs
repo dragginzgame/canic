@@ -2,6 +2,35 @@ use super::*;
 use crate::test_support::temp_dir;
 use std::io::Write as _;
 
+// Re-exec only this case with private Cargo output paths. Make exports
+// a shared target; these fixtures must not discover or replace each other's .d
+// records. A child environment avoids mutating the parallel libtest process.
+fn run_with_private_cargo_target(test: fn()) {
+    const CHILD_ENV: &str = "CANIC_TEST_PRIVATE_REUSE_TARGET";
+    let thread = std::thread::current();
+    let test_name = thread.name().expect("libtest names each test thread");
+    if env::var(CHILD_ENV).as_deref() == Ok(test_name) {
+        test();
+        return;
+    }
+    let scratch = temp_dir("reuse-cargo-target");
+    fs::create_dir_all(&scratch).unwrap();
+    let output = Command::new(env::current_exe().unwrap())
+        .args(["--exact", test_name])
+        .env(CHILD_ENV, test_name)
+        .env("CARGO_TARGET_DIR", scratch.join("target"))
+        .env("CARGO_BUILD_BUILD_DIR", scratch.join("build"))
+        .output()
+        .unwrap();
+    fs::remove_dir_all(scratch).unwrap();
+    assert!(
+        output.status.success(),
+        "isolated reuse test failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn infrastructure_build_fixture() -> (PathBuf, WorkspaceBuildContext) {
     let root = temp_dir("reuse-first-infrastructure");
     let app = root.join("app");
@@ -108,6 +137,10 @@ fn compile_infrastructure_fixture(context: &WorkspaceBuildContext) {
 
 #[test]
 fn first_infrastructure_build_and_replaced_cargo_records_preserve_source_authority() {
+    run_with_private_cargo_target(first_infrastructure_build_fixture_preserves_source_authority);
+}
+
+fn first_infrastructure_build_fixture_preserves_source_authority() {
     let (root, context) = infrastructure_build_fixture();
     let control_source = root.join("upstream/canic-control-plane/src/lib.rs");
     let metadata =
@@ -149,6 +182,10 @@ fn first_infrastructure_build_and_replaced_cargo_records_preserve_source_authori
 
 #[test]
 fn governed_inputs_invalidate_reuse_even_when_file_lengths_are_unchanged() {
+    run_with_private_cargo_target(governed_fixture_inputs_invalidate_reuse);
+}
+
+fn governed_fixture_inputs_invalidate_reuse() {
     let root = temp_dir("build-reuse-inputs");
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(
@@ -176,7 +213,8 @@ fn governed_inputs_invalidate_reuse_even_when_file_lengths_are_unchanged() {
         release_build_id: None,
     };
     let tools = [root.join("tool")];
-    let original = input_digest(&context, &tools).unwrap();
+    let original_snapshot = input_snapshot(&context, &tools).unwrap();
+    let original = original_snapshot.digest();
     for (path, replacement) in [
         ("src/lib.rs", "pub const VALUE: u8 = 2;\n"),
         ("canic.toml", "configuration = 2\n"),
@@ -198,7 +236,11 @@ fn governed_inputs_invalidate_reuse_even_when_file_lengths_are_unchanged() {
     changed = context.clone();
     changed.profile = crate::canister_build::CanisterBuildProfile::Release;
     assert_ne!(original, input_digest(&changed, &tools).unwrap());
-    assert_eq!(original, input_digest(&context, &tools).unwrap());
+    let restored = input_snapshot(&context, &tools).unwrap();
+    original_snapshot
+        .validate_after(&restored)
+        .expect("restored fixture inputs retain their original authority");
+    assert_eq!(original, restored.digest());
     let external = temp_dir("build-reuse-external");
     fs::create_dir_all(&external).unwrap();
     let included = external.join("shared.rs");
