@@ -160,6 +160,22 @@ PocketIC case, plus scoped Clippy. Historical logs remain
 The intervening 0.13.0 projection passed eight unit cases and scoped Clippy;
 earlier results do not substitute for 0.13.1 qualification.
 
+## Secret-scan qualification
+
+The full-history scan of commit `bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3`
+reported 16 `generic-api-key` candidates in the retained 0.13.2 evidence log.
+Each flagged line is a source-path/SHA-256 entry. Every value was independently
+recomputed from its named source file in that exact commit and matched; these
+are reproducible file checksums, not credentials. Paths containing auth, token,
+key or access terminology caused the generic detector to classify the digests.
+
+The existing `.gitleaksignore` mechanism now records only those exact
+commit/path/rule/line fingerprints. No path allowlist, rule override or history
+rewrite is introduced. Historical evidence bytes remain unchanged. A new
+occurrence or commit still receives normal built-in scanning. The targeted
+full-history scan passes with Gitleaks 8.30.1, built-in rules and zero findings
+at the exact commit above after applying these reviewed exceptions.
+
 ## Remaining ownership
 
 The published dependency mismatch is resolved by IcyDB 0.257.4. Current
