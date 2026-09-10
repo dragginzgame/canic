@@ -1,0 +1,26 @@
+--- a/apps/toko_miner/game_shard/src/observability/database_metrics.rs
++++ b/apps/toko_miner/game_shard/src/observability/database_metrics.rs
+@@ -79,7 +79,7 @@
+         ];
+         for ((suffix, unit), value) in SUFFIXES.iter().zip(values) {
+             rows.push(metric(
+-                format!("{PREFIX}{}{suffix}", entity.path()),
++                metric_name(entity.path(), suffix),
+                 value,
+                 unit,
+                 observed_at_ns,
+@@ -87,6 +87,14 @@
+         }
+     }
+     Ok(rows)
++}
++
++fn metric_name(path: &str, suffix: &str) -> String {
++    let mut name = String::with_capacity(PREFIX.len() + path.len() + suffix.len());
++    name.push_str(PREFIX);
++    name.push_str(path);
++    name.push_str(suffix);
++    name
+ }
+ 
+ fn metric(name: String, value: u64, unit: &str, observed_at_ns: u64) -> PublicMetric {

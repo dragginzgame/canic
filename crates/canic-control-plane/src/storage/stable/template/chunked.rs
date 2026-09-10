@@ -3,7 +3,7 @@ use canic_core::CANIC_WASM_CHUNK_BYTES;
 use canic_core::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use canic_core::cdk::structures::{
     DefaultMemoryImpl, Vec as StableVec,
-    memory::VirtualMemory,
+    memory::RuntimeMemory,
     storable::{Bound, Storable},
 };
 use canic_core::eager_static;
@@ -24,7 +24,7 @@ struct TemplateChunkPayloadStore;
 
 eager_static! {
     static TEMPLATE_CHUNK_SETS: RefCell<
-        StableBtreeMap<TemplateReleaseKey, TemplateChunkSetRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateReleaseKey, TemplateChunkSetRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_sets.v1", ty = TemplateChunkSetStateStore, id = TEMPLATE_CHUNK_SETS_ID)),
     );
@@ -36,14 +36,14 @@ eager_static! {
 
 eager_static! {
     static TEMPLATE_CHUNK_REFS: RefCell<
-        StableBtreeMap<TemplateChunkKey, TemplateChunkRefRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateChunkKey, TemplateChunkRefRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_refs.v1", ty = TemplateChunkRefStore, id = TEMPLATE_CHUNK_REFS_ID)),
     );
 }
 
 eager_static! {
-    static TEMPLATE_CHUNK_PAYLOADS_MEMORY: VirtualMemory<DefaultMemoryImpl> =
+    static TEMPLATE_CHUNK_PAYLOADS_MEMORY: RuntimeMemory<DefaultMemoryImpl> =
         canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_payloads.v1", ty = TemplateChunkPayloadStore, id = TEMPLATE_CHUNK_PAYLOADS_ID);
 }
 
@@ -200,7 +200,7 @@ impl Storable for TemplateChunkPayloadRecord {
 }
 
 type TemplateChunkPayloadVec =
-    StableVec<TemplateChunkPayloadRecord, VirtualMemory<DefaultMemoryImpl>>;
+    StableVec<TemplateChunkPayloadRecord, RuntimeMemory<DefaultMemoryImpl>>;
 
 ///
 /// TemplateChunkRefEntryRecord

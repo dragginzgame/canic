@@ -7,7 +7,7 @@
 use crate::{
     cdk::{
         structures::{
-            DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::VirtualMemory,
+            DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
         },
         types::Principal,
     },
@@ -23,7 +23,7 @@ const AUTHORITY_RESTORE_FENCE_RECORD_KEY: u8 = 0;
 
 eager_static! {
     static AUTHORITY_RESTORE_FENCE: RefCell<
-        StableBtreeMap<u8, AuthorityRestoreFenceRecord, VirtualMemory<DefaultMemoryImpl>>,
+        StableBtreeMap<u8, AuthorityRestoreFenceRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
         key = "canic.core.authority_restore.fence.v1",

@@ -5,7 +5,9 @@
 //! Boundary: workflow query facade over runtime memory ops.
 
 use crate::{
-    InternalError, dto::memory::MemoryLedgerResponse, ops::runtime::memory::MemoryRegistryOps,
+    InternalError,
+    dto::memory::{MemoryAllocationsResponse, MemoryLedgerResponse},
+    ops::runtime::memory::MemoryRegistryOps,
 };
 
 ///
@@ -15,6 +17,10 @@ use crate::{
 pub struct MemoryQuery;
 
 impl MemoryQuery {
+    pub fn allocations() -> Result<MemoryAllocationsResponse, InternalError> {
+        MemoryRegistryOps::allocation_snapshot()
+    }
+
     pub fn ledger() -> Result<MemoryLedgerResponse, InternalError> {
         MemoryRegistryOps::ledger_snapshot()
     }

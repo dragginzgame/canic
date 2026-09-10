@@ -7,7 +7,7 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{
-        DefaultMemoryImpl, Memory, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
+        DefaultMemoryImpl, Memory, Storable, cell::Cell, memory::RuntimeMemory, storable::Bound,
     },
     ids::{IntentId, IntentResourceKey},
     model::{
@@ -38,7 +38,7 @@ const APPLICATION_RECEIPT_ELIGIBILITY_MIN_NODE_ENTRIES: u64 = 5;
 const APPLICATION_RECEIPT_ELIGIBILITY_CHUNK_BYTES: u64 = 2_378;
 const APPLICATION_RECEIPT_ELIGIBILITY_FIXED_BYTES: u64 = 116;
 
-type StableIntentMemory = VirtualMemory<DefaultMemoryImpl>;
+type StableIntentMemory = RuntimeMemory<DefaultMemoryImpl>;
 type ApplicationReceiptEligibilityMap = StableBtreeMap<
     ApplicationReceiptEligibilityKeyRecord,
     ApplicationReceiptEligibilityRecord,
@@ -47,7 +47,7 @@ type ApplicationReceiptEligibilityMap = StableBtreeMap<
 type ApplicationReceiptEligibilityState = (ApplicationReceiptEligibilityMap, StableIntentMemory);
 
 eager_static! {
-    static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, VirtualMemory<DefaultMemoryImpl>>> =
+    static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.meta.v1", ty = IntentStoreMetaRecord, id = INTENT_META_ID),
             IntentStoreMetaRecord::default(),
@@ -59,7 +59,7 @@ eager_static! {
         StableBtreeMap<
             OperationId,
             ApplicationReceiptReplayRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
@@ -87,7 +87,7 @@ eager_static! {
         StableBtreeMap<
             OperationId,
             ReceiptBackedIntentRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
@@ -99,7 +99,7 @@ eager_static! {
 
 eager_static! {
     static INTENT_EXPIRY_INDEX: RefCell<
-        StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.expiry_index.v1", ty = IntentExpiryEntryRecord, id = INTENT_EXPIRY_INDEX_ID)),
     );
@@ -110,7 +110,7 @@ eager_static! {
         StableBtreeMap<
             OperationId,
             PlacementAcknowledgementEntryRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
@@ -122,7 +122,7 @@ eager_static! {
 
 eager_static! {
     static INTENT_RECORDS: RefCell<
-        StableBtreeMap<IntentId, IntentRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentId, IntentRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.records.v1", ty = IntentRecord, id = INTENT_RECORDS_ID)),
     );
@@ -130,7 +130,7 @@ eager_static! {
 
 eager_static! {
     static INTENT_TOTALS: RefCell<
-        StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.totals.v1", ty = IntentResourceTotalsRecord, id = INTENT_TOTALS_ID)),
     );
@@ -138,7 +138,7 @@ eager_static! {
 
 eager_static! {
     static INTENT_PENDING: RefCell<
-        StableBtreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentId, IntentPendingEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.pending.v1", ty = IntentPendingEntryRecord, id = INTENT_PENDING_ID)),
     );
@@ -794,7 +794,7 @@ impl IntentStore {
 
     pub(crate) fn with_pending_entries<R>(
         f: impl FnOnce(
-            &StableBtreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>,
+            &StableBtreeMap<IntentId, IntentPendingEntryRecord, RuntimeMemory<DefaultMemoryImpl>>,
         ) -> R,
     ) -> R {
         INTENT_PENDING.with_borrow(|map| f(map))
@@ -829,7 +829,7 @@ impl IntentStore {
             &StableBtreeMap<
                 IntentExpiryKeyRecord,
                 IntentExpiryEntryRecord,
-                VirtualMemory<DefaultMemoryImpl>,
+                RuntimeMemory<DefaultMemoryImpl>,
             >,
         ) -> R,
     ) -> R {
@@ -865,7 +865,7 @@ impl ReceiptBackedIntentStore {
             &StableBtreeMap<
                 OperationId,
                 ReceiptBackedIntentRecord,
-                VirtualMemory<DefaultMemoryImpl>,
+                RuntimeMemory<DefaultMemoryImpl>,
             >,
         ) -> R,
     ) -> R {
@@ -897,7 +897,7 @@ impl ReceiptBackedIntentStore {
             &StableBtreeMap<
                 OperationId,
                 ApplicationReceiptReplayRecord,
-                VirtualMemory<DefaultMemoryImpl>,
+                RuntimeMemory<DefaultMemoryImpl>,
             >,
         ) -> R,
     ) -> R {
@@ -946,7 +946,7 @@ impl ReceiptBackedIntentStore {
             &StableBtreeMap<
                 ApplicationReceiptEligibilityKeyRecord,
                 ApplicationReceiptEligibilityRecord,
-                VirtualMemory<DefaultMemoryImpl>,
+                RuntimeMemory<DefaultMemoryImpl>,
             >,
         ) -> R,
     ) -> R {
@@ -1001,7 +1001,7 @@ impl ReceiptBackedIntentStore {
             &StableBtreeMap<
                 OperationId,
                 PlacementAcknowledgementEntryRecord,
-                VirtualMemory<DefaultMemoryImpl>,
+                RuntimeMemory<DefaultMemoryImpl>,
             >,
         ) -> R,
     ) -> R {

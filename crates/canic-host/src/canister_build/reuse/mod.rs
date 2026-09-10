@@ -5,6 +5,7 @@
 //! Boundary: source bytes and admitted tools key a cache; immutable release records remain authority.
 
 mod dependencies;
+mod snapshot;
 #[cfg(test)]
 mod tests;
 
@@ -32,6 +33,8 @@ use std::{
 };
 use thiserror::Error;
 
+use snapshot::BuildInputSnapshot;
+
 const RECORD_LIMIT: usize = 4 * 1024 * 1024;
 
 ///
@@ -43,7 +46,7 @@ const RECORD_LIMIT: usize = 4 * 1024 * 1024;
 pub struct CompleteBuildReuse {
     context: WorkspaceBuildContext,
     tool_paths: Vec<PathBuf>,
-    inputs: String,
+    inputs: BuildInputSnapshot,
     record_path: PathBuf,
     _lock: fs::File,
 }
@@ -86,6 +89,14 @@ struct CompleteBuildReuseRecord {
 pub enum BuildReuseError {
     #[error("build inputs changed during compilation; no reusable build was recorded")]
     Changed,
+
+    #[error("build input changed during compilation: {0}; no reusable build was recorded")]
+    ChangedInput(PathBuf),
+
+    #[error(
+        "build input was first discovered after compilation: {0}; retry to verify it before recording reuse"
+    )]
+    UnobservedInput(PathBuf),
 
     #[error("build reuse evidence failed: {0}")]
     Evidence(String),
@@ -142,11 +153,11 @@ impl CompleteBuildReuse {
             require_native_tool(&path)?;
             tool_paths.push(path);
         }
-        let inputs = input_digest(context, &tool_paths)?;
+        let inputs = input_snapshot(context, &tool_paths)?;
         let record_path = context
             .icp_root
             .join(".canic/build-reuse")
-            .join(format!("{inputs}.json"));
+            .join(format!("{}.json", inputs.digest()));
         Ok(Self {
             context: context.clone(),
             tool_paths,
@@ -165,7 +176,7 @@ impl CompleteBuildReuse {
         };
         let record: CompleteBuildReuseRecord = serde_json::from_slice(&bytes)?;
         if record.schema_version != 1
-            || record.inputs != self.inputs
+            || record.inputs != self.inputs.digest()
             || record.files.is_empty()
             || record.roles.is_empty()
         {
@@ -209,17 +220,18 @@ impl CompleteBuildReuse {
         roles: Vec<String>,
     ) -> Result<(), BuildReuseError> {
         verify_release(&self.context, release_build_id)?;
-        if input_digest(&self.context, &self.tool_paths)? != self.inputs {
-            return Err(BuildReuseError::Changed);
-        }
+        let after = input_snapshot(&self.context, &self.tool_paths)?;
+        self.inputs.validate_after(&after)?;
+        let inputs = after.digest();
+        let record_path = self.record_path.with_file_name(format!("{inputs}.json"));
         let record = CompleteBuildReuseRecord {
             schema_version: 1,
-            inputs: self.inputs.clone(),
+            inputs,
             release_build_id,
             files: output_files(&self.release_directory(release_build_id))?,
             roles,
         };
-        write_bytes(&self.record_path, &serde_json::to_vec(&record)?)?;
+        write_bytes(&record_path, &serde_json::to_vec(&record)?)?;
         Ok(())
     }
 
@@ -262,16 +274,29 @@ fn verify_release(
     verify().map_err(|error| BuildReuseError::Evidence(error.to_string()))
 }
 
-fn input_digest(
+fn input_snapshot(
     context: &WorkspaceBuildContext,
     tools: &[PathBuf],
-) -> Result<String, BuildReuseError> {
+) -> Result<BuildInputSnapshot, BuildReuseError> {
     let metadata =
         cargo_metadata_catalog_for_manifest(&context.workspace_root.join("Cargo.toml"), true, true)
             .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
     let mut roots = BTreeSet::new();
     let mut files = BTreeMap::new();
     for package in metadata.packages {
+        if package.name == "canic" {
+            // Generated infrastructure enables family sources absent from the App's graph.
+            roots.extend(
+                crate::fleet_package::resolved_family_roots(
+                    &package.manifest_path,
+                    &package.version,
+                )
+                .map_err(|error| BuildReuseError::Evidence(error.to_string()))?
+                .into_values()
+                .map(|root| root.canonicalize())
+                .collect::<Result<Vec<_>, _>>()?,
+            );
+        }
         roots.insert(
             package
                 .manifest_path
@@ -327,6 +352,13 @@ fn input_digest(
     }
     append_rust_toolchain_inputs(context, &mut files)?;
 
+    Ok(BuildInputSnapshot {
+        identity: input_identity(context)?,
+        files,
+    })
+}
+
+fn input_identity(context: &WorkspaceBuildContext) -> Result<String, BuildReuseError> {
     let mut digest = Sha256::new();
     hash_field(&mut digest, b"canic.complete-build-inputs.v1");
     hash_field(&mut digest, context.profile.target_dir_name().as_bytes());
@@ -335,10 +367,6 @@ fn input_digest(
         &mut digest,
         context.config_path.as_os_str().as_encoded_bytes(),
     );
-    for (path, hash) in files {
-        hash_field(&mut digest, path.as_bytes());
-        hash_field(&mut digest, hash.as_bytes());
-    }
     let mut environment = env::vars_os().collect::<Vec<_>>();
     environment.sort();
     for (key, value) in environment {
@@ -359,6 +387,14 @@ fn input_digest(
         hash_field(&mut digest, &output.stdout);
     }
     Ok(format!("{:x}", digest.finalize()))
+}
+
+#[cfg(test)]
+fn input_digest(
+    context: &WorkspaceBuildContext,
+    tools: &[PathBuf],
+) -> Result<String, BuildReuseError> {
+    Ok(input_snapshot(context, tools)?.digest())
 }
 
 fn append_rust_toolchain_inputs(
@@ -476,7 +512,7 @@ fn add_file(path: &Path, files: &mut BTreeMap<String, String>) -> Result<(), Bui
     Ok(())
 }
 
-fn file_hash(path: &Path) -> Result<String, BuildReuseError> {
+pub(super) fn file_hash(path: &Path) -> Result<String, BuildReuseError> {
     if !fs::symlink_metadata(path)?.is_file() {
         return Err(BuildReuseError::Unsupported(path.to_path_buf()));
     }
@@ -508,7 +544,7 @@ fn hash_field(digest: &mut Sha256, value: &[u8]) {
     digest.update(value);
 }
 
-fn require_native_tool(path: &Path) -> Result<(), BuildReuseError> {
+pub(super) fn require_native_tool(path: &Path) -> Result<(), BuildReuseError> {
     let mut file = fs::File::open(path)?;
     let mut magic = [0_u8; 4];
     file.read_exact(&mut magic)?;
@@ -525,7 +561,7 @@ fn require_native_tool(path: &Path) -> Result<(), BuildReuseError> {
     }
 }
 
-fn resolve_tool(command: &std::ffi::OsStr) -> Result<PathBuf, BuildReuseError> {
+pub(super) fn resolve_tool(command: &std::ffi::OsStr) -> Result<PathBuf, BuildReuseError> {
     let path = Path::new(command);
     if path.components().count() > 1 {
         return Ok(path.canonicalize()?);

@@ -3,7 +3,7 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::{
-        structures::{DefaultMemoryImpl, memory::VirtualMemory},
+        structures::{DefaultMemoryImpl, memory::RuntimeMemory},
         types::{BoundedString64, BoundedString128},
     },
     eager_static,
@@ -14,7 +14,7 @@ use std::cell::RefCell;
 
 eager_static! {
     static PLACEMENT_INDEX_REGISTRY: RefCell<
-        StableBtreeMap<PlacementIndexKey, PlacementIndexEntryRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<PlacementIndexKey, PlacementIndexEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.placement.index_registry.v1", ty = PlacementIndexRegistry, id = PLACEMENT_INDEX_REGISTRY_ID)),
     );

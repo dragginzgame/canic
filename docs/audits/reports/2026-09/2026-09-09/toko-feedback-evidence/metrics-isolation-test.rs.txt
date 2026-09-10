@@ -1,0 +1,382 @@
+//! Qualify the real optional application producer through Canic's native sampler.
+
+use super::*;
+use canic::dto::public_status::{PublicHistoryRequest, PublicHistorySnapshot, PublicMetricKind};
+
+#[derive(CandidType)]
+enum HistoryRequest {
+    History(PublicHistoryRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum HistoryResponse {
+    History(PublicHistorySnapshot),
+}
+
+#[test]
+#[ignore = "requires the managed release artefacts built by make qualification"]
+fn managed_public_metrics_qualifies_failure_isolation() {
+    let release = env::var("TOKO_MINER_QUALIFICATION_RELEASE_BUILD_ID").unwrap();
+    let fixture = install_managed_component_group(ManagedComponentGroupQualificationInput::new(
+        include_str!("../../../canic.toml"),
+        "game",
+        &release,
+        vec![Principal::from_slice(&[0x71; 29])],
+        vec![
+            artifact("game_hub"),
+            artifact("game_shard"),
+            artifact("translation"),
+            artifact("user_hub"),
+            artifact("user_shard"),
+        ],
+    ))
+    .expect("install metrics-enabled governed fixture");
+    let shard = fixture
+        .nodes()
+        .iter()
+        .find(|node| node.role.to_string() == "game_shard")
+        .expect("Game Shard")
+        .canister_id;
+    let translation = fixture
+        .nodes()
+        .iter()
+        .find(|node| node.role.to_string() == "translation")
+        .unwrap()
+        .canister_id;
+    let _catalogue = ready_translation_catalogue(&fixture, translation);
+    eprintln!("Translation catalogue is ready before scheduled sampling");
+    for node in fixture
+        .nodes()
+        .iter()
+        .filter(|node| node.role.to_string() == "game_shard")
+    {
+        let entities: u64 = fixture.pic().update_candid_as_or_panic(
+            node.canister_id,
+            fixture.root(),
+            "qualification_seed_metrics",
+            (),
+        );
+        assert_eq!(entities, 64, "real IcyDB source cardinality");
+    }
+    for _ in 0..3 {
+        fixture.pic().advance_time(Duration::from_secs(301));
+        for _ in 0..SETUP_TICKS {
+            fixture.pic().tick();
+        }
+    }
+    let source_report: Result<icydb::metrics::MetricsReport, icydb::Error> = fixture
+        .pic()
+        .query_candid_as_or_panic(shard, fixture.root(), "icydb_metrics", ());
+    let source_report = source_report.expect("real IcyDB metrics");
+    eprintln!(
+        "ceiling source: {} total, {} selected, longest path {} bytes",
+        source_report.total_entities(),
+        source_report.entities().len(),
+        source_report
+            .entities()
+            .iter()
+            .map(|entity| entity.path().len())
+            .max()
+            .unwrap()
+    );
+    assert_eq!(source_report.total_entities(), 64);
+    assert_eq!(source_report.entities().len(), 64);
+    assert_eq!(
+        source_report
+            .entities()
+            .iter()
+            .map(|entity| entity.path().len())
+            .max(),
+        Some(64)
+    );
+    let application = read_metrics(&fixture, shard, PublicMetricFamily::Application);
+    assert_eq!(application.state, PublicSnapshotState::Fresh);
+    assert!(!application.truncated);
+    assert!(application.metrics.entries.len() >= 2);
+    assert_eq!(application.metrics.entries.len(), 194);
+    assert!(
+        application
+            .metrics
+            .entries
+            .iter()
+            .all(|row| row.kind == PublicMetricKind::Gauge && row.canister_id.is_none())
+    );
+    let first = &application.metrics.entries[0];
+    let history = read_history(&fixture, shard, first.name.clone(), first.canister_id);
+    assert!(history.points.entries.len() >= 2);
+    assert!(
+        history
+            .points
+            .entries
+            .iter()
+            .all(|point| point.delta.is_none())
+    );
+    let again = read_history(&fixture, shard, first.name.clone(), first.canister_id);
+    assert_eq!(
+        history.points.entries, again.points.entries,
+        "queries must not add samples"
+    );
+    let cycles = read_metrics(&fixture, shard, PublicMetricFamily::Cycles);
+    assert_eq!(cycles.state, PublicSnapshotState::Fresh);
+    assert_eq!(cycles.metrics.entries[0].unit, "cycles");
+    let mut covered_roles = BTreeSet::new();
+    let mut budgets = Vec::new();
+    for node in fixture.nodes() {
+        covered_roles.insert(node.role.to_string());
+        let id = node.canister_id;
+        let cycles = read_metrics(&fixture, id, PublicMetricFamily::Cycles);
+        assert_eq!(cycles.state, PublicSnapshotState::Fresh);
+        assert!(!cycles.metrics.entries.is_empty());
+        assert_process_coverage(&fixture, id);
+        assert_observer_boundary(&fixture, id);
+        let rows = read_metrics(&fixture, id, PublicMetricFamily::Application);
+        budgets.push((
+            node.role.to_string(),
+            sampler_instructions(&fixture, id, rows.metrics.entries.len()),
+        ));
+        eprintln!(
+            "metrics role {}: application {:?}, {} rows",
+            node.role,
+            rows.state,
+            rows.metrics.entries.len()
+        );
+    }
+    eprintln!("Measured budgets (separate ceiling gate remains failing): {budgets:?}");
+    assert_eq!(
+        covered_roles,
+        [
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+    );
+
+    for node in fixture
+        .nodes()
+        .iter()
+        .filter(|node| node.role.to_string() == "game_shard")
+    {
+        let id = node.canister_id;
+        let before = read_metrics(&fixture, id, PublicMetricFamily::Application);
+        let first = &before.metrics.entries[0];
+        let history_before = read_history(&fixture, id, first.name.clone(), first.canister_id);
+        let cycles_before = read_metrics(&fixture, id, PublicMetricFamily::Cycles);
+        let entities: u64 = fixture.pic().update_candid_as_or_panic(
+            id,
+            fixture.root(),
+            "qualification_overflow_metrics",
+            (),
+        );
+        assert_eq!(entities, 65);
+        fixture.pic().advance_time(Duration::from_secs(301));
+        for _ in 0..SETUP_TICKS {
+            fixture.pic().tick();
+        }
+        let failed = read_metrics(&fixture, id, PublicMetricFamily::Application);
+        assert_eq!(failed.sampled_at_ns, before.sampled_at_ns);
+        assert_eq!(failed.metrics.entries, before.metrics.entries);
+        let history_failed = read_history(&fixture, id, first.name.clone(), first.canister_id);
+        assert_eq!(history_failed.points.entries, history_before.points.entries);
+        for family in [
+            PublicMetricFamily::Cycles,
+            PublicMetricFamily::Operations,
+            PublicMetricFamily::Performance,
+        ] {
+            let independent = read_metrics(&fixture, id, family);
+            assert_eq!(independent.state, PublicSnapshotState::Fresh);
+            assert!(independent.sampled_at_ns > cycles_before.sampled_at_ns);
+        }
+        assert_observer_boundary(&fixture, id);
+        let entities: u64 = fixture.pic().update_candid_as_or_panic(
+            id,
+            fixture.root(),
+            "qualification_seed_metrics",
+            (),
+        );
+        assert_eq!(entities, 64);
+        fixture.pic().advance_time(Duration::from_secs(301));
+        for _ in 0..SETUP_TICKS {
+            fixture.pic().tick();
+        }
+        let recovered = read_metrics(&fixture, id, PublicMetricFamily::Application);
+        let recovered_report: Result<icydb::metrics::MetricsReport, icydb::Error> = fixture.pic().query_candid_as_or_panic(id, fixture.root(), "icydb_metrics", ());
+        eprintln!("Recovery source: {:?}; snapshot {:?}, before {:?}, after {:?}", recovered_report.as_ref().map(|report| (report.total_entities(), report.entities().iter().map(|entity| entity.path()).collect::<Vec<_>>())), recovered.state, before.sampled_at_ns, recovered.sampled_at_ns);
+        assert_eq!(recovered.state, PublicSnapshotState::Fresh);
+        assert_eq!(recovered.metrics.entries.len(), 194);
+        assert!(recovered.sampled_at_ns > before.sampled_at_ns);
+        let history_recovered = read_history(&fixture, id, first.name.clone(), first.canister_id);
+        assert!(history_recovered.points.entries.len() > history_before.points.entries.len());
+        assert!(
+            history_recovered
+                .points
+                .entries
+                .iter()
+                .all(|point| point.delta.is_none())
+        );
+        eprintln!("PASS failure isolation and recovery: {id}; real source 64 -> 65 -> 64");
+    }
+}
+
+fn assert_process_coverage(fixture: &ManagedComponentGroupFixture, shard: Principal) {
+    let operations = read_metrics(fixture, shard, PublicMetricFamily::Operations);
+    assert_eq!(operations.state, PublicSnapshotState::Fresh);
+    assert!(!operations.truncated);
+    let calls = operations
+        .metrics
+        .entries
+        .iter()
+        .find(|row| row.name == "process.inter_canister_call.started")
+        .expect("bounded anonymous inter-canister call aggregate");
+    assert!(matches!(calls.kind, PublicMetricKind::Counter { .. }));
+    assert_eq!(calls.unit, "count");
+    assert!(calls.canister_id.is_none());
+    let timer = operations
+        .metrics
+        .entries
+        .iter()
+        .find(|row| row.name == "timer.events.work_completed")
+        .expect("bounded timer aggregate");
+    assert_eq!(timer.kind, PublicMetricKind::Gauge);
+    assert_eq!(timer.unit, "count");
+    assert!(timer.canister_id.is_none());
+
+    let performance = read_metrics(fixture, shard, PublicMetricFamily::Performance);
+    assert_eq!(performance.state, PublicSnapshotState::Fresh);
+    assert!(!performance.truncated);
+    for name in ["memory.wasm_extent", "memory.stable_extent"] {
+        let memory = performance
+            .metrics
+            .entries
+            .iter()
+            .find(|row| row.name == name)
+            .expect("published memory extent");
+        assert_eq!(memory.kind, PublicMetricKind::Gauge);
+        assert_eq!(memory.unit, "bytes");
+        assert!(memory.canister_id.is_none());
+    }
+}
+
+fn assert_observer_boundary(fixture: &ManagedComponentGroupFixture, shard: Principal) {
+    let result: Result<ProtectedCanicObservabilityResponse, Error> =
+        fixture.pic().query_candid_as_or_panic(
+            shard,
+            Principal::anonymous(),
+            protocol::CANIC_OBSERVABILITY,
+            (ProtectedCanicObservabilityRequest::CycleBalance,),
+        );
+    let Err(error) = result else {
+        panic!("public publication must preserve observer denial")
+    };
+    assert_eq!(error.code(), AUTHORITY_UNAVAILABLE.raw_code());
+}
+
+fn sampler_instructions(
+    fixture: &ManagedComponentGroupFixture,
+    shard: Principal,
+    row_count: usize,
+) -> u64 {
+    let runtime = fixture
+        .diagnostic_status(shard)
+        .expect("sampler diagnostics");
+    let timers = runtime
+        .timers
+        .iter()
+        .filter(|timer| {
+            timer.owner == "canic" && timer.subsystem == "public_metrics" && timer.name == "sample"
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(timers.len(), 1);
+    let maximum = timers[0]
+        .work_performance
+        .instructions_maximum
+        .expect("measured sampler work");
+    eprintln!(
+        "Toko Miner complete public sampling maximum: {maximum} instructions; {row_count} application rows"
+    );
+    eprintln!("sampler performance: {:?}", timers[0].work_performance);
+    let details: Result<ProtectedCanicObservabilityResponse, Error> =
+        fixture.pic().query_candid_as_or_panic(
+            shard,
+            fixture.root(),
+            protocol::CANIC_OBSERVABILITY,
+            (ProtectedCanicObservabilityRequest::Metrics(
+                MetricsStatusRequest {
+                    kind: MetricsKind::Runtime,
+                    page: PageRequest {
+                        offset: 0,
+                        limit: 256,
+                    },
+                },
+            ),),
+        );
+    if let ProtectedCanicObservabilityResponse::Metrics(page) = details.unwrap() {
+        for row in page.entries.iter().filter(|row| {
+            row.labels
+                .iter()
+                .any(|label| label == "public_metrics_sample" || label == "qualification_family")
+        }) {
+            eprintln!("sampler checkpoint: {row:?}");
+        }
+    }
+
+    for family in [
+        PublicMetricFamily::Operations,
+        PublicMetricFamily::Performance,
+    ] {
+        let snapshot = read_metrics(fixture, shard, family);
+        eprintln!("family {family:?}: {} rows", snapshot.metrics.entries.len());
+    }
+    maximum
+}
+
+fn read_metrics(
+    fixture: &ManagedComponentGroupFixture,
+    shard: Principal,
+    family: PublicMetricFamily,
+) -> PublicMetricsSnapshot {
+    let result: Result<PublicCanicResponse, Error> = fixture.pic().query_candid_as_or_panic(
+        shard,
+        Principal::anonymous(),
+        protocol::CANIC_PUBLIC_STATUS,
+        (PublicCanicRequest::Metrics(PublicMetricsRequest {
+            family,
+            page: PageRequest {
+                offset: 0,
+                limit: 256,
+            },
+        }),),
+    );
+    let PublicCanicResponse::Metrics(snapshot) = result.expect("published snapshot") else {
+        panic!("metrics response expected")
+    };
+    snapshot
+}
+
+fn read_history(
+    fixture: &ManagedComponentGroupFixture,
+    shard: Principal,
+    name: String,
+    canister_id: Option<Principal>,
+) -> PublicHistorySnapshot {
+    let result: Result<HistoryResponse, Error> = fixture.pic().query_candid_as_or_panic(
+        shard,
+        Principal::anonymous(),
+        protocol::CANIC_PUBLIC_STATUS,
+        (HistoryRequest::History(PublicHistoryRequest {
+            family: PublicMetricFamily::Application,
+            name,
+            canister_id,
+            page: PageRequest {
+                offset: 0,
+                limit: 288,
+            },
+        }),),
+    );
+    let HistoryResponse::History(snapshot) = result.expect("published history");
+    snapshot
+}

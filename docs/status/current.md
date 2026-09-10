@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 
 ## Purpose
 
@@ -25,9 +25,234 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from tagged `v0.110.12`. Its immutable
+Current development begins from tagged `v0.110.13`. Its immutable
 release details are in [the 0.110 changelog](../changelog/0.110.md). Package
-versions remain 0.110.12; the current source batch uses the open 0.110.13 draft.
+versions remain 0.110.13; the current source batch uses the open 0.110.14 draft.
+
+## Validation Throughput: Qualified Before Push
+
+The maintainer-selected [VS1 batch](../design/0.110-fleet-runtime-contraction/0.110-design.md#validation-throughput-amendment-vs1)
+is qualified on the settled ic-memory 0.13.1 candidate. Governed PocketIC runs
+select the pinned native ICP executable, avoiding repeated npm launcher startup.
+Fleet observations reuse validated Root inspections within one decision; fresh
+operator/controller/module checks and subsequent observations remain intact.
+
+Both exact production-adapter journeys pass with an unchanged 1,686-file source
+inventory: mixed topology plus two deliberate resets takes 1,153.72s (19m14s),
+and retained-estate recovery takes 575.12s (9m35s). These include 424.62s and
+85.50s of initial artifact work. All 144 duplicate balance queries disappear;
+that stage takes 7.187s across 24 observations. Recovery, real row wipes,
+newly written row preservation, distinct reset operations, retained identities,
+funding bounds, cycle conservation and effect-free replays remain covered.
+
+All 23 focused host cases, three timing cases and the exact governed catalogue
+regression pass. Warning-denied all-target/all-feature host/internal-fixture
+Clippy passes. Native tool selection/refusal, shell and release-integrity checks
+also pass. The [VS1 evidence](../audits/working/0.110-validation-throughput/report.md)
+retains final source/tool context, raw logs, artifact hashes and phase/resource
+records. Existing verified artifact reuse is sufficient; sub-second replica
+setup does not justify new mutable fixture pooling or catalogue splitting.
+
+The historical 0.110.12 runner took 6,322s, including 5,564s in the internal
+PocketIC suite. Earlier attribution runs took 1,906.37s and 1,056.83s for the two
+journeys. Those dependency/cache states differ from the final candidate; no
+isolated whole-journey speedup percentage, new complete-gate time or sub-hour
+result is claimed. The memory owner's handoff confirms its 0.13.1 adoption
+waited for the previous 0.13.0 recovery command to finish; an after-run source
+difference was not proof of an overlapping edit.
+
+The throughput implementation remains qualified at the recorded checkpoint.
+IcyDB 0.257.4 is now published with ic-memory 0.13.2, and the maintainer requested
+adoption. The deferred CANIC-162 source is restored and the aligned candidate
+passes fresh qualification: eight memory cases, three ABI guards, 15 timer
+inventory guards, the governed catalogue regression and both exact PocketIC
+proofs. Composed lifecycle takes 53.28s (80s runner); protected allocation
+observation takes 19.79s (26s runner), with existing artifact reuse. These are
+qualification timings, not new VS1/full-gate measurements. Warning-denied
+scoped Clippy passes for affected runtime, host, fixtures, lifecycle probe/schema,
+both reset roles and the native-agent integration target. The source inventory
+stays unchanged through these checks; unrelated external packages are unchanged.
+
+The complete scoped .14 batch and changelog are **ready for push/release review**.
+Package versions remain 0.110.13. The maintainer selects the release gate;
+no version, publication, deployment or sibling-repository mutation ran.
+
+## Current Toko Feedback Disposition
+
+CANIC-162 now uses one ic-memory 0.13.2 runtime shared with published IcyDB
+0.257.4. The protected allocation-report surface, runtime handles, substrate
+re-export, Root relay, host transport and focused fixture are restored from the
+verified deferral patch. The structured single-runtime guard remains enforced.
+The default bucket policy is unchanged. The
+[assessment](../audits/reports/2026-09/2026-09-10/canic162-memory.md)
+retains both prior checkpoints and fresh alignment evidence.
+
+The temporary 0.12.3 / IcyDB 0.257.2 deferral qualification is historical.
+VS1's 0.13.1 timings are also retained at their original checkpoint, not
+relabeled as measurements of this candidate. Live Game Hub attribution and
+memory/cycle savings remain unproven. Build scheduling, reuse, metrics and
+recovery fixes remain in the same open .14 draft.
+
+The earlier 2026-09-10 read-only refresh ended at CANIC-161. Older CANIC-007,
+132/133, 135/136 and 137 labels refer to defects with published Canic fixes and
+retained qualification, not a fresh implementation queue. The
+[feedback cleanup](../audits/reports/2026-09/2026-09-10/toko-feedback-triage.md)
+maps each to evidence and keeps downstream acceptance separate. A new focused
+funding regression protects Coordinator's combined Root allowances from being
+mistaken for the per-Root grant cap; runtime policy remains unchanged. All 17
+focused cases, core library/test Clippy with warnings denied, formatting and
+document/release-note checks pass. These completed corrections and their
+changelog remain qualified; VS1 and the newly aligned memory composition
+are complete within their recorded scope. The .14 batch is ready for release
+review. No version or publication ran.
+
+CANIC-087/139's follow-up reuses verified extraction for unchanged compiled
+declarations after backend edits. Cargo retains dependency ownership; every
+runtime still rebuilds for its newly embedded complete release identity. The
+[BF4 report](../audits/reports/2026-09/2026-09-10/build-declaration-reuse.md)
+records role/shared-input invalidation and a real six-role comparison: 1.922s
+fresh extraction versus 0.087s verified reuse, with exact Candid parity.
+This completes bounded declaration reuse, not cross-identity runtime reuse or
+an end-to-end build-speed claim. All 39 focused build cases, the separate
+real-tool case and warning-denied host/CLI Clippy pass. The complete scoped
+.14 build work and changelog remain qualified; the newly aligned memory
+composition passes the checks described above.
+CANIC-148/153/159 need
+publication/adoption of the already qualified candidate, while live staging recovery and application-loop repair
+remain separate. No sibling repository or live estate changed in this cleanup.
+
+## Build Feedback: Infrastructure Finalization
+
+The maintainer selected build speed as the next Toko Miner feedback priority.
+BF2 overlaps Coordinator and Store finalization with subsequent compilation,
+using captured inputs and the existing qualification pipeline. Cargo stays
+serial under one build lock; every worker finishes before success or failure
+returns. No runtime profile, feature or release identity changes.
+
+The controlled two-infrastructure comparison improves 112.89s to 85.03s
+(24.68%), with exact Wasm, gzip, Candid, protocol and transform-provenance parity.
+All 53 focused host cases and 25 CLI build cases pass, as does warning-denied
+all-target/all-feature Clippy for both packages. A real configured-admission
+failure drains workers and leaves no capture stages; a following valid request
+with the same release identity reproduces the artifact bytes. The
+[build scheduling report](../audits/reports/2026-09/2026-09-09/build-pipeline.md)
+records commands, hashes, timings and limits.
+
+BF3 addresses CANIC-139's reported first-build fingerprint failure. The initial
+snapshot now includes the exact infrastructure family sources even when absent
+from the App's ordinary dependency graph. Refreshed Cargo inventories are
+accepted only after verifying the retained source bytes; newly discovered
+external inputs and real changes remain refusals with path-specific diagnostics.
+The final 58 focused host cases pass, including a tiny real Cargo/Wasm first
+build, stale-record replacement, source mutation and symlink refusal. Updated
+all-target/all-feature host and CLI Clippy passes. The
+[first-build reuse report](../audits/reports/2026-09/2026-09-09/build-reuse-first-build.md)
+separates reproduced mechanisms from the unavailable historical input diff. A
+subsequent controlled Toko Miner source copy starts without target or dependency
+records, builds all eight artifacts in 355.98s, then reuses all eight in 3.40s.
+Its 26,768 source inventory entries are unchanged; all 143 newly recorded
+control-plane paths were observed before compilation. The linked report retains
+this candidate evidence separately from publication/adoption and runtime proof.
+
+The complete BF2/BF3 batch and open 0.110.14 changelog are ready for push/release
+review. No broad gate, version bump or Git publication ran. CANIC-087/139 remain
+partial: precise per-role reuse across changed inputs and downstream adoption
+of the unpublished candidate are not claimed. CANIC-141 stays deferred. This maintainer-selected
+follow-up remains on the published 0.110 line despite the soft release-count
+guideline; it does not begin another minor. The sections below retain the
+published 0.110.13 qualification history.
+
+## Metrics cost policy clarification
+
+On 2026-09-10 the maintainer directed that an arbitrary instruction number must
+not become a permanent blocker. The historical 20M reference was introduced in
+0.110.11 without a documented operating-cost or latency derivation. The current
+Canic timer regression reports absolute cost and comparison with that advisory
+reference; it no longer fails solely for crossing it. Structural bounds,
+source-growth qualification and rejection/recovery checks remain enforced.
+The [maintained sampling policy](../features/runtime/public-observability.md#sampling-cost-qualification)
+requires a workload, measured baseline, justified margin and consequence before
+adding an absolute regression gate. Historical measurement receipts retain their
+original verdicts. This extends the open 0.110.14 batch without a runtime change.
+All eight timer integration cases, warning-denied lint for that test target,
+formatting, document checks and .14 release-notes preflight pass. The
+[policy audit](../audits/reports/2026-09/2026-09-10/metrics-cost-policy.md)
+retains exact measurements and the prepared downstream patch.
+
+The maintainer clarified on 2026-09-10 that this task stays entirely in Canic.
+The IcyDB `explain()` request is outside this task; no IcyDB source was changed.
+The prepared Toko metrics-test patch remains unapplied reference material, not
+pending authorization or an active implementation step. Further work stays in
+this repository.
+
+## Additional Toko Miner Qualification
+
+The maintainer requested all four downstream qualification items. The
+[four-item audit](../audits/reports/2026-09/2026-09-09/toko-feedback.md)
+retains exact evidence and staging approval material. The disposable same-release
+reset keeps all 27 physical identities, wipes old user data and preserves newly
+created data on completed replay. Lost replies and a Store outage recover with
+three infrastructure installs total and valid cycle conservation.
+
+Historical metrics qualification covers nine nodes/five roles. Its real
+64-entity/194-row ceiling reached 22.15M instructions against the then-enforced
+20M reference, now advisory as described above. A small
+allocation experiment reaches 21.75M and is not adopted. Rejected optional data
+also exposed a sampling timer that permanently stopped; the candidate marks
+rejection retryable so independent families and later recovery remain scheduled.
+All eight timer-authority cases and the three-Game-Shard 64→65→64 source
+regression pass. The subsequent history-index correction brings the unchanged
+downstream producer below that reference through 300 sample periods, full retention and
+rollover, then rejection/recovery on all three Game Shards. The peak is
+19,963,567 instructions: only 0.18% headroom. Exact key equality, admission order
+and retention limits remain unchanged; sparse index capacity is released. See
+the [index qualification](../audits/reports/2026-09/2026-09-09/metrics-history-index.md)
+for the frozen candidate, measurements and remaining scope limits.
+After the index correction, all 18 public-metrics unit cases, all eight governed
+timer-authority cases and warning-denied all-target/all-feature core Clippy pass.
+The control-plane candidate preserves Accepted-phase Root failure origin, while
+leaving Coordinator-dependent publication waits non-blocking. The extended
+five-component PocketIC journey now proves exact origin propagation during an
+Accepted-phase Store outage, same-operation recovery, cleared terminal failures
+and immediate replay without updates. The
+[CANIC-159 runtime report](../audits/reports/2026-09/2026-09-10/canic159-runtime.md)
+closes the candidate-runtime proof gap; downstream adoption remains separate.
+The exact journey, all-target/all-feature test-package Clippy, formatting and
+document/release-note checks pass. The accepted Canic .14 batch is ready for
+release review before expanding changed-role reuse.
+These corrections extend the existing open 0.110.14 batch; no version or
+publication ran.
+
+The actual staging preparation review applies zero effects and proposes zero
+new funding. It requires separate approval before stopping Coordinator and
+restarting Root; its dependent full reset/funding review does not yet exist.
+The maintainer explicitly approved the final Toko Miner wrapper cleanup/evidence
+patch. All six reviewed base/output hashes matched when applying it. Shell
+syntax, ShellCheck and both local reinstall/preservation contracts pass. The
+downstream ledger and scan log record application; concurrent gameplay edits
+are preserved. No new reset owner, mode or compatibility path was added.
+The expanded four-item acceptance set remains open for downstream adoption
+and actual staging recovery. Metrics passes the measured frozen ceiling with
+minimal headroom; concurrent downstream changes need their own qualification.
+The Canic corrections and open .14 changelog are prepared for release review.
+
+## Toko Application Loop And Workload Funding
+
+For CANIC-161 the maintainer identifies the excessive nested loop as Toko
+application code. No Canic loop defect is established. The current Toko config
+specifies initial cycles but no Workload `topup` policies; those policies are
+opt-in per exact role. This source observation does not prove the incident's
+installed policy or reconstruct its burn. The retained Game Shard artifact
+matches its release manifest, but exposes no configuration custom section.
+
+The [funding runbook](../operations/fleet-funding.md#workload-funding-and-application-failures)
+now explains the manual-funding boundary, protected Workload observations and
+application repair versus balance recovery. Six existing focused top-up policy
+tests pass. The [CANIC-161 assessment](../audits/reports/2026-09/2026-09-10/canic161-funding.md)
+records evidence and the remaining incident/runtime qualification. This is a
+Canic documentation correction in the open .14 batch; no sibling, runtime
+funding policy, deployed canister or balance changed. The accepted Canic batch
+and changelog remain ready for release review; CANIC-161 is not fully closed.
 
 ## Integration Guard Corrections
 
@@ -103,13 +328,13 @@ changelog are ready for push/release review. The maintainer's complete gate
 still needs its release-flow rerun; this correction did not run broad validation,
 change package versions or publish Git state.
 
-## Active IcyDB Update
+## Previous IcyDB Update: 0.257.2
 
-The maintainer requested the latest IcyDB on 2026-09-09. The official crates.io
-registry reports 0.257.2 as the latest published non-yanked release; the sibling
-checkout's 0.257.3 is not yet published. The workspace exact pin and all six
-IcyDB lockfile entries now use 0.257.2, with no unrelated dependency changes or
-source adaptation. The existing `icydb_lifecycle_composition` PocketIC target
+This records the 2026-09-09 checkpoint; the current 0.257.4 adoption is above.
+The registry then reported 0.257.2 as the latest published non-yanked release;
+the sibling checkout's 0.257.3 was not yet published. The workspace exact pin
+and all six IcyDB lockfile entries advanced to 0.257.2, with no unrelated
+dependency changes or source adaptation. The existing `icydb_lifecycle_composition` PocketIC target
 passes (one case, 40.40s; runner 56s), covering startup, timer custody,
 same-release upgrade and failed-upgrade retry. Log:
 `/tmp/canic-icydb-pocketic.log`. The runner cleaned its server and scratch.

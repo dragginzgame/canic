@@ -1,0 +1,63 @@
+   Compiling canic v0.110.13 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-macros v0.110.13 (/home/adam/projects/canic/crates/canic-macros)
+    Checking canic-backup v0.110.13 (/home/adam/projects/canic/crates/canic-backup)
+    Checking canic-testing-internal v0.110.13 (/home/adam/projects/canic/crates/canic-testing-internal)
+error: unused imports: `CyclesFundingBudget`, `FleetAdmissionMutationAction`, `FleetAdmissionMutationOutcome`, `FleetAdmissionMutationRequest`, `FleetAdmissionMutationResponse`, `FleetAdmissionOperationPhase`, `FleetAdmissionPolicy`, `FleetAdmissionProjectionPhase`, `FleetAdmissionRootStatusResponse`, `FleetAdmissionRootTransitionPhase`, `FleetAdmissionSelector`, `FleetFundingPolicyRotationApplyRequest`, `FleetFundingPolicyRotationBeginRequest`, `FleetFundingPolicyRotationFundingSource`, `FleetFundingPolicyRotationPlacementEvidence`, `FleetFundingPolicyRotationPlanHeader`, `FleetFundingPolicyRotationPlan`, `FleetFundingPolicyRotationReceipt`, `FleetFundingPolicyRotationRootPlan`, `FleetFundingPolicyRotationStageRootRequest`, `FleetFundingPolicyUsage`, `FleetFundingProfile`, `FleetRootFundingNoGrantReason`, `FleetRootFundingResponse`, `FleetSubnetRootAutomaticIcpRefillPolicy`, `FleetSubnetRootFundingPolicy`, `FleetSubnetRootIcpRefillPolicy`, `IcpRefillStatus`, `IcpRefillTrigger`, `cdk::types::Cycles`, `compile_installed_fleet_admission_policy`, `coordinator_root_funding_policy_hash`, `effective_fleet_admission_principals`, `fleet_admission_participant_catalog_digest`, `fleet_admission_root_participant_catalog_digest`, `fleet_admission_target_for_binding`, `fleet_funding_policy_rotation_operation_id`, `fleet_funding_policy_rotation_plan_digest`, `fleet_funding_policy_rotation_roots_digest`, `materialize_fleet_admission_projection`, and `validate_fleet_funding_policy_rotation_plan`
+   --> crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:138:9
+    |
+138 |         cdk::types::Cycles,
+    |         ^^^^^^^^^^^^^^^^^^
+...
+141 |                 FleetAdmissionMutationAction, FleetAdmissionMutationOutcome,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+142 |                 FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+143 |                 FleetAdmissionOperationPhase, FleetAdmissionProjectionPhase,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+144 |                 FleetAdmissionRootStatusResponse, FleetAdmissionRootTransitionPhase,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+147 |                 FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+148 |                 FleetFundingPolicyRotationFundingSource,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+149 |                 FleetFundingPolicyRotationPlacementEvidence, FleetFundingPolicyRotationPlan,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+150 |                 FleetFundingPolicyRotationPlanHeader, FleetFundingPolicyRotationReceipt,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+151 |                 FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationStageRootRequest,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+152 |                 FleetFundingPolicyUsage, FleetRootFundingNoGrantReason, FleetRootFundingResponse,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^
+153 |             },
+154 |             icp_refill::{IcpRefillStatus, IcpRefillTrigger},
+    |                          ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+...
+157 |             CyclesFundingBudget, FleetAdmissionPolicy, FleetAdmissionSelector, FleetFundingProfile,
+    |             ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^
+158 |             FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootFundingPolicy,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+159 |             FleetSubnetRootIcpRefillPolicy,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+162 |             compile_installed_fleet_admission_policy, effective_fleet_admission_principals,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+163 |             fleet_admission_participant_catalog_digest,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+164 |             fleet_admission_root_participant_catalog_digest, fleet_admission_target_for_binding,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+165 |             materialize_fleet_admission_projection,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+168 |             coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+169 |             fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+170 |             validate_fleet_funding_policy_rotation_plan,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `-D unused-imports` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error: could not compile `canic-testing-internal` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

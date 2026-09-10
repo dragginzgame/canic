@@ -1,0 +1,70 @@
+{
+  "Ok": {
+    "Operation": {
+      "ProvisionComponents": {
+        "provisioned_at_ns": null,
+        "result": null,
+        "activated_component_count": "0 : nat32",
+        "operation_id": "blob \"\\f3\\e9\\9f\\5f\\11\\94\\74\\de\\08\\04\\fe\\fb\\68\\96\\2c\\15\\95\\c5\\80\\eb\\f1\\fb\\32\\db\\7d\\35\\77\\62\\c4\\0d\\bf\\21\"",
+        "runtimes_activated_at_ns": null,
+        "published_at_ns": null,
+        "root_runtime_active": "false",
+        "activation_started_at_ns": null,
+        "claimed_component_count": "0 : nat32",
+        "installed_component_count": "0 : nat32",
+        "receipt_content_hash": "blob \"\\a4\\c5\\98\\df\\32\\6e\\79\\1c\\c4\\ea\\4a\\84\\59\\c8\\0c\\80\\ad\\72\\42\\d7\\36\\c6\\43\\33\\ca\\99\\9c\\f8\\ee\\99\\96\\31\"",
+        "accepted_at_ns": "1_788_977_420_514_849_824 : nat64",
+        "fleet_subnet_root": "lefxa-wl777-77774-qaaka-cai",
+        "reserved_component_count": "3 : nat32",
+        "activation": null,
+        "estate_funding_required": null,
+        "phase": {
+          "Accepted": null
+        },
+        "registry_committed_component_count": "0 : nat32",
+        "placement_count": "1 : nat32",
+        "last_failure": {
+          "Some": {
+            "retry_category": {
+              "Backoff": null
+            },
+            "operation_id": "blob \"\\f3\\e9\\9f\\5f\\11\\94\\74\\de\\08\\04\\fe\\fb\\68\\96\\2c\\15\\95\\c5\\80\\eb\\f1\\fb\\32\\db\\7d\\35\\77\\62\\c4\\0d\\bf\\21\"",
+            "stage": {
+              "Provisioning": null
+            },
+            "target": "lefxa-wl777-77774-qaaka-cai",
+            "consecutive_failures": "12 : nat32",
+            "failed_at_ns": "1_788_977_786_537_691_599 : nat64",
+            "diagnostic_code": "66 : nat16",
+            "retry_at_ns": {
+              "Some": "1_788_977_846_537_691_599 : nat64"
+            }
+          }
+        },
+        "configuration_digest": "blob \"\\58\\98\\72\\de\\55\\a1\\2c\\56\\42\\12\\6a\\3d\\08\\b9\\3f\\8a\\6f\\de\\0d\\8f\\63\\e0\\55\\a7\\27\\45\\ef\\ba\\e1\\fb\\c5\\77\"",
+        "component_count": "3 : nat32",
+        "publication": null,
+        "plan_hash": "blob \"\\8a\\e8\\5f\\e2\\99\\48\\e1\\c0\\7b\\78\\c5\\11\\7e\\f6\\2f\\91\\c0\\c5\\f6\\4c\\77\\89\\7a\\b8\\7c\\3b\\c2\\79\\4a\\66\\51\\0d\"",
+        "fleet_registry": {
+          "content_hash": "blob \"\\78\\d8\\49\\c7\\de\\d7\\94\\3c\\a9\\b3\\53\\fc\\2b\\15\\a8\\e0\\2d\\7f\\f0\\17\\f0\\22\\ef\\74\\48\\c5\\0a\\d1\\18\\35\\11\\56\"",
+          "authority": {
+            "epoch": "1 : nat64",
+            "binding": {
+              "coordinator_subnet": "srkif-m33vd-rsyll-hrrsp-o6jlq-a6ad4-7pyvj-hi6b5-ncfgy-qdn5s-tqe",
+              "coordinator": "lrcgn-xd777-77774-qaajq-cai",
+              "fleet": {
+                "fleet": {
+                  "canonical_network_id": "d2cb955be48b53ea077d2f8d17476682ae143319557b2f0a9b8bef31c66b9b01",
+                  "fleet_id": "3a630a3ace1792d8b9fb51cea65d02426637aa54c380e10264b7223cbe9b17ef"
+                },
+                "app": "toko_miner"
+              }
+            }
+          },
+          "revision": "3 : nat64"
+        },
+        "published_component_count": "0 : nat32"
+      }
+    }
+  }
+}

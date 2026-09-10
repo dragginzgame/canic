@@ -6,7 +6,7 @@
 
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
+    cdk::structures::{DefaultMemoryImpl, Storable, memory::RuntimeMemory, storable::Bound},
     eager_static,
     role_contract::allocation::memory::cycles::{
         CYCLES_FUNDING_LEDGER_ID, CYCLES_TOPUP_EVENTS_ID, CYCLES_TRACKER_ID,
@@ -53,7 +53,7 @@ eager_static! {
 ///
 
 pub struct CycleTracker {
-    map: StableBtreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>,
+    map: StableBtreeMap<u64, Cycles, RuntimeMemory<DefaultMemoryImpl>>,
 }
 
 ///
@@ -146,12 +146,12 @@ impl CyclesFundingLedgerData {
 ///
 
 pub struct CyclesFundingLedger {
-    map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, VirtualMemory<DefaultMemoryImpl>>,
+    map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, RuntimeMemory<DefaultMemoryImpl>>,
 }
 
 impl CyclesFundingLedger {
     pub const fn new(
-        map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, VirtualMemory<DefaultMemoryImpl>>,
+        map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, RuntimeMemory<DefaultMemoryImpl>>,
     ) -> Self {
         Self { map }
     }
@@ -346,7 +346,7 @@ impl CycleTopupEventsData {
 
 pub struct CycleTopupEvents {
     map:
-        StableBtreeMap<CycleTopupEventKey, CycleTopupEventRecord, VirtualMemory<DefaultMemoryImpl>>,
+        StableBtreeMap<CycleTopupEventKey, CycleTopupEventRecord, RuntimeMemory<DefaultMemoryImpl>>,
 }
 
 impl CycleTopupEvents {
@@ -354,7 +354,7 @@ impl CycleTopupEvents {
         map: StableBtreeMap<
             CycleTopupEventKey,
             CycleTopupEventRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >,
     ) -> Self {
         Self { map }
@@ -447,7 +447,7 @@ impl CycleTopupEvents {
 }
 
 impl CycleTracker {
-    pub const fn new(map: StableBtreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>) -> Self {
+    pub const fn new(map: StableBtreeMap<u64, Cycles, RuntimeMemory<DefaultMemoryImpl>>) -> Self {
         Self { map }
     }
 

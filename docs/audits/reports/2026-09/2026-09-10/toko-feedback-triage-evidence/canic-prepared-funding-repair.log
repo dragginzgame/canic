@@ -1,0 +1,43 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:40223/
+==> targeted canic-testing-internal PocketIC proof
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.28s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-df76281e9aadb3a1)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::four_workloads_and_four_failed_assets_repair_without_new_creation ... [FLEET]      CACHE  literal-zero release artifacts (16)                   1.08s
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.40s
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[FLEET]      RUN    planning literal-zero infrastructure
+[FLEET]      DONE   funding infrastructure prepared                      16.82s
+[FLEET]      RUN    establishing four Workloads before reserve funding
+[FLEET]      DONE   four Workloads active with no Ready reserve          27.09s
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"90ee72fa152bd27422c6fe2e9705608aab43b7a166173ba94df826726f6ba7df","phase":"infrastructure","plan_sha256":"6dcdf40f1052547d1c91e0af3f374c60cc84ecf32560a51c593692d7138d3add","reviewed_effects":8,"state":{"kind":"advancing"}},"unix_ms":1788723812582}
+[FLEET-MEASURE] {"progress":{"applied_effects":4,"operation_id":"90ee72fa152bd27422c6fe2e9705608aab43b7a166173ba94df826726f6ba7df","phase":"import_reconciliation","plan_sha256":"6dcdf40f1052547d1c91e0af3f374c60cc84ecf32560a51c593692d7138d3add","reviewed_effects":8,"state":{"kind":"advancing"}},"unix_ms":1788723833946}
+[FLEET-MEASURE] {"progress":{"applied_effects":4,"operation_id":"90ee72fa152bd27422c6fe2e9705608aab43b7a166173ba94df826726f6ba7df","phase":"import_reconciliation","plan_sha256":"6dcdf40f1052547d1c91e0af3f374c60cc84ecf32560a51c593692d7138d3add","reviewed_effects":8,"state":{"kind":"advancing"}},"unix_ms":1788723843960}
+[FLEET-MEASURE] {"progress":{"applied_effects":8,"operation_id":"90ee72fa152bd27422c6fe2e9705608aab43b7a166173ba94df826726f6ba7df","phase":"terminal_verification","plan_sha256":"6dcdf40f1052547d1c91e0af3f374c60cc84ecf32560a51c593692d7138d3add","reviewed_effects":8,"state":{"kind":"advancing"}},"unix_ms":1788723863170}
+[FLEET-MEASURE] {"progress":{"applied_effects":8,"operation_id":"90ee72fa152bd27422c6fe2e9705608aab43b7a166173ba94df826726f6ba7df","phase":"complete","plan_sha256":"6dcdf40f1052547d1c91e0af3f374c60cc84ecf32560a51c593692d7138d3add","reviewed_effects":8,"state":{"kind":"complete"}},"unix_ms":1788723881074}
+[FLEET-MEASURE] {"progress":{"applied_effects":8,"operation_id":"90ee72fa152bd27422c6fe2e9705608aab43b7a166173ba94df826726f6ba7df","phase":"complete","plan_sha256":"6dcdf40f1052547d1c91e0af3f374c60cc84ecf32560a51c593692d7138d3add","reviewed_effects":8,"state":{"kind":"complete"}},"unix_ms":1788723898853}
+[FLEET]      DONE   funded autonomous production-adapter journey complete   3m 06s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 186.95s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=439068 kB high_water=464656 kB threads=21
+==> targeted canic-testing-internal PocketIC proof done in 187s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  187s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 188s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.plhSAT

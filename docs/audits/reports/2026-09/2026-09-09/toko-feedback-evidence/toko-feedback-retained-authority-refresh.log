@@ -1,0 +1,20 @@
+Set default identity to toko-miner-local
+fleet: toko-miner-retained-qualification
+release_build: 43e2cf9b9258fea38f9c10d000621fe28a3f179a0baa2f72ddacd70c22e24b4f
+observed_canisters: 27
+observed_controlled_cycles: 697.418T
+desired: /tmp/toko-feedback-fleet/.tools/local-dev/toko-miner-retained-qualification.toml
+Planning local Fleet changes (pass 1/20).
+Fleet observation RootManagement: 512 ms, 1 remote call attempts
+Fleet observation ConfiguredCanisters: 667 ms, 4 remote call attempts
+Fleet observation EstateFunding: 284 ms, 1 remote call attempts
+Fleet observation PoolBalances: 0 ms, 0 remote call attempts
+Fleet observation ProtocolReadiness: 0 ms, 0 remote call attempts
+Fleet observation LedgerFee: 258 ms, 1 remote call attempts
+Fleet observation OperatorBalance: 254 ms, 1 remote call attempts
+Fleet observation TerminalInventory: 14763 ms, 26 remote call attempts
+Fleet observation ProtocolActions: 10182 ms, 35 remote call attempts, failed
+fleet: Fleet platform operation failed: invalid canic_root_status response from Canister lefxa-wl777-77774-qaaka-cai: canister rejected request: E132 STATE_CONFLICT (origin: control_plane_state): State conflicts with current state.
+
+local development failed: Canic could not compile the managed local Fleet plan
+Set default identity to anonymous

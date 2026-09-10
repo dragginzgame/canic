@@ -826,6 +826,7 @@ macro_rules! canic_emit_root_status_endpoint {
             CycleHistory(::canic::dto::page::PageRequest),
             Health,
             Logs(::canic::dto::role::LogStatusRequest),
+            MemoryAllocations,
             Metrics(::canic::dto::role::MetricsStatusRequest),
             Readiness,
             Runtime,
@@ -837,6 +838,7 @@ macro_rules! canic_emit_root_status_endpoint {
             CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
             Health(::canic::dto::runtime::CanicHealthStatus),
             Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
+            MemoryAllocations(::canic::dto::memory::MemoryAllocationsResponse),
             Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
             Readiness(::canic::dto::runtime::CanicReadinessStatus),
             Runtime(::canic::dto::runtime::CanicRuntimeStatus),
@@ -871,6 +873,10 @@ macro_rules! canic_emit_root_status_endpoint {
                         request.page,
                     ),
                 )),
+                ObservabilityRequest::MemoryAllocations => {
+                    $crate::__internal::core::api::memory::MemoryQuery::allocations()
+                        .map(ObservabilityResponse::MemoryAllocations)
+                }
                 ObservabilityRequest::Metrics(request) => {
                     $crate::__canic_role_metrics_status!(request).map(ObservabilityResponse::Metrics)
                 }

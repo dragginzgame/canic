@@ -7,7 +7,7 @@
 use crate::model::fleet_admission_projection::FleetAdmissionTargetTransitionPhaseModel;
 use crate::{
     cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::VirtualMemory,
+        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
     },
     ids::{FleetAdmissionProjection, MAX_FLEET_ADMISSION_PROJECTION_RECORD_BYTES},
     role_contract::allocation::memory::fleet_admission_projection::FLEET_ADMISSION_PROJECTION_ID,
@@ -19,7 +19,7 @@ const FLEET_ADMISSION_PROJECTION_RECORD_KEY: u8 = 0;
 
 eager_static! {
     static FLEET_ADMISSION_PROJECTION: RefCell<
-        StableBtreeMap<u8, FleetAdmissionProjectionRecord, VirtualMemory<DefaultMemoryImpl>>,
+        StableBtreeMap<u8, FleetAdmissionProjectionRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
         key = "canic.core.fleet_admission.projection.v1",

@@ -10,6 +10,14 @@
 use candid::CandidType;
 use serde::Deserialize;
 
+/// Source of a measured ID's binding; unknown does not mean unused.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum MemoryAllocationBinding {
+    Current { stable_key: String, owner: String },
+    Ledger { stable_key: String, owner: String },
+    Unknown,
+}
+
 ///
 /// MemoryCommitRecoveryErrorResponse
 ///

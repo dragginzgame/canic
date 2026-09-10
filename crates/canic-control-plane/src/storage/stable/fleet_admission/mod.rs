@@ -8,7 +8,7 @@ use candid::Principal;
 #[cfg(feature = "fleet-coordinator-canister")]
 use canic_core::{
     cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::VirtualMemory,
+        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
     },
     eager_static,
     role_contract::allocation::memory::control_plane::FLEET_COORDINATOR_ADMISSION_ID,
@@ -28,7 +28,7 @@ const FLEET_ADMISSION_RECORD_KEY: u8 = 0;
 #[cfg(feature = "fleet-coordinator-canister")]
 eager_static! {
     static FLEET_ADMISSION: RefCell<
-        StableBtreeMap<u8, FleetAdmissionAuthorityRecord, VirtualMemory<DefaultMemoryImpl>>,
+        StableBtreeMap<u8, FleetAdmissionAuthorityRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
         authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
         key = "canic.control_plane.fleet_admission.v1",

@@ -1,0 +1,21 @@
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.13 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.13 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 53s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-87b779c1ec38a5fc)
+
+running 11 tests
+test fleet_ensure::policy::tests::apply_policy_rejects_bootstrap_imports_above_the_root_maximum ... ok
+test fleet_ensure::policy::tests::component_provisioning_stall_floor_scales_and_caps ... ok
+test fleet_ensure::policy::tests::complete_pool_inventory_owns_creation_capacity_forecast ... ok
+test fleet_ensure::policy::tests::continuation_review_reserves_only_available_headroom_and_exposes_pending_discovery ... ok
+test fleet_ensure::policy::tests::estate_creation_forecast_retains_ready_floor_without_repeating_workloads ... ok
+test fleet_ensure::policy::tests::estate_shortfall_compiles_one_exact_plan_owned_ledger_transfer ... ok
+test fleet_ensure::policy::tests::estate_workload_forecast_includes_recursive_initial_children ... ok
+test fleet_ensure::policy::tests::every_retained_pool_lifecycle_and_pending_creation_consumes_capacity_once ... ok
+test fleet_ensure::policy::tests::fresh_fleet_descendant_capacity_does_not_multiply_terminal_proof ... ok
+test fleet_ensure::policy::tests::unresolved_pool_creation_rejects_before_funding_authority ... ok
+test fleet_ensure::policy::tests::full_failed_inventory_funds_exact_retained_assets_without_creating_replacements ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 0.00s
+

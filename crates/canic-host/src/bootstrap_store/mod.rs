@@ -4,7 +4,6 @@
 mod tests;
 
 use crate::{
-    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_candid::resolve_infrastructure_candid,
     build_toolchain::BuildToolchain,
     canister_build::{
@@ -13,10 +12,10 @@ use crate::{
             canister_build_target_root, configure_canister_cargo_command,
             configure_declaration_command, declaration_target_root,
         },
+        compiled::CompiledCanisterArtifact,
     },
     cargo_command,
     cargo_metadata::cargo_metadata,
-    durable_io::write_bytes,
     fleet_package::{
         self, FleetPackageSpec, append_infrastructure_profile_args, resolved_canic_package,
         resolved_wrapper_dependencies,
@@ -25,7 +24,6 @@ use crate::{
         PackageValidationMode, RolePackageValidation, finding_detail,
         resolve_built_in_wasm_store_contract, validate_built_in_wasm_store_package,
     },
-    should_embed_candid_metadata,
 };
 use std::{
     fs,
@@ -51,6 +49,13 @@ pub fn build_bootstrap_wasm_store_artifact(
     context: &WorkspaceBuildContext,
     toolchain: &BuildToolchain,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
+    compile_bootstrap_wasm_store_artifact(context)?.finish(toolchain)
+}
+
+/// Compile and capture the exact infrastructure input before finalization.
+pub fn compile_bootstrap_wasm_store_artifact(
+    context: &WorkspaceBuildContext,
+) -> Result<CompiledCanisterArtifact, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_wasm_store_source(context)?;
     require_built_in_wasm_store_contract(&source.manifest_path)?;
     let artifact_root = context.artifact_root().join(WASM_STORE_ROLE);
@@ -82,24 +87,7 @@ pub fn build_bootstrap_wasm_store_artifact(
     let wasm_gz_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm.gz"));
     let did_path = artifact_root.join(format!("{WASM_STORE_ROLE}.did"));
     let profile_path = artifact_root.join(".build-profile");
-    let embed_candid = should_embed_candid_metadata(context.build_network);
-    let transforms = finalize_wasm_artifact(
-        &WasmArtifactFinalization {
-            profile: context.profile,
-            build_network: context.build_network,
-            embed_candid,
-            validate_sidecar_only: false,
-            source_wasm_path: &built_wasm_path,
-            candid: &candid,
-            wasm_path: &wasm_path,
-            did_path: &did_path,
-            wasm_gz_path: &wasm_gz_path,
-        },
-        toolchain,
-    )?;
-    write_bytes(&profile_path, context.profile.target_dir_name().as_bytes())?;
-
-    Ok(CanisterArtifactBuildOutput {
+    let output = CanisterArtifactBuildOutput {
         package_name: source.package_name,
         package_version: source.package_version.clone(),
         protocol_release_identity: source.package_version,
@@ -111,8 +99,15 @@ pub fn build_bootstrap_wasm_store_artifact(
         did_path,
         candid_sha256: profile.candid_sha256,
         protocol_profile_digest: profile.protocol_profile_digest,
-        transforms,
-    })
+        transforms: Vec::new(),
+    };
+    CompiledCanisterArtifact::capture(
+        context,
+        &built_wasm_path,
+        candid,
+        output,
+        Some(profile_path),
+    )
 }
 
 fn require_built_in_wasm_store_contract(

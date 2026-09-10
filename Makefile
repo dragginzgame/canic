@@ -372,6 +372,7 @@ release-validation-matrix-gate:
 
 validation-runner-gate:
 	bash scripts/ci/test-validation-target-runner.sh
+	bash scripts/ci/test-native-icp.sh
 
 wasm-capability-size-report-gate:
 	bash scripts/ci/test-wasm-capability-size-report.sh

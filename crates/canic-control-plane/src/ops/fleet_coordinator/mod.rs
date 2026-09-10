@@ -112,7 +112,8 @@ use canic_core::{
             FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
             FleetComponentProvisioningStatusResponse, FleetComponentPublicationRootProgress,
             FleetComponentSynchronizationRootProgress, FleetSubnetRootProvisioningBatch,
-            RootComponentActivationRequest, RootComponentDirectorySynchronizationRequest,
+            ProvisioningFailureStage, RootComponentActivationRequest,
+            RootComponentDirectorySynchronizationRequest,
             RootComponentDirectorySynchronizationResponse,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningPhase, RootComponentProvisioningStatusResponse,
@@ -155,17 +156,18 @@ const COMPONENT_SCALE_OUT_RECEIPT_HASH_DOMAIN: &[u8] =
 pub struct FleetCoordinatorOps;
 
 impl FleetCoordinatorOps {
-    /// Keep Coordinator-dependent waits readable so publication can advance.
-    pub(crate) fn observed_activation_failure(
+    /// Preserve failed provisioning while allowing Coordinator-dependent publication waits.
+    pub(crate) fn observed_root_failure(
+        phase: RootComponentProvisioningPhase,
         failure: Option<canic_core::dto::component_provisioning::RootComponentProvisioningFailure>,
     ) -> Option<InternalError> {
         failure
-            .filter(|failure| {
-                !matches!(
-                    failure.stage,
-                    canic_core::dto::component_provisioning::ProvisioningFailureStage::Provisioning
-                        | canic_core::dto::component_provisioning::ProvisioningFailureStage::CoordinatorStatus
-                )
+            .filter(|failure| match failure.stage {
+                ProvisioningFailureStage::Provisioning => {
+                    phase == RootComponentProvisioningPhase::Accepted
+                }
+                ProvisioningFailureStage::CoordinatorStatus => false,
+                _ => true,
             })
             .map(Self::observed_failure_error)
     }

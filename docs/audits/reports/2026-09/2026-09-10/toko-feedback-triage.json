@@ -1,0 +1,159 @@
+{
+  "date": "2026-09-10",
+  "latest_feedback_id": "CANIC-161",
+  "downstream_ledger": {
+    "path": "../toko-miner/docs/upstream/canic.md",
+    "sha256": "c56d6578b0ac9e16140153bc5ca7381625db0b66bef196eac3290e8ddbc6fcc7",
+    "bytes": 1289551
+  },
+  "published_baseline": "5250d69186047bc373db7cdc7b7680c3aad031d0",
+  "source_evidence": [
+    {
+      "path": "crates/canic-core/src/model/fleet_funding_policy/mod.rs",
+      "sha256": "ecca316565220846eaca41b8b671ec75d2272827cb82e9e82abe698bdc4203ba",
+      "bytes": 34041,
+      "published_sha256": "08443458031f4d224dbf5d1fc21db493aa946930dcf10fbe7dc209ca74d7e3c3",
+      "matches_published_source": false
+    },
+    {
+      "path": "crates/canic-core/src/workflow/runtime/mod.rs",
+      "sha256": "dc1a49a44ea181347db1f0c9905aa6f4aa2d68f3d773b9ac6d73ee04b54c1f4c",
+      "bytes": 5913,
+      "published_sha256": "dc1a49a44ea181347db1f0c9905aa6f4aa2d68f3d773b9ac6d73ee04b54c1f4c",
+      "matches_published_source": true
+    },
+    {
+      "path": "crates/canic-core/src/workflow/runtime/nonroot.rs",
+      "sha256": "7fba2c3f676cd7d07222948dae6cbbdd2120d59e84a05c5895dbbc6021f19541",
+      "bytes": 12719,
+      "published_sha256": "7fba2c3f676cd7d07222948dae6cbbdd2120d59e84a05c5895dbbc6021f19541",
+      "matches_published_source": true
+    },
+    {
+      "path": "crates/canic-core/src/ops/storage/auth/mod.rs",
+      "sha256": "92298d264a22515acb56596b8f9bb2e659e5fff3035fc3a161e4985fabda4741",
+      "bytes": 17472,
+      "published_sha256": "92298d264a22515acb56596b8f9bb2e659e5fff3035fc3a161e4985fabda4741",
+      "matches_published_source": true
+    },
+    {
+      "path": "crates/canic-core/src/role_contract/policy.rs",
+      "sha256": "ae5fd5104db572d9c9aea482c25f09cfac8199c8d26595dadfeeb8868a65397e",
+      "bytes": 12776,
+      "published_sha256": "ae5fd5104db572d9c9aea482c25f09cfac8199c8d26595dadfeeb8868a65397e",
+      "matches_published_source": true
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/policy/mod.rs",
+      "sha256": "8fe20415a65079fc5baee7e38aa70fa05eecb9a94751bfea9d024658ae5e6e0f",
+      "bytes": 155368,
+      "published_sha256": "8fe20415a65079fc5baee7e38aa70fa05eecb9a94751bfea9d024658ae5e6e0f",
+      "matches_published_source": true
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/generate/mod.rs",
+      "sha256": "825224cdb276fcc6b72fbe63c0db9aafc5880bec817556f60d94d2bba6e3d4ba",
+      "bytes": 85926,
+      "published_sha256": "825224cdb276fcc6b72fbe63c0db9aafc5880bec817556f60d94d2bba6e3d4ba",
+      "matches_published_source": true
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/generate/tests.rs",
+      "sha256": "b301bbdc23b3b0ef7d54a6ae11c777c4e87dfefbdf6b72b9c37a0abd263ee730",
+      "bytes": 178619,
+      "published_sha256": "b301bbdc23b3b0ef7d54a6ae11c777c4e87dfefbdf6b72b9c37a0abd263ee730",
+      "matches_published_source": true
+    },
+    {
+      "path": "crates/canic-cli/src/medic/fleet.rs",
+      "sha256": "aa680282225c3386aa4806f5d2c25e04f5de5b1376447f035a6af67901f48345",
+      "bytes": 7368,
+      "published_sha256": "aa680282225c3386aa4806f5d2c25e04f5de5b1376447f035a6af67901f48345",
+      "matches_published_source": true
+    },
+    {
+      "path": "crates/canic-tests/tests/native_agent_delegation.rs",
+      "sha256": "2af8702f412871b7eb6d08ccc0943325ec1d65a104a4e54b853d7dbeacfbdfb6",
+      "bytes": 60888,
+      "published_sha256": "2af8702f412871b7eb6d08ccc0943325ec1d65a104a4e54b853d7dbeacfbdfb6",
+      "matches_published_source": true
+    }
+  ],
+  "current_change": "Multi-Root funding regression and documentation; runtime semantics unchanged",
+  "validation": [
+    {
+      "command": "RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host --lib fleet_ensure::policy::tests",
+      "exit_code": 0,
+      "passed_tests": 11,
+      "log": {
+        "path": "docs/audits/reports/2026-09/2026-09-10/toko-feedback-triage-evidence/canic-feedback-pool-policy-tests.log",
+        "sha256": "3b1dfabca03ce6ba81d25466297d6db44f0293b8c7976660c324154d86c5c996",
+        "bytes": 1706
+      }
+    },
+    {
+      "command": "RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host --lib protected_funding_admission_rejects_five_automatic_root_grants",
+      "exit_code": 0,
+      "passed_tests": 1,
+      "log": {
+        "path": "docs/audits/reports/2026-09/2026-09-10/toko-feedback-triage-evidence/canic-feedback-funding-admission-tests.log",
+        "sha256": "01a7128797ede9abd1125f9cc362c88c883cd45e035565305be8fd6e644ec26c",
+        "bytes": 373
+      }
+    },
+    {
+      "command": "RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --lib model::fleet_funding_policy::tests",
+      "exit_code": 0,
+      "passed_tests": 5,
+      "log": {
+        "path": "docs/audits/reports/2026-09/2026-09-10/toko-feedback-triage-evidence/canic-feedback-funding-policy-tests.log",
+        "sha256": "daac4fcaf272a2d0a05261bb662109c381ba1e78111b0760927648f2da367ed6",
+        "bytes": 875
+      }
+    },
+    {
+      "command": "RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-core --lib --tests -- -D warnings",
+      "exit_code": 0,
+      "passed_tests": null,
+      "log": {
+        "path": "docs/audits/reports/2026-09/2026-09-10/toko-feedback-triage-evidence/canic-feedback-funding-clippy.log",
+        "sha256": "420eedb260c7899003ecd6728eff6f4beb38504f7b73284e969fa5fdc14a8e33",
+        "bytes": 267
+      }
+    }
+  ],
+  "historical_runtime_evidence_not_rerun": [
+    {
+      "path": "docs/audits/reports/2026-09/2026-09-10/toko-feedback-triage-evidence/canic-prepared-funding-refill.log",
+      "sha256": "79228046569739601f24f6d18bb5d7f0ab3ac199b8220d222a638449b32cb679",
+      "bytes": 2816
+    },
+    {
+      "path": "docs/audits/reports/2026-09/2026-09-10/toko-feedback-triage-evidence/canic-prepared-funding-repair.log",
+      "sha256": "9c65c9c6acea71a415e1fad0686a62fb62a6f2c67cf3aaf73d3ab00b4449a4a0",
+      "bytes": 4100
+    },
+    {
+      "path": "docs/audits/reports/2026-09/2026-09-05/artifacts/feedback-activation/native-auth-recovery.log",
+      "sha256": "1469da3ae768378827a9750afde06286df8a822721b8ab6119dd5d9eb4b0ab48",
+      "bytes": 7307
+    }
+  ],
+  "dispositions": {
+    "CANIC-007": "published Canic correction; downstream acceptance separate",
+    "CANIC-132": "published Canic correction with retained refill evidence",
+    "CANIC-133": "published Canic correction with retained repair evidence",
+    "CANIC-135": "published selected restoration and retained recovery evidence; broad contraction acceptance separate",
+    "CANIC-136": "published selected Root delegation; broader artifact qualification separate",
+    "CANIC-137": "published shared validation; current multi-Root clarification qualified",
+    "CANIC-087/139": "next implementation: exact changed-input dependency-closure reuse",
+    "CANIC-148/153/159": "qualified candidate awaiting publication and adoption",
+    "CANIC-149/150/160": "downstream end-to-end measurement remains",
+    "CANIC-154-158": "downstream recovery acceptance and staging effects remain",
+    "CANIC-161": "application defect report; installed funding policy and repair qualification remain",
+    "CANIC-141": "deferred"
+  },
+  "external_repositories_modified": false,
+  "live_fleet_calls": false,
+  "broad_validation": false
+}

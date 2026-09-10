@@ -6,6 +6,7 @@
 
 use crate::dto::{
     cycles::{CycleTopupEvent, CycleTrackerEntry},
+    memory::MemoryAllocationsResponse,
     metrics::MetricEntry,
     page::{Page, PageRequest},
     prelude::*,
@@ -18,6 +19,7 @@ pub enum CanisterObservabilityRequest {
     CycleBalance,
     CycleHistory(PageRequest),
     CycleTopups(PageRequest),
+    MemoryAllocations,
     Metrics(MetricsStatusRequest),
 }
 
@@ -27,6 +29,7 @@ pub enum CanisterObservabilityResponse {
     CycleBalance(CycleBalanceStatusResponse),
     CycleHistory(Page<CycleTrackerEntry>),
     CycleTopups(Page<CycleTopupEvent>),
+    MemoryAllocations(MemoryAllocationsResponse),
     Metrics(Page<MetricEntry>),
 }
 

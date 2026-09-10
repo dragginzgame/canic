@@ -1,0 +1,197 @@
+{
+  "log_sha256": "68799116cfb739f9d5944448e7f4bd0678066cbef629068cd5035421ead500b0",
+  "samples": [
+    {
+      "canister": "x556p-cd777-77777-aaada-cai",
+      "validation": 48781,
+      "sort": 2717312,
+      "source_validation": 8321,
+      "history": 11431527,
+      "rows": 194
+    },
+    {
+      "canister": "xt7th-zt777-77777-aaaca-cai",
+      "validation": 48781,
+      "sort": 3001393,
+      "source_validation": 8321,
+      "history": 11278313,
+      "rows": 194
+    },
+    {
+      "canister": "xu6vt-ul777-77777-aaacq-cai",
+      "validation": 48781,
+      "sort": 3297339,
+      "source_validation": 8321,
+      "history": 11435694,
+      "rows": 194
+    },
+    {
+      "canister": "xt7th-zt777-77777-aaaca-cai",
+      "validation": 48781,
+      "sort": 2675385,
+      "source_validation": 1130393,
+      "history": 9683848,
+      "rows": 194
+    },
+    {
+      "canister": "xu6vt-ul777-77777-aaacq-cai",
+      "validation": 48781,
+      "sort": 3136751,
+      "source_validation": 1130393,
+      "history": 9603834,
+      "rows": 194
+    },
+    {
+      "canister": "x556p-cd777-77777-aaada-cai",
+      "validation": 48781,
+      "sort": 2874943,
+      "source_validation": 1210393,
+      "history": 9683220,
+      "rows": 194
+    },
+    {
+      "canister": "xt7th-zt777-77777-aaaca-cai",
+      "validation": 48781,
+      "sort": 2679731,
+      "source_validation": 1130393,
+      "history": 9603190,
+      "rows": 194
+    },
+    {
+      "canister": "xu6vt-ul777-77777-aaacq-cai",
+      "validation": 48781,
+      "sort": 3297131,
+      "source_validation": 1130393,
+      "history": 9603206,
+      "rows": 194
+    },
+    {
+      "canister": "x556p-cd777-77777-aaada-cai",
+      "validation": 48781,
+      "sort": 2708974,
+      "source_validation": 1210393,
+      "history": 9763190,
+      "rows": 194
+    },
+    {
+      "canister": "xu6vt-ul777-77777-aaacq-cai",
+      "validation": 48781,
+      "sort": 3143607,
+      "source_validation": 1130393,
+      "history": 9443834,
+      "rows": 194
+    },
+    {
+      "canister": "x556p-cd777-77777-aaada-cai",
+      "validation": 48781,
+      "sort": 2882306,
+      "source_validation": 1130393,
+      "history": 9762852,
+      "rows": 194
+    },
+    {
+      "canister": "xt7th-zt777-77777-aaaca-cai",
+      "validation": 48781,
+      "sort": 2679160,
+      "source_validation": 1130393,
+      "history": 9684186,
+      "rows": 194
+    },
+    {
+      "canister": "xu6vt-ul777-77777-aaacq-cai",
+      "validation": 48781,
+      "sort": 3143758,
+      "source_validation": 1210393,
+      "history": 9442610,
+      "rows": 194
+    },
+    {
+      "canister": "x556p-cd777-77777-aaada-cai",
+      "validation": 48781,
+      "sort": 2722306,
+      "source_validation": 1210393,
+      "history": 9764240,
+      "rows": 194
+    },
+    {
+      "canister": "xt7th-zt777-77777-aaaca-cai",
+      "validation": 48781,
+      "sort": 2689718,
+      "source_validation": 1130393,
+      "history": 9603960,
+      "rows": 194
+    },
+    {
+      "canister": "x556p-cd777-77777-aaada-cai",
+      "validation": 48781,
+      "sort": 2882306,
+      "source_validation": 1210393,
+      "history": 9763233,
+      "rows": 194
+    },
+    {
+      "canister": "xt7th-zt777-77777-aaaca-cai",
+      "validation": 48781,
+      "sort": 2697851,
+      "source_validation": 1130393,
+      "history": 9683190,
+      "rows": 194
+    },
+    {
+      "canister": "xu6vt-ul777-77777-aaacq-cai",
+      "validation": 48781,
+      "sort": 3009027,
+      "source_validation": 1130393,
+      "history": 9604186,
+      "rows": 194
+    },
+    {
+      "canister": "x556p-cd777-77777-aaada-cai",
+      "validation": 48781,
+      "sort": 2722306,
+      "source_validation": 1210393,
+      "history": 9762596,
+      "rows": 194
+    },
+    {
+      "canister": "xt7th-zt777-77777-aaaca-cai",
+      "validation": 48781,
+      "sort": 2697508,
+      "source_validation": 1130393,
+      "history": 9602244,
+      "rows": 194
+    },
+    {
+      "canister": "xu6vt-ul777-77777-aaacq-cai",
+      "validation": 48781,
+      "sort": 2872033,
+      "source_validation": 1210393,
+      "history": 9603605,
+      "rows": 194
+    },
+    {
+      "canister": "xt7th-zt777-77777-aaaca-cai",
+      "validation": 48781,
+      "sort": 2697671,
+      "source_validation": 1130393,
+      "history": 9683190,
+      "rows": 194
+    },
+    {
+      "canister": "xu6vt-ul777-77777-aaacq-cai",
+      "validation": 48781,
+      "sort": 2865938,
+      "source_validation": 1210393,
+      "history": 9604186,
+      "rows": 194
+    },
+    {
+      "canister": "x556p-cd777-77777-aaada-cai",
+      "validation": 48781,
+      "sort": 2770324,
+      "source_validation": 1130393,
+      "history": 9764200,
+      "rows": 194
+    }
+  ]
+}

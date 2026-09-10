@@ -7,7 +7,7 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::candid::Nat,
-    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
     impl_storable_bounded,
     role_contract::allocation::memory::cycles::CYCLES_ICP_REFILL_RECORDS_ID,
     storage::prelude::*,
@@ -169,12 +169,12 @@ impl IcpRefillRecordsData {
 ///
 
 pub struct IcpRefillRecords {
-    map: StableBtreeMap<IcpRefillRecordKey, IcpRefillRecord, VirtualMemory<DefaultMemoryImpl>>,
+    map: StableBtreeMap<IcpRefillRecordKey, IcpRefillRecord, RuntimeMemory<DefaultMemoryImpl>>,
 }
 
 impl IcpRefillRecords {
     pub const fn new(
-        map: StableBtreeMap<IcpRefillRecordKey, IcpRefillRecord, VirtualMemory<DefaultMemoryImpl>>,
+        map: StableBtreeMap<IcpRefillRecordKey, IcpRefillRecord, RuntimeMemory<DefaultMemoryImpl>>,
     ) -> Self {
         Self { map }
     }

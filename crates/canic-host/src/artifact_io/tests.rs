@@ -6,6 +6,39 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::os::unix::fs::PermissionsExt;
 
 #[test]
+fn captured_cargo_input_survives_replacement_and_cleans_up() {
+    let root = unique_temp_dir("canic-captured-cargo-output");
+    fs::create_dir_all(&root).expect("create capture root");
+    let source = root.join("cargo.wasm");
+    let destination = root.join("published.wasm");
+    fs::write(&source, b"compiled first role").expect("write compiled input");
+    fs::write(&destination, b"previous artifact").expect("write prior output");
+    let captured = CapturedWasmArtifact::capture(&source, &destination).expect("capture input");
+
+    fs::write(&source, b"later compilation").expect("replace Cargo output");
+    assert_eq!(fs::read(captured.path()).unwrap(), b"compiled first role");
+    assert_eq!(fs::read(&destination).unwrap(), b"previous artifact");
+    fs::remove_file(&source).expect("remove Cargo output");
+    assert_eq!(fs::read(captured.path()).unwrap(), b"compiled first role");
+
+    drop(captured);
+    assert_no_artifact_stage(&root);
+    fs::remove_dir_all(root).expect("remove capture root");
+}
+
+#[test]
+fn failed_cargo_input_capture_leaves_no_stage_or_published_changes() {
+    let root = unique_temp_dir("canic-failed-cargo-capture");
+    fs::create_dir_all(&root).expect("create capture root");
+    let destination = root.join("published.wasm");
+    fs::write(&destination, b"previous artifact").expect("write prior output");
+    assert!(CapturedWasmArtifact::capture(&root.join("missing.wasm"), &destination).is_err());
+    assert_no_artifact_stage(&root);
+    assert_eq!(fs::read(&destination).unwrap(), b"previous artifact");
+    fs::remove_dir_all(root).expect("remove capture root");
+}
+
+#[test]
 fn ic_code_limit_failure_preserves_the_published_artifact_set() {
     let root = unique_temp_dir("canic-artifact-set-ic-limit");
     fs::create_dir_all(&root).expect("create temp dir");

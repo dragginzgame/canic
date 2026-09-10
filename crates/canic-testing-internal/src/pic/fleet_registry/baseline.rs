@@ -132,6 +132,11 @@ mod tests {
     use canic_core::{
         cdk::types::Cycles,
         dto::{
+            component_provisioning::{
+                FleetComponentProvisioningRetryStage, ProvisioningFailureOrigin,
+                ProvisioningFailureStage, ProvisioningRetryCategory,
+                RootComponentProvisioningPhase,
+            },
             fleet_admission::{
                 FleetAdmissionMutationAction, FleetAdmissionMutationOutcome,
                 FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
@@ -237,6 +242,8 @@ mod tests {
         report_artifact_cache_maintenance, with_canonical_root_cargo_inputs,
     };
     use crate::pic::fleet_registry::fixture::progress_elapsed;
+    #[cfg(test)]
+    use crate::pic::timing::Span;
     use crate::pic::{
         CanicWasmBuildProfile,
         artifacts::{
@@ -1929,6 +1936,8 @@ exec icp "$@"
         build_network: BuildNetwork,
         release_nonce: [u8; 32],
     ) -> LiteralZeroReleaseArtifacts {
+        let span = Span::start("release_artifact_resolution");
+        let mut phase = Span::start("artifact_recipe");
         let release_build_id =
             persist_internal_test_release_build_plan(adapter_root, build_network, release_nonce);
         let outputs =
@@ -1942,12 +1951,14 @@ exec icp "$@"
             build_network,
             release_build_id,
         );
+        phase = phase.next("artifact_cache_lookup");
         let started_at = Instant::now();
         let outcome = match prepare_artifact_cache(&cache)
             .expect("prepare literal-zero release artifact cache")
         {
             ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
             ArtifactCachePreparation::Build(transaction) => {
+                phase = phase.next("artifact_build_and_seal");
                 build_and_seal_literal_zero_release_artifacts(
                     workspace_root,
                     adapter_root,
@@ -1957,6 +1968,7 @@ exec icp "$@"
                     release_build_id,
                     build_network,
                 );
+                phase = phase.next("artifact_cache_commit");
                 for (name, path) in &outputs {
                     transaction
                         .import_output(name, path)
@@ -1991,7 +2003,12 @@ exec icp "$@"
             outcome.record().maintenance(),
         );
 
-        load_literal_zero_release_artifacts(adapter_root, release_build_id, configured_roles)
+        phase = phase.next("artifact_load");
+        let artifacts =
+            load_literal_zero_release_artifacts(adapter_root, release_build_id, configured_roles);
+        phase.finish();
+        span.finish();
+        artifacts
     }
 
     #[cfg(test)]
@@ -2243,16 +2260,19 @@ exec icp "$@"
         };
         let builder = CanisterArtifactBuilder::for_profile(context.profile)
             .expect("preflight literal-zero artifact toolchain");
+        let mut phase = Span::start("coordinator_build");
         let coordinator = builder
             .build_workspace_canister_artifact(
                 &context.with_role(CanicInfrastructureRole::FleetCoordinator.as_str()),
             )
             .expect("build literal-zero Coordinator artifact");
+        phase = phase.next("store_build");
         let store = builder
             .build_workspace_canister_artifact(
                 &context.with_role(CanicInfrastructureRole::WasmStore.as_str()),
             )
             .expect("build literal-zero Store artifact");
+        phase = phase.next("configured_roles_build");
         let configured = builder
             .build_workspace_configured_canister_artifacts(&context, configured_roles)
             .expect("build literal-zero Root and Component artifacts");
@@ -2274,6 +2294,7 @@ exec icp "$@"
             .collect::<Vec<_>>();
         assert!(!components.is_empty(), "literal-zero Component artifacts");
 
+        phase = phase.next("seal_release_manifests");
         let infrastructure = compile_and_persist_canic_infrastructure_artifact_manifest(
             adapter_root,
             release_build_id,
@@ -2337,6 +2358,7 @@ exec icp "$@"
         .expect("persist literal-zero current release authority");
         finalize_release_build_from_manifest(adapter_root, release_build_id, &current.path)
             .expect("finalize literal-zero current release authority");
+        phase.finish();
     }
 
     #[cfg(test)]
@@ -3546,6 +3568,73 @@ exec icp "$@"
     }
 
     #[cfg(test)]
+    fn assert_accepted_provisioning_origin(
+        pic: &PocketIc,
+        root: Principal,
+        coordinator: Principal,
+        operation_id: [u8; 32],
+    ) {
+        let mut last_observation = None;
+        for _ in 0..240 {
+            let root_status = observed_root_provisioning(pic, root, operation_id)
+                .expect("accepted Root operation stays readable");
+            let CoordinatorOperationReadResponse::Operation(
+                CoordinatorOperationStatusResponse::ComponentProvisioning(coordinator_status),
+            ) = coordinator_status(
+                pic,
+                coordinator,
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+            )
+            .expect("Coordinator operation stays readable during Store outage")
+            else {
+                panic!("exact Coordinator provisioning operation");
+            };
+            if let Some(failure) = root_status.last_failure
+                && failure.stage == ProvisioningFailureStage::Provisioning
+                && let Some(observed) = coordinator_status.pending_root_failure
+                && observed.origin.is_some_and(|origin| {
+                    origin.failed_at_ns == failure.failed_at_ns && origin.stage == failure.stage
+                })
+            {
+                assert_eq!(root_status.phase, RootComponentProvisioningPhase::Accepted);
+                assert_eq!(failure.target, root);
+                assert_eq!(failure.operation_id, operation_id);
+                assert_eq!(
+                    failure.diagnostic_code,
+                    canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE
+                        .raw_code()
+                        .raw()
+                );
+                assert_eq!(failure.retry_category, ProvisioningRetryCategory::Backoff);
+                assert!(failure.retry_at_ns.is_some());
+                assert_eq!(coordinator_status.operation_id, operation_id);
+                assert_eq!(observed.fleet_subnet_root, root);
+                assert_eq!(
+                    observed.stage,
+                    FleetComponentProvisioningRetryStage::RootProvisioning
+                );
+                assert_eq!(
+                    observed.origin,
+                    Some(ProvisioningFailureOrigin {
+                        failed_at_ns: failure.failed_at_ns,
+                        stage: failure.stage,
+                        target: failure.target,
+                        operation_id: failure.operation_id,
+                        diagnostic_code: failure.diagnostic_code,
+                        retry_category: failure.retry_category,
+                    })
+                );
+                println!("CANIC-159 Accepted Root failure retained by Coordinator: {observed:?}");
+                return;
+            }
+            last_observation = Some((root_status, coordinator_status));
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        panic!("Coordinator did not retain the Accepted Root origin: {last_observation:?}");
+    }
+
+    #[cfg(test)]
     /// Faults injected at the existing Root activation boundary.
     #[derive(Clone, Copy, Eq, PartialEq)]
     enum ActivationFailureFixture {
@@ -3761,6 +3850,22 @@ exec icp "$@"
                         &pic,
                         installed.root_id,
                         request.operation_id,
+                        |status| status.phase == RootComponentProvisioningPhase::Accepted,
+                    );
+                    pic.stop_canister(wasm_store, Some(installation_controller))
+                        .expect("stop Store while Root provisioning is Accepted");
+                    assert_accepted_provisioning_origin(
+                        &pic,
+                        installed.root_id,
+                        coordinator,
+                        request.operation_id,
+                    );
+                    pic.start_canister(wasm_store, Some(installation_controller))
+                        .expect("resume the same operation after Accepted-phase Store outage");
+                    await_root_provisioning(
+                        &pic,
+                        installed.root_id,
+                        request.operation_id,
                         |status| {
                             status.phase == canic_core::dto::component_provisioning::RootComponentProvisioningPhase::Published
                                 && status.activated_component_count == status.component_count
@@ -3904,6 +4009,7 @@ exec icp "$@"
             terminal_status.root_batch_count
         );
         assert!(terminal_status.runtimes_activated_at_ns.is_some());
+        assert_eq!(terminal_status.pending_root_failure, None);
         let terminal_pool = root_pool_status(&pic, fixture.root_id);
         assert_eq!(terminal_pool.workload, 5);
         assert!(!terminal_pool.entries.is_empty());
@@ -4227,6 +4333,8 @@ exec icp "$@"
         reason = "one governed control-plane journey keeps Prepared Root inspection, controller finalization, Component convergence, conservation and terminal replay together"
     )]
     fn assert_literal_zero_host_journey(funding: FundingJourney, initial_workload_count: usize) {
+        let journey_span = Span::start("production_adapter_journey");
+        let mut phase = Span::start("source_and_fixture_recipe");
         let funded_import_repair = matches!(funding, FundingJourney::FailedImports);
         let failed_reserve = matches!(funding, FundingJourney::FailedReserve);
         let fund_estate = matches!(
@@ -4290,6 +4398,7 @@ exec icp "$@"
         std::fs::create_dir_all(&adapter_root)
             .expect("create CANIC-121 production-adapter fixture");
         let _adapter_root_cleanup = TestDirectoryCleanup(adapter_root.clone());
+        phase = phase.next("initial_artifacts");
         let release_artifacts = build_literal_zero_release_artifacts(
             &source_workspace,
             &adapter_root,
@@ -4306,6 +4415,7 @@ exec icp "$@"
             &release_artifacts.component_wasms,
             release_artifacts.release_build_id,
         );
+        phase = phase.next("replica_and_transport_setup");
         let (icp_wrapper, operator, controller_mutation_log) = prepare_isolated_icp(&adapter_root);
         let mut pic = build_management_pic();
         let subnet = *pic
@@ -4594,6 +4704,7 @@ exec icp "$@"
             None,
         );
 
+        phase = phase.next("generation_and_initial_review");
         let live_url = pic.make_live(None);
         let local_replica = LocalReplicaTarget {
             root_key: hex_bytes(pic.root_key().expect("PocketIC local root key")),
@@ -4722,6 +4833,8 @@ exec icp "$@"
                 "funded autonomous production-adapter journey complete",
                 journey_started_at,
             );
+            phase.finish();
+            journey_span.finish();
             return;
         }
 
@@ -4740,10 +4853,13 @@ exec icp "$@"
                 pools: &pools,
             });
             pic.stop_live();
+            phase.finish();
+            journey_span.finish();
             return;
         }
 
         if matches!(funding, FundingJourney::Reinstall) {
+            phase = phase.next("initial_working_fleet");
             prepare_ready_imports(&pic, root, operator, &pools);
             let mut platform = literal_zero_journey_platform(
                 &desired,
@@ -4785,6 +4901,7 @@ exec icp "$@"
                 "working reinstall fixture prepared",
                 infrastructure_started_at,
             );
+            phase = phase.next("retained_estate_reinstall");
             assert_generated_reinstall_journey(ReinstallJourney {
                 adapter_root: &adapter_root,
                 config: &config_path,
@@ -4797,11 +4914,15 @@ exec icp "$@"
                 store,
                 pools: &pools,
             });
+            phase = phase.next("cleanup");
             pic.stop_live();
             std::fs::remove_dir_all(&adapter_root).expect("remove completed reinstall fixture");
+            phase.finish();
+            journey_span.finish();
             progress_elapsed("generated reinstall journey complete", journey_started_at);
             return;
         }
+        phase = phase.next("initial_recovery_and_convergence");
         let mut resumed_platform = literal_zero_journey_platform(
             &desired,
             &icp_wrapper,
@@ -5243,6 +5364,7 @@ exec icp "$@"
             local_replica.clone(),
             !matches!(funding, FundingJourney::Fresh),
         );
+        phase = phase.next("initial_terminal_replay");
         let replay_started_at = Instant::now();
         super::super::fixture::progress("proving literal-zero terminal replay");
         let same_plan = fleet_ensure_workflow::apply(
@@ -5299,6 +5421,7 @@ exec icp "$@"
         );
         progress_elapsed("literal-zero terminal replay complete", replay_started_at);
         if initial_workload_count == 5 && matches!(funding, FundingJourney::Fresh) {
+            phase = phase.next("same_release_reinstall");
             assert_same_release_reinstall_journey(ReinstallJourney {
                 adapter_root: &adapter_root,
                 config: &config_path,
@@ -5313,6 +5436,7 @@ exec icp "$@"
             });
         }
 
+        phase = phase.next("cleanup");
         pic.stop_live();
         std::fs::remove_dir_all(adapter_root)
             .expect("remove literal-zero production-adapter fixture");
@@ -5320,6 +5444,8 @@ exec icp "$@"
             "literal-zero production-adapter journey complete",
             journey_started_at,
         );
+        phase.finish();
+        journey_span.finish();
     }
 
     #[cfg(test)]
@@ -5832,6 +5958,12 @@ esac
         let before_root = ledger_account_balance(input.pic, ledger, input.root);
         let mut previous_operation = None;
         for wipe in 0..2_u64 {
+            let wipe_span = Span::start(if wipe == 0 {
+                "first_deliberate_wipe"
+            } else {
+                "second_deliberate_wipe"
+            });
+            let mut phase = Span::start("seed_and_preparation_review");
             let applications = input
                 .pools
                 .iter()
@@ -5900,6 +6032,7 @@ esac
                 ),
                 Err(EnsureWorkflowError::ReinstallConflict)
             ));
+            phase = phase.next("preparation_seal_and_replay");
             let sealed = fleet_ensure_workflow::apply(
                 root,
                 desired,
@@ -5928,6 +6061,7 @@ esac
             )
             .expect("replay seal without mutation");
             assert_eq!(replay.effects_applied, 0);
+            phase = phase.next("reset_review");
             let reset = fleet_ensure_workflow::plan(
                 root,
                 desired,
@@ -5956,6 +6090,7 @@ esac
                 })
                 .count();
             assert_eq!(installs, 3, "reset exactly Coordinator, Store and Root");
+            phase = phase.next("reset_interruptions_and_recovery");
             if wipe == 0 {
                 std::fs::write(root.join("fail-before-install"), []).unwrap();
                 std::fs::write(root.join("fail-before-root-install"), input.root.to_text())
@@ -6054,6 +6189,7 @@ esac
             .expect("recover and complete the exact wipe");
             assert!(complete.terminal);
             assert!(complete.actual_conservation.is_some());
+            phase = phase.next("reset_state_and_conservation");
             let final_rows = input
                 .pools
                 .iter()
@@ -6094,6 +6230,7 @@ esac
                 3 * usize::try_from(wipe + 1).unwrap(),
                 "lost same-Wasm response never repeats an install"
             );
+            phase = phase.next("reset_terminal_replay");
             let replay = fleet_ensure_workflow::apply(
                 root,
                 desired,
@@ -6127,6 +6264,8 @@ esac
                 &mut platform(),
             )
             .expect("retain ordinary no-op convergence");
+            phase.finish();
+            wipe_span.finish();
         }
     }
 
@@ -6136,6 +6275,7 @@ esac
         reason = "one real release transition retains reset, recovery, conservation and both replay boundaries"
     )]
     fn assert_generated_reinstall_journey(input: ReinstallJourney<'_>) {
+        let mut phase = Span::start("replacement_artifacts_and_generation");
         let root = input.adapter_root;
         let pic = input.pic;
         let operator = Principal::from_text(&input.desired.operator).unwrap();
@@ -6363,6 +6503,7 @@ exec '{}' "$@"
                 true,
             )
         };
+        phase = phase.next("root_reinstall_review_and_authority_rejection");
         let mut first_platform = platform();
         let reviewed = fleet_ensure_workflow::plan(
             root,
@@ -6435,6 +6576,7 @@ exec '{}' "$@"
             .unwrap()
             .version;
         std::fs::write(root.join("lose-install-response"), b"once").unwrap();
+        phase = phase.next("root_reinstall_lost_response_and_recovery");
         let lost = fleet_ensure_workflow::apply(
             root,
             &desired,
@@ -6491,6 +6633,7 @@ exec '{}' "$@"
             ledger_account_balance(pic, ledger, input.root),
             Nat::from(1_000_000_000_u128)
         );
+        phase = phase.next("successor_reviews_and_convergence");
         let full = fleet_ensure_workflow::plan(
             root,
             &desired,
@@ -6584,6 +6727,7 @@ exec '{}' "$@"
                 Err(error) => panic!("reviewed recovery must converge: {error:?}"),
             }
         };
+        phase = phase.next("retained_estate_state_and_replay");
         assert!(total_funding > 0);
         assert_eq!(
             ledger_account_balance(pic, ledger, operator),
@@ -6656,6 +6800,7 @@ exec '{}' "$@"
         super::super::fixture::progress(
             "generated changed-release reinstall, recovery and replay complete",
         );
+        phase.finish();
     }
 
     #[cfg(test)]
@@ -6721,6 +6866,7 @@ exec '{}' "$@"
     ) -> IcpEnsurePlatform {
         let platform = IcpEnsurePlatform::new(desired.clone(), wrapper.to_str().unwrap(), root)
             .with_local_replica(replica)
+            .with_observation_handler(crate::pic::timing::observation)
             .with_progress_handler(|progress| {
                 let unix_ms = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -12575,6 +12721,135 @@ cycles = "80T"
         Ok(())
     }
 
+    #[test]
+    fn protected_memory_allocations_preserve_stable_state_and_root_authority() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_component_registry();
+        let pic = fixture.pic();
+        let target = fixture.issuer.canister_id;
+        let outsider = Principal::from_slice(&[0x7f; 29]);
+
+        for canister in [fixture.root, target] {
+            let denied: Result<CanisterObservabilityResponse, Error> = pic
+                .query_candid_as(
+                    canister,
+                    outsider,
+                    canic::protocol::CANIC_OBSERVABILITY,
+                    (CanisterObservabilityRequest::MemoryAllocations,),
+                )
+                .expect("direct observation transport");
+            assert!(controller_authority_unavailable(&denied));
+        }
+        let root_report: Result<CanisterObservabilityResponse, Error> = pic
+            .query_candid(
+                fixture.root,
+                canic::protocol::CANIC_OBSERVABILITY,
+                (CanisterObservabilityRequest::MemoryAllocations,),
+            )
+            .expect("Root allocation query");
+        assert!(matches!(
+            root_report,
+            Ok(CanisterObservabilityResponse::MemoryAllocations(_))
+        ));
+
+        let relay_request = || {
+            RootCommandFragment::ObserveCanister(FleetCanisterObservabilityRequest {
+                canister_id: target,
+                request: CanisterObservabilityRequest::MemoryAllocations,
+            })
+        };
+        let denied: Result<RootCommandResponseFragment, Error> = pic
+            .update_candid_as(
+                fixture.root,
+                outsider,
+                canic::protocol::CANIC_ROOT_COMMAND,
+                (relay_request(),),
+            )
+            .expect("relay refusal transport");
+        assert!(controller_authority_unavailable(&denied));
+
+        let before = pic.get_stable_memory(target);
+        let physical_extent = before.len() as u64;
+        let before_digest = wasm_hash(&before);
+        drop(before);
+        let mut previous = None;
+        for _ in 0..2 {
+            let response: Result<RootCommandResponseFragment, Error> = pic
+                .update_candid(
+                    fixture.root,
+                    canic::protocol::CANIC_ROOT_COMMAND,
+                    (relay_request(),),
+                )
+                .expect("relay transport");
+            let RootCommandResponseFragment::ObserveCanister(
+                CanisterObservabilityResponse::MemoryAllocations(report),
+            ) = response.expect("controller relay accepted")
+            else {
+                panic!("expected current memory allocations");
+            };
+            assert_memory_allocation_conservation(&report, physical_extent);
+            if let Some(previous) = previous {
+                assert_eq!(report, previous);
+            }
+            previous = Some(report);
+        }
+        assert_eq!(wasm_hash(&pic.get_stable_memory(target)), before_digest);
+        drop(fixture);
+    }
+
+    #[cfg(test)]
+    fn assert_memory_allocation_conservation(
+        report: &canic::dto::memory::MemoryAllocationsResponse,
+        physical_extent: u64,
+    ) {
+        assert_eq!(report.physical_extent.bytes, physical_extent);
+        assert_eq!(report.bucket_size_pages, 128);
+        assert_eq!(report.metadata_bytes_read, 34_848);
+        assert_eq!(report.memories.len(), 255);
+        assert_eq!(
+            report.physical_extent.bytes,
+            report.manager_metadata_bytes + report.allocated_bucket_bytes + report.unmanaged_bytes
+        );
+        assert_eq!(
+            report.allocated_bucket_bytes,
+            report
+                .memories
+                .iter()
+                .map(|entry| entry.allocated_bytes)
+                .sum::<u64>()
+        );
+        assert_eq!(
+            report.allocated_bucket_bytes,
+            report.known_binding_bytes + report.unknown_binding_bytes
+        );
+        assert_eq!(
+            report.allocated_bucket_bytes,
+            report.virtual_extent.bytes + report.bucket_slack_bytes
+        );
+        assert!(matches!(
+            report.memories[0].binding,
+            canic::dto::memory::MemoryAllocationBinding::Ledger { .. }
+        ));
+        assert!(
+            report
+                .memories
+                .iter()
+                .all(|entry| entry.payload_bytes.is_none())
+        );
+        assert!(
+            report
+                .memories
+                .windows(2)
+                .all(|pair| pair[0].memory_manager_id < pair[1].memory_manager_id)
+        );
+        assert!(
+            report
+                .memories
+                .iter()
+                .any(|entry| entry.virtual_extent.wasm_pages == 0)
+        );
+    }
+
     fn validate_active_component_registry_baseline(
         baseline: &CachedPocketIcBaseline<ActiveComponentRegistryBaselineMetadata>,
     ) -> Result<(), ActiveComponentRegistryBaselineError> {
@@ -14019,6 +14294,10 @@ cycles = "80T"
             (
                 "autonomous Root removal",
                 published_draining_root_autonomously_reaches_external_deletion_readiness,
+            ),
+            (
+                "protected current memory allocations",
+                protected_memory_allocations_preserve_stable_state_and_root_authority,
             ),
             (
                 "reinstall fixture release-cache identity",

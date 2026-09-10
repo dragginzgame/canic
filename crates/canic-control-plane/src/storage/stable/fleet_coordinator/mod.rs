@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use candid::{CandidType, Principal};
 #[cfg(feature = "fleet-coordinator-canister")]
 use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
     eager_static, impl_storable_bounded,
     role_contract::allocation::memory::control_plane::{
         FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_REGISTRY_ID,
@@ -88,7 +88,7 @@ struct FleetCoordinatorFundingState;
 #[cfg(feature = "fleet-coordinator-canister")]
 eager_static! {
     static FLEET_COORDINATOR_STATE:
-        RefCell<Cell<FleetCoordinatorStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<FleetCoordinatorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
@@ -103,7 +103,7 @@ eager_static! {
 #[cfg(feature = "fleet-coordinator-canister")]
 eager_static! {
     static FLEET_COORDINATOR_FUNDING_STATE:
-        RefCell<Cell<FleetCoordinatorFundingStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<FleetCoordinatorFundingStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,

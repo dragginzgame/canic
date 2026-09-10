@@ -5,7 +5,10 @@
 //! Boundary: maps memory workflow errors into public API errors.
 
 use crate::{
-    dto::{error::Error, memory::MemoryLedgerResponse},
+    dto::{
+        error::Error,
+        memory::{MemoryAllocationsResponse, MemoryLedgerResponse},
+    },
     workflow::memory::query::MemoryQuery as MemoryQueryWorkflow,
 };
 
@@ -18,6 +21,11 @@ use crate::{
 pub struct MemoryQuery;
 
 impl MemoryQuery {
+    /// Return bounded current allocation extents without opening stable stores.
+    pub fn allocations() -> Result<MemoryAllocationsResponse, Error> {
+        MemoryQueryWorkflow::allocations().map_err(Error::from)
+    }
+
     /// Return the current memory ledger snapshot.
     pub fn ledger() -> Result<MemoryLedgerResponse, Error> {
         MemoryQueryWorkflow::ledger().map_err(Error::from)

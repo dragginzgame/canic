@@ -1,8 +1,61 @@
 use crate::dto::prelude::*;
 
 pub use crate::domain::memory::{
-    MemoryAllocationState, MemoryCommitRecoveryErrorResponse, MemoryRangeAuthorityMode,
+    MemoryAllocationBinding, MemoryAllocationState, MemoryCommitRecoveryErrorResponse,
+    MemoryRangeAuthorityMode,
 };
+
+/// Measured physical and virtual allocations exposed by protected observations.
+/// Covers all usable IDs, including unknown bindings and the substrate ledger.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct MemoryAllocationsResponse {
+    pub current_generation: u64,
+    pub manager_layout_version: u8,
+    /// Actual persisted size, never a requested/default assumption.
+    pub bucket_size_pages: u16,
+    pub bucket_size_bytes: u64,
+    pub bucket_capacity: u32,
+    pub allocated_buckets: u16,
+    pub remaining_buckets: u32,
+    pub maximum_bucket_bytes: u64,
+    /// Backing extent: IC stable memory in canisters, vector memory on native hosts.
+    pub physical_extent: MemoryAllocationSizeEntry,
+    /// Addressable capacity, not stored payload occupancy.
+    pub virtual_extent: MemoryAllocationSizeEntry,
+    pub manager_metadata_bytes: u64,
+    pub manager_header_bytes: u64,
+    pub manager_bucket_table_bytes: u64,
+    pub manager_padding_bytes: u64,
+    pub allocated_bucket_bytes: u64,
+    pub bucket_slack_bytes: u64,
+    pub known_binding_bytes: u64,
+    pub unknown_binding_bytes: u64,
+    /// Physical bytes outside the assigned manager region.
+    pub unmanaged_bytes: u64,
+    pub metadata_bytes_read: u64,
+    pub memories: Vec<MemoryAllocationEntry>,
+}
+
+/// One manager ID's measured capacity and independently sourced ownership metadata.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct MemoryAllocationEntry {
+    pub memory_manager_id: u8,
+    pub binding: MemoryAllocationBinding,
+    pub range_claim: Option<MemoryAllocationRangeClaim>,
+    pub virtual_extent: MemoryAllocationSizeEntry,
+    pub allocated_buckets: u16,
+    pub allocated_bytes: u64,
+    pub bucket_slack_bytes: u64,
+    /// Unavailable: allocation metadata does not measure payload occupancy.
+    pub payload_bytes: Option<u64>,
+}
+
+/// Current range policy metadata; this does not establish a stable-key binding.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct MemoryAllocationRangeClaim {
+    pub authority: String,
+    pub mode: MemoryRangeAuthorityMode,
+}
 
 ///
 /// MemoryLedgerResponse

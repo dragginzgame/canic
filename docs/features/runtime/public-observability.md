@@ -57,6 +57,54 @@ endpoint macros. Structural Candid equality does not establish the exact bytes
 used by protocol-profile hashing. After refreshing, build the affected artifacts
 without the refresh flag to verify the ordinary materialization path as well.
 
+## Current Memory Allocations
+
+Root and managed-canister `canic_observability` accept `MemoryAllocations` under
+the existing controller predicate. For a controlled Workload, send
+`canic_root_command(ObserveCanister { canister_id, request = MemoryAllocations })`
+through its Root. The host's `observe_fleet_canister` uses these same owners.
+Store does not expose this selector. There is no public memory-ledger endpoint.
+
+The response reports the committed generation, actual persisted bucket size,
+manager capacity and allocation totals, and all 255 usable manager IDs in order.
+Each row separates virtual extent, allocated buckets and bytes, bucket slack,
+and a current stable-key/owner binding, the ic-memory ledger binding, or an
+explicit unknown binding. Range claims describe allocation policy; they do not
+establish an unknown allocation's owner. Zero-page entries remain visible.
+
+Collection uses ic-memory 0.13.2's owned runtime report. It reads 34,848 bytes of
+validated manager metadata and bounded current declarations without decoding
+history, constructing stores, growing memory, writing, or advancing the ledger
+generation. Canic requires an already bootstrapped runtime.
+`MemoryQuery::ledger()` remains the separate full historical diagnostic API.
+
+`physical_extent.bytes` measures allocated IC stable memory in canister
+execution and the supplied backing-memory extent in native execution. Format
+bytes in binary units and label this metric **allocated stable memory**.
+Virtual extent includes structure capacity and metadata. `payload_bytes` is
+unavailable; bucket slack is allocation beyond virtual extent, not unused
+record-payload capacity.
+
+The report preserves these conservation identities:
+
+- Physical extent = manager metadata + allocated bucket bytes + unmanaged bytes.
+- Allocated bucket bytes = the sum of every row's allocated bytes.
+- Allocated bucket bytes = known-binding bytes + unknown-binding bytes.
+- Allocated bucket bytes = virtual extent + bucket slack.
+
+The ledger is included in the rows and known-binding total; do not add it twice.
+Unknown-binding bytes are managed buckets without a current binding.
+Unmanaged bytes are physical extent outside the manager's accounted extent.
+
+Canic retains the default 128-page (8 MiB) buckets. Storage uses
+`ic_memory::RuntimeMemory`; collections and memory traits come from
+`ic_memory::ic_stable_structures`, the exact re-exported substrate dependency.
+The reported CANIC-162 Game Hub size of 232 MiB is consistent with 29 default
+buckets plus a 64 KiB manager page (232.0625 MiB), but still needs live per-owner
+measurement. No memory reduction is claimed. The
+[assessment](../../audits/reports/2026-09/2026-09-10/canic162-memory.md)
+records adoption and composed lifecycle evidence with IcyDB 0.257.4.
+
 ## Optional Public Metrics
 
 One top-level setting in `canic.toml` selects the public aggregate families
@@ -137,6 +185,47 @@ to 256; applications remain responsible for bounding their own collection and
 input construction and disposal. The timer records its cost through existing
 performance instrumentation after collection; the current run is visible on the
 next sample and does not recursively sample itself.
+
+## Sampling cost qualification
+
+Measure the complete sampling callback in Wasm, including application collection,
+validation, publication and history. Retain the exact source/artifact, build
+profile, selected families, entity/name cardinality and instruction counts.
+Cover first allocation, steady sampling, full history retention/rollover and
+rejection/recovery. Native counters and a small ordinary fixture do not establish
+the maximum supported producer cost.
+
+The historical **20,000,000 instructions** is an advisory comparison point.
+It first appeared in Canic's 0.110.11 sampling regression on 2026-09-08; that
+fixture measured 4,647,992 instructions. It was retained for history and then
+copied into Toko Miner's complete-callback qualification. No operating-cost or
+latency calculation establishes that exact value. It is not a runtime cutoff,
+protocol limit or universal application budget, and crossing it alone must not
+block a Canic release. The timer regression reports the measurement and whether
+it exceeds the reference without an absolute-cost assertion.
+
+Correctness and bounded work remain required: enforce collection/label limits,
+history capacity, exact timestamps, family isolation, continued scheduling and
+recovery. The current scaling regression also compares the same retained prefix
+with 256 and 4,096 source checkpoints: a sixteenfold source increase may use at
+most twice the first sample's instructions. This fixture-specific tolerance
+detects a return to source-proportional collection; it does not certify a global
+instruction bound or replace structural bounds. Revise that comparison when
+its workload or measurement meaning changes, retaining the supporting evidence.
+
+An absolute regression threshold needs an explicit workload, measured baseline,
+justified margin and consequence for exceeding it. An application operating
+budget additionally needs its sampling cadence, deployment scale and an actual
+latency or accounted cycle-cost requirement. Record and review those assumptions
+when the producer, profile or platform changes. Do not silently raise a failing
+limit, infer cycles from instructions, or treat an unexplained historical number
+as permanent authority. Until such a budget exists, absolute cost is reported
+for review alongside the maintained structural and behavioural checks.
+
+The original [sampling evidence](../../audits/reports/2026-09/2026-09-08/public-sampling-bounds.md)
+and [Toko ceiling evidence](../../audits/reports/2026-09/2026-09-09/metrics-history-index.md)
+retain their original measurements and test verdicts. A historical pass/fail
+against 20M is not a new product-cost requirement.
 
 ## Bounded chart history
 

@@ -11,7 +11,7 @@ use canic_core::impl_storable_bounded;
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
     cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::VirtualMemory,
+        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::RuntimeMemory,
         storable::Storable,
     },
     dto::fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
@@ -88,7 +88,7 @@ struct RootComponentDraining;
 #[cfg(feature = "root-control-plane")]
 eager_static! {
     static ROOT_COMPONENT_REGISTRY:
-        RefCell<Cell<RootComponentRegistryStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<RootComponentRegistryStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
@@ -106,7 +106,7 @@ eager_static! {
         StableBtreeMap<
             RootComponentDrainingKey,
             RootComponentDrainingRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
@@ -124,7 +124,7 @@ eager_static! {
         StableBtreeMap<
             RootComponentSubtreeRemovalHistoryKey,
             RootComponentSubtreeRemovalCompletedLeafRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
@@ -142,7 +142,7 @@ eager_static! {
         StableBtreeMap<
             ComponentRegistryEntryKey,
             ComponentRegistryEntryRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
@@ -160,7 +160,7 @@ eager_static! {
         StableBtreeMap<
             ComponentRegistryPrincipalKey,
             ComponentRegistryPrincipalIndexRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
@@ -178,7 +178,7 @@ eager_static! {
         StableBtreeMap<
             RootComponentAllocationOperationKey,
             RootComponentAllocationRecord,
-            VirtualMemory<DefaultMemoryImpl>,
+            RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(

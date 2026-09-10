@@ -4,13 +4,18 @@
 //! Does not own: memory schema declarations, stable records, or DTO schema.
 //! Boundary: maps memory runtime diagnostics into ops query responses.
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     InternalError,
     domain::memory::{
-        MemoryAllocationState, MemoryCommitRecoveryErrorResponse, MemoryRangeAuthorityMode,
+        MemoryAllocationBinding, MemoryAllocationState, MemoryCommitRecoveryErrorResponse,
+        MemoryRangeAuthorityMode,
     },
     dto::memory::{
-        MemoryAllocationRecordEntry, MemoryAllocationSizeEntry, MemoryCommitRecoveryResponse,
+        MemoryAllocationEntry, MemoryAllocationRangeClaim, MemoryAllocationRecordEntry,
+        MemoryAllocationSizeEntry, MemoryAllocationsResponse, MemoryCommitRecoveryResponse,
         MemoryCommitSlotResponse, MemoryLedgerGenerationEntry, MemoryLedgerMemoryEntry,
         MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemorySchemaMetadataEntry,
     },
@@ -68,6 +73,14 @@ impl From<MemoryRegistryOpsError> for InternalError {
 pub struct MemoryRegistryOps;
 
 impl MemoryRegistryOps {
+    /// Measure all usable IDs through the substrate's bounded read-only report.
+    /// Collection never decodes history or constructs a missing runtime.
+    pub fn allocation_snapshot() -> Result<MemoryAllocationsResponse, InternalError> {
+        let report = ic_memory::default_memory_manager_memory_allocations()
+            .map_err(MemoryRegistryOpsError::from)?;
+        memory_allocations_response(report)
+    }
+
     // Run eager TLS touches after the registry validates stable-memory slots.
     pub fn init_eager_tls() {
         init_eager_tls();
@@ -135,6 +148,66 @@ impl MemoryRegistryOps {
             records,
             generations,
         })
+    }
+}
+
+fn memory_allocations_response(
+    report: ic_memory::MemoryAllocations,
+) -> Result<MemoryAllocationsResponse, InternalError> {
+    let current_generation = report
+        .current_generation
+        .ok_or_else(|| InternalError::public(crate::diagnostics::codes::STATE_INVALID))?;
+    Ok(MemoryAllocationsResponse {
+        current_generation,
+        manager_layout_version: report.manager_layout_version,
+        bucket_size_pages: report.bucket_size_pages,
+        bucket_size_bytes: report.bucket_size_bytes,
+        bucket_capacity: report.bucket_capacity,
+        allocated_buckets: report.allocated_buckets,
+        remaining_buckets: report.remaining_buckets,
+        maximum_bucket_bytes: report.maximum_bucket_bytes,
+        physical_extent: memory_allocation_size_response(report.physical_extent),
+        virtual_extent: memory_allocation_size_response(report.virtual_extent),
+        manager_metadata_bytes: report.manager_metadata_bytes,
+        manager_header_bytes: report.manager_header_bytes,
+        manager_bucket_table_bytes: report.manager_bucket_table_bytes,
+        manager_padding_bytes: report.manager_padding_bytes,
+        allocated_bucket_bytes: report.allocated_bucket_bytes,
+        bucket_slack_bytes: report.bucket_slack_bytes,
+        known_binding_bytes: report.known_binding_bytes,
+        unknown_binding_bytes: report.unknown_binding_bytes,
+        unmanaged_bytes: report.unmanaged_bytes,
+        metadata_bytes_read: report.metadata_bytes_read,
+        memories: report
+            .memories
+            .into_iter()
+            .map(memory_allocation_entry_response)
+            .collect(),
+    })
+}
+
+fn memory_allocation_entry_response(entry: ic_memory::MemoryAllocation) -> MemoryAllocationEntry {
+    let binding = match entry.binding {
+        ic_memory::AllocationBinding::Current { stable_key, owner } => {
+            MemoryAllocationBinding::Current { stable_key, owner }
+        }
+        ic_memory::AllocationBinding::Ledger { stable_key, owner } => {
+            MemoryAllocationBinding::Ledger { stable_key, owner }
+        }
+        ic_memory::AllocationBinding::Unknown => MemoryAllocationBinding::Unknown,
+    };
+    MemoryAllocationEntry {
+        memory_manager_id: entry.memory_manager_id,
+        binding,
+        range_claim: entry.range_claim.map(|claim| MemoryAllocationRangeClaim {
+            authority: claim.authority,
+            mode: memory_range_authority_mode(claim.mode),
+        }),
+        virtual_extent: memory_allocation_size_response(entry.virtual_extent),
+        allocated_buckets: entry.allocated_buckets,
+        allocated_bytes: entry.allocated_bytes,
+        bucket_slack_bytes: entry.bucket_slack_bytes,
+        payload_bytes: entry.payload_bytes,
     }
 }
 
@@ -314,157 +387,5 @@ const fn commit_recovery_error_response(
             MemoryCommitRecoveryErrorResponse::UnexpectedGeneration
         }
         _ => MemoryCommitRecoveryErrorResponse::Unknown,
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Tests
-// -----------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ic_memory::{
-        AllocationDeclaration, AllocationHistory, AllocationLedger, AllocationSlotDescriptor,
-        SchemaMetadata,
-    };
-
-    #[test]
-    fn ledger_snapshot_reads_the_bootstrapped_ic_memory_runtime() {
-        MemoryRegistryOps::init_registry().expect("bootstrap canonical memory runtime");
-
-        let snapshot = MemoryRegistryOps::ledger_snapshot().expect("runtime diagnostic export");
-
-        assert!(snapshot.current_generation > 0);
-        assert!(
-            snapshot
-                .authorities
-                .iter()
-                .any(|authority| authority.owner == "canic-core")
-        );
-        assert!(
-            snapshot
-                .memories
-                .iter()
-                .any(|memory| memory.memory_manager_id >= 30)
-        );
-    }
-
-    #[test]
-    fn commit_slot_response_maps_ic_memory_012_variants_exactly() {
-        assert_eq!(
-            commit_slot_response(CommitSlotDiagnostic::Empty),
-            MemoryCommitSlotResponse {
-                present: false,
-                generation: None,
-                valid: false,
-            }
-        );
-        assert_eq!(
-            commit_slot_response(CommitSlotDiagnostic::Valid { generation: 7 }),
-            MemoryCommitSlotResponse {
-                present: true,
-                generation: Some(7),
-                valid: true,
-            }
-        );
-        assert_eq!(
-            commit_slot_response(CommitSlotDiagnostic::Invalid { generation: 8 }),
-            MemoryCommitSlotResponse {
-                present: true,
-                generation: Some(8),
-                valid: false,
-            }
-        );
-    }
-
-    #[test]
-    fn commit_recovery_response_maps_invalid_slots_without_unknown_fallback() {
-        let response = commit_recovery_response(Some(CommitStoreDiagnostic {
-            slot0: CommitSlotDiagnostic::Invalid { generation: 3 },
-            slot1: CommitSlotDiagnostic::Empty,
-            recovery: Err(CommitRecoveryError::InvalidCommitSlots {
-                slot0_invalid: true,
-                slot1_invalid: false,
-            }),
-        }));
-
-        assert_eq!(response.authoritative_generation, None);
-        assert_eq!(
-            response.recovery_error,
-            Some(MemoryCommitRecoveryErrorResponse::InvalidCommitSlots)
-        );
-    }
-
-    #[test]
-    fn memory_allocation_record_response_includes_live_backing_memory_size() {
-        let declaration = AllocationDeclaration::new(
-            "app.users.v1",
-            AllocationSlotDescriptor::memory_manager(100).expect("usable slot"),
-            None,
-            SchemaMetadata::default(),
-        )
-        .expect("declaration");
-        let ledger = AllocationLedger::new_committed(0, AllocationHistory::default())
-            .expect("genesis ledger")
-            .stage_reservation_generation(&[declaration], None)
-            .expect("reservation generation");
-        let record = DiagnosticRecord {
-            allocation: ledger.allocation_history().records()[0].clone(),
-            memory_size: Some(DiagnosticMemorySizeOutcome::Measured(
-                DiagnosticMemorySize::from_wasm_pages(3),
-            )),
-        };
-
-        let response = memory_allocation_record_response(record);
-
-        assert_eq!(
-            response.memory_size,
-            Some(MemoryAllocationSizeEntry {
-                wasm_pages: 3,
-                bytes: 196_608,
-            })
-        );
-        assert_eq!(
-            memory_ledger_memory_entry_response(&response),
-            Some(MemoryLedgerMemoryEntry {
-                memory_manager_id: 100,
-                stable_key: "app.users.v1".to_string(),
-                state: MemoryAllocationState::Reserved,
-                size: MemoryAllocationSizeEntry {
-                    wasm_pages: 3,
-                    bytes: 196_608,
-                },
-            })
-        );
-    }
-
-    #[test]
-    fn memory_allocation_record_response_omits_failed_size_measurements() {
-        let declaration = AllocationDeclaration::new(
-            "app.users.v1",
-            AllocationSlotDescriptor::memory_manager(100).expect("usable slot"),
-            None,
-            SchemaMetadata::default(),
-        )
-        .expect("declaration");
-        let ledger = AllocationLedger::new_committed(0, AllocationHistory::default())
-            .expect("genesis ledger")
-            .stage_reservation_generation(&[declaration], None)
-            .expect("reservation generation");
-        let record = DiagnosticRecord {
-            allocation: ledger.allocation_history().records()[0].clone(),
-            memory_size: Some(DiagnosticMemorySizeOutcome::Failed(
-                ic_memory::DiagnosticFailure::new(
-                    ic_memory::DiagnosticCode::MemorySize,
-                    "slot could not be measured",
-                ),
-            )),
-        };
-
-        let response = memory_allocation_record_response(record);
-
-        assert_eq!(response.memory_size, None);
-        assert_eq!(memory_ledger_memory_entry_response(&response), None);
     }
 }

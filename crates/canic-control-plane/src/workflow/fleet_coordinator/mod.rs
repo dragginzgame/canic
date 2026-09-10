@@ -1291,7 +1291,7 @@ async fn query_root_component_provisioning(
             RemoteRootOperationStatusResponse::ProvisionComponents(response),
         ) if response.operation_id == operation_id && response.plan_hash == plan_hash => {
             if let Some(error) =
-                FleetCoordinatorOps::observed_activation_failure(response.last_failure)
+                FleetCoordinatorOps::observed_root_failure(response.phase, response.last_failure)
             {
                 return Err(error);
             }

@@ -6,7 +6,7 @@
 
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
     config::{
         ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose,
         FleetServiceMemberPurpose, FleetServicePlacementPolicy,
@@ -32,7 +32,7 @@ const FLEET_ACTIVATION_RECORD_KEY: u8 = 0;
 
 eager_static! {
     static FLEET_ACTIVATION: RefCell<
-        StableBtreeMap<u8, FleetActivationRecord, VirtualMemory<DefaultMemoryImpl>>,
+        StableBtreeMap<u8, FleetActivationRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
         key = "canic.core.fleet.activation.v1",

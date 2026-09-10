@@ -1,0 +1,3 @@
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.13 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 45.16s

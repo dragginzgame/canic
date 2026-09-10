@@ -660,6 +660,37 @@ mod tests {
     }
 
     #[test]
+    fn coordinator_lifetime_grants_scale_with_admitted_root_allowances() {
+        let first = authority();
+        let mut second = authority();
+        second.root_funding.maximum_automatic_grants = 2;
+        second.root_funding.maximum_automatic_cycles = Cycles::new(60_000_000_000_000);
+        for root in [&first, &second] {
+            validate_fleet_subnet_root_funding_authority(root, false)
+                .expect("each Root independently satisfies protected policy");
+        }
+        let mut coordinator = coordinator_policy();
+        coordinator.maximum_automatic_grants = 6;
+        coordinator.maximum_automatic_cycles = Cycles::new(180_000_000_000_000);
+        validate_coordinator_root_funding_policy(&coordinator)
+            .expect("Coordinator is not limited to one Root's grant count");
+        validate_fleet_root_funding_capacity(&coordinator, [&first, &second])
+            .expect("Coordinator may admit the combined Root allowances");
+
+        coordinator.maximum_automatic_grants = 7;
+        assert_eq!(
+            validate_fleet_root_funding_capacity(&coordinator, [&first, &second]),
+            Err(FleetFundingPolicyValidationError::CoordinatorAutomaticGrantCountAboveRoots)
+        );
+        coordinator.maximum_automatic_grants = 6;
+        coordinator.maximum_automatic_cycles = Cycles::new(180_000_000_000_001);
+        assert_eq!(
+            validate_fleet_root_funding_capacity(&coordinator, [&first, &second]),
+            Err(FleetFundingPolicyValidationError::CoordinatorAutomaticCyclesAboveRoots)
+        );
+    }
+
+    #[test]
     fn preview_multi_subnet_profile_admits_the_bounded_staging_envelope() {
         let root = FleetSubnetRootFundingAuthority {
             root_funding: FleetSubnetRootFundingPolicy {

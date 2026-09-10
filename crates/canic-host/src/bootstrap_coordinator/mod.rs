@@ -8,7 +8,6 @@
 mod tests;
 
 use crate::{
-    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_candid::resolve_infrastructure_candid,
     build_toolchain::BuildToolchain,
     canister_build::{
@@ -17,6 +16,7 @@ use crate::{
             canister_build_target_root, configure_canister_cargo_command,
             configure_declaration_command, declaration_target_root,
         },
+        compiled::CompiledCanisterArtifact,
     },
     cargo_command,
     cargo_metadata::cargo_metadata,
@@ -28,7 +28,6 @@ use crate::{
         PackageValidationMode, RolePackageValidation, finding_detail,
         resolve_built_in_fleet_coordinator_contract, validate_built_in_fleet_coordinator_package,
     },
-    should_embed_candid_metadata,
 };
 use std::{
     fs,
@@ -54,6 +53,13 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     context: &WorkspaceBuildContext,
     toolchain: &BuildToolchain,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
+    compile_bootstrap_fleet_coordinator_artifact(context)?.finish(toolchain)
+}
+
+/// Compile and capture the exact infrastructure input before finalization.
+pub fn compile_bootstrap_fleet_coordinator_artifact(
+    context: &WorkspaceBuildContext,
+) -> Result<CompiledCanisterArtifact, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_fleet_coordinator_source(context)?;
     require_built_in_fleet_coordinator_contract(&source.manifest_path)?;
     let built_wasm_path = canister_build_target_root(&context.workspace_root)
@@ -82,23 +88,7 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     let wasm_gz_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.wasm.gz"));
     let did_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.did"));
 
-    let embed_candid = should_embed_candid_metadata(context.build_network);
-    let transforms = finalize_wasm_artifact(
-        &WasmArtifactFinalization {
-            profile: context.profile,
-            build_network: context.build_network,
-            embed_candid,
-            validate_sidecar_only: false,
-            source_wasm_path: &built_wasm_path,
-            candid: &candid,
-            wasm_path: &wasm_path,
-            did_path: &did_path,
-            wasm_gz_path: &wasm_gz_path,
-        },
-        toolchain,
-    )?;
-
-    Ok(CanisterArtifactBuildOutput {
+    let output = CanisterArtifactBuildOutput {
         package_name: source.package_name,
         package_version: source.package_version.clone(),
         protocol_release_identity: source.package_version,
@@ -110,8 +100,9 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
         did_path,
         candid_sha256: profile.candid_sha256,
         protocol_profile_digest: profile.protocol_profile_digest,
-        transforms,
-    })
+        transforms: Vec::new(),
+    };
+    CompiledCanisterArtifact::capture(context, &built_wasm_path, candid, output, None)
 }
 
 fn resolve_bootstrap_fleet_coordinator_source(

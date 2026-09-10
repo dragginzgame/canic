@@ -9,6 +9,23 @@ const CANIC_MANAGED_RUNTIME_CRATES: &[&str] =
     &["canic", "canic-core", "canic-control-plane", "canic-macros"];
 
 #[test]
+fn composed_memory_runtime_has_one_package_identity() {
+    let lock = fs::read_to_string(workspace_root().join("Cargo.lock")).expect("workspace lockfile");
+    let lock: toml::Value = toml::from_str(&lock).expect("structured lockfile");
+    let memories = lock["package"]
+        .as_array()
+        .expect("locked packages")
+        .iter()
+        .filter(|package| package["name"].as_str() == Some("ic-memory"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        memories.len(),
+        1,
+        "Canic and IcyDB must share one ic-memory package identity; align the published dependencies before release: {memories:?}"
+    );
+}
+
+#[test]
 fn canic_managed_runtime_code_uses_managed_explicit_stable_keys() {
     let workspace_root = workspace_root();
     let mut violations = Vec::new();

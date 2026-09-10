@@ -1,0 +1,241 @@
+--- a/apps/toko_miner/game_shard/design/src/lib.rs
++++ b/apps/toko_miner/game_shard/design/src/lib.rs
+@@ -30,3 +30,5 @@
+     NftCollectionSample, NftCollectionStartingAccess, NftRarity, ProductionTier, ResourcePhase,
+     RobotAppearanceOptionGroup, RobotRank, RocketStatus,
+ };
++
++pub mod qualification;
+--- /dev/null
++++ b/apps/toko_miner/game_shard/design/src/qualification.rs
+@@ -0,0 +1,131 @@
++//! Disposable real IcyDB source-cardinality fixture.
++use crate::GameShardStore;
++use icydb::model::prelude::*;
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX00 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX01 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX02 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX03 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX04 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX05 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX06 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX07 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX08 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX09 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX10 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX11 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX12 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX13 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX14 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX15 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX16 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX17 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX18 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX19 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX20 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX21 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX22 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX23 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX24 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX25 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX26 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX27 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX28 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX29 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX30 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX31 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX32 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX33 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX34 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX35 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX36 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX37 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX38 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX39 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX40 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX41 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX42 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX43 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX44 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX45 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX46 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX47 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX48 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX49 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX50 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX51 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX52 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX53 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX54 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX55 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX56 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX57 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX58 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX59 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX60 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX61 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX62 {}
++#[entity(store = "GameShardStore", version = 1, pk(field = "id"), fields(field(name = "id", value(item(prim = "Ulid")), generated(insert = "Ulid::generate"))))]
++pub struct QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX63 {}
+--- a/apps/toko_miner/game_shard/src/lib.rs
++++ b/apps/toko_miner/game_shard/src/lib.rs
+@@ -17,6 +17,7 @@
+ 
+ #![expect(clippy::unused_async)]
+ 
++mod qualification_ceiling;
+ mod action;
+ mod artwork;
+ mod bootstrap;
+--- /dev/null
++++ b/apps/toko_miner/game_shard/src/qualification_ceiling.rs
+@@ -0,0 +1,86 @@
++//! Disposable setup endpoint; never present in a product artifact.
++#[ic_cdk::update]
++#[icydb::request_execution]
++fn qualification_seed_metrics() -> u64 {
++    assert!(crate::startup::system_fixtures_are_ready());
++    icydb::metrics::metrics_reset_all();
++    crate::observability::refresh_after_system_fixtures().unwrap();
++    let existing = icydb::metrics::metrics_report().total_entities();
++    assert!(existing > 0 && existing < 64);
++    let remaining = 64 - existing;
++    let db = crate::db().unwrap();
++    if remaining > 0 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX00>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX00::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 1 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX01>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX01::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 2 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX02>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX02::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 3 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX03>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX03::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 4 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX04>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX04::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 5 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX05>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX05::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 6 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX06>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX06::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 7 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX07>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX07::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 8 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX08>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX08::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 9 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX09>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX09::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 10 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX10>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX10::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 11 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX11>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX11::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 12 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX12>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX12::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 13 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX13>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX13::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 14 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX14>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX14::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 15 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX15>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX15::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 16 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX16>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX16::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 17 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX17>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX17::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 18 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX18>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX18::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 19 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX19>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX19::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 20 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX20>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX20::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 21 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX21>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX21::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 22 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX22>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX22::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 23 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX23>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX23::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 24 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX24>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX24::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 25 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX25>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX25::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 26 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX26>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX26::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 27 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX27>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX27::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 28 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX28>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX28::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 29 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX29>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX29::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 30 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX30>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX30::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 31 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX31>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX31::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 32 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX32>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX32::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 33 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX33>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX33::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 34 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX34>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX34::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 35 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX35>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX35::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 36 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX36>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX36::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 37 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX37>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX37::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 38 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX38>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX38::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 39 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX39>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX39::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 40 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX40>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX40::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 41 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX41>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX41::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 42 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX42>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX42::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 43 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX43>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX43::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 44 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX44>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX44::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 45 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX45>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX45::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 46 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX46>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX46::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 47 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX47>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX47::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 48 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX48>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX48::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 49 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX49>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX49::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 50 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX50>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX50::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 51 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX51>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX51::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 52 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX52>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX52::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 53 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX53>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX53::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 54 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX54>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX54::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 55 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX55>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX55::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 56 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX56>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX56::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 57 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX57>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX57::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 58 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX58>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX58::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 59 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX59>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX59::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 60 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX60>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX60::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 61 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX61>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX61::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 62 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX62>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX62::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    if remaining > 63 { db.query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX63>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX63::ID.eq(icydb::types::Ulid::from_u128(0))).limit(1).execute_live_page(None).unwrap(); }
++    icydb::metrics::metrics_report().total_entities()
++}
++
++#[ic_cdk::update]
++#[icydb::request_execution]
++fn qualification_overflow_metrics() -> u64 {
++    crate::db().unwrap()
++        .query::<toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX63>().unwrap().filter(toko_miner_game_shard_design::qualification::QualificationXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX63::ID.eq(icydb::types::Ulid::from_u128(0)))
++        .limit(1).execute_live_page(None).unwrap();
++    icydb::metrics::metrics_report().total_entities()
++}

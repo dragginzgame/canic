@@ -202,6 +202,17 @@ than spawning an implicit or unobservable child process.
 
 Local governed tests retain content-addressed Wasm and sealed release-artifact
 sets under `target/test-artifacts` and reuse the shared incremental Wasm target.
+The PocketIC lane selects an installed native ICP CLI matching the repository
+pin before starting its server. `CANIC_TEST_ICP_BIN` explicitly selects that
+executable; otherwise an already-native `icp` on PATH is retained. If a launcher
+shadows it, the runner selects the native installation under
+`ICP_CLI_INSTALL_DIR` or `${CARGO_HOME:-$HOME/.cargo}/bin`. A missing, non-native
+or mismatched selected tool fails before Cargo. `make install-dev` installs the
+pinned native CLI. Selection creates only a private scratch symlink and changes
+PATH for the test invocation; other tools and ordinary/plan-only lanes retain
+their existing resolution. Production transport and command version checks
+remain intact.
+
 Tests must keep plans, journals, identities and PocketIC state invocation-local;
 only immutable build products whose source, configuration, toolchain and output
 set are transactionally verified may cross invocations. Use `make clean-wasm`

@@ -1,5 +1,5 @@
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
     eager_static,
     role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_ID,
     storage::prelude::*,
@@ -11,7 +11,7 @@ eager_static! {
     // ENV
     // All the environment variables a canister needs
     //
-    static ENV: RefCell<Cell<EnvRecord, VirtualMemory<DefaultMemoryImpl>>> =
+    static ENV: RefCell<Cell<EnvRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.runtime.bindings.v1", ty = EnvRecord, id = RUNTIME_BINDINGS_ID),
             EnvRecord::default(),

@@ -6,7 +6,7 @@
 
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, Memory, memory::RuntimeMemory},
     eager_static, impl_storable_unbounded,
     log::{Level, Topic},
     role_contract::allocation::memory::log::LOG_ENTRIES_ID,
@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 eager_static! {
-    static LOG: RefCell<LogStore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
+    static LOG: RefCell<LogStore<RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
         LogStore::new(StableBtreeMap::init(crate::ic_memory_key!(
             authority = CANIC_CORE_MEMORY_AUTHORITY,
             key = "canic.core.log.entries.v1",

@@ -1,0 +1,39 @@
+{
+  "date": "2026-09-10",
+  "historical_reference_instructions": 20000000,
+  "absolute_reference_blocks_canic_test": false,
+  "measured_instructions": {
+    "first_256_checkpoints": 15497186,
+    "repeat_4096_checkpoints": 15547635,
+    "scheduled_maximum": 16586795
+  },
+  "positive_wasm_measurement_required": true,
+  "source_growth_regression_retained": true,
+  "runtime_changed": false,
+  "downstream_patch": "prepared_not_applied",
+  "checks": {
+    "timer_authority": "8 passed, 19.51 seconds; governed runner 29 seconds",
+    "initial_single_test_selection": "runner refused unsupported integration-test case selection before tests; corrected to registered timer_authority target",
+    "formatting": "passed",
+    "document_links": "passed",
+    "current_document_guard": "passed",
+    "release_notes_preflight": "0.110.14 passed",
+    "timer_test_target_clippy": "passed, warnings denied"
+  },
+  "logs": {
+    "canic-metrics-cost-policy-test.log": {
+      "sha256": "0102ce86923c997eb390ff442dcd8bd266988d5a48c9361a334986cb13b3ee57",
+      "source": "/tmp/canic-metrics-cost-policy-test.log"
+    },
+    "canic-metrics-cost-policy-timer.log": {
+      "sha256": "a02b9755e8046eac73ed2dbb1cfea1ab983a45723ecbfcd029780b365ec72673",
+      "source": "/tmp/canic-metrics-cost-policy-timer.log"
+    },
+    "canic-metrics-cost-policy-clippy.log": {
+      "sha256": "ea4a68be2723e50ee40af23bd1db12ad62e516b94c431e445eb1c007ff426e92",
+      "source": "/tmp/canic-metrics-cost-policy-clippy.log"
+    }
+  },
+  "active_repository_scope": "canic_only_explicit_maintainer_clarification",
+  "icydb_explain": "outside_task_no_mutation"
+}

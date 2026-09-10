@@ -1,0 +1,52 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> shared PocketIC server ready: http://127.0.0.1:44817/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-5d509623fcc1d42e)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-5d509623fcc1d42e)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::protected_memory_allocations_preserve_stable_state_and_root_authority ... [FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             1m 47s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 50.99s
+[FLEET]      RUN    finished PIC wasm build
+[FLEET]      DONE   root artifacts ready                                 2m 40s
+[WASM]       DONE   Fleet Coordinator artifact                           43.08s
+[FLEET]      DONE   Coordinator artifact ready                           43.52s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       DONE   delegation_issuer_stub                               35.96s
+[FLEET]      DONE   Store and Component artifacts ready                  37.17s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.20s
+[FLEET]      DONE   Root and Store installed                              4.21s
+[FLEET]      DONE   Coordinator installed                                 1.51s
+[FLEET]      DONE   Root joined and synchronized                          0.13s
+[FLEET]      DONE   Component Registry activated                          2.99s
+[FLEET]      DONE   fresh Fleet validated                                 0.01s
+[FLEET]      DONE   fresh Fleet setup complete                           4m 10s
+[FLEET]      READY  active baseline (slot 0)                             4m 10s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 254.48s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=376788 kB high_water=1218072 kB threads=133
+==> targeted canic-testing-internal PocketIC proof done in 255s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  255s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 256s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.5sE8V1

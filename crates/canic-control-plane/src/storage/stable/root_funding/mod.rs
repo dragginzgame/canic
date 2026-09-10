@@ -5,7 +5,7 @@
 //! Boundary: Root funding ops commit only complete validated current or terminal records.
 
 use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
     dto::fleet_funding::{
         FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
         FleetRootFundingAcceptanceReceipt, FleetRootFundingRequest, FleetRootFundingResponse,
@@ -22,7 +22,7 @@ struct RootFundingState;
 
 eager_static! {
     static ROOT_FUNDING_STATE:
-        RefCell<Cell<RootFundingStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<RootFundingStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,

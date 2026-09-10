@@ -5,7 +5,7 @@
 //! Boundary: storage retains one fixed record; ops validates and commits exact attempt fences.
 
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
     eager_static,
     role_contract::allocation::memory::async_job_recovery::ASYNC_JOB_RECOVERY_ID,
     storage::prelude::*,
@@ -17,7 +17,7 @@ pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 589;
 
 eager_static! {
     static ASYNC_JOB_RECOVERY: RefCell<
-        Cell<AsyncJobRecoveryRecord, VirtualMemory<DefaultMemoryImpl>>,
+        Cell<AsyncJobRecoveryRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(Cell::init(
         crate::ic_memory_key!(
             authority = CANIC_CORE_MEMORY_AUTHORITY,

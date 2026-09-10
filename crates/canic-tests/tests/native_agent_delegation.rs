@@ -20,16 +20,17 @@ use canic::{
     ids::{CanisterRole, FleetKey, cap},
     protocol,
 };
+use canic_core::cdk::structures::{
+    VectorMemory,
+    cell::Cell,
+    memory::{MemoryId, MemoryManager},
+};
 use canic_testing_internal::pic::{
     ActiveComponentRegistryFixture, managed_test_init_identity, report_canister_diagnostics,
     role_grant, setup_active_component_registry, setup_fresh_active_component_registry,
     upgrade_args,
 };
 use ic_agent::{Agent, Identity, identity::Secp256k1Identity};
-use ic_stable_structures::{
-    Cell, VectorMemory,
-    memory_manager::{MemoryId, MemoryManager},
-};
 use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIcTimeExt, RetryPolicy};
 use ic_testkit::pocket_ic::{PocketIc, common::rest::BlobCompression};
 use serde::Serialize;

@@ -5,7 +5,7 @@
 //! Boundary: Root admission ops convert complete model state to and from memory ID 65.
 
 use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
     eager_static,
     ids::{
         FleetAdmissionPolicy, FleetCoordinatorBinding, FleetSubnetRootBinding,
@@ -22,7 +22,7 @@ struct RootAdmissionState;
 
 eager_static! {
     static ROOT_ADMISSION_STATE:
-        RefCell<Cell<RootAdmissionStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<RootAdmissionStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,

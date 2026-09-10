@@ -1,0 +1,26 @@
+   Compiling canic-core v0.110.13 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 48.82s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-be90d7741bd6194b)
+
+running 18 tests
+test model::public_metrics::history::tests::history_cached_provider_data_cannot_be_restamped_or_create_new_slots ... ok
+test model::public_metrics::history::tests::history_accepts_distinct_counter_resets_at_the_same_source_time ... ok
+test model::public_metrics::history::tests::history_coalesces_slots_keeps_gaps_and_rejects_older_source_time ... ok
+test model::public_metrics::history::tests::history_counter_windows_and_unit_changes_are_explicit ... ok
+test model::public_metrics::history::tests::history_lookup_binds_family_name_and_canister ... ok
+test model::public_metrics::history::tests::history_ring_has_exact_retention_and_expiration_releases_budget ... ok
+test model::public_metrics::history::tests::older_reappearing_series_cannot_erase_retained_history_by_changing_units ... ok
+test ops::runtime::public_metrics::counter_tests::public_metrics_counter_deltas_require_adjacent_unsaturated_same_window_observations ... ok
+test ops::runtime::public_metrics::history_tests::history_reads_bound_pages_hide_disabled_data_and_expire_without_mutation ... ok
+test ops::runtime::public_metrics::process::tests::public_process_rows_expose_only_bounded_outcome_aggregates ... ok
+test ops::runtime::public_metrics::tests::publication_is_disabled_even_when_a_cached_snapshot_exists ... ok
+test ops::runtime::public_metrics::tests::reads_preserve_sample_time_and_report_staleness_without_refresh ... ok
+test ops::runtime::public_metrics::tests::rejected_sample_preserves_previous_snapshot ... ok
+test model::public_metrics::history::tests::history_expiration_releases_sparse_index_capacity ... ok
+test model::public_metrics::history::tests::history_caps_total_series_bytes_and_preserves_latest_snapshot ... ok
+test ops::runtime::public_metrics::tests::cache_consumes_only_one_bounded_prefix_and_reports_truncation ... ok
+test ops::runtime::public_metrics::tests::publication_selection_is_exact_and_pages_are_bounded ... ok
+test ops::runtime::public_metrics::tests::performance_sampling_is_bounded_and_independent_of_recording_order ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 1248 filtered out; finished in 0.01s
+

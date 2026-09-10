@@ -4,7 +4,7 @@ use canic_core::{
     cdk::{
         structures::{
             DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell,
-            memory::VirtualMemory,
+            memory::RuntimeMemory,
         },
         types::{Cycles, Principal},
     },
@@ -22,7 +22,7 @@ use std::cell::RefCell;
 
 eager_static! {
     static CANISTER_POOL: RefCell<
-        StableBtreeMap<Principal, CanisterPoolAssetRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<Principal, CanisterPoolAssetRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
         authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
         key = "canic.control_plane.root.canister_inventory.assets.v1",
@@ -33,7 +33,7 @@ eager_static! {
 
 eager_static! {
     static CANISTER_POOL_HANDOFF_RECEIPTS: RefCell<
-        StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
         authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
         key = "canic.control_plane.root.canister_pool.handoff_receipts.v1",
@@ -44,7 +44,7 @@ eager_static! {
 
 eager_static! {
     static CANISTER_POOL_STATE: RefCell<
-        Cell<CanisterPoolStateRecord, VirtualMemory<DefaultMemoryImpl>>
+        Cell<CanisterPoolStateRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,

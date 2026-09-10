@@ -2,6 +2,8 @@ mod artifact;
 mod batch;
 pub(crate) mod cache;
 mod candid;
+mod candid_cache;
+pub(crate) mod compiled;
 mod context;
 mod model;
 mod process;
@@ -18,9 +20,10 @@ pub use context::{
     WorkspaceBuildContext, print_workspace_build_context_once, workspace_build_context_once,
 };
 pub use model::{
-    ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
-    CanisterArtifactBuildOptions, CanisterArtifactBuildOutput,
-    ConfiguredCanisterArtifactBuildOutput, WasmArtifactMetrics, WasmTransformMetrics,
+    AppCanisterArtifactBuildOutput, ArtifactTransformKind, ArtifactTransformOutcome,
+    ArtifactTransformOutput, CanisterArtifactBuildOptions, CanisterArtifactBuildOutput,
+    ConfiguredCanisterArtifactBuildOutput, TimedCanisterArtifactBuildOutput, WasmArtifactMetrics,
+    WasmTransformMetrics,
 };
 
 #[cfg(test)]

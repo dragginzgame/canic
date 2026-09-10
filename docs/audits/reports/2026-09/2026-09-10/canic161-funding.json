@@ -1,0 +1,73 @@
+{
+  "date": "2026-09-10",
+  "feedback": "CANIC-161",
+  "status": "partially_assessed",
+  "application_loop_origin": "Toko application code, maintainer report",
+  "current_source_has_workload_topup_policy": false,
+  "installed_policy_verified": false,
+  "incident_burn_measured": false,
+  "live_effects_applied": false,
+  "external_repositories_modified": false,
+  "sources": [
+    {
+      "path": "crates/canic-core/src/role_contract/policy.rs",
+      "sha256": "ae5fd5104db572d9c9aea482c25f09cfac8199c8d26595dadfeeb8868a65397e",
+      "bytes": 12776
+    },
+    {
+      "path": "crates/canic-core/src/role_contract/tests.rs",
+      "sha256": "c89c83c146345c1cebac545f44b25e3cd90f15605de9334a31992e6f518f263b",
+      "bytes": 37865
+    },
+    {
+      "path": "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
+      "sha256": "2dfcb1c34899b2f3225d255ef83f2ee645eb1c0ae5991f6541bde0bf00933e3b",
+      "bytes": 42386
+    },
+    {
+      "path": "crates/canic-cli/src/cycles/options.rs",
+      "sha256": "9d4fb57bb7acde1e1361b85393e001cbd3cff15577f67db4ea994067cdf4b6a4",
+      "bytes": 5086
+    },
+    {
+      "path": "crates/canic-cli/src/cycles/wallet.rs",
+      "sha256": "4a110a8944a7a9d678d1717e7ed0af29a74976bf0ed25c8237d8846348616387",
+      "bytes": 26787
+    },
+    {
+      "path": "crates/canic-host/src/observability/mod.rs",
+      "sha256": "65c89d98f2ca7eec63bbb4ed62afbbae970d1387d0f4eb567374634e6c6e5ce2",
+      "bytes": 10991
+    },
+    {
+      "path": "../toko-miner/apps/toko_miner/canic.toml",
+      "sha256": "a6d577f17ae4eadb9a73801f933ccc5c45cbcf1307cb585367a71461539fa896",
+      "bytes": 2330
+    },
+    {
+      "path": "../toko-miner/docs/upstream/canic.md",
+      "sha256": "44eb22453a19e6a0c91998ef857b104e68fe25aaa37115af591bf7974a16cc56",
+      "bytes": 1287618
+    }
+  ],
+  "incident_release_manifest": {
+    "path": "../toko-miner/.canic/release-builds/6ff4c10e350e50d72b231739cc9266122e34f9b0bd20f7b39a87d558b05d7ceb/application-artifact-union.json",
+    "sha256": "a79b31ff80c38623428d003f877a62fc5f5bfa5b8abb97ff3ed83f377e96eaf0",
+    "bytes": 4998
+  },
+  "incident_game_shard_wasm": {
+    "path": "../toko-miner/.canic/release-builds/6ff4c10e350e50d72b231739cc9266122e34f9b0bd20f7b39a87d558b05d7ceb/artifacts/game_shard/game_shard.wasm",
+    "sha256": "ad69ce92acfe698e7b0be6f80af7eefd351a28896d0aef6ced0c986a0192f65d",
+    "bytes": 7985849
+  },
+  "validation": {
+    "command": "RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --lib automatic_topup",
+    "exit_code": 0,
+    "passed": 6,
+    "log": {
+      "path": "docs/audits/reports/2026-09/2026-09-10/canic161-topup-policy-tests.log",
+      "sha256": "30f2be0e5a3301bae77d10460323803547abeb08a5bba28618e5abfe535fc2c2",
+      "bytes": 874
+    }
+  }
+}
