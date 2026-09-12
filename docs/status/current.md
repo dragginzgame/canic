@@ -26,7 +26,7 @@ version transaction owns that marker; explanatory prose is not a second release
 guard.
 
 Published development base is tagged `v0.110.14` at `c9c91f19c`. The current
-pre-existing development commit is `87cfa79fb` (subject `0.110.15`); its package
+pre-existing development commit is `049621e55` (subject `0.110.15`); its package
 versions still read 0.110.14.
 Release details are in [the 0.110 changelog](../changelog/0.110.md). Package
 versions remain 0.110.14; the current source batch uses the open 0.110.15 draft.
@@ -45,6 +45,20 @@ Logs are `/tmp/canic-icydb-guards.log`, `/tmp/canic-icydb-clippy.log` and
 `/tmp/canic-icydb-02575-source.sha256`. The .15 changelog includes the update.
 Earlier 0.257.4 qualification records below remain historical. The dependency
 update is qualified; the completed CANIC-165 boundary is recorded below.
+
+## Release validation follow-up: secret scan
+
+The next maintainer release check reported four generic-key findings in retained
+CANIC-165 PocketIC bootstrap evidence. Each is a valid public Principal used as
+an account partition key, constructed from repeated fixture bytes `[0xe4; 29]`
+or `[0xe3; 29]`. Review verified the historical values' Principal checksums and
+fixture origins. Four exact commit/file/rule/line fingerprints were added to
+`.gitleaksignore`; retained evidence and built-in scanner rules are unchanged.
+The governed full-history secret scan passes at development HEAD `049621e55`
+with zero remaining findings using the reviewed working-tree exceptions; the
+log is `/tmp/canic165-secret-scan.log`. The .15 changelog includes the correction
+and the planned batch remains ready for the maintainer's release flow. No full
+validation, version transaction or Git publication ran for this correction.
 
 ## Release validation follow-up: importer layering
 

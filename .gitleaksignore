@@ -44,3 +44,10 @@ bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/
 bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1178
 bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1653
 bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/canic162-evidence/adoption-0132.log:generic-api-key:1818
+# CANIC-165 PocketIC account partition keys: valid public Principals constructed
+# from repeated test bytes, not credentials. Lines 336/338 use [0xe4; 29];
+# lines 471/594 use [0xe3; 29] (see fleet_registry/baseline.rs).
+9e1becc5853521d351d485f4f7198bd8a78426fa:docs/audits/reports/2026-09/2026-09-11/canic165-delivery-evidence/bootstrap.log:generic-api-key:336
+9e1becc5853521d351d485f4f7198bd8a78426fa:docs/audits/reports/2026-09/2026-09-11/canic165-delivery-evidence/bootstrap.log:generic-api-key:338
+9e1becc5853521d351d485f4f7198bd8a78426fa:docs/audits/reports/2026-09/2026-09-11/canic165-delivery-evidence/bootstrap.log:generic-api-key:471
+9e1becc5853521d351d485f4f7198bd8a78426fa:docs/audits/reports/2026-09/2026-09-11/canic165-delivery-evidence/bootstrap.log:generic-api-key:594
