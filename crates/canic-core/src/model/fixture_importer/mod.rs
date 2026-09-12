@@ -1,116 +1,106 @@
 //! Module: model::fixture_importer
 //!
-//! Responsibility: own one heap registration and exact in-flight consumer lease.
-//! Does not own: application progress, database writes, transport or timer scheduling.
-//! Boundary: the application owns the durable cursor; the lease only serializes delivery.
+//! Responsibility: enforce one heap registration and exact in-flight consumer lease.
+//! Does not own: application callbacks, boundary conversion, transport or scheduling.
+//! Boundary: the application owns durable progress; this model serializes delivery.
 
-use crate::dto::fixture_provisioning::{
-    FixtureAssignment, FixtureImportError, FixtureImportProgress, FixtureTargetBinding,
-};
-use std::cell::RefCell;
+use crate::ids::{ManagedCanisterBinding, ReleaseBuildId};
 
-/// Synchronous application participant for bounded import and validation steps.
-///
-/// Register once from the existing synchronous lifecycle participant, after restoring
-/// the database. Mutating methods must commit rows and their checkpoint in one message.
-/// Canic traps a returned error or invalid postcondition to roll back that message.
-/// Each validation step must inspect bounded stored data; completion must not rescan it.
-pub trait FixtureImporter: Sync {
-    /// Read the durable checkpoint without changing it; `None` means not begun.
-    fn progress(
-        &self,
-        assignment: &FixtureAssignment,
-    ) -> Result<Option<FixtureImportProgress>, FixtureImportError>;
-    /// Initialize an absent checkpoint for this exact assignment without wiping existing data.
-    fn begin(&self, assignment: &FixtureAssignment) -> Result<(), FixtureImportError>;
-    /// Apply one verified chunk and advance the same durable checkpoint exactly once.
-    fn apply_chunk(
-        &self,
-        assignment: &FixtureAssignment,
-        index: u32,
-        bytes: &[u8],
-    ) -> Result<(), FixtureImportError>;
-    /// Validate a bounded portion of stored data and eventually commit the exact receipt.
-    fn validate_step(&self, assignment: &FixtureAssignment) -> Result<(), FixtureImportError>;
+/// Exact installation and source authority retained by a heap fetch attempt.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FixtureImportAuthority {
+    pub target: ManagedCanisterBinding,
+    pub installation: [u8; 32],
+    pub release_build_id: ReleaseBuildId,
+    pub content_id: [u8; 32],
 }
 
 /// Exact heap attempt identity, including installation authority for late cleanup fencing.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FixtureImportLease {
     generation: u64,
-    binding: Box<FixtureTargetBinding>,
+    authority: Box<FixtureImportAuthority>,
 }
 
-#[derive(Default)]
-struct Registry {
-    importer: Option<&'static dyn FixtureImporter>,
+/// Closed registry failures, converted to public consumer errors by ops.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FixtureImporterRegistryError {
+    Busy,
+    Registration,
+}
+
+/// One participant per heap; ops supplies its callback handle without model dependencies.
+pub struct FixtureImporterRegistry<I> {
+    importer: Option<I>,
     generation: u64,
     active: Option<FixtureImportLease>,
 }
 
-thread_local! {
-    static REGISTRY: RefCell<Registry> = RefCell::new(Registry::default());
-}
+impl<I: Copy> FixtureImporterRegistry<I> {
+    /// Start a fresh heap with no registered participant or active fetch.
+    pub const fn new() -> Self {
+        Self {
+            importer: None,
+            generation: 0,
+            active: None,
+        }
+    }
 
-/// One application importer per heap; restart reconstructs registration through lifecycle.
-pub struct FixtureImporterRegistry;
-
-impl FixtureImporterRegistry {
     /// Read the real heap lease for controlled interruption qualification.
     #[cfg(feature = "internal-test-fixtures")]
-    pub fn fetch_in_flight() -> bool {
-        REGISTRY.with_borrow(|registry| registry.active.is_some())
+    pub const fn fetch_in_flight(&self) -> bool {
+        self.active.is_some()
     }
 
-    pub fn register(importer: &'static dyn FixtureImporter) -> Result<(), FixtureImportError> {
-        REGISTRY.with_borrow_mut(|registry| {
-            if registry.importer.is_some() {
-                return Err(FixtureImportError::Registration);
-            }
-            registry.importer = Some(importer);
-            Ok(())
-        })
+    /// Reject replacement of a participant until the heap is reconstructed.
+    pub const fn register(&mut self, importer: I) -> Result<(), FixtureImporterRegistryError> {
+        if self.importer.is_some() {
+            return Err(FixtureImporterRegistryError::Registration);
+        }
+        self.importer = Some(importer);
+        Ok(())
     }
 
-    pub fn importer() -> Option<&'static dyn FixtureImporter> {
-        REGISTRY.with_borrow(|registry| registry.importer)
+    /// Copy the handle so callers never hold a registry borrow across callbacks.
+    pub const fn importer(&self) -> Option<I> {
+        self.importer
     }
 
+    /// Issue one unique lease without wrapping the attempt generation.
     pub fn acquire(
-        binding: &FixtureTargetBinding,
-    ) -> Result<FixtureImportLease, FixtureImportError> {
-        REGISTRY.with_borrow_mut(|registry| {
-            if registry.active.is_some() {
-                return Err(FixtureImportError::Busy);
-            }
-            let generation = registry
-                .generation
-                .checked_add(1)
-                .ok_or(FixtureImportError::Busy)?;
-            let lease = FixtureImportLease {
-                generation,
-                binding: Box::new(binding.clone()),
-            };
-            registry.generation = generation;
-            registry.active = Some(lease.clone());
-            Ok(lease)
-        })
+        &mut self,
+        authority: FixtureImportAuthority,
+    ) -> Result<FixtureImportLease, FixtureImporterRegistryError> {
+        if self.active.is_some() {
+            return Err(FixtureImporterRegistryError::Busy);
+        }
+        let generation = self
+            .generation
+            .checked_add(1)
+            .ok_or(FixtureImporterRegistryError::Busy)?;
+        let lease = FixtureImportLease {
+            generation,
+            authority: Box::new(authority),
+        };
+        self.generation = generation;
+        self.active = Some(lease.clone());
+        Ok(lease)
     }
 
     /// Expired business attempts invalidate the old heap token before a successor fetch.
-    pub fn abandon() {
-        REGISTRY.with_borrow_mut(|registry| registry.active = None);
+    pub fn abandon(&mut self) {
+        self.active = None;
     }
 
-    pub fn is_current(lease: &FixtureImportLease) -> bool {
-        REGISTRY.with_borrow(|registry| registry.active.as_ref() == Some(lease))
+    /// Require the exact attempt and installation authority to remain active.
+    pub fn is_current(&self, lease: &FixtureImportLease) -> bool {
+        self.active.as_ref() == Some(lease)
     }
 
-    pub fn release(lease: &FixtureImportLease) {
-        REGISTRY.with_borrow_mut(|registry| {
-            if registry.active.as_ref() == Some(lease) {
-                registry.active = None;
-            }
-        });
+    /// Late cleanup must never release a successor attempt.
+    pub fn release(&mut self, lease: &FixtureImportLease) {
+        if self.is_current(lease) {
+            self.active = None;
+        }
     }
 }

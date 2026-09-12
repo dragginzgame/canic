@@ -7,7 +7,6 @@ use crate::{
         FixtureTargetBinding,
     },
     ids::{ReleaseBuildId, ReleaseBuildNonce},
-    model::fixture_importer::FixtureImporterRegistry,
     ops::fixture_content,
 };
 use candid::Principal;
@@ -105,20 +104,21 @@ fn importer_progress_never_adopts_a_different_installation_or_content() {
 #[test]
 fn importer_leases_serialize_steps_and_old_cleanup_cannot_release_a_new_attempt() {
     let assignment = assignment();
-    let first = FixtureImporterRegistry::acquire(&assignment.grant.binding).unwrap();
-    assert_eq!(
-        FixtureImporterRegistry::acquire(&assignment.grant.binding),
+    let first = ImportLease::acquire(&assignment).unwrap();
+    assert!(matches!(
+        ImportLease::acquire(&assignment),
         Err(FixtureImportError::Busy)
-    );
-    FixtureImporterRegistry::release(&first);
-    let next = FixtureImporterRegistry::acquire(&assignment.grant.binding).unwrap();
-    FixtureImporterRegistry::release(&first);
-    assert!(FixtureImporterRegistry::is_current(&next));
-    assert!(!FixtureImporterRegistry::is_current(&first));
-    FixtureImporterRegistry::release(&next);
-    let lease = ImportLease::acquire(&assignment).unwrap();
-    assert_eq!(lease.require_current(), Ok(()));
-    drop(lease);
+    ));
+    abandon_expired_fetch();
+    let next = ImportLease::acquire(&assignment).unwrap();
+    assert_eq!(first.require_current(), Err(FixtureImportError::Authority));
+    drop(first);
+    assert_eq!(next.require_current(), Ok(()));
+    assert!(matches!(
+        ImportLease::acquire(&assignment),
+        Err(FixtureImportError::Busy)
+    ));
+    drop(next);
     assert!(ImportLease::acquire(&assignment).is_ok());
 }
 
@@ -195,4 +195,17 @@ fn transport_outages_and_pending_sources_remain_retryable() {
     ] {
         assert_eq!(permanent_failure(error), None);
     }
+}
+
+#[test]
+fn importer_replaced_installation_fences_late_cleanup() {
+    let assignment = assignment();
+    let lease = ImportLease::acquire(&assignment).unwrap();
+    abandon_expired_fetch();
+    let mut replacement = assignment;
+    replacement.grant.binding.installation = [9; 32];
+    let next = ImportLease::acquire(&replacement).unwrap();
+    assert_eq!(lease.require_current(), Err(FixtureImportError::Authority));
+    drop(lease);
+    assert_eq!(next.require_current(), Ok(()));
 }
