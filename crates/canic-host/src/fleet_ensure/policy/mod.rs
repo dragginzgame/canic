@@ -684,6 +684,7 @@ pub fn compile_plan(
                 observation,
                 bounds,
                 authority.maximum_successor_actions,
+                authority.fixture_publication_retry_attempts,
                 accumulator.execution_burn,
                 available_after_estate_fees,
             )
@@ -3642,7 +3643,7 @@ mod tests {
             management_creation_fee: 0,
             material_threshold: 1,
         };
-        let review = super::recovery::review(&observation, bounds, 32, 41, 369).unwrap();
+        let review = super::recovery::review(&observation, bounds, 32, 0, 41, 369).unwrap();
         assert_eq!(review.base_execution_burn_cycles, 41);
         assert_eq!(review.whole_continuation_ceiling_cycles, 448);
         assert_eq!(review.continuation_reserve_cycles, 328);
@@ -3651,8 +3652,15 @@ mod tests {
             review.discovery,
             crate::fleet_ensure::model::RecoveryDiscovery::PendingCurrentProtocol
         );
-        let no_headroom = super::recovery::review(&observation, bounds, 32, 41, 40).unwrap();
+        let no_headroom = super::recovery::review(&observation, bounds, 32, 0, 41, 40).unwrap();
         assert_eq!(no_headroom.continuation_reserve_cycles, 0);
+        let fixtures = super::recovery::review(&observation, bounds, 32, 6, 41, 1_000).unwrap();
+        assert_eq!(fixtures.whole_continuation_ceiling_cycles, 532);
+        assert_eq!(fixtures.continuation_reserve_cycles, 532);
+        assert_eq!(
+            fixtures.base_execution_burn_cycles,
+            review.base_execution_burn_cycles
+        );
     }
 
     #[test]
@@ -3991,6 +3999,7 @@ mod tests {
                 update_burn: 20,
             },
             32,
+            0,
             40,
             10_000,
         )

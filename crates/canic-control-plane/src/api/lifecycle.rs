@@ -951,6 +951,11 @@ impl LifecycleApi {
                 config_path,
             );
         crate::workflow::canister_pool::declare();
+        crate::workflow::component_provisioning::resume_after_restart().unwrap_or_else(|error| {
+            ic_cdk::trap(format!(
+                "Root Component provisioning resume failed: {error}"
+            ))
+        });
         if active {
             crate::workflow::canister_pool::start().unwrap_or_else(|error| {
                 ic_cdk::trap(format!("Canister pool maintenance start failed: {error}"))

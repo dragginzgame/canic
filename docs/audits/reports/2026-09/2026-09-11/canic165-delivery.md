@@ -1,9 +1,10 @@
 # CANIC-165: retained delivery, failures and grant lifecycle
 
-Date: 2026-09-11. This is focused FP2 implementation evidence, not a closeout
-or release-validation verdict. Package versions remain 0.110.14 and the root
-Unreleased entry remains unassigned. Updated 2026-09-12 with partial-import
-reinstall, discarded Store receipts and durable outage backoff.
+Date: 2026-09-11; updated 2026-09-12. This retains focused FP2 implementation
+and qualification evidence, not a minor closeout or broad release-validation
+verdict. Package versions remain 0.110.14. The completed Canic feature now joins
+the existing .15 draft. The [latest generated apply checkpoint](#complete-generated-fleet-apply-and-funding-2026-09-12)
+completes the earlier runtime, funding and recovery evidence below.
 
 ## Qualified behavior
 
@@ -493,3 +494,126 @@ The current feature contract, design, status and Unreleased changelog are update
 The exact held-reply cases and complete generated Fleet apply/funding remain
 open. CANIC-165 is still unassigned and the complete batch is not push-ready.
 No broad gate, version, Git publication, staging effect or sibling mutation ran.
+
+
+## Held Store replies and Root worker restoration (2026-09-12)
+
+A controller-guarded barrier compiled only under `internal-test-fixtures` holds
+successful canonical Store grant, revocation and chunk responses after their
+real authorization and storage work. The host-generated Store package supplies
+the test Wasm; its exact bytes are bound at initial Root installation. Ordinary
+Store builds emit no barrier endpoints. This instrumented artifact is neither
+production-finalized nor byte-identical to shipping Store. It adds no production
+transport, stable record, scheduler or tuning limit. Bounded test rounds use real
+management consensus calls; the Store barrier's own reply survives the simulated
+caller-timeout advance.
+
+The Root case begins stop while a real Store reply remains held, lets Root's
+bounded call drain, then restarts the same Root Wasm. Store remains held through
+restart. Release and recovery preserve the exact grant revision and target set;
+the Fleet reaches terminal activation. The subsequent revocation case observes
+the grant disabled before target reset, repeats the same interruption boundary,
+then finishes removal and proves exact effect-free replay.
+
+This exposed a real defect: Root's aggregate provisioning journal survived
+restart while Prepared, but its heap worker was not rescheduled. The synchronous
+control-plane restore adapter now asks the existing provisioning workflow to
+resume its retained active operation. The existing dispatcher retains backoff
+and review-required failure handling; completed operations have no active owner.
+The correction adds no readiness override or alternate lifecycle.
+
+The initial live-upgrade setup was replaced with stop/drain before heap
+replacement, following the [IC management contract](https://docs.internetcomputer.org/references/ic-interface-spec/management-canister/).
+No claim is made that Rust can interpret outstanding callbacks after its heap
+has been replaced. The final consumer case separately holds a real Store reply
+past reinstall and proves empty replacement state, fenced admission, exact new
+receipt completion and old-grant rejection.
+
+The Root case passes in 98.26s (113s runner); seven Store/IcyDB cases pass in
+78.07s (88s runner). Twenty-three provisioning tests and scoped Clippy
+pass. The existing [command record](canic165-delivery-evidence/commands.json)
+retains source snapshots and failures as well as passing runs. The final consumer
+check follows a test-helper extraction after the Root proof; Root/runtime inputs
+are unchanged. Complete generated Fleet apply and reviewed funding remain FP2
+work. Fixture-bearing generation stays disabled and the batch stays Unreleased.
+
+
+## Generated release cache authority correction (2026-09-12)
+
+The generated Fleet test recipe omitted `fixture-artifact-manifest.json` from
+its cached output inventory, even though the complete release manifest binds its
+digest. Cache reuse could therefore restore a selected release without the child
+authority required by generation. The cache now retains that manifest alongside
+the existing release plan and artifact manifests.
+
+A native regression commits a real release plan and empty fixture manifest,
+removes the release directory, restores the cache and loads the exact original
+fixture authority by release, topology and digest. Other output files in this
+native proof are inert; it does not qualify a finalized fixture-bearing release.
+The existing distinct-release cache regression also passes: two tests in 10.94s.
+Scoped internal-testing library/test Clippy passes with warnings denied.
+
+Logs and a source snapshot are retained in the existing delivery evidence.
+Only `baseline.rs` changed after the held-reply runtime qualification; its later
+change adds the cache output and native regression. No runtime source changed.
+Fixture-bearing cached payloads, generated apply and reviewed funding remain
+open; this correction does not enable fixture-bearing generation.
+
+
+## Complete generated Fleet apply and funding (2026-09-12)
+
+The existing mixed-topology production-adapter journey now supplies a neutral
+Shard fixture through the host manifest compiler before sealing. It builds the
+ordinary generated Coordinator, Root, Store and configured application packages,
+generates desired Fleet state and applies the real reviewed host plan against
+a disposable PocketIC Fleet. Store carries no internal response-barrier feature.
+
+The generated cache retains the selected fixture manifest and content chunks,
+and fingerprints authored selection/source inputs separately from its outputs.
+Native qualification removes the release directory, restores exact authority and
+payloads, verifies retained bytes without authored source files, and proves that
+changed source bytes invalidate the cache. Distinct release cache identities
+remain separate. The final journey reuses 30 sealed artifacts: total artifact
+resolution is 7.73s, including a 1.69s cache restore. Its separately sealed second
+build takes 57.15s to resolve. These are local observations, not a complete
+release-time benchmark or cross-release reuse of finalized Wasms.
+
+A production gap was found in fresh continuation: its finite successor count
+and funding preview omitted fixture preparation/chunks and their paid retries.
+Review now counts one preparation and every chunk for each distinct content
+object in the per-Root upper bound. Required
+`fixture_publication_retry_attempts` separately binds additional permitted calls
+into the current v1 review record and plan digest. The preview includes their
+configured update/observation costs. Funding defaults and exact release binding
+are unchanged; source verification precedes admission. The provisional
+fixture-unavailable rejection is removed from generation and initialization.
+
+The final runtime proof loses actual controller, reset and fixture upload replies.
+A fresh adapter resumes the same reviewed operation, observes the committed
+upload and does not publish twice. Before terminal replay, assertions verify
+retained source bytes, exact target/release/content receipt, reviewed
+publication attempt bounds and the original retry reserve. The complete Fleet
+converges, its exact and newly planned replays apply no effects, and cycle
+conservation holds. Changed-build and identical-build deliberate reinstalls also
+converge and replay; the existing public allocation qualification passes.
+
+The first attempt rejected overlapping cache input/output paths before building.
+The second reached terminal deployment, but an outdated mirrored Candid type
+prevented the intended reset response loss. Its test fragment now includes the
+current fixture command. The final run exercises every intended fault. Both
+failed runs remain in the same evidence bundle.
+
+The final case passes in **824.01s** (838s target; 839s runner). Nineteen focused
+host tests and two cache regressions pass; the corrected cache-input regression
+passes separately in 0.10s. Scoped host/internal-testing library/test Clippy
+passes with warnings denied. All 1,641 recorded source inputs remain unchanged
+during the final runtime run. Each run names its own source snapshot; the final
+source is based on pre-existing development commit `9e1becc58`, with package
+versions still 0.110.14. No Git, version or publication action was performed.
+
+This completes Canic FP2 and its .15 draft propagation. It does not qualify
+Toko's actual Translation/Game Shard conversion, matched payload/import-cost
+measurements, production fixture ceilings or live staging recovery. Those remain
+downstream work. Earlier checkpoint statements about disabled generation or open
+FP2 describe their historical evidence scope. No broad gate or minor closeout
+audit was run.

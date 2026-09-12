@@ -103,6 +103,7 @@ fn fixture() -> (
             principal: Some(ROOT.into()),
         }],
         continuation: Some(FleetEnsureContinuationAuthority {
+            fixture_publication_retry_attempts: 0,
             app_config_sha256: "11".repeat(32),
             application_artifact_union_sha256: "22".repeat(32),
             coordinator_candid_sha256: "33".repeat(32),
@@ -471,4 +472,15 @@ fn affordable_prefix_is_durable_without_authorizing_the_unaffordable_tail() {
     assert_eq!(restored.operation_id, original.operation_id);
     verify_records::<MockError>(&original, &restored).unwrap();
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn fixture_retry_allowance_changes_the_reviewed_plan_digest() {
+    let (_, mut plan, _, _) = fixture();
+    let original = expected_plan_sha256(&plan);
+    plan.continuation
+        .as_mut()
+        .unwrap()
+        .fixture_publication_retry_attempts = 1;
+    assert_ne!(expected_plan_sha256(&plan), original);
 }

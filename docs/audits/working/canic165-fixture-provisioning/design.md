@@ -1,13 +1,15 @@
 # CANIC-165 fixture provisioning: Canic integration design
 
 Design work selected by the maintainer's 2026-09-11 upstream-feedback request.
-This tracks the selected Canic-owned implementation. No release number is
-allocated. The .15 CANIC-160/164 corrections and CANIC-166 diagnostic
-remain independent of this product extension. No new minor begins here.
+This tracks the selected Canic-owned implementation. FP2 is now qualified and
+joins the existing .15 draft after completion. CANIC-160/164 corrections and
+CANIC-166 diagnostics retain their separate outcome descriptions. No new minor
+begins here.
 
 The maintainer selected implementation of CANIC-165 on 2026-09-11 and explicitly
-continued issue fixes without a minor closeout audit. Release allocation remains
-undecided; closeout is not a prerequisite to this selected implementation work. The
+continued issue fixes without a minor closeout audit. The completed feature now
+joins the existing .15 draft; closeout is not a prerequisite to this selected work.
+The
 [application commit proof](../../reports/2026-09/2026-09-11/canic165-import-commit.md)
 now qualifies published IcyDB plus an application-owned stable checkpoint,
 including traps, returned errors, restart, bounded validation and same-Principal
@@ -19,8 +21,10 @@ qualifies the actual Store's opaque source namespace, bounded upload recovery,
 exact target grants, revocation and shared capacity. Subsequent checkpoints below
 qualify automated delivery, receipt readiness and later Shards. Root now revokes
 source grants before recycling and retains replacement revisions in installation
-intent. Direct fixture-bearing Root retirement is qualified; interrupted effects,
-reviewed funding and generated apply keep FP2 open.
+intent. Direct fixture-bearing Root retirement and held Store reply recovery are
+qualified. Root restore resumes its retained provisioning worker while Prepared.
+Reviewed funding and complete generated apply now pass. FP2 is complete in Canic;
+FP3's downstream conversion and measurements remain outside this workspace.
 
 ## Outcome and current evidence
 
@@ -195,9 +199,9 @@ effects before references can be released. Cycle conservation remains required.
 Toko Miner's refreshed CANIC-165 handoff accepts the selected provisioning owner
 and distinguishes unpublished partial evidence from a complete released seam.
 Its funding/backoff and retirement list predates the newer local checkpoints
-below: those checks remain covered within their recorded scope. Exact Root-await
-and held actual-Store reply interruption, plus generated Fleet apply/funding,
-remain Canic acceptance. CANIC-166 remains a separate fresh reviewed staging
+below: those checks remain covered within their recorded scope. Held Store
+reply recovery now passes with test-only response barriers and bounded Root
+stop/restart. Complete generated Fleet apply/funding remains Canic acceptance. CANIC-166 remains a separate fresh reviewed staging
 recovery boundary, with no new local recovery framework requested.
 
 Downstream adoption must cover both Translation and Game Shard against their
@@ -221,7 +225,7 @@ Canic agents do not modify either Toko role or claim those measurements here.
 | --- | --- | --- | --- |
 | FP0 | Select Canic integration and identify unavailable seams | Owner/source review, identity/readiness dependency analysis, explicit persistence gate | Design checkpoint complete; no runtime API claim |
 | FP1 | Prove one application-neutral importer and receipt boundary | PocketIC traps/errors/restarts around rows/checkpoint, bounded validation, no duplicate commit, stale-install callback refusal | Qualified against the composed probe and controllable source; includes callback traps, supersession, in-flight reinstall and durable receipt recovery |
-| FP2 | Complete retained Store delivery through existing provisioning | Source upload retry, wrong caller/binding/conflicting chunks, initial parent/child receipt/grant ordering, pending placement, later Shard after operator exit, retention/outage/funding bounds | Store delivery, receipt readiness, later-Shard recovery, grant reuse, durable backoff, direct fixture-bearing Root retirement, grouped-removal rejection and automatic pending-target funding and reviewed publication retry accounting qualified; pending real fetch at reinstall submission qualified; exact held-reply effects and generated apply/funding remain; release position not assigned |
+| FP2 | Complete retained Store delivery through existing provisioning | Source upload retry, wrong caller/binding/conflicting chunks, initial parent/child receipt/grant ordering, pending placement, later Shard after operator exit, retention/outage/funding bounds | Store delivery, receipt readiness, later-Shard recovery, grant reuse, durable backoff, direct fixture-bearing Root retirement, grouped-removal rejection and automatic pending-target funding and reviewed publication retry accounting qualified; held Store replies across consumer reinstall and bounded Root restart qualified; generated apply/funding, lost-upload recovery and selected-build reinstall qualified; complete in the .15 draft |
 | FP3 | Propagate complete contract and cut over downstream roles | Shipped facade/config/Candid/docs/fixtures; Toko-owned Translation and Shard conversion, measured Wasm and per-message costs | Canic propagation belongs to FP2; downstream repository changes remain outside this workspace |
 
 Initial parent/child readiness ordering is mandatory FP2 integration evidence:
@@ -719,3 +723,76 @@ open, as does interruption of Root inside its actual Store grant/revoke await.
 The cross-subnet fixture does not qualify generated Fleet topology or complete
 generated apply/funding. FP2 remains open and fixture-bearing generation remains
 disabled; this checkpoint does not waive either exact interrupted-effect proof.
+
+
+## Held Store replies and Root worker restoration (2026-09-12)
+
+A controller-guarded barrier compiled only under `internal-test-fixtures` holds
+successful canonical Store grant, revocation and chunk responses after their
+real authorization and storage work. The host-generated Store package supplies
+the test Wasm; its exact bytes are bound at initial Root installation. Ordinary
+Store builds emit no barrier endpoints. This instrumented artifact is neither
+production-finalized nor byte-identical to shipping Store. It adds no production
+transport, stable record, scheduler or tuning limit. Bounded test rounds use real
+management consensus calls; the Store barrier's own reply survives the simulated
+caller-timeout advance.
+
+The Root case begins stop while a real Store reply remains held, lets Root's
+bounded call drain, then restarts the same Root Wasm. Store remains held through
+restart. Release and recovery preserve the exact grant revision and target set;
+the Fleet reaches terminal activation. The subsequent revocation case observes
+the grant disabled before target reset, repeats the same interruption boundary,
+then finishes removal and proves exact effect-free replay.
+
+This exposed a real defect: Root's aggregate provisioning journal survived
+restart while Prepared, but its heap worker was not rescheduled. The synchronous
+control-plane restore adapter now asks the existing provisioning workflow to
+resume its retained active operation. The existing dispatcher retains backoff
+and review-required failure handling; completed operations have no active owner.
+The correction adds no readiness override or alternate lifecycle.
+
+The initial live-upgrade setup was replaced with stop/drain before heap
+replacement, following the [IC management contract](https://docs.internetcomputer.org/references/ic-interface-spec/management-canister/).
+No claim is made that Rust can interpret outstanding callbacks after its heap
+has been replaced. The final consumer case separately holds a real Store reply
+past reinstall and proves empty replacement state, fenced admission, exact new
+receipt completion and old-grant rejection.
+
+The Root case passes in 98.26s (113s runner); seven Store/IcyDB cases pass in
+78.07s (88s runner). Twenty-three provisioning tests and scoped Clippy
+pass. The existing [delivery evidence](../../reports/2026-09/2026-09-11/canic165-delivery.md)
+retains source snapshots and failures as well as passing runs. The final consumer
+check follows a test-helper extraction after the Root proof; Root/runtime inputs
+are unchanged. Complete generated Fleet apply and reviewed funding remain FP2
+work. Fixture-bearing generation stays disabled and the batch stays Unreleased.
+
+
+### Generated cache preparation checkpoint
+
+The generated Fleet artifact cache now restores the bound fixture manifest.
+Both native cache regressions and scoped Clippy pass; the existing generated
+recipe still carries an empty fixture manifest. The next generated proof must
+retain nonempty fixture payloads in the cache, fingerprint their authored inputs,
+then exercise reviewed publication and funding through full production-adapter
+apply. See the [delivery record](../../reports/2026-09/2026-09-11/canic165-delivery.md).
+
+
+## Complete generated apply and funding checkpoint (2026-09-12)
+
+FP2 is qualified through the existing production-adapter mixed-Fleet journey,
+including one neutral Shard source, lost upload reply, fresh-adapter recovery,
+exact target receipt, reviewed action/retry allowance, conservation and terminal
+replay. Changed-build and identical-build reinstalls also pass. The ordinary
+generated Store package has no held-response test controls.
+
+Fresh continuation now counts distinct fixture preparation/chunk actions and
+retains a separate digest-bound `fixture_publication_retry_attempts` allowance.
+No funding defaults or release-binding rules change. The generated cache retains
+source manifests/payloads and fingerprints authored inputs independently.
+
+The case passes in 824.01s; scoped native checks and Clippy pass. See the
+[delivery record](../../reports/2026-09/2026-09-11/canic165-delivery.md) for failures,
+source snapshots and exact limits. Earlier checkpoint statements about gated
+generation or unfinished FP2 are historical. The finished Canic feature joins
+the existing .15 draft; no minor transition, publication or staging effect ran.
+Downstream Translation/Game Shard conversion and matched measurements remain FP3.

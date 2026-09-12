@@ -12,7 +12,7 @@ the later maintainer-selected observation-only assessment is recorded below.
 | --- | --- | --- |
 | CANIC-167 | Agreed and implemented: final build summaries show exact code/data bytes and profile; selected-role provenance retains final measurements for fast and release. | Publication and downstream adoption; no new limit or inferred executable headroom. |
 | CANIC-166 | Agreed; ordinary resume needs an actionable diagnosis. The exact reported plan reference already belongs to CANIC-157's supported bounded partial-activation recovery. Current code now distinguishes an inspectable source from other unreadable evidence. | Use the existing explicit recovery review against fresh exact authority; staging admission/execution is not established by this local work. |
-| CANIC-165 | Separate provisioning extension in progress. Actual Store import, later Shards, replacement grants, backoff, automatic funding and direct retirement are qualified within their recorded scope. | Exact Root grant/revoke await and held actual-Store reply interruption, then complete generated Fleet apply/funding. Downstream matched size/import-cost receipts cover both Translation and Game Shard against compact embedding. |
+| CANIC-165 | Canic provisioning implementation qualified: actual Store import, later Shards, replacement grants, backoff, funding, direct retirement, held-reply recovery and complete generated Fleet apply/reinstall. The completed feature joins the .15 draft. | Publication and downstream conversion; matched size/import-cost receipts for Translation and Game Shard against compact embedding remain downstream work. |
 | CANIC-163 | Implemented and qualified as the selected explicit-intent extension in .15: completed source authority is distinct from selected target artifacts. | Publication and Toko wrapper adoption; changed/identical builds, lost Root responses and completed-digest replay are covered by the [Canic proof](canic163-selected-build-reinstall.md). |
 | CANIC-164 | Implemented and qualified in the existing .15 batch. | Publication, downstream adoption and live attribution remain separate. |
 | CANIC-160 | Shared/concurrent observation corrections are qualified in .15. | Comparable real Toko deployment timing remains downstream evidence. |
@@ -22,8 +22,9 @@ the later maintainer-selected observation-only assessment is recorded below.
 | Earlier Confirmed labels | Published fixes and retained evidence already cover 007/132/133/135/136/137. | Downstream status labels do not reopen implementation without a new failing case; see the [prior triage](../2026-09-10/toko-feedback-triage.md). |
 
 CANIC-166's diagnostic is a bounded follow-up to a published operator recovery
-path and extends the same .15 draft. CANIC-165 is not folded into that release
-as an unfinished feature, and no new minor is opened. Its
+path and extends the same .15 draft. CANIC-165 now joins that draft after its
+complete generated apply/funding qualification; it remains a distinct product
+extension in the changelog. No new minor is opened. Its
 [design checkpoint](../../../working/canic165-fixture-provisioning/design.md)
 records owners, identity, source access, consistency requirements and sequenced
 proofs. CANIC-163 was implemented as its own complete operator batch after the

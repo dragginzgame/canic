@@ -343,3 +343,105 @@ test fleet_ensure::json::tests::fixture_upload_report_retains_identity_and_exter
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 585 filtered out; finished in 0.00s
 
+
+
+== 2026-09-12 held Store replies: pass; held-store-replies-worker-source.sha256 ==
+ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib component_provisioning
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 47.79s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-c73a961573114900)
+
+running 23 tests
+test ops::fleet_coordinator::component_provisioning_root_progress::tests::coalesced_root_provisioning_progress_is_a_strict_monotonic_successor ... ok
+test ops::fleet_coordinator::component_provisioning_root_progress::tests::regressed_or_noncanonical_root_provisioning_progress_fails_closed ... ok
+test workflow::component_provisioning::tests::active_registry_inventory_binds_the_exact_runtime_activation ... ok
+test state_contract::tests::root_component_provisioning_declares_exact_consecutive_domains ... ok
+test workflow::component_provisioning::tests::capacity_helpers_reject_first_excess_without_mutation ... ok
+test workflow::component_provisioning::tests::registry_commit_progress_allows_only_exact_or_response_lost_commitment ... ok
+test workflow::component_provisioning::tests::only_the_exact_protected_coordinator_is_authorized ... ok
+test workflow::component_provisioning::tests::registry_progress_allows_only_exact_or_response_lost_reservation ... ok
+test workflow::component_provisioning::tests::sealed_startup_retries_only_its_exact_completed_component_batch ... ok
+test ops::component_provisioning::tests::acceptance_persists_maximum_encoded_operation_and_placement_authority ... ok
+test ops::component_provisioning::tests::member_origin_is_valid_only_under_exact_accepted_authority ... ok
+test ops::component_provisioning::tests::exact_acceptance_replays_across_restart_without_mutating_capacity ... ok
+test ops::component_provisioning::tests::prepaid_claim_cannot_precede_complete_identity_reservation ... ok
+test ops::component_provisioning::tests::corrupted_receipt_index_or_aggregate_state_fails_closed ... ok
+test ops::component_provisioning::tests::reservation_advance_is_cursor_bound_and_response_loss_safe ... ok
+test ops::component_provisioning::tests::active_root_batch_retains_preexisting_runtime_evidence_and_completes_later ... ok
+test ops::component_provisioning::tests::reservation_cursor_crosses_canonical_placements_without_reusing_identity ... ok
+test ops::component_provisioning::tests::claim_install_and_registry_advances_are_context_bound_restart_safe_and_terminal ... ok
+test ops::component_provisioning::tests::terminal_batch_releases_only_the_active_fence_for_the_next_operation ... ok
+test ops::component_provisioning::tests::provisioning_failure_backoff_survives_restart_without_changing_work_receipts ... ok
+test ops::component_provisioning::tests::directory_publication_journals_each_delivery_and_replays_terminal_receipt ... ok
+test ops::component_provisioning::tests::runtime_activation_begins_only_after_publication_and_replays_exactly ... ok
+test ops::component_provisioning::tests::conflicting_operation_and_active_batch_reject_without_new_reservations ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 241 filtered out; finished in 0.38s
+
+
+
+== 2026-09-12 generated cache authority; generated-cache-source.sha256 ==
+ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-testing-internal --lib --features governed-pocketic-tests release_cache_
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 13.77s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 2 tests
+test pic::fleet_registry::baseline::tests::generated_release_cache_restores_fixture_authority_without_source_rebuild ... ok
+test pic::fleet_registry::baseline::tests::reinstall_fixture_release_cache_binds_distinct_repeatable_identities ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 67 filtered out; finished in 10.94s
+
+
+
+== 2026-09-12 generated fixture apply: pass; generated-apply-source.sha256 ==
+ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host -p canic-testing-internal --lib --features canic-testing-internal/governed-pocketic-tests -- release_set::current fixture_publication release_cache_ continuation
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 14.04s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-73cb7bd5e7fa567b)
+
+running 19 tests
+test canister_build::reuse::dependencies::tests::cargo_paths_preserve_escaped_names_and_continuations ... ok
+test fleet_ensure::policy::tests::continuation_review_reserves_only_available_headroom_and_exposes_pending_discovery ... ok
+test fleet_ensure::workflow::continuation::tests::affordable_successor_retains_a_prefix_and_its_exact_conservation_bound ... ok
+test fleet_ensure::workflow::continuation::tests::fixture_retry_allowance_changes_the_reviewed_plan_digest ... ok
+test fleet_ensure::workflow::continuation::tests::recovery_preview_tolerates_bounded_balance_movement_but_preserves_authority ... ok
+test fleet_ensure::workflow::continuation::tests::review_difference_exposes_targets_action_kinds_and_bounded_debit ... ok
+test release_set::current::tests::current_manifest_canonical_shape_binds_all_child_digests ... ok
+test fleet_ensure::workflow::continuation::tests::new_review_does_not_revalidate_the_previous_inactive_plans_phases ... ok
+test fleet_ensure::ops::current_protocol::tests::fixture_publication_binding_reserves_reviewed_attempts_and_rejects_overflow ... ok
+test fleet_ensure::workflow::continuation::tests::insufficient_remaining_budget_rejects_before_phase_or_intent_persistence ... ok
+test fleet_ensure::workflow::continuation::tests::a_rehashed_successor_cannot_add_a_canister_effect_or_change_protocol_authority ... ok
+test fleet_ensure::workflow::continuation::tests::successor_rejects_changed_principal_and_exhausted_phase_authority ... ok
+test fleet_ensure::workflow::continuation::tests::affordable_prefix_is_durable_without_authorizing_the_unaffordable_tail ... ok
+test fleet_ensure::workflow::continuation::tests::phase_is_durable_before_intent_and_hydrates_without_inline_actions_in_journal ... ok
+test release_set::current::tests::complete_release_binds_fixture_bytes_and_rejects_substituted_receipts ... ok
+test fleet_ensure::tests::fixture_publication_rejects_a_journal_counter_beyond_its_reviewed_limit ... ok
+test fleet_ensure::tests::fixture_publication_review_accounts_for_each_retry_and_rejects_zero_attempts ... ok
+test fleet_ensure::tests::fixture_publication_last_attempt_lost_reply_reconciles_without_another_call ... ok
+test fleet_ensure::tests::fixture_publication_attempt_bound_survives_failure_and_restart ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 570 filtered out; finished in 0.36s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 2 tests
+test pic::fleet_registry::baseline::tests::generated_release_cache_restores_fixture_authority_without_source_rebuild ... ok
+test pic::fleet_registry::baseline::tests::reinstall_fixture_release_cache_binds_distinct_repeatable_identities ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 67 filtered out; finished in 11.00s
+
+
+
+== 2026-09-12 generated fixture apply: pass; generated-cache-inputs-source.sha256 ==
+ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-testing-internal --lib --features governed-pocketic-tests generated_release_cache_restores_fixture_authority_without_source_rebuild
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 14.15s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::generated_release_cache_restores_fixture_authority_without_source_rebuild ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 68 filtered out; finished in 0.10s
+

@@ -88,23 +88,6 @@ impl CurrentReleaseSetManifest {
         Ok(fixtures)
     }
 
-    /// Refuse fixture-bearing deployment until the reviewed delivery owner is connected.
-    pub fn require_fixture_delivery(
-        &self,
-        root: &Path,
-        topology: &ComponentTopology,
-    ) -> Result<(), FixtureArtifactError> {
-        if !self
-            .verify_fixtures(root, topology)?
-            .manifest
-            .entries
-            .is_empty()
-        {
-            return Err(FixtureArtifactError::DeliveryUnavailable);
-        }
-        Ok(())
-    }
-
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, CurrentReleaseSetManifestError> {
         self.validate(self.release_build_id)?;
         serde_json::to_vec(self).map_err(CurrentReleaseSetManifestError::Serialize)
