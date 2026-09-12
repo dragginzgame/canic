@@ -1,7 +1,7 @@
 //! Module: ops::storage::async_job_recovery
 //!
 //! Responsibility: claim, finish, abandon, and inspect durable async-job attempts.
-//! Does not own: timer registration, provider state, retry timing, or domain work.
+//! Does not own: timer registration, provider state or domain work.
 //! Boundary: workflows provide observed time and lease deadlines; ops commits exact fences.
 
 #[cfg(test)]
@@ -11,10 +11,12 @@ mod tests;
 use crate::storage::stable::async_job_recovery::AsyncJobRecoveryData;
 use crate::{
     InternalError,
+    domain::provisioning_failure::{ProvisioningRetryCategory, retry_delay_seconds},
     model::replay::OperationId,
     storage::stable::async_job_recovery::{
         AsyncAttemptFenceRecord, AsyncAttemptLeaseRecord, AsyncJobRecoveryStore,
-        ReplaySafeAsyncAttemptFenceRecord, ReplaySafeAsyncAttemptLeaseRecord,
+        FixtureImportRetryRecord, ReplaySafeAsyncAttemptFenceRecord,
+        ReplaySafeAsyncAttemptLeaseRecord,
     },
 };
 use sha2::{Digest, Sha256};
@@ -27,6 +29,7 @@ pub enum AsyncJobOwner {
     AuthRenewal,
     CanisterPoolMaintenance,
     CycleTopup,
+    FixtureImport,
     PlacementReceiptAcknowledgement,
 }
 
@@ -87,7 +90,23 @@ impl AsyncJobRecoveryOps {
             return Err(InternalError::invariant());
         }
         let mut state = AsyncJobRecoveryStore::get();
+        if owner == AsyncJobOwner::FixtureImport {
+            if state.fixture_import_failure.is_some() {
+                return Err(InternalError::invariant());
+            }
+            if state.fixture_import_retry.not_before_ns > now_ns {
+                return Ok(AsyncJobClaim::Busy {
+                    retry_at_ns: state.fixture_import_retry.not_before_ns,
+                });
+            }
+        }
         let claim = match owner {
+            AsyncJobOwner::FixtureImport => claim_attempt(
+                &mut state.fixture_import,
+                owner,
+                now_ns,
+                lease_expires_at_ns,
+            ),
             AsyncJobOwner::AuthRenewal => {
                 claim_attempt(&mut state.auth_renewal, owner, now_ns, lease_expires_at_ns)
             }
@@ -116,13 +135,15 @@ impl AsyncJobRecoveryOps {
         Ok(claim)
     }
 
-    /// Finish only the exact active attempt and preserve only cycle-funding retry identity.
+    /// Finish the exact attempt, retaining cycle identity or fixture backoff for retry.
     pub fn finish(
         attempt: AsyncJobAttempt,
         completion: AsyncJobCompletion,
+        now_ns: u64,
     ) -> Result<bool, InternalError> {
         let mut state = AsyncJobRecoveryStore::get();
         let exact = match attempt.owner {
+            AsyncJobOwner::FixtureImport => finish_attempt(&mut state.fixture_import, attempt),
             AsyncJobOwner::AuthRenewal => finish_attempt(&mut state.auth_renewal, attempt),
             AsyncJobOwner::CanisterPoolMaintenance => {
                 finish_attempt(&mut state.canister_pool_maintenance, attempt)
@@ -135,6 +156,9 @@ impl AsyncJobRecoveryOps {
             }
         };
         if exact {
+            if attempt.owner == AsyncJobOwner::FixtureImport {
+                update_fixture_retry(&mut state.fixture_import_retry, completion, now_ns);
+            }
             AsyncJobRecoveryStore::replace(state);
         }
         Ok(exact)
@@ -145,6 +169,7 @@ impl AsyncJobRecoveryOps {
     pub fn active_lease_deadline(owner: AsyncJobOwner) -> Option<u64> {
         let state = AsyncJobRecoveryStore::get();
         match owner {
+            AsyncJobOwner::FixtureImport => lease_deadline(&state.fixture_import),
             AsyncJobOwner::AuthRenewal => lease_deadline(&state.auth_renewal),
             AsyncJobOwner::CanisterPoolMaintenance => {
                 lease_deadline(&state.canister_pool_maintenance)
@@ -170,6 +195,7 @@ impl AsyncJobRecoveryOps {
     pub fn abandon(owner: AsyncJobOwner) {
         let mut state = AsyncJobRecoveryStore::get();
         match owner {
+            AsyncJobOwner::FixtureImport => state.fixture_import.active = None,
             AsyncJobOwner::AuthRenewal => state.auth_renewal.active = None,
             AsyncJobOwner::CanisterPoolMaintenance => {
                 state.canister_pool_maintenance.active = None;
@@ -185,9 +211,59 @@ impl AsyncJobRecoveryOps {
         AsyncJobRecoveryStore::replace(state);
     }
 
+    /// Observe the fixture-specific permanent diagnostic without duplicating its cursor.
+    #[must_use]
+    pub fn fixture_import_failure() -> Option<crate::domain::fixture_import::FixtureImportFailure> {
+        AsyncJobRecoveryStore::get().fixture_import_failure
+    }
+
+    /// Retain a permanent fixture failure only for the exact current delivery attempt.
+    #[must_use]
+    pub fn fail_fixture_import(
+        attempt: AsyncJobAttempt,
+        failure: crate::domain::fixture_import::FixtureImportFailure,
+    ) -> bool {
+        let mut state = AsyncJobRecoveryStore::get();
+        if attempt.owner != AsyncJobOwner::FixtureImport
+            || !finish_attempt(&mut state.fixture_import, attempt)
+        {
+            return false;
+        }
+        state.fixture_import_failure = Some(failure);
+        AsyncJobRecoveryStore::replace(state);
+        true
+    }
+
+    /// Fence a late source callback before it can mutate application state.
+    #[must_use]
+    pub fn is_current(attempt: AsyncJobAttempt) -> bool {
+        let state = AsyncJobRecoveryStore::get();
+        attempt.owner == AsyncJobOwner::FixtureImport
+            && state.fixture_import.active.as_ref().is_some_and(|active| {
+                active.attempt_generation == attempt.attempt_generation
+                    && active.lease_expires_at_ns == attempt.lease_expires_at_ns
+            })
+    }
+
     #[cfg(test)]
     pub(crate) fn reset_for_tests() {
         AsyncJobRecoveryStore::import(AsyncJobRecoveryData::default());
+    }
+}
+
+// Commit retry pressure with lease completion; stale attempts never reach this update.
+fn update_fixture_retry(
+    retry: &mut FixtureImportRetryRecord,
+    completion: AsyncJobCompletion,
+    now_ns: u64,
+) {
+    if completion == AsyncJobCompletion::RetryableFailure {
+        retry.failures = retry.failures.saturating_add(1);
+        let seconds = retry_delay_seconds(ProvisioningRetryCategory::Backoff, retry.failures)
+            .expect("backoff permits retry");
+        retry.not_before_ns = now_ns.saturating_add(seconds * 1_000_000_000);
+    } else {
+        *retry = FixtureImportRetryRecord::default();
     }
 }
 

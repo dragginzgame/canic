@@ -345,17 +345,18 @@ pub(in crate::workflow) async fn advance_component_removal_once(
         return Ok(false);
     }
     if draining.final_inventory.is_none() {
-        if draining.descendant_count == 0 {
+        // Removing the final membership precedes directory convergence and subtree
+        // completion. Only the durable driver can establish terminal emptiness.
+        let advanced = advance_component_draining(RootComponentDrainingAdvanceRequest {
+            operation_id,
+            component,
+        })
+        .await?;
+        if let RootComponentDrainingAdvancePhase::DescendantsEmpty(empty) = advanced.phase {
             finalize_component_inventory(RootComponentFinalInventoryRequest {
                 operation_id,
                 component,
-                expected_registry: draining.registry,
-            })
-            .await?;
-        } else {
-            advance_component_draining(RootComponentDrainingAdvanceRequest {
-                operation_id,
-                component,
+                expected_registry: empty.registry,
             })
             .await?;
         }

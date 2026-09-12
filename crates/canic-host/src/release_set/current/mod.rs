@@ -14,9 +14,16 @@ use crate::{
     release_build::{ReleaseBuildPlanError, ReleaseBuildPlanState, load_release_build_plan},
     release_set::{
         PersistedApplicationArtifactUnion, PersistedCanicInfrastructureArtifactManifest,
+        fixture::{
+            FixtureArtifactError, PersistedFixtureArtifactManifest, load_fixture_artifact_manifest,
+            verify_fixture_artifacts,
+        },
     },
 };
-use canic_core::ids::{BuildNetwork, ReleaseBuildId};
+use canic_core::{
+    bootstrap::compiled::ComponentTopology,
+    ids::{BuildNetwork, ReleaseBuildId},
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -33,6 +40,7 @@ pub const CURRENT_RELEASE_SET_MANIFEST_FILE: &str = "current-release-set-manifes
 pub struct CurrentReleaseSetManifest {
     pub application_artifact_union_sha256: [u8; 32],
     pub build_network: BuildNetwork,
+    pub fixture_artifact_manifest_sha256: [u8; 32],
     pub infrastructure_artifact_manifest_sha256: [u8; 32],
     pub release_build_id: ReleaseBuildId,
     pub schema_version: u16,
@@ -55,6 +63,44 @@ impl CurrentReleaseSetManifest {
             return Err(CurrentReleaseSetManifestError::Invalid(
                 "path and document release-build identities differ".to_string(),
             ));
+        }
+        Ok(())
+    }
+
+    /// Validate retained fixture bytes against the complete selected release authority.
+    pub fn verify_fixtures(
+        &self,
+        root: &Path,
+        topology: &ComponentTopology,
+    ) -> Result<PersistedFixtureArtifactManifest, FixtureArtifactError> {
+        let fixtures = load_fixture_artifact_manifest(
+            root,
+            topology,
+            self.release_build_id,
+            self.fixture_artifact_manifest_sha256,
+        )?;
+        verify_fixture_artifacts(
+            root,
+            topology,
+            self.release_build_id,
+            self.fixture_artifact_manifest_sha256,
+        )?;
+        Ok(fixtures)
+    }
+
+    /// Refuse fixture-bearing deployment until the reviewed delivery owner is connected.
+    pub fn require_fixture_delivery(
+        &self,
+        root: &Path,
+        topology: &ComponentTopology,
+    ) -> Result<(), FixtureArtifactError> {
+        if !self
+            .verify_fixtures(root, topology)?
+            .manifest
+            .entries
+            .is_empty()
+        {
+            return Err(FixtureArtifactError::DeliveryUnavailable);
         }
         Ok(())
     }
@@ -99,15 +145,20 @@ pub enum CurrentReleaseSetManifestError {
     Serialize(serde_json::Error),
 
     #[error(transparent)]
+    Fixture(#[from] FixtureArtifactError),
+
+    #[error(transparent)]
     ReleaseBuild(#[from] ReleaseBuildPlanError),
 }
 
-/// Bind two exact child manifests before the release build becomes immutable.
+/// Bind the exact artifact and fixture child manifests before the release build becomes immutable.
 pub fn compile_and_persist_current_release_set_manifest(
     root: &Path,
+    topology: &ComponentTopology,
     release_build_id: ReleaseBuildId,
     application: &PersistedApplicationArtifactUnion,
     infrastructure: &PersistedCanicInfrastructureArtifactManifest,
+    fixtures: &PersistedFixtureArtifactManifest,
 ) -> Result<PersistedCurrentReleaseSetManifest, CurrentReleaseSetManifestError> {
     let release_build = load_release_build_plan(root, release_build_id)?;
     if application.union.release_build_id != release_build_id
@@ -117,9 +168,19 @@ pub fn compile_and_persist_current_release_set_manifest(
             "child manifest release-build identities differ".to_string(),
         ));
     }
+    let retained =
+        load_fixture_artifact_manifest(root, topology, release_build_id, fixtures.digest)?;
+    if retained != *fixtures
+        || application.union.fleet_component_topology_digest
+            != retained.manifest.component_topology_digest
+    {
+        return Err(FixtureArtifactError::Authority.into());
+    }
+    verify_fixture_artifacts(root, topology, release_build_id, fixtures.digest)?;
     let expected = CurrentReleaseSetManifest {
         application_artifact_union_sha256: application.digest,
         build_network: release_build.build_network,
+        fixture_artifact_manifest_sha256: fixtures.digest,
         infrastructure_artifact_manifest_sha256: infrastructure.digest,
         release_build_id,
         schema_version: CurrentReleaseSetManifest::SCHEMA_VERSION,

@@ -191,6 +191,13 @@ impl RootWasmStoreStateOps {
             .map(|record| record.response)
     }
 
+    /// Only a bootstrapped fixture-bearing release can have issued delivery grants.
+    pub fn fixture_delivery_store() -> Option<Principal> {
+        RootWasmStoreState::root_store_bootstrap()
+            .filter(|record| !record.response.fixtures.is_empty())
+            .map(|record| record.response.wasm_store)
+    }
+
     /// Resolve one runtime-managed wasm store principal by logical binding.
     #[must_use]
     pub fn wasm_store_pid(binding: &WasmStoreBinding) -> Option<Principal> {

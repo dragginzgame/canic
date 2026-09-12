@@ -1,0 +1,15 @@
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 28.39s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-5af01db5c457ebf2)
+
+running 5 tests
+test fleet_ensure::tests::tampered_reviewed_plan_fails_before_any_effect ... ok
+test fleet_ensure::tests::unreadable_plan_without_recovery_evidence_preserves_bytes_and_refuses_effects ... ok
+test fleet_ensure::ops::current_protocol::tests::activation_source_requires_exact_completed_prefix_and_issued_provisioning ... ok
+test fleet_ensure::tests::in_progress_operation_resumes_reviewed_desired_before_newer_input ... ok
+test fleet_ensure::ops::reinstall::adoption::tests::interrupted_adoption_rejects_drift_before_replacing_either_document ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 559 filtered out; finished in 1.32s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.yeHKOR

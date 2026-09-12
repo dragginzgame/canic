@@ -29,7 +29,8 @@ use std::{
 };
 use thiserror::Error;
 
-const RECOVERY_WATCHDOG_CADENCE: Duration = Duration::from_secs(30);
+/// Shared cadence for uncertain-work recovery; successful work may request immediate continuation.
+pub const RECOVERY_WATCHDOG_CADENCE: Duration = Duration::from_secs(30);
 
 thread_local! {
     static CORE_RECOVERY_WATCHDOG: RefCell<Option<WatchdogRegistration>> = const { RefCell::new(None) };
@@ -500,6 +501,8 @@ mod tests {
             PlacementAcknowledgementWorkflow::timer_identity()
                 .expect("placement acknowledgement identity"),
             recovery_watchdog_identity().expect("recovery watchdog identity"),
+            crate::workflow::fixture_provisioning::timer::FixtureImportTimer::timer_identity()
+                .expect("fixture import identity"),
             canister_pool_timer_identity().expect("canister pool identity"),
             crate::workflow::metrics::publication::timer::PublicSamplingTimer::timer_identity()
                 .expect("public sampling identity"),

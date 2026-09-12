@@ -3161,6 +3161,21 @@ fn maximum_observation_count(
         .ok_or(EnsurePolicyError::ArithmeticOverflow {
             field: "protocol observation count",
         })?;
+    // Each permitted retry may repeat the effect's three observations after restart.
+    let publication_retry_observations =
+        protocol_actions.iter().try_fold(0_u128, |total, action| {
+            let Some(attempts) = action.fixture_publication_attempt_limit() else {
+                return Ok(total);
+            };
+            let retries = attempts
+                .checked_sub(1)
+                .ok_or_else(|| EnsurePolicyError::InvalidProtocolStep(action.name().to_string()))?;
+            checked_add(
+                total,
+                u128::from(retries) * 3,
+                "publication retry observations",
+            )
+        })?;
     let terminal_protocol_observations = terminal_protocol_observation_bound(
         desired,
         protocol_actions,
@@ -3183,6 +3198,7 @@ fn maximum_observation_count(
         .and_then(|value| value.checked_add(terminal_present))
         .and_then(|value| value.checked_add(action_observations))
         .and_then(|value| value.checked_add(protocol_observations))
+        .and_then(|value| value.checked_add(publication_retry_observations))
         .and_then(|value| value.checked_add(terminal_protocol_observations))
         .and_then(|value| value.checked_add(u128::from(stalled_observations)))
         .ok_or(EnsurePolicyError::ArithmeticOverflow {

@@ -1,5 +1,6 @@
 //! Passive contracts for one Fleet Subnet Root's initial local Wasm Store bootstrap.
 
+use crate::dto::fixture_provisioning::FixtureDescriptor;
 use crate::ids::{
     CanisterRole, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootReleaseSet,
     ReleaseBuildId,
@@ -69,6 +70,19 @@ pub struct RootStoreReleaseSetEntry {
 }
 
 ///
+/// RootStoreFixture
+///
+/// One admitted role's immutable source, protected by the installed Root release digest.
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootStoreFixture {
+    pub role: CanisterRole,
+    pub content_id: [u8; 32],
+    pub descriptor: FixtureDescriptor,
+}
+
+///
 /// RootStoreReleaseSetManifest
 ///
 /// Runtime decoding shape for the host's exact canonical root release-set JSON bytes.
@@ -80,6 +94,7 @@ pub struct RootStoreReleaseSetManifest {
     pub release_build_id: ReleaseBuildId,
     pub component_topology_digest: ComponentTopologyDigest,
     pub entries: Vec<RootStoreReleaseSetEntry>,
+    pub fixtures: Vec<RootStoreFixture>,
 }
 
 ///
@@ -126,4 +141,17 @@ pub struct RootStoreBootstrapResponse {
     pub wasm_store: Principal,
     pub release_set: FleetSubnetRootReleaseSet,
     pub catalog: Vec<RootStoreCatalogEntry>,
+    pub fixtures: Vec<RootStoreFixture>,
+}
+
+///
+/// RootStoreFixturePrepareRequest
+///
+/// Select one source from Root's protected staged release manifest; carries no payload authority.
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootStoreFixturePrepareRequest {
+    pub bootstrap: RootStoreBootstrapRequest,
+    pub role: CanisterRole,
 }

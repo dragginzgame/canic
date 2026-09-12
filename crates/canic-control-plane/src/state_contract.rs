@@ -15,6 +15,8 @@ use crate::storage::stable::component_provisioning::{
     RootComponentOperationRecord, RootComponentProvisioningData,
     RootComponentProvisioningPlacementRecord, RootComponentProvisioningStateRecord,
 };
+#[cfg(feature = "wasm-store-canister")]
+use crate::storage::stable::fixture_store::{FixtureStoreData, FixtureStoreEntryRecord};
 #[cfg(feature = "root-control-plane")]
 use crate::storage::stable::root_admission::{RootAdmissionData, RootAdmissionRecord};
 #[cfg(feature = "root-control-plane")]
@@ -67,6 +69,8 @@ use canic_core::{
 #[must_use]
 pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor> {
     vec![
+        #[cfg(feature = "wasm-store-canister")]
+        fixture_store_descriptor(),
         fleet_admission_descriptor(),
         descriptor(
             StateAllocationKey::FleetCoordinatorRegistry,
@@ -183,6 +187,19 @@ fn root_admission_descriptor() -> StateAllocationDescriptor {
         RootAdmissionData::STATE_CONTRACT_NAME,
         193,
         "root_admission_restores_exact_participant_progress_and_forward_recovery",
+    )
+}
+
+#[cfg(feature = "wasm-store-canister")]
+fn fixture_store_descriptor() -> StateAllocationDescriptor {
+    descriptor(
+        StateAllocationKey::FixtureStore,
+        "fixture_store",
+        canic_core::role_contract::allocation::memory::control_plane::FIXTURE_STORE_ID,
+        FixtureStoreEntryRecord::STATE_CONTRACT_NAME,
+        FixtureStoreData::STATE_CONTRACT_NAME,
+        231,
+        "fixture_store_restores_content_progress_and_exact_grant_revisions",
     )
 }
 
@@ -441,6 +458,8 @@ mod tests {
             .collect::<Vec<_>>();
 
         for expected in [
+            #[cfg(feature = "wasm-store-canister")]
+            StateAllocationKey::FixtureStore,
             StateAllocationKey::FleetCoordinatorAdmission,
             StateAllocationKey::FleetCoordinatorFunding,
             StateAllocationKey::FleetCoordinatorRegistry,
@@ -464,6 +483,12 @@ mod tests {
         let descriptors = canic_control_plane_state_descriptors();
 
         for (allocation, record, snapshot) in [
+            #[cfg(feature = "wasm-store-canister")]
+            (
+                StateAllocationKey::FixtureStore,
+                FixtureStoreEntryRecord::STATE_CONTRACT_NAME,
+                FixtureStoreData::STATE_CONTRACT_NAME,
+            ),
             (
                 StateAllocationKey::FleetCoordinatorAdmission,
                 FleetAdmissionAuthorityRecord::STATE_CONTRACT_NAME,

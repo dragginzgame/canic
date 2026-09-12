@@ -53,6 +53,7 @@ pub struct RuntimeWorkflow;
 impl RuntimeWorkflow {
     /// Start fixed runtime consumers shared by non-root profiles.
     pub fn start_all() -> Result<(), InternalError> {
+        workflow::fixture_provisioning::timer::FixtureImportTimer::start()?;
         workflow::runtime::log::LogRetentionWorkflow::start()?;
         workflow::runtime::intent::IntentCleanupWorkflow::start()?;
         workflow::metrics::publication::timer::PublicSamplingTimer::start()?;

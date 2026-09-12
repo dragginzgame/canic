@@ -47,6 +47,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     query_read_only(CANIC_ROOT_STATUS),
+    query_read_only(crate::protocol::CANIC_ROOT_FIXTURE_STATUS),
     query_read_only(CANIC_CONTROL_STATUS),
     query_read_only(crate::protocol::CANIC_PUBLIC_STATUS),
     query_read_only(crate::protocol::CANIC_AUTH_STATUS),
@@ -58,7 +59,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     query_read_only(crate::protocol::CANIC_WASM_STORE_CATALOG),
 ];
 
-/// Exact replay-policy rows for the Store role, including its two data lanes.
+/// Exact replay-policy rows for the Store's template and fixture data lanes.
 pub const STORE_ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_command_dispatch(
         CANIC_WASM_STORE_COMMAND,
@@ -71,6 +72,11 @@ pub const STORE_ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     query_read_only(CANIC_WASM_STORE_STATUS),
     update_read_only("canic_wasm_store_chunk"),
+    update_read_only(crate::protocol::CANIC_WASM_STORE_FIXTURE_CHUNK),
+    update_monotonic_transition(
+        crate::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
+        command_kind("wasm_store.publish_fixture.v1"),
+    ),
     update_monotonic_transition(
         "canic_wasm_store_publish_chunk",
         command_kind("wasm_store.publish_chunk.v1"),

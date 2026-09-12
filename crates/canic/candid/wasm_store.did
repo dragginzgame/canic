@@ -17,6 +17,32 @@ type CapabilityRequestMetadata = record {
   issued_at_ns : nat64;
 };
 type CapabilityService = variant { Root };
+//
+// ComponentBinding
+//
+// Complete immutable identity and placement of one concrete Component.
+//
+type ComponentBinding = record {
+  placement_subnet : principal;
+  component : text;
+  role : text;
+  canister_id : principal;
+  fleet_subnet_root : principal;
+  authority : FleetRegistryAuthority;
+  component_spec : text;
+  spec_hash : blob;
+};
+//
+// ComponentChildBinding
+//
+// Complete immutable identity of one child at any depth in one exact Component tree.
+//
+type ComponentChildBinding = record {
+  component : ComponentBinding;
+  parent_canister_id : principal;
+  role : text;
+  canister_id : principal;
+};
 // Named response for the canister's current cycle balance.
 type CycleBalanceStatusResponse = record { cycles : nat };
 type CycleTrackerEntry = record { cycles : nat; timestamp_secs : nat64 };
@@ -43,6 +69,62 @@ type CyclesResponse = variant {
 // value; Candid/Serde decoding may still preserve any raw `u16`.
 //
 type Error = record { code : nat16 };
+// One independently decodable opaque chunk selected by an application descriptor.
+type FixtureChunkDescriptor = record { length : nat32; digest : blob };
+// Authenticated target pull, pinned to the exact granted revision and content.
+type FixtureChunkRead = record { grant : FixtureGrant; index : nat32 };
+// One bounded, sequential Store upload; exact earlier chunks may be replayed.
+type FixtureChunkUpload = record {
+  content_id : blob;
+  bytes : blob;
+  index : nat32;
+};
+// Release-independent fixture content; release authority binds its resulting digest.
+type FixtureDescriptor = record {
+  format_hash : blob;
+  schema_version : nat16;
+  chunks : vec FixtureChunkDescriptor;
+  encoded_length : nat64;
+  completion_summary : blob;
+};
+// Current target authority, including revoked revisions retained against stale replay.
+type FixtureGrant = record {
+  enabled : bool;
+  binding : FixtureTargetBinding;
+  revision : nat64;
+};
+// Compare-and-set read-grant intent; stale grant or revoke messages cannot replace it.
+type FixtureGrantRequest = record {
+  enabled : bool;
+  binding : FixtureTargetBinding;
+  expected_revision : nat64;
+};
+// Durable source-byte progress; completion is not an application data receipt.
+type FixtureSourceStatus = record {
+  received_bytes : nat64;
+  content_id : blob;
+  complete : bool;
+  chunk_count : nat32;
+  next_chunk : nat32;
+};
+// Closed Store outcomes for deterministic caller retry and conflict handling.
+type FixtureStoreError = variant {
+  NotReady;
+  Authority;
+  NotFound;
+  Bounds;
+  Capacity;
+  Sequence;
+  Content;
+  Conflict;
+};
+// Root-derived installation authority independent of reusable content identity.
+type FixtureTargetBinding = record {
+  content_id : blob;
+  release_build_id : text;
+  target : ManagedCanisterBinding;
+  installation : blob;
+};
 //
 // FleetActivationIdentity
 //
@@ -187,6 +269,15 @@ type FleetSubnetWasmStoreInitArgs = record {
   install_id : blob;
   authority : FleetSubnetWasmStoreAuthority;
 };
+//
+// ManagedCanisterBinding
+//
+// Immutable Registry-issued identity retained by one managed application Canister.
+//
+type ManagedCanisterBinding = variant {
+  ComponentChild : ComponentChildBinding;
+  Component : ComponentBinding;
+};
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -305,11 +396,16 @@ type PublicStatusResponse = variant {
 };
 type Result = variant { Ok : ObservabilityResponse; Err : Error };
 type Result_1 = variant { Ok : PublicStatusResponse; Err : Error };
-type Result_2 = variant { Ok : StoreCatalogReadResponse; Err : Error };
-type Result_3 = variant { Ok : TemplateChunkResponse; Err : Error };
-type Result_4 = variant { Ok : StoreCommandResponse; Err : Error };
-type Result_5 = variant { Ok; Err : Error };
-type Result_6 = variant { Ok : StoreStatusResponse; Err : Error };
+type Result_10 = variant { Ok : Result_2; Err : Error };
+type Result_11 = variant { Ok : StoreStatusResponse; Err : Error };
+type Result_2 = variant { Ok : FixtureSourceStatus; Err : FixtureStoreError };
+type Result_3 = variant { Ok : StoreCatalogReadResponse; Err : Error };
+type Result_4 = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result_5 = variant { Ok : FixtureGrant; Err : FixtureStoreError };
+type Result_6 = variant { Ok : StoreCommandResponse; Err : Error };
+type Result_7 = variant { Ok : blob; Err : FixtureStoreError };
+type Result_8 = variant { Ok : Result_7; Err : Error };
+type Result_9 = variant { Ok; Err : Error };
 // Closed compiled capability identity exposed by the immutable role overview.
 type RoleCapability = variant {
   Sharding;
@@ -344,20 +440,28 @@ type StoreCatalogReadRequest = variant {
   Storage;
   Template : TemplateLookupRequest;
   Catalog;
+  Fixture : blob;
+  FixtureGrant : principal;
 };
 type StoreCatalogReadResponse = variant {
   Storage : WasmStoreStatusResponse;
   Template : TemplateStagingStatusResponse;
   Catalog : vec WasmStoreCatalogEntryResponse;
+  Fixture : Result_2;
+  FixtureGrant : opt FixtureGrant;
 };
 // Closed Store control-plane command union.
+type WasmStoreGcTarget = variant { Complete; Prepared };
+type WasmStoreGcRequest = record { operation_id : blob; target : WasmStoreGcTarget };
 type StoreCommand = variant {
   ActivateFleet : FleetActivationRequest;
+  PrepareFixture : FixtureDescriptor;
   RespondCapability : NonrootCyclesCapabilityEnvelopeV1;
   PrepareChunkSet : TemplateChunkSetPrepareInput;
   SynchronizeState : StateSnapshotInput;
+  SetFixtureGrant : FixtureGrantRequest;
   StageManifest : TemplateManifestInput;
-  RunGc : OperationStatusRequest;
+  RunGc : WasmStoreGcRequest;
   InspectTemplate : TemplateLookupRequest;
   ReclaimDeletionCycles : WasmStoreDeletionCycleReclamationRequest;
   PrepareFleetCredential : FleetCredentialGenerationRequest;
@@ -365,6 +469,7 @@ type StoreCommand = variant {
 };
 // Closed response union correlated to one accepted Store command.
 type StoreCommandResponse = variant {
+  FixtureSource : Result_2;
   RespondCapability : NonrootCyclesCapabilityResponseV1;
   PrepareChunkSet : TemplateChunkSetInfoResponse;
   SynchronizeState;
@@ -372,6 +477,7 @@ type StoreCommandResponse = variant {
   InspectTemplate : TemplateChunkSetInfoResponse;
   ReclaimDeletionCycles : WasmStoreDeletionCycleReclamationResponse;
   OperationAccepted : OperationReceipt;
+  FixtureGrant : Result_5;
   SynchronizeTopology;
 };
 // Store-owned durable operation detail selected by one operation ID.
@@ -530,10 +636,12 @@ type WasmStoreTemplateStatusResponse = record {
 service : (FleetSubnetWasmStoreInitArgs) -> {
   canic_observability : (ObservabilityRequest) -> (Result) query;
   canic_public_status : (PublicStatusRequest) -> (Result_1) query;
-  canic_wasm_store_catalog : (StoreCatalogReadRequest) -> (Result_2) query;
-  canic_wasm_store_chunk : (TemplateChunkRequest) -> (Result_3);
-  canic_wasm_store_command : (StoreCommand) -> (Result_4);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_5);
-  canic_wasm_store_status : (StoreStatusRequest) -> (Result_6) query;
+  canic_wasm_store_catalog : (StoreCatalogReadRequest) -> (Result_3) query;
+  canic_wasm_store_chunk : (TemplateChunkRequest) -> (Result_4);
+  canic_wasm_store_command : (StoreCommand) -> (Result_6);
+  canic_wasm_store_fixture_chunk : (FixtureChunkRead) -> (Result_8);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_9);
+  canic_wasm_store_publish_fixture : (FixtureChunkUpload) -> (Result_10);
+  canic_wasm_store_status : (StoreStatusRequest) -> (Result_11) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

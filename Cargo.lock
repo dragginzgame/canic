@@ -484,7 +484,7 @@ dependencies = [
  "ic-testkit",
  "ic0",
  "serde",
- "toml 1.1.5+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
@@ -512,7 +512,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
- "toml 1.1.5+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
@@ -528,7 +528,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.18",
- "toml 1.1.5+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
@@ -556,7 +556,7 @@ dependencies = [
  "sha2 0.10.9",
  "syn 3.0.5",
  "thiserror 2.0.18",
- "toml 1.1.5+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
@@ -581,7 +581,7 @@ dependencies = [
  "syn 3.0.5",
  "thiserror 2.0.18",
  "tokio",
- "toml 1.1.5+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
@@ -616,7 +616,7 @@ dependencies = [
  "ic-testkit",
  "serde",
  "serde_json",
- "toml 1.1.5+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
@@ -634,6 +634,7 @@ dependencies = [
  "ic-timers",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
 ]
 
@@ -645,8 +646,11 @@ dependencies = [
  "canic",
  "canic-icydb-lifecycle-schema",
  "ic-cdk",
+ "ic-memory",
  "ic-timers",
  "icydb",
+ "serde",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -2505,9 +2509,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.257.4"
+version = "0.257.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdf31d03df0d31e06cfb437c61d665534c95bc51f529a6bc27e0e95a26cc10e8"
+checksum = "551b1f4cb11dd116bbae251f75d5f5ad21b92e8d9144f051d6949c3d29a11043"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2523,9 +2527,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.257.4"
+version = "0.257.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b544043818cbbcf711ed615347b78e0929913f1ef0bb39473d414261e2bfad"
+checksum = "59e96c4c4a6d45f6195022caf5fc256593d985f0f2a4928738eab201a227eb32"
 dependencies = [
  "candid",
  "getrandom 0.4.3",
@@ -2547,18 +2551,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.257.4"
+version = "0.257.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18cbf6304dbf1f60ed35ad41f778ab8fab9f72cf63c30d9ca6325db8724477af"
+checksum = "2d2b89e92339d6d25fb521a80195b55ada52a0acc6771f60206e563b5f7f395e"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.257.4"
+version = "0.257.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6f5d132c2342ca64e9339796297d0ee4f61ad1b694a5304f8089efcf61c7c29"
+checksum = "438b45a1cc74753a1385c2a69e15a2a50e8232cd8022005112f2a6c68993787c"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2578,9 +2582,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.257.4"
+version = "0.257.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58402cee06282849761227ee7fa11c3f537c370c7cd069f385dca275c4c4652f"
+checksum = "9864eb76daf67481055f3d904066345f31145a52253f74887fdf4494f7d9b569"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2595,9 +2599,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.257.4"
+version = "0.257.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9901b45e4ef60e7e3ffdb7a5945c0609e050192116a2540a99994a4178a45a0b"
+checksum = "f0be07452cdf594e834d2209db0e73412c75c6b4e38c3be6fca3cad2a2f6f84a"
 dependencies = [
  "candid",
  "derive_more",
@@ -2886,9 +2890,9 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libredox"
-version = "0.1.23"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d8f1ea3f21fd3405dcaf6c9b5c1630af9afc422d9073ea39c5f6d6c772e08ed"
+checksum = "6480ccc157a1389bb2e4891b24751b0f798ba640d22386f23143fbcc89da195a"
 dependencies = [
  "libc",
 ]
@@ -3481,7 +3485,7 @@ version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e67ba7e9b2b56446f1d419b1d807906278ffa1a658a8a5d8a39dcb1f5a78614f"
 dependencies = [
- "toml_edit 0.25.13+spec-1.1.0",
+ "toml_edit 0.25.15+spec-1.1.0",
 ]
 
 [[package]]
@@ -4308,9 +4312,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.16.0"
+version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
+checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
 
 [[package]]
 name = "socket2"
@@ -4711,9 +4715,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.1.5+spec-1.1.0"
+version = "1.1.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12c0ba9680044b4ce98d391a62094047eada0d64860b80166c39f4a6b5640785"
+checksum = "920602543f0911ab71da12c50d59701da54c196d1a2bf5cb4b75667f137a406a"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -4766,9 +4770,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.25.13+spec-1.1.0"
+version = "0.25.15+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6975367e4d2ef766d86af01ffad14b622fecc8d4357a998fbc4deb6e9bacaf9b"
+checksum = "1340ea94a5856333492c9064b02c778b191dd2c853778d9609debdcdfea3a614"
 dependencies = [
  "indexmap",
  "toml_datetime 1.1.1+spec-1.1.0",

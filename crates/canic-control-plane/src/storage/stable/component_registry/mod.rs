@@ -1197,6 +1197,8 @@ pub struct RootComponentCreationEffectRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentInstallEffectRecord {
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub fixture_grant_revision: Option<u64>,
     pub raw_module_hash: [u8; 32],
     pub protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
@@ -2121,6 +2123,8 @@ impl_storable_bounded!(
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentChildInstallEffectRecord {
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub fixture_grant_revision: Option<u64>,
     pub raw_module_hash: [u8; 32],
     pub protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,

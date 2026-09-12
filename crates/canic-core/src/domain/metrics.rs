@@ -380,6 +380,7 @@ pub enum ManagementCallMetricOperation {
     InstallChunkedCode,
     InstallCode,
     SignWithEcdsa,
+    StartCanister,
     StopCanister,
     StoredChunks,
     UninstallCode,

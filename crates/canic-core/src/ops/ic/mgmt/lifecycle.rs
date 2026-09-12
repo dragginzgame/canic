@@ -135,6 +135,15 @@ impl MgmtOps {
         Ok(())
     }
 
+    /// Start one verified installation through the observed management boundary.
+    pub async fn start_canister(canister_pid: Principal) -> Result<(), InternalError> {
+        management_call(
+            ManagementCallMetricOperation::StartCanister,
+            MgmtInfra::start_canister(canister_pid),
+        )
+        .await
+    }
+
     /// Stops a canister via the management canister.
     pub async fn stop_canister(canister_pid: Principal) -> Result<(), InternalError> {
         management_call(

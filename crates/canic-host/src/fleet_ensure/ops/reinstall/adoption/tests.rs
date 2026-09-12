@@ -166,6 +166,8 @@ fn fixture_plan(source: FleetActivationSourceRecord) -> FleetEnsurePlan {
         protocol_actions: Vec::new(),
         recovery_review: None,
         reinstall: Some(Box::new(FleetReinstallRecord {
+            target_artifacts_sha256: None,
+            source: None,
             operation_id,
             source_operation_id: source.operation_id.clone(),
             authorities: Vec::new(),

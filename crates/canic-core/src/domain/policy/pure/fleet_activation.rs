@@ -8,9 +8,9 @@ use crate::{
     ids::{EndpointCall, EndpointCallKind},
     protocol::{
         CANIC_ADMISSION_STATUS, CANIC_AUTH_STATUS, CANIC_COMMAND, CANIC_CONTROL_STATUS,
-        CANIC_OBSERVABILITY, CANIC_PUBLIC_STATUS, CANIC_ROOT_COMMAND, CANIC_ROOT_OPERATION_STATUS,
-        CANIC_ROOT_STATUS, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_COMMAND,
-        CANIC_WASM_STORE_STATUS,
+        CANIC_OBSERVABILITY, CANIC_PUBLIC_STATUS, CANIC_ROOT_COMMAND, CANIC_ROOT_FIXTURE_STATUS,
+        CANIC_ROOT_OPERATION_STATUS, CANIC_ROOT_STATUS, CANIC_WASM_STORE_CATALOG,
+        CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
     },
 };
 use thiserror::Error as ThisError;
@@ -60,6 +60,12 @@ pub fn require_prepared_nonroot_endpoint(
     fenced(call)
 }
 
+/// Infrastructure traffic remains available before fixture completion, with its own auth checks.
+#[must_use]
+pub fn is_nonroot_infrastructure_endpoint(call: EndpointCall) -> bool {
+    require_prepared_nonroot_endpoint(call, false).is_ok()
+}
+
 /// Require one compile-selected Store data lane while that Store is Prepared.
 pub fn require_prepared_store_data_endpoint(
     call: EndpointCall,
@@ -74,15 +80,19 @@ pub fn require_prepared_store_data_endpoint(
 pub fn require_prepared_root_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
-    if is_query(
-        call,
-        &[
-            CANIC_PUBLIC_STATUS,
-            CANIC_OBSERVABILITY,
-            CANIC_ROOT_OPERATION_STATUS,
-            CANIC_ROOT_STATUS,
-        ],
-    ) || is_update(call, &[CANIC_ROOT_COMMAND])
+    let fixture_status = call.endpoint.name == CANIC_ROOT_FIXTURE_STATUS
+        && call.kind == EndpointCallKind::QueryComposite;
+    if fixture_status
+        || is_query(
+            call,
+            &[
+                CANIC_PUBLIC_STATUS,
+                CANIC_OBSERVABILITY,
+                CANIC_ROOT_OPERATION_STATUS,
+                CANIC_ROOT_STATUS,
+            ],
+        )
+        || is_update(call, &[CANIC_ROOT_COMMAND])
     {
         return Ok(());
     }
@@ -117,10 +127,57 @@ mod tests {
     }
 
     #[test]
+    fn fixture_gate_exempts_only_exact_infrastructure_names_and_call_modes() {
+        for name in [
+            CANIC_PUBLIC_STATUS,
+            CANIC_OBSERVABILITY,
+            CANIC_CONTROL_STATUS,
+            CANIC_AUTH_STATUS,
+            CANIC_ADMISSION_STATUS,
+        ] {
+            assert!(is_nonroot_infrastructure_endpoint(call(
+                name,
+                EndpointCallKind::Query
+            )));
+            assert!(!is_nonroot_infrastructure_endpoint(call(
+                name,
+                EndpointCallKind::Update
+            )));
+            assert!(!is_nonroot_infrastructure_endpoint(call(
+                name,
+                EndpointCallKind::QueryComposite
+            )));
+        }
+        assert!(is_nonroot_infrastructure_endpoint(call(
+            CANIC_COMMAND,
+            EndpointCallKind::Update
+        )));
+        assert!(!is_nonroot_infrastructure_endpoint(call(
+            CANIC_COMMAND,
+            EndpointCallKind::Query
+        )));
+        for name in [
+            "canic_application_query",
+            "create_account",
+            "canic_observability_extra",
+        ] {
+            assert!(!is_nonroot_infrastructure_endpoint(call(
+                name,
+                EndpointCallKind::Query
+            )));
+            assert!(!is_nonroot_infrastructure_endpoint(call(
+                name,
+                EndpointCallKind::Update
+            )));
+        }
+    }
+
+    #[test]
     fn prepared_root_admits_only_the_role_owned_entrypoints() {
         for (endpoint, kind) in [
             (CANIC_ROOT_COMMAND, EndpointCallKind::Update),
             (CANIC_ROOT_STATUS, EndpointCallKind::Query),
+            (CANIC_ROOT_FIXTURE_STATUS, EndpointCallKind::QueryComposite),
             (CANIC_ROOT_OPERATION_STATUS, EndpointCallKind::Query),
             (CANIC_PUBLIC_STATUS, EndpointCallKind::Query),
             (CANIC_OBSERVABILITY, EndpointCallKind::Query),
@@ -136,6 +193,8 @@ mod tests {
             (CANIC_ROOT_COMMAND, EndpointCallKind::Query),
             (CANIC_ROOT_STATUS, EndpointCallKind::Update),
             (CANIC_ROOT_STATUS, EndpointCallKind::QueryComposite),
+            (CANIC_ROOT_FIXTURE_STATUS, EndpointCallKind::Query),
+            (CANIC_ROOT_FIXTURE_STATUS, EndpointCallKind::Update),
         ] {
             assert_eq!(
                 require_prepared_root_endpoint(call(endpoint, kind)),
@@ -163,6 +222,7 @@ mod tests {
         for (endpoint, kind) in [
             ("application_update", EndpointCallKind::Update),
             ("application_query", EndpointCallKind::Query),
+            (CANIC_ROOT_FIXTURE_STATUS, EndpointCallKind::QueryComposite),
             (CANIC_WASM_STORE_CATALOG, EndpointCallKind::Query),
             (CANIC_CONTROL_STATUS, EndpointCallKind::Update),
             (CANIC_COMMAND, EndpointCallKind::Query),
@@ -192,6 +252,7 @@ mod tests {
             (CANIC_CONTROL_STATUS, EndpointCallKind::Query),
             (CANIC_COMMAND, EndpointCallKind::Update),
             (CANIC_WASM_STORE_STATUS, EndpointCallKind::Update),
+            (CANIC_ROOT_FIXTURE_STATUS, EndpointCallKind::QueryComposite),
             (CANIC_WASM_STORE_CATALOG, EndpointCallKind::Update),
             (CANIC_AUTH_STATUS, EndpointCallKind::Query),
             (CANIC_ADMISSION_STATUS, EndpointCallKind::Query),

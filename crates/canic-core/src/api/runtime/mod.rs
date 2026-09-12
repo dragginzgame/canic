@@ -166,12 +166,47 @@ impl RuntimeIntrospectionApi {
             }]
         };
 
+        let fixture = crate::workflow::fixture_provisioning::status();
+        let fixture_ready = crate::workflow::fixture_provisioning::is_ready(&fixture);
+        let mut checks = vec![readiness_check];
+        let mut blockers = blockers;
+        checks.push(RuntimeCheck {
+            category: "readiness".to_string(),
+            code: "fixture_receipt".to_string(),
+            status: if fixture_ready {
+                RuntimeCheckStatus::Pass
+            } else {
+                RuntimeCheckStatus::Fail
+            },
+            subject: role.clone().unwrap_or_else(|| "unknown_role".to_string()),
+            detail: "application fixture receipt for the installed selection".to_string(),
+            next: None,
+            source: "application_durable_progress".to_string(),
+        });
+        if !fixture_ready {
+            blockers.push(RuntimeDiagnostic {
+                category: "readiness".to_string(),
+                code: "fixture_not_ready".to_string(),
+                severity: RuntimeDiagnosticSeverity::Blocked,
+                subject: role.clone().unwrap_or_else(|| "unknown_role".to_string()),
+                detail: "required fixture has no validated completion receipt".to_string(),
+                next: Some(
+                    "inspect the protected fixture result for progress or failure".to_string(),
+                ),
+                source: "application_durable_progress".to_string(),
+            });
+        }
         CanicReadinessStatus {
+            fixture,
             schema_version: RUNTIME_INTROSPECTION_SCHEMA_VERSION,
             role,
-            status,
+            status: if fixture_ready {
+                status
+            } else {
+                ReadinessStatus::NotReady
+            },
             observed_at_ns,
-            checks: vec![readiness_check],
+            checks,
             blockers,
             warnings: Vec::new(),
         }

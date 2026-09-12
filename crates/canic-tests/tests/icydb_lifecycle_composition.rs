@@ -1,6 +1,8 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test qualifies exact published-IcyDB lifecycle composition in PocketIC.
 
+mod fixture_provisioning;
+
 use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
@@ -273,10 +275,8 @@ fn prove_prepared_reconstruction_and_retry(
 }
 
 fn composition_snapshot(pic: &PocketIc, canister_id: Principal) -> LifecycleCompositionSnapshot {
-    let result: Result<LifecycleCompositionSnapshot, Error> = pic
-        .query_candid(canister_id, "lifecycle_composition_snapshot", ())
-        .expect("query Canic/IcyDB lifecycle composition snapshot");
-    result.expect("read Canic/IcyDB lifecycle composition snapshot")
+    pic.query_candid(canister_id, "lifecycle_composition_snapshot", ())
+        .expect("query Canic/IcyDB lifecycle composition snapshot")
 }
 
 fn assert_participant_reconstructed(snapshot: &LifecycleCompositionSnapshot) {

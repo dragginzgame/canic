@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "feedback": "CANIC-163",
+  "date": "2026-09-11",
+  "status": "qualified",
+  "package_version": "0.110.14",
+  "open_changelog_draft": "0.110.15",
+  "source_release_build_id": "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae",
+  "selected_release_build_id": "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a",
+  "host_tests_passed": 9,
+  "cli_tests_passed": 15,
+  "help_tests_passed": 2,
+  "clippy": {
+    "result": "pass",
+    "warnings_denied": true,
+    "packages": [
+      "canic-host",
+      "canic-cli",
+      "canic-testing-internal"
+    ]
+  },
+  "pocketic": {
+    "case": "pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation",
+    "result": "pass",
+    "test_seconds": 770.29,
+    "runner_seconds": 784,
+    "physical_canisters": 9,
+    "pool_canisters": 6,
+    "workload_canisters": 5,
+    "deliberate_wipes": 2,
+    "infrastructure_installs": 6,
+    "checks": [
+      "changed infrastructure and application installed hashes",
+      "source authority distinct from selected build",
+      "old rows removed and authored fixture rows restored",
+      "interruption before install and after lost install responses",
+      "lost replacement Root response reconciled from durable Intent",
+      "different desired selection during interrupted apply and terminal replay",
+      "conflicting new reinstall rejected",
+      "identical-build deliberate second wipe",
+      "physical estate and cycle conservation",
+      "zero-effect terminal replay",
+      "public allocation summaries remain available"
+    ],
+    "timings": [
+      {
+        "name": "initial_artifacts",
+        "seconds": 8.71509
+      },
+      {
+        "name": "initial_recovery_and_convergence",
+        "seconds": 160.893905
+      },
+      {
+        "name": "initial_terminal_replay",
+        "seconds": 48.880797
+      },
+      {
+        "name": "first_deliberate_wipe",
+        "seconds": 261.025576
+      },
+      {
+        "name": "second_deliberate_wipe",
+        "seconds": 240.245358
+      },
+      {
+        "name": "selected_build_reinstall",
+        "seconds": 509.3229
+      },
+      {
+        "name": "public_memory_allocation_qualification",
+        "seconds": 36.256994
+      },
+      {
+        "name": "production_adapter_journey",
+        "seconds": 770.188967
+      }
+    ]
+  },
+  "source_verification": {
+    "source_files": 1557,
+    "source_unchanged": true,
+    "source_snapshot_sha256": "bd968a55bc495dc8b4ab44dea796899fefb33831c5e0b8069c86d9e6a3caffc0",
+    "source_map_sha256": "dc3453fba39ad6e28891d2adde00b98e36346020a4f723b504e7051316ac1ece"
+  },
+  "evidence_sha256": {
+    "native.log": "e298b3b84212421908cfe2ec1982dd82db45e0430d765b389e1762a60f382da2",
+    "clippy.log": "0372bfbaaab4c6ca37e66177e091cc5595b3e02f3fd9a74551eb822cd68728e7",
+    "pocketic.log": "d6cb6a88b1cd7c23191df80df52f04ddd944560023254e25ae7bab2425c38421",
+    "source-sha256.json": "bd968a55bc495dc8b4ab44dea796899fefb33831c5e0b8069c86d9e6a3caffc0"
+  },
+  "boundaries": {
+    "workspace_validation_run": false,
+    "version_changed": false,
+    "git_published": false,
+    "staging_applied": false,
+    "sibling_modified": false,
+    "toko_wrapper_qualification_complete": false
+  },
+  "final_checks": {
+    "changed_rust_formatting": "pass",
+    "git_diff_check": "pass",
+    "document_semantics": "pass",
+    "release_draft_preflight": "pass",
+    "local_document_links": "pass",
+    "evidence_checksums": "pass",
+    "evidence_secret_scan": "pass"
+  }
+}

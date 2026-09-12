@@ -2017,6 +2017,10 @@ fn release_authority(
             "complete release set does not bind its application artifact union".to_string(),
         ));
     }
+    complete
+        .manifest
+        .require_fixture_delivery(request.root, component_topology)
+        .map_err(|error| FleetGenerateError::Release(error.to_string()))?;
     Ok((infrastructure, complete))
 }
 

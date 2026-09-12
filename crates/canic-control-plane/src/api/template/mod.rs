@@ -15,10 +15,10 @@ use crate::{
         StoreOperationStatusResponse, TemplateChunkResponse, TemplateLookupRequest,
         TemplateStagingStatusResponse, WasmStoreCatalogEntryResponse,
         WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
-        WasmStoreGcOperationStatus, WasmStoreStatusResponse,
+        WasmStoreGcOperationStatus, WasmStoreGcRequest, WasmStoreStatusResponse,
     },
-    ids::{TemplateId, TemplateVersion, WasmStoreGcMode},
-    ops::storage::template::{TemplateChunkedOps, WasmStoreGcExecutionStats, WasmStoreGcOps},
+    ids::{TemplateId, TemplateVersion},
+    ops::storage::template::{TemplateChunkedOps, WasmStoreGcOps},
 };
 #[cfg(feature = "root-control-plane")]
 use crate::{
@@ -36,8 +36,6 @@ use canic_core::control_plane_support::ops::ic::IcOps;
 use canic_core::dto::error::Error;
 #[cfg(feature = "root-control-plane")]
 use canic_core::dto::root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse};
-#[cfg(feature = "wasm-store-canister")]
-use canic_core::{log, log::Topic};
 
 /// Admit Store mutations from the exact Root or retained exact installation controller.
 #[cfg(feature = "wasm-store-canister")]
@@ -76,6 +74,36 @@ pub struct WasmStoreBootstrapApi;
 
 #[cfg(feature = "root-control-plane")]
 impl WasmStoreBootstrapApi {
+    /// Observe a retained source without repeating its registration command.
+    pub async fn root_fixture_status(
+        content_id: [u8; 32],
+    ) -> Result<
+        Result<
+            canic_core::dto::fixture_provisioning::FixtureSourceStatus,
+            canic_core::dto::fixture_provisioning::FixtureStoreError,
+        >,
+        Error,
+    > {
+        crate::workflow::bootstrap::root_store::source_status(content_id)
+            .await
+            .map_err(Error::from)
+    }
+
+    /// Register a source selected only from the installed Root release manifest.
+    pub async fn prepare_root_store_fixture(
+        request: canic_core::dto::root_store::RootStoreFixturePrepareRequest,
+    ) -> Result<
+        Result<
+            canic_core::dto::fixture_provisioning::FixtureSourceStatus,
+            canic_core::dto::fixture_provisioning::FixtureStoreError,
+        >,
+        Error,
+    > {
+        crate::workflow::bootstrap::root_store::prepare(request)
+            .await
+            .map_err(Error::from)
+    }
+
     /// Bootstrap the exact topology-admitted initial release set into this root's local Store.
     pub async fn bootstrap_root_store(
         request: RootStoreBootstrapRequest,
@@ -201,76 +229,9 @@ impl WasmStoreCanisterApi {
         local_template_status(WasmStoreGcOps::snapshot())
     }
 
-    // Mark this local wasm store as prepared for store-local GC execution.
-    pub fn prepare_gc(operation_id: [u8; 32]) -> Result<(), Error> {
-        WasmStoreGcOps::prepare(operation_id, now_secs())
-    }
-
-    // Mark this local wasm store as actively executing store-local GC.
-    pub fn begin_gc() -> Result<(), Error> {
-        WasmStoreGcOps::begin(now_secs())
-    }
-
-    // Mark this local wasm store as having completed the current local GC pass.
-    pub async fn complete_gc() -> Result<(), Error> {
-        let clearing_started_at = now_secs();
-        let current = WasmStoreGcOps::status();
-
-        if current.mode == WasmStoreGcMode::Complete {
-            return Ok(());
-        }
-
-        if current.mode != WasmStoreGcMode::InProgress {
-            return Err(Error::from_registered(
-                canic_core::diagnostics::codes::STATE_CONFLICT,
-            ));
-        }
-
-        WasmStoreGcOps::begin_clearing(clearing_started_at)?;
-        let stats = match execute_local_store_gc().await {
-            Ok(stats) => stats,
-            Err(err) => {
-                let _ = WasmStoreGcOps::begin(now_secs());
-                return Err(err);
-            }
-        };
-        WasmStoreGcOps::complete(now_secs())?;
-
-        log!(
-            Topic::Wasm,
-            Ok,
-            "wasm_store: gc complete reclaimed_bytes={} cleared_templates={} cleared_releases={} cleared_chunks={} cleared_chunk_hashes={}",
-            stats.reclaimed_store_bytes,
-            stats.cleared_template_count,
-            stats.cleared_release_count,
-            stats.cleared_chunk_count,
-            stats.cleared_chunk_store_hash_count
-        );
-
-        Ok(())
-    }
-
-    /// Resume the exact Store-local GC operation through every private phase.
-    pub async fn run_gc(operation_id: [u8; 32]) -> Result<(), Error> {
-        let current = WasmStoreGcOps::status();
-        if current.operation_id != Some(operation_id) {
-            return Err(Error::from_registered(
-                canic_core::diagnostics::codes::STATE_CONFLICT,
-            ));
-        }
-        match current.mode {
-            WasmStoreGcMode::Normal => {
-                Self::prepare_gc(operation_id)?;
-                Self::begin_gc()?;
-                Self::complete_gc().await
-            }
-            WasmStoreGcMode::Prepared => {
-                Self::begin_gc()?;
-                Self::complete_gc().await
-            }
-            WasmStoreGcMode::InProgress | WasmStoreGcMode::Clearing => Self::complete_gc().await,
-            WasmStoreGcMode::Complete => Ok(()),
-        }
+    /// Submit an explicit preparation or collection intent to the Store GC owner.
+    pub fn request_gc(request: WasmStoreGcRequest) -> Result<(), Error> {
+        crate::workflow::wasm_store::gc::request(request)
     }
 
     // Return transferable cycles to the authenticated root before physical Store deletion.
@@ -389,13 +350,6 @@ fn local_publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
     let store = config::current_wasm_store().map_err(Error::from)?;
     let limits = WasmStoreLimits::from(&store);
     TemplateChunkedOps::publish_chunk_in_store_from_input(request, limits).map_err(Error::from)
-}
-
-#[cfg(feature = "wasm-store-canister")]
-async fn execute_local_store_gc() -> Result<WasmStoreGcExecutionStats, Error> {
-    TemplateChunkedOps::execute_local_store_gc()
-        .await
-        .map_err(Error::from)
 }
 
 #[cfg(feature = "wasm-store-canister")]

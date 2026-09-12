@@ -120,6 +120,9 @@ pub(super) struct MockPlatform {
     paced_root_owned_observations: Vec<(String, u32)>,
     protocol_command_only: bool,
     protocol_action: Option<EnsureAction>,
+    reviewed_protocol_actions: Vec<EnsureAction>,
+    publication_journal: Option<PathBuf>,
+    publication_attempts_on_issue: Vec<u32>,
     fresh_protocol_actions: Vec<EnsureAction>,
     protocol_pending_waits: u32,
     protocol_ready: BTreeSet<String>,
@@ -167,6 +170,9 @@ impl MockPlatform {
             paced_root_owned_observations: Vec::new(),
             protocol_command_only: false,
             protocol_action: None,
+            reviewed_protocol_actions: Vec::new(),
+            publication_journal: None,
+            publication_attempts_on_issue: Vec::new(),
             fresh_protocol_actions: Vec::new(),
             protocol_pending_waits: 0,
             protocol_ready: BTreeSet::new(),
@@ -883,6 +889,14 @@ impl EnsurePlatform for MockPlatform {
         operation_id: &str,
         _state: &FleetEnsureStateRecord,
     ) -> Result<Vec<EnsureAction>, Self::Error> {
+        if !self.reviewed_protocol_actions.is_empty() {
+            return Ok(self
+                .reviewed_protocol_actions
+                .iter()
+                .filter(|action| !self.protocol_ready.contains(action.name()))
+                .cloned()
+                .collect());
+        }
         if let Some(action) = self.protocol_action.clone() {
             return Ok((!self.protocol_ready.contains(action.name()))
                 .then_some(action)
@@ -1029,10 +1043,27 @@ impl EnsurePlatform for MockPlatform {
         &mut self,
         _operation_id: &str,
         action: &EnsureAction,
-        _record: &EffectRecord,
+        record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectOutcome, Self::Error> {
         let hash = crate::fleet_ensure::ops::action_sha256(action);
+        if action.fixture_publication_attempt_limit().is_some()
+            && let Some(path) = &self.publication_journal
+        {
+            let journal: FleetEnsureJournalRecord = serde_json::from_slice(
+                &fs::read(path).expect("intent is durable before publication issue"),
+            )
+            .unwrap();
+            assert_eq!(
+                journal
+                    .effects
+                    .iter()
+                    .find(|effect| effect.action_sha256 == hash),
+                Some(record)
+            );
+            self.publication_attempts_on_issue
+                .push(record.publication_attempts);
+        }
         if let Some(outcome) = self.completed.get(&hash)
             && !is_pool_maintenance(action)
         {
@@ -1583,9 +1614,386 @@ fn assert_retained_create_balance(paths: &crate::fleet_ensure::ops::EnsurePaths,
     );
 }
 
+fn configure_fixture_publication(fixture: &mut Fixture) {
+    let root = Principal::from_slice(&[71]);
+    let store = Principal::from_slice(&[72]);
+    let wasm = fixture.root.join("app.wasm");
+    for (name, principal, kind) in [
+        ("fixture-root", root, DesiredCanisterKind::Root),
+        ("fixture-store", store, DesiredCanisterKind::Store),
+    ] {
+        let text = principal.to_text();
+        let mut canister = desired_canister(name, Some(&text), false, &wasm, None);
+        canister.kind = kind;
+        canister.parent = Some(
+            if kind == DesiredCanisterKind::Root {
+                "treasury"
+            } else {
+                "fixture-root"
+            }
+            .to_string(),
+        );
+        canister.wasm = None;
+        fixture.desired.canisters.push(canister);
+        fixture.platform.live.insert(
+            text.clone(),
+            live(
+                &text,
+                500,
+                Some(&sha256_hex(b"current-wasm")),
+                true,
+                &[CONTROLLER],
+            ),
+        );
+    }
+    fixture
+        .desired
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+        .unwrap()
+        .wasm = None;
+    fixture.desired.protocol = Some(DesiredFleetProtocol {
+        app_config: "canic.toml".into(),
+        component_group_placements: Vec::new(),
+        coordinator_candid: "coordinator.did".into(),
+        root_candid: "root.did".into(),
+        store_candid: "store.did".into(),
+    });
+    fixture.platform.reviewed_protocol_actions = fixture_publication_actions(root, store);
+}
+
+fn fixture_publication_actions(root: Principal, store: Principal) -> Vec<EnsureAction> {
+    let chunks = [b"first rows".as_slice(), b"last rows".as_slice()];
+    let descriptor = canic_core::dto::fixture_provisioning::FixtureDescriptor {
+        schema_version: 1,
+        format_hash: [1; 32],
+        completion_summary: [2; 32],
+        encoded_length: chunks.iter().map(|bytes| bytes.len() as u64).sum(),
+        chunks: chunks
+            .iter()
+            .map(
+                |bytes| canic_core::dto::fixture_provisioning::FixtureChunkDescriptor {
+                    digest: canic_core::cdk::utils::hash::wasm_hash(bytes)
+                        .try_into()
+                        .unwrap(),
+                    length: u32::try_from(bytes.len()).unwrap(),
+                },
+            )
+            .collect(),
+    };
+    let content_id =
+        canic_control_plane::api::fixture_content::FixtureContentApi::content_id(&descriptor)
+            .unwrap();
+    let role = canic_core::ids::CanisterRole::new("app");
+    let total = descriptor.encoded_length;
+    let mut actions = vec![fleet_protocol_action(
+        "prepare-fixture",
+        CurrentFleetProtocolAction::PrepareStoreFixture {
+            maximum_attempts: 1,
+            request: canic_core::dto::root_store::RootStoreFixturePrepareRequest {
+                bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest {
+                    operation_id: [8; 32],
+                    manifest_payload_size_bytes: 100,
+                },
+                role: role.clone(),
+            },
+            source: canic_core::dto::root_store::RootStoreFixture {
+                role,
+                content_id,
+                descriptor,
+            },
+            store,
+        },
+    )];
+    let mut received_bytes = 0;
+    for (index, bytes) in chunks.iter().enumerate() {
+        received_bytes += bytes.len() as u64;
+        let action = CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+            maximum_attempts: 1,
+            request: canic_core::dto::fixture_provisioning::FixtureChunkUpload {
+                content_id,
+                index: u32::try_from(index).unwrap(),
+                bytes: bytes.to_vec(),
+            },
+            expected: canic_core::dto::fixture_provisioning::FixtureSourceStatus {
+                content_id,
+                next_chunk: u32::try_from(index).unwrap() + 1,
+                chunk_count: u32::try_from(chunks.len()).unwrap(),
+                received_bytes,
+                complete: index + 1 == chunks.len(),
+            },
+            source_bytes: total,
+        };
+        actions.push(fleet_protocol_action(
+            &format!("publish-fixture-{index}"),
+            action,
+        ));
+    }
+    for outer in &mut actions {
+        if let EnsureAction::FleetProtocol {
+            action,
+            principal,
+            candid,
+            ..
+        } = outer
+        {
+            let is_root = action.target_kind() == DesiredCanisterKind::Root;
+            *principal = if is_root { root } else { store }.to_text();
+            *candid = if is_root { "root.did" } else { "store.did" }.to_string();
+        }
+    }
+    actions
+}
+
+fn publication_retry_fixture(maximum_attempts: u32) -> Fixture {
+    let mut fixture = fixture();
+    fixture
+        .desired
+        .canisters
+        .retain(|canister| canister.name == "treasury");
+    fixture
+        .platform
+        .live
+        .retain(|principal, _| principal == TREASURY);
+    configure_fixture_publication(&mut fixture);
+    for outer in &mut fixture.platform.reviewed_protocol_actions {
+        let EnsureAction::FleetProtocol {
+            action,
+            maximum_execution_burn_cycles,
+            ..
+        } = outer
+        else {
+            unreachable!()
+        };
+        match action.as_mut() {
+            CurrentFleetProtocolAction::PrepareStoreFixture {
+                maximum_attempts: limit,
+                ..
+            }
+            | CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+                maximum_attempts: limit,
+                ..
+            } => *limit = maximum_attempts,
+            _ => unreachable!(),
+        }
+        *maximum_execution_burn_cycles = u128::from(maximum_attempts);
+    }
+    fixture.platform.desired = fixture.desired.clone();
+    fixture
+}
+
 #[test]
+fn fixture_publication_attempt_bound_survives_failure_and_restart() {
+    // Exercise both preparation and a later chunk after an earlier committed prefix.
+    for selected in [0, 2] {
+        let mut fixture = publication_retry_fixture(2);
+        let planned = workflow::plan(
+            &fixture.root,
+            &fixture.desired,
+            "publication",
+            "test-fleet",
+            1,
+            &mut fixture.platform,
+        )
+        .unwrap();
+        let paths =
+            crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+        let action = planned.plan.protocol_actions[selected].clone();
+        let hash = action_sha256(&action);
+        for attempt in 1..=2 {
+            // Reconstruct the process; only observed external state and the on-disk journal survive.
+            let mut resumed = MockPlatform::new(
+                fixture.desired.clone(),
+                fixture.platform.live.values().cloned(),
+            );
+            resumed.protocol_ready = fixture.platform.protocol_ready.clone();
+            resumed.reviewed_protocol_actions = fixture.platform.reviewed_protocol_actions.clone();
+            resumed.publication_journal = Some(paths.journal.clone());
+            resumed.stall_before_mutation(hash.clone(), 1);
+            let result = workflow::apply(
+                &fixture.root,
+                &fixture.desired,
+                "publication",
+                "test-fleet",
+                &planned.plan.plan_sha256,
+                &mut resumed,
+            );
+            assert!(matches!(
+                result,
+                Err(workflow::EnsureWorkflowError::Platform(_)
+                    | workflow::EnsureWorkflowError::Stalled { .. })
+            ));
+            assert_eq!(resumed.publication_attempts_on_issue.last(), Some(&attempt));
+            let journal = crate::fleet_ensure::ops::read_journal(&paths)
+                .unwrap()
+                .unwrap();
+            let record = journal
+                .effects
+                .iter()
+                .find(|effect| effect.action_sha256 == hash)
+                .unwrap();
+            assert_eq!(record.publication_attempts, attempt);
+            assert_eq!(record.state, EffectState::Intent);
+            fixture.platform = resumed;
+        }
+        fixture.platform.publication_attempts_on_issue.clear();
+        for _ in 0..2 {
+            assert!(matches!(
+                workflow::apply(
+                    &fixture.root,
+                    &fixture.desired,
+                    "publication",
+                    "test-fleet",
+                    &planned.plan.plan_sha256,
+                    &mut fixture.platform
+                ),
+                Err(workflow::EnsureWorkflowError::FixturePublicationBound {
+                    maximum_attempts: 2,
+                    ..
+                })
+            ));
+            assert!(fixture.platform.publication_attempts_on_issue.is_empty());
+            assert!(!fixture.platform.mutations.contains_key(&hash));
+        }
+        fs::remove_dir_all(fixture.root).unwrap();
+    }
+}
+
+#[test]
+fn fixture_publication_last_attempt_lost_reply_reconciles_without_another_call() {
+    let mut fixture = publication_retry_fixture(1);
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        "publication",
+        "test-fleet",
+        1,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    fixture.platform.publication_journal = Some(paths.journal.clone());
+    fixture.platform.fail_once = planned
+        .plan
+        .protocol_actions
+        .iter()
+        .map(action_sha256)
+        .collect();
+    loop {
+        match workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            "publication",
+            "test-fleet",
+            &planned.plan.plan_sha256,
+            &mut fixture.platform,
+        ) {
+            Ok(report) => {
+                assert!(report.terminal);
+                break;
+            }
+            Err(workflow::EnsureWorkflowError::Platform(_)) => {
+                let mut resumed = MockPlatform::new(
+                    fixture.desired.clone(),
+                    fixture.platform.live.values().cloned(),
+                );
+                resumed.protocol_ready = fixture.platform.protocol_ready.clone();
+                resumed.reviewed_protocol_actions =
+                    fixture.platform.reviewed_protocol_actions.clone();
+                resumed.fail_once = fixture.platform.fail_once.clone();
+                resumed.publication_journal = Some(paths.journal.clone());
+                fixture.platform = resumed;
+            }
+            Err(error) => panic!("unexpected publication recovery: {error}"),
+        }
+    }
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .unwrap()
+        .unwrap();
+    assert!(!journal.effects.is_empty());
+    assert!(
+        journal
+            .effects
+            .iter()
+            .all(|effect| effect.publication_attempts == 1 && effect.state == EffectState::Applied)
+    );
+    assert!(fixture.platform.publication_attempts_on_issue.is_empty());
+    assert!(
+        workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            "publication",
+            "test-fleet",
+            &planned.plan.plan_sha256,
+            &mut fixture.platform
+        )
+        .unwrap()
+        .terminal
+    );
+    assert!(fixture.platform.publication_attempts_on_issue.is_empty());
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn fixture_publication_review_accounts_for_each_retry_and_rejects_zero_attempts() {
+    let mut fixture = publication_retry_fixture(1);
+    fixture.desired.maximum_observation_burn_cycles = "1".into();
+    let one = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        "publication",
+        "test-fleet",
+        1,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let mut retry = publication_retry_fixture(3);
+    retry.desired.maximum_observation_burn_cycles = "1".into();
+    let three = workflow::plan(
+        &retry.root,
+        &retry.desired,
+        "publication",
+        "test-fleet",
+        1,
+        &mut retry.platform,
+    )
+    .unwrap();
+    let count = one.plan.protocol_actions.len() as u128;
+    // Two extra update calls and their three observations per action.
+    assert_eq!(
+        three.plan.conservation.maximum_execution_burn_cycles
+            - one.plan.conservation.maximum_execution_burn_cycles,
+        count * 2 * 4
+    );
+    assert_ne!(one.plan.plan_sha256, three.plan.plan_sha256);
+    let mut invalid = publication_retry_fixture(0);
+    assert!(matches!(
+        workflow::plan(
+            &invalid.root,
+            &invalid.desired,
+            "publication",
+            "test-fleet",
+            1,
+            &mut invalid.platform
+        ),
+        Err(workflow::EnsureWorkflowError::Policy(
+            crate::fleet_ensure::policy::EnsurePolicyError::InvalidProtocolStep(_)
+        ))
+    ));
+    for root in [fixture.root, retry.root, invalid.root] {
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one durable journal journey covers every lost effect response and terminal replay"
+)]
 fn interruption_at_every_effect_converges_once_and_second_run_has_zero_effects() {
     let mut fixture = fixture();
+    configure_fixture_publication(&mut fixture);
     fixture
         .desired
         .protocol_steps
@@ -1610,7 +2018,15 @@ fn interruption_at_every_effect_converges_once_and_second_run_has_zero_effects()
         .flat_map(|canister| canister.actions.iter())
         .chain(planned.plan.protocol_actions.iter())
         .collect::<Vec<_>>();
-    assert_eq!(actions.len(), 15);
+    assert!(!actions.is_empty());
+    let hashes = actions
+        .iter()
+        .map(|action| action_sha256(action))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(hashes.len(), actions.len());
+    assert!(actions.iter().any(|action| matches!(action,
+        EnsureAction::FleetProtocol { action, .. }
+            if matches!(action.as_ref(), CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. }))));
     platform.fail_once = actions
         .iter()
         .map(|action| crate::fleet_ensure::ops::action_sha256(action))
@@ -1646,7 +2062,15 @@ fn interruption_at_every_effect_converges_once_and_second_run_has_zero_effects()
         "test-fleet",
     )
     .expect("terminal ensure inventory");
-    assert_eq!(inventory.entries.len(), 4);
+    assert_eq!(
+        inventory.entries.len(),
+        fixture
+            .desired
+            .canisters
+            .iter()
+            .filter(|canister| canister.presence == DesiredPresence::Present)
+            .count()
+    );
     let conservation = report
         .actual_conservation
         .expect("terminal conservation proof");
@@ -1777,6 +2201,7 @@ fn retryable_provisioning_failure_replays_only_the_exact_retained_issued_command
         .iter()
         .enumerate()
         .map(|(index, action)| EffectRecord {
+            publication_attempts: 0,
             maintenance_attempts: 0,
             action_sha256: crate::fleet_ensure::ops::action_sha256(action),
             created_principal: None,
@@ -2102,6 +2527,7 @@ fn active_registry_is_retired_only_after_every_infrastructure_reinstall_is_appli
             crate::fleet_ensure::model::InstallMode::Reinstall,
         );
         effects.push(EffectRecord {
+            publication_attempts: 0,
             maintenance_attempts: 0,
             action_sha256: crate::fleet_ensure::ops::action_sha256(&action),
             created_principal: None,
@@ -2373,6 +2799,7 @@ fn lost_estate_funding_response_reuses_the_exact_ledger_transfer() {
     )
     .expect("construct current state");
     let mut record = EffectRecord {
+        publication_attempts: 0,
         maintenance_attempts: 0,
         action_sha256: action_hash.clone(),
         created_principal: None,
@@ -4288,6 +4715,69 @@ fn tampered_reviewed_plan_fails_before_any_effect() {
 }
 
 #[test]
+fn unreadable_plan_without_recovery_evidence_preserves_bytes_and_refuses_effects() {
+    let fixture = fixture();
+    let mut platform = fixture.platform;
+    let digest = "e".repeat(64);
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &digest,
+        "test-fleet",
+        1,
+        &mut platform,
+    )
+    .expect("retain current plan");
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    for (bytes, category) in [
+        (b"{".as_slice(), serde_json::error::Category::Eof),
+        (
+            br#"{"protocol_actions":[]}"#.as_slice(),
+            serde_json::error::Category::Data,
+        ),
+    ] {
+        fs::write(&paths.plan, bytes).expect("retain damaged plan");
+        let failures = [
+            workflow::plan(
+                &fixture.root,
+                &fixture.desired,
+                &digest,
+                "test-fleet",
+                2,
+                &mut platform,
+            )
+            .expect_err("planning must preserve unreadable authority"),
+            workflow::apply(
+                &fixture.root,
+                &fixture.desired,
+                &digest,
+                "test-fleet",
+                &planned.plan.plan_sha256,
+                &mut platform,
+            )
+            .expect_err("apply must refuse unreadable authority"),
+        ];
+        for error in failures {
+            let workflow::EnsureWorkflowError::RetainedPlanUnreadable { source } = error else {
+                panic!("expected an unreadable plan diagnostic");
+            };
+            assert!(matches!(*source,
+                crate::fleet_ensure::ops::EnsureStateError::Decode { path, source }
+                if path == paths.plan && source.classify() == category
+            ));
+        }
+        assert_eq!(fs::read(&paths.plan).expect("retained bytes"), bytes);
+        assert!(!paths.journal.exists());
+    }
+    assert_eq!(platform.mutations.values().sum::<u32>(), 0);
+    fs::remove_dir_all(fixture.root).expect("remove fixture");
+}
+
+#[test]
 #[ignore = "the workspace runner supplies one shared PocketIC server and serial execution"]
 #[expect(
     clippy::too_many_lines,
@@ -5422,6 +5912,10 @@ fn current_protocol_variants(plan: &FleetEnsurePlan) -> BTreeSet<&'static str> {
                     "prepare_component_registry"
                 }
                 CurrentFleetProtocolAction::ProvisionComponents { .. } => "provision_components",
+                CurrentFleetProtocolAction::PrepareStoreFixture { .. } => "prepare_store_fixture",
+                CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. } => {
+                    "publish_store_fixture_chunk"
+                }
                 CurrentFleetProtocolAction::PublishStoreChunk { .. } => "publish_store_chunk",
                 CurrentFleetProtocolAction::StageStoreManifest { .. } => "stage_store_manifest",
                 CurrentFleetProtocolAction::SynchronizeRegistry { .. } => "synchronize_registry",
@@ -5603,10 +6097,15 @@ fn empty_outcome() -> EffectOutcome {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one source authority table covers selected protocol admission and each independent live drift"
+)]
 fn reinstall_preparation_binds_exact_running_authority_before_sealing() {
     use crate::fleet_ensure::{
         model::{
-            DesiredFleetArtifacts, RootManagementCanisterObservation, RootManagementObservation,
+            FleetReinstallSourceRecord, ReviewedDesiredFleetRecord,
+            RootManagementCanisterObservation, RootManagementObservation,
         },
         policy::{
             EnsurePolicyError,
@@ -5615,36 +6114,69 @@ fn reinstall_preparation_binds_exact_running_authority_before_sealing() {
     };
     let fixture = protocol_tranche_fixture(Vec::new());
     let hash = sha256_hex(b"current-wasm");
-    let artifacts = DesiredFleetArtifacts {
+    let source = FleetReinstallSourceRecord {
+        reviewed_desired: ReviewedDesiredFleetRecord::capture(&fixture.desired),
         wasm_sha256_by_canister: BTreeMap::from([("treasury".to_string(), hash.clone())]),
-        ..DesiredFleetArtifacts::default()
+        candid_sha256_by_path: BTreeMap::from([("coordinator.did".to_string(), "11".repeat(32))]),
     };
     let observed = RootManagementCanisterObservation {
         live: live(TREASURY, 500, Some(&hash), true, &[CONTROLLER]),
         name: "treasury".to_string(),
         subnet: SUBNET.to_string(),
     };
-    let candid_hashes = BTreeMap::from([("coordinator.did".to_string(), "11".repeat(32))]);
-    let plan = |observed: RootManagementCanisterObservation| {
+    let mut target = fixture.desired.clone();
+    target.protocol.as_mut().unwrap().coordinator_candid = "selected-new-coordinator.did".into();
+    let plan = |desired: &DesiredFleet, observed: RootManagementCanisterObservation| {
         preparation(PreparationInput {
-            desired: &fixture.desired,
-            artifacts: &artifacts,
+            desired,
+            source: &source,
+            target_artifacts_sha256: &"42".repeat(32),
             observation: &RootManagementObservation {
                 operator_cycles: 0,
                 roots: BTreeMap::from([("treasury".to_string(), observed)]),
             },
-            candid_hashes: &candid_hashes,
             source_operation_id: &"21".repeat(32),
             desired_sha256: &"22".repeat(32),
             operation_id: &"23".repeat(32),
             time: 100,
         })
     };
-    let accepted = plan(observed.clone()).expect("exact current authority");
+    let accepted = plan(&target, observed.clone()).expect("exact current authority");
     assert!(matches!(
         accepted.canisters[0].actions.as_slice(),
-        [EnsureAction::SealAuthority { .. }]
+        [EnsureAction::SealAuthority { candid, .. }] if candid == "coordinator.did"
     ));
+    assert_eq!(
+        accepted.reviewed_desired.as_ref().unwrap().desired(),
+        &target
+    );
+    assert_eq!(
+        accepted.reinstall.as_ref().unwrap().source.as_deref(),
+        Some(&source)
+    );
+    assert!(
+        plan(&fixture.desired, observed.clone()).is_ok(),
+        "identical rebuild remains a wipe"
+    );
+    let mut changed = target.clone();
+    changed.operator = OLD_APP.into();
+    assert!(matches!(
+        plan(&changed, observed.clone()),
+        Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
+    ));
+    let mut foreign = target.clone();
+    foreign.cycles_ledger = OLD_APP.into();
+    assert!(matches!(
+        plan(&foreign, observed.clone()),
+        Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
+    ));
+    foreign = target.clone();
+    foreign.canisters[0].subnet = OLD_APP.into();
+    assert!(matches!(
+        plan(&foreign, observed.clone()),
+        Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
+    ));
+
     assert_eq!(
         accepted.reinstall.as_ref().unwrap().authorities[0].principal,
         TREASURY
@@ -5670,7 +6202,7 @@ fn reinstall_preparation_binds_exact_running_authority_before_sealing() {
     conflicts.push(changed);
     for changed in conflicts {
         assert!(matches!(
-            plan(changed),
+            plan(&target, changed),
             Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
         ));
     }
@@ -5690,4 +6222,131 @@ fn reinstall_seals_roots_before_coordinator_to_finish_inflight_funding() {
         workflow::action_order(&seal(DesiredCanisterKind::Root))
             < workflow::action_order(&seal(DesiredCanisterKind::Coordinator))
     );
+}
+
+#[test]
+fn reinstall_history_accepts_only_the_exact_intended_root_replacement() {
+    use crate::fleet_ensure::model::{
+        ReinstallHistoryWitness, ReinstallRootWitnessRecord, RootManagementBinding,
+    };
+    use crate::fleet_ensure::policy::reinstall::history_authority;
+    let before = RootManagementBinding {
+        controllers: vec![CONTROLLER.into()],
+        module_sha256: "11".repeat(32),
+        name: "root".into(),
+        principal: TREASURY.into(),
+        subnet: SUBNET.into(),
+    };
+    let mut after = before.clone();
+    after.module_sha256 = "22".repeat(32);
+    let witness = ReinstallHistoryWitness {
+        prior_module_sha256: before.module_sha256.clone(),
+        authority: before.clone(),
+        candid: "source.did".into(),
+        candid_sha256: "33".repeat(32),
+        replacement: Some(Box::new(ReinstallRootWitnessRecord {
+            authority: after.clone(),
+            candid: "target.did".into(),
+            candid_sha256: "44".repeat(32),
+        })),
+    };
+    let select = |current: &RootManagementBinding, principal: &str, state: &EffectState| {
+        history_authority(&witness, current, principal, &after.module_sha256, state)
+    };
+    assert_eq!(
+        select(&before, TREASURY, &EffectState::Intent)
+            .unwrap()
+            .candid,
+        "source.did"
+    );
+    assert_eq!(
+        select(&after, TREASURY, &EffectState::Issued)
+            .unwrap()
+            .candid,
+        "target.did"
+    );
+    assert_eq!(
+        select(&after, TREASURY, &EffectState::Intent)
+            .unwrap()
+            .candid,
+        "target.did"
+    );
+    assert!(select(&after, TREASURY, &EffectState::Applied).is_none());
+    assert!(select(&after, OLD_APP, &EffectState::Issued).is_none());
+    let mut foreign = after.clone();
+    foreign.module_sha256 = "55".repeat(32);
+    assert!(select(&foreign, TREASURY, &EffectState::Issued).is_none());
+    foreign = after.clone();
+    foreign.controllers = vec![OLD_APP.into()];
+    assert!(select(&foreign, TREASURY, &EffectState::Issued).is_none());
+    foreign = after.clone();
+    foreign.subnet = OLD_APP.into();
+    assert!(select(&foreign, TREASURY, &EffectState::Issued).is_none());
+}
+
+#[test]
+fn reinstall_selected_artifact_identity_detects_in_place_changes() {
+    let mut fixture = protocol_tranche_fixture(Vec::new());
+    let wasm = fixture.root.join("selected.wasm");
+    fs::write(&wasm, b"selected release bytes").unwrap();
+    fixture.desired.canisters[0].wasm = Some(wasm.to_string_lossy().into_owned());
+    let digest = || {
+        crate::fleet_ensure::ops::reinstall::target_artifacts_sha256(
+            &fixture.root,
+            &fixture.desired,
+        )
+        .unwrap()
+    };
+    let selected = digest();
+    fs::write(&wasm, b"different release bytes").unwrap();
+    assert_ne!(digest(), selected);
+    fs::write(&wasm, b"selected release bytes").unwrap();
+    assert_eq!(digest(), selected);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn fixture_publication_rejects_a_journal_counter_beyond_its_reviewed_limit() {
+    let mut fixture = publication_retry_fixture(1);
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        "publication",
+        "test-fleet",
+        1,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    let hash = action_sha256(&planned.plan.protocol_actions[0]);
+    fixture.platform.stall_before_mutation(hash, 1);
+    assert!(matches!(
+        workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            "publication",
+            "test-fleet",
+            &planned.plan.plan_sha256,
+            &mut fixture.platform
+        ),
+        Err(workflow::EnsureWorkflowError::Platform(_))
+    ));
+    let mut journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .unwrap()
+        .unwrap();
+    journal.effects[0].publication_attempts = 2;
+    crate::fleet_ensure::ops::write_journal(&paths, &journal).unwrap();
+    assert!(matches!(
+        workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            "publication",
+            "test-fleet",
+            &planned.plan.plan_sha256,
+            &mut fixture.platform
+        ),
+        Err(workflow::EnsureWorkflowError::JournalIntegrity)
+    ));
+    assert!(fixture.platform.mutations.is_empty());
+    fs::remove_dir_all(fixture.root).unwrap();
 }

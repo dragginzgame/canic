@@ -8,12 +8,12 @@ pub(super) mod activation;
 
 use super::*;
 use crate::fleet_ensure::{
-    model::{DesiredFleet, FleetReinstallRecord},
+    model::{DesiredFleet, FleetReinstallRecord, FleetReinstallSourceRecord},
     ops::reinstall as capture,
     policy::reinstall as policy,
 };
 
-/// Plan a new deliberate wipe of the currently converged same-release Fleet.
+/// Plan a new deliberate wipe selecting a build for the currently converged Fleet.
 pub fn plan_reinstall<P: EnsurePlatform>(
     root: &Path,
     desired: &DesiredFleet,
@@ -55,13 +55,19 @@ pub fn plan_reinstall<P: EnsurePlatform>(
         return Err(EnsureWorkflowError::ReinstallConflict);
     }
     verify_journal(&journal, &prior, requested_fleet, &state)?;
-    if prior.desired_sha256 != desired_sha256 || state.active_registry.is_none() {
+    if state.active_registry.is_none() {
         return Err(EnsureWorkflowError::ReinstallConflict);
     }
     let source = completed_inventory_operation(&prior, &journal, &state)?;
-    platform
-        .terminal_inventory(source, &state)
-        .map_err(EnsureWorkflowError::Platform)?;
+    let source_desired = prior
+        .reviewed_desired
+        .as_ref()
+        .ok_or(EnsureWorkflowError::PlanIntegrity)?
+        .desired();
+    let source_authority = capture::capture_source(root, source_desired)?;
+    observe_source(&source_authority, desired, platform, |platform| {
+        platform.terminal_inventory(source, &state)
+    })?;
     let operation = canic_core::cdk::utils::hash::sha256_hex(
         format!(
             "canic-fleet-reinstall:{desired_sha256}:{}:{created_at_time}",
@@ -74,6 +80,7 @@ pub fn plan_reinstall<P: EnsurePlatform>(
         desired,
         desired_sha256,
         source,
+        &source_authority,
         &operation,
         created_at_time,
         platform,
@@ -81,6 +88,45 @@ pub fn plan_reinstall<P: EnsurePlatform>(
     )?;
     write_plan(&paths, &plan)?;
     Ok(report(plan))
+}
+
+fn source_authority<E: std::error::Error + 'static>(
+    intent: &FleetReinstallRecord,
+) -> Result<&FleetReinstallSourceRecord, EnsureWorkflowError<E>> {
+    intent
+        .source
+        .as_deref()
+        .filter(|_| intent.activation_reset.is_none())
+        .ok_or(EnsureWorkflowError::PlanIntegrity)
+}
+
+fn verify_selected_artifacts<E: std::error::Error + 'static>(
+    root: &Path,
+    desired: &DesiredFleet,
+    intent: &FleetReinstallRecord,
+) -> Result<(), EnsureWorkflowError<E>> {
+    let current = capture::target_artifacts_sha256(root, desired)?;
+    if intent.target_artifacts_sha256.as_deref() != Some(&current) {
+        return Err(EnsureWorkflowError::DriftedBeforeApply);
+    }
+    Ok(())
+}
+
+/// Restore the selected target even when a source observation fails.
+fn observe_source<P: EnsurePlatform, T>(
+    source: &FleetReinstallSourceRecord,
+    target: &DesiredFleet,
+    platform: &mut P,
+    observe: impl FnOnce(&mut P) -> Result<T, P::Error>,
+) -> Result<T, EnsureWorkflowError<P::Error>> {
+    platform
+        .bind_reviewed_desired(source.reviewed_desired.desired())
+        .map_err(EnsureWorkflowError::Platform)?;
+    let result = observe(platform);
+    platform
+        .bind_reviewed_desired(target)
+        .map_err(EnsureWorkflowError::Platform)?;
+    result.map_err(EnsureWorkflowError::Platform)
 }
 
 const fn report(plan: FleetEnsurePlan) -> FleetEnsureReport {
@@ -102,24 +148,31 @@ fn preparation<P: EnsurePlatform>(
     desired: &DesiredFleet,
     digest: &str,
     source: &str,
+    source_authority: &FleetReinstallSourceRecord,
     operation: &str,
     time: u64,
     platform: &mut P,
     state: &FleetEnsureStateRecord,
 ) -> Result<FleetEnsurePlan, EnsureWorkflowError<P::Error>> {
-    let roots = platform
-        .reinstall_authorities(state)
-        .map_err(EnsureWorkflowError::Platform)?
-        .ok_or(EnsureWorkflowError::ReinstallConflict)?;
+    if capture::capture_source(root, source_authority.reviewed_desired.desired())?
+        != *source_authority
+    {
+        return Err(EnsureWorkflowError::DriftedBeforeApply);
+    }
+    let target_artifacts_sha256 = capture::target_artifacts_sha256(root, desired)?;
+    let roots = observe_source(source_authority, desired, platform, |platform| {
+        platform.reinstall_authorities(state)
+    })?
+    .ok_or(EnsureWorkflowError::ReinstallConflict)?;
     let observation = RootManagementObservation {
         roots,
         operator_cycles: 0,
     };
     Ok(policy::preparation(policy::PreparationInput {
         desired,
-        artifacts: &resolve_desired_artifacts(root, desired)?,
+        source: source_authority,
+        target_artifacts_sha256: &target_artifacts_sha256,
         observation: &observation,
-        candid_hashes: &capture::candid_hashes(root, desired)?,
         source_operation_id: source,
         desired_sha256: digest,
         operation_id: operation,
@@ -150,10 +203,11 @@ pub(super) fn continue_plan<P: EnsurePlatform>(
         .reinstall
         .as_deref()
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
-    let inventory = platform
-        .reinstall_inventory(&intent.source_operation_id, state)
-        .map_err(EnsureWorkflowError::Platform)?
-        .ok_or(EnsureWorkflowError::ReinstallConflict)?;
+    verify_selected_artifacts(root, desired, intent)?;
+    let inventory = observe_source(source_authority(intent)?, desired, platform, |platform| {
+        platform.reinstall_inventory(&intent.source_operation_id, state)
+    })?
+    .ok_or(EnsureWorkflowError::ReinstallConflict)?;
     let retained = capture::capture_imports(desired, &inventory)
         .ok_or(EnsureWorkflowError::ReinstallConflict)?;
     let intent = capture::capture_intent(intent, &inventory);
@@ -198,6 +252,7 @@ pub(super) fn verify_before_apply<P: EnsurePlatform>(
             desired,
             &plan.desired_sha256,
             &intent.source_operation_id,
+            source_authority(intent)?,
             &plan.operation_id,
             plan.planned_at_time,
             platform,
@@ -207,10 +262,11 @@ pub(super) fn verify_before_apply<P: EnsurePlatform>(
         (current, observation)
     } else {
         verify_seals(root, desired, plan, intent, state, platform)?;
-        let inventory = platform
-            .reinstall_inventory(&intent.source_operation_id, state)
-            .map_err(EnsureWorkflowError::Platform)?
-            .ok_or(EnsureWorkflowError::ReinstallConflict)?;
+        verify_selected_artifacts(root, desired, intent)?;
+        let inventory = observe_source(source_authority(intent)?, desired, platform, |platform| {
+            platform.reinstall_inventory(&intent.source_operation_id, state)
+        })?
+        .ok_or(EnsureWorkflowError::ReinstallConflict)?;
         if inventory.assets != intent.assets {
             return Err(EnsureWorkflowError::DriftedBeforeApply);
         }
@@ -246,6 +302,7 @@ fn verify_seals<P: EnsurePlatform>(
         desired,
         &plan.desired_sha256,
         &intent.source_operation_id,
+        source_authority(intent)?,
         &plan.operation_id,
         plan.planned_at_time,
         platform,

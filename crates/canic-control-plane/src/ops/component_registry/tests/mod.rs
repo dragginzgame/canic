@@ -700,6 +700,7 @@ fn empty_root_final_inventory_is_exact_durable_and_response_idempotent() {
 
     let store_pid = candid::Principal::from_slice(&[13; 29]);
     let store = RootStoreBootstrapResponse {
+        fixtures: vec![],
         fleet_subnet_root: root.fleet_subnet_root,
         wasm_store: store_pid,
         release_set,
@@ -3649,6 +3650,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         .is_err()
     );
     let install_plan = RootComponentChildInstallPlan {
+        fixture_grant_revision: Some(3),
         raw_module_hash: [56; 32],
         protocol_profile_digest: ProtocolProfileDigest::from_bytes([59; 32]),
         chunk_hashes: vec![vec![57; 32], vec![58; 32]],
@@ -3737,6 +3739,22 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         )
         .is_err()
     );
+    let mut changed_revision = install_plan.clone();
+    changed_revision.fixture_grant_revision = Some(5);
+    assert_eq!(
+        ComponentRegistryOps::renew_child_install_intent(
+            component,
+            [44; 32],
+            &changed_revision,
+            ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(62),
+                reservation_intent_id: IntentId(63)
+            },
+        )
+        .unwrap_err()
+        .public_code(),
+        InternalError::invariant().public_code()
+    );
     restart_component_registry();
     let renewed = ComponentRegistryOps::renew_child_install_intent(
         component,
@@ -3753,6 +3771,10 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
     else {
         panic!("renewed child install intent");
     };
+    assert_eq!(
+        installation.fixture_grant_revision,
+        install_plan.fixture_grant_revision
+    );
     assert_eq!(installation.binding, install_plan.binding);
     assert_eq!(
         installation.protocol_profile_digest,
@@ -4333,6 +4355,7 @@ fn install_intent_reserves_terminal_bytes_and_advances_idempotently() {
         .expect("Registry status")
         .encoded_bytes;
     let plan = RootComponentInstallPlan {
+        fixture_grant_revision: Some(3),
         raw_module_hash: [20; 32],
         protocol_profile_digest: ProtocolProfileDigest::from_bytes([23; 32]),
         chunk_hashes: vec![vec![21; 32], vec![22; 32]],
@@ -5017,6 +5040,49 @@ fn import_empty_quiescent_component() -> (
     (partition, draining, fleet)
 }
 
+fn assert_retained_install_revision(plan: &RootComponentInstallPlan) {
+    let mut changed_revision = plan.clone();
+    changed_revision.fixture_grant_revision = Some(5);
+    assert_eq!(
+        ComponentRegistryOps::renew_install_intent(
+            [12; 32],
+            &changed_revision,
+            ReplayCostGuardSettlement {
+                quota_intent_id: IntentId(26),
+                reservation_intent_id: IntentId(27)
+            },
+        )
+        .unwrap_err()
+        .public_code(),
+        InternalError::invariant().public_code()
+    );
+
+    let recorded = RootComponentRegistryStore::allocation([12; 32]).unwrap();
+    let RootComponentAllocationProgressRecord::InstallIntent {
+        mut installation, ..
+    } = recorded.progress
+    else {
+        unreachable!()
+    };
+    let bytes = canic_core::cdk::serialize::serialize(&installation).unwrap();
+    let restored: RootComponentInstallEffectRecord =
+        canic_core::cdk::serialize::deserialize(&bytes).unwrap();
+    assert_eq!(restored, installation);
+    installation.fixture_grant_revision = None;
+    let mut explicit_null = serde_json::to_value(&installation).unwrap();
+    assert!(explicit_null["fixture_grant_revision"].is_null());
+    serde_json::from_value::<RootComponentInstallEffectRecord>(explicit_null.clone()).unwrap();
+    explicit_null
+        .as_object_mut()
+        .unwrap()
+        .remove("fixture_grant_revision");
+    assert!(
+        serde_json::from_value::<RootComponentInstallEffectRecord>(explicit_null)
+            .unwrap_err()
+            .is_data()
+    );
+}
+
 fn advance_install_to_verified(plan: &RootComponentInstallPlan, created_bytes: u64) -> u64 {
     ComponentRegistryOps::validate_install_capacity([12; 32], plan).expect("install capacity");
     let intent = ComponentRegistryOps::begin_install(
@@ -5051,6 +5117,8 @@ fn advance_install_to_verified(plan: &RootComponentInstallPlan, created_bytes: u
         .is_err()
     );
 
+    assert_retained_install_revision(plan);
+
     let interrupted = RootComponentRegistryStore::export();
     RootComponentRegistryStore::import(interrupted);
     let renewed = ComponentRegistryOps::renew_install_intent(
@@ -5066,6 +5134,10 @@ fn advance_install_to_verified(plan: &RootComponentInstallPlan, created_bytes: u
     else {
         panic!("renewed install intent");
     };
+    assert_eq!(
+        installation.fixture_grant_revision,
+        plan.fixture_grant_revision
+    );
     assert_eq!(installation.raw_module_hash, plan.raw_module_hash);
     assert_eq!(installation.binding, plan.binding);
     assert_eq!(
@@ -5618,6 +5690,7 @@ fn active_component_allocation(
         charged_entry_bytes: 4_096,
     };
     let installation = RootComponentInstallEffectRecord {
+        fixture_grant_revision: None,
         raw_module_hash: [19; 32],
         protocol_profile_digest: partition.protocol_profile_digest,
         chunk_hashes: vec![vec![20; 32]],

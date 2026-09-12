@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "issue": "CANIC-164",
+  "base_commit": "c9c91f19c",
+  "package_version": "0.110.14",
+  "open_patch": "0.110.15",
+  "source_aggregate": {
+    "files": 3900,
+    "sha256": "436376f4f32fa47605982344497e959e93fe9ca81b91ab11e4e95861761428c4"
+  },
+  "unchanged_across_pocketic_proofs": true,
+  "public_gauges": 23,
+  "source_ids": 255,
+  "states": {
+    "available": 1,
+    "unsupported": 2,
+    "failed": 3
+  },
+  "validation": {
+    "native_tests_passed": 26,
+    "timer_tests_passed": 9,
+    "mixed_fleet_passed": true,
+    "warnings_denied_clippy": true
+  },
+  "timings_seconds": {
+    "timer_tests": 133.49,
+    "timer_runner": 203,
+    "mixed_fleet": 1110.58,
+    "mixed_runner": 1138,
+    "initial_artifacts": 369.312,
+    "public_memory_phase": 35.029
+  },
+  "sampling_instructions": {
+    "first_256_checkpoints": 17741093,
+    "repeat_4096_checkpoints": 17766504,
+    "scheduled_maximum": 18728667,
+    "full_history_maximum": 18065610
+  },
+  "history": {
+    "periods": 300,
+    "retained_points": 287,
+    "maximum_slots": 288,
+    "reserved_bytes": 4097514,
+    "byte_limit": 8388608
+  },
+  "roles": [
+    {
+      "role": "root",
+      "physical_bytes": 469827584,
+      "measured_ids": 255,
+      "observed_at_ns": 1789061071631641050
+    },
+    {
+      "role": "scale_hub",
+      "physical_bytes": 218169344,
+      "measured_ids": 255,
+      "observed_at_ns": 1789061071631641050
+    },
+    {
+      "role": "app",
+      "physical_bytes": 218169344,
+      "measured_ids": 255,
+      "observed_at_ns": 1789061071631641050
+    },
+    {
+      "role": "scale_replica",
+      "physical_bytes": 218169344,
+      "measured_ids": 255,
+      "observed_at_ns": 1789061071631641050
+    },
+    {
+      "role": "user_hub",
+      "physical_bytes": 251723776,
+      "measured_ids": 255,
+      "observed_at_ns": 1789061071631641050
+    },
+    {
+      "role": "user_shard",
+      "physical_bytes": 234946560,
+      "measured_ids": 255,
+      "observed_at_ns": 1789061100184064628
+    }
+  ],
+  "store": "unsupported_without_allocation_totals",
+  "tools": {
+    "rust": "1.98.1",
+    "icp": "1.4.0",
+    "pocket_ic": "16.0.0"
+  },
+  "evidence_sha256": {
+    "clippy.log": "c15e2cfbd39a8f22365154230b1bba1f39acc8b6d58538718fab5e915ea066d4",
+    "core-clippy.log": "aa4af403661318dd724bfe458063cedbb4af855b41dc719e337993e782bea96e",
+    "native.log": "89c9ea55b6e3ae4168bf4e1b99068ddc08680b538228da1bee67bfe606a2b41e",
+    "proof-source.json": "398f3dfbc772e3d1c803371054d90cfc8a9b61a5f1ae5c2763b0a6f118667e44",
+    "roles-pocketic.log": "fcbf94e156e1a93c9edbe3df35e92be74fe87e0f95b0d3c67e76eb453290301a",
+    "timer-clippy.log": "f115ddff2dcc0c0e52e98e4fe84829ba6c1a0acff4eb5ae0c411c5e229ffb749",
+    "timer-pocketic.log": "6b719e307918aa19deb9a6e5174c4b79e87b7dbe5adc7bdb0144ce4b03280a22"
+  },
+  "limits": [
+    "Fixture measurements, not Toko live attribution or a full application producer benchmark.",
+    "No isolated before/after allocation-cost delta.",
+    "The historical 20M reference remains advisory.",
+    "Final status/evidence docs were updated after runtime proofs."
+  ]
+}

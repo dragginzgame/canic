@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "issue": "CANIC-165",
+  "date": "2026-09-11",
+  "status": "partial-qualification",
+  "qualified_boundary": "retained-store-source-and-target-grants",
+  "release_assignment": null,
+  "checks": [
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core -p canic-control-plane --lib -- role_contract::tests memory::policy::tests ops::fixture_store::tests state_contract::tests --test-threads=1",
+      "result": "pass",
+      "core_tests": 44,
+      "note": "The following focused control-plane run supersedes the earlier nine control-plane cases in this log."
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib -- ops::fixture_store::tests state_contract::tests --test-threads=1",
+      "result": "pass",
+      "tests": 10,
+      "test_seconds": 0.4
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-core -p canic-control-plane -p canic_icydb_lifecycle_probe --lib --tests --all-features -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-control-plane --lib --tests -- -D warnings",
+      "result": "pass",
+      "note": "Final control-plane source after complete command-envelope admission."
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-tests --test icydb_lifecycle_composition --all-features -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo check --locked -p canic-control-plane --lib --no-default-features --features root-control-plane",
+      "result": "pass"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "result": "pass",
+      "tests": 4,
+      "test_seconds": 50.82,
+      "runner_seconds": 94,
+      "store_runtime_build_seconds": 7.76
+    }
+  ],
+  "source_files": 1605,
+  "source_unchanged_during_final_pocketic": true,
+  "source_snapshot": "canic165-store-evidence/canic165-store-source.sha256",
+  "source_snapshot_scope": "Rust, Cargo/config TOML, Cargo.lock and Candid files selected by ripgrep",
+  "evidence": [
+    {
+      "path": "canic165-store-evidence/canic165-store-build.log",
+      "sha256": "b5fd0c11b4710eb11a5b51c16763b59e70e89cd0a3928ecf7146df7f9ad456d3"
+    },
+    {
+      "path": "canic165-store-evidence/canic165-store-control-clippy.log",
+      "sha256": "6a2e8c21108f3a326f829249dff16cbd85ff8dc10fd704d81802b453e7450d49"
+    },
+    {
+      "path": "canic165-store-evidence/canic165-store-control-native.log",
+      "sha256": "945b689b331f4f17fe6f4beb0540fd780de2bb801deb17ace0b3fb9edb943441"
+    },
+    {
+      "path": "canic165-store-evidence/canic165-store-integration-clippy.log",
+      "sha256": "eca2c8d36a4859cebb1e5f30510943c628cd3ba4ebffcb7eb3ac6b86ef58041f"
+    },
+    {
+      "path": "canic165-store-evidence/canic165-store-native.log",
+      "sha256": "54424527ebe9d63c3f7a69b5220a578115442fb65a40a21c3b81a4a9c6ca1937"
+    },
+    {
+      "path": "canic165-store-evidence/canic165-store-pocketic.log",
+      "sha256": "4677e34857b2be64c03fa48c084bd0847ee02d740d352cd9f0a5acd3c2a833fb"
+    },
+    {
+      "path": "canic165-store-evidence/canic165-store-root-check.log",
+      "sha256": "b9fbb856918a9636d9901c84a7824b27da90b33908263ba12a30cc3539a5f6fa"
+    },
+    {
+      "path": "canic165-store-evidence/canic165-store-runtime-clippy.log",
+      "sha256": "3cf6757fdce095b198ab66517c0147cc03a657dd8b2f5e99b7f0fbafc1e932f5"
+    },
+    {
+      "path": "canic165-store-evidence/canic165-store-source.sha256",
+      "sha256": "568e323a87ad19db26dc152a4068aa4e5f7f5722dea32f0011774c5bb58c324b"
+    }
+  ],
+  "remaining": [
+    "Reviewed release/build fixture binding and resumable host/Root publication",
+    "Root-derived grants from verified installation/allocation intent",
+    "Registered importer delivery and receipt-gated deployment, dispatch and placement",
+    "Combined Prepared-Root/parent/child ordering and later Shards",
+    "Source outage/backoff, funding, reference release and terminal Store retirement",
+    "Complete facade/config/runbook propagation and production fixture measurements"
+  ],
+  "production_api_added": true,
+  "production_limits_qualified": false,
+  "dependency_upgrade_performed": false,
+  "sibling_repositories_modified": false,
+  "broad_gate_run_by_agent": false,
+  "version_changed": false,
+  "published": false,
+  "live_deployment_changed": false
+}

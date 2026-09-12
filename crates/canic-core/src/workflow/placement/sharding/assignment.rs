@@ -39,6 +39,7 @@ impl ShardingWorkflow {
         pool: &str,
         partition_key: impl AsRef<str>,
     ) -> Result<Principal, InternalError> {
+        crate::workflow::fixture_provisioning::require_ready()?;
         let pool_cfg = match Self::get_shard_pool_cfg(pool) {
             Ok(pool_cfg) => pool_cfg,
             Err(err) => {

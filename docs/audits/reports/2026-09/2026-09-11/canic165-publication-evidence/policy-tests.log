@@ -1,0 +1,13 @@
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 11s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-ddfaf1360157e1cd)
+
+running 5 tests
+test domain::policy::pure::fleet_activation::tests::prepared_nonroot_uses_the_ordinary_role_recovery_allowlist ... ok
+test domain::policy::pure::fleet_activation::tests::prepared_root_rejects_ordinary_and_wrong_kind_calls ... ok
+test domain::policy::pure::fleet_activation::tests::prepared_root_admits_only_the_role_owned_entrypoints ... ok
+test domain::policy::pure::fleet_activation::tests::prepared_store_data_policy_is_reachable_only_through_compile_selected_updates ... ok
+test domain::policy::pure::fleet_activation::tests::prepared_store_uses_only_its_role_owned_commands_and_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1272 filtered out; finished in 0.00s
+

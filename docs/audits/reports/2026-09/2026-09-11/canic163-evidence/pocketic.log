@@ -1,0 +1,619 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:35467/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 11.98s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-b4e91a1412f42ea3)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-b4e91a1412f42ea3)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation ... [CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":1,"parent_id":null,"name":"production_adapter_journey","state":"started","elapsed_us":5}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":2,"parent_id":1,"name":"source_and_fixture_recipe","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":2,"parent_id":1,"name":"source_and_fixture_recipe","state":"completed","elapsed_us":1350}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":3,"parent_id":1,"name":"initial_artifacts","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":4,"parent_id":3,"name":"release_artifact_resolution","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":5,"parent_id":4,"name":"artifact_recipe","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":5,"parent_id":4,"name":"artifact_recipe","state":"completed","elapsed_us":6024759}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":6,"parent_id":4,"name":"artifact_cache_lookup","state":"started","elapsed_us":0}
+[FLEET]      CACHE  literal-zero release artifacts (28)                   1.69s
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":6,"parent_id":4,"name":"artifact_cache_lookup","state":"completed","elapsed_us":1686272}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":7,"parent_id":4,"name":"artifact_load","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":7,"parent_id":4,"name":"artifact_load","state":"completed","elapsed_us":18969}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":4,"parent_id":3,"name":"release_artifact_resolution","state":"completed","elapsed_us":7730089}
+[WASM]       RUN    cycles_ledger_stub (1/1)
+[WASM]       CACHE  cycles_ledger_stub                                    0.41s
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":3,"parent_id":1,"name":"initial_artifacts","state":"completed","elapsed_us":8715090}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":8,"parent_id":1,"name":"replica_and_transport_setup","state":"started","elapsed_us":0}
+[FLEET]      RUN    starting management-agent PocketIC instance
+[FLEET]      READY  management-agent PocketIC instance
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":8,"parent_id":1,"name":"replica_and_transport_setup","state":"completed","elapsed_us":552543}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":9,"parent_id":1,"name":"generation_and_initial_review","state":"started","elapsed_us":0}
+[FLEET]      RUN    planning literal-zero infrastructure
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":9,"observation":{"stage":"root_management","elapsed_millis":50,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":9,"observation":{"stage":"configured_canisters","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":9,"observation":{"stage":"estate_funding","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":9,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":9,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":9,"observation":{"stage":"ledger_fee","elapsed_millis":65,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":9,"observation":{"stage":"operator_balance","elapsed_millis":68,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":9,"observation":{"stage":"protocol_actions","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":9,"parent_id":1,"name":"generation_and_initial_review","state":"completed","elapsed_us":5475216}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":10,"parent_id":1,"name":"initial_recovery_and_convergence","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"configured_canisters","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"estate_funding","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"ledger_fee","elapsed_millis":79,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"operator_balance","elapsed_millis":75,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_actions","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"infrastructure","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":18,"state":{"kind":"advancing"}},"unix_ms":1789118879805}
+[FLEET-MEASURE] {"progress":{"applied_effects":12,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"infrastructure","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":18,"state":{"kind":"advancing"}},"unix_ms":1789118905944}
+[FLEET-MEASURE] {"progress":{"applied_effects":18,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"terminal_verification","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":18,"state":{"kind":"advancing"}},"unix_ms":1789118937377}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"configured_canisters","elapsed_millis":1671,"remote_call_attempts":10,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"estate_funding","elapsed_millis":78,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"pool_balances","elapsed_millis":291,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"ledger_fee","elapsed_millis":86,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"operator_balance","elapsed_millis":66,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_actions","elapsed_millis":952,"remote_call_attempts":3,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":18,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"terminal_verification","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":24,"state":{"kind":"prerequisite_complete"}},"unix_ms":1789118940694}
+[FLEET-MEASURE] {"progress":{"applied_effects":18,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"import_reconciliation","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":24,"state":{"kind":"advancing"}},"unix_ms":1789118940694}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"configured_canisters","elapsed_millis":1715,"remote_call_attempts":10,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"estate_funding","elapsed_millis":95,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"pool_balances","elapsed_millis":293,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"ledger_fee","elapsed_millis":90,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"operator_balance","elapsed_millis":75,"remote_call_attempts":1,"succeeded":true}}
+[FLEET]      DONE   literal-zero infrastructure replay complete          1m 05s
+[FLEET-MEASURE] {"progress":{"applied_effects":18,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"import_reconciliation","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":24,"state":{"kind":"advancing"}},"unix_ms":1789118944799}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"configured_canisters","elapsed_millis":1573,"remote_call_attempts":9,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"estate_funding","elapsed_millis":86,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"pool_balances","elapsed_millis":243,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"ledger_fee","elapsed_millis":89,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"operator_balance","elapsed_millis":66,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":24,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"terminal_verification","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":24,"state":{"kind":"advancing"}},"unix_ms":1789118957948}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"configured_canisters","elapsed_millis":453,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"estate_funding","elapsed_millis":66,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"ledger_fee","elapsed_millis":81,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"operator_balance","elapsed_millis":76,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_actions","elapsed_millis":3230,"remote_call_attempts":32,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":24,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"terminal_verification","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"prerequisite_complete"}},"unix_ms":1789118962843}
+[FLEET-MEASURE] {"progress":{"applied_effects":24,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"control_plane","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"advancing"}},"unix_ms":1789118962844}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"advancing"}},"unix_ms":1789118999677}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119001139}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119003339}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119004933}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119005688}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119007331}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119008072}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119008759}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119009436}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119010189}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119010917}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119014545}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119015151}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119016004}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119016704}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119017635}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119019110}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119021505}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119025918}
+[FLEET-MEASURE] {"progress":{"applied_effects":48,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"workload_provisioning","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119026598}
+[FLEET-MEASURE] {"progress":{"applied_effects":49,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"pool_readiness","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"advancing"}},"unix_ms":1789119027245}
+[FLEET-MEASURE] {"progress":{"applied_effects":50,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"terminal_verification","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"advancing"}},"unix_ms":1789119027991}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"configured_canisters","elapsed_millis":390,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"estate_funding","elapsed_millis":67,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"ledger_fee","elapsed_millis":66,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"operator_balance","elapsed_millis":72,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_actions","elapsed_millis":3164,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"terminal_inventory","elapsed_millis":7382,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"configured_canisters","elapsed_millis":454,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"estate_funding","elapsed_millis":85,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"ledger_fee","elapsed_millis":66,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":10,"observation":{"stage":"operator_balance","elapsed_millis":72,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":50,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"complete","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"complete"}},"unix_ms":1789119040000}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":10,"parent_id":1,"name":"initial_recovery_and_convergence","state":"completed","elapsed_us":160893905}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":11,"parent_id":1,"name":"initial_terminal_replay","state":"started","elapsed_us":0}
+[FLEET]      RUN    proving literal-zero terminal replay
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"configured_canisters","elapsed_millis":404,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"estate_funding","elapsed_millis":84,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"ledger_fee","elapsed_millis":85,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"operator_balance","elapsed_millis":90,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_actions","elapsed_millis":3048,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"terminal_inventory","elapsed_millis":7119,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"configured_canisters","elapsed_millis":454,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"estate_funding","elapsed_millis":80,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"ledger_fee","elapsed_millis":97,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"operator_balance","elapsed_millis":77,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":50,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"complete","plan_sha256":"8320a6a3226108e9db5fd494d5129cf8f683282378aa1078bbda2a10f692ac3c","reviewed_effects":50,"state":{"kind":"complete"}},"unix_ms":1789119053001}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"root_management","elapsed_millis":398,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"configured_canisters","elapsed_millis":437,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"estate_funding","elapsed_millis":86,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"ledger_fee","elapsed_millis":91,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"operator_balance","elapsed_millis":69,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"terminal_inventory","elapsed_millis":7248,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_actions","elapsed_millis":3115,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"configured_canisters","elapsed_millis":486,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"estate_funding","elapsed_millis":88,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"ledger_fee","elapsed_millis":81,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"operator_balance","elapsed_millis":76,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"terminal_inventory","elapsed_millis":7269,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_actions","elapsed_millis":3078,"remote_call_attempts":29,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"terminal_verification","plan_sha256":"41c0017a30dd233eef10cf748022d51a1a52fb86fa4df247d2dc4dc4ec3616f4","reviewed_effects":0,"state":{"kind":"advancing"}},"unix_ms":1789119077015}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"configured_canisters","elapsed_millis":446,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"estate_funding","elapsed_millis":88,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"ledger_fee","elapsed_millis":81,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"operator_balance","elapsed_millis":107,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_actions","elapsed_millis":3181,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"terminal_inventory","elapsed_millis":7547,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"configured_canisters","elapsed_millis":456,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"estate_funding","elapsed_millis":84,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"ledger_fee","elapsed_millis":80,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":11,"observation":{"stage":"operator_balance","elapsed_millis":106,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"26f134a70b0cad10e531888d46c64909cbb663981eb5b77fef4d9ddc7af1184b","phase":"complete","plan_sha256":"41c0017a30dd233eef10cf748022d51a1a52fb86fa4df247d2dc4dc4ec3616f4","reviewed_effects":0,"state":{"kind":"complete"}},"unix_ms":1789119089327}
+[FLEET]      DONE   literal-zero terminal replay complete                48.88s
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":11,"parent_id":1,"name":"initial_terminal_replay","state":"completed","elapsed_us":48880797}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":12,"parent_id":1,"name":"selected_build_reinstall","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":13,"parent_id":12,"name":"release_artifact_resolution","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":14,"parent_id":13,"name":"artifact_recipe","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":14,"parent_id":13,"name":"artifact_recipe","state":"completed","elapsed_us":6304838}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":15,"parent_id":13,"name":"artifact_cache_lookup","state":"started","elapsed_us":0}
+[FLEET]      CACHE  literal-zero release artifacts (28)                   1.69s
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":15,"parent_id":13,"name":"artifact_cache_lookup","state":"completed","elapsed_us":1694022}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":16,"parent_id":13,"name":"artifact_load","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":16,"parent_id":13,"name":"artifact_load","state":"completed","elapsed_us":11600}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":13,"parent_id":12,"name":"release_artifact_resolution","state":"completed","elapsed_us":8010558}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":17,"parent_id":12,"name":"first_deliberate_wipe","state":"started","elapsed_us":1}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":18,"parent_id":17,"name":"seed_and_preparation_review","state":"started","elapsed_us":0}
+Fleet observation TerminalInventory: 7405 ms, 18 remote call attempts
+Fleet observation RootManagement: 315 ms, 2 remote call attempts
+fleet: canic-121-literal-zero-estate
+operation_id: bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029
+plan_sha256: 9c6fe74d00d040247bf9626fd04dbc435a31b73a180ee0bb8333f9746de22897
+plan_scope: reinstall_preparation
+terminal: false
+cycle_budget: planning allowances; maximums are not measured expenditure
+observed_controlled_cycles: 579.865T
+retained_in_reused_canisters_cycles: 579.865T
+scheduled_transfer_cycles: 0.000B
+maximum_unavoidable_fee_cycles: 0.000B
+maximum_execution_burn_cycles: 18.000T
+maximum_new_funding_cycles: 0.000B
+maximum_operator_debit_cycles: 0.000B
+maximum_estate_funding_cycles: 0.000B
+maximum_estate_creation_fee_cycles: 0.000B
+expected_post_operation_cycles: 561.865T
+estate_funding_domains:
+reinstall: application data will be discarded; logical pool roles may be reassigned
+reinstall builds: source=a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae selected=33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a
+next: apply this preparation digest, then run fleet ensure again to review the reset
+host_create_actions: 0 (initial or replacement canisters; separate from Root-funded pool creations)
+canisters:
+  coordinator: disposition=Reuse principal=pi33i-pt777-77776-aaaaa-cai observed_cycles=499.953T effects=1 actions=[seal authority]
+  root-0: disposition=Reuse principal=pp254-cl777-77776-aaaaq-cai observed_cycles=79.912T effects=1 actions=[seal authority]
+conservation_equation: 579.865T observed controlled + 0.000B maximum operator debit - 0.000B maximum unavoidable fees - 0.000B maximum Root-funded creation fees - 18.000T maximum execution burn = 561.865T expected remaining
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":18,"parent_id":17,"name":"seed_and_preparation_review","state":"completed","elapsed_us":9549437}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":19,"parent_id":17,"name":"preparation_seal_and_replay","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":19,"observation":{"stage":"root_management","elapsed_millis":421,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":19,"observation":{"stage":"root_management","elapsed_millis":454,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"infrastructure","plan_sha256":"9c6fe74d00d040247bf9626fd04dbc435a31b73a180ee0bb8333f9746de22897","reviewed_effects":2,"state":{"kind":"advancing"}},"unix_ms":1789119109923}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":19,"observation":{"stage":"root_management","elapsed_millis":444,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":19,"observation":{"stage":"root_management","elapsed_millis":451,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":2,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"terminal_verification","plan_sha256":"9c6fe74d00d040247bf9626fd04dbc435a31b73a180ee0bb8333f9746de22897","reviewed_effects":2,"state":{"kind":"advancing"}},"unix_ms":1789119116339}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":19,"observation":{"stage":"root_management","elapsed_millis":480,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":2,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"infrastructure","plan_sha256":"9c6fe74d00d040247bf9626fd04dbc435a31b73a180ee0bb8333f9746de22897","reviewed_effects":2,"state":{"kind":"prerequisite_complete"}},"unix_ms":1789119118049}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":19,"observation":{"stage":"root_management","elapsed_millis":485,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":19,"parent_id":17,"name":"preparation_seal_and_replay","state":"completed","elapsed_us":12809830}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":20,"parent_id":17,"name":"reset_review","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":20,"observation":{"stage":"root_management","elapsed_millis":478,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":20,"observation":{"stage":"root_management","elapsed_millis":434,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":20,"observation":{"stage":"terminal_inventory","elapsed_millis":7509,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":20,"observation":{"stage":"configured_canisters","elapsed_millis":464,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":20,"observation":{"stage":"estate_funding","elapsed_millis":66,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":20,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":20,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":20,"observation":{"stage":"ledger_fee","elapsed_millis":65,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":20,"observation":{"stage":"operator_balance","elapsed_millis":76,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":20,"parent_id":17,"name":"reset_review","state":"completed","elapsed_us":14118809}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":21,"parent_id":17,"name":"reset_interruptions_and_recovery","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":492,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":477,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"terminal_inventory","elapsed_millis":7220,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"configured_canisters","elapsed_millis":456,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"estate_funding","elapsed_millis":83,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"ledger_fee","elapsed_millis":78,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"operator_balance","elapsed_millis":72,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"infrastructure","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1789119147727}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":447,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":448,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"infrastructure","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1789119152511}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":447,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":449,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"infrastructure","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1789119160490}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":453,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":457,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":441,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":459,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":445,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":443,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":2,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"infrastructure","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1789119180696}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":453,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":449,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":2,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"infrastructure","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1789119193980}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":456,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":3,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"terminal_verification","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1789119196536}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"configured_canisters","elapsed_millis":1687,"remote_call_attempts":10,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"estate_funding","elapsed_millis":95,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"pool_balances","elapsed_millis":307,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"ledger_fee","elapsed_millis":94,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"operator_balance","elapsed_millis":77,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"protocol_actions","elapsed_millis":1027,"remote_call_attempts":3,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":3,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"terminal_verification","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":9,"state":{"kind":"prerequisite_complete"}},"unix_ms":1789119199983}
+[FLEET-MEASURE] {"progress":{"applied_effects":3,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"import_reconciliation","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":9,"state":{"kind":"advancing"}},"unix_ms":1789119199983}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"configured_canisters","elapsed_millis":1816,"remote_call_attempts":10,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"estate_funding","elapsed_millis":88,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"pool_balances","elapsed_millis":306,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"ledger_fee","elapsed_millis":95,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"operator_balance","elapsed_millis":71,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":9,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"terminal_verification","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":9,"state":{"kind":"advancing"}},"unix_ms":1789119215373}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"configured_canisters","elapsed_millis":461,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"estate_funding","elapsed_millis":83,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"ledger_fee","elapsed_millis":90,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"operator_balance","elapsed_millis":106,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"protocol_actions","elapsed_millis":3384,"remote_call_attempts":32,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":9,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"terminal_verification","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"prerequisite_complete"}},"unix_ms":1789119220446}
+[FLEET-MEASURE] {"progress":{"applied_effects":9,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"control_plane","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"advancing"}},"unix_ms":1789119220447}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"advancing"}},"unix_ms":1789119258263}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119259749}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119260289}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119262309}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119264402}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119266522}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119267084}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119267600}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119268137}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119268787}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119269371}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119269931}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119273664}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119274123}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119274711}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119275263}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119275830}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119276364}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119276868}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119277448}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119277955}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119278403}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119279008}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119279450}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119279962}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119280381}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119280819}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119281518}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119282442}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119282985}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119283630}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119284127}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119284712}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"workload_provisioning","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119285320}
+[FLEET-MEASURE] {"progress":{"applied_effects":34,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"pool_readiness","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"advancing"}},"unix_ms":1789119285890}
+[FLEET-MEASURE] {"progress":{"applied_effects":35,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"terminal_verification","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"advancing"}},"unix_ms":1789119287217}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"configured_canisters","elapsed_millis":470,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"estate_funding","elapsed_millis":75,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"ledger_fee","elapsed_millis":88,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"operator_balance","elapsed_millis":77,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"protocol_actions","elapsed_millis":3480,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"terminal_inventory","elapsed_millis":7326,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"configured_canisters","elapsed_millis":447,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"estate_funding","elapsed_millis":82,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"ledger_fee","elapsed_millis":103,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"operator_balance","elapsed_millis":68,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":21,"observation":{"stage":"root_management","elapsed_millis":437,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":35,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"complete","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"complete"}},"unix_ms":1789119303779}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":21,"parent_id":17,"name":"reset_interruptions_and_recovery","state":"completed","elapsed_us":169920381}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":22,"parent_id":17,"name":"reset_state_and_conservation","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":22,"parent_id":17,"name":"reset_state_and_conservation","state":"completed","elapsed_us":124731}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":23,"parent_id":17,"name":"reset_terminal_replay","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"configured_canisters","elapsed_millis":434,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"estate_funding","elapsed_millis":86,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"ledger_fee","elapsed_millis":83,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"operator_balance","elapsed_millis":77,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_actions","elapsed_millis":3290,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"terminal_inventory","elapsed_millis":7928,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"configured_canisters","elapsed_millis":467,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"estate_funding","elapsed_millis":89,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"ledger_fee","elapsed_millis":88,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"operator_balance","elapsed_millis":83,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"root_management","elapsed_millis":419,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":35,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"complete","plan_sha256":"9a921dd8bc66d72aa6b05064e6ef0f3836dcf1b2a305792ae9d1fbc763f7ed4b","reviewed_effects":35,"state":{"kind":"complete"}},"unix_ms":1789119321613}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"root_management","elapsed_millis":341,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"configured_canisters","elapsed_millis":441,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"estate_funding","elapsed_millis":98,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"ledger_fee","elapsed_millis":109,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"operator_balance","elapsed_millis":97,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"terminal_inventory","elapsed_millis":7649,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_actions","elapsed_millis":3260,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"configured_canisters","elapsed_millis":409,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"estate_funding","elapsed_millis":90,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"ledger_fee","elapsed_millis":81,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"operator_balance","elapsed_millis":69,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"terminal_inventory","elapsed_millis":7650,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_actions","elapsed_millis":3116,"remote_call_attempts":29,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"terminal_verification","plan_sha256":"41e0977a7d708fbc9eba5cb1406413ee4a1ee7744a2d102726595749600a14d3","reviewed_effects":0,"state":{"kind":"advancing"}},"unix_ms":1789119346476}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"configured_canisters","elapsed_millis":434,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"estate_funding","elapsed_millis":68,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"ledger_fee","elapsed_millis":66,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"operator_balance","elapsed_millis":69,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_actions","elapsed_millis":3210,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"terminal_inventory","elapsed_millis":7219,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"configured_canisters","elapsed_millis":457,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"estate_funding","elapsed_millis":78,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"ledger_fee","elapsed_millis":83,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":23,"observation":{"stage":"operator_balance","elapsed_millis":70,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"bea8a4004800d50c8ff6225c4f6d362305e26ec5985e3ca702b4ce7a8b575029","phase":"complete","plan_sha256":"41e0977a7d708fbc9eba5cb1406413ee4a1ee7744a2d102726595749600a14d3","reviewed_effects":0,"state":{"kind":"complete"}},"unix_ms":1789119358398}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":23,"parent_id":17,"name":"reset_terminal_replay","state":"completed","elapsed_us":54502191}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":17,"parent_id":12,"name":"first_deliberate_wipe","state":"completed","elapsed_us":261025576}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":24,"parent_id":12,"name":"second_deliberate_wipe","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":25,"parent_id":24,"name":"seed_and_preparation_review","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":25,"observation":{"stage":"terminal_inventory","elapsed_millis":7502,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":25,"observation":{"stage":"root_management","elapsed_millis":420,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":25,"parent_id":24,"name":"seed_and_preparation_review","state":"completed","elapsed_us":9133664}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":26,"parent_id":24,"name":"preparation_seal_and_replay","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":26,"observation":{"stage":"root_management","elapsed_millis":519,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":26,"observation":{"stage":"root_management","elapsed_millis":449,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"infrastructure","plan_sha256":"162a831d15e19067f1b82796c0f827ceda34f525dd100b4fe70f482b0ab0c30e","reviewed_effects":2,"state":{"kind":"advancing"}},"unix_ms":1789119370632}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":26,"observation":{"stage":"root_management","elapsed_millis":445,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":26,"observation":{"stage":"root_management","elapsed_millis":450,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":2,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"terminal_verification","plan_sha256":"162a831d15e19067f1b82796c0f827ceda34f525dd100b4fe70f482b0ab0c30e","reviewed_effects":2,"state":{"kind":"advancing"}},"unix_ms":1789119377147}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":26,"observation":{"stage":"root_management","elapsed_millis":481,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":2,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"infrastructure","plan_sha256":"162a831d15e19067f1b82796c0f827ceda34f525dd100b4fe70f482b0ab0c30e","reviewed_effects":2,"state":{"kind":"prerequisite_complete"}},"unix_ms":1789119378885}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":26,"observation":{"stage":"root_management","elapsed_millis":474,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":26,"parent_id":24,"name":"preparation_seal_and_replay","state":"completed","elapsed_us":13044771}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":27,"parent_id":24,"name":"reset_review","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":27,"observation":{"stage":"root_management","elapsed_millis":464,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":27,"observation":{"stage":"root_management","elapsed_millis":438,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":27,"observation":{"stage":"terminal_inventory","elapsed_millis":7669,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":27,"observation":{"stage":"configured_canisters","elapsed_millis":450,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":27,"observation":{"stage":"estate_funding","elapsed_millis":87,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":27,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":27,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":27,"observation":{"stage":"ledger_fee","elapsed_millis":70,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":27,"observation":{"stage":"operator_balance","elapsed_millis":80,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":27,"parent_id":24,"name":"reset_review","state":"completed","elapsed_us":14379504}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":28,"parent_id":24,"name":"reset_interruptions_and_recovery","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":485,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":487,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"terminal_inventory","elapsed_millis":7430,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"configured_canisters","elapsed_millis":460,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"estate_funding","elapsed_millis":84,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"ledger_fee","elapsed_millis":79,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"operator_balance","elapsed_millis":80,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"infrastructure","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1789119409059}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":457,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":457,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":446,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":454,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":442,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":453,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":449,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":450,"remote_call_attempts":2,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":444,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":3,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"terminal_verification","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":3,"state":{"kind":"advancing"}},"unix_ms":1789119442092}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"configured_canisters","elapsed_millis":1698,"remote_call_attempts":10,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"estate_funding","elapsed_millis":89,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"pool_balances","elapsed_millis":320,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"ledger_fee","elapsed_millis":88,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"operator_balance","elapsed_millis":76,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"protocol_actions","elapsed_millis":1132,"remote_call_attempts":3,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":3,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"terminal_verification","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":9,"state":{"kind":"prerequisite_complete"}},"unix_ms":1789119445677}
+[FLEET-MEASURE] {"progress":{"applied_effects":3,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"import_reconciliation","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":9,"state":{"kind":"advancing"}},"unix_ms":1789119445677}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"configured_canisters","elapsed_millis":1815,"remote_call_attempts":10,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"estate_funding","elapsed_millis":87,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"pool_balances","elapsed_millis":317,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"ledger_fee","elapsed_millis":91,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"operator_balance","elapsed_millis":80,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":9,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"terminal_verification","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":9,"state":{"kind":"advancing"}},"unix_ms":1789119461197}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"configured_canisters","elapsed_millis":445,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"estate_funding","elapsed_millis":86,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"ledger_fee","elapsed_millis":82,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"operator_balance","elapsed_millis":75,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"protocol_actions","elapsed_millis":3443,"remote_call_attempts":32,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":9,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"terminal_verification","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"prerequisite_complete"}},"unix_ms":1789119466240}
+[FLEET-MEASURE] {"progress":{"applied_effects":9,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"control_plane","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"advancing"}},"unix_ms":1789119466241}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"advancing"}},"unix_ms":1789119503610}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119505102}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119505655}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119506769}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119507248}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119507719}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119508103}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119508558}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119509078}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119509590}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119510082}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119510656}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119511266}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119511766}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119512227}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119512806}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119513306}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119513892}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119514380}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119514974}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119515660}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119516288}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119516827}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119517273}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119517739}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119518133}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119518561}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119519152}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119519687}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119520298}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119520726}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119521332}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119521907}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119522450}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119522879}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119523354}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119524032}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119524495}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119525098}
+[FLEET-MEASURE] {"progress":{"applied_effects":33,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"workload_provisioning","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"awaiting_progress"}},"unix_ms":1789119525695}
+[FLEET-MEASURE] {"progress":{"applied_effects":34,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"pool_readiness","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"advancing"}},"unix_ms":1789119526233}
+[FLEET-MEASURE] {"progress":{"applied_effects":35,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"terminal_verification","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"advancing"}},"unix_ms":1789119526985}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"configured_canisters","elapsed_millis":487,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"estate_funding","elapsed_millis":95,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"ledger_fee","elapsed_millis":98,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"operator_balance","elapsed_millis":77,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"protocol_actions","elapsed_millis":3532,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"terminal_inventory","elapsed_millis":7451,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"configured_canisters","elapsed_millis":466,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"estate_funding","elapsed_millis":106,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"ledger_fee","elapsed_millis":94,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"operator_balance","elapsed_millis":93,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":28,"observation":{"stage":"root_management","elapsed_millis":565,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":35,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"complete","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"complete"}},"unix_ms":1789119543986}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":28,"parent_id":24,"name":"reset_interruptions_and_recovery","state":"completed","elapsed_us":149021772}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":29,"parent_id":24,"name":"reset_state_and_conservation","state":"started","elapsed_us":0}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":29,"parent_id":24,"name":"reset_state_and_conservation","state":"completed","elapsed_us":140469}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":30,"parent_id":24,"name":"reset_terminal_replay","state":"started","elapsed_us":0}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"configured_canisters","elapsed_millis":426,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"estate_funding","elapsed_millis":85,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"ledger_fee","elapsed_millis":69,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"operator_balance","elapsed_millis":126,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_actions","elapsed_millis":3231,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"terminal_inventory","elapsed_millis":7343,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"configured_canisters","elapsed_millis":450,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"estate_funding","elapsed_millis":85,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"ledger_fee","elapsed_millis":84,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"operator_balance","elapsed_millis":115,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"root_management","elapsed_millis":498,"remote_call_attempts":2,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":35,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"complete","plan_sha256":"c8f0a385324e7a58c0cd4f45b8b0ca1a584eaf2508e7dbecdad048994076696d","reviewed_effects":35,"state":{"kind":"complete"}},"unix_ms":1789119561300}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"root_management","elapsed_millis":435,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"configured_canisters","elapsed_millis":455,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"estate_funding","elapsed_millis":87,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"ledger_fee","elapsed_millis":93,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"operator_balance","elapsed_millis":80,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"terminal_inventory","elapsed_millis":7870,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_actions","elapsed_millis":3436,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"configured_canisters","elapsed_millis":507,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"estate_funding","elapsed_millis":110,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"ledger_fee","elapsed_millis":82,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"operator_balance","elapsed_millis":77,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"terminal_inventory","elapsed_millis":7634,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_actions","elapsed_millis":3126,"remote_call_attempts":29,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"terminal_verification","plan_sha256":"a03d8b23b05abcb24806d953951bc3f5697eb8ce211a5040ce1b7b9ab852ab65","reviewed_effects":0,"state":{"kind":"advancing"}},"unix_ms":1789119586671}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"configured_canisters","elapsed_millis":427,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"estate_funding","elapsed_millis":78,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"ledger_fee","elapsed_millis":66,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"operator_balance","elapsed_millis":118,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_actions","elapsed_millis":3140,"remote_call_attempts":29,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"terminal_inventory","elapsed_millis":7278,"remote_call_attempts":18,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"configured_canisters","elapsed_millis":457,"remote_call_attempts":4,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"estate_funding","elapsed_millis":75,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"pool_balances","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"protocol_readiness","elapsed_millis":0,"remote_call_attempts":0,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"ledger_fee","elapsed_millis":78,"remote_call_attempts":1,"succeeded":true}}
+[CANIC-OBSERVATION] {"schema_version":1,"process_id":48274,"parent_id":30,"observation":{"stage":"operator_balance","elapsed_millis":80,"remote_call_attempts":1,"succeeded":true}}
+[FLEET-MEASURE] {"progress":{"applied_effects":0,"operation_id":"d808674d62b03d5408b7f99bed0c373ab2cfe2c7d11cfb0c5e4ba92c1959f9e0","phase":"complete","plan_sha256":"a03d8b23b05abcb24806d953951bc3f5697eb8ce211a5040ce1b7b9ab852ab65","reviewed_effects":0,"state":{"kind":"complete"}},"unix_ms":1789119598643}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":30,"parent_id":24,"name":"reset_terminal_replay","state":"completed","elapsed_us":54524989}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":24,"parent_id":12,"name":"second_deliberate_wipe","state":"completed","elapsed_us":240245358}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":12,"parent_id":1,"name":"selected_build_reinstall","state":"completed","elapsed_us":509322900}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":31,"parent_id":1,"name":"public_memory_allocation_qualification","state":"started","elapsed_us":0}
+CANIC164 role=root physical_bytes=469827584 measured_ids=255 sample_ns=1789119900720606920
+CANIC164 role=user_shard physical_bytes=234946560 measured_ids=255 sample_ns=1789119900720606920
+CANIC164 role=app physical_bytes=218169344 measured_ids=255 sample_ns=1789119900720606920
+CANIC164 role=scale_hub physical_bytes=218169344 measured_ids=255 sample_ns=1789119900720606920
+CANIC164 role=scale_replica physical_bytes=218169344 measured_ids=255 sample_ns=1789119900720606920
+CANIC164 role=user_hub physical_bytes=251723776 measured_ids=255 sample_ns=1789119900720606920
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":31,"parent_id":1,"name":"public_memory_allocation_qualification","state":"completed","elapsed_us":36256994}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":32,"parent_id":1,"name":"cleanup","state":"started","elapsed_us":0}
+[FLEET]      DONE   literal-zero production-adapter journey complete    12m 50s
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":32,"parent_id":1,"name":"cleanup","state":"completed","elapsed_us":89755}
+[CANIC-TIMING] {"schema_version":1,"process_id":48274,"span_id":1,"parent_id":null,"name":"production_adapter_journey","state":"completed","elapsed_us":770188967}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 770.29s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=653260 kB high_water=2335780 kB threads=23
+==> targeted canic-testing-internal PocketIC proof done in 783s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  783s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 784s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.C25wdR

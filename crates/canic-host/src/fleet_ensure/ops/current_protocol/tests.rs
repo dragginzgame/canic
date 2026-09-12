@@ -1,9 +1,14 @@
 //! Focused proof for typed current Fleet protocol compilation.
 
 use super::*;
-use crate::fleet_ensure::model::{
-    DesiredCanister, DesiredCanisterKind, DesiredComponentGroupPlacement, DesiredFleetBootstrap,
-    DesiredFleetBootstrapRoot, DesiredFleetProtocol, FLEET_ENSURE_SCHEMA_VERSION,
+use crate::fleet_ensure::{
+    model::{
+        DesiredCanister, DesiredCanisterKind, DesiredComponentGroupPlacement,
+        DesiredFleetBootstrap, DesiredFleetBootstrapRoot, DesiredFleetProtocol,
+        FLEET_ENSURE_SCHEMA_VERSION,
+    },
+    ops::read_plan,
+    workflow,
 };
 use canic_core::{
     bootstrap::parse_config_model,
@@ -146,7 +151,7 @@ fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
         "effects": actions[..2].iter().enumerate().map(|(index, action)| serde_json::json!({
             "action_sha256": crate::fleet_ensure::ops::action_sha256(action),
             "state": if index == 0 { "applied" } else { "issued" },
-            "maintenance_attempts": 0, "created_principal": null, "destination_post_cycles": null,
+            "publication_attempts": 0, "maintenance_attempts": 0, "created_principal": null, "destination_post_cycles": null,
             "destination_pre_cycles": null, "post_cycles": null, "pre_cycles": null,
             "pre_canister_version": null, "progress_identity": null, "receipt": null,
         })).collect::<Vec<_>>(),
@@ -190,6 +195,7 @@ fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
     requested.fleet = "source".to_string();
     requested.environment = "local".to_string();
     let mut platform = crate::fleet_ensure::tests::MockPlatform::new(requested.clone(), []);
+    assert_unreadable_activation_review(&paths, &requested, &evidence, &mut platform);
     let error = crate::fleet_ensure::workflow::plan_reinstall(
         &temp,
         &requested,
@@ -229,11 +235,78 @@ fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
             Err(EnsureStateError::InvalidActivationSource)
         ));
     }
+    assert!(matches!(
+        crate::fleet_ensure::workflow::retained_in_progress_plan::<std::io::Error>(
+            &temp, "local", "source",
+        ),
+        Err(crate::fleet_ensure::workflow::EnsureWorkflowError::RetainedPlanUnreadable { .. })
+    ));
     assert_eq!(
         fs::read(&paths.plan).expect("unchanged plan"),
         serde_json::to_vec(&plan).expect("plan")
     );
     fs::remove_dir_all(temp).expect("remove fixture");
+}
+
+fn assert_unreadable_activation_review(
+    paths: &crate::fleet_ensure::ops::EnsurePaths,
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    evidence: &crate::fleet_ensure::model::FleetActivationSourceRecord,
+    platform: &mut crate::fleet_ensure::tests::MockPlatform,
+) {
+    let documents = [&paths.plan, &paths.journal, &paths.state];
+    let before = documents.map(|path| fs::read(path).expect("source bytes"));
+    assert!(matches!(
+        read_plan(paths),
+        Err(crate::fleet_ensure::ops::EnsureStateError::Decode { .. })
+    ));
+    let failures = [
+        workflow::retained_in_progress_plan::<crate::fleet_ensure::tests::MockError>(
+            &paths.workspace,
+            &desired.environment,
+            &desired.fleet,
+        )
+        .expect_err("unreadable source cannot resume"),
+        workflow::plan(
+            &paths.workspace,
+            desired,
+            &"b".repeat(64),
+            &desired.fleet,
+            2,
+            platform,
+        )
+        .expect_err("ordinary planning cannot supersede source"),
+        workflow::apply(
+            &paths.workspace,
+            desired,
+            &"b".repeat(64),
+            &desired.fleet,
+            &evidence.plan_sha256,
+            platform,
+        )
+        .expect_err("ordinary apply cannot execute source"),
+    ];
+    for error in failures {
+        assert!(matches!(
+            error,
+            workflow::EnsureWorkflowError::RetainedActivationReviewRequired {
+                operation_id, plan_sha256, source_document_sha256, source,
+            } if operation_id == evidence.operation_id
+                && plan_sha256 == evidence.plan_sha256
+                && source_document_sha256 == evidence.plan_document_sha256
+                && matches!(*source, crate::fleet_ensure::ops::EnsureStateError::Decode { .. })
+        ));
+    }
+    assert_eq!(
+        documents.map(|path| fs::read(path).expect("retained bytes")),
+        before
+    );
+    assert_eq!(
+        platform.mutation_count(&crate::fleet_ensure::ops::action_sha256(
+            &evidence.provisioning
+        )),
+        0
+    );
 }
 
 #[test]
@@ -861,6 +934,27 @@ fn fresh_fleet_store_bootstrap_is_deterministic() {
     )
     .expect("persist qualified union");
     persist_infrastructure_manifest(&root, release_build_id);
+    let fixtures = crate::release_set::fixture::compile_and_persist_fixture_artifact_manifest(
+        &root,
+        &topology,
+        release_build_id,
+        &[],
+    )
+    .expect("retain empty fixture closure");
+    let infrastructure = crate::release_set::load_persisted_canic_infrastructure_artifact_manifest(
+        &root,
+        release_build_id,
+    )
+    .expect("load infrastructure receipt");
+    crate::release_set::compile_and_persist_current_release_set_manifest(
+        &root,
+        &topology,
+        release_build_id,
+        &persisted,
+        &infrastructure,
+        &fixtures,
+    )
+    .expect("bind all release children");
     let registry = active_registry(&config);
     let entry = registry
         .fleet_subnet_roots
@@ -877,9 +971,13 @@ fn fresh_fleet_store_bootstrap_is_deterministic() {
         limits: entry.limits.clone(),
         funding: entry.funding.clone(),
     };
-    let manifest =
-        FleetSubnetRootReleaseSetManifest::project(&topology, &binding, &persisted.union)
-            .expect("project Root release set");
+    let manifest = FleetSubnetRootReleaseSetManifest::project(
+        &topology,
+        &binding,
+        &persisted.union,
+        &fixtures.manifest,
+    )
+    .expect("project Root release set");
     let manifest_bytes =
         serde_json::to_vec(&manifest.root_store_manifest()).expect("canonical manifest");
     let authority = FleetSubnetRootAuthority {
@@ -1234,4 +1332,66 @@ fn principal(byte: u8) -> Principal {
 
 fn subnet(byte: u8) -> SubnetId {
     SubnetId::from_principal(principal(byte))
+}
+
+#[test]
+fn fixture_publication_binding_reserves_reviewed_attempts_and_rejects_overflow() {
+    use canic_core::dto::fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus};
+    let root = crate::test_support::temp_dir("fixture-publication-budget");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("store.did"), "service : {};").unwrap();
+    let mut desired = desired(Vec::new());
+    let upload = CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+        maximum_attempts: 1,
+        request: FixtureChunkUpload {
+            content_id: [1; 32],
+            index: 0,
+            bytes: vec![2],
+        },
+        expected: FixtureSourceStatus {
+            content_id: [1; 32],
+            next_chunk: 1,
+            chunk_count: 1,
+            received_bytes: 1,
+            complete: true,
+        },
+        source_bytes: 1,
+    };
+    let bind = |desired: &DesiredFleet, burn| {
+        bind_action(
+            &root,
+            desired,
+            &state(),
+            desired.protocol.as_ref().unwrap(),
+            upload.clone(),
+            principal(21),
+            "fixture-upload".into(),
+            burn,
+        )
+    };
+    let mut hashes = BTreeSet::new();
+    for limit in [1, 3] {
+        desired.maximum_stalled_observations = limit;
+        let bound = bind(&desired, 7).unwrap();
+        assert_eq!(bound.fixture_publication_attempt_limit(), Some(limit));
+        let EnsureAction::FleetProtocol {
+            maximum_execution_burn_cycles,
+            ..
+        } = &bound
+        else {
+            unreachable!()
+        };
+        assert_eq!(*maximum_execution_burn_cycles, u128::from(limit) * 7);
+        assert!(hashes.insert(crate::fleet_ensure::ops::action_sha256(&bound)));
+    }
+    assert!(matches!(
+        bind(&desired, u128::MAX),
+        Err(CurrentProtocolError::ResponseMismatch)
+    ));
+    desired.maximum_stalled_observations = 0;
+    assert!(matches!(
+        bind(&desired, 7),
+        Err(CurrentProtocolError::ResponseMismatch)
+    ));
+    fs::remove_dir_all(root).unwrap();
 }

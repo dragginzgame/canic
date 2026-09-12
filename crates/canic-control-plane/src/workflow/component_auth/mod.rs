@@ -46,7 +46,7 @@ pub fn require_active_fleet_subnet_root_internal() -> Result<(), InternalError> 
     FleetActivationWorkflow::require_active()
 }
 
-/// Require the exact pre-activation Root phase used only by compiled initial-child bootstrap.
+/// Require the exact pre-activation Root phase for initial-child bootstrap and bounded funding.
 pub fn require_prepared_fleet_subnet_root() -> Result<(), Error> {
     let status = FleetActivationWorkflow::status().map_err(Error::from)?;
     if status.phase != canic_core::dto::fleet_activation::FleetActivationPhase::Prepared {

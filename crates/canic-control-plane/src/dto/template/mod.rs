@@ -3,6 +3,9 @@ use crate::ids::{
     WasmStoreBinding, WasmStoreGcMode,
 };
 use candid::{CandidType, Principal};
+use canic_core::dto::fixture_provisioning::{
+    FixtureDescriptor, FixtureGrant, FixtureGrantRequest, FixtureSourceStatus, FixtureStoreError,
+};
 use canic_core::{
     dto::{
         capability::{NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1},
@@ -177,6 +180,20 @@ pub struct WasmStoreGcOperationStatus {
     pub gc: WasmStoreGcStatusResponse,
 }
 
+/// Exact outcome requested from the existing Store retirement operation.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum WasmStoreGcTarget {
+    Complete,
+    Prepared,
+}
+
+/// Root-owned retirement intent; preparation replay never authorizes collection.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreGcRequest {
+    pub operation_id: [u8; 32],
+    pub target: WasmStoreGcTarget,
+}
+
 /// Closed Store control-plane command union.
 #[derive(CandidType, Deserialize)]
 pub enum StoreCommand {
@@ -184,10 +201,12 @@ pub enum StoreCommand {
     InspectTemplate(TemplateLookupRequest),
     PrepareChunkSet(TemplateChunkSetPrepareInput),
     PrepareFleetCredential(FleetCredentialGenerationRequest),
+    PrepareFixture(FixtureDescriptor),
     ReclaimDeletionCycles(WasmStoreDeletionCycleReclamationRequest),
     RespondCapability(NonrootCyclesCapabilityEnvelopeV1),
-    RunGc(OperationStatusRequest),
+    RunGc(WasmStoreGcRequest),
     StageManifest(TemplateManifestInput),
+    SetFixtureGrant(Box<FixtureGrantRequest>),
     SynchronizeState(StateSnapshotInput),
     SynchronizeTopology(TopologySnapshotInput),
 }
@@ -195,6 +214,8 @@ pub enum StoreCommand {
 /// Closed response union correlated to one accepted Store command.
 #[derive(CandidType, Deserialize)]
 pub enum StoreCommandResponse {
+    FixtureSource(Result<FixtureSourceStatus, FixtureStoreError>),
+    FixtureGrant(Box<Result<FixtureGrant, FixtureStoreError>>),
     InspectTemplate(TemplateChunkSetInfoResponse),
     OperationAccepted(OperationReceipt),
     PrepareChunkSet(TemplateChunkSetInfoResponse),
@@ -223,6 +244,8 @@ pub enum StoreObservabilityResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum StoreCatalogRequest {
     Catalog,
+    Fixture([u8; 32]),
+    FixtureGrant(Principal),
     Storage,
     Template(TemplateLookupRequest),
 }
@@ -231,6 +254,8 @@ pub enum StoreCatalogRequest {
 #[derive(CandidType, Deserialize)]
 pub enum StoreCatalogResponse {
     Catalog(Vec<WasmStoreCatalogEntryResponse>),
+    Fixture(Result<FixtureSourceStatus, FixtureStoreError>),
+    FixtureGrant(Option<Box<FixtureGrant>>),
     Storage(WasmStoreStatusResponse),
     Template(TemplateStagingStatusResponse),
 }

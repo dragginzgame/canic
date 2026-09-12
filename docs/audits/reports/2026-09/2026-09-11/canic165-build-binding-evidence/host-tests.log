@@ -1,0 +1,50 @@
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 36.41s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-7f1661d911b1d22b)
+
+running 42 tests
+test canister_build::reuse::dependencies::tests::cargo_paths_preserve_escaped_names_and_continuations ... ok
+test canister_build::reuse::snapshot::tests::real_source_edits_and_inventory_growth_are_distinct_failures ... ok
+test canister_build::reuse::snapshot::tests::replaced_dependency_inventory_rechecks_dropped_source_bytes ... ok
+test canister_build::reuse::tests::cache_never_follows_a_replaced_output_symlink ... ok
+test canister_build::reuse::tests::declared_fixture_payloads_participate_in_cache_inputs_inside_excluded_directories ... ok
+test canister_build::reuse::tests::executable_launchers_do_not_claim_their_delegated_tool_bytes ... ok
+test canister_build::reuse::tests::first_infrastructure_build_and_replaced_cargo_records_preserve_source_authority ... ok
+test canister_build::reuse::tests::governed_inputs_invalidate_reuse_even_when_file_lengths_are_unchanged ... ok
+test canister_build::reuse::tests::output_snapshot_detects_corruption_missing_and_extra_files ... ok
+test canister_build::reuse::tests::source_bytes_additions_deletions_and_renames_change_the_input_set ... ok
+test fleet_ensure::generate::tests::candid_sidecar_rejects_a_symbolic_link ... ok
+test fleet_ensure::generate::tests::candid_sidecar_uses_the_manifest_bound_wasm_basename ... ok
+test fleet_ensure::generate::tests::estate_creation_fee_is_required_and_uses_compact_cycle_units ... ok
+test fleet_ensure::generate::tests::estate_seed_retains_explicit_fleet_id_independent_from_operator ... ok
+test fleet_ensure::generate::tests::fresh_pool_creation_funding_preserves_configured_readiness_floor ... ok
+test fleet_ensure::generate::tests::fresh_pool_supply_includes_both_hubs_initial_shards_and_ready_reserve ... ok
+test fleet_ensure::generate::tests::generated_multi_component_retained_estate_plans_applies_and_replays_without_effect ... ok
+test fleet_ensure::generate::tests::generation_rejects_component_demand_above_pool_target_before_observation ... ok
+test fleet_ensure::generate::tests::human_admission_principals_compile_to_one_canonical_set ... ok
+test fleet_ensure::generate::tests::management_runtime_and_module_observations_fail_closed ... ok
+test fleet_ensure::generate::tests::multi_root_generation_joins_topology_by_typed_subnet_identity ... ok
+test fleet_ensure::generate::tests::protected_funding_admission_rejects_five_automatic_root_grants ... ok
+test fleet_ensure::generate::tests::protected_policy_and_estate_seed_have_distinct_authority_shapes ... ok
+test fleet_ensure::generate::tests::protected_policy_rejects_unsuffixed_cycle_amounts_before_generation ... ok
+test fleet_ensure::generate::tests::release_build_network_must_match_the_selected_environment ... ok
+test fleet_ensure::generate::tests::retained_identities_and_controller_sets_are_exact ... ok
+test fleet_ensure::generate::tests::retained_pool_imports_above_root_initialisation_maximum_reject_during_generation ... ok
+test fleet_ensure::generate::tests::retained_root_policy_must_match_current_configuration ... ok
+test fleet_ensure::generate::tests::separate_treasury_seed_carries_exact_placement ... ok
+test fleet_ensure::generate::tests::treasury_adoption_requires_one_observed_seeded_identity ... ok
+test release_set::current::tests::complete_release_binds_fixture_bytes_and_rejects_substituted_receipts ... ok
+test release_set::current::tests::current_manifest_canonical_shape_binds_all_child_digests ... ok
+test release_set::fixture::tests::canonical_role_binding_preserves_chunk_order_and_separates_release_identity ... ok
+test release_set::fixture::tests::changed_sources_cannot_replace_selected_content_and_tampering_is_detected ... ok
+test release_set::fixture::tests::chunk_bounds_and_workspace_path_confinement_precede_persistence ... ok
+test release_set::fixture::tests::configured_source_manifest_is_strict_and_cannot_escape_its_directory ... ok
+test release_set::fixture::tests::configured_sources_bind_metadata_and_payload_even_in_excluded_directories ... ok
+test release_set::fixture::tests::duplicate_unknown_and_infrastructure_roles_never_publish_a_manifest ... ok
+test release_set::fixture::tests::interrupted_copy_resumes_without_overwrite_and_finalization_prevents_repair ... ok
+test release_set::fixture::tests::publication_recovers_from_remote_progress_and_rejects_false_completion ... ok
+test release_set::fixture::tests::restored_source_does_not_hide_different_bytes_retained_during_build ... ok
+test release_set::fixture::tests::source_and_retained_links_are_refused ... ok
+
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 11.94s
+

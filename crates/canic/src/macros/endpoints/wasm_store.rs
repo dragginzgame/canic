@@ -67,6 +67,8 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 StoreCommand::ActivateFleet(_)
                     | StoreCommand::InspectTemplate(_)
                     | StoreCommand::PrepareFleetCredential(_)
+                    | StoreCommand::PrepareFixture(_)
+                    | StoreCommand::SetFixtureGrant(_)
                     | StoreCommand::ReclaimDeletionCycles(_)
                     | StoreCommand::RunGc(_)
             ) {
@@ -103,6 +105,14 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             }
 
             match command {
+                StoreCommand::PrepareFixture(request) => {
+                    $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::prepare(request)
+                        .map(StoreCommandResponse::FixtureSource)
+                }
+                StoreCommand::SetFixtureGrant(request) => {
+                    $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::set_grant(*request)
+                        .map(|result| StoreCommandResponse::FixtureGrant(Box::new(result)))
+                }
                 StoreCommand::ActivateFleet(request) => {
                     let operation_id = request.operation_id;
                     let transition = $crate::__internal::core::api::fleet_activation::FleetActivationApi::activate_nonroot(request)?;
@@ -145,20 +155,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 }
                 StoreCommand::RunGc(request) => {
                     let operation_id = request.operation_id;
-                    let should_advance = ::canic::api::canister::template::WasmStoreCanisterApi::status()?
-                        .gc
-                        .mode
-                        != ::canic::ids::WasmStoreGcMode::Normal;
-                    ::canic::api::canister::template::WasmStoreCanisterApi::prepare_gc(operation_id)?;
-                    if should_advance {
-                        $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
-                            ::core::time::Duration::ZERO,
-                            "canic:wasm_store:gc",
-                            async move {
-                                let _ = ::canic::api::canister::template::WasmStoreCanisterApi::run_gc(operation_id).await;
-                            },
-                        );
-                    }
+                    ::canic::api::canister::template::WasmStoreCanisterApi::request_gc(request)?;
                     Ok(StoreCommandResponse::OperationAccepted(
                         ::canic::dto::role::OperationReceipt { operation_id },
                     ))
@@ -293,6 +290,8 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         #[serde(crate = "::canic::__internal::serde")]
         pub enum StoreCatalogReadRequest {
             Catalog,
+            Fixture([u8; 32]),
+            FixtureGrant(::canic::__internal::candid::Principal),
             Storage,
             Template(::canic::dto::template::TemplateLookupRequest),
         }
@@ -300,6 +299,8 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         #[serde(crate = "::canic::__internal::serde")]
         pub enum StoreCatalogReadResponse {
             Catalog(Vec<::canic::dto::template::WasmStoreCatalogEntryResponse>),
+            Fixture(Result<::canic::dto::fixture_provisioning::FixtureSourceStatus, ::canic::dto::fixture_provisioning::FixtureStoreError>),
+            FixtureGrant(Option<Box<::canic::dto::fixture_provisioning::FixtureGrant>>),
             Storage(::canic::dto::template::WasmStoreStatusResponse),
             Template(::canic::dto::template::TemplateStagingStatusResponse),
         }
@@ -310,6 +311,12 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             request: StoreCatalogReadRequest,
         ) -> Result<StoreCatalogReadResponse, ::canic::Error> {
             match request {
+                StoreCatalogReadRequest::Fixture(content) => {
+                    Ok(StoreCatalogReadResponse::Fixture($crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::source_status(content)))
+                }
+                StoreCatalogReadRequest::FixtureGrant(target) => {
+                    Ok(StoreCatalogReadResponse::FixtureGrant($crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::grant_status(target).map(Box::new)))
+                }
                 StoreCatalogReadRequest::Catalog => {
                     ::canic::api::canister::template::WasmStoreCanisterApi::catalog()
                         .map(StoreCatalogReadResponse::Catalog)
@@ -330,6 +337,26 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::publish_chunk(request)
+        }
+
+        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
+        async fn canic_wasm_store_publish_fixture(
+            request: ::canic::dto::fixture_provisioning::FixtureChunkUpload,
+        ) -> Result<Result<::canic::dto::fixture_provisioning::FixtureSourceStatus, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
+            $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::upload(request)
+        }
+
+        #[$crate::canic_update(internal, public)]
+        async fn canic_wasm_store_fixture_chunk(
+            request: ::canic::dto::fixture_provisioning::FixtureChunkRead,
+        ) -> Result<Result<Vec<u8>, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
+            let caller = $crate::__internal::cdk::api::msg_caller();
+            // Framework admission cannot express this request-bound grant. Authenticate
+            // its exact caller and full revision here before delegating payload access.
+            if let Err(error) = $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::authorize_read(caller, &request) {
+                return Ok(Err(error));
+            }
+            Ok($crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::read(request))
         }
 
         #[$crate::canic_update(internal, requires(caller::is_root()))]

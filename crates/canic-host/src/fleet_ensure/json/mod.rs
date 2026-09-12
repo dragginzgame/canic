@@ -7,9 +7,7 @@
 #[cfg(test)]
 mod tests;
 
-use crate::fleet_ensure::model::{
-    CanisterPlan, CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan, FleetEnsureReport,
-};
+use crate::fleet_ensure::model::{CanisterPlan, EnsureAction, FleetEnsurePlan, FleetEnsureReport};
 use std::fmt::Display;
 
 use canic_core::cdk::utils::hash::sha256_hex;
@@ -123,12 +121,12 @@ fn action_json_value(action: &EnsureAction) -> Result<Value, serde_json::Error> 
     else {
         return to_value(action);
     };
-    let CurrentFleetProtocolAction::PublishStoreChunk { request } = protocol_action.as_ref() else {
+    let Some(bytes) = protocol_action.publication_bytes() else {
         return to_value(action);
     };
 
-    let bytes_sha256 = sha256_hex(&request.bytes);
-    let bytes_size = u64::try_from(request.bytes.len()).unwrap_or(u64::MAX);
+    let bytes_sha256 = sha256_hex(bytes);
+    let bytes_size = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     let mut compact = action.clone();
     let EnsureAction::FleetProtocol {
         action: compact_protocol_action,
@@ -137,13 +135,10 @@ fn action_json_value(action: &EnsureAction) -> Result<Value, serde_json::Error> 
     else {
         unreachable!("cloned Fleet protocol action retains its variant")
     };
-    let CurrentFleetProtocolAction::PublishStoreChunk {
-        request: compact_request,
-    } = compact_protocol_action.as_mut()
-    else {
-        unreachable!("cloned Store publication retains its variant")
-    };
-    compact_request.bytes.clear();
+    compact_protocol_action
+        .publication_bytes_mut()
+        .expect("cloned publication retains payload")
+        .clear();
 
     let mut projection = to_value(&compact)?;
     let projected_request = projection

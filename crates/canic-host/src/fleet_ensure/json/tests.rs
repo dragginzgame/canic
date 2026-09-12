@@ -1,7 +1,7 @@
 use super::*;
 use crate::fleet_ensure::model::{
-    CycleConservation, EnsureAction, EstateFundingDomainPlan, FLEET_ENSURE_SCHEMA_VERSION,
-    FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureReport,
+    CurrentFleetProtocolAction, CycleConservation, EnsureAction, EstateFundingDomainPlan,
+    FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureReport,
 };
 use canic_control_plane::{
     dto::template::TemplateChunkInput,
@@ -155,5 +155,44 @@ fn current_funding_action_emits_explicit_cycle_bounds() {
     assert_eq!(
         serde_json::from_value::<EnsureAction>(document).unwrap(),
         action
+    );
+}
+
+#[test]
+fn fixture_upload_report_retains_identity_and_externalizes_payload() {
+    let bytes = vec![42; 4096];
+    let action = EnsureAction::FleetProtocol {
+        action: Box::new(CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+            maximum_attempts: 1,
+            request: canic_core::dto::fixture_provisioning::FixtureChunkUpload {
+                content_id: [7; 32],
+                index: 0,
+                bytes: bytes.clone(),
+            },
+            expected: canic_core::dto::fixture_provisioning::FixtureSourceStatus {
+                content_id: [7; 32],
+                next_chunk: 1,
+                chunk_count: 1,
+                received_bytes: bytes.len() as u64,
+                complete: true,
+            },
+            source_bytes: bytes.len() as u64,
+        }),
+        candid: "store.did".into(),
+        candid_sha256: "15".repeat(32),
+        maximum_execution_burn_cycles: 7,
+        name: "publish-fixture".into(),
+        principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+    };
+    let projection = action_json_value(&action).unwrap();
+    let request = &projection["action"]["request"];
+    assert!(request.get("bytes").is_none());
+    assert_eq!(request["bytes_sha256"], sha256_hex(&bytes));
+    assert_eq!(request["bytes_size"], bytes.len() as u64);
+    assert_eq!(request["content_id"], serde_json::json!([7; 32].to_vec()));
+    assert_eq!(request["index"], 0);
+    assert_eq!(
+        projection["action"]["expected"]["received_bytes"],
+        bytes.len() as u64
     );
 }

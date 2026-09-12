@@ -6,6 +6,8 @@
     reason = "the published IcyDB actor uses crate-visible generated participant bindings"
 )]
 
+mod fixture_provisioning;
+
 use candid::CandidType;
 use canic::{Error, prelude::*};
 use std::cell::{Cell, RefCell};
@@ -148,6 +150,7 @@ fn run_icydb_participant(hook: ProbeLifecycleHook, participant: fn() -> ()) {
     }
     COMPOSITION.with_borrow_mut(|record| *record = LifecycleCompositionRecord::new(hook));
     participant();
+    fixture_provisioning::consumer::register();
     let icydb_row_observed = timer_row_exists("icydb", "startup", "recovery");
     COMPOSITION.with_borrow_mut(|record| {
         record.participant_runs = record.participant_runs.saturating_add(1);
@@ -248,10 +251,10 @@ async fn canic_fleet_admission_parity_probe() -> Result<candid::Principal, Error
     Ok(ic_cdk::api::msg_caller())
 }
 
-#[canic_query(public)]
-fn lifecycle_composition_snapshot() -> Result<LifecycleCompositionSnapshot, Error> {
+#[ic_cdk::query(guard = "crate::require_test_controller")]
+fn lifecycle_composition_snapshot() -> LifecycleCompositionSnapshot {
     let record = COMPOSITION.with_borrow(|record| *record);
-    Ok(LifecycleCompositionSnapshot {
+    LifecycleCompositionSnapshot {
         hook: record.hook,
         participant_runs: record.participant_runs,
         icydb_row_observed_after_participant: ProbeEvidence::from_observation(
@@ -271,7 +274,16 @@ fn lifecycle_composition_snapshot() -> Result<LifecycleCompositionSnapshot, Erro
         canic_upgrade_runs: record.canic_upgrade_runs,
         database_startup: database_startup(),
         database_access: ProbeEvidence::from_observation(database_ready()),
-    })
+    }
 }
 
 canic::finish!();
+
+/// Test instrumentation stays observable while application dispatch is deliberately fenced.
+fn require_test_controller() -> Result<(), String> {
+    if ic_cdk::api::is_controller(&ic_cdk::api::msg_caller()) {
+        Ok(())
+    } else {
+        Err("test instrumentation requires a controller".to_string())
+    }
+}

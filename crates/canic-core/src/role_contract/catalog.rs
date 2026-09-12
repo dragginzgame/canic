@@ -237,6 +237,10 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
 
 const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     capability_allocation(
+        RoleCapabilityKey::WasmStore,
+        StateAllocationKey::FixtureStore,
+    ),
+    capability_allocation(
         RoleCapabilityKey::FleetAdmissionProjection,
         StateAllocationKey::CoreFleetAdmissionProjection,
     ),
@@ -390,6 +394,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
 
 const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     feature_allocation(
+        CanicFeatureKey::WasmStoreCanister,
+        StateAllocationKey::FixtureStore,
+    ),
+    feature_allocation(
         CanicFeatureKey::AuthIssuerCanisterSigCreate,
         StateAllocationKey::CoreDelegatedTokenIssuerState,
     ),
@@ -484,6 +492,7 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
 ];
 
 const BUILT_IN_ALLOCATIONS: &[BuiltInAllocation] = &[
+    built_in_allocation(BuiltInRoleKind::WasmStore, StateAllocationKey::FixtureStore),
     built_in_allocation(
         BuiltInRoleKind::FleetCoordinator,
         StateAllocationKey::CoreAuthorityRestoreFence,

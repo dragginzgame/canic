@@ -1,0 +1,51 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:46883/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 37.64s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::current_store_bootstraps_application_catalog_and_replays_zero_effects ... [WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 52.24s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       DONE   delegation_issuer_stub                               38.12s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             1m 36s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                  6.12s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 201.20s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=308376 kB high_water=368992 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 239s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  239s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 240s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.yGJ7kP

@@ -1,0 +1,67 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:32837/
+==> targeted canic-tests PocketIC integration proof
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+   Compiling canic-tests v0.110.14 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `test` profile [optimized + debuginfo] target(s) in 41.35s
+     Running tests/icydb_lifecycle_composition.rs (target/debug/deps/icydb_lifecycle_composition-646e14b47fe7056c)
+
+running 5 tests
+test fixture_provisioning::published_icydb_rows_and_checkpoint_share_a_synchronous_message_commit ... [WASM]       RUN    canic_icydb_lifecycle_probe (1/1)
+[WASM]       DONE   canic_icydb_lifecycle_probe                          37.70s
+CANIC-165 commit=19535502 validation=20733701 receipt_replay=13675822 instructions; 8 rows, 16-byte chunks
+ok
+test fixture_provisioning::store::consumer::automatic_consumer_recovers_outages_traps_and_restart_then_stops_on_durable_receipt ... Build phase runtime Cargo/link bootstrap_store: 33.80s
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.85 MiB (2990578 B)  headroom=7.15 MiB (7495182 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.wasm: shrink=0.57s candid=0.51s binaryen=0.00s gzip/validation=0.19s total=1.29s
+ok
+test fixture_provisioning::store::retained_store_recovers_upload_and_fences_revoked_target_reads ... ok
+test fixture_provisioning::transport::transport_rechecks_import_authority_and_requires_durable_validation_receipt ... ok
+test managed_canic_and_published_icydb_share_lifecycle_and_timer_custody ... [WASM]       RUN    canic_icydb_lifecycle_probe (1/1)
+[WASM]       DONE   canic_icydb_lifecycle_probe                           6.98s
+Canic/IcyDB timer inventory at prepared after install:
+  LogicalTimerRow { owner: "canic", subsystem: "log_retention", name: "run", scheduling_mode: Once, registration: Unregistered, condition: Idle, enabled: true }
+  LogicalTimerRow { owner: "icydb", subsystem: "startup", name: "recovery", scheduling_mode: Continuation, registration: Scheduled, condition: Active, enabled: true }
+Canic/IcyDB timer inventory at active after install:
+  LogicalTimerRow { owner: "canic", subsystem: "intent_cleanup", name: "run", scheduling_mode: Once, registration: Unregistered, condition: Idle, enabled: true }
+  LogicalTimerRow { owner: "canic", subsystem: "log_retention", name: "run", scheduling_mode: Once, registration: Unregistered, condition: Idle, enabled: true }
+  LogicalTimerRow { owner: "icydb", subsystem: "startup", name: "recovery", scheduling_mode: Continuation, registration: Scheduled, condition: Active, enabled: true }
+Canic/IcyDB timer inventory at prepared before upgrade:
+  LogicalTimerRow { owner: "canic", subsystem: "log_retention", name: "run", scheduling_mode: Once, registration: Unregistered, condition: Idle, enabled: true }
+  LogicalTimerRow { owner: "icydb", subsystem: "startup", name: "recovery", scheduling_mode: Watchdog, registration: Unregistered, condition: Idle, enabled: true }
+Canic/IcyDB timer inventory at prepared after upgrade:
+  LogicalTimerRow { owner: "canic", subsystem: "log_retention", name: "run", scheduling_mode: Once, registration: Unregistered, condition: Idle, enabled: true }
+  LogicalTimerRow { owner: "icydb", subsystem: "startup", name: "recovery", scheduling_mode: Watchdog, registration: Unregistered, condition: Idle, enabled: true }
+Canic/IcyDB timer inventory at active before upgrade:
+  LogicalTimerRow { owner: "canic", subsystem: "intent_cleanup", name: "run", scheduling_mode: Once, registration: Unregistered, condition: Idle, enabled: true }
+  LogicalTimerRow { owner: "canic", subsystem: "log_retention", name: "run", scheduling_mode: Once, registration: Unregistered, condition: Idle, enabled: true }
+  LogicalTimerRow { owner: "icydb", subsystem: "startup", name: "recovery", scheduling_mode: Continuation, registration: Scheduled, condition: Active, enabled: true }
+Canic/IcyDB timer inventory at active after upgrade:
+  LogicalTimerRow { owner: "canic", subsystem: "intent_cleanup", name: "run", scheduling_mode: Once, registration: Unregistered, condition: Idle, enabled: true }
+  LogicalTimerRow { owner: "canic", subsystem: "log_retention", name: "run", scheduling_mode: Once, registration: Unregistered, condition: Idle, enabled: true }
+  LogicalTimerRow { owner: "icydb", subsystem: "startup", name: "recovery", scheduling_mode: Watchdog, registration: Unregistered, condition: Idle, enabled: true }
+ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 121.29s
+
+==> shared PocketIC resources after targeted canic-tests PocketIC integration proof: rss=507756 kB high_water=543800 kB threads=19
+==> targeted canic-tests PocketIC integration proof done in 163s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  163s     PASS   targeted canic-tests PocketIC integration proof
+workspace runner wall time: 164s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.Ygp4Nx

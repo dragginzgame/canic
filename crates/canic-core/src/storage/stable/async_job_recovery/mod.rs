@@ -1,7 +1,7 @@
 //! Module: storage::stable::async_job_recovery
 //!
 //! Responsibility: persist bounded serial-attempt fences for recovery-critical async jobs.
-//! Does not own: timer scheduling, provider state, retry timing, or domain operation records.
+//! Does not own: timer scheduling, provider state or application progress.
 //! Boundary: storage retains one fixed record; ops validates and commits exact attempt fences.
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
 use std::cell::RefCell;
 
 /// Exact maximum encoded bytes for the complete async-job recovery record.
-pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 589;
+pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 810;
 
 eager_static! {
     static ASYNC_JOB_RECOVERY: RefCell<
@@ -60,12 +60,22 @@ pub struct ReplaySafeAsyncAttemptFenceRecord {
     pub pending_operation_generation: Option<u64>,
 }
 
+/// Durable fixture retry pressure; application progress remains in the importer.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FixtureImportRetryRecord {
+    pub failures: u32,
+    pub not_before_ns: u64,
+}
+
 /// Complete fixed-shape recovery state for recovery-critical domain jobs.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AsyncJobRecoveryRecord {
     pub auth_renewal: AsyncAttemptFenceRecord,
     pub canister_pool_maintenance: AsyncAttemptFenceRecord,
     pub cycle_topup: ReplaySafeAsyncAttemptFenceRecord,
+    pub fixture_import: AsyncAttemptFenceRecord,
+    pub fixture_import_retry: FixtureImportRetryRecord,
+    pub fixture_import_failure: Option<crate::domain::fixture_import::FixtureImportFailure>,
     pub placement_receipt_acknowledgement: AsyncAttemptFenceRecord,
 }
 
@@ -143,6 +153,16 @@ mod tests {
                 }),
                 pending_operation_generation: Some(u64::MAX),
             },
+            fixture_import: attempt.clone(),
+            fixture_import_retry: FixtureImportRetryRecord {
+                failures: u32::MAX,
+                not_before_ns: u64::MAX,
+            },
+            fixture_import_failure: Some(
+                crate::domain::fixture_import::FixtureImportFailure::SourceRejected {
+                    code: u16::MAX,
+                },
+            ),
             placement_receipt_acknowledgement: attempt,
         };
 

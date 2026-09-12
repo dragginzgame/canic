@@ -414,7 +414,17 @@ impl FleetActivationWorkflow {
             .map_err(InternalError::from)?;
 
         require_endpoint_for_phase(is_root, role.is_wasm_store(), status.phase, call)
-            .map_err(InternalError::from)
+            .map_err(InternalError::from)?;
+        // The exact infrastructure surface must remain available while application data loads.
+        if !is_root
+            && !role.is_wasm_store()
+            && !crate::domain::policy::pure::fleet_activation::is_nonroot_infrastructure_endpoint(
+                call,
+            )
+        {
+            crate::workflow::fixture_provisioning::require_ready()?;
+        }
+        Ok(())
     }
 
     /// Enforce the activation phase for a compile-selected Store data-lane endpoint.

@@ -11,7 +11,9 @@ mod tests;
 use crate::{
     component_topology::PlannedFleetSubnetRootTopology,
     release_set::{
-        GZIP_MAGIC, WASM_MAGIC, valid_package_name, validate_release_artifact_relative_path,
+        GZIP_MAGIC, WASM_MAGIC,
+        fixture::{FixtureArtifactError, FixtureArtifactManifest},
+        valid_package_name, validate_release_artifact_relative_path,
     },
 };
 use std::{
@@ -309,6 +311,7 @@ pub struct FleetSubnetRootReleaseSetManifest {
     pub release_build_id: ReleaseBuildId,
     pub component_topology_digest: ComponentTopologyDigest,
     pub entries: Vec<FleetSubnetRootReleaseSetEntry>,
+    pub fixtures: Vec<canic_core::dto::root_store::RootStoreFixture>,
 }
 
 impl FleetSubnetRootReleaseSetManifest {
@@ -321,6 +324,7 @@ impl FleetSubnetRootReleaseSetManifest {
         };
 
         RootStoreReleaseSetManifest {
+            fixtures: self.fixtures.clone(),
             release_build_id: self.release_build_id,
             component_topology_digest: self.component_topology_digest,
             entries: self
@@ -359,6 +363,7 @@ impl FleetSubnetRootReleaseSetManifest {
         topology: &ComponentTopology,
         binding: &FleetSubnetRootBinding,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<Self, ApplicationReleaseSetError> {
         Self::project_for_root(
             topology,
@@ -366,6 +371,7 @@ impl FleetSubnetRootReleaseSetManifest {
             binding.component_topology_digest,
             binding.limits.maximum_wasm_store_bytes,
             union,
+            fixtures,
         )
     }
 
@@ -374,6 +380,7 @@ impl FleetSubnetRootReleaseSetManifest {
         topology: &ComponentTopology,
         root: &PlannedFleetSubnetRootTopology,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<Self, ApplicationReleaseSetError> {
         Self::project_for_root(
             topology,
@@ -381,6 +388,7 @@ impl FleetSubnetRootReleaseSetManifest {
             root.component_topology_digest,
             root.limits.maximum_wasm_store_bytes,
             union,
+            fixtures,
         )
     }
 
@@ -390,8 +398,10 @@ impl FleetSubnetRootReleaseSetManifest {
         component_topology_digest: ComponentTopologyDigest,
         maximum_wasm_store_bytes: u64,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<Self, ApplicationReleaseSetError> {
         union.validate_against(topology)?;
+        fixtures.validate(topology, union.release_build_id)?;
         let projected = topology.project_for_admissions(component_admissions)?;
         let digest = projected.digest()?;
         if digest != component_topology_digest {
@@ -422,6 +432,7 @@ impl FleetSubnetRootReleaseSetManifest {
         let manifest = Self {
             release_build_id: union.release_build_id,
             component_topology_digest: digest,
+            fixtures: project_fixtures(&projected, fixtures),
             entries,
         };
         manifest.validate_for_root(
@@ -430,6 +441,7 @@ impl FleetSubnetRootReleaseSetManifest {
             component_topology_digest,
             maximum_wasm_store_bytes,
             union,
+            fixtures,
         )?;
         Ok(manifest)
     }
@@ -440,6 +452,7 @@ impl FleetSubnetRootReleaseSetManifest {
         topology: &ComponentTopology,
         binding: &FleetSubnetRootBinding,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<(), ApplicationReleaseSetError> {
         self.validate_for_root(
             topology,
@@ -447,6 +460,7 @@ impl FleetSubnetRootReleaseSetManifest {
             binding.component_topology_digest,
             binding.limits.maximum_wasm_store_bytes,
             union,
+            fixtures,
         )
     }
 
@@ -456,6 +470,7 @@ impl FleetSubnetRootReleaseSetManifest {
         topology: &ComponentTopology,
         root: &PlannedFleetSubnetRootTopology,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<(), ApplicationReleaseSetError> {
         self.validate_for_root(
             topology,
@@ -463,6 +478,7 @@ impl FleetSubnetRootReleaseSetManifest {
             root.component_topology_digest,
             root.limits.maximum_wasm_store_bytes,
             union,
+            fixtures,
         )
     }
 
@@ -473,8 +489,10 @@ impl FleetSubnetRootReleaseSetManifest {
         component_topology_digest: ComponentTopologyDigest,
         maximum_wasm_store_bytes: u64,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<(), ApplicationReleaseSetError> {
         union.validate_against(topology)?;
+        fixtures.validate(topology, union.release_build_id)?;
         if self.release_build_id != union.release_build_id {
             return Err(ApplicationReleaseSetError::ManifestBuildMismatch {
                 expected: union.release_build_id,
@@ -498,7 +516,7 @@ impl FleetSubnetRootReleaseSetManifest {
         }
 
         let expected = expected_projection_entries(&projected, union)?;
-        if self.entries != expected {
+        if self.entries != expected || self.fixtures != project_fixtures(&projected, fixtures) {
             return Err(ApplicationReleaseSetError::ProjectionMismatch);
         }
 
@@ -518,6 +536,19 @@ impl FleetSubnetRootReleaseSetManifest {
                 Ok(total)
             }
         })?;
+        let mut unique_sources = BTreeSet::new();
+        let total_bytes = self
+            .fixtures
+            .iter()
+            .try_fold(total_bytes, |total, source| {
+                if unique_sources.insert(source.content_id) {
+                    total
+                        .checked_add(source.descriptor.encoded_length)
+                        .ok_or(ApplicationReleaseSetError::StoreBytesOverflow)
+                } else {
+                    Ok(total)
+                }
+            })?;
         if total_bytes > maximum_wasm_store_bytes {
             return Err(ApplicationReleaseSetError::WasmStoreLimitExceeded {
                 maximum_bytes: maximum_wasm_store_bytes,
@@ -534,8 +565,9 @@ impl FleetSubnetRootReleaseSetManifest {
         topology: &ComponentTopology,
         binding: &FleetSubnetRootBinding,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<Vec<u8>, ApplicationReleaseSetError> {
-        self.validate_against(topology, binding, union)?;
+        self.validate_against(topology, binding, union, fixtures)?;
         serde_json::to_vec(self).map_err(ApplicationReleaseSetError::Serialization)
     }
 
@@ -545,9 +577,10 @@ impl FleetSubnetRootReleaseSetManifest {
         topology: &ComponentTopology,
         binding: &FleetSubnetRootBinding,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<ReleaseSetDigest, ApplicationReleaseSetError> {
         Ok(ReleaseSetDigest::from_bytes(
-            Sha256::digest(self.canonical_bytes(topology, binding, union)?).into(),
+            Sha256::digest(self.canonical_bytes(topology, binding, union, fixtures)?).into(),
         ))
     }
 
@@ -557,8 +590,9 @@ impl FleetSubnetRootReleaseSetManifest {
         topology: &ComponentTopology,
         root: &PlannedFleetSubnetRootTopology,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<Vec<u8>, ApplicationReleaseSetError> {
-        self.validate_against_planned(topology, root, union)?;
+        self.validate_against_planned(topology, root, union, fixtures)?;
         serde_json::to_vec(self).map_err(ApplicationReleaseSetError::Serialization)
     }
 
@@ -568,9 +602,10 @@ impl FleetSubnetRootReleaseSetManifest {
         topology: &ComponentTopology,
         root: &PlannedFleetSubnetRootTopology,
         union: &ApplicationArtifactUnion,
+        fixtures: &FixtureArtifactManifest,
     ) -> Result<ReleaseSetDigest, ApplicationReleaseSetError> {
         Ok(ReleaseSetDigest::from_bytes(
-            Sha256::digest(self.canonical_bytes_planned(topology, root, union)?).into(),
+            Sha256::digest(self.canonical_bytes_planned(topology, root, union, fixtures)?).into(),
         ))
     }
 }
@@ -583,6 +618,9 @@ impl FleetSubnetRootReleaseSetManifest {
 
 #[derive(Debug, ThisError)]
 pub enum ApplicationReleaseSetError {
+    #[error(transparent)]
+    Fixture(#[from] FixtureArtifactError),
+
     #[error("application artifact {role} {kind} size cannot be represented")]
     ArtifactSizeOverflow {
         role: CanisterRole,
@@ -966,4 +1004,21 @@ fn expected_projection_entries(
         }
     }
     Ok(entries)
+}
+
+fn project_fixtures(
+    topology: &ComponentTopology,
+    fixtures: &FixtureArtifactManifest,
+) -> Vec<canic_core::dto::root_store::RootStoreFixture> {
+    let roles = topology_roles(topology);
+    fixtures
+        .entries
+        .iter()
+        .filter(|entry| roles.contains(&entry.role))
+        .map(|entry| canic_core::dto::root_store::RootStoreFixture {
+            role: entry.role.clone(),
+            content_id: entry.content_id,
+            descriptor: entry.descriptor.clone(),
+        })
+        .collect()
 }

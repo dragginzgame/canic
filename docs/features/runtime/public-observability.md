@@ -120,13 +120,57 @@ public_metrics = ["cycles", "shard_occupancy", "performance"]
 | --- | --- |
 | `cycles` | Sampled local canister cycle balance |
 | `shard_occupancy` | Assigned-key count and configured capacity per shard and pool, without partition keys |
-| `performance` | Recorded instruction totals and observation counts from performance metrics |
+| `performance` | Recorded instruction totals, observation counts, memory extents and cached anonymous allocation summaries |
 | `operations` | Existing aggregate operation and funding counters, with units |
 | `application` | Explicit aggregate values supplied by trusted application code |
 
 Shard occupancy counts assignments. An application may label these as users
 only when one assignment represents one user. Canic does not infer application
 user identities, active-user counts or game-specific semantics.
+
+### Public allocation summaries
+
+Selecting `performance` also selects the local allocation summary. The existing
+sampler reads bounded memory-manager metadata; public queries and history reads
+only read the cache. There is no additional endpoint, selector, remote collector
+or application callback. Omitting `performance` skips this collection and hides
+its values. Raw keys, owner strings, memory IDs and range claims remain protected.
+
+All summary names have the `memory.allocations.` prefix and no canister label.
+Rows use `Gauge`, preserve `observed_at_ns`, and use the existing bounded history.
+
+| Suffix | Unit | Meaning |
+| --- | --- | --- |
+| `state` | `state` | `1` = available, `2` = unsupported, `3` = collection failed or incomplete |
+| `physical_extent` | `bytes` | Allocated IC stable-memory extent |
+| `bucket_size` | `bytes` | Actual persisted bucket size |
+| `allocated_bucket_bytes`, `allocated_buckets` | `bytes`, `count` | Assigned manager capacity |
+| `bucket_capacity`, `remaining_buckets` | `count` | Manager bucket limit and remaining capacity |
+| `virtual_extent`, `bucket_slack` | `bytes` | Addressable virtual capacity and allocation beyond it |
+| `manager_metadata`, `unmanaged` | `bytes` | Manager metadata and physical extent outside its assigned region |
+| `known_binding`, `unknown_binding` | `bytes` | Allocated capacity with and without a current binding |
+| `current_binding.allocated`, `current_binding.slack` | `bytes` | Totals for current declared bindings |
+| `ledger_binding.allocated`, `ledger_binding.slack` | `bytes` | Totals for the substrate ledger binding |
+| `unknown_binding.allocated`, `unknown_binding.slack` | `bytes` | Totals without a current binding |
+| `ids_measured`, `ids_total` | `count` | Coverage of all usable manager IDs, including unopened IDs |
+| `metadata_read` | `bytes` | Bounded manager metadata read by the owner |
+| `payload_available` | `count` | `0`: allocation metadata cannot measure payload occupancy |
+
+Absence of `state` means no allocation sample has been published. An unsupported
+role publishes only the allocation state; Store is explicitly unsupported.
+A first failure also publishes only state. Later failures retain the last good
+allocation values with their original timestamps and publish a new failure state.
+The containing Performance family may still contain other valid metrics: check
+allocation state and row age before presenting these values as current. Do not
+render missing values as zero. History retains original successful source times
+on failure and reports its existing series/byte truncation limits.
+
+The physical, capacity and ownership identities described above are validated
+independently before publication. Current-binding totals include any owner with
+a current declaration; they are not a crate-specific breakdown. The ledger is
+already part of known-binding bytes. Do not add ownership partitions to capacity
+partitions. Virtual extent is not payload use, and bucket slack is not evidence
+of a leak or reclaimable memory. No payload byte gauge is fabricated.
 
 Instruction counts are not cycle costs. Funding amounts are transfers, not
 consumption. An application with an exact accounted cost can publish an

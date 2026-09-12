@@ -1,5 +1,6 @@
 #![expect(clippy::unused_async)]
 
+mod fixture_importer;
 mod reinstall_fixture;
 
 use candid::Principal;
@@ -10,7 +11,10 @@ thread_local! {
     static RECOVERY_GENERATION: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
-canic::start!();
+canic::start!(lifecycle_participant(
+    init = fixture_importer::restore,
+    post_upgrade = fixture_importer::restore
+),);
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {

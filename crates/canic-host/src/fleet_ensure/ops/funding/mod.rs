@@ -48,6 +48,7 @@ pub(in crate::fleet_ensure) fn intent(
     destination: u128,
 ) -> EffectRecord {
     EffectRecord {
+        publication_attempts: 0,
         maintenance_attempts: 0,
         action_sha256: action_sha256(action),
         created_principal: None,

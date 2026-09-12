@@ -1,0 +1,66 @@
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 19s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-cdb29c7405defb50)
+
+running 30 tests
+test replay_policy::tests::cost::coordinator_retirement_declares_guarded_value_transfer ... ok
+test replay_policy::tests::cost::costed_manifest_entries_declare_guards ... ok
+test replay_policy::tests::cost::costed_root_capability_command_entries_declare_guards ... ok
+test replay_policy::tests::cost::costed_role_command_entries_declare_guards ... ok
+test replay_policy::tests::cost::root_release_publication_is_the_role_owned_durable_publish_command ... ok
+test replay_policy::tests::cost::store_deletion_cycle_reclamation_is_guarded_and_convergent ... ok
+test replay_policy::tests::coverage::endpoint_manifest_entries_are_unique ... ok
+test replay_policy::tests::coverage::intentionally_non_idempotent_entries_must_state_reason ... ok
+test replay_policy::tests::coverage::release_candidate_manifests_have_no_release_blockers ... ok
+test replay_policy::tests::coverage::emitted_canic_update_endpoints_have_replay_policy_entries ... ok
+test replay_policy::tests::coverage::remaining_release_blockers_are_explicit_endpoint_slices ... ok
+test replay_policy::tests::endpoint::common_role_command_dispatch_is_variant_manifest_owned ... ok
+test replay_policy::tests::endpoint::store_byte_lanes_keep_their_direct_replay_contracts ... ok
+test replay_policy::tests::role_command::asynchronous_root_intents_are_replay_protected_by_operation_id ... ok
+test replay_policy::tests::role_command::coordinator_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::coordinator_long_running_intents_are_operation_replay_protected ... ok
+test replay_policy::tests::role_command::managed_admission_transitions_are_operation_replay_protected ... ok
+test replay_policy::tests::role_command::managed_auth_effects_own_exact_replay_contracts ... ok
+test replay_policy::tests::role_command::managed_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::managed_observability_does_not_acquire_mutation_replay_policy ... ok
+test replay_policy::tests::role_command::query_like_root_commands_do_not_acquire_mutation_replay_policy ... ok
+test replay_policy::tests::role_command::root_admission_transitions_are_operation_replay_protected ... ok
+test replay_policy::tests::role_command::root_capability_variant_delegates_to_its_nested_command_manifest ... ok
+test replay_policy::tests::role_command::root_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::store_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::store_effect_variants_preserve_cost_and_convergence ... ok
+test replay_policy::tests::root_capability::root_capability_acknowledgement_is_response_idempotent ... ok
+test replay_policy::tests::root_capability::root_capability_command_blockers_are_explicit ... ok
+test replay_policy::tests::root_capability::root_capability_command_variants_have_replay_policy_entries ... ok
+test replay_policy::tests::root_capability::root_capability_implemented_effect_commands_are_replay_protected ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1247 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_host-6f776a3af0746ca6)
+
+running 20 tests
+test fleet_ensure::json::tests::current_funding_action_emits_explicit_cycle_bounds ... ok
+test fleet_ensure::json::tests::fixture_upload_report_retains_identity_and_externalizes_payload ... ok
+test fleet_ensure::json::tests::report_projects_store_chunk_as_bounded_local_content_reference ... ok
+test fleet_ensure::ops::current_protocol::fixture::tests::publication_reconciles_each_prefix_and_completed_replay ... ok
+test release_set::fixture::tests::configured_sources_bind_metadata_and_payload_even_in_excluded_directories ... ok
+test fleet_ensure::ops::plan_content::tests::read_object_rejects_a_linked_content_object ... ok
+test release_set::fixture::tests::configured_source_manifest_is_strict_and_cannot_escape_its_directory ... ok
+test fleet_ensure::ops::plan_content::tests::read_object_rejects_invalid_expected_size_before_object_access ... ok
+test fleet_ensure::ops::plan_content::tests::read_object_rejects_oversized_truncated_and_hash_mismatched_content ... ok
+test release_set::fixture::tests::chunk_bounds_and_workspace_path_confinement_precede_persistence ... ok
+test fleet_ensure::ops::plan_content::tests::fixture_content_round_trips_without_inline_payloads_and_rejects_substitution ... ok
+test release_set::fixture::tests::duplicate_unknown_and_infrastructure_roles_never_publish_a_manifest ... ok
+test fleet_ensure::tests::current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes ... ok
+test fleet_ensure::ops::current_protocol::tests::fresh_fleet_store_bootstrap_is_deterministic ... ok
+test release_set::fixture::tests::source_and_retained_links_are_refused ... ok
+test release_set::fixture::tests::restored_source_does_not_hide_different_bytes_retained_during_build ... ok
+test release_set::fixture::tests::changed_sources_cannot_replace_selected_content_and_tampering_is_detected ... ok
+test release_set::fixture::tests::interrupted_copy_resumes_without_overwrite_and_finalization_prevents_repair ... ok
+test release_set::fixture::tests::canonical_role_binding_preserves_chunk_order_and_separates_release_identity ... ok
+test fleet_ensure::tests::interruption_at_every_effect_converges_once_and_second_run_has_zero_effects ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 561 filtered out; finished in 0.34s
+

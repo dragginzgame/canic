@@ -55,6 +55,7 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    monotonic_transition("PrepareStoreFixture", "root.prepare_store_fixture.v1"),
     snapshot_convergent(
         "GetOrCreateDelegationProof",
         "auth.get_or_create_chain_key_delegation_proof.v1",
@@ -370,6 +371,8 @@ pub const STORE_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
     response_idempotent("ActivateFleet", "fleet_activation.activate.v1"),
     query_or_read_only("InspectTemplate"),
     monotonic_transition("PrepareChunkSet", "wasm_store.prepare.v1"),
+    monotonic_transition("PrepareFixture", "wasm_store.prepare_fixture.v1"),
+    monotonic_transition("SetFixtureGrant", "wasm_store.set_fixture_grant.v1"),
     monotonic_transition(
         "PrepareFleetCredential",
         "fleet_activation.prepare_credential_generation.v1",

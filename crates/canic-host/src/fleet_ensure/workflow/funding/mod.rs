@@ -59,6 +59,7 @@ pub(super) fn verify<E: std::error::Error + 'static>(
                 || effect.pre_cycles.is_none()
                 || effect.created_principal.is_some()
                 || effect.pre_canister_version.is_some()
+                || effect.publication_attempts != 0
                 || effect.maintenance_attempts != 0
             {
                 return Err(EnsureWorkflowError::JournalIntegrity);

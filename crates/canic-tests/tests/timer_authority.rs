@@ -8,6 +8,7 @@ use canic::{
         cycles::{CycleTopupEvent, CycleTrackerEntry},
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
+        public_status::{PublicHistoryRequest, PublicMetricFamily, PublicSnapshotState},
         role::{CycleBalanceStatusResponse, MetricsStatusRequest},
         runtime::{
             CanicRuntimeStatus, RuntimeCheckStatus, TimerProcessCondition, TimerRegistrationStatus,
@@ -145,6 +146,72 @@ struct PublicSamplingProbe {
     sample_instructions: u64,
     sample: Result<(), Error>,
     cycle_tracking: Result<(), Error>,
+    allocation_unchanged: bool,
+    allocation_ids_measured: u64,
+}
+
+#[test]
+fn public_memory_sampling_retains_bounded_history_at_the_source_ceiling() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister = fixture.install_runtime_probe_canister();
+    let mut maximum = 0;
+    let mut first_sample = None;
+    // Cross the complete retained window and exercise ring replacement.
+    for period in 0..300 {
+        fixture.pic.advance_time(Duration::from_secs(301));
+        let response: Result<PublicSamplingProbe, Error> = fixture
+            .pic
+            .update_candid(
+                canister,
+                "qualify_public_metrics_sampling",
+                (if period == 0 { 4096_u16 } else { 0_u16 }, false),
+            )
+            .unwrap();
+        let response = response.unwrap();
+        response.sample.unwrap();
+        response.cycle_tracking.unwrap();
+        assert!(response.allocation_unchanged);
+        assert_eq!(response.allocation_ids_measured, 255);
+        maximum = maximum.max(response.sample_instructions);
+        let response: Result<PublicStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                canister,
+                fixture.root,
+                protocol::CANIC_PUBLIC_STATUS,
+                (PublicStatusRequest::History(PublicHistoryRequest {
+                    family: PublicMetricFamily::Performance,
+                    name: "memory.allocations.physical_extent".into(),
+                    canister_id: None,
+                    page: PageRequest {
+                        offset: 0,
+                        limit: 1000,
+                    },
+                }),),
+            )
+            .unwrap();
+        let PublicStatusResponse::History(history) = response.unwrap() else {
+            panic!("history response");
+        };
+        assert_eq!(history.state, PublicSnapshotState::Fresh);
+        assert!(history.reserved_bytes <= history.byte_limit);
+        assert!(history.points.entries.len() <= 288);
+        assert!(history.points.entries.iter().all(|point| point.value > 0));
+        let latest = history.points.entries.last().unwrap().observed_at_ns;
+        if period == 0 {
+            first_sample = Some(latest);
+        }
+        if period == 299 {
+            assert!(history.points.entries.first().unwrap().observed_at_ns > first_sample.unwrap());
+            println!(
+                "CANIC164 history points={} reserved_bytes={} byte_limit={} max_sample_instructions={maximum}",
+                history.points.entries.len(),
+                history.reserved_bytes,
+                history.byte_limit
+            );
+        }
+    }
+    report_sampling_cost("allocation summaries with full retained history", maximum);
 }
 
 #[test]
@@ -1026,4 +1093,30 @@ fn assert_public_process_projection(
         assert_eq!(row.unit, "bytes");
         assert_eq!(row.kind, canic::dto::public_status::PublicMetricKind::Gauge);
     }
+    let allocation = |suffix: &str| {
+        performance
+            .metrics
+            .entries
+            .iter()
+            .find(|row| row.name == format!("memory.allocations.{suffix}"))
+            .unwrap()
+            .value
+    };
+    assert_eq!(allocation("state"), 1);
+    assert_eq!(allocation("ids_measured"), allocation("ids_total"));
+    assert_eq!(allocation("payload_available"), 0);
+    assert_eq!(
+        allocation("physical_extent"),
+        allocation("manager_metadata")
+            + allocation("allocated_bucket_bytes")
+            + allocation("unmanaged")
+    );
+    assert_eq!(
+        allocation("allocated_bucket_bytes"),
+        allocation("virtual_extent") + allocation("bucket_slack")
+    );
+    assert_eq!(
+        allocation("allocated_bucket_bytes"),
+        allocation("known_binding") + allocation("unknown_binding")
+    );
 }

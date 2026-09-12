@@ -92,6 +92,11 @@ crate::ic_memory_range!(
     start = role_contract::allocation::CANIC_CORE_UPPER_MIN_ID,
     end = role_contract::allocation::CANIC_CORE_MAX_ID,
 );
+ic_memory_range!(
+    authority = CANIC_CORE_MEMORY_AUTHORITY,
+    start = role_contract::allocation::CANIC_CORE_AUTH_MIN_ID,
+    end = role_contract::allocation::CANIC_CORE_AUTH_MAX_ID,
+);
 
 #[cfg(test)]
 const _: () = {

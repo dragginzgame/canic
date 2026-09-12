@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "scope": "targeted working-tree initial-grant and installed-assignment qualification",
+  "checks": [
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked --no-fail-fast -p canic-core -p canic-control-plane -p canic-host --lib -- fixture_assignment ops::fixture_grant ops::storage::fleet_activation::tests workflow::bootstrap::root_store fleet_ensure::ops::current_protocol::tests release_set::fixture",
+      "exit_code": 0,
+      "passed": 47,
+      "log": "native-tests.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --lib fixture_assignment",
+      "exit_code": 0,
+      "passed": 3,
+      "log": "native-tests.log",
+      "scope": "same assignment cases repeated after test module relocation"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo check --locked -p canic-control-plane --no-default-features --features root-control-plane --lib",
+      "exit_code": 0,
+      "log": "root-only.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo check --locked -p canic-control-plane --no-default-features --features wasm-store-canister --lib",
+      "exit_code": 0,
+      "log": "store-only.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-core -p canic-control-plane -p canic-host -p canic-testing-internal --features canic-testing-internal/governed-pocketic-tests --lib --tests -- -D warnings",
+      "exit_code": 0,
+      "log": "clippy.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "exit_code": 0,
+      "passed": 1,
+      "case_seconds": 440.06,
+      "runner_seconds": 525,
+      "log": "pocketic.log"
+    }
+  ],
+  "runtime_source_snapshot": "source.sha256",
+  "runtime_source_inputs": 1622,
+  "runtime_source_unchanged": true,
+  "native_lineage": "Final native, role and Clippy checks preceded only moving the unchanged new tests.rs into tests/mod.rs. The three assignment tests pass again after that relocation. Final PocketIC covers the complete source snapshot.",
+  "ready_to_push": false
+}

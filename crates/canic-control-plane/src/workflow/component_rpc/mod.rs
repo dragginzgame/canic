@@ -13,7 +13,7 @@ use canic_core::{
         ops::ic::IcOps,
         workflow::rpc::{
             RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
-            RootCapabilityMemberLifecycle, RootCapabilityParentAuthority,
+            RootCapabilityParentAuthority,
         },
     },
     diagnostics::codes,
@@ -127,7 +127,10 @@ fn caller_authority(
             )
         }
         canic_core::dto::component_registry::ComponentLifecycleStatus::Prepared
-            if matches!(request, Request::AllocatePlacementChild(_)) =>
+            if matches!(
+                request,
+                Request::AllocatePlacementChild(_) | Request::Cycles(_)
+            ) =>
         {
             super::component_auth::require_prepared_fleet_subnet_root()?;
             RootCapabilityMemberAuthority::try_from_prepared_member(
@@ -140,13 +143,6 @@ fn caller_authority(
         )),
     }
     .map_err(Error::from)?;
-    if member.lifecycle() == RootCapabilityMemberLifecycle::Prepared
-        && !matches!(request, Request::AllocatePlacementChild(_))
-    {
-        return Err(Error::from_registered(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
-        ));
-    }
     Ok(RootCapabilityCallerAuthority::ComponentMember(member))
 }
 

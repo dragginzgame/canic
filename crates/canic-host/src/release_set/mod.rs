@@ -4,6 +4,7 @@ mod application;
 mod artifact;
 mod config;
 mod current;
+pub mod fixture;
 mod infrastructure;
 mod paths;
 

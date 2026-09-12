@@ -145,6 +145,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::TemplateChunkRefs, vec![12]),
         (StateAllocationKey::TemplateChunkPayloads, vec![13]),
         (StateAllocationKey::WasmStoreGcState, vec![14]),
+        (StateAllocationKey::FixtureStore, vec![68]),
         (StateAllocationKey::FleetCoordinatorRegistry, vec![15]),
         (StateAllocationKey::RootWasmStoreState, vec![16]),
         (StateAllocationKey::RootFleetRegistryMirror, vec![17]),
@@ -189,6 +190,9 @@ fn canonical_allocations_form_packed_owner_ledgers() {
             ))
             .chain(std::iter::once(
                 allocation::memory::control_plane::ROOT_ADMISSION_ID,
+            ))
+            .chain(std::iter::once(
+                allocation::memory::control_plane::FIXTURE_STORE_ID
             ))
             .collect::<Vec<_>>()
     );
@@ -872,7 +876,7 @@ fn repeated_selection_merges_allocation_provenance() {
 }
 
 #[test]
-fn built_in_wasm_store_keeps_template_and_gc_ids() {
+fn built_in_wasm_store_owns_template_gc_and_fixture_ids() {
     let resolution = resolve_role_contract(RoleContractInput {
         source: RoleContractSource::BuiltIn(BuiltInRoleKind::WasmStore),
         declared_features: BTreeSet::from([CanicFeatureKey::WasmStoreCanister]),
@@ -886,7 +890,7 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
         allocation_ids(&contract.allocations),
         vec![
             10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-            49, 60,
+            49, 60, 68,
         ]
     );
     assert_eq!(

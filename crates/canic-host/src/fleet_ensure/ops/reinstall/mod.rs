@@ -10,8 +10,71 @@ pub(in crate::fleet_ensure) mod source;
 use super::{EnsureStateError, FleetReinstallObservation};
 use crate::fleet_ensure::model::{
     DesiredCanister, DesiredCanisterKind, DesiredFleet, DesiredPresence, FleetReinstallRecord,
+    FleetReinstallSourceRecord, ReviewedDesiredFleetRecord,
 };
 use std::{collections::BTreeMap, path::Path};
+
+/// Bind every resolved target artifact, including generated continuation contracts.
+pub(in crate::fleet_ensure) fn target_artifacts_sha256(
+    root: &Path,
+    desired: &DesiredFleet,
+) -> Result<String, EnsureStateError> {
+    let artifacts = super::resolve_desired_artifacts(root, desired)?;
+    let steps = artifacts
+        .protocol_by_step
+        .iter()
+        .map(|(name, step)| {
+            (
+                name,
+                &step.candid_sha256,
+                &step.command_args_sha256,
+                &step.expected_status_sha256,
+                &step.status_args_sha256,
+            )
+        })
+        .collect::<Vec<_>>();
+    let continuation = artifacts.continuation.as_ref().map(|authority| {
+        (
+            &authority.app_config_sha256,
+            &authority.application_artifact_union_sha256,
+            &authority.coordinator_candid_sha256,
+            &authority.root_candid_sha256,
+            &authority.store_candid_sha256,
+        )
+    });
+    let bytes = crate::fleet_ensure::json::to_vec(&(
+        continuation,
+        artifacts.drain_candid_sha256_by_canister,
+        artifacts.init_arg_sha256_by_canister,
+        artifacts.init_candid_sha256_by_canister,
+        artifacts.wasm_sha256_by_canister,
+        steps,
+    ))
+    .map_err(|source| EnsureStateError::Decode {
+        path: root.to_path_buf(),
+        source,
+    })?;
+    Ok(canic_core::cdk::utils::hash::sha256_hex(&bytes))
+}
+
+/// Bind the completed source input to its local infrastructure and protocol bytes.
+pub(in crate::fleet_ensure) fn capture_source(
+    root: &Path,
+    desired: &DesiredFleet,
+) -> Result<FleetReinstallSourceRecord, EnsureStateError> {
+    let mut wasm_sha256_by_canister = BTreeMap::new();
+    for canister in &desired.canisters {
+        if let Some(path) = &canister.wasm {
+            wasm_sha256_by_canister
+                .insert(canister.name.clone(), super::artifact_sha256(root, path)?);
+        }
+    }
+    Ok(FleetReinstallSourceRecord {
+        reviewed_desired: ReviewedDesiredFleetRecord::capture(desired),
+        wasm_sha256_by_canister,
+        candid_sha256_by_path: candid_hashes(root, desired)?,
+    })
+}
 
 pub(in crate::fleet_ensure) fn candid_hashes(
     root: &Path,
@@ -19,7 +82,11 @@ pub(in crate::fleet_ensure) fn candid_hashes(
 ) -> Result<BTreeMap<String, String>, EnsureStateError> {
     let mut hashes = BTreeMap::new();
     if let Some(protocol) = &desired.protocol {
-        for path in [&protocol.coordinator_candid, &protocol.root_candid] {
+        for path in [
+            &protocol.coordinator_candid,
+            &protocol.root_candid,
+            &protocol.store_candid,
+        ] {
             hashes.insert(path.clone(), super::artifact_sha256(root, path)?);
         }
     }
@@ -143,19 +210,13 @@ pub(in crate::fleet_ensure) fn terminal_authority(
     binding: &crate::fleet_ensure::model::RootManagementBinding,
 ) -> crate::fleet_ensure::model::RootManagementBinding {
     let mut expected = binding.clone();
-    if plan
-        .reinstall
-        .as_ref()
-        .is_some_and(|intent| intent.activation_reset.is_some())
-    {
-        for action in plan.canisters.iter().flat_map(|canister| &canister.actions) {
-            if let crate::fleet_ensure::model::EnsureAction::Install {
-                name, wasm_sha256, ..
-            } = action
-                && name == &binding.name
-            {
-                expected.module_sha256.clone_from(wasm_sha256);
-            }
+    for action in plan.canisters.iter().flat_map(|canister| &canister.actions) {
+        if let crate::fleet_ensure::model::EnsureAction::Install {
+            name, wasm_sha256, ..
+        } = action
+            && name == &binding.name
+        {
+            expected.module_sha256.clone_from(wasm_sha256);
         }
     }
     expected

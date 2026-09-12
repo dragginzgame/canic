@@ -108,6 +108,7 @@ impl RoleCapabilityKey {
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StateAllocationKey {
+    FixtureStore,
     TemplateManifests,
     TemplateChunkSets,
     TemplateChunkRefs,

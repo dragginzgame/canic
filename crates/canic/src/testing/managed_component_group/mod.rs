@@ -425,17 +425,16 @@ impl ManagedComponentGroupFixture {
                 ManagedComponentGroupQualificationError::Authority(error.to_string())
             })?;
         let managed_binding = ManagedCanisterBinding::ComponentChild(binding.clone());
-        let admission = if self.role_uses_admission(&allocation.canister_role)? {
-            Some(
-                compile_fleet_admission_projection(&self.policy, managed_binding.clone()).map_err(
-                    |error| ManagedComponentGroupQualificationError::Authority(error.to_string()),
-                )?,
-            )
-        } else {
-            None
-        };
+        let admission = self
+            .role_uses_admission(&allocation.canister_role)?
+            .then(|| compile_fleet_admission_projection(&self.policy, managed_binding.clone()))
+            .transpose()
+            .map_err(|error| {
+                ManagedComponentGroupQualificationError::Authority(error.to_string())
+            })?;
         let install_id = allocation.request_id;
         let payload = CanisterInitPayload {
+            fixture: None,
             admission,
             authority: CanisterInitAuthority::ComponentChild {
                 root: self.root.clone(),
@@ -894,6 +893,7 @@ impl TopLevelInstallContext<'_> {
                 ManagedComponentGroupQualificationError::Authority(error.to_string())
             })?;
         let payload = CanisterInitPayload {
+            fixture: None,
             admission,
             authority: CanisterInitAuthority::Component {
                 root: self.root.clone(),

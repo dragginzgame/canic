@@ -26,6 +26,7 @@ use canic_core::ids::BuildNetwork;
 use flate2::{Compression, GzBuilder};
 
 pub use wasm::enforce_wasm_code_section_limit;
+pub use wasm::wasm_artifact_metrics;
 
 const ARTIFACT_STAGE_ATTEMPTS: usize = 64;
 static ARTIFACT_STAGE_SEQUENCE: AtomicU64 = AtomicU64::new(0);

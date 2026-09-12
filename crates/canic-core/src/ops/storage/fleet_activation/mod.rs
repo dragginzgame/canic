@@ -4,6 +4,7 @@
 //! Does not own: lifecycle orchestration, embedded build lookup, endpoint policy, or timers.
 //! Boundary: initialization writes `Prepared` once; status rejects invalid role/state projections.
 
+mod fixture;
 mod mapper;
 
 #[cfg(test)]
@@ -26,6 +27,7 @@ use crate::{
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse,
         },
+        fixture_provisioning::FixtureAssignment,
         fleet_activation::{
             FleetActivationIdentity, FleetActivationRequest, FleetActivationStatusResponse,
             FleetCascadeActivationEvidence, FleetCascadeManifestEntry,
@@ -126,6 +128,7 @@ pub struct PreparedFleetActivationSnapshot(Option<FleetActivationRecord>);
 
 /// Exact managed-runtime identity validated before protected activation persistence.
 pub struct PreparedComponentRuntime {
+    pub fixture: Option<Box<crate::dto::fixture_provisioning::FixtureAssignment>>,
     pub binding: ManagedCanisterBinding,
     pub deployment: ProtectedComponentDeployment,
 }
@@ -225,6 +228,21 @@ impl FleetActivationOps {
             | FleetActivationStateRecord::Active { identity, .. } => identity,
         };
         Ok(identity.fleet)
+    }
+
+    /// Read the immutable fixture selection without constructing or hashing Directory status.
+    pub(crate) fn component_fixture_assignment()
+    -> Result<Option<Box<FixtureAssignment>>, FleetActivationOpsError> {
+        let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        fixture::validate(&record)?;
+        let runtime =
+            record
+                .component_runtime
+                .ok_or_else(|| FleetActivationOpsError::InvalidRecord {
+                    reason: "protected non-root is not a managed Component-tree runtime"
+                        .to_string(),
+                })?;
+        Ok(runtime.fixture.as_ref().map(fixture::to_dto).map(Box::new))
     }
 
     pub(crate) fn component_runtime_status()
@@ -806,6 +824,9 @@ fn initialize_prepared(
         cascade_manifest: None,
         credential_manifests: Vec::new(),
         component_runtime: component_runtime.map(|runtime| ComponentRuntimeRecord {
+            fixture: runtime
+                .fixture
+                .map(|assignment| fixture::to_record(*assignment)),
             binding: runtime.binding,
             deployment: protected_component_deployment_dto_to_record(runtime.deployment),
             directory: None,
@@ -875,6 +896,7 @@ fn wasm_store_authority_record_to_id(
 }
 
 fn validate_record_bound(record: &FleetActivationRecord) -> Result<(), FleetActivationOpsError> {
+    fixture::validate(record)?;
     let bytes = crate::cdk::serialize::serialize(record)
         .map_err(|error| FleetActivationOpsError::Encode(error.to_string()))?;
     let maximum = MAX_FLEET_ACTIVATION_RECORD_BYTES as usize;
@@ -960,6 +982,7 @@ fn replace_record(record: FleetActivationRecord) -> Result<(), FleetActivationOp
 fn component_runtime_status(
     record: FleetActivationRecord,
 ) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
+    fixture::validate(&record)?;
     let (operation_id, runtime_active, state_activated_at_ns) = match &record.state {
         FleetActivationStateRecord::Prepared { identity, .. } => {
             (identity.operation_id, false, None)
@@ -1029,6 +1052,10 @@ fn component_runtime_status(
         }
     };
     Ok(ComponentRuntimeStatusResponse {
+        fixture: component_runtime
+            .fixture
+            .as_ref()
+            .map(|assignment| Box::new(fixture::to_dto(assignment))),
         operation_id,
         binding: component_runtime.binding,
         deployment: Box::new(protected_component_deployment_record_to_dto(
@@ -1871,6 +1898,7 @@ mod tests {
             release_build_id,
             release_build_id,
             Some(PreparedComponentRuntime {
+                fixture: None,
                 binding: ManagedCanisterBinding::Component(binding.clone()),
                 deployment: deployment.clone(),
             }),
@@ -2021,6 +2049,7 @@ mod tests {
             release_build_id,
             release_build_id,
             Some(PreparedComponentRuntime {
+                fixture: None,
                 binding: ManagedCanisterBinding::Component(binding.clone()),
                 deployment: ProtectedComponentDeployment::UngroupedOrdinary {
                     binding: binding.clone(),

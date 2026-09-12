@@ -9,6 +9,7 @@ pub mod auth;
 pub mod blob_storage;
 pub mod cycles_funding;
 pub mod env;
+pub mod fixture_importer;
 pub mod fleet_activation;
 pub mod fleet_admission_authority;
 pub mod fleet_admission_policy;

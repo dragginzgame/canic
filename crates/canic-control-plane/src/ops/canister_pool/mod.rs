@@ -413,6 +413,20 @@ impl CanisterPoolOps {
         }
     }
 
+    /// Source access may only be issued to the current workload allocation.
+    pub fn require_workload_claim(
+        canister_id: Principal,
+        claim: &CanisterPoolClaimKey,
+    ) -> Result<(), InternalError> {
+        let expected = claim_record(claim);
+        if !matches!(required_asset(canister_id)?.status,
+            CanisterPoolAssetStatusRecord::Workload(current) if current == expected)
+        {
+            return Err(InternalError::conflict());
+        }
+        Ok(())
+    }
+
     pub fn finalize_claim(
         claim: &CanisterPoolClaimKey,
         canister_id: Principal,
@@ -1117,6 +1131,33 @@ impl CanisterPoolOps {
     #[must_use]
     pub fn completed_handoff_recipient(canister_id: Principal) -> Option<Principal> {
         CanisterPoolStore::handoff_receipt(&canister_id).map(|receipt| receipt.recipient)
+    }
+
+    /// Retain the exact allocation identity while its physical asset awaits recycling.
+    pub fn pending_recycling_claim(
+        canister_id: Principal,
+    ) -> Result<Option<CanisterPoolClaimKey>, InternalError> {
+        Ok(match required_asset(canister_id)?.status {
+            CanisterPoolAssetStatusRecord::Recycling {
+                claim,
+                reset: CanisterPoolRecycleResetRecord::Pending,
+            } => Some(CanisterPoolClaimKey {
+                component: claim.component,
+                operation_id: claim.operation_id,
+            }),
+            _ => None,
+        })
+    }
+
+    /// A late reset callback cannot act on a returned or newly claimed physical asset.
+    pub fn require_pending_recycling_claim(
+        canister_id: Principal,
+        expected: &CanisterPoolClaimKey,
+    ) -> Result<(), InternalError> {
+        if Self::pending_recycling_claim(canister_id)?.as_ref() != Some(expected) {
+            return Err(InternalError::conflict());
+        }
+        Ok(())
     }
 
     pub fn recycling_reset_is_terminal(canister_id: Principal) -> Result<bool, InternalError> {
@@ -2248,10 +2289,19 @@ mod tests {
                 .expect("ready asset");
         CanisterPoolOps::finalize_claim(&claim, recycled, 5).expect("workload");
         imported_ready_with_config(&asset_config, principal(5), Cycles::new(100), 6);
+        CanisterPoolOps::require_workload_claim(recycled, &claim).unwrap();
         CanisterPoolOps::register_recycled_pending(recycled, 6)
             .expect("recycled asset remains managed");
+        assert_eq!(
+            CanisterPoolOps::require_workload_claim(recycled, &claim)
+                .unwrap_err()
+                .public_code(),
+            InternalError::conflict().public_code()
+        );
         CanisterPoolOps::register_recycled_pending(recycled, 7)
             .expect("exact recycle retry remains idempotent");
+        CanisterPoolOps::require_pending_recycling_claim(recycled, &claim)
+            .expect("the retained allocation fences grant revocation");
         assert_eq!(CanisterPoolOps::workload_count(), 1);
         assert_eq!(
             CanisterPoolOps::response(asset_config.clone(), None, 10).pooled,
@@ -2261,6 +2311,12 @@ mod tests {
             .expect_err("Registry membership cannot settle before reset is terminal");
         CanisterPoolOps::mark_ready(recycled, Cycles::new(100), 8)
             .expect("record terminal physical reset");
+        assert_eq!(
+            CanisterPoolOps::require_pending_recycling_claim(recycled, &claim)
+                .unwrap_err()
+                .public_code(),
+            InternalError::conflict().public_code(),
+        );
         CanisterPoolOps::validate_complete_recycling(recycled, claim.component)
             .expect("terminal recycling is safe to settle with membership");
         assert_eq!(CanisterPoolOps::workload_count(), 1);

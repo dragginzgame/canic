@@ -34,7 +34,7 @@ use crate::{
 use candid::{CandidType, Nat, Principal};
 use canic_core::{
     cdk::{types::Cycles, utils::hash::hex_bytes},
-    dto::canister::{CanisterInspectionRequest, CanisterStatusResponse},
+    dto::canister::CanisterInspectionRequest,
     dto::pool::{
         CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus,
         CanisterPoolCreationFailure, CanisterPoolCreationProgress, CanisterPoolHandoff,
@@ -499,19 +499,14 @@ enum RootInspectionCommand {
     InspectCanister(CanisterInspectionRequest),
 }
 
+/// Protected management evidence shared by Root-owned observation and pool funding.
 #[derive(CandidType, Deserialize)]
 enum RootInspectionResponse {
-    InspectCanister(CanisterStatusResponse),
-}
-
-/// Minimal protected management projection needed to authorize native pool funding.
-#[derive(CandidType, Deserialize)]
-enum RootFundingInspectionResponse {
-    InspectCanister(RootFundingInspectionStatus),
+    InspectCanister(RootInspectionStatus),
 }
 
 #[derive(CandidType, Clone, Deserialize)]
-struct RootFundingInspectionStatus {
+struct RootInspectionStatus {
     status: canic_core::dto::canister::CanisterStatusType,
     settings: ManagementCanisterObservationSettings,
     module_hash: Option<Vec<u8>>,
@@ -828,7 +823,7 @@ pub enum IcpEnsurePlatformError {
 /// Read evidence shared only by projections of one Fleet observation.
 #[derive(Default)]
 struct FleetObservationSnapshot {
-    pool_inspections: BTreeMap<PoolInspectionAuthority, RootFundingInspectionStatus>,
+    pool_inspections: BTreeMap<PoolInspectionAuthority, RootInspectionStatus>,
     pool_pages: BTreeMap<(Principal, Option<Principal>), CanisterPoolResponse>,
     statuses: BTreeMap<String, Option<LiveCanister>>,
 }
@@ -838,6 +833,50 @@ struct FleetObservationSnapshot {
 struct PoolInspectionAuthority {
     root: Principal,
     target: Principal,
+}
+
+impl PoolInspectionAuthority {
+    fn parse(root: &str, target: &str) -> Result<Self, IcpEnsurePlatformError> {
+        Ok(Self {
+            root: parse_principal("Fleet Subnet Root", root)?,
+            target: parse_principal("Root-owned inspection target", target)?,
+        })
+    }
+}
+
+/// Consumer requirements kept separate from the transport result shared by one batch.
+enum PoolInspectionRequirement {
+    PendingFresh,
+    RootControlled(InspectedModule),
+}
+
+/// Prepared only after the caller's Root and operator checks succeed.
+struct PreparedPoolInspection<'a> {
+    authority: PoolInspectionAuthority,
+    name: &'a str,
+    root: &'a str,
+    requirement: PoolInspectionRequirement,
+}
+
+/// A configured pending asset awaiting its independent management inspection.
+struct PendingPoolObservation<'a> {
+    configured: &'a crate::fleet_ensure::model::DesiredCanister,
+    principal: &'a str,
+    asset: CanisterPoolAsset,
+    inspection: PreparedPoolInspection<'a>,
+}
+
+/// Pool-page and Root checks stay ordered before independent inspections overlap.
+enum PreparedRootOwnedObservation<'a> {
+    Observed(Option<LiveCanister>),
+    Pending(Box<PendingPoolObservation<'a>>),
+}
+
+/// Completed transport outcomes local to one drained inspection batch.
+#[derive(Default)]
+struct PoolInspectionBatch {
+    responses:
+        BTreeMap<PoolInspectionAuthority, Result<RootInspectionStatus, IcpEnsurePlatformError>>,
 }
 
 /// Distinguish an unobserved identity from an observed missing canister.
@@ -1279,7 +1318,7 @@ impl IcpEnsurePlatform {
                     ));
                 }
                 let target = parse_principal("reset pool asset", &asset.principal)?;
-                let RootFundingInspectionResponse::InspectCanister(response) = call_with_candid(
+                let RootInspectionResponse::InspectCanister(response) = call_with_candid(
                     &self.icp,
                     candid_by_root.get(root_name).ok_or_else(|| {
                         pool_configuration_error("missing reset read contract".to_string())
@@ -1607,7 +1646,18 @@ impl IcpEnsurePlatform {
         configured: &crate::fleet_ensure::model::DesiredCanister,
         principal: &str,
         state: &FleetEnsureStateRecord,
-    ) -> Result<Option<CanisterStatusResponse>, IcpEnsurePlatformError> {
+    ) -> Result<Option<RootInspectionStatus>, IcpEnsurePlatformError> {
+        self.root_owned_inspection_authority(configured, principal, state)?
+            .map(|authority| self.read_pool_inspection(authority))
+            .transpose()
+    }
+
+    fn root_owned_inspection_authority(
+        &self,
+        configured: &crate::fleet_ensure::model::DesiredCanister,
+        principal: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<PoolInspectionAuthority>, IcpEnsurePlatformError> {
         let parent = configured.parent.as_deref().ok_or_else(|| {
             IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
                 canister: configured.name.clone(),
@@ -1674,18 +1724,7 @@ impl IcpEnsurePlatform {
             return Ok(None);
         }
         self.require_operator()?;
-        let response: RootInspectionResponse = call_with_candid(
-            &self.icp,
-            &self.root_protocol_candid()?,
-            parse_principal("Fleet Subnet Root", root)?,
-            canic_protocol::CANIC_ROOT_COMMAND,
-            &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
-                canister_id: parse_principal("Root-owned canister", principal)?,
-            }),
-        )
-        .map_err(current_protocol::CurrentProtocolError::from)?;
-        let RootInspectionResponse::InspectCanister(response) = response;
-        Ok(Some(response))
+        PoolInspectionAuthority::parse(root, principal).map(Some)
     }
 
     fn created_canister_cycles(
@@ -1806,6 +1845,21 @@ impl IcpEnsurePlatform {
         principal: &str,
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        match self.prepare_root_owned_observation(configured, principal, state)? {
+            PreparedRootOwnedObservation::Observed(live) => Ok(live),
+            PreparedRootOwnedObservation::Pending(pending) => {
+                let response = self.read_pool_inspection(pending.inspection.authority)?;
+                self.complete_pending_pool_observation(*pending, response)
+            }
+        }
+    }
+
+    fn prepare_root_owned_observation<'a>(
+        &'a self,
+        configured: &'a crate::fleet_ensure::model::DesiredCanister,
+        principal: &'a str,
+        state: &'a FleetEnsureStateRecord,
+    ) -> Result<PreparedRootOwnedObservation<'a>, IcpEnsurePlatformError> {
         let candid = self.root_protocol_candid()?;
         let parent = configured.parent.as_deref().ok_or_else(|| {
             current_protocol::CurrentProtocolError::Configuration(format!(
@@ -1821,7 +1875,8 @@ impl IcpEnsurePlatform {
         })?;
         if self.required_root_status(&configured.name, root)? == CanisterRuntimeStatus::Stopped {
             return self
-                .retained_root_owned_observation(configured, principal, parent, root, state);
+                .retained_root_owned_observation(configured, principal, parent, root, state)
+                .map(PreparedRootOwnedObservation::Observed);
         }
         let target = parse_principal("Root-owned canister", principal)?;
         let mut start_after = None;
@@ -1831,7 +1886,7 @@ impl IcpEnsurePlatform {
                 parse_principal("Fleet Subnet Root", root)?,
                 start_after,
             )?;
-            if let Some(mut asset) = page
+            if let Some(asset) = page
                 .entries
                 .into_iter()
                 .find(|asset| asset.canister_id == target)
@@ -1841,14 +1896,23 @@ impl IcpEnsurePlatform {
                     canic_core::dto::pool::CanisterPoolAssetStatus::PendingReset
                 ) && asset.cycles.to_u128() == 0
                 {
-                    let cycles = self.inspect_pending_pool_balance(configured, principal, state)?;
-                    asset.cycles = Cycles::new(cycles);
+                    let inspection =
+                        self.prepare_pending_pool_inspection(configured, principal, state)?;
+                    return Ok(PreparedRootOwnedObservation::Pending(Box::new(
+                        PendingPoolObservation {
+                            configured,
+                            principal,
+                            asset,
+                            inspection,
+                        },
+                    )));
                 }
-                return Self::observed_root_owned_asset(configured, principal, root, asset);
+                return Self::observed_root_owned_asset(configured, principal, root, asset)
+                    .map(PreparedRootOwnedObservation::Observed);
             }
             let next = page.next_start_after;
             if next.is_none() {
-                return Ok(None);
+                return Ok(PreparedRootOwnedObservation::Observed(None));
             }
             if next == start_after {
                 return Err(
@@ -1862,12 +1926,23 @@ impl IcpEnsurePlatform {
         }
     }
 
-    fn inspect_pending_pool_balance(
+    fn complete_pending_pool_observation(
         &self,
-        configured: &crate::fleet_ensure::model::DesiredCanister,
+        mut pending: PendingPoolObservation<'_>,
+        response: RootInspectionStatus,
+    ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        let root = pending.inspection.root;
+        let cycles = self.complete_pool_inspection(pending.inspection, response)?;
+        pending.asset.cycles = Cycles::new(cycles);
+        Self::observed_root_owned_asset(pending.configured, pending.principal, root, pending.asset)
+    }
+
+    fn prepare_pending_pool_inspection<'a>(
+        &'a self,
+        configured: &'a crate::fleet_ensure::model::DesiredCanister,
         principal: &str,
-        state: &FleetEnsureStateRecord,
-    ) -> Result<u128, IcpEnsurePlatformError> {
+        state: &'a FleetEnsureStateRecord,
+    ) -> Result<PreparedPoolInspection<'a>, IcpEnsurePlatformError> {
         let parent = configured.parent.as_deref().ok_or_else(|| {
             IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
                 canister: configured.name.clone(),
@@ -1892,24 +1967,27 @@ impl IcpEnsurePlatform {
                 .map(String::as_str)
                 == Some(principal);
         if pending_fresh_pool {
-            let response = self
-                .inspect_root_owned_canister(configured, principal, state)?
+            let authority = self
+                .root_owned_inspection_authority(configured, principal, state)?
                 .ok_or_else(
                     || IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
                         canister: configured.name.clone(),
                         field: "installed Root",
                     },
                 )?;
-            return validate_pending_fresh_pool_inspection(
-                &configured.name,
+            return Ok(PreparedPoolInspection {
+                authority,
+                name: &configured.name,
                 root,
-                &self.desired.operator,
-                &response.settings.controllers,
-                response.module_hash.as_deref(),
-                &response.cycles,
-            );
+                requirement: PoolInspectionRequirement::PendingFresh,
+            });
         }
-        self.inspect_pool_balance(&configured.name, root, principal, InspectedModule::Any)
+        self.prepare_pool_balance_inspection(
+            &configured.name,
+            root,
+            principal,
+            InspectedModule::Any,
+        )
     }
 
     fn inspect_pool_balance(
@@ -1919,6 +1997,18 @@ impl IcpEnsurePlatform {
         principal: &str,
         module: InspectedModule,
     ) -> Result<u128, IcpEnsurePlatformError> {
+        let inspection = self.prepare_pool_balance_inspection(name, root, principal, module)?;
+        let response = self.read_pool_inspection(inspection.authority)?;
+        self.complete_pool_inspection(inspection, response)
+    }
+
+    fn prepare_pool_balance_inspection<'a>(
+        &self,
+        name: &'a str,
+        root: &'a str,
+        principal: &str,
+        module: InspectedModule,
+    ) -> Result<PreparedPoolInspection<'a>, IcpEnsurePlatformError> {
         if self.required_root_status(name, root)? != CanisterRuntimeStatus::Running {
             return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
                 canister: name.to_string(),
@@ -1926,43 +2016,86 @@ impl IcpEnsurePlatform {
             });
         }
         self.require_operator()?;
-        let authority = PoolInspectionAuthority {
-            target: parse_principal("Root-owned funding target", principal)?,
-            root: parse_principal("Fleet Subnet Root", root)?,
-        };
-        let cached = self
+        Ok(PreparedPoolInspection {
+            authority: PoolInspectionAuthority::parse(root, principal)?,
+            name,
+            root,
+            requirement: PoolInspectionRequirement::RootControlled(module),
+        })
+    }
+
+    fn complete_pool_inspection(
+        &self,
+        inspection: PreparedPoolInspection<'_>,
+        response: RootInspectionStatus,
+    ) -> Result<u128, IcpEnsurePlatformError> {
+        let cycles = match inspection.requirement {
+            PoolInspectionRequirement::PendingFresh => validate_pending_fresh_pool_inspection(
+                inspection.name,
+                inspection.root,
+                &self.desired.operator,
+                &response.settings.controllers,
+                response.module_hash.as_deref(),
+                &response.cycles,
+            ),
+            PoolInspectionRequirement::RootControlled(module) => {
+                validate_root_controlled_inspection(
+                    inspection.name,
+                    module,
+                    inspection.root,
+                    &response.settings.controllers,
+                    response.module_hash.as_deref(),
+                    &response.cycles,
+                )
+            }
+        }?;
+        self.retain_pool_inspection(inspection.authority, response);
+        Ok(cycles)
+    }
+
+    // Read raw evidence only after the caller has established its Root/operator authority.
+    fn read_pool_inspection(
+        &self,
+        authority: PoolInspectionAuthority,
+    ) -> Result<RootInspectionStatus, IcpEnsurePlatformError> {
+        if let Some(response) = self
             .observation_snapshot
             .borrow()
             .as_ref()
-            .and_then(|snapshot| snapshot.pool_inspections.get(&authority).cloned());
-        let response = if let Some(response) = cached {
-            response
-        } else {
-            let RootFundingInspectionResponse::InspectCanister(response) = call_with_candid(
-                &self.icp,
-                &self.root_protocol_candid()?,
-                authority.root,
-                canic_protocol::CANIC_ROOT_COMMAND,
-                &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
-                    canister_id: authority.target,
-                }),
-            )
-            .map_err(current_protocol::CurrentProtocolError::from)?;
-            response
-        };
-        // Consumers keep their own module/controller checks over the same observed response.
-        let cycles = validate_root_controlled_inspection(
-            name,
-            module,
-            root,
-            &response.settings.controllers,
-            response.module_hash.as_deref(),
-            &response.cycles,
-        )?;
+            .and_then(|snapshot| snapshot.pool_inspections.get(&authority).cloned())
+        {
+            return Ok(response);
+        }
+        Self::fetch_pool_inspection(&self.icp, &self.root_protocol_candid()?, authority)
+    }
+
+    fn fetch_pool_inspection(
+        icp: &IcpCli,
+        candid: &Path,
+        authority: PoolInspectionAuthority,
+    ) -> Result<RootInspectionStatus, IcpEnsurePlatformError> {
+        let RootInspectionResponse::InspectCanister(response) = call_with_candid(
+            icp,
+            candid,
+            authority.root,
+            canic_protocol::CANIC_ROOT_COMMAND,
+            &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                canister_id: authority.target,
+            }),
+        )
+        .map_err(current_protocol::CurrentProtocolError::from)?;
+        Ok(response)
+    }
+
+    // Only a successfully validated consumer may retain a response in this observation.
+    fn retain_pool_inspection(
+        &self,
+        authority: PoolInspectionAuthority,
+        response: RootInspectionStatus,
+    ) {
         if let Some(snapshot) = self.observation_snapshot.borrow_mut().as_mut() {
             snapshot.pool_inspections.insert(authority, response);
         }
-        Ok(cycles)
     }
 
     fn pool_funding_module(
@@ -2540,29 +2673,115 @@ impl IcpEnsurePlatform {
         let mut observed = BTreeMap::new();
         let mut cursor = 0;
         while cursor < configured.len() {
-            if configured[cursor].kind == DesiredCanisterKind::Pool {
-                let canister = &configured[cursor];
-                let live = self
-                    .current_principal(state, &canister.name)
-                    .map(|principal| self.observe_root_owned_canister(canister, principal, state))
-                    .transpose()?
-                    .flatten();
-                observed.insert(canister.name.clone(), live);
-                cursor += 1;
-                continue;
-            }
-            // Only consecutive independent management reads may overlap. Pool dependencies
-            // remain ordered, and every started batch drains before exposing an error.
+            let pool_batch = configured[cursor].kind == DesiredCanisterKind::Pool;
             let end = configured[cursor..]
                 .iter()
                 .take(super::bounded_observations::MAX_IN_FLIGHT)
-                .take_while(|canister| canister.kind != DesiredCanisterKind::Pool)
+                .take_while(|canister| (canister.kind == DesiredCanisterKind::Pool) == pool_batch)
                 .count()
                 + cursor;
+            if pool_batch {
+                self.observe_configured_pool_batch(&configured[cursor..end], state, &mut observed)?;
+                cursor = end;
+                continue;
+            }
             self.observe_configured_status_batch(&configured[cursor..end], state, &mut observed)?;
             cursor = end;
         }
         Ok(observed)
+    }
+
+    fn observe_configured_pool_batch(
+        &self,
+        configured: &[crate::fleet_ensure::model::DesiredCanister],
+        state: &FleetEnsureStateRecord,
+        observed: &mut BTreeMap<String, Option<LiveCanister>>,
+    ) -> Result<(), IcpEnsurePlatformError> {
+        // Preparation and result consumption follow desired order. An earlier transport
+        // failure must still precede a later preparation failure, regardless of arrival.
+        let prepared = configured
+            .iter()
+            .map(|canister| {
+                self.current_principal(state, &canister.name).map_or(
+                    Ok(PreparedRootOwnedObservation::Observed(None)),
+                    |principal| self.prepare_root_owned_observation(canister, principal, state),
+                )
+            })
+            .collect::<Vec<_>>();
+        let authorities = prepared
+            .iter()
+            .filter_map(|result| match result {
+                Ok(PreparedRootOwnedObservation::Pending(pending)) => {
+                    Some(pending.inspection.authority)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let mut responses = self.read_pool_inspection_batch(&authorities)?;
+        for (canister, prepared) in configured.iter().zip(prepared) {
+            let live = match prepared? {
+                PreparedRootOwnedObservation::Observed(live) => live,
+                PreparedRootOwnedObservation::Pending(pending) => {
+                    let response = self.pool_inspection_batch_response(
+                        &mut responses,
+                        pending.inspection.authority,
+                    )?;
+                    self.complete_pending_pool_observation(*pending, response)?
+                }
+            };
+            observed.insert(canister.name.clone(), live);
+        }
+        Ok(())
+    }
+
+    fn read_pool_inspection_batch(
+        &self,
+        authorities: &[PoolInspectionAuthority],
+    ) -> Result<PoolInspectionBatch, IcpEnsurePlatformError> {
+        let mut seen = BTreeSet::new();
+        let requests = authorities
+            .iter()
+            .copied()
+            .filter(|authority| {
+                seen.insert(*authority)
+                    && !self
+                        .observation_snapshot
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|snapshot| snapshot.pool_inspections.contains_key(authority))
+            })
+            .collect::<Vec<_>>();
+        if requests.is_empty() {
+            return Ok(PoolInspectionBatch::default());
+        }
+        let candid = self.root_protocol_candid()?;
+        let icp = &self.icp;
+        Ok(PoolInspectionBatch {
+            responses: super::bounded_observations::collect(&requests, |authority| {
+                Ok::<_, std::convert::Infallible>((
+                    *authority,
+                    Self::fetch_pool_inspection(icp, &candid, *authority),
+                ))
+            })
+            .expect("inspection results are retained for ordered authority decisions")
+            .into_iter()
+            .collect(),
+        })
+    }
+
+    fn pool_inspection_batch_response(
+        &self,
+        batch: &mut PoolInspectionBatch,
+        authority: PoolInspectionAuthority,
+    ) -> Result<RootInspectionStatus, IcpEnsurePlatformError> {
+        match batch.responses.get(&authority) {
+            Some(Ok(response)) => Ok(response.clone()),
+            Some(Err(_)) => batch
+                .responses
+                .remove(&authority)
+                .expect("observed batch failure"),
+            None => self.read_pool_inspection(authority),
+        }
     }
 
     fn observe_configured_status_batch(
@@ -2868,9 +3087,29 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 IcpEnsurePlatformError::RootManagement("missing reset Root".to_string())
             })?;
         let principal = parse_principal("reset Root", &binding.principal)?;
-        let candid = self.root_protocol_candid()?;
+        let candid = if let Some(source) = intent.source.as_deref()
+            && check == super::ReinstallAssetCheck::BeforeReset
+        {
+            let path = source
+                .reviewed_desired
+                .desired()
+                .protocol
+                .as_ref()
+                .map(|protocol| &protocol.root_candid)
+                .ok_or_else(|| pool_configuration_error("missing source Root protocol".into()))?;
+            let hash = super::artifact_sha256(&self.root, path)
+                .map_err(|error| pool_configuration_error(error.to_string()))?;
+            if source.candid_sha256_by_path.get(path) != Some(&hash) {
+                return Err(pool_configuration_error(
+                    "source Root protocol changed".into(),
+                ));
+            }
+            self.root.join(path)
+        } else {
+            self.root_protocol_candid()?
+        };
         for asset in intent.assets.iter().filter(|asset| asset.root == root_name) {
-            let RootFundingInspectionResponse::InspectCanister(status) = call_with_candid(
+            let RootInspectionResponse::InspectCanister(status) = call_with_candid(
                 &self.icp,
                 &candid,
                 principal,
@@ -3551,11 +3790,20 @@ impl EnsurePlatform for IcpEnsurePlatform {
                         .as_ref()
                         .and_then(|a| a.get(&witness.authority.name))
                         .and_then(super::reinstall::authority_binding);
-                    if authority.as_ref() != Some(&witness.authority) {
-                        return Err(IcpEnsurePlatformError::ReinstallHistoryConflict {
+                    let history_authority = authority
+                        .as_ref()
+                        .and_then(|current| {
+                            crate::fleet_ensure::policy::reinstall::history_authority(
+                                witness,
+                                current,
+                                principal,
+                                wasm_sha256,
+                                &record.state,
+                            )
+                        })
+                        .ok_or_else(|| IcpEnsurePlatformError::ReinstallHistoryConflict {
                             canister: witness.authority.principal.clone(),
-                        });
-                    }
+                        })?;
                     let live = live.as_ref().ok_or_else(|| {
                         IcpEnsurePlatformError::ReinstallHistoryConflict {
                             canister: principal.clone(),
@@ -3569,7 +3817,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     let history = super::install_history::observe(
                         &self.icp,
                         &self.root,
-                        witness,
+                        &history_authority,
                         parse_principal("operator", &self.desired.operator)?,
                         before,
                         live,
@@ -5020,7 +5268,7 @@ mod tests {
 
         fn response(path: &Path, controller: Principal, cycles: u128) {
             let response = Ok::<_, canic_core::dto::error::Error>(
-                RootFundingInspectionResponse::InspectCanister(RootFundingInspectionStatus {
+                RootInspectionResponse::InspectCanister(RootInspectionStatus {
                     status: canic_core::dto::canister::CanisterStatusType::Running,
                     settings: ManagementCanisterObservationSettings {
                         controllers: vec![controller],
@@ -5038,6 +5286,650 @@ mod tests {
             )
             .unwrap();
         }
+    }
+
+    // Exercise preparation and completion directly when checking scope expiry.
+    #[cfg(unix)]
+    impl IcpEnsurePlatform {
+        fn inspect_pending_pool_balance(
+            &self,
+            configured: &crate::fleet_ensure::model::DesiredCanister,
+            principal: &str,
+            state: &FleetEnsureStateRecord,
+        ) -> Result<u128, IcpEnsurePlatformError> {
+            let inspection = self.prepare_pending_pool_inspection(configured, principal, state)?;
+            let response = self.read_pool_inspection(inspection.authority)?;
+            self.complete_pool_inspection(inspection, response)
+        }
+    }
+
+    #[cfg(unix)]
+    impl PoolInspectionFixture {
+        fn fresh(pool_count: u32) -> Self {
+            let mut fixture = Self::new();
+            let owners = &mut fixture.owners;
+            let operator = Principal::from_text(&owners.platform.desired.operator).unwrap();
+            let mut root = owners.platform.desired.canisters[1].clone();
+            root.principal = Some(fixture.root_id.to_text());
+            root.controllers = vec![operator.to_text()];
+            owners.platform.desired.canisters = vec![root.clone()];
+            let config = canic_core::bootstrap::parse_config_model(
+                "[app]\nname = 'inspection'\n[roles.root]\nkind = 'root'\n",
+            )
+            .unwrap();
+            owners.platform.desired.bootstrap = Some(crate::fleet_ensure::model::DesiredFleetBootstrap {
+                admission: canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_policy_template(vec![operator], Vec::new()).unwrap(),
+                app: canic_core::ids::AppId::from("inspection"),
+                canonical_network_id: canic_core::ids::CanonicalNetworkId::ic_mainnet(),
+                component_deployment_configuration: config.compile_component_deployment_configuration().unwrap(),
+                coordinator: "coordinator".into(),
+                coordinator_subnet: canic_core::ids::SubnetId::from_principal(fixture.root_id),
+                fleet_id: canic_core::ids::FleetId::from_generated_bytes([5; 32]),
+                fresh_estate: true,
+                release_build_id: canic_core::ids::ReleaseBuildId::from_nonce(canic_core::ids::ReleaseBuildNonce::from_random_bytes([7; 32])),
+                root_funding: None,
+                roots: Vec::new(),
+            });
+            std::fs::write(
+                owners.root.join(format!("{}.json", fixture.root_id)),
+                serde_json::json!({
+                    "id": fixture.root_id.to_text(), "status": "Running",
+                    "settings": {"controllers": [operator.to_text()]},
+                    "module_hash": artifact_hash(&owners.root.join("owner.wasm")).unwrap(),
+                    "cycles": "10000",
+                })
+                .to_string(),
+            )
+            .unwrap();
+            let mut entries = Vec::new();
+            for index in 0..pool_count {
+                let target = Principal::from_slice(&[u8::try_from(index + 10).unwrap()]);
+                let mut configured = root.clone();
+                configured.name = format!("pool-{index:03}");
+                configured.kind = DesiredCanisterKind::Pool;
+                configured.principal = None;
+                configured.parent = Some("root".into());
+                owners
+                    .state
+                    .pending_principals
+                    .insert(configured.name.clone(), target.to_text());
+                owners.platform.desired.canisters.push(configured);
+                entries.push(CanisterPoolAsset {
+                    canister_id: target,
+                    creation_receipt: None,
+                    cycles: Cycles::new(0),
+                    origin: CanisterPoolAssetOrigin::Created,
+                    status: CanisterPoolAssetStatus::PendingReset,
+                    added_at_ns: 1,
+                    updated_at_ns: 1,
+                });
+            }
+            fixture.target = entries[0].canister_id;
+            Self::fresh_pool_page(&owners.root, entries);
+            let script = std::fs::read_to_string(owners.root.join("icp")).unwrap();
+            let script = script.replace(
+                "call) if",
+                &format!(
+                    "call) case \"$*\" in *canic_root_status*) cat '{}'/pool.json; exit;; esac; if",
+                    owners.root.display()
+                ),
+            );
+            std::fs::write(owners.root.join("icp"), script).unwrap();
+            Self::fresh_response(&owners.root, vec![fixture.root_id], None, 1_000);
+            fixture
+        }
+
+        fn fresh_pool_page(path: &Path, entries: Vec<CanisterPoolAsset>) {
+            let pool_count = u32::try_from(entries.len()).unwrap();
+            let page = CanisterPoolResponse {
+                config: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                    minimum_size: 1,
+                    maximum_size: 128,
+                    canister_cycles: Cycles::new(1_000),
+                    creation_execution_margin: Cycles::new(100),
+                },
+                tracked: pool_count,
+                store: 0,
+                store_deletion_pending: 0,
+                pooled: pool_count,
+                workload: 0,
+                surplus: 0,
+                ready: 0,
+                pending_reset: pool_count,
+                claimed: 0,
+                recycling: 0,
+                handing_off: 0,
+                failed: 0,
+                completed_handoffs: 0,
+                pending_creation: None,
+                pending_handoff: None,
+                entries,
+                next_start_after: None,
+            };
+            let response = Ok::<_, canic_core::dto::error::Error>(RootPoolStatusResponse::Pool(
+                Box::new(page),
+            ));
+            std::fs::write(
+                path.join("pool.json"),
+                serde_json::json!({
+                    "response_bytes": hex_bytes(candid::encode_one(response).unwrap()),
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
+
+        fn fresh_response(
+            path: &Path,
+            controllers: Vec<Principal>,
+            module_hash: Option<Vec<u8>>,
+            cycles: u128,
+        ) {
+            let response = Ok::<_, canic_core::dto::error::Error>(
+                RootInspectionResponse::InspectCanister(RootInspectionStatus {
+                    status: canic_core::dto::canister::CanisterStatusType::Running,
+                    settings: ManagementCanisterObservationSettings { controllers },
+                    module_hash,
+                    cycles: Nat::from(cycles),
+                }),
+            );
+            std::fs::write(
+                path.join("inspection.json"),
+                serde_json::json!({
+                    "response_bytes": hex_bytes(candid::encode_one(response).unwrap()),
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    impl PoolInspectionFixture {
+        fn inspection_hook(&self, hook: &str) {
+            let path = &self.owners.root;
+            let script = std::fs::read_to_string(path.join("icp")).unwrap();
+            let response = format!("cat '{}'/inspection.json", path.display());
+            assert!(script.contains(&response));
+            std::fs::write(
+                path.join("icp"),
+                script.replace(&response, &format!("{hook}\n{response}")),
+            )
+            .unwrap();
+        }
+
+        fn route_inspection_targets(&self) {
+            let path = &self.owners.root;
+            for configured in self
+                .owners
+                .platform
+                .desired
+                .canisters
+                .iter()
+                .filter(|canister| canister.kind == DesiredCanisterKind::Pool)
+            {
+                let target = &self.owners.state.pending_principals[&configured.name];
+                let request = RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                    canister_id: Principal::from_text(target).unwrap(),
+                });
+                std::fs::write(
+                    path.join(format!("request-{}.bin", configured.name)),
+                    candid::encode_one(request).unwrap(),
+                )
+                .unwrap();
+            }
+            self.inspection_hook(&format!(
+                r#"
+cd '{}'
+request_name=
+for expected in request-*.bin; do
+    if cmp -s "$5" "$expected"; then
+        request_name=${{expected#request-}}
+        request_name=${{request_name%.bin}}
+        break
+    fi
+done
+[ -n "$request_name" ] || exit 1
+printf 'start:%s\n' "$request_name" >> events
+if [ -f "$request_name.fail" ]; then
+    printf 'finish:%s\n' "$request_name" >> events
+    exit 1
+fi
+if [ -f "$request_name.response" ]; then
+    attempts=0
+    while ! grep -q '^finish:pool-001$' events; do
+        attempts=$((attempts + 1))
+        [ "$attempts" -lt 500 ] || exit 1
+        sleep 0.01
+    done
+    printf 'finish:%s\n' "$request_name" >> events
+    cat "$request_name.response"
+    exit
+fi
+printf 'finish:%s\n' "$request_name" >> events
+"#,
+                path.display()
+            ));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn configured_pool_inspections_overlap_within_the_bound_and_drain_partial_batches() {
+        let bound = crate::fleet_ensure::ops::bounded_observations::MAX_IN_FLIGHT;
+        let pool_count = bound * 2 + 1;
+        let mut fixture = PoolInspectionFixture::fresh(u32::try_from(pool_count).unwrap());
+        let path = &fixture.owners.root;
+        fixture.inspection_hook(&format!(
+            r#"
+cd '{}'
+printf 'start\n' >> events
+started=$(grep -c '^start$' events)
+goal=$(( (started + {bound} - 1) / {bound} * {bound} ))
+[ "$goal" -le {pool_count} ] || goal={pool_count}
+attempts=0
+while [ "$(grep -c '^start$' events)" -lt "$goal" ]; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 500 ] || exit 1
+    sleep 0.01
+done
+printf 'finish\n' >> events
+"#,
+            path.display()
+        ));
+        let observed = fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                platform.observe_configured_canisters(&fixture.owners.state)
+            })
+            .unwrap();
+        assert_eq!(
+            observed.len(),
+            fixture.owners.platform.desired.canisters.len()
+        );
+        let events = std::fs::read_to_string(path.join("events")).unwrap();
+        let mut active = 0;
+        let mut maximum = 0;
+        for event in events.lines() {
+            match event {
+                "start" => {
+                    active += 1;
+                    maximum = maximum.max(active);
+                }
+                "finish" => {
+                    assert!(active > 0);
+                    active -= 1;
+                }
+                _ => panic!("unknown fixture event"),
+            }
+            assert!(active <= bound);
+        }
+        assert_eq!(active, 0);
+        assert_eq!(maximum, bound);
+        assert_eq!(
+            fixture.owners.platform.icp.remote_call_count(),
+            u64::try_from(pool_count).unwrap() + 2
+        );
+        assert!(
+            fixture
+                .owners
+                .platform
+                .observation_snapshot
+                .borrow()
+                .is_none()
+        );
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_batch_keeps_consumer_error_before_later_transport_error_and_retries_fresh() {
+        let mut fixture = PoolInspectionFixture::fresh(5);
+        let path = &fixture.owners.root;
+        PoolInspectionFixture::fresh_response(
+            path,
+            vec![fixture.root_id],
+            Some(vec![1; 32]),
+            1_000,
+        );
+        std::fs::copy(path.join("inspection.json"), path.join("pool-000.response")).unwrap();
+        PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], None, 1_000);
+        std::fs::write(path.join("pool-001.fail"), []).unwrap();
+        fixture.route_inspection_targets();
+        let failed = fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                platform.observe_configured_canisters(&fixture.owners.state)
+            });
+        assert!(
+            matches!(failed, Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict { canister, field: "module-free pool asset" }) if canister == "pool-000")
+        );
+        let events = std::fs::read_to_string(path.join("events")).unwrap();
+        for index in 0..4 {
+            assert!(events.contains(&format!("finish:pool-{index:03}")));
+        }
+        assert!(!events.contains("pool-004"));
+        assert!(events.find("finish:pool-001").unwrap() < events.find("finish:pool-000").unwrap());
+        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 6);
+        assert!(
+            fixture
+                .owners
+                .platform
+                .observation_snapshot
+                .borrow()
+                .is_none()
+        );
+        std::fs::remove_file(path.join("pool-000.response")).unwrap();
+        std::fs::remove_file(path.join("pool-001.fail")).unwrap();
+        let observed = fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                platform.observe_configured_canisters(&fixture.owners.state)
+            })
+            .unwrap();
+        assert_eq!(observed.len(), 6);
+        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 13);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_batch_preserves_preparation_and_transport_error_precedence() {
+        for invalid_index in [1, 2] {
+            let mut fixture = PoolInspectionFixture::fresh(5);
+            let path = &fixture.owners.root;
+            // Index zero is the Root; reject authority for exactly one pool request.
+            fixture.owners.platform.desired.canisters[invalid_index].parent =
+                Some("missing-root".into());
+            fixture.route_inspection_targets();
+            for index in 0..4 {
+                std::fs::write(path.join(format!("pool-{index:03}.fail")), []).unwrap();
+            }
+            let failed = fixture
+                .owners
+                .platform
+                .with_observation_snapshot(|platform| {
+                    platform.observe_configured_canisters(&fixture.owners.state)
+                });
+            if invalid_index == 1 {
+                assert!(matches!(
+                    failed,
+                    Err(IcpEnsurePlatformError::CurrentProtocol(
+                        current_protocol::CurrentProtocolError::Configuration(_)
+                    ))
+                ));
+            } else {
+                assert!(matches!(
+                    failed,
+                    Err(IcpEnsurePlatformError::CurrentProtocol(
+                        current_protocol::CurrentProtocolError::Transport(_)
+                    ))
+                ));
+            }
+            let events = std::fs::read_to_string(path.join("events")).unwrap();
+            assert_eq!(
+                events
+                    .lines()
+                    .filter(|line| line.starts_with("finish:"))
+                    .count(),
+                3
+            );
+            assert!(!events.contains(&format!("pool-{:03}", invalid_index - 1)));
+            assert!(!events.contains("pool-004"));
+            assert_eq!(fixture.owners.platform.icp.remote_call_count(), 5);
+            assert!(
+                fixture
+                    .owners
+                    .platform
+                    .observation_snapshot
+                    .borrow()
+                    .is_none()
+            );
+            std::fs::remove_dir_all(path).unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_batch_benchmark_matches_serial_observation_with_bounded_reads() {
+        for pool_count in [1, 14, 27] {
+            let mut serial_observed = None;
+            for concurrent in [false, true] {
+                let mut fixture = PoolInspectionFixture::fresh(pool_count);
+                fixture.inspection_hook("sleep 0.02");
+                let observed = fixture.owners.platform.with_observation_snapshot(|platform| {
+                    let started = std::time::Instant::now();
+                    let observed = if concurrent {
+                        platform.observe_configured_canisters(&fixture.owners.state)?
+                    } else {
+                        platform.desired.canisters.iter().map(|configured| {
+                            let principal = platform.current_principal(&fixture.owners.state, &configured.name).unwrap();
+                            platform.observe_configured_canister(configured, principal, &fixture.owners.state).map(|live| (configured.name.clone(), live))
+                        }).collect::<Result<BTreeMap<_, _>, _>>()?
+                    };
+                    let configured_ms = started.elapsed().as_millis();
+                    let configured_calls = platform.icp.remote_call_count();
+                    for live in observed.values().filter_map(Option::as_ref).filter(|live| live.principal != fixture.root_id.to_text()) {
+                        assert_eq!(platform.inspect_pool_balance("pool", &fixture.root_id.to_text(), &live.principal, InspectedModule::Any)?, live.cycles);
+                    }
+                    assert_eq!(platform.icp.remote_call_count(), configured_calls);
+                    assert_eq!(configured_calls, u64::from(pool_count) + 2);
+                    println!("pool_batch_benchmark assets={pool_count} concurrent={concurrent} configured_ms={configured_ms} configured_calls={configured_calls} extra_balance_calls=0 latency_ms=20");
+                    Ok(observed)
+                }).unwrap();
+                if let Some(serial) = &serial_observed {
+                    assert_eq!(&observed, serial);
+                } else {
+                    serial_observed = Some(observed);
+                }
+                std::fs::remove_dir_all(&fixture.owners.root).unwrap();
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fresh_pool_observation_shares_inspections_with_balance_review() {
+        let mut redundant_calls = 0;
+        for pool_count in [1, 14, 27] {
+            let mut fixture = PoolInspectionFixture::fresh(pool_count);
+            let root = fixture.root_id.to_text();
+            let path = &fixture.owners.root;
+            fixture.owners.platform.with_observation_snapshot(|platform| {
+                let started = std::time::Instant::now();
+                let observed = platform.observe_configured_canisters(&fixture.owners.state)?;
+                let configured_elapsed = started.elapsed();
+                let configured_calls = platform.icp.remote_call_count();
+                assert_eq!(observed.len(), usize::try_from(pool_count).unwrap() + 1);
+                assert_eq!(configured_calls, u64::from(pool_count) + 2);
+                let started = std::time::Instant::now();
+                for live in observed.values().filter_map(Option::as_ref).filter(|live| live.principal != root) {
+                    assert_eq!(live.cycles, 1_000);
+                    assert_eq!(platform.inspect_pool_balance("pool", &root, &live.principal, InspectedModule::Any)?, 1_000);
+                }
+                let balance_calls = platform.icp.remote_call_count() - configured_calls;
+                println!("fresh_pool_observation assets={pool_count} configured_ms={} configured_calls={configured_calls} balance_ms={} balance_calls={balance_calls}", configured_elapsed.as_millis(), started.elapsed().as_millis());
+                redundant_calls += balance_calls;
+                Ok(())
+            }).unwrap();
+            PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], None, 900);
+            let configured = &fixture.owners.platform.desired.canisters[1];
+            assert_eq!(
+                fixture
+                    .owners
+                    .platform
+                    .inspect_pending_pool_balance(
+                        configured,
+                        &fixture.target.to_text(),
+                        &fixture.owners.state
+                    )
+                    .unwrap(),
+                900
+            );
+            std::fs::remove_dir_all(path).unwrap();
+        }
+        assert_eq!(redundant_calls, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fresh_pool_inspection_preserves_consumer_authority_and_failed_scope_expiry() {
+        let mut fixture = PoolInspectionFixture::fresh(1);
+        let root = fixture.root_id.to_text();
+        let target = fixture.target.to_text();
+        let operator = Principal::from_text(&fixture.owners.platform.desired.operator).unwrap();
+        let configured = fixture.owners.platform.desired.canisters[1].clone();
+        let path = &fixture.owners.root;
+        PoolInspectionFixture::fresh_response(path, vec![fixture.root_id, operator], None, 1_000);
+        let failed = fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                assert_eq!(
+                    platform.inspect_pending_pool_balance(
+                        &configured,
+                        &target,
+                        &fixture.owners.state
+                    )?,
+                    1_000
+                );
+                let calls = platform.icp.remote_call_count();
+                assert!(matches!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any),
+                    Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                        field: "Root-only controllers",
+                        ..
+                    })
+                ));
+                assert_eq!(platform.icp.remote_call_count(), calls);
+                std::fs::write(path.join("operator"), Principal::from_slice(&[8]).to_text())
+                    .unwrap();
+                assert!(matches!(
+                    platform.inspect_pending_pool_balance(
+                        &configured,
+                        &target,
+                        &fixture.owners.state
+                    ),
+                    Err(IcpEnsurePlatformError::OperatorMismatch { .. })
+                ));
+                Err::<(), _>(IcpEnsurePlatformError::Arithmetic(
+                    "injected observation failure",
+                ))
+            });
+        assert!(matches!(failed, Err(IcpEnsurePlatformError::Arithmetic(_))));
+        assert!(
+            fixture
+                .owners
+                .platform
+                .observation_snapshot
+                .borrow()
+                .is_none()
+        );
+        std::fs::write(path.join("operator"), operator.to_text()).unwrap();
+        PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], Some(vec![1; 32]), 900);
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                assert_eq!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any)?,
+                    900
+                );
+                assert!(matches!(
+                    platform.inspect_pending_pool_balance(
+                        &configured,
+                        &target,
+                        &fixture.owners.state
+                    ),
+                    Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                        field: "module-free pool asset",
+                        ..
+                    })
+                ));
+                Ok(())
+            })
+            .unwrap();
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fresh_pool_inspection_retries_failures_and_rechecks_root_authority_on_cache_hits() {
+        let mut fixture = PoolInspectionFixture::fresh(1);
+        let target = fixture.target.to_text();
+        let root = fixture.root_id.to_text();
+        let configured = fixture.owners.platform.desired.canisters[1].clone();
+        let path = &fixture.owners.root;
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                let inspect = |platform: &IcpEnsurePlatform| {
+                    platform.inspect_pending_pool_balance(
+                        &configured,
+                        &target,
+                        &fixture.owners.state,
+                    )
+                };
+                std::fs::write(path.join("fail"), []).unwrap();
+                assert!(matches!(
+                    inspect(platform),
+                    Err(IcpEnsurePlatformError::CurrentProtocol(
+                        current_protocol::CurrentProtocolError::Transport(_)
+                    ))
+                ));
+                std::fs::remove_file(path.join("fail")).unwrap();
+                PoolInspectionFixture::fresh_response(
+                    path,
+                    vec![Principal::from_slice(&[8])],
+                    None,
+                    900,
+                );
+                assert!(matches!(
+                    inspect(platform),
+                    Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                        field: "reviewed fresh pool controllers",
+                        ..
+                    })
+                ));
+                PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], None, 800);
+                assert_eq!(inspect(platform)?, 800);
+                assert_eq!(platform.icp.remote_call_count(), 4);
+                // Funding accepts the same response, but fresh observation must still
+                // establish its own exact Root artifact and controller authority.
+                assert_eq!(
+                    platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any)?,
+                    800
+                );
+                std::fs::write(path.join("owner.wasm"), b"changed-root-artifact").unwrap();
+                assert!(matches!(
+                    inspect(platform),
+                    Err(
+                        IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                            field: "Root module SHA-256",
+                            ..
+                        }
+                    )
+                ));
+                std::fs::write(path.join("owner.wasm"), b"current-owner-module").unwrap();
+                platform.desired.canisters[0].controllers =
+                    vec![Principal::from_slice(&[8]).to_text()];
+                assert!(matches!(
+                    inspect(platform),
+                    Err(
+                        IcpEnsurePlatformError::RootOwnedObservationAuthorityConflict {
+                            field: "Root controllers",
+                            ..
+                        }
+                    )
+                ));
+                Ok(())
+            })
+            .unwrap();
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[cfg(unix)]

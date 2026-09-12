@@ -9,6 +9,7 @@ mod funding;
 #[cfg(test)]
 mod funding_tests;
 mod reinstall;
+mod retained_plan;
 mod root_reinstall;
 
 use crate::fleet_ensure::{
@@ -25,7 +26,8 @@ use crate::fleet_ensure::{
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
         compact_inline_plan, lock_operation, read_journal, read_plan, read_root_start_authority,
-        read_state, resolve_desired_artifacts, write_journal, write_plan, write_state,
+        read_state, reserve_fixture_publication_attempt, resolve_desired_artifacts, write_journal,
+        write_plan, write_state,
     },
     policy::{
         EnsurePolicyError, RootStartPlanInput, compile_plan, compile_root_start_prerequisite_plan,
@@ -129,7 +131,26 @@ where
     E: std::error::Error + 'static,
 {
     #[error(
-        "activation {operation_id} has an Issued provisioning action after its Applied host prefix (source document {source_document_sha256}); preserve the plan and journal: recovery of this partial activation is not yet qualified"
+        "retained Fleet plan cannot be resumed: {source}; local source evidence identifies operation {operation_id}, journal plan reference {plan_sha256}, source document {source_document_sha256}; preserve plan, journal, state and artifacts; request an explicit --reinstall review without --apply using the selected corrected release; live authority, complete estate and cycle checks must pass before any reset; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan"
+    )]
+    RetainedActivationReviewRequired {
+        operation_id: String,
+        plan_sha256: String,
+        source_document_sha256: String,
+        #[source]
+        source: Box<EnsureStateError>,
+    },
+
+    #[error(
+        "retained Fleet plan is unreadable: {source}; preserve plan, journal, state, artifacts and paid-effect receipts; local evidence does not establish the supported partial-activation review path; resolve issued effects under their exact authority before a release transition; do not edit fields, replace digests or discard the operation; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan"
+    )]
+    RetainedPlanUnreadable {
+        #[source]
+        source: Box<EnsureStateError>,
+    },
+
+    #[error(
+        "activation {operation_id} has an Issued provisioning action after its Applied host prefix (source document {source_document_sha256}); preserve the plan and journal: required live evidence for the bounded partial-activation recovery is unavailable"
     )]
     PartialActivationResetUnavailable {
         operation_id: String,
@@ -137,7 +158,7 @@ where
     },
 
     #[error(
-        "a new reinstall requires the unchanged, fully converged Fleet; preserve the retained plan and journal if activation is blocked, because partial-activation reset is not yet supported"
+        "reinstall requires a converged Fleet with retained physical authority or an admitted single-Root partial-activation recovery source; the supplied source or target does not satisfy either contract; preserve the retained plan and journal"
     )]
     ReinstallConflict,
 
@@ -217,6 +238,14 @@ where
     ConvergenceDrift,
 
     #[error(
+        "fixture publication action {action} exhausted its {maximum_attempts} reviewed paid attempts; preserve the operation and reconcile its exact source status; no additional update was issued"
+    )]
+    FixturePublicationBound {
+        action: String,
+        maximum_attempts: u32,
+    },
+
+    #[error(
         "Root pool maintenance {action} exhausted its reviewed limit of {maximum_updates} updates; retained receipts remain authoritative"
     )]
     PoolMaintenanceBound {
@@ -260,6 +289,30 @@ where
     State(#[from] EnsureStateError),
 }
 
+/// Recover the selected target for an exact reinstall apply, including terminal replay.
+pub fn retained_reinstall_apply_plan<E: std::error::Error + 'static>(
+    root: &Path,
+    environment: &str,
+    requested_fleet: &str,
+    reviewed_plan_sha256: &str,
+) -> Result<Option<FleetEnsurePlan>, EnsureWorkflowError<E>> {
+    validate_path_labels(environment, requested_fleet)?;
+    let paths = EnsurePaths::under(root, environment, requested_fleet);
+    let _lock = lock_operation(&paths)?;
+    let Some(plan) = retained_plan::read(&paths, environment, requested_fleet)? else {
+        return Ok(None);
+    };
+    let plan = verified_plan(plan)?;
+    if plan.environment != environment || plan.fleet != requested_fleet {
+        return Err(EnsureWorkflowError::PlanIntegrity);
+    }
+    if plan.reinstall.is_some() && plan.plan_sha256 == reviewed_plan_sha256 {
+        Ok(Some(plan))
+    } else {
+        Ok(None)
+    }
+}
+
 /// Load and verify the sole immutable in-progress operation for one exact Fleet path.
 pub fn retained_in_progress_plan<E>(
     root: &Path,
@@ -287,7 +340,10 @@ where
     ) {
         return Ok(None);
     }
-    let retained = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
+    let retained = verified_plan(
+        retained_plan::read(&paths, environment, requested_fleet)?
+            .ok_or(EnsureWorkflowError::PlanMissing)?,
+    )?;
     if retained.environment != environment || retained.fleet != requested_fleet {
         return Err(EnsureWorkflowError::PlanIntegrity);
     }
@@ -345,7 +401,10 @@ where
     if let Some(mut journal) = read_journal(&paths)?
         && journal.completion == FleetEnsureCompletion::InProgress
     {
-        let retained = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
+        let retained = verified_plan(
+            retained_plan::read(&paths, &desired.environment, requested_fleet)?
+                .ok_or(EnsureWorkflowError::PlanMissing)?,
+        )?;
         let state = read_state(&paths, requested_fleet)?;
         verify_journal(&journal, &retained, requested_fleet, &state)?;
         if journal.estate_funding_required.is_some() {
@@ -377,7 +436,9 @@ where
         });
     }
     let mut state = read_state(&paths, requested_fleet)?;
-    let prior_plan = read_plan(&paths)?.map(verified_plan).transpose()?;
+    let prior_plan = retained_plan::read(&paths, &desired.environment, requested_fleet)?
+        .map(verified_plan)
+        .transpose()?;
     let prior_journal = read_journal(&paths)?;
     if let Some(prior) = &prior_plan {
         let activation_reset = prior
@@ -810,7 +871,8 @@ where
     let adopting = pending.is_some();
     let retained_plan = verified_plan(match pending {
         Some(plan) => plan,
-        None => read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?,
+        None => retained_plan::read(&paths, &desired.environment, requested_fleet)?
+            .ok_or(EnsureWorkflowError::PlanMissing)?,
     })?;
     let retained_journal = if adopting {
         None
@@ -835,7 +897,10 @@ where
         verify_journal(journal, &retained_plan, requested_fleet, &state)?;
         compact_inline_plan(&paths, &retained_plan)?;
     }
-    if !in_progress && retained_plan.desired_sha256 != desired_sha256 {
+    if !in_progress
+        && retained_plan.reinstall.is_none()
+        && retained_plan.desired_sha256 != desired_sha256
+    {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     let operation_desired = if in_progress || retained_plan.reinstall.is_some() {
@@ -1084,6 +1149,7 @@ where
                         .action_canister_version(action, &state)
                         .map_err(EnsureWorkflowError::Platform)?;
                     journal.effects.push(EffectRecord {
+                        publication_attempts: 0,
                         maintenance_attempts: 0,
                         action_sha256: action_hash.clone(),
                         created_principal: None,
@@ -1293,6 +1359,20 @@ where
                     let maintenance_continuation =
                         observed.retry == EffectRetry::ContinuePoolMaintenance;
                     if matches!(record.state, EffectState::Intent) || maintenance_continuation {
+                        if let Some(maximum_attempts) = action.fixture_publication_attempt_limit() {
+                            if !reserve_fixture_publication_attempt(record, maximum_attempts) {
+                                return Err(EnsureWorkflowError::FixturePublicationBound {
+                                    action: action.name().to_string(),
+                                    maximum_attempts,
+                                });
+                            }
+                            // Reserve before the external call, even if its response never returns.
+                            write_journal(&paths, &journal)?;
+                        }
+                        let record = journal
+                            .effects
+                            .get_mut(index)
+                            .ok_or(EnsureWorkflowError::JournalIntegrity)?;
                         if let EnsureAction::FleetProtocol {
                             action: current, ..
                         } = action
@@ -3522,11 +3602,19 @@ where
     let action_hashes_match = journal.effects.iter().zip(actions).all(|(effect, action)| {
         effect.action_sha256 == action_sha256(action)
             && maintenance_attempts_are_exact(effect, action)
+            && publication_attempts_are_exact(effect, action)
     });
     if !(effect_count_matches && action_hashes_match) {
         return Err(EnsureWorkflowError::JournalIntegrity);
     }
     Ok(())
+}
+
+fn publication_attempts_are_exact(effect: &EffectRecord, action: &EnsureAction) -> bool {
+    match action.fixture_publication_attempt_limit() {
+        Some(maximum) => maximum > 0 && effect.publication_attempts <= maximum,
+        None => effect.publication_attempts == 0,
+    }
 }
 
 fn maintenance_attempts_are_exact(effect: &EffectRecord, action: &EnsureAction) -> bool {
@@ -4356,6 +4444,7 @@ mod tests {
             completion: FleetEnsureCompletion::ReplanRequired,
             estate_funding_required: None,
             effects: vec![crate::fleet_ensure::model::EffectRecord {
+                publication_attempts: 0,
                 maintenance_attempts: 0,
                 action_sha256: "action".to_string(),
                 created_principal: None,
@@ -4749,6 +4838,7 @@ mod tests {
         let (state, mut journal) = retained_evidence();
         journal.initial_estate_funding_cycles_by_root = BTreeMap::from([("root".to_string(), 40)]);
         journal.effects = vec![EffectRecord {
+            publication_attempts: 0,
             maintenance_attempts: 0,
             action_sha256: action_hash,
             created_principal: None,
@@ -4873,6 +4963,7 @@ mod tests {
         let actions = [&first, &second];
         let (_, mut journal) = retained_evidence();
         journal.effects = vec![EffectRecord {
+            publication_attempts: 0,
             maintenance_attempts: 0,
             action_sha256: action_sha256(&first),
             created_principal: None,

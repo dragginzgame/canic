@@ -1,0 +1,5 @@
+   Compiling canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+    Checking canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic_icydb_lifecycle_probe v0.110.14 (/home/adam/projects/canic/canisters/test/canic_icydb_lifecycle_probe)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 17.53s

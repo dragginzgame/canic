@@ -1,0 +1,28 @@
+Production and consumer integration lint
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canister_user_hub v0.110.14 (/home/adam/projects/canic/apps/test/user_hub)
+   Compiling canister_user_shard v0.110.14 (/home/adam/projects/canic/apps/test/user_shard)
+   Compiling canic_icydb_lifecycle_probe v0.110.14 (/home/adam/projects/canic/canisters/test/canic_icydb_lifecycle_probe)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Checking canic-tests v0.110.14 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 29.87s
+
+Root and bootstrap test lint
+    Checking canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 34.85s
+
+Final core, Root and bootstrap test lint
+    Checking canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+    Checking canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 32.90s

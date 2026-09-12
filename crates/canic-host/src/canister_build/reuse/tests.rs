@@ -2,6 +2,18 @@ use super::*;
 use crate::test_support::temp_dir;
 use std::io::Write as _;
 
+const REUSE_CONFIG: &str = r#"[app]
+name = "reuse"
+[roles.root]
+kind = "root"
+[roles.app]
+kind = "canister"
+package = "."
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
+"#;
+
 // Re-exec only this case with private Cargo output paths. Make exports
 // a shared target; these fixtures must not discover or replace each other's .d
 // records. A child environment avoids mutating the parallel libtest process.
@@ -83,7 +95,7 @@ canic-control-plane = { path = "../canic-control-plane", optional = true }
     fs::write(canic.join("src/lib.rs"), "pub fn value() -> u8 { 1 }\n#[cfg(feature = \"fleet\")] pub use canic_control_plane::CONTROL;\n").unwrap();
     let control_source = control.join("src/lib.rs");
     fs::write(&control_source, "pub const CONTROL: u8 = 1;\n").unwrap();
-    fs::write(app.join("canic.toml"), "fixture = true\n").unwrap();
+    fs::write(app.join("canic.toml"), REUSE_CONFIG).unwrap();
     let lock = crate::cargo_command()
         .args(["generate-lockfile", "--offline", "--manifest-path"])
         .arg(app.join("Cargo.toml"))
@@ -198,7 +210,7 @@ fn governed_fixture_inputs_invalidate_reuse() {
     )
     .unwrap();
     fs::write(root.join("src/lib.rs"), "pub const VALUE: u8 = 1;\n").unwrap();
-    fs::write(root.join("canic.toml"), "configuration = 1\n").unwrap();
+    fs::write(root.join("canic.toml"), REUSE_CONFIG).unwrap();
     fs::write(root.join("tool"), "tool payload 1\n").unwrap();
     let context = WorkspaceBuildContext {
         role: "root".into(),
@@ -215,9 +227,10 @@ fn governed_fixture_inputs_invalidate_reuse() {
     let tools = [root.join("tool")];
     let original_snapshot = input_snapshot(&context, &tools).unwrap();
     let original = original_snapshot.digest();
+    let changed_config = format!("# changed configuration input\n{REUSE_CONFIG}");
     for (path, replacement) in [
         ("src/lib.rs", "pub const VALUE: u8 = 2;\n"),
-        ("canic.toml", "configuration = 2\n"),
+        ("canic.toml", changed_config.as_str()),
         ("tool", "tool payload 2\n"),
         (
             "Cargo.lock",
@@ -351,5 +364,52 @@ fn executable_launchers_do_not_claim_their_delegated_tool_bytes() {
         Err(BuildReuseError::UnboundTool(_))
     ));
     require_native_tool(&env::current_exe().unwrap()).unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn declared_fixture_payloads_participate_in_cache_inputs_inside_excluded_directories() {
+    let root = temp_dir("reuse-declared-fixture");
+    fs::create_dir_all(root.join(".canic/source")).unwrap();
+    fs::write(root.join("canic.toml"), REUSE_CONFIG).unwrap();
+    fs::write(root.join("Cargo.toml"), "[package]\nname = \"app\"\nversion = \"0.1.0\"\n[package.metadata.canic]\nfixture = \".canic/source/fixture.json\"\n").unwrap();
+    fs::write(root.join(".canic/source/fixture.json"), serde_json::to_vec(&serde_json::json!({
+        "format_hash": "01".repeat(32), "completion_summary": "02".repeat(32), "chunk_paths": ["rows.bin"]
+    })).unwrap()).unwrap();
+    let rows = root.join(".canic/source/rows.bin");
+    fs::write(&rows, [3; 64]).unwrap();
+    let context = WorkspaceBuildContext {
+        role: "root".into(),
+        profile: crate::canister_build::CanisterBuildProfile::Fast,
+        environment: "local".into(),
+        build_network: canic_core::ids::BuildNetwork::Local,
+        workspace_root: root.clone(),
+        icp_root: root.clone(),
+        config_path: root.join("canic.toml"),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    let mut files = BTreeMap::new();
+    collect_files(&root, &root, &mut files, true).unwrap();
+    assert!(!files.contains_key(rows.to_str().unwrap()));
+    append_fixture_inputs(&context, &mut files).unwrap();
+    assert!(files.contains_key(rows.to_str().unwrap()));
+    let before = BuildInputSnapshot {
+        identity: "fixture".into(),
+        files,
+    };
+    fs::write(&rows, [4; 64]).unwrap();
+    let mut files = BTreeMap::new();
+    collect_files(&root, &root, &mut files, true).unwrap();
+    append_fixture_inputs(&context, &mut files).unwrap();
+    let after = BuildInputSnapshot {
+        identity: "fixture".into(),
+        files,
+    };
+    assert_ne!(before.digest(), after.digest());
+    assert!(
+        matches!(before.validate_after(&after), Err(BuildReuseError::ChangedInput(path)) if path == rows)
+    );
     fs::remove_dir_all(root).unwrap();
 }

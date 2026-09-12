@@ -256,6 +256,7 @@ fn installed_allocation(
         creation: effect,
         canister,
         installation: RootComponentInstallEffectView {
+            fixture_grant_revision: None,
             raw_module_hash: [33; 32],
             protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
                 [34; 32],
