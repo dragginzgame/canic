@@ -69,6 +69,12 @@ maximum_instances_per_parent = 4
 component_role = "user_hub"
 maximum_instances = 1
 
+# Exercise both the per-request cap and a smaller final grant in two transfers.
+[component_specs.users.cycles_funding]
+max_per_request = "2T"
+max_per_child = "3T"
+cooldown_secs = 1
+
 [component_specs.users.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100

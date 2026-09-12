@@ -1019,6 +1019,9 @@ mod tests {
             }],
             visibility: Vec::new(),
             readiness: CanicReadinessStatus {
+                fixture: Ok(
+                    canic_core::dto::fixture_provisioning::FixtureProvisioningStatus::NotRequired,
+                ),
                 schema_version: canic_core::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION,
                 role: Some("root".to_string()),
                 status: ReadinessStatus::Ready,

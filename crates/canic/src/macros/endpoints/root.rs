@@ -47,6 +47,7 @@ macro_rules! canic_emit_root_command_endpoint {
             ),
             #[cfg(canic_capability_role_attestation_signer)]
             PrepareRoleAttestation(::canic::dto::auth::RoleAttestationRequest),
+            PrepareStoreFixture(::canic::dto::root_store::RootStoreFixturePrepareRequest),
             PreviewCycleRefill(::canic::dto::icp_refill::CycleRefillInput),
             ProvisionChild(::canic::dto::component_registry::RootComponentChildAllocationRequest),
             ProvisionComponent(::canic::dto::component_registry::RootComponentAllocationRequest),
@@ -84,6 +85,8 @@ macro_rules! canic_emit_root_command_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum RootCommandResponse {
+            PrepareStoreFixture(Result<::canic::dto::fixture_provisioning::FixtureSourceStatus,
+                ::canic::dto::fixture_provisioning::FixtureStoreError>),
             AcceptFunding(::canic::dto::fleet_funding::FleetRootFundingAcceptanceReceipt),
             ActivateFleetAdmission(
                 ::canic::dto::fleet_admission::FleetAdmissionRootReceipt,
@@ -200,6 +203,7 @@ macro_rules! canic_emit_root_command_endpoint {
                 &command,
                 RootCommand::AdoptStore(_)
                     | RootCommand::BootstrapStore(_)
+                    | RootCommand::PrepareStoreFixture(_)
                     | RootCommand::HandoffPoolCanister(_)
                     | RootCommand::ImportPoolCanister(_)
                     | RootCommand::InspectCanister(_)
@@ -340,6 +344,7 @@ macro_rules! canic_emit_root_command_endpoint {
                 RootCommand::AcceptFunding(_)
                     | RootCommand::AdoptStore(_)
                     | RootCommand::BootstrapStore(_)
+                    | RootCommand::PrepareStoreFixture(_)
                     | RootCommand::HandoffPoolCanister(_)
                     | RootCommand::ImportPoolCanister(_)
                     | RootCommand::InspectCanister(_)
@@ -380,6 +385,10 @@ macro_rules! canic_emit_root_command_endpoint {
                     Ok(RootCommandResponse::OperationAccepted(
                         ::canic::dto::role::OperationReceipt { operation_id },
                     ))
+                }
+                RootCommand::PrepareStoreFixture(request) => {
+                    ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_root_store_fixture(request)
+                        .await.map(RootCommandResponse::PrepareStoreFixture)
                 }
                 RootCommand::BootstrapStore(request) => {
                     let operation_id = request.operation_id;
@@ -1100,6 +1109,14 @@ macro_rules! canic_emit_root_status_endpoint {
                         .map(RootStatusResponse::StoreOverview)
                 }
                         }
+        }
+        // This read calls Store; keep it separate from ordinary Root status used by updates.
+        #[$crate::canic_query(composite, requires(caller::is_controller()))]
+        async fn canic_root_fixture_status(
+            content_id: [u8; 32],
+        ) -> Result<Result<::canic::dto::fixture_provisioning::FixtureSourceStatus,
+            ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
+            ::canic::api::canister::template::WasmStoreBootstrapApi::root_fixture_status(content_id).await
         }
     };
 }

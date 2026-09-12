@@ -11,6 +11,9 @@ CI should validate:
 - package metadata App/role equality with the envelope target;
 - Rust/Cargo toolchain and build profile;
 - raw Wasm and deterministic gzip SHA-256 plus sizes;
+- `payload.final_wasm_metrics` for exact final raw/gzip, code-section,
+  data-section and defined-function counts in every profile, independently of
+  optional optimization metrics;
 - transform tool/version/executable-SHA/outcome consistency, including
   required Binaryen 132 optimization and its before/after structural metrics
   for release profiles;

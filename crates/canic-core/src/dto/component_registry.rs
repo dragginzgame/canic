@@ -1022,6 +1022,7 @@ pub struct ComponentRuntimeActivationRequest {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ComponentRuntimeStatusResponse {
+    pub fixture: Option<Box<crate::dto::fixture_provisioning::FixtureAssignment>>,
     pub operation_id: [u8; 32],
     pub binding: ManagedCanisterBinding,
     pub deployment: Box<ProtectedComponentDeployment>,
@@ -2632,6 +2633,7 @@ mod tests {
         let directory_response = RootComponentChildDirectoryPreparationResponse {
             committed: commit_response.clone(),
             child: ComponentRuntimeStatusResponse {
+                fixture: None,
                 operation_id: request.operation_id,
                 binding: ManagedCanisterBinding::ComponentChild(child_binding.clone()),
                 deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
@@ -2655,6 +2657,7 @@ mod tests {
         let activation_response = RootComponentChildRuntimeActivationResponse {
             committed: commit_response.clone(),
             child: ComponentRuntimeStatusResponse {
+                fixture: None,
                 operation_id: request.operation_id,
                 binding: ManagedCanisterBinding::ComponentChild(child_binding.clone()),
                 deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
@@ -2704,6 +2707,7 @@ mod tests {
             },
             directory: active_directory,
             child: ComponentRuntimeStatusResponse {
+                fixture: None,
                 operation_id: request.operation_id,
                 binding: ManagedCanisterBinding::ComponentChild(child_binding.clone()),
                 deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {

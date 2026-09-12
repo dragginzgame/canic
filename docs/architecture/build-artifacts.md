@@ -50,6 +50,24 @@ profile digest remain bound before optimization. The builder keeps Wasm
 compilation non-incremental. An explicit
 `RUSTC_WRAPPER` wins; otherwise an executable `sccache` on `PATH` is used.
 
+### Final size reporting
+
+Application, infrastructure and selected-role build tables show the selected
+Cargo profile and exact `CODE (B)` and `DATA (B)` section payload lengths beside
+the existing raw/gzip size summary. These measurements come from the finalized
+Wasm through the same host parser used during finalization, including for fast
+builds without a Binaryen transform. Section lengths include their internal
+encoding; raw size also includes other sections and the module envelope. Data
+bytes are not a measure of eventual stable memory, and gzip is transport size.
+The table introduces no headroom estimate or new installation limit.
+
+Selected-role `--provenance` evidence records the exact final measurements in
+`payload.final_wasm_metrics`: `raw_bytes`, `gzip_bytes`, `code_section_bytes`,
+`data_section_bytes` and `defined_functions`. The existing envelope target and
+Cargo record identify the profile, while artifact records retain the raw/gzip
+hashes. Final metrics are separate from optional transform before/after metrics.
+The current v1 payload requires this field through a pre-1.0 hard cut.
+
 ### Complete build reuse and compilation phases
 
 `canic build <app>` verifies inputs before allocating another release identity.

@@ -1,4 +1,6 @@
 # Minimal synthetic topology: one standalone Component and two Hubs, each with one child.
+public_metrics = ["performance"]
+
 [app]
 name = "test"
 init_mode = "enabled"

@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-11",
+  "scope": "Read-only explicit partial-activation recovery preparation assessment",
+  "environment": "staging",
+  "fleet": "toko-miner-staging-001",
+  "source_operation_id": "aed7d8545e4722930c1b500fde05b87c4ba07e4e63088ebbd54593d7b2ab8895",
+  "source_plan_reference": "5714f60182f51fff270478361b9dafd96222c417cb084ccf67e2a5118b419407",
+  "target_release_build_id": "d35953a6157e746b9af5cf23e897a90faabbd8df25832ddcb37b57541da1f607",
+  "review_operation_id": "9bf8f663018d7749710f9dafb0fa3eaf8d664fc6c3d57ec593d9769b5ded3586",
+  "review_plan_sha256": "20e836ef8401e1509e7c8753edb9247c3c6a68d7c5d3906aeecd3c481ad2bb40",
+  "review_scope": "reinstall_preparation",
+  "review_document_sha256": "d3cfe3d01e217bc4fe9185051c60ca6bbb0259f9cb4576f160c0295a026d494e",
+  "retained_review_path": "/home/adam/projects/canic/.tmp/canic166-review-8sd3kaay/review.json",
+  "actions": [
+    {
+      "kind": "stop",
+      "name": "coordinator"
+    },
+    {
+      "kind": "stop",
+      "name": "root-0"
+    },
+    {
+      "kind": "start",
+      "name": "root-0"
+    }
+  ],
+  "native_controlled_cycles": "392570624115307",
+  "maximum_preparation_execution_burn_cycles": "219000000000000",
+  "conservative_post_preparation_floor_cycles": "173570624115307",
+  "source_observed_debit_cycles": "114852237593758",
+  "source_reviewed_maximum_execution_burn_cycles": "375000000000000",
+  "maximum_new_funding_cycles": "0",
+  "maximum_operator_debit_cycles": "0",
+  "maximum_unavoidable_fee_cycles": "0",
+  "scheduled_transfer_cycles": "0",
+  "physical_assets": 24,
+  "workloads": 9,
+  "ready_assets": 15,
+  "infrastructure_canisters": 3,
+  "root_ledger_balance_cycles": "0",
+  "pending_creation_count": 0,
+  "original_and_copied_inputs_unchanged": true,
+  "global_identity_unchanged": true,
+  "effects_applied": 0,
+  "terminal": false,
+  "actual_conservation": null,
+  "applied": false
+}

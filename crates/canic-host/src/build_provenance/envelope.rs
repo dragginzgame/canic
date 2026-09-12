@@ -10,7 +10,7 @@ use crate::{
 use std::path::Path;
 
 use super::{
-    artifacts::{artifact_provenance, artifact_transform_provenance},
+    artifacts::{artifact_provenance, artifact_transform_provenance, final_wasm_metrics},
     cargo::cargo_provenance,
     inputs::build_input_fingerprints,
     model::{
@@ -111,6 +111,7 @@ fn build_provenance_payload(
             protocol_profile_digest: request.output.protocol_profile_digest.to_string(),
         },
         artifacts: artifact_provenance(request)?,
+        final_wasm_metrics: final_wasm_metrics(request)?,
         transforms: artifact_transform_provenance(request)?,
         warnings,
     })

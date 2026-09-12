@@ -1,0 +1,27 @@
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 52.32s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-70052057650eb192)
+
+running 6 tests
+test ops::fixture_store::tests::child_grant_preserves_component_identity_and_authenticates_only_the_child ... ok
+test ops::fixture_store::tests::descriptor_admission_accounts_for_the_full_command_envelope ... ok
+test ops::fixture_store::tests::descriptor_and_authority_conflicts_leave_storage_unchanged ... ok
+test ops::fixture_store::tests::fixture_capacity_includes_metadata_payload_grants_and_template_bytes ... ok
+test ops::fixture_store::tests::fixture_store_restores_content_progress_and_exact_grant_revisions ... ok
+test ops::fixture_store::tests::revoked_and_replaced_grants_fence_delayed_commands_and_reads ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 248 filtered out; finished in 0.41s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_host-6b9fefa8482cf1f0)
+
+running 7 tests
+test release_set::fixture::tests::canonical_role_binding_preserves_chunk_order_and_separates_release_identity ... ok
+test release_set::fixture::tests::changed_sources_cannot_replace_selected_content_and_tampering_is_detected ... ok
+test release_set::fixture::tests::chunk_bounds_and_workspace_path_confinement_precede_persistence ... ok
+test release_set::fixture::tests::duplicate_unknown_and_infrastructure_roles_never_publish_a_manifest ... ok
+test release_set::fixture::tests::interrupted_copy_resumes_without_overwrite_and_finalization_prevents_repair ... ok
+test release_set::fixture::tests::publication_recovers_from_remote_progress_and_rejects_false_completion ... ok
+test release_set::fixture::tests::source_and_retained_links_are_refused ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 566 filtered out; finished in 0.17s
+

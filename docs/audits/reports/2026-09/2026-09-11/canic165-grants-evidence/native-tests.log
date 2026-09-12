@@ -1,0 +1,82 @@
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 58s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-70052057650eb192)
+
+running 8 tests
+test ops::fixture_grant::tests::initial_issuance_and_lost_reply_replay_keep_one_exact_grant ... ok
+test ops::fixture_grant::tests::revoked_and_conflicting_grants_never_authorize_initial_issuance ... ok
+test workflow::bootstrap::root_store::tests::expected_artifact_metadata_is_derived_without_local_staging_state ... ok
+test workflow::bootstrap::root_store::tests::live_catalog_must_equal_the_complete_ordered_release_set ... ok
+test workflow::bootstrap::root_store::tests::runtime_projection_does_not_conflate_package_selector_with_cargo_identity ... ok
+test workflow::bootstrap::root_store::fixture::tests::completion_checks_all_retained_source_metadata ... ok
+test workflow::bootstrap::root_store::tests::sha256_decoder_accepts_only_canonical_lowercase_hex ... ok
+test workflow::bootstrap::root_store::fixture::tests::release_sources_require_ordered_admitted_roles_and_exact_content ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 250 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_core-cdb29c7405defb50)
+
+running 19 tests
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_rejects_same_principal_from_another_component_authority ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_rejects_substitution_and_revocation_after_restore ... ok
+test ops::storage::fleet_activation::tests::fleet_service_modes_round_trip_through_internal_storage_records ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_roundtrips_for_parent_and_child_without_a_progress_cursor ... ok
+test ops::storage::fleet_activation::tests::nonroot_init_mismatch_writes_no_activation_record ... ok
+test ops::storage::fleet_activation::tests::root_init_mismatch_writes_no_activation_record ... ok
+test ops::storage::fleet_activation::tests::nonroot_activation_commits_once_and_exact_replay_is_observational ... ok
+test ops::storage::fleet_activation::tests::component_directory_preparation_is_exact_idempotent_and_remains_prepared ... ok
+test ops::storage::fleet_activation::tests::managed_upgrade_requires_the_retained_release_build_identity ... ok
+test ops::storage::fleet_activation::tests::root_init_commits_exact_prepared_identity_once ... ok
+test ops::storage::fleet_activation::tests::nonroot_activation_rejects_mismatched_evidence_without_transition ... ok
+test ops::storage::fleet_activation::tests::nonroot_init_commits_identity_empty_evidence_and_application_args_once ... ok
+test ops::storage::fleet_activation::tests::root_status_rejects_nonroot_application_init_arguments ... ok
+test ops::storage::fleet_activation::tests::status_projects_complete_active_root_evidence ... ok
+test ops::storage::fleet_activation::tests::status_rejects_absent_and_contradictory_protected_state ... ok
+test ops::storage::fleet_activation::tests::status_projects_the_exact_prepared_identity ... ok
+test ops::storage::fleet_activation::tests::wasm_store_init_commits_exact_reciprocal_authority ... ok
+test ops::storage::fleet_activation::tests::status_projects_only_nonroot_applied_evidence ... ok
+test ops::storage::fleet_activation::tests::component_runtime_activation_is_directory_bound_and_exact_idempotent ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 1261 filtered out; finished in 0.22s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_host-41b2c29968c050d9)
+
+running 20 tests
+test fleet_ensure::ops::current_protocol::tests::fresh_fleet_registry_prepare_classifies_typed_unavailable_status ... ok
+test fleet_ensure::ops::current_protocol::tests::duplicate_or_incomplete_placement_authority_fails_closed ... ok
+test fleet_ensure::ops::current_protocol::tests::current_desired_state_rejects_component_demand_above_pool_target ... ok
+test fleet_ensure::ops::current_protocol::tests::live_root_authority_compiles_one_deterministic_registry_sequence ... ok
+test fleet_ensure::ops::current_protocol::tests::registry_sequence_rejects_store_and_registry_authority_drift ... ok
+test fleet_ensure::ops::current_protocol::tests::store_authority_without_operation_receipt_does_not_complete_adoption ... ok
+test fleet_ensure::ops::current_protocol::tests::fresh_fleet_generated_store_controllers_resolve_exact_principals ... ok
+test fleet_ensure::ops::current_protocol::tests::typed_placements_compile_to_exact_active_root_batches ... ok
+test fleet_ensure::ops::current_protocol::tests::provisioned_registry_requires_its_exact_component_operation_receipt ... ok
+test release_set::fixture::tests::configured_source_manifest_is_strict_and_cannot_escape_its_directory ... ok
+test release_set::fixture::tests::configured_sources_bind_metadata_and_payload_even_in_excluded_directories ... ok
+test release_set::fixture::tests::chunk_bounds_and_workspace_path_confinement_precede_persistence ... ok
+test release_set::fixture::tests::duplicate_unknown_and_infrastructure_roles_never_publish_a_manifest ... ok
+test release_set::fixture::tests::source_and_retained_links_are_refused ... ok
+test release_set::fixture::tests::restored_source_does_not_hide_different_bytes_retained_during_build ... ok
+test fleet_ensure::ops::current_protocol::tests::fresh_fleet_store_bootstrap_is_deterministic ... ok
+test release_set::fixture::tests::changed_sources_cannot_replace_selected_content_and_tampering_is_detected ... ok
+test release_set::fixture::tests::interrupted_copy_resumes_without_overwrite_and_finalization_prevents_repair ... ok
+test release_set::fixture::tests::canonical_role_binding_preserves_chunk_order_and_separates_release_identity ... ok
+test fleet_ensure::ops::current_protocol::tests::activation_source_requires_exact_completed_prefix_and_issued_provisioning ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 561 filtered out; finished in 0.18s
+
+
+Final assignment regression after directory-module relocation:
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 57.35s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-ddfaf1360157e1cd)
+
+running 3 tests
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_rejects_same_principal_from_another_component_authority ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_rejects_substitution_and_revocation_after_restore ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_roundtrips_for_parent_and_child_without_a_progress_cursor ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 1277 filtered out; finished in 0.00s
+

@@ -269,6 +269,14 @@ fn verify_release(
         {
             return Err("retained child manifest digest differs".into());
         }
+        let fixtures = current
+            .manifest
+            .verify_fixtures(&context.icp_root, config.component_topology())?;
+        crate::release_set::fixture::load_configured_fixture_sources(
+            &context.icp_root,
+            &context.config_path,
+        )?
+        .verify_retained(&fixtures)?;
         Ok(current.path)
     };
     verify().map_err(|error| BuildReuseError::Evidence(error.to_string()))
@@ -324,6 +332,7 @@ fn input_snapshot(
         collect_files(root, root, &mut files, true)?;
     }
     dependencies::append_observed_cargo_inputs(context, &mut files)?;
+    append_fixture_inputs(context, &mut files)?;
     add_file(&context.config_path, &mut files)?;
     for root in [&context.workspace_root, &metadata.workspace_root] {
         for ancestor in root.ancestors() {
@@ -356,6 +365,30 @@ fn input_snapshot(
         identity: input_identity(context)?,
         files,
     })
+}
+
+fn append_fixture_inputs(
+    context: &WorkspaceBuildContext,
+    files: &mut BTreeMap<String, String>,
+) -> Result<(), BuildReuseError> {
+    let fixtures = crate::release_set::fixture::load_configured_fixture_sources(
+        &context.icp_root,
+        &context.config_path,
+    )
+    .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
+    for (path, hash) in fixtures.source_files {
+        let key = path
+            .to_str()
+            .ok_or_else(|| BuildReuseError::Unsupported(path.clone()))?
+            .to_owned();
+        if files
+            .insert(key, hash.clone())
+            .is_some_and(|before| before != hash)
+        {
+            return Err(BuildReuseError::ChangedInput(path));
+        }
+    }
+    Ok(())
 }
 
 fn input_identity(context: &WorkspaceBuildContext) -> Result<String, BuildReuseError> {

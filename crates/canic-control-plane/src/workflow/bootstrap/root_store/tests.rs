@@ -133,6 +133,7 @@ fn live_catalog_must_equal_the_complete_ordered_release_set() {
 fn expected_artifact_metadata_is_derived_without_local_staging_state() {
     let entry = release_set_entry("app");
     let manifest = RootStoreReleaseSetManifest {
+        fixtures: Vec::new(),
         release_build_id: entry.artifact.release_build_id,
         component_topology_digest: ComponentTopologyDigest::from_bytes([3; 32]),
         entries: vec![entry],

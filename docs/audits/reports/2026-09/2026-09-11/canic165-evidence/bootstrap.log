@@ -1,0 +1,57 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:41661/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 11.46s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-b4e91a1412f42ea3)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-b4e91a1412f42ea3)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.25 MiB (8650462 B)  headroom=1.75 MiB (1835298 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.54s candid=1.45s binaryen=0.00s gzip/validation=0.51s total=3.54s
+[WASM]       DONE   Fleet Coordinator artifact                           1m 45s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       DONE   canister_index_child                                 37.77s
+[WASM]       DONE   canister_index_hub                                    6.00s
+[WASM]       DONE   canister_scale_hub                                    6.02s
+[WASM]       DONE   canister_scale                                        5.71s
+[WASM]       DONE   canister_user_hub                                    36.60s
+[WASM]       DONE   canister_user_shard                                  35.99s
+[WASM]       DONE   batch: 6 built, 0 cached, 0 failed                   2m 08s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             37.83s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 54.19s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 431.01s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=443560 kB high_water=464184 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 443s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  443s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 444s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.qGEqBD

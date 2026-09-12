@@ -73,6 +73,7 @@ mod tests {
                 RootComponentAllocationRequest, RootComponentAllocationResponse,
                 RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
             },
+            fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus, FixtureStoreError},
             fleet_registry::{
                 FleetRegistryActivationRequest, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
                 FleetSubnetRootRegistrySyncRequest, FleetSubnetRootStatus,
@@ -88,8 +89,8 @@ mod tests {
             root_store::{
                 ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
                 RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
-                RootStoreReleaseSetEntry, RootStoreReleaseSetEntryKind,
-                RootStoreReleaseSetManifest,
+                RootStoreFixturePrepareRequest, RootStoreReleaseSetEntry,
+                RootStoreReleaseSetEntryKind, RootStoreReleaseSetManifest,
             },
         },
         ids::{CanisterRole, ComponentBinding, FleetId, ReleaseSetDigest, SubnetId},
@@ -181,9 +182,9 @@ mod tests {
     };
     #[cfg(test)]
     use canic_host::fleet_ensure::model::{
-        CurrentFleetProtocolAction, DesiredComponentGroupPlacement, DesiredFleet,
-        DesiredFleetBootstrap, DesiredFleetBootstrapRoot, DesiredFleetProtocol, EffectRecord,
-        EffectState, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlan,
+        CurrentFleetProtocolAction, DesiredCanisterKind, DesiredComponentGroupPlacement,
+        DesiredFleet, DesiredFleetBootstrap, DesiredFleetBootstrapRoot, DesiredFleetProtocol,
+        EffectRecord, EffectState, EnsureAction, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlan,
         FleetEnsureStateRecord,
     };
     #[cfg(test)]
@@ -323,6 +324,7 @@ mod tests {
         #[cfg(test)]
         AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
         BootstrapStore(RootStoreBootstrapRequest),
+        PrepareStoreFixture(canic::dto::root_store::RootStoreFixturePrepareRequest),
         #[cfg(test)]
         InspectCanister(CanisterInspectionRequest),
         #[cfg(test)]
@@ -341,6 +343,8 @@ mod tests {
         PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
         PrepareFleetActivation,
         ProvisionComponent(RootComponentAllocationRequest),
+        #[cfg(test)]
+        RemoveSubtree(canic::dto::component_registry::RootComponentSubtreeRemovalRequest),
         #[cfg(test)]
         RespondCapability(canic::dto::capability::RootCapabilityEnvelopeV1),
         #[cfg(test)]
@@ -371,6 +375,12 @@ mod tests {
         reason = "the direct Root wire decoder changes size across test-only variants"
     )]
     enum RootCommandResponseFragment {
+        PrepareStoreFixture(
+            Result<
+                canic::dto::fixture_provisioning::FixtureSourceStatus,
+                canic::dto::fixture_provisioning::FixtureStoreError,
+            >,
+        ),
         #[cfg(test)]
         ImportPoolCanister(PoolImportResponse),
         #[cfg(test)]
@@ -401,6 +411,10 @@ mod tests {
         #[cfg(test)]
         ComponentRegistryActivePartition(ComponentRegistryActivePartitionRequest),
         #[cfg(test)]
+        ComponentRegistryPartition(
+            canic::dto::component_registry::ComponentRegistryPartitionRequest,
+        ),
+        #[cfg(test)]
         CycleBalance,
         #[cfg(test)]
         CycleHistory(PageRequest),
@@ -430,6 +444,10 @@ mod tests {
         ComponentRegistry(RootComponentRegistryStatusResponse),
         #[cfg(test)]
         ComponentRegistryActivePartition(ComponentRegistryActivePartitionResponse),
+        #[cfg(test)]
+        ComponentRegistryPartition(
+            canic::dto::component_registry::ComponentRegistryPartitionResponse,
+        ),
         #[cfg(test)]
         CycleBalance(CycleBalanceStatusResponse),
         #[cfg(test)]
@@ -557,26 +575,35 @@ mod tests {
         descendant: Principal,
         request: canic::dto::capability::RootCapabilityEnvelopeV1,
     ) -> u128 {
-        let response: Result<RootCommandResponseFragment, Error> = pic
-            .update_candid_as(
-                root,
-                descendant,
-                canic::protocol::CANIC_ROOT_COMMAND,
-                (RootCommandFragment::RespondCapability(request),),
-            )
-            .expect("request exact descendant funding from Root");
-        let RootCommandResponseFragment::RespondCapability(response) =
-            response.expect("Root accepts registered descendant funding request")
+        let canic::dto::rpc::CyclesResponse::Transferred { cycles_transferred } =
+            descendant_funding_response(pic, root, descendant, request)
         else {
-            panic!("Root returned a differently correlated capability response");
-        };
-        let canic::dto::rpc::Response::Cycles(canic::dto::rpc::CyclesResponse::Transferred {
-            cycles_transferred,
-        }) = response.response
-        else {
-            panic!("Root returned a differently correlated cycles response");
+            panic!("Root returned a funding preflight rejection");
         };
         cycles_transferred
+    }
+
+    #[cfg(test)]
+    fn descendant_funding_response(
+        pic: &PocketIc,
+        root: Principal,
+        descendant: Principal,
+        request: canic::dto::capability::RootCapabilityEnvelopeV1,
+    ) -> canic::dto::rpc::CyclesResponse {
+        let response = root_command_as(
+            pic,
+            root,
+            descendant,
+            RootCommandFragment::RespondCapability(request),
+        )
+        .expect("Root accepts registered descendant funding request");
+        let RootCommandResponseFragment::RespondCapability(response) = response else {
+            panic!("Root returned a differently correlated capability response");
+        };
+        let canic::dto::rpc::Response::Cycles(response) = response.response else {
+            panic!("Root returned a differently correlated cycles response");
+        };
+        response
     }
 
     fn root_status(
@@ -2349,11 +2376,21 @@ exec icp "$@"
             &application_outputs,
         )
         .expect("persist literal-zero application authority");
+        let fixtures =
+            canic_host::release_set::fixture::compile_and_persist_fixture_artifact_manifest(
+                adapter_root,
+                &configuration.component_topology,
+                release_build_id,
+                &[],
+            )
+            .expect("persist empty fixture authority");
         let current = compile_and_persist_current_release_set_manifest(
             adapter_root,
+            &configuration.component_topology,
             release_build_id,
             &application,
             &infrastructure,
+            &fixtures,
         )
         .expect("persist literal-zero current release authority");
         finalize_release_build_from_manifest(adapter_root, release_build_id, &current.path)
@@ -3047,6 +3084,689 @@ exec icp "$@"
         assert_eq!(request_count, 5);
     }
 
+    #[cfg(test)]
+    #[derive(CandidType)]
+    enum FixtureReadinessRequest {
+        Readiness,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Deserialize)]
+    enum FixtureReadinessResponse {
+        Readiness(canic::dto::runtime::CanicReadinessStatus),
+    }
+
+    #[cfg(test)]
+    fn fixture_readiness(
+        pic: &PocketIc,
+        root: Principal,
+        target: Principal,
+    ) -> canic::dto::runtime::CanicReadinessStatus {
+        let response: Result<FixtureReadinessResponse, Error> = pic
+            .query_candid_as(
+                target,
+                root,
+                canic::protocol::CANIC_OBSERVABILITY,
+                (FixtureReadinessRequest::Readiness,),
+            )
+            .expect("protected readiness remains observable");
+        let FixtureReadinessResponse::Readiness(response) = response.unwrap();
+        response
+    }
+
+    #[cfg(test)]
+    fn selected_fixture_targets(pic: &PocketIc, root: Principal) -> Vec<(Principal, CanisterRole)> {
+        root_pool_status(pic, root)
+            .entries
+            .iter()
+            .filter(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
+            .filter_map(|entry| {
+                let response = pic
+                    .query_candid_as::<Result<ManagedStatusResponseFragment, Error>, _>(
+                        entry.canister_id,
+                        root,
+                        canic::protocol::CANIC_OBSERVABILITY,
+                        (ManagedStatusRequestFragment::Binding,),
+                    )
+                    .ok()?
+                    .ok()?;
+                let ManagedStatusResponseFragment::Binding(binding) = response else {
+                    return None;
+                };
+                let role = match binding.as_ref() {
+                    ManagedCanisterBinding::Component(binding) => &binding.role,
+                    ManagedCanisterBinding::ComponentChild(binding) => &binding.role,
+                };
+                ["user_hub", "user_shard"]
+                    .contains(&role.as_str())
+                    .then_some((entry.canister_id, role.clone()))
+            })
+            .collect()
+    }
+
+    #[cfg(test)]
+    fn assert_root_waits_for_fixture_membership(
+        pic: &PocketIc,
+        root: Principal,
+        operation_id: [u8; 32],
+    ) {
+        let response = root_status(
+            pic,
+            root,
+            RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+        )
+        .expect("observe Root provisioning while fixtures are held");
+        let RootStatusResponseFragment::Operation(
+            RootOperationStatusResponse::ProvisionComponents(status),
+        ) = response
+        else {
+            panic!("expected exact Component provisioning status");
+        };
+        assert!(
+            !status.root_runtime_active,
+            "initial child must progress while Root remains Prepared"
+        );
+        assert!(status.runtimes_activated_at_ns.is_none());
+    }
+
+    /// The initial child completes autonomously while the parent's data remains held.
+    #[cfg(test)]
+    fn qualify_pending_fixture_bootstrap(
+        pic: &PocketIc,
+        fixture: &BootstrappedRootFixture,
+        operation_id: [u8; 32],
+        funding: &canic_core::bootstrap::compiled::CyclesFundingPolicyConfig,
+    ) {
+        use canic::dto::fixture_provisioning::{FixtureImportError, FixtureProvisioningStatus};
+        let mut selected = Vec::new();
+        for _ in 0..240 {
+            selected = selected_fixture_targets(pic, fixture.root_id);
+            if selected.len() == 2 {
+                break;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        assert_eq!(
+            selected.len(),
+            2,
+            "initial child must be allocated before parent fixture readiness"
+        );
+        let hub = selected
+            .iter()
+            .find(|(_, role)| role.as_str() == "user_hub")
+            .unwrap()
+            .0;
+        let shard = selected
+            .iter()
+            .find(|(_, role)| role.as_str() == "user_shard")
+            .unwrap()
+            .0;
+        for _ in 0..40 {
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        assert_root_waits_for_fixture_membership(pic, fixture.root_id, operation_id);
+        let pending_targets = selected_fixture_targets(pic, fixture.root_id);
+        let readiness = fixture_readiness(pic, fixture.root_id, hub);
+        assert_eq!(
+            readiness.status,
+            canic::dto::runtime::ReadinessStatus::NotReady
+        );
+        assert_eq!(readiness.fixture, Err(FixtureImportError::NotReady));
+        assert!(
+            pic.query_candid::<Result<String, Error>, _>(hub, "test_recovery_generation", ())
+                .is_err()
+        );
+        assert!(
+            pic.update_candid::<Result<Principal, Error>, _>(
+                hub,
+                "create_account",
+                (Principal::anonymous(),)
+            )
+            .is_err()
+        );
+        for _ in 0..160 {
+            if fixture_readiness(pic, fixture.root_id, shard).status
+                == canic::dto::runtime::ReadinessStatus::Ready
+            {
+                break;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        let child = fixture_readiness(pic, fixture.root_id, shard);
+        assert!(matches!(
+            child.fixture,
+            Ok(FixtureProvisioningStatus::Complete(_))
+        ));
+        assert_eq!(child.status, canic::dto::runtime::ReadinessStatus::Ready);
+        assert_eq!(
+            fixture_readiness(pic, fixture.root_id, hub).fixture,
+            Err(FixtureImportError::NotReady)
+        );
+        assert_eq!(
+            pending_targets,
+            selected_fixture_targets(pic, fixture.root_id),
+            "observing pending receipts must not allocate another selected target"
+        );
+        qualify_pending_fixture_funding(pic, fixture.root_id, hub, funding);
+        assert_eq!(
+            fixture_readiness(pic, fixture.root_id, hub).fixture,
+            Err(FixtureImportError::NotReady)
+        );
+        assert_root_waits_for_fixture_membership(pic, fixture.root_id, operation_id);
+        pic.update_candid_as::<(), _>(hub, fixture.root_id, "test_release_fixture", ())
+            .unwrap();
+    }
+
+    /// Pending imports share the configured allowance and exact funding replay owner.
+    #[cfg(test)]
+    fn qualify_pending_fixture_funding(
+        pic: &PocketIc,
+        root: Principal,
+        hub: Principal,
+        funding: &canic_core::bootstrap::compiled::CyclesFundingPolicyConfig,
+    ) {
+        use canic::dto::rpc::{CyclesFundingPreflightResponse, CyclesResponse};
+        let per_request = funding.max_per_request.to_u128();
+        let total = funding.max_per_child.to_u128();
+        assert!(per_request > 0 && total > 0 && funding.cooldown_secs > 0);
+        // Stop only the recipient so exact balance assertions exclude its timer execution.
+        // Root remains live and executes the actual management transfer and durable receipt.
+        pic.stop_canister(hub, Some(root)).unwrap();
+        let initial_balance = pic.cycle_balance(hub);
+        let error = root_command_as(
+            pic,
+            root,
+            Principal::from_slice(&[0xb4; 29]),
+            RootCommandFragment::RespondCapability(descendant_funding_request(pic, 0xb4)),
+        )
+        .err()
+        .expect("unregistered caller cannot acquire a fixture funding allowance");
+        assert_eq!(
+            error.code(),
+            canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+        );
+        let mut forbidden = descendant_funding_request(pic, 0xb5);
+        forbidden.capability =
+            canic::dto::rpc::Request::RecycleCanister(canic::dto::rpc::RecycleCanisterRequest {
+                canister_pid: hub,
+                metadata: None,
+            });
+        let error = root_command_as(
+            pic,
+            root,
+            hub,
+            RootCommandFragment::RespondCapability(forbidden),
+        )
+        .err()
+        .expect("Prepared funding authority must not admit recycling");
+        assert_eq!(
+            error.code(),
+            canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        );
+        assert_eq!(pic.cycle_balance(hub), initial_balance);
+        let mut granted = 0;
+        let grants = total.div_ceil(per_request);
+        for index in 0..grants {
+            pic.advance_time(Duration::from_secs(funding.cooldown_secs));
+            // Measure each effect separately from earlier elapsed-time charges.
+            pic.tick();
+            let before_transfer = pic.cycle_balance(hub);
+            let mut request = descendant_funding_request(pic, 0xb1);
+            request.metadata.request_id[..16].copy_from_slice(&index.to_be_bytes());
+            let canic::dto::rpc::Request::Cycles(ref mut cycles) = request.capability else {
+                unreachable!();
+            };
+            cycles.cycles = total.checked_add(1).unwrap();
+            let amount = request_descendant_funding(pic, root, hub, request.clone());
+            assert_eq!(amount, per_request.min(total - granted));
+            granted += amount;
+            assert_eq!(pic.cycle_balance(hub), before_transfer + amount);
+            // Discard the first receipt and replay its exact identity during cooldown.
+            assert_eq!(
+                request_descendant_funding(pic, root, hub, request.clone()),
+                amount
+            );
+            assert_eq!(pic.cycle_balance(hub), before_transfer + amount);
+            request.metadata.request_id[31] = 0xb2;
+            assert!(
+                matches!(descendant_funding_response(pic, root, hub, request),
+                CyclesResponse::PreflightRejected(
+                    CyclesFundingPreflightResponse::CooldownActive { retry_after_secs }
+                ) if retry_after_secs > 0 && retry_after_secs <= funding.cooldown_secs)
+            );
+            assert_eq!(pic.cycle_balance(hub), before_transfer + amount);
+        }
+        assert_eq!(granted, total);
+        pic.advance_time(Duration::from_secs(funding.cooldown_secs));
+        pic.tick();
+        let exhausted_balance = pic.cycle_balance(hub);
+        assert_eq!(
+            descendant_funding_response(pic, root, hub, descendant_funding_request(pic, 0xb3)),
+            CyclesResponse::PreflightRejected(
+                CyclesFundingPreflightResponse::ChildBudgetExhausted {
+                    remaining_child_budget: 0,
+                    max_per_child: total,
+                }
+            )
+        );
+        assert_eq!(pic.cycle_balance(hub), exhausted_balance);
+        pic.start_canister(hub, Some(root)).unwrap();
+    }
+
+    /// A later application allocation uses retained sources after publication authority leaves.
+    #[cfg(test)]
+    fn qualify_later_fixture_shard(
+        pic: &PocketIc,
+        fixture: &BootstrappedRootFixture,
+        hub: Principal,
+        initial_shard: Principal,
+        capacity: u32,
+    ) {
+        // The initial journey already assigned one distinct account.
+        for index in 1..capacity {
+            let user = Principal::from_slice(&index.to_be_bytes());
+            let assigned: Result<Principal, Error> = pic
+                .update_candid(hub, "create_account", (user,))
+                .expect("fill the configured initial Shard capacity");
+            assert_eq!(assigned.unwrap(), initial_shard);
+        }
+        let before = root_pool_status(pic, fixture.root_id);
+        let store = fixture.response.wasm_store;
+        let controller = fixture
+            .init_args
+            .authority
+            .wasm_store_authority
+            .installation_controller;
+        pic.set_controllers(store, Some(controller), vec![fixture.root_id])
+            .expect("remove publication controller after the initial Fleet completes");
+        pic.stop_canister(store, Some(fixture.root_id))
+            .expect("interrupt retained source access");
+        let user = Principal::from_slice(&[0xe4; 29]);
+        let interrupted: Result<Principal, Error> = pic
+            .update_candid(hub, "create_account", (user,))
+            .expect("source outage returns an application result");
+        assert!(
+            interrupted.is_err(),
+            "an unavailable source cannot yield a ready assignment"
+        );
+        pic.start_canister(store, Some(fixture.root_id))
+            .expect("restore the retained Store");
+        let mut last = None;
+        let mut assigned = None;
+        for _ in 0..120 {
+            let result: Result<Principal, Error> = pic
+                .update_candid(hub, "create_account", (user,))
+                .expect("retry the same account allocation");
+            match result {
+                Ok(shard) => {
+                    assigned = Some(shard);
+                    break;
+                }
+                Err(error) => last = Some(error),
+            }
+            pic.advance_time(Duration::from_secs(30));
+            pic.tick();
+        }
+        let shard = assigned.unwrap_or_else(|| panic!("later Shard did not recover: {last:?}"));
+        assert_ne!(shard, initial_shard);
+        let after = root_pool_status(pic, fixture.root_id);
+        assert_eq!(after.workload, before.workload + 1);
+        assert_eq!(after.failed, before.failed);
+        let response: Result<StoreCatalogResponse, Error> = pic
+            .query_candid_as(
+                store,
+                fixture.root_id,
+                canic::protocol::CANIC_WASM_STORE_CATALOG,
+                (StoreCatalogRequest::FixtureGrant(shard),),
+            )
+            .unwrap();
+        let StoreCatalogResponse::FixtureGrant(Some(grant)) = response.unwrap() else {
+            panic!("the later Shard must receive an autonomous exact grant");
+        };
+        assert_eq!(grant.revision, 1);
+        assert!(grant.enabled);
+        assert_eq!(
+            grant.binding.target,
+            managed_binding_status(pic, fixture.root_id, shard)
+        );
+        assert_eq!(
+            grant.binding.release_build_id,
+            fixture.response.release_set.release_build_id
+        );
+        let source = fixture
+            .response
+            .fixtures
+            .iter()
+            .find(|source| source.role.as_str() == "user_shard")
+            .unwrap();
+        assert_eq!(grant.binding.content_id, source.content_id);
+        let readiness = fixture_readiness(pic, fixture.root_id, shard);
+        assert_eq!(
+            readiness.status,
+            canic::dto::runtime::ReadinessStatus::Ready
+        );
+        let Ok(canic::dto::fixture_provisioning::FixtureProvisioningStatus::Complete(receipt)) =
+            readiness.fixture
+        else {
+            panic!("later placement requires a completed application receipt");
+        };
+        assert_eq!(receipt.binding, grant.binding);
+        assert_eq!(
+            receipt.completion_summary,
+            source.descriptor.completion_summary
+        );
+        // Discard the first successful assignment response and reconcile by the same key.
+        let replay: Result<Principal, Error> =
+            pic.update_candid(hub, "create_account", (user,)).unwrap();
+        assert_eq!(replay.unwrap(), shard);
+        assert_eq!(root_pool_status(pic, fixture.root_id), after);
+        qualify_fixture_revocation_before_recycling(pic, fixture, shard, &grant);
+        qualify_fixture_replacement(pic, fixture, hub, shard, &grant);
+    }
+
+    /// Unavailable Store authority prevents removal; successful removal revokes before reset.
+    #[cfg(test)]
+    fn qualify_fixture_revocation_before_recycling(
+        pic: &PocketIc,
+        fixture: &BootstrappedRootFixture,
+        shard: Principal,
+        grant: &canic::dto::fixture_provisioning::FixtureGrant,
+    ) {
+        let ManagedCanisterBinding::ComponentChild(binding) = &grant.binding.target else {
+            unreachable!()
+        };
+        let component = binding.component.component;
+        let root = fixture.root_id;
+        let store = fixture.response.wasm_store;
+        let RootStatusResponseFragment::ComponentRegistryPartition(partition) = root_status(
+            pic,
+            root,
+            RootStatusRequestFragment::ComponentRegistryPartition(
+                canic::dto::component_registry::ComponentRegistryPartitionRequest { component },
+            ),
+        )
+        .unwrap() else {
+            panic!("expected current Component partition");
+        };
+        let request = canic::dto::component_registry::RootComponentSubtreeRemovalRequest {
+            operation_id: [0xe5; 32],
+            component,
+            target_canister_id: shard,
+            expected_registry: partition.head,
+        };
+        let before = root_pool_status(pic, root)
+            .entries
+            .into_iter()
+            .find(|entry| entry.canister_id == shard)
+            .unwrap();
+        pic.stop_canister(store, Some(root)).unwrap();
+        let unavailable = root_command(
+            pic,
+            root,
+            RootCommandFragment::RemoveSubtree(request.clone()),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            unavailable,
+            Error::from_registered(canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE)
+        );
+        assert_eq!(
+            root_pool_status(pic, root)
+                .entries
+                .iter()
+                .find(|entry| entry.canister_id == shard),
+            Some(&before)
+        );
+        assert!(
+            pic.canister_status(shard, Some(root))
+                .unwrap()
+                .module_hash
+                .is_some()
+        );
+        pic.start_canister(store, Some(root)).unwrap();
+        root_command(
+            pic,
+            root,
+            RootCommandFragment::RemoveSubtree(request.clone()),
+        )
+        .unwrap();
+        wait_for_fixture_subtree_removal(pic, root, request.operation_id);
+        assert!(
+            pic.canister_status(shard, Some(root))
+                .unwrap()
+                .module_hash
+                .is_none()
+        );
+        assert_fixture_revocation_and_replay(pic, root, store, shard, grant, request);
+    }
+
+    #[cfg(test)]
+    fn wait_for_fixture_subtree_removal(pic: &PocketIc, root: Principal, operation_id: [u8; 32]) {
+        let mut latest = None;
+        for _ in 0..180 {
+            let response = root_status(
+                pic,
+                root,
+                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+            )
+            .unwrap();
+            if let RootStatusResponseFragment::Operation(
+                RootOperationStatusResponse::RemoveSubtree(status),
+            ) = response
+            {
+                let completed = matches!(
+                    status.phase,
+                    canic::dto::component_registry::RootComponentSubtreeRemovalPhase::Completed(_)
+                );
+                latest = Some(status);
+                if completed {
+                    break;
+                }
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        assert!(
+            latest.as_ref().is_some_and(|status| matches!(
+                status.phase,
+                canic::dto::component_registry::RootComponentSubtreeRemovalPhase::Completed(_)
+            )),
+            "subtree removal must recover after Store returns: {latest:?}"
+        );
+    }
+
+    #[cfg(test)]
+    fn assert_fixture_revocation_and_replay(
+        pic: &PocketIc,
+        root: Principal,
+        store: Principal,
+        shard: Principal,
+        grant: &canic::dto::fixture_provisioning::FixtureGrant,
+        request: canic::dto::component_registry::RootComponentSubtreeRemovalRequest,
+    ) {
+        let read_grant = || {
+            let response: Result<StoreCatalogResponse, Error> = pic
+                .query_candid_as(
+                    store,
+                    root,
+                    canic::protocol::CANIC_WASM_STORE_CATALOG,
+                    (StoreCatalogRequest::FixtureGrant(shard),),
+                )
+                .unwrap();
+            let StoreCatalogResponse::FixtureGrant(Some(revoked)) = response.unwrap() else {
+                panic!("revoked grant remains retained");
+            };
+            revoked
+        };
+        let revoked = read_grant();
+        assert_eq!(revoked.binding, grant.binding);
+        assert_eq!(revoked.revision, grant.revision + 1);
+        assert!(!revoked.enabled);
+        let before = root_pool_status(pic, root)
+            .entries
+            .into_iter()
+            .find(|entry| entry.canister_id == shard)
+            .unwrap();
+        assert_eq!(before.status, CanisterPoolAssetStatus::Ready);
+        root_command(pic, root, RootCommandFragment::RemoveSubtree(request)).unwrap();
+        assert_eq!(
+            root_pool_status(pic, root)
+                .entries
+                .iter()
+                .find(|entry| entry.canister_id == shard),
+            Some(&before)
+        );
+        assert_eq!(read_grant(), revoked);
+        let StoreCommandResponse::FixtureGrant(stale) = store_command_as(
+            pic,
+            store,
+            root,
+            StoreCommand::SetFixtureGrant(Box::new(
+                canic::dto::fixture_provisioning::FixtureGrantRequest {
+                    expected_revision: 0,
+                    binding: grant.binding.clone(),
+                    enabled: true,
+                },
+            )),
+        )
+        .unwrap() else {
+            panic!("exact grant response");
+        };
+        assert_eq!(*stale, Err(FixtureStoreError::Conflict));
+    }
+
+    /// A new operation reuses the physical target with a retained successor grant.
+    #[cfg(test)]
+    fn qualify_fixture_replacement(
+        pic: &PocketIc,
+        fixture: &BootstrappedRootFixture,
+        hub: Principal,
+        shard: Principal,
+        previous: &canic::dto::fixture_provisioning::FixtureGrant,
+    ) {
+        let root = fixture.root_id;
+        pic.stop_canister(shard, Some(root)).unwrap();
+        let operation_id: [u8; 32] = [0xe6; 32];
+        let mut last = None;
+        let mut replacement = None;
+        for _ in 0..120 {
+            let result: Result<Principal, Error> = pic
+                .update_candid_as(hub, root, "test_create_fixture_child", (operation_id,))
+                .unwrap();
+            match result {
+                Ok(canister) => {
+                    replacement = Some(canister);
+                    break;
+                }
+                Err(error) => last = Some(error),
+            }
+            pic.advance_time(Duration::from_secs(30));
+            pic.tick();
+        }
+        if replacement.is_none() {
+            fixture_replacement_diagnostics(pic, root, shard);
+        }
+        assert_eq!(
+            replacement,
+            Some(shard),
+            "replacement must reuse the recycled asset: {last:?}"
+        );
+        let store = fixture.response.wasm_store;
+        let response: Result<StoreCatalogResponse, Error> = pic
+            .query_candid_as(
+                store,
+                root,
+                canic::protocol::CANIC_WASM_STORE_CATALOG,
+                (StoreCatalogRequest::FixtureGrant(shard),),
+            )
+            .unwrap();
+        let StoreCatalogResponse::FixtureGrant(Some(grant)) = response.unwrap() else {
+            panic!("replacement grant must be retained");
+        };
+        assert_eq!(grant.revision, previous.revision + 2);
+        assert!(grant.enabled);
+        assert_ne!(grant.binding.installation, previous.binding.installation);
+        assert_eq!(grant.binding.content_id, previous.binding.content_id);
+        assert_eq!(
+            grant.binding.target,
+            managed_binding_status(pic, root, shard)
+        );
+        let readiness = fixture_readiness(pic, root, shard);
+        assert_eq!(
+            readiness.status,
+            canic::dto::runtime::ReadinessStatus::Ready
+        );
+        let Ok(canic::dto::fixture_provisioning::FixtureProvisioningStatus::Complete(receipt)) =
+            readiness.fixture
+        else {
+            panic!("replacement requires its own completed import");
+        };
+        assert_eq!(receipt.binding, grant.binding);
+        let replay: Result<Principal, Error> = pic
+            .update_candid_as(hub, root, "test_create_fixture_child", (operation_id,))
+            .unwrap();
+        assert_eq!(replay.unwrap(), shard);
+        let StoreCommandResponse::FixtureGrant(stale) = store_command_as(
+            pic,
+            store,
+            root,
+            StoreCommand::SetFixtureGrant(Box::new(
+                canic::dto::fixture_provisioning::FixtureGrantRequest {
+                    expected_revision: previous.revision,
+                    binding: previous.binding.clone(),
+                    enabled: false,
+                },
+            )),
+        )
+        .unwrap() else {
+            panic!("exact grant response");
+        };
+        assert_eq!(*stale, Err(FixtureStoreError::Conflict));
+        let response: Result<StoreCatalogResponse, Error> = pic
+            .query_candid_as(
+                store,
+                root,
+                canic::protocol::CANIC_WASM_STORE_CATALOG,
+                (StoreCatalogRequest::FixtureGrant(shard),),
+            )
+            .unwrap();
+        let StoreCatalogResponse::FixtureGrant(retained) = response.unwrap() else {
+            panic!("exact grant response");
+        };
+        assert_eq!(retained, Some(grant));
+    }
+
+    #[cfg(test)]
+    fn fixture_replacement_diagnostics(pic: &PocketIc, root: Principal, shard: Principal) {
+        for entry in root_pool_status(pic, root).entries {
+            if entry.canister_id == shard {
+                eprintln!("replacement target pool entry: {entry:?}");
+            }
+            if let CanisterPoolAssetStatus::Workload { claim } = entry.status {
+                let response = root_status(
+                    pic,
+                    root,
+                    RootStatusRequestFragment::Operation(OperationStatusRequest {
+                        operation_id: claim.operation_id,
+                    }),
+                );
+                if let Ok(RootStatusResponseFragment::Operation(
+                    RootOperationStatusResponse::ProvisionChild(operation),
+                )) = response
+                {
+                    eprintln!(
+                        "retained child phase: {:?}, creation: {:?}",
+                        operation.allocation.phase, operation.allocation.creation
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     #[expect(
         clippy::too_many_lines,
@@ -3057,42 +3777,14 @@ exec icp "$@"
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let config_path = initial_shard_root_canister_config_path(&workspace_root);
         let config = AppConfigSnapshot::load(&config_path).expect("load initial-Shard config");
-        let root_wasm = build_initial_shard_root_wasm();
-        let coordinator_wasm = build_test_coordinator_wasm();
-        let store_fixture = build_root_store_fixture_with_config(
-            &config_path,
-            build_initial_shard_component_wasms(),
-        );
         let pic = build_pic();
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
-        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
-            &pic,
-            root_wasm,
-            coordinator,
-            store_fixture,
-            BootstrappedRootPlacement {
-                canister_pool_maximum_size: None,
-                canister_pool_minimum_size: None,
-                canister_pool_cycles: None,
-                coordinator_subnet: None,
-                existing_root: None,
-                existing_wasm_store: None,
-                root_subnet: None,
-                component_admission_limits: None,
-                fleet_id: None,
-                funding: None,
-                coordinator_root_funding: None,
-            },
-            &config_path,
-            create_prepaid_pool_assets,
-        );
-        install_fixture_coordinator_with_config(
+        let fixture = install_initial_shard_fixture(
             &pic,
             coordinator,
-            coordinator_wasm,
-            &fixture,
             &config_path,
+            &["user_hub", "user_shard"],
         );
         let (joining_version, sync_request) =
             join_and_synchronize_root(&pic, coordinator, &fixture);
@@ -3127,6 +3819,12 @@ exec icp "$@"
             panic!("Coordinator returned a differently correlated replay response");
         };
         assert_eq!(replayed_receipt, first_receipt);
+        qualify_pending_fixture_bootstrap(
+            &pic,
+            &fixture,
+            operation_id,
+            &config.model().component_specs["users"].cycles_funding,
+        );
 
         let mut last_status = None;
         let terminal = (0..240).find_map(|_| {
@@ -3333,6 +4031,92 @@ exec icp "$@"
         assert_eq!(child_binding.role.as_str(), "user_shard");
         assert_eq!(child_binding.parent_canister_id, *hub);
         assert_eq!(child_binding.component, *hub_binding);
+        let store = fixture.response.wasm_store;
+        let controller = fixture
+            .init_args
+            .authority
+            .wasm_store_authority
+            .installation_controller;
+        let grants = bindings
+            .iter()
+            .filter_map(|(canister, binding)| {
+                let response: Result<StoreCatalogResponse, Error> = pic
+                    .query_candid_as(
+                        store,
+                        controller,
+                        canic::protocol::CANIC_WASM_STORE_CATALOG,
+                        (StoreCatalogRequest::FixtureGrant(*canister),),
+                    )
+                    .unwrap();
+                let StoreCatalogResponse::FixtureGrant(grant) = response.unwrap() else {
+                    panic!("Store returned a different status variant");
+                };
+                let role = match binding {
+                    ManagedCanisterBinding::Component(binding) => &binding.role,
+                    ManagedCanisterBinding::ComponentChild(binding) => &binding.role,
+                };
+                let Some(source) = fixture
+                    .response
+                    .fixtures
+                    .iter()
+                    .find(|source| &source.role == role)
+                else {
+                    assert!(
+                        grant.is_none(),
+                        "unselected roles must not receive fixture access"
+                    );
+                    return None;
+                };
+                let grant =
+                    grant.expect("selected target must have an autonomous Root-derived grant");
+                assert_eq!(&grant.binding.target, binding);
+                assert!(grant.enabled);
+                assert_eq!(grant.revision, 1);
+                assert_eq!(
+                    grant.binding.release_build_id,
+                    fixture.response.release_set.release_build_id
+                );
+                assert_eq!(grant.binding.content_id, source.content_id);
+                let runtime: Result<ManagedStatusResponseFragment, Error> = pic
+                    .query_candid_as(
+                        *canister,
+                        fixture.root_id,
+                        canic::protocol::CANIC_CONTROL_STATUS,
+                        (ManagedStatusRequestFragment::Operation(
+                            OperationStatusRequest {
+                                operation_id: grant.binding.installation,
+                            },
+                        ),),
+                    )
+                    .unwrap();
+                let ManagedStatusResponseFragment::Operation(operation) = runtime.unwrap() else {
+                    panic!("expected exact installed runtime operation");
+                };
+                let ManagedOperationStatusResponseFragment::ConfigureRuntime(runtime) = *operation;
+                assert_eq!(runtime.runtime.operation_id, grant.binding.installation);
+                assert_eq!(&runtime.runtime.binding, binding);
+                let assignment = runtime
+                    .runtime
+                    .fixture
+                    .expect("installed fixture assignment");
+                assert_eq!(assignment.store, store);
+                assert_eq!(assignment.grant, *grant);
+                assert_eq!(assignment.descriptor, source.descriptor);
+                let ready = fixture_readiness(&pic, fixture.root_id, *canister);
+                let Ok(canic::dto::fixture_provisioning::FixtureProvisioningStatus::Complete(
+                    receipt,
+                )) = ready.fixture
+                else {
+                    panic!("terminal membership requires an exact durable fixture receipt");
+                };
+                assert_eq!(receipt.binding, grant.binding);
+                assert_eq!(
+                    receipt.completion_summary,
+                    source.descriptor.completion_summary
+                );
+                Some((*canister, *grant))
+            })
+            .collect::<Vec<_>>();
         for canister in workload_principals {
             assert!(matches!(
                 fetch_role_overview_readiness(&pic, canister)
@@ -3340,6 +4124,18 @@ exec icp "$@"
                 RoleOverviewReadinessObservation::Ready
             ));
         }
+
+        let user = Principal::from_slice(&[0xe3; 29]);
+        for _ in 0..2 {
+            let assigned: Result<Principal, Error> = pic
+                .update_candid(*hub, "create_account", (user,))
+                .expect("ready Hub application dispatch");
+            assert_eq!(assigned.unwrap(), child_binding.canister_id);
+        }
+        assert_eq!(
+            root_pool_status(&pic, fixture.root_id).workload,
+            terminal_pool.workload
+        );
 
         let RootStatusResponseFragment::Operation(
             RootOperationStatusResponse::ProvisionComponents(root_terminal),
@@ -3411,9 +4207,486 @@ exec icp "$@"
         };
         assert_eq!(terminal_receipt, first_receipt);
         assert_eq!(root_pool_status(&pic, fixture.root_id), replay_pool);
+        for (canister, grant) in grants {
+            let response: Result<StoreCatalogResponse, Error> = pic
+                .query_candid_as(
+                    store,
+                    controller,
+                    canic::protocol::CANIC_WASM_STORE_CATALOG,
+                    (StoreCatalogRequest::FixtureGrant(canister),),
+                )
+                .unwrap();
+            let StoreCatalogResponse::FixtureGrant(Some(replayed)) = response.unwrap() else {
+                panic!("terminal replay must retain the exact grant");
+            };
+            assert_eq!(*replayed, grant);
+        }
+        qualify_later_fixture_shard(
+            &pic,
+            &fixture,
+            *hub,
+            child_binding.canister_id,
+            config.model().component_specs["users"]
+                .sharding
+                .as_ref()
+                .unwrap()
+                .pools["user_shards"]
+                .policy
+                .capacity,
+        );
+        assert_retained_fixtures(&pic, &fixture);
+        let CoordinatorRegistryResponse::Registry(before) =
+            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
+        let CoordinatorObservabilityResponse::RegistryVersion(version) = coordinator_status(
+            &pic,
+            coordinator,
+            CoordinatorObservabilityRequest::RegistryVersion,
+        )
+        .unwrap() else {
+            panic!("Registry version correlation");
+        };
+        let Err(rejected) = coordinator_command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::RemoveRoot(FleetSubnetRootDrainingReservationRequest {
+                asset_recipient: Principal::from_slice(&[0xe7; 29]),
+                operation_id: [0xd1; 32],
+                expected_registry: version,
+                expected_root: before
+                    .fleet_subnet_roots
+                    .iter()
+                    .find(|entry| entry.fleet_subnet_root == fixture.root_id)
+                    .unwrap()
+                    .clone(),
+            }),
+        ) else {
+            panic!("grouped service references must fence standalone Root retirement");
+        };
+        assert_eq!(
+            rejected.code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
+        let CoordinatorRegistryResponse::Registry(after) =
+            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
+        assert_eq!(after, before);
+        assert_retained_fixtures(&pic, &fixture);
+    }
+
+    #[cfg(test)]
+    fn assert_retained_fixtures(pic: &PocketIc, fixture: &BootstrappedRootFixture) {
+        let store = fixture.response.wasm_store;
+        for source in &fixture.response.fixtures {
+            let retained: Result<StoreCatalogResponse, Error> = pic
+                .query_candid_as(
+                    store,
+                    fixture.root_id,
+                    canic::protocol::CANIC_WASM_STORE_CATALOG,
+                    (StoreCatalogRequest::Fixture(source.content_id),),
+                )
+                .expect("retained fixture catalog before whole-Root retirement");
+            let Ok(StoreCatalogResponse::Fixture(Ok(retained))) = retained else {
+                panic!("completed imports must retain their exact source");
+            };
+            assert_eq!(retained.content_id, source.content_id);
+            assert_eq!(retained.received_bytes, source.descriptor.encoded_length);
+            assert_eq!(retained.next_chunk, retained.chunk_count);
+            assert!(retained.complete);
+        }
+    }
+
+    #[cfg(test)]
+    fn install_initial_shard_fixture(
+        pic: &PocketIc,
+        coordinator: Principal,
+        config_path: &Path,
+        fixture_roles: &[&str],
+    ) -> BootstrappedRootFixture {
+        install_fixture_root(
+            pic,
+            coordinator,
+            config_path,
+            fixture_roles,
+            build_initial_shard_root_wasm(),
+            build_initial_shard_component_wasms(),
+        )
+    }
+
+    #[cfg(test)]
+    fn install_fixture_root(
+        pic: &PocketIc,
+        coordinator: Principal,
+        config_path: &Path,
+        fixture_roles: &[&str],
+        root_wasm: Vec<u8>,
+        component_wasms: &BTreeMap<CanisterRole, Vec<u8>>,
+    ) -> BootstrappedRootFixture {
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let mut store_fixture = build_root_store_fixture_with_config(config_path, component_wasms);
+        let payload = b"reviewed fixture source";
+        for (index, role) in ["user_hub", "user_shard"].into_iter().enumerate() {
+            if !fixture_roles.contains(&role) {
+                continue;
+            }
+            let descriptor = canic::dto::fixture_provisioning::FixtureDescriptor {
+                schema_version: 1,
+                format_hash: [u8::try_from(index + 1).unwrap(); 32],
+                encoded_length: payload.len() as u64,
+                chunks: vec![canic::dto::fixture_provisioning::FixtureChunkDescriptor {
+                    digest: wasm_hash(payload).try_into().unwrap(),
+                    length: u32::try_from(payload.len()).unwrap(),
+                }],
+                completion_summary: [3; 32],
+            };
+            store_fixture
+                .manifest
+                .fixtures
+                .push(canic::dto::root_store::RootStoreFixture {
+                    role: CanisterRole::new(role),
+                    content_id:
+                        canic_control_plane::api::fixture_content::FixtureContentApi::content_id(
+                            &descriptor,
+                        )
+                        .unwrap(),
+                    descriptor,
+                });
+        }
+        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
+                canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
+                coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            config_path,
+            create_prepaid_pool_assets,
+        );
+        install_fixture_coordinator_with_config(
+            pic,
+            coordinator,
+            coordinator_wasm,
+            &fixture,
+            config_path,
+        );
+        fixture
     }
 
     #[test]
+    fn pending_fixture_automatically_funds_within_configured_allowance() {
+        let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = workspace.join("apps/test/test-configs/fixture-automatic-funding.toml");
+        let config = AppConfigSnapshot::load(&config_path).unwrap();
+        let root_wasm = crate::pic::artifacts::build_generated_fleet_wasm(
+            &workspace,
+            &config_path,
+            "root",
+            CanicWasmBuildProfile::Fast,
+        );
+        let components = build_component_fixture_wasms(
+            &workspace,
+            &config_path,
+            "fleet-fixture-automatic-funding",
+            &[
+                ("user_hub", "canister_user_hub"),
+                ("user_shard", "canister_user_shard"),
+            ],
+        );
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let fixture = install_fixture_root(
+            &pic,
+            coordinator,
+            &config_path,
+            &["user_hub", "user_shard"],
+            root_wasm,
+            &components,
+        );
+        let (version, sync) = join_and_synchronize_root(&pic, coordinator, &fixture);
+        activate_registry_and_prepare_component_registry(
+            &pic,
+            coordinator,
+            &fixture,
+            version,
+            sync,
+        );
+        let CoordinatorRegistryResponse::Registry(registry) =
+            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
+        let operation_id = [0xb6; 32];
+        let plan = fixture_fresh_component_plan(config.model(), &registry, operation_id);
+        coordinator_command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::ProvisionComponents(plan.request),
+        )
+        .unwrap();
+        let hub = await_initial_fixture_hub(&pic, coordinator, fixture.root_id, operation_id);
+        qualify_automatic_fixture_funding(
+            &pic,
+            fixture.root_id,
+            hub,
+            &config.model().component_specs["users"],
+        );
+        assert_root_waits_for_fixture_membership(&pic, fixture.root_id, operation_id);
+        assert_eq!(
+            fixture_readiness(&pic, fixture.root_id, hub).fixture,
+            Err(canic::dto::fixture_provisioning::FixtureImportError::NotReady)
+        );
+        let selected = selected_fixture_targets(&pic, fixture.root_id);
+        pic.update_candid_as::<(), _>(hub, fixture.root_id, "test_release_fixture", ())
+            .unwrap();
+        for _ in 0..240 {
+            if fixture_readiness(&pic, fixture.root_id, hub).status
+                == canic::dto::runtime::ReadinessStatus::Ready
+            {
+                break;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        assert_eq!(
+            fixture_readiness(&pic, fixture.root_id, hub).status,
+            canic::dto::runtime::ReadinessStatus::Ready
+        );
+        assert_eq!(selected_fixture_targets(&pic, fixture.root_id), selected);
+        assert_retained_fixtures(&pic, &fixture);
+    }
+
+    #[cfg(test)]
+    fn await_initial_fixture_hub(
+        pic: &PocketIc,
+        coordinator: Principal,
+        root: Principal,
+        operation_id: [u8; 32],
+    ) -> Principal {
+        (0..240)
+            .find_map(|_| {
+                let hub = selected_fixture_targets(pic, root)
+                    .into_iter()
+                    .find(|(_, role)| role.as_str() == "user_hub")
+                    .map(|(canister, _)| canister);
+                if hub.is_none() {
+                    pic.advance_time(Duration::from_secs(1));
+                    pic.tick();
+                }
+                hub
+            })
+            .unwrap_or_else(|| {
+                let status = coordinator_status(
+                    pic,
+                    coordinator,
+                    CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
+                        operation_id,
+                    }),
+                )
+                .unwrap();
+                let CoordinatorOperationReadResponse::Operation(
+                    CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+                ) = status
+                else {
+                    panic!("Component provisioning status correlation");
+                };
+                panic!(
+                    "initial Hub unavailable: {status:?}; pool={:?}",
+                    root_pool_status(pic, root)
+                );
+            })
+    }
+
+    #[cfg(test)]
+    fn fixture_topup_events(
+        pic: &PocketIc,
+        root: Principal,
+        target: Principal,
+    ) -> Vec<canic::dto::cycles::CycleTopupEvent> {
+        let response: Result<CanisterObservabilityResponse, Error> = pic
+            .query_candid_as(
+                target,
+                root,
+                canic::protocol::CANIC_OBSERVABILITY,
+                (CanisterObservabilityRequest::CycleTopups(
+                    canic::dto::page::PageRequest {
+                        offset: 0,
+                        limit: 100,
+                    },
+                ),),
+            )
+            .unwrap();
+        let CanisterObservabilityResponse::CycleTopups(page) = response.unwrap() else {
+            panic!("cycle top-up history response");
+        };
+        assert_eq!(
+            page.entries.len() as u64,
+            page.total,
+            "complete bounded funding history"
+        );
+        page.entries
+    }
+
+    #[cfg(test)]
+    fn qualify_automatic_fixture_funding(
+        pic: &PocketIc,
+        root: Principal,
+        hub: Principal,
+        spec: &canic_core::bootstrap::compiled::ComponentSpecConfig,
+    ) {
+        use canic::dto::cycles::CycleTopupEventStatus;
+        let expected = spec.cycles_funding.max_per_child.to_u128();
+        let mut events = Vec::new();
+        for _ in 0..240 {
+            events = fixture_topup_events(pic, root, hub);
+            if events
+                .iter()
+                .filter_map(|event| event.transferred_cycles.as_ref())
+                .map(Cycles::to_u128)
+                .sum::<u128>()
+                == expected
+                && events
+                    .iter()
+                    .any(|event| event.status == CycleTopupEventStatus::RequestErr)
+            {
+                break;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        let transfers = events
+            .iter()
+            .filter(|event| event.status == CycleTopupEventStatus::RequestOk)
+            .map(|event| {
+                assert_eq!(event.requested_cycles, spec.topup.as_ref().unwrap().amount);
+                event.transferred_cycles.as_ref().unwrap().to_u128()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            transfers.iter().sum::<u128>(),
+            expected,
+            "automatic funding must reach its configured allowance; transfers={transfers:?}"
+        );
+        assert!(
+            transfers
+                .iter()
+                .all(|amount| *amount <= spec.cycles_funding.max_per_request.to_u128())
+        );
+        assert!(
+            transfers
+                .iter()
+                .any(|amount| *amount < spec.cycles_funding.max_per_request.to_u128())
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| event.status == CycleTopupEventStatus::RequestErr)
+        );
+        assert_eq!(
+            descendant_funding_response(pic, root, hub, descendant_funding_request(pic, 0xb7)),
+            canic::dto::rpc::CyclesResponse::PreflightRejected(
+                canic::dto::rpc::CyclesFundingPreflightResponse::ChildBudgetExhausted {
+                    remaining_child_budget: 0,
+                    max_per_child: expected,
+                }
+            )
+        );
+        let history = candid::encode_one(&events).unwrap();
+        for _ in 0..5 {
+            pic.advance_time(Duration::from_secs(60));
+            pic.tick();
+        }
+        assert_eq!(
+            candid::encode_one(fixture_topup_events(pic, root, hub)).unwrap(),
+            history,
+            "exhausted automatic funding stops issuing further requests"
+        );
+    }
+
+    #[test]
+    fn fixture_bearing_root_retirement_conserves_assets_and_cycles() {
+        let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = initial_shard_root_canister_config_path(&workspace);
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let fixture =
+            install_initial_shard_fixture(&pic, coordinator, &config_path, &["user_shard"]);
+        let (version, sync) = join_and_synchronize_root(&pic, coordinator, &fixture);
+        activate_registry_and_prepare_component_registry(
+            &pic,
+            coordinator,
+            &fixture,
+            version,
+            sync,
+        );
+        reset_prepaid_pool_assets(&pic, fixture.root_id);
+        // Direct Component provisioning has no Coordinator group/service references.
+        let hub = provision_component_request(
+            &pic,
+            fixture.root_id,
+            RootComponentAllocationRequest {
+                operation_id: [0xa3; 32],
+                component_spec: "users".parse().unwrap(),
+            },
+        );
+        activate_root(&pic, fixture.root_id);
+        let assigned: Result<Principal, Error> = pic
+            .update_candid(
+                installed_component_binding(&hub).canister_id,
+                "create_account",
+                (Principal::from_slice(&[0xe3; 29]),),
+            )
+            .unwrap();
+        let shard = assigned.expect("initial Shard assignment after its import completes");
+        let readiness = fixture_readiness(&pic, fixture.root_id, shard);
+        let Ok(canic::dto::fixture_provisioning::FixtureProvisioningStatus::Complete(receipt)) =
+            readiness.fixture
+        else {
+            panic!("retirement must follow a real completed application import");
+        };
+        let source = fixture
+            .response
+            .fixtures
+            .iter()
+            .find(|source| source.role.as_str() == "user_shard")
+            .unwrap();
+        assert_eq!(
+            receipt.binding.target,
+            managed_binding_status(&pic, fixture.root_id, shard)
+        );
+        assert_eq!(receipt.binding.content_id, source.content_id);
+        assert_eq!(
+            receipt.binding.release_build_id,
+            fixture.response.release_set.release_build_id
+        );
+        assert_eq!(
+            receipt.completion_summary,
+            source.descriptor.completion_summary
+        );
+        assert_retained_fixtures(&pic, &fixture);
+        qualify_root_retirement(&RootRetirementFixture {
+            pic: &pic,
+            coordinator,
+            root: fixture.root_id,
+            wasm_store: fixture.response.wasm_store,
+            pool_assets: &fixture.init_args.canister_pool_imports,
+        });
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one real Root/Store sequence binds publication, interrupted progress and terminal replay"
+    )]
     fn current_store_bootstraps_application_catalog_and_replays_zero_effects() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
@@ -3424,8 +4697,35 @@ exec icp "$@"
             .compile_component_deployment_configuration()
             .expect("compile five-Component deployment configuration");
         let root_wasm = build_five_component_root_wasm();
-        let store_fixture =
+        let mut store_fixture =
             build_root_store_fixture_with_config(&config_path, build_five_component_wasms());
+        let payloads = [b"first fixture rows".as_slice(), b"last rows".as_slice()];
+        let descriptor = canic::dto::fixture_provisioning::FixtureDescriptor {
+            schema_version: 1,
+            format_hash: [1; 32],
+            completion_summary: [3; 32],
+            encoded_length: payloads.iter().map(|bytes| bytes.len() as u64).sum(),
+            chunks: payloads
+                .iter()
+                .map(
+                    |bytes| canic::dto::fixture_provisioning::FixtureChunkDescriptor {
+                        digest: wasm_hash(bytes).try_into().unwrap(),
+                        length: u32::try_from(bytes.len()).unwrap(),
+                    },
+                )
+                .collect(),
+        };
+        let source = canic::dto::root_store::RootStoreFixture {
+            role: configuration.component_topology.component_specs[0]
+                .component_role
+                .clone(),
+            content_id: canic_control_plane::api::fixture_content::FixtureContentApi::content_id(
+                &descriptor,
+            )
+            .unwrap(),
+            descriptor,
+        };
+        store_fixture.manifest.fixtures.push(source.clone());
         let pic = build_pic();
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
@@ -3459,12 +4759,31 @@ exec icp "$@"
         }
         std::fs::create_dir_all(&artifact_root).expect("create artifact-union fixture");
         let union = fixture_application_artifact_union(&artifact_root, &installed);
+        let retained = artifact_root.join(format!(
+            ".canic/release-builds/{}/fixture-content/{}",
+            union.release_build_id,
+            canic_core::cdk::utils::hash::hex_bytes(source.content_id),
+        ));
+        std::fs::create_dir_all(&retained).unwrap();
+        for (index, payload) in payloads.iter().enumerate() {
+            std::fs::write(retained.join(format!("{index}.bin")), payload).unwrap();
+        }
         let store_sequence = compile_current_store_sequence_from_union(
             &artifact_root,
             &configuration.component_topology,
             &installed.init_args.authority,
             operation_id,
             &union,
+            &canic_host::release_set::fixture::FixtureArtifactManifest {
+                schema_version: 1,
+                release_build_id: union.release_build_id,
+                component_topology_digest: union.fleet_component_topology_digest,
+                entries: vec![canic_host::release_set::fixture::FixtureArtifactEntry {
+                    role: source.role.clone(),
+                    content_id: source.content_id,
+                    descriptor: source.descriptor.clone(),
+                }],
+            },
         )
         .expect("compile current Store sequence");
         let wasm_store = installed
@@ -3486,18 +4805,64 @@ exec icp "$@"
                 name: format!("store-bootstrap-{index}"),
                 target: match action {
                     CurrentFleetProtocolAction::AdoptStore { .. }
-                    | CurrentFleetProtocolAction::BootstrapStore { .. } => installed.root_id,
+                    | CurrentFleetProtocolAction::BootstrapStore { .. }
+                    | CurrentFleetProtocolAction::PrepareStoreFixture { .. } => installed.root_id,
                     CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
+                    | CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. }
                     | CurrentFleetProtocolAction::PublishStoreChunk { .. }
                     | CurrentFleetProtocolAction::StageStoreManifest { .. } => wasm_store,
                     _ => panic!("Store sequence emitted a non-Store/Root action"),
                 },
             })
             .collect::<Vec<_>>();
+        let mut fixture_updates = 0;
         for step in &actions {
-            issue_current_protocol_step(&pic, step, installation_controller);
+            if let CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+                request, expected, ..
+            } = &step.action
+            {
+                assert!(!current_protocol_step_is_terminal(
+                    &pic,
+                    step,
+                    installation_controller
+                ));
+                // Commit the update and discard its response, leaving only retained Store progress.
+                pic.update_call(
+                    wasm_store,
+                    installation_controller,
+                    canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
+                    encode_one(request).unwrap(),
+                )
+                .expect("publish fixture with lost response");
+                fixture_updates += 1;
+                let reopened = CompiledCurrentProtocolStep {
+                    action: step.action.clone(),
+                    name: step.name.clone(),
+                    target: step.target,
+                };
+                assert!(current_protocol_step_is_terminal(
+                    &pic,
+                    &reopened,
+                    installation_controller
+                ));
+                let status: Result<StoreCatalogResponse, Error> = pic
+                    .query_candid_as(
+                        wasm_store,
+                        installation_controller,
+                        canic::protocol::CANIC_WASM_STORE_CATALOG,
+                        (StoreCatalogRequest::Fixture(source.content_id),),
+                    )
+                    .unwrap();
+                let Ok(StoreCatalogResponse::Fixture(Ok(observed))) = status else {
+                    panic!("exact fixture source status");
+                };
+                assert_eq!(&observed, expected);
+            } else {
+                issue_current_protocol_step(&pic, step, installation_controller);
+            }
             await_current_protocol_step(&pic, step, installation_controller);
         }
+        assert_eq!(fixture_updates, payloads.len());
         let nonterminal = actions
             .iter()
             .filter(|step| !current_protocol_step_is_terminal(&pic, step, installation_controller))
@@ -3699,6 +5064,12 @@ exec icp "$@"
             &installed.init_args.authority,
             operation_id,
             &union,
+            &canic_host::release_set::fixture::FixtureArtifactManifest {
+                schema_version: 1,
+                release_build_id: union.release_build_id,
+                component_topology_digest: union.fleet_component_topology_digest,
+                entries: Vec::new(),
+            },
         )
         .expect("compile current Store sequence");
         let fixture = BootstrappedRootFixture {
@@ -5421,8 +6792,8 @@ exec icp "$@"
         );
         progress_elapsed("literal-zero terminal replay complete", replay_started_at);
         if initial_workload_count == 5 && matches!(funding, FundingJourney::Fresh) {
-            phase = phase.next("same_release_reinstall");
-            assert_same_release_reinstall_journey(ReinstallJourney {
+            phase = phase.next("selected_build_reinstall");
+            assert_selected_build_reinstall_journey(ReinstallJourney {
                 adapter_root: &adapter_root,
                 config: &config_path,
                 icp_wrapper: &icp_wrapper,
@@ -5434,6 +6805,8 @@ exec icp "$@"
                 store,
                 pools: &pools,
             });
+            phase = phase.next("public_memory_allocation_qualification");
+            assert_public_memory_allocation_samples(&pic, root, store, operator, &pools);
         }
 
         phase = phase.next("cleanup");
@@ -5446,6 +6819,197 @@ exec icp "$@"
         );
         phase.finish();
         journey_span.finish();
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    enum PublicMemoryRequest {
+        Health,
+        Metrics(canic::dto::public_status::PublicMetricsRequest),
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Deserialize)]
+    enum PublicMemoryResponse {
+        Health(canic::dto::public_status::PublicHealth),
+        Metrics(canic::dto::public_status::PublicMetricsSnapshot),
+    }
+
+    #[cfg(test)]
+    fn public_memory_snapshot(
+        pic: &PocketIc,
+        target: Principal,
+    ) -> canic::dto::public_status::PublicMetricsSnapshot {
+        let response: Result<PublicMemoryResponse, Error> = pic
+            .query_candid_as(
+                target,
+                Principal::anonymous(),
+                canic::protocol::CANIC_PUBLIC_STATUS,
+                (PublicMemoryRequest::Metrics(
+                    canic::dto::public_status::PublicMetricsRequest {
+                        family: canic::dto::public_status::PublicMetricFamily::Performance,
+                        page: canic::dto::page::PageRequest {
+                            offset: 0,
+                            limit: 256,
+                        },
+                    },
+                ),),
+            )
+            .expect("anonymous public memory transport");
+        let PublicMemoryResponse::Metrics(snapshot) = response.expect("public memory cache") else {
+            panic!("metrics response");
+        };
+        snapshot
+    }
+
+    #[cfg(test)]
+    fn assert_public_memory_allocation_samples(
+        pic: &PocketIc,
+        root: Principal,
+        store: Principal,
+        operator: Principal,
+        pools: &[Principal],
+    ) {
+        let targets = [root, store]
+            .into_iter()
+            .chain(pools.iter().copied().filter(|target| {
+                pic.canister_status(*target, Some(root))
+                    .unwrap()
+                    .module_hash
+                    .is_some()
+            }))
+            .collect::<Vec<_>>();
+        pic.advance_time(std::time::Duration::from_secs(301));
+        for _ in 0..120 {
+            pic.tick();
+            if targets.iter().all(|target| {
+                public_memory_snapshot(pic, *target)
+                    .metrics
+                    .entries
+                    .iter()
+                    .any(|row| row.name == "memory.allocations.state")
+            }) {
+                break;
+            }
+        }
+        let mut roles = BTreeSet::new();
+        for target in targets {
+            roles.insert(assert_public_memory_target(
+                pic, target, root, store, operator,
+            ));
+        }
+        for required in ["root", "user_hub", "user_shard"] {
+            assert!(
+                roles.contains(required),
+                "required public-memory role {required}"
+            );
+        }
+    }
+
+    #[cfg(test)]
+    fn assert_public_memory_target(
+        pic: &PocketIc,
+        target: Principal,
+        root: Principal,
+        store: Principal,
+        operator: Principal,
+    ) -> String {
+        let health: Result<PublicMemoryResponse, Error> = pic
+            .query_candid_as(
+                target,
+                Principal::anonymous(),
+                canic::protocol::CANIC_PUBLIC_STATUS,
+                (PublicMemoryRequest::Health,),
+            )
+            .unwrap();
+        let PublicMemoryResponse::Health(health) = health.unwrap() else {
+            panic!("public health");
+        };
+        let role = health.role.unwrap();
+        let before = wasm_hash(&pic.get_stable_memory(target));
+        let snapshot = public_memory_snapshot(pic, target);
+        assert_eq!(wasm_hash(&pic.get_stable_memory(target)), before);
+        assert_eq!(
+            snapshot.state,
+            canic::dto::public_status::PublicSnapshotState::Fresh
+        );
+        let value = |suffix: &str| {
+            snapshot
+                .metrics
+                .entries
+                .iter()
+                .find(|row| row.name == format!("memory.allocations.{suffix}"))
+                .expect("allocation gauge")
+                .value
+        };
+        if target == store {
+            assert_eq!(value("state"), 2);
+            assert!(
+                !snapshot
+                    .metrics
+                    .entries
+                    .iter()
+                    .any(|row| row.name == "memory.allocations.physical_extent")
+            );
+            return role;
+        }
+        assert_eq!(value("state"), 1);
+        assert_eq!(value("ids_measured"), value("ids_total"));
+        assert_eq!(value("payload_available"), 0);
+        assert_eq!(
+            value("physical_extent"),
+            value("manager_metadata") + value("allocated_bucket_bytes") + value("unmanaged")
+        );
+        assert_eq!(
+            value("allocated_bucket_bytes"),
+            value("virtual_extent") + value("bucket_slack")
+        );
+        assert_eq!(
+            value("allocated_bucket_bytes"),
+            value("known_binding") + value("unknown_binding")
+        );
+        assert!(
+            snapshot
+                .metrics
+                .entries
+                .iter()
+                .filter(|row| row.name.starts_with("memory.allocations."))
+                .all(|row| row.canister_id.is_none() && row.observed_at_ns > 0)
+        );
+        let denied: Result<CanisterObservabilityResponse, Error> = pic
+            .query_candid_as(
+                target,
+                Principal::anonymous(),
+                canic::protocol::CANIC_OBSERVABILITY,
+                (CanisterObservabilityRequest::MemoryAllocations,),
+            )
+            .unwrap();
+        assert!(controller_authority_unavailable(&denied));
+        let controller = if target == root { operator } else { root };
+        let diagnostic: Result<CanisterObservabilityResponse, Error> = pic
+            .query_candid_as(
+                target,
+                controller,
+                canic::protocol::CANIC_OBSERVABILITY,
+                (CanisterObservabilityRequest::MemoryAllocations,),
+            )
+            .unwrap();
+        let CanisterObservabilityResponse::MemoryAllocations(report) = diagnostic.unwrap() else {
+            panic!("allocation diagnostic");
+        };
+        assert_eq!(value("bucket_size"), u128::from(report.bucket_size_bytes));
+        assert_eq!(
+            value("physical_extent"),
+            u128::from(report.physical_extent.bytes)
+        );
+        println!(
+            "CANIC164 role={} physical_bytes={} measured_ids={} sample_ns={}",
+            role,
+            value("physical_extent"),
+            value("ids_measured"),
+            snapshot.sampled_at_ns.unwrap()
+        );
+        role
     }
 
     #[cfg(test)]
@@ -5923,13 +7487,104 @@ esac
     }
 
     #[cfg(test)]
+    fn selected_reinstall_artifacts(input: &ReinstallJourney<'_>) -> LiteralZeroReleaseArtifacts {
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(input.config).unwrap();
+        let configuration = config
+            .model()
+            .compile_component_deployment_configuration()
+            .unwrap();
+        let roles = config
+            .model()
+            .roles
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        build_literal_zero_release_artifacts(
+            &workspace,
+            input.adapter_root,
+            input.config,
+            &configuration,
+            &roles,
+            BuildNetwork::Local,
+            REINSTALL_RELEASE_BUILD_NONCE,
+        )
+    }
+
+    #[cfg(test)]
+    fn select_reinstall_build(
+        source: &DesiredFleet,
+        artifacts: &LiteralZeroReleaseArtifacts,
+    ) -> DesiredFleet {
+        let mut desired = source.clone();
+        desired.bootstrap.as_mut().unwrap().release_build_id = artifacts.release_build_id;
+        let protocol = desired.protocol.as_mut().unwrap();
+        protocol
+            .coordinator_candid
+            .clone_from(&artifacts.coordinator_candid);
+        protocol.root_candid.clone_from(&artifacts.root_candid);
+        protocol.store_candid.clone_from(&artifacts.store_candid);
+        for canister in &mut desired.canisters {
+            let wasm = match canister.kind {
+                DesiredCanisterKind::Coordinator => &artifacts.coordinator_wasm,
+                DesiredCanisterKind::Root => &artifacts.root_wasm,
+                DesiredCanisterKind::Store => &artifacts.store_wasm,
+                _ => continue,
+            };
+            canister.wasm = Some(wasm.clone());
+        }
+        desired
+    }
+
+    #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
         reason = "one production-adapter journey proves stable-row wiping, interruption recovery, conservation and deliberate repeat identity"
     )]
-    fn assert_same_release_reinstall_journey(input: ReinstallJourney<'_>) {
+    fn assert_selected_build_reinstall_journey(input: ReinstallJourney<'_>) {
         use canic_host::fleet_ensure::model::FleetEnsurePlanScope;
         let root = input.adapter_root;
+        let source_desired = input.desired.clone();
+        let replacement = selected_reinstall_artifacts(&input);
+        let selected = select_reinstall_build(input.desired, &replacement);
+        assert_ne!(
+            selected.bootstrap.as_ref().unwrap().release_build_id,
+            input.desired.bootstrap.as_ref().unwrap().release_build_id
+        );
+        let input = ReinstallJourney {
+            desired: &selected,
+            ..input
+        };
+        let selected_hashes =
+            canic_host::fleet_ensure::ops::resolve_desired_artifacts(root, &selected)
+                .expect("selected artifact identities")
+                .wasm_sha256_by_canister;
+        let source_hashes =
+            canic_host::fleet_ensure::ops::resolve_desired_artifacts(root, &source_desired)
+                .expect("source artifact identities")
+                .wasm_sha256_by_canister;
+        for (name, hash) in &selected_hashes {
+            assert_ne!(
+                Some(hash),
+                source_hashes.get(name),
+                "distinct infrastructure build"
+            );
+        }
+        let bootstrap = selected.bootstrap.as_ref().unwrap();
+        let application_hashes =
+            canic_host::release_set::load_persisted_application_artifact_union(
+                root,
+                &bootstrap
+                    .component_deployment_configuration
+                    .component_topology,
+                bootstrap.release_build_id,
+            )
+            .expect("selected application release manifest")
+            .union
+            .entries
+            .into_iter()
+            .map(|artifact| artifact.wasm_gz_sha256_hex)
+            .collect::<BTreeSet<_>>();
         let desired = input.desired;
         let digest = desired_sha256(desired);
         let operator = Principal::from_text(&desired.operator).unwrap();
@@ -6010,11 +7665,25 @@ esac
                     1_800_000_000_000_000_100 + wipe,
                     &mut first,
                 )
-                .expect("review same-release wipe preparation")
+                .expect("review identical selected-build wipe preparation")
             };
             assert_eq!(
                 preparation.plan.scope,
                 FleetEnsurePlanScope::ReinstallPreparation
+            );
+            assert_eq!(preparation.plan.desired_sha256, digest);
+            assert_eq!(
+                preparation
+                    .plan
+                    .reviewed_desired
+                    .as_ref()
+                    .unwrap()
+                    .desired()
+                    .bootstrap
+                    .as_ref()
+                    .unwrap()
+                    .release_build_id,
+                desired.bootstrap.as_ref().unwrap().release_build_id
             );
             assert_ne!(
                 previous_operation.as_ref(),
@@ -6169,14 +7838,35 @@ esac
                 assert!(matches!(
                     fleet_ensure_workflow::plan_reinstall(
                         root,
-                        desired,
-                        &digest,
+                        &source_desired,
+                        &desired_sha256(&source_desired),
                         &desired.fleet,
                         1_800_000_000_000_000_130,
                         &mut platform()
                     ),
                     Err(EnsureWorkflowError::ReinstallConflict)
                 ));
+                std::fs::remove_file(root.join("lost-install-response")).unwrap();
+                let interrupted = fleet_ensure_workflow::apply(
+                    root,
+                    &source_desired,
+                    &desired_sha256(&source_desired),
+                    &desired.fleet,
+                    &reset.plan.plan_sha256,
+                    &mut platform(),
+                );
+                assert!(
+                    matches!(interrupted, Err(EnsureWorkflowError::Platform(_))),
+                    "lose changed Root response while workspace selects another build: {interrupted:?}"
+                );
+                assert!(root.join("lost-install-response").is_file());
+                assert_eq!(
+                    std::fs::read_to_string(root.join("reinstall-mutations.log"))
+                        .unwrap()
+                        .lines()
+                        .count(),
+                    3
+                );
             }
             let complete = fleet_ensure_workflow::apply(
                 root,
@@ -6190,6 +7880,27 @@ esac
             assert!(complete.terminal);
             assert!(complete.actual_conservation.is_some());
             phase = phase.next("reset_state_and_conservation");
+            for binding in &reset.plan.reinstall.as_ref().unwrap().authorities {
+                let id = Principal::from_text(&binding.principal).unwrap();
+                let status = input.pic.canister_status(id, Some(operator)).unwrap();
+                assert_eq!(
+                    status
+                        .module_hash
+                        .map(|hash| canic_core::cdk::utils::hash::hex_bytes(&hash))
+                        .as_ref(),
+                    selected_hashes.get(&binding.name)
+                );
+            }
+            for id in input.pools {
+                let status = input.pic.canister_status(*id, Some(input.root)).unwrap();
+                if let Some(hash) = status.module_hash {
+                    assert!(
+                        application_hashes
+                            .contains(&canic_core::cdk::utils::hash::hex_bytes(&hash)),
+                        "selected application Wasm installed"
+                    );
+                }
+            }
             let final_rows = input
                 .pools
                 .iter()
@@ -6228,13 +7939,13 @@ esac
             assert_eq!(
                 mutations.lines().count(),
                 3 * usize::try_from(wipe + 1).unwrap(),
-                "lost same-Wasm response never repeats an install"
+                "lost changed or identical Wasm response never repeats an install"
             );
             phase = phase.next("reset_terminal_replay");
             let replay = fleet_ensure_workflow::apply(
                 root,
-                desired,
-                &digest,
+                &source_desired,
+                &desired_sha256(&source_desired),
                 &desired.fleet,
                 &reset.plan.plan_sha256,
                 &mut platform(),
@@ -7020,6 +8731,7 @@ exec '{}' "$@"
     #[cfg(test)]
     fn fixture_effect_intent(action: &EnsureAction) -> EffectRecord {
         EffectRecord {
+            publication_attempts: 0,
             maintenance_attempts: 0,
             action_sha256: action_sha256(action),
             created_principal: None,
@@ -8231,6 +9943,8 @@ cycles = "80T"
     const fn current_protocol_test_stage(action: &CurrentFleetProtocolAction) -> u8 {
         match action {
             CurrentFleetProtocolAction::ReconcilePoolAsset { .. }
+            | CurrentFleetProtocolAction::PrepareStoreFixture { .. }
+            | CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. }
             | CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
             | CurrentFleetProtocolAction::PublishStoreChunk { .. }
             | CurrentFleetProtocolAction::StageStoreManifest { .. }
@@ -8330,6 +10044,34 @@ cycles = "80T"
                 )
                 .expect("join current Root");
                 assert!(matches!(response, CoordinatorCommandResponse::JoinRoot(_)));
+            }
+            CurrentFleetProtocolAction::PrepareStoreFixture {
+                request, source, ..
+            } => {
+                let response = root_command(
+                    pic,
+                    step.target,
+                    RootCommandFragment::PrepareStoreFixture(request.clone()),
+                )
+                .unwrap();
+                assert!(
+                    matches!(response, RootCommandResponseFragment::PrepareStoreFixture(Ok(status)) if status.content_id == source.content_id)
+                );
+            }
+            CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+                request, expected, ..
+            } => {
+                let response: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> = pic
+                    .update_candid_as(
+                        step.target,
+                        store_controller,
+                        canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
+                        (request.clone(),),
+                    )
+                    .unwrap();
+                let status = response.unwrap().unwrap();
+                assert_eq!(status.content_id, expected.content_id);
+                assert!(status.next_chunk >= expected.next_chunk);
             }
             CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
                 store_prepare_as(pic, step.target, store_controller, request.clone())
@@ -8506,6 +10248,36 @@ cycles = "80T"
                     RootOperationStatusResponse::BootstrapStore(observed)
                 )) if observed == *expected
             ),
+            CurrentFleetProtocolAction::PrepareStoreFixture { source, .. } => {
+                let status: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> = pic
+                    .query_candid(
+                        step.target,
+                        canic::protocol::CANIC_ROOT_FIXTURE_STATUS,
+                        (source.content_id,),
+                    )
+                    .unwrap();
+                matches!(status, Ok(Ok(status)) if status.content_id == source.content_id
+                    && status.chunk_count as usize == source.descriptor.chunks.len())
+            }
+            CurrentFleetProtocolAction::PublishStoreFixtureChunk { expected, .. } => {
+                let response: Result<
+                    canic_control_plane::dto::template::StoreCatalogResponse,
+                    Error,
+                > = pic
+                    .query_candid_as(
+                        step.target,
+                        store_controller,
+                        canic::protocol::CANIC_WASM_STORE_CATALOG,
+                        (
+                            canic_control_plane::dto::template::StoreCatalogRequest::Fixture(
+                                expected.content_id,
+                            ),
+                        ),
+                    )
+                    .unwrap();
+                matches!(response, Ok(canic_control_plane::dto::template::StoreCatalogResponse::Fixture(Ok(status)))
+                    if status.content_id == expected.content_id && status.next_chunk >= expected.next_chunk)
+            }
             CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
                 let status = current_store_staging_status(
                     pic,
@@ -10794,7 +12566,30 @@ cycles = "80T"
     fn prepared_root_bootstraps_and_reverifies_its_exact_local_store() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let root_wasm = build_test_root_wasm();
-        let store_fixture = build_root_store_fixture();
+        let mut store_fixture = build_root_store_fixture();
+        let payload = b"reviewed fixture source";
+        let descriptor = canic::dto::fixture_provisioning::FixtureDescriptor {
+            schema_version: 1,
+            format_hash: [1; 32],
+            encoded_length: payload.len() as u64,
+            chunks: vec![canic::dto::fixture_provisioning::FixtureChunkDescriptor {
+                digest: wasm_hash(payload).try_into().unwrap(),
+                length: u32::try_from(payload.len()).unwrap(),
+            }],
+            completion_summary: [3; 32],
+        };
+        store_fixture
+            .manifest
+            .fixtures
+            .push(canic::dto::root_store::RootStoreFixture {
+                role: CanisterRole::new("issuer"),
+                content_id:
+                    canic_control_plane::api::fixture_content::FixtureContentApi::content_id(
+                        &descriptor,
+                    )
+                    .unwrap(),
+                descriptor,
+            });
         let pic = build_pic();
         let fixture = install_bootstrapped_root(
             &pic,
@@ -11861,10 +13656,6 @@ cycles = "80T"
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the complete autonomous deletion journey uses one exclusively owned fixture"
-    )]
     fn published_draining_root_autonomously_reaches_external_deletion_readiness() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         // Root deletion is deliberately outside the pooled baseline's reset
@@ -11873,28 +13664,53 @@ cycles = "80T"
         // an exclusively owned instance so it cannot invalidate the warm
         // baseline used by reset-complete cases.
         let fixture = setup_fresh_active_component_registry();
-        let cycles_ledger = install_retirement_ledger(&fixture);
+        qualify_root_retirement(&RootRetirementFixture {
+            pic: fixture.pic(),
+            coordinator: fixture.coordinator,
+            root: fixture.root,
+            wasm_store: fixture.wasm_store,
+            pool_assets: &fixture.pool_assets,
+        });
+    }
+
+    /// Exclusively owned Fleet authority and all workload/pool assets to conserve.
+    #[cfg(test)]
+    struct RootRetirementFixture<'a> {
+        pic: &'a PocketIc,
+        coordinator: Principal,
+        root: Principal,
+        wasm_store: Principal,
+        pool_assets: &'a [Principal],
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the complete autonomous deletion journey shares exact inventory and conservation assertions"
+    )]
+    fn qualify_root_retirement(fixture: &RootRetirementFixture<'_>) {
+        let cycles_ledger = install_retirement_ledger(fixture.pic, fixture.root);
         let operator = Principal::from_slice(&[0xe7; 29]);
         let mut controllers = fixture
-            .pic()
+            .pic
             .canister_status(fixture.coordinator, None)
             .expect("Coordinator controllers")
             .settings
             .controllers;
         controllers.push(operator);
         fixture
-            .pic()
+            .pic
             .set_controllers(fixture.coordinator, None, controllers)
             .expect("reviewed retirement operator controls Coordinator");
 
         let CoordinatorRegistryResponse::Registry(registry) = coordinator_status(
-            fixture.pic(),
+            fixture.pic,
             fixture.coordinator,
             CoordinatorRegistryRequest::Registry,
         )
         .expect("query active Registry before root removal");
         let CoordinatorObservabilityResponse::RegistryVersion(version) = coordinator_status(
-            fixture.pic(),
+            fixture.pic,
             fixture.coordinator,
             CoordinatorObservabilityRequest::RegistryVersion,
         )
@@ -11915,7 +13731,7 @@ cycles = "80T"
             expected_root,
         };
         let CoordinatorCommandResponse::OperationAccepted(receipt) = coordinator_command(
-            fixture.pic(),
+            fixture.pic,
             fixture.coordinator,
             CoordinatorCommand::RemoveRoot(request.clone()),
         )
@@ -11925,7 +13741,7 @@ cycles = "80T"
         assert_eq!(receipt.operation_id, operation_id);
 
         let CoordinatorCommandResponse::OperationAccepted(retried) = coordinator_command(
-            fixture.pic(),
+            fixture.pic,
             fixture.coordinator,
             CoordinatorCommand::RemoveRoot(request),
         )
@@ -11940,12 +13756,12 @@ cycles = "80T"
         let mut stagnant_seconds = 0_u16;
         for _ in 0..ROOT_REMOVAL_MAX_SIMULATED_SECONDS {
             for _ in 0..ROOT_REMOVAL_TICKS_PER_SECOND {
-                fixture.pic().tick();
+                fixture.pic.tick();
             }
             if let Ok(RootStatusResponseFragment::Operation(
                 RootOperationStatusResponse::RemoveRoot(status),
             )) = root_status(
-                fixture.pic(),
+                fixture.pic,
                 fixture.root,
                 RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
             ) {
@@ -11962,23 +13778,33 @@ cycles = "80T"
                     break;
                 }
             }
-            fixture.pic().advance_time(Duration::from_secs(1));
+            fixture.pic.advance_time(Duration::from_secs(1));
         }
         let terminal = terminal.unwrap_or_else(|| {
+            let storage: Result<StoreCatalogResponse, Error> = fixture.pic.query_candid_as(
+                fixture.wasm_store, fixture.root,
+                canic::protocol::CANIC_WASM_STORE_CATALOG,
+                (StoreCatalogRequest::Storage,),
+            ).expect("retirement Store diagnostic transport");
+            match storage {
+                Ok(StoreCatalogResponse::Storage(storage)) => eprintln!("retirement Store: {storage:?}"),
+                Ok(_) => eprintln!("retirement Store returned another response variant"),
+                Err(error) => eprintln!("retirement Store status: {error:?}"),
+            }
             report_canister_diagnostics(
-                fixture.pic(),
+                fixture.pic,
                 fixture.root,
                 Principal::anonymous(),
                 "autonomous Root removal timeout",
             );
             report_canister_diagnostics(
-                fixture.pic(),
+                fixture.pic,
                 fixture.coordinator,
                 Principal::anonymous(),
                 "autonomous Coordinator Root-removal timeout",
             );
             let coordinator = coordinator_status(
-                fixture.pic(),
+                fixture.pic,
                 fixture.coordinator,
                 CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
             )
@@ -12011,7 +13837,7 @@ cycles = "80T"
                     status.completion.is_some(),
                 )
             });
-            let pool = root_pool_status(fixture.pic(), fixture.root);
+            let pool = root_pool_status(fixture.pic, fixture.root);
             panic!(
                 "Root must autonomously reach external deletion readiness; \
                  root(final_inventory, removal, reclamation, binding, store_deletion, \
@@ -12033,13 +13859,13 @@ cycles = "80T"
         assert!(terminal.store_deletion.is_some());
         assert!(terminal.deletion_preparation.is_some());
 
-        let pool = root_pool_status(fixture.pic(), fixture.root);
+        let pool = root_pool_status(fixture.pic, fixture.root);
         assert_eq!(pool.tracked, 0);
-        assert_eq!(pool.completed_handoffs, PREPAID_POOL_ASSET_COUNT as u64);
-        for component in [&fixture.issuer, &fixture.verifier] {
+        assert_eq!(pool.completed_handoffs, fixture.pool_assets.len() as u64);
+        for asset in fixture.pool_assets {
             let handed_off = fixture
-                .pic()
-                .canister_status(component.canister_id, Some(operator))
+                .pic
+                .canister_status(*asset, Some(operator))
                 .expect("operator must control each handed-off Component canister");
             assert_eq!(handed_off.module_hash, None);
             let mut controllers = handed_off.settings.controllers;
@@ -12050,7 +13876,7 @@ cycles = "80T"
         }
         assert!(
             fixture
-                .pic()
+                .pic
                 .canister_status(fixture.wasm_store, Some(fixture.root))
                 .is_err(),
             "autonomous removal must delete the retained Store"
@@ -12059,7 +13885,7 @@ cycles = "80T"
         let CoordinatorOperationReadResponse::Operation(
             CoordinatorOperationStatusResponse::RootRemoval(coordinator),
         ) = coordinator_status(
-            fixture.pic(),
+            fixture.pic,
             fixture.coordinator,
             CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
         )
@@ -12080,16 +13906,16 @@ cycles = "80T"
         assert_eq!(ledger_receipt.intent.fee, 100_000_000);
         assert!(ledger_receipt.block_index.is_some());
         let transfers: u64 = fixture
-            .pic()
+            .pic
             .query_candid(cycles_ledger, "transfer_count", ())
             .expect("one transfer despite lost reply");
         assert_eq!(transfers, 1);
         assert_eq!(
-            ledger_account_balance(fixture.pic(), cycles_ledger, fixture.root),
+            ledger_account_balance(fixture.pic, cycles_ledger, fixture.root),
             Nat::from(0_u8)
         );
         assert_eq!(
-            ledger_account_balance(fixture.pic(), cycles_ledger, fixture.coordinator),
+            ledger_account_balance(fixture.pic, cycles_ledger, fixture.coordinator),
             Nat::from(900_000_000_u128)
         );
         assert_eq!(
@@ -12103,18 +13929,18 @@ cycles = "80T"
 
         assert!(coordinator.execution.is_none());
         assert!(coordinator.completion.is_none());
-        finish_coordinator_retirement(&fixture, cycles_ledger, operator, readiness);
+        finish_coordinator_retirement(fixture, cycles_ledger, operator, readiness);
     }
 
     #[cfg(test)]
     fn finish_coordinator_retirement(
-        fixture: &ActiveComponentRegistryFixture,
+        fixture: &RootRetirementFixture<'_>,
         ledger: Principal,
         operator: Principal,
         readiness: canic_core::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
     ) {
         use canic_core::dto::fleet_registry::FleetRetirementRequest;
-        let pic = fixture.pic();
+        let pic = fixture.pic;
         let CoordinatorObservabilityResponse::RegistryVersion(version) = coordinator_status(
             pic,
             fixture.coordinator,
@@ -12194,9 +14020,9 @@ cycles = "80T"
             .query_candid(ledger, "transfer_count", ())
             .expect("exact transfer count");
         assert_eq!(transfers, 2);
-        for component in [&fixture.issuer, &fixture.verifier] {
+        for asset in fixture.pool_assets {
             let status = pic
-                .canister_status(component.canister_id, Some(operator))
+                .canister_status(*asset, Some(operator))
                 .expect("assets remain controlled after Root deletion");
             assert!(status.settings.controllers.contains(&operator));
             assert_eq!(status.module_hash, None);
@@ -12205,13 +14031,13 @@ cycles = "80T"
 
     #[cfg(test)]
     fn delete_prepared_root(
-        fixture: &ActiveComponentRegistryFixture,
+        fixture: &RootRetirementFixture<'_>,
         readiness: canic_core::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
     ) {
         use canic_core::dto::fleet_registry::{
             FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
         };
-        let pic = fixture.pic();
+        let pic = fixture.pic;
         let status = pic
             .canister_status(fixture.root, None)
             .expect("exact Root deletion authority");
@@ -12273,7 +14099,7 @@ cycles = "80T"
     fn explicit_root_reinstall_retains_cycle_accounts_and_pool_control() {
         let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_fresh_active_component_registry();
-        let ledger = install_retirement_ledger(&fixture);
+        let ledger = install_retirement_ledger(fixture.pic(), fixture.root);
         let pic = fixture.pic();
         let root_wasm = build_test_root_wasm();
         let fresh = compile_reinstall_root_fixture(&fixture, &root_wasm);
@@ -12382,24 +14208,22 @@ cycles = "80T"
     }
 
     #[cfg(test)]
-    fn install_retirement_ledger(fixture: &ActiveComponentRegistryFixture) -> Principal {
+    fn install_retirement_ledger(pic: &PocketIc, root: Principal) -> Principal {
         let (_, wasm) = build_mainnet_refill_wasms();
         let ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai").expect("canonical Ledger");
-        fixture
-            .pic()
-            .create_canister_with_id(None, None, ledger)
+        pic.create_canister_with_id(None, None, ledger)
             .expect("create retirement Ledger stub");
-        fixture.pic().add_cycles(ledger, 100_000_000_000_000);
-        fixture.pic().install_canister(
+        pic.add_cycles(ledger, 100_000_000_000_000);
+        pic.install_canister(
             ledger,
             wasm,
             encode_one(CyclesLedgerStubInitArgs {
                 canister_ids: vec![],
                 expected_controllers_by_index: None,
-                expected_root: fixture.root,
-                expected_subnet: fixture.pic().get_subnet(fixture.root).expect("Root subnet"),
+                expected_root: root,
+                expected_subnet: pic.get_subnet(root).expect("Root subnet"),
                 initial_balances: Some(vec![CyclesLedgerStubAccountBalance {
-                    owner: fixture.root,
+                    owner: root,
                     balance: Nat::from(1_000_000_000_u128),
                 }]),
                 pending_first_index: None,
@@ -12408,8 +14232,7 @@ cycles = "80T"
             .expect("retirement Ledger init"),
             None,
         );
-        let (): () = fixture
-            .pic()
+        let (): () = pic
             .update_candid(ledger, "lose_next_transfer_reply", ())
             .expect("lose committed transfer reply");
         ledger
@@ -13888,6 +15711,16 @@ cycles = "80T"
             operation_id: [37; 32],
             manifest_payload_size_bytes: manifest_bytes.len() as u64,
         };
+        for source in &manifest.fixtures {
+            qualify_root_fixture_publication(
+                pic,
+                root_id,
+                store,
+                installation_controller,
+                &request,
+                source,
+            );
+        }
         let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
             pic,
             root_id,
@@ -13911,6 +15744,98 @@ cycles = "80T"
             panic!("Root returned a differently correlated bootstrap status");
         };
         (request, response)
+    }
+
+    fn qualify_root_fixture_publication(
+        pic: &PocketIc,
+        root: Principal,
+        store: Principal,
+        controller: Principal,
+        bootstrap: &RootStoreBootstrapRequest,
+        source: &canic::dto::root_store::RootStoreFixture,
+    ) {
+        let request = RootStoreFixturePrepareRequest {
+            bootstrap: bootstrap.clone(),
+            role: source.role.clone(),
+        };
+        let unknown = RootStoreFixturePrepareRequest {
+            role: CanisterRole::new("not_selected"),
+            ..request.clone()
+        };
+        assert!(matches!(
+            root_command(pic, root, RootCommandFragment::PrepareStoreFixture(unknown)).unwrap(),
+            RootCommandResponseFragment::PrepareStoreFixture(Err(FixtureStoreError::NotFound))
+        ));
+        let mut wrong_size = request.clone();
+        wrong_size.bootstrap.manifest_payload_size_bytes += 1;
+        assert!(
+            root_command(
+                pic,
+                root,
+                RootCommandFragment::PrepareStoreFixture(wrong_size)
+            )
+            .is_err()
+        );
+        let RootCommandResponseFragment::PrepareStoreFixture(Ok(prepared)) = root_command(
+            pic,
+            root,
+            RootCommandFragment::PrepareStoreFixture(request.clone()),
+        )
+        .unwrap() else {
+            panic!("Root fixture preparation failed")
+        };
+        assert_eq!(prepared.content_id, source.content_id);
+        assert_eq!(prepared.next_chunk, 0);
+        assert!(!prepared.complete);
+        // Ignore the first acknowledgement and recover only from a repeated command.
+        let RootCommandResponseFragment::PrepareStoreFixture(Ok(repeated)) = root_command(
+            pic,
+            root,
+            RootCommandFragment::PrepareStoreFixture(request.clone()),
+        )
+        .unwrap() else {
+            panic!("Root fixture preparation replay failed")
+        };
+        assert_eq!(repeated, prepared);
+        assert!(
+            root_command(
+                pic,
+                root,
+                RootCommandFragment::BootstrapStore(bootstrap.clone())
+            )
+            .is_err()
+        );
+        assert_prepared(pic, root);
+        let upload = FixtureChunkUpload {
+            content_id: source.content_id,
+            index: 0,
+            bytes: b"reviewed fixture source".to_vec(),
+        };
+        let uploaded: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> = pic
+            .update_candid_as(
+                store,
+                controller,
+                canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
+                (upload.clone(),),
+            )
+            .unwrap();
+        let uploaded = uploaded.unwrap().unwrap();
+        assert!(uploaded.complete);
+        let replayed: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> = pic
+            .update_candid_as(
+                store,
+                controller,
+                canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
+                (upload,),
+            )
+            .unwrap();
+        assert_eq!(replayed.unwrap().unwrap(), uploaded);
+        let RootCommandResponseFragment::PrepareStoreFixture(Ok(recovered)) =
+            root_command(pic, root, RootCommandFragment::PrepareStoreFixture(request)).unwrap()
+        else {
+            panic!("Root completed fixture observation failed")
+        };
+        assert_eq!(recovered, uploaded);
     }
 
     fn create_prepaid_pool_assets(pic: &PocketIc, root: Principal) -> Vec<Principal> {
@@ -14063,6 +15988,7 @@ cycles = "80T"
 
         (
             RootStoreReleaseSetManifest {
+                fixtures: Vec::new(),
                 release_build_id,
                 component_topology_digest: topology.digest().expect("fixture topology digest"),
                 entries,
@@ -14326,6 +16252,14 @@ cycles = "80T"
             (
                 "fresh provisioning automatic pool readiness",
                 fresh_five_component_acceptance_seeds_the_root_owned_pool_before_effects,
+            ),
+            (
+                "fixture-bearing Root retirement",
+                fixture_bearing_root_retirement_conserves_assets_and_cycles,
+            ),
+            (
+                "pending fixture automatic funding",
+                pending_fixture_automatically_funds_within_configured_allowance,
             ),
             (
                 "Prepared Root initial-Shard bootstrap",

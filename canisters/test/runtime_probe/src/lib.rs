@@ -299,6 +299,8 @@ struct PublicSamplingProbe {
     sample_instructions: u64,
     sample: Result<(), canic::Error>,
     cycle_tracking: Result<(), canic::Error>,
+    allocation_unchanged: bool,
+    allocation_ids_measured: u64,
 }
 
 /// Exercise production sampling after a bounded amount of synthetic instrumentation.
@@ -314,9 +316,13 @@ async fn qualify_public_metrics_sampling(
         canic::api::ops::perf::record_checkpoint(&"a".repeat(128), "accepted_label", 7);
     }
     process_fixture::record();
+    let before = canic::__internal::core::api::memory::MemoryQuery::allocations()?;
     let start = ic_cdk::api::performance_counter(0);
     let sample = canic::api::public_status::PublicStatusApi::sample_metrics();
     let sample_instructions = ic_cdk::api::performance_counter(0).saturating_sub(start);
+    let after = canic::__internal::core::api::memory::MemoryQuery::allocations()?;
+    let allocation_unchanged = before == after;
+    let allocation_ids_measured = after.memories.len() as u64;
     // This internal fixture qualifies the existing cycle owner without exposing a new App API.
     let cycle_tracking =
         canic::__internal::core::api::runtime::root_funding::RootFundingTimerApi::reconcile();
@@ -324,6 +330,8 @@ async fn qualify_public_metrics_sampling(
         sample_instructions,
         sample,
         cycle_tracking,
+        allocation_unchanged,
+        allocation_ids_measured,
     })
 }
 

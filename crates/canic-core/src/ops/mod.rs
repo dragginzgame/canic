@@ -23,6 +23,8 @@ pub mod component_provisioning_receipt;
 pub mod component_runtime;
 pub mod config;
 pub mod cost_guard;
+pub mod fixture_content;
+pub mod fixture_importer;
 pub mod fleet_activation;
 pub mod fleet_admission_policy;
 pub mod fleet_funding_policy;

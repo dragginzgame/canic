@@ -134,6 +134,18 @@ impl MgmtInfra {
         Ok(())
     }
 
+    /// Start an installed canister without changing its code or controllers.
+    pub async fn start_canister(canister_pid: Principal) -> Result<(), IcInfraError> {
+        let args = InfraCanisterIdRecord {
+            canister_id: canister_pid,
+        };
+        Call::unbounded_wait(Principal::management_canister(), "start_canister")
+            .with_arg(args)?
+            .execute()
+            .await?;
+        Ok(())
+    }
+
     /// Stop a canister.
     pub async fn stop_canister(canister_pid: Principal) -> Result<(), IcInfraError> {
         let args = InfraCanisterIdRecord {

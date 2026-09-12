@@ -1,0 +1,345 @@
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 16s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-ddfaf1360157e1cd)
+
+running 17 tests
+test ops::fixture_importer::tests::codec_failures_preserve_the_originating_code_and_stop_retrying ... ok
+test ops::fixture_importer::tests::import_retries_wait_for_infrastructure_but_stop_on_exact_invalid_content ... ok
+test ops::fixture_importer::tests::importer_progress_never_adopts_a_different_installation_or_content ... ok
+test ops::fixture_importer::tests::importer_leases_serialize_steps_and_old_cleanup_cannot_release_a_new_attempt ... ok
+test ops::fixture_importer::tests::importer_registration_has_one_owner_and_cannot_be_replaced_mid_import ... ok
+test ops::fixture_importer::tests::importer_receipt_requires_complete_position_and_exact_validated_summary ... ok
+test ops::fixture_importer::tests::transport_outages_and_pending_sources_remain_retryable ... ok
+test storage::stable::async_job_recovery::tests::async_job_recovery_roundtrips_at_its_exact_worst_case_bound ... ok
+test storage::stable::async_job_recovery::tests::async_job_recovery_export_import_replaces_the_complete_record ... ok
+test ops::storage::async_job_recovery::tests::abandon_clears_only_active_and_cycle_retry_authority ... ok
+test ops::storage::async_job_recovery::tests::cycle_takeover_and_retry_reuse_only_the_exact_cycle_operation ... ok
+test ops::storage::async_job_recovery::tests::every_closed_owner_survives_response_loss_restart_and_one_fenced_takeover ... ok
+test ops::storage::async_job_recovery::tests::non_cycle_retry_completion_retains_no_generated_operation_identity ... ok
+test ops::storage::async_job_recovery::tests::invalid_lease_and_generation_exhaustion_fail_without_mutation ... ok
+test ops::storage::async_job_recovery::tests::stale_completion_cannot_clear_a_takeover_attempt ... ok
+test ops::storage::async_job_recovery::tests::live_attempts_coalesce_and_expired_minimal_takeover_advances_only_the_attempt ... ok
+test ops::storage::async_job_recovery::tests::permanent_fixture_failure_survives_restore_and_stale_attempt_cannot_replace_it ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 1272 filtered out; finished in 0.24s
+
+
+--- Revocation before recycling checkpoint ---
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 32.50s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-e73d16d76a87a083)
+
+running 16 tests
+test ops::fixture_grant::tests::initial_issuance_and_lost_reply_replay_keep_one_exact_grant ... ok
+test ops::fixture_grant::tests::recycling_revokes_only_the_exact_claim_and_reconciles_a_lost_reply ... ok
+test ops::fixture_grant::tests::revoked_and_conflicting_grants_never_authorize_initial_issuance ... ok
+test ops::canister_pool::tests::draining_cancels_only_known_unapplied_creation ... ok
+test ops::canister_pool::tests::ledger_creation_adopts_exact_principal_before_advancing_sequence ... ok
+test ops::canister_pool::tests::claims_preserve_heterogeneous_capacity_for_later_larger_demand ... ok
+test ops::canister_pool::tests::equal_capacity_claim_is_oldest_first_and_exactly_replayable ... ok
+test ops::canister_pool::tests::insufficient_cycle_assets_are_not_claimed ... ok
+test ops::canister_pool::tests::delayed_creation_authority_cannot_reserve_a_full_pool ... ok
+test ops::canister_pool::tests::recycled_assets_remain_visible_at_the_complete_asset_ceiling ... ok
+test ops::canister_pool::tests::underfunded_creation_pauses_and_resumes_the_same_operation ... ok
+test ops::canister_pool::tests::ready_capacity_matches_distinct_assets_to_exact_cycle_demands ... ok
+test ops::canister_pool::tests::pending_creation_reserves_one_standby_capacity_slot ... ok
+test ops::canister_pool::tests::undersized_ready_import_can_be_queued_for_balance_reinspection ... ok
+test ops::canister_pool::tests::store_pool_and_workload_are_exclusive_physical_inventory_states ... ok
+test ops::canister_pool::tests::draining_handoff_is_exclusive_replayable_and_removes_the_asset ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 244 filtered out; finished in 0.37s
+
+
+=== Retained replacement grant and stopped-target startup checkpoint ===
+ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib -- ops::fixture_grant ops::canister_pool ops::component_registry
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 02s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-e73d16d76a87a083)
+
+running 39 tests
+test ops::component_registry::tests::deletion_retained_target_has_no_absolute_cycle_cap ... ok
+test ops::fixture_grant::tests::initial_issuance_and_lost_reply_replay_keep_one_exact_grant ... ok
+test ops::fixture_grant::tests::recycling_revokes_only_the_exact_claim_and_reconciles_a_lost_reply ... ok
+test ops::fixture_grant::tests::replacement_rejects_live_or_foreign_source_authority ... ok
+test ops::fixture_grant::tests::replacement_selection_and_replay_cannot_follow_a_newer_store_revision ... ok
+test ops::fixture_grant::tests::revoked_and_conflicting_grants_never_authorize_initial_issuance ... ok
+test ops::canister_pool::tests::draining_cancels_only_known_unapplied_creation ... ok
+test ops::canister_pool::tests::delayed_creation_authority_cannot_reserve_a_full_pool ... ok
+test ops::canister_pool::tests::draining_handoff_is_exclusive_replayable_and_removes_the_asset ... ok
+test ops::canister_pool::tests::pending_creation_reserves_one_standby_capacity_slot ... ok
+test ops::canister_pool::tests::insufficient_cycle_assets_are_not_claimed ... ok
+test ops::canister_pool::tests::store_pool_and_workload_are_exclusive_physical_inventory_states ... ok
+test ops::canister_pool::tests::ledger_creation_adopts_exact_principal_before_advancing_sequence ... ok
+test ops::canister_pool::tests::underfunded_creation_pauses_and_resumes_the_same_operation ... ok
+test ops::canister_pool::tests::undersized_ready_import_can_be_queued_for_balance_reinspection ... ok
+test ops::canister_pool::tests::equal_capacity_claim_is_oldest_first_and_exactly_replayable ... ok
+test ops::canister_pool::tests::recycled_assets_remain_visible_at_the_complete_asset_ceiling ... ok
+test ops::canister_pool::tests::ready_capacity_matches_distinct_assets_to_exact_cycle_demands ... ok
+test ops::component_registry::tests::allocation_reservation_fails_before_mutation_when_registry_capacity_is_exhausted ... ok
+test ops::component_registry::tests::allocation_reservation_is_exact_idempotent_and_charges_registry_capacity ... ok
+test ops::component_registry::tests::creation_intent_reserves_terminal_bytes_and_created_retry_preserves_principal ... ok
+test ops::component_registry::tests::peer_allocation_counts_are_scoped_to_exact_requester_and_target ... ok
+test ops::component_registry::tests::grouped_component_rejects_ordinary_draining_before_mutation ... ok
+test ops::component_registry::tests::preparation_is_exact_idempotent_and_conflict_closed ... ok
+test ops::component_registry::tests::directory_refresh_is_exact_idempotent_and_conflict_closed ... ok
+test ops::component_registry::tests::root_draining_is_durable_and_fences_only_new_top_level_allocations ... ok
+test ops::component_registry::tests::incomplete_component_operation_does_not_block_an_unrelated_partition ... ok
+test ops::component_registry::tests::prequiescence_draining_component_retains_committed_runtime_operation ... ok
+test ops::component_registry::tests::component_final_inventory_is_exact_durable_and_response_idempotent ... ok
+test ops::component_registry::tests::empty_root_final_inventory_is_exact_durable_and_response_idempotent ... ok
+test ops::component_registry::tests::component_membership_removal_is_atomic_settled_and_response_idempotent ... ok
+test ops::component_registry::tests::install_intent_reserves_terminal_bytes_and_advances_idempotently ... ok
+test ops::component_registry::tests::component_deletion_is_prepared_durable_and_absence_idempotent ... ok
+test ops::component_registry::tests::subtree_removal_target_finalization_is_terminal_and_releases_the_live_fence ... ok
+test ops::component_registry::tests::child_reservation_is_parent_indexed_idempotent_and_capacity_bounded ... ok
+test ops::component_registry::tests::component_draining_fence_is_durable_capacity_bounded_and_stops_growth ... ok
+test ops::component_registry::tests::subtree_removal_fence_is_durable_scoped_and_capacity_bounded ... ok
+test ops::component_registry::tests::subtree_removal_traversal_is_bounded_deterministic_and_restart_safe ... ok
+test ops::canister_pool::tests::claims_preserve_heterogeneous_capacity_for_later_larger_demand ... ok
+
+test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 223 filtered out; finished in 0.44s
+
+
+=== Retained replacement grant and stopped-target startup checkpoint ===
+ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --lib -- ops::storage::fleet_activation::fixture ops::runtime::metrics::management_call
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 54.56s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-ddfaf1360157e1cd)
+
+running 4 tests
+test ops::runtime::metrics::management_call::tests::management_call_metrics_accumulate_by_operation_outcome_and_reason ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_rejects_same_principal_from_another_component_authority ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_rejects_substitution_and_revocation_after_restore ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_roundtrips_for_parent_and_child_without_a_progress_cursor ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1285 filtered out; finished in 0.00s
+
+
+
+CANIC-165 durable outage backoff - 2026-09-12
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 00s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-54f318737a01b308)
+
+running 13 tests
+test storage::stable::async_job_recovery::tests::async_job_recovery_roundtrips_at_its_exact_worst_case_bound ... ok
+test workflow::runtime::async_job::tests::expired_abandonment_clears_only_expired_domain_work ... ok
+test storage::stable::async_job_recovery::tests::async_job_recovery_export_import_replaces_the_complete_record ... ok
+test ops::storage::async_job_recovery::tests::abandon_clears_only_active_and_cycle_retry_authority ... ok
+test ops::storage::async_job_recovery::tests::cycle_takeover_and_retry_reuse_only_the_exact_cycle_operation ... ok
+test ops::storage::async_job_recovery::tests::fixture_backoff_survives_restore_and_admits_only_one_retry_at_the_deadline ... ok
+test ops::storage::async_job_recovery::tests::every_closed_owner_survives_response_loss_restart_and_one_fenced_takeover ... ok
+test ops::storage::async_job_recovery::tests::fixture_retry_fences_stale_and_foreign_completions_and_saturates_without_early_retry ... ok
+test ops::storage::async_job_recovery::tests::invalid_lease_and_generation_exhaustion_fail_without_mutation ... ok
+test ops::storage::async_job_recovery::tests::live_attempts_coalesce_and_expired_minimal_takeover_advances_only_the_attempt ... ok
+test ops::storage::async_job_recovery::tests::non_cycle_retry_completion_retains_no_generated_operation_identity ... ok
+test ops::storage::async_job_recovery::tests::permanent_fixture_failure_survives_restore_and_stale_attempt_cannot_replace_it ... ok
+test ops::storage::async_job_recovery::tests::stale_completion_cannot_clear_a_takeover_attempt ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 1278 filtered out; finished in 0.27s
+
+
+
+CANIC-165 durable outage backoff - 2026-09-12
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 41.86s
+     Running tests/stable_memory_abi_guard.rs (target/debug/deps/stable_memory_abi_guard-d1ae83f338db0a15)
+
+running 3 tests
+test managed_memory_guard_matches_calls_without_rejecting_observation_names ... ok
+test composed_memory_runtime_has_one_package_identity ... ok
+test canic_managed_runtime_code_uses_managed_explicit_stable_keys ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/timer_inventory_guard.rs (target/debug/deps/timer_inventory_guard-386f7ea75f3f8329)
+
+running 15 tests
+test recovery_takeovers_recheck_each_owners_authoritative_domain_demand ... ok
+test semantic_inventory_detects_raw_timer_mechanics ... ok
+test maintained_runtime_docs_do_not_advertise_the_removed_timer_facade ... ok
+test semantic_inventory_detects_aliased_raw_provider_imports ... ok
+test semantic_inventory_counts_macro_generated_native_calls ... ok
+test semantic_inventory_ignores_comments_and_string_literals ... ok
+test pool_and_snapshot_paths_use_exact_native_owners ... ok
+test semantic_inventory_observes_unclassified_and_duplicate_native_calls ... ok
+test semantic_inventory_rejects_aliased_provider_authority ... ok
+test semantic_inventory_rejects_aliased_native_registration_actions ... ok
+test semantic_inventory_observes_native_registration_method_actions ... ok
+test semantic_inventory_rejects_value_aliased_provider_authority ... ok
+test timer_provider_graph_and_manifest_consumers_are_closed ... ok
+test timer_registration_custody_is_closed ... ok
+test direct_raw_timer_provider_access_is_absent_from_production ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+
+
+
+CANIC-165 explicit Store retirement - 2026-09-12
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 33.08s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-c73a961573114900)
+
+running 20 tests
+test ops::storage::template::gc::tests::transition_record_advances_monotonically ... ok
+test ops::storage::template::gc::tests::transition_record_is_idempotent_for_same_mode ... ok
+test ops::storage::template::gc::tests::transition_record_rejects_invalid_order ... ok
+test ops::storage::template::gc::tests::transition_record_can_return_from_clearing_to_in_progress_for_retry ... ok
+test workflow::runtime::template::publication::lifecycle::gc::tests::lifecycle_guard_rejects_concurrent_entry_and_releases_on_drop ... ok
+test ops::storage::template::gc::tests::exact_preparation_replay_preserves_every_later_phase_and_collection_requires_preparation ... ok
+test ops::storage::template::gc::tests::prepare_binds_one_exact_nonzero_operation_identity ... ok
+test ops::storage::template::gc::tests::snapshot_reflects_persisted_state ... ok
+test workflow::runtime::template::publication::lifecycle::gc::tests::deleted_store_inventory_reconciliation_is_root_owned_and_idempotent ... ok
+test workflow::runtime::template::publication::lifecycle::gc::tests::root_store_gc_reconciliation_preserves_live_retry_lineage ... ok
+test workflow::runtime::template::publication::lifecycle::gc::tests::reclaimed_store_binding_finalization_resumes_from_every_durable_slot ... ok
+test ops::storage::template::gc::tests::writable_gate_closes_when_gc_starts ... ok
+test ops::fixture_store::tests::descriptor_and_authority_conflicts_leave_storage_unchanged ... ok
+test ops::fixture_store::tests::child_grant_preserves_component_identity_and_authenticates_only_the_child ... ok
+test ops::fixture_store::tests::fixture_store_restores_content_progress_and_exact_grant_revisions ... ok
+test ops::fixture_store::tests::revoked_and_replaced_grants_fence_delayed_commands_and_reads ... ok
+test ops::fixture_store::tests::retired_fixture_collection_is_bounded_accounted_and_restart_safe ... ok
+test ops::fixture_store::tests::fixture_capacity_includes_metadata_payload_grants_and_template_bytes ... ok
+test ops::fixture_store::tests::descriptor_admission_accounts_for_the_full_command_envelope ... ok
+test ops::component_registry::tests::empty_root_final_inventory_is_exact_durable_and_response_idempotent ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 244 filtered out; finished in 0.34s
+
+
+
+CANIC-165 explicit Store retirement - 2026-09-12
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.25s
+     Running tests/timer_inventory_guard.rs (target/debug/deps/timer_inventory_guard-386f7ea75f3f8329)
+
+running 15 tests
+test maintained_runtime_docs_do_not_advertise_the_removed_timer_facade ... ok
+test recovery_takeovers_recheck_each_owners_authoritative_domain_demand ... ok
+test pool_and_snapshot_paths_use_exact_native_owners ... ok
+test semantic_inventory_rejects_aliased_provider_authority ... ok
+test semantic_inventory_detects_aliased_raw_provider_imports ... ok
+test semantic_inventory_rejects_aliased_native_registration_actions ... ok
+test semantic_inventory_counts_macro_generated_native_calls ... ok
+test semantic_inventory_detects_raw_timer_mechanics ... ok
+test semantic_inventory_observes_unclassified_and_duplicate_native_calls ... ok
+test semantic_inventory_rejects_value_aliased_provider_authority ... ok
+test semantic_inventory_ignores_comments_and_string_literals ... ok
+test semantic_inventory_observes_native_registration_method_actions ... ok
+test timer_provider_graph_and_manifest_consumers_are_closed ... ok
+test timer_registration_custody_is_closed ... ok
+test direct_raw_timer_provider_access_is_absent_from_production ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+
+
+=== Fixture-bearing retirement: cargo test --locked -p canic-control-plane --lib -- ops::component_registry [pass] ===
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 27.25s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-c73a961573114900)
+
+running 21 tests
+test ops::component_registry::tests::deletion_retained_target_has_no_absolute_cycle_cap ... ok
+test ops::component_registry::tests::allocation_reservation_is_exact_idempotent_and_charges_registry_capacity ... ok
+test ops::component_registry::tests::creation_intent_reserves_terminal_bytes_and_created_retry_preserves_principal ... ok
+test ops::component_registry::tests::grouped_component_rejects_ordinary_draining_before_mutation ... ok
+test ops::component_registry::tests::preparation_is_exact_idempotent_and_conflict_closed ... ok
+test ops::component_registry::tests::peer_allocation_counts_are_scoped_to_exact_requester_and_target ... ok
+test ops::component_registry::tests::directory_refresh_is_exact_idempotent_and_conflict_closed ... ok
+test ops::component_registry::tests::root_draining_is_durable_and_fences_only_new_top_level_allocations ... ok
+test ops::component_registry::tests::incomplete_component_operation_does_not_block_an_unrelated_partition ... ok
+test ops::component_registry::tests::prequiescence_draining_component_retains_committed_runtime_operation ... ok
+test ops::component_registry::tests::component_final_inventory_is_exact_durable_and_response_idempotent ... ok
+test ops::component_registry::tests::empty_root_final_inventory_is_exact_durable_and_response_idempotent ... ok
+test ops::component_registry::tests::install_intent_reserves_terminal_bytes_and_advances_idempotently ... ok
+test ops::component_registry::tests::component_membership_removal_is_atomic_settled_and_response_idempotent ... ok
+test ops::component_registry::tests::component_deletion_is_prepared_durable_and_absence_idempotent ... ok
+test ops::component_registry::tests::subtree_removal_target_finalization_is_terminal_and_releases_the_live_fence ... ok
+test ops::component_registry::tests::child_reservation_is_parent_indexed_idempotent_and_capacity_bounded ... ok
+test ops::component_registry::tests::component_draining_fence_is_durable_capacity_bounded_and_stops_growth ... ok
+test ops::component_registry::tests::subtree_removal_fence_is_durable_scoped_and_capacity_bounded ... ok
+test ops::component_registry::tests::subtree_removal_traversal_is_bounded_deterministic_and_restart_safe ... ok
+test ops::component_registry::tests::allocation_reservation_fails_before_mutation_when_registry_capacity_is_exhausted ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 243 filtered out; finished in 0.38s
+
+
+=== Pending fixture funding: cargo test --locked -p canic-control-plane --lib -- workflow::component_rpc [pass] ===
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 27.30s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-c73a961573114900)
+
+running 2 tests
+test workflow::component_rpc::tests::structural_provision_rejects_fleet_subnet_root_as_application_parent ... ok
+test workflow::component_rpc::tests::structural_provision_rejects_selector_based_parent_resolution ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 0.00s
+
+
+=== Durable reviewed publication attempts ===
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 37.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-fe0594d34665833f)
+
+running 5 tests
+test fleet_ensure::ops::current_protocol::tests::fixture_publication_binding_reserves_reviewed_attempts_and_rejects_overflow ... ok
+test fleet_ensure::tests::fixture_publication_rejects_a_journal_counter_beyond_its_reviewed_limit ... ok
+test fleet_ensure::tests::fixture_publication_review_accounts_for_each_retry_and_rejects_zero_attempts ... ok
+test fleet_ensure::tests::fixture_publication_last_attempt_lost_reply_reconciles_without_another_call ... ok
+test fleet_ensure::tests::fixture_publication_attempt_bound_survives_failure_and_restart ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 581 filtered out; finished in 0.18s
+
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.32s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-fe0594d34665833f)
+
+running 4 tests
+test fleet_ensure::ops::plan_content::tests::read_object_rejects_a_linked_content_object ... ok
+test fleet_ensure::ops::plan_content::tests::read_object_rejects_invalid_expected_size_before_object_access ... ok
+test fleet_ensure::ops::plan_content::tests::read_object_rejects_oversized_truncated_and_hash_mismatched_content ... ok
+test fleet_ensure::ops::plan_content::tests::fixture_content_round_trips_without_inline_payloads_and_rejects_substitution ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 582 filtered out; finished in 0.03s
+
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-fe0594d34665833f)
+
+running 1 test
+test fleet_ensure::tests::pool_maintenance_attempt_bound_survives_lost_response_and_restart ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 585 filtered out; finished in 0.21s
+
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.32s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-fe0594d34665833f)
+
+running 1 test
+test fleet_ensure::tests::interruption_at_every_effect_converges_once_and_second_run_has_zero_effects ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 585 filtered out; finished in 0.36s
+
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-fe0594d34665833f)
+
+running 13 tests
+test fleet_ensure::ops::current_protocol::tests::fresh_fleet_registry_prepare_classifies_typed_unavailable_status ... ok
+test fleet_ensure::ops::current_protocol::tests::fresh_fleet_generated_store_controllers_resolve_exact_principals ... ok
+test fleet_ensure::ops::current_protocol::tests::duplicate_or_incomplete_placement_authority_fails_closed ... ok
+test fleet_ensure::ops::current_protocol::fixture::tests::publication_reconciles_each_prefix_and_completed_replay ... ok
+test fleet_ensure::ops::current_protocol::tests::current_desired_state_rejects_component_demand_above_pool_target ... ok
+test fleet_ensure::ops::current_protocol::tests::live_root_authority_compiles_one_deterministic_registry_sequence ... ok
+test fleet_ensure::ops::current_protocol::tests::registry_sequence_rejects_store_and_registry_authority_drift ... ok
+test fleet_ensure::ops::current_protocol::tests::store_authority_without_operation_receipt_does_not_complete_adoption ... ok
+test fleet_ensure::ops::current_protocol::tests::fixture_publication_binding_reserves_reviewed_attempts_and_rejects_overflow ... ok
+test fleet_ensure::ops::current_protocol::tests::typed_placements_compile_to_exact_active_root_batches ... ok
+test fleet_ensure::ops::current_protocol::tests::provisioned_registry_requires_its_exact_component_operation_receipt ... ok
+test fleet_ensure::ops::current_protocol::tests::fresh_fleet_store_bootstrap_is_deterministic ... ok
+test fleet_ensure::ops::current_protocol::tests::activation_source_requires_exact_completed_prefix_and_issued_provisioning ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 573 filtered out; finished in 0.17s
+
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-fe0594d34665833f)
+
+running 1 test
+test fleet_ensure::json::tests::fixture_upload_report_retains_identity_and_externalizes_payload ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 585 filtered out; finished in 0.00s
+

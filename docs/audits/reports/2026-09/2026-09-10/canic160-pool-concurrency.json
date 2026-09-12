@@ -1,0 +1,300 @@
+{
+  "schema_version": 1,
+  "issue": "CANIC-160",
+  "base_commit": "c9c91f19c",
+  "package_version": "0.110.14",
+  "open_patch": "0.110.15",
+  "source_path": "crates/canic-host/src/fleet_ensure/ops/platform.rs",
+  "source": {
+    "tracked_files": 3898,
+    "tracked_tree_sha256": "94448e303779d8c90c41dbc3e21f6fe319763fd4d870bd8a663b39f07410ccf4",
+    "platform_sha256": "78cd739efe8e13bcb95e71cdee857abfccfc33f4f06def704b6745bcb53e855f"
+  },
+  "source_unchanged_through_pocketic": true,
+  "maximum_in_flight": 4,
+  "native_measurements": [
+    {
+      "assets": 1,
+      "concurrent": false,
+      "configured_ms": 40,
+      "configured_calls": 3,
+      "extra_balance_calls": 0,
+      "injected_inspection_latency_ms": 20
+    },
+    {
+      "assets": 1,
+      "concurrent": true,
+      "configured_ms": 41,
+      "configured_calls": 3,
+      "extra_balance_calls": 0,
+      "injected_inspection_latency_ms": 20
+    },
+    {
+      "assets": 14,
+      "concurrent": false,
+      "configured_ms": 440,
+      "configured_calls": 16,
+      "extra_balance_calls": 0,
+      "injected_inspection_latency_ms": 20
+    },
+    {
+      "assets": 14,
+      "concurrent": true,
+      "configured_ms": 164,
+      "configured_calls": 16,
+      "extra_balance_calls": 0,
+      "injected_inspection_latency_ms": 20
+    },
+    {
+      "assets": 27,
+      "concurrent": false,
+      "configured_ms": 836,
+      "configured_calls": 29,
+      "extra_balance_calls": 0,
+      "injected_inspection_latency_ms": 20
+    },
+    {
+      "assets": 27,
+      "concurrent": true,
+      "configured_ms": 290,
+      "configured_calls": 29,
+      "extra_balance_calls": 0,
+      "injected_inspection_latency_ms": 20
+    }
+  ],
+  "validation": {
+    "focused_native_tests_passed": 33,
+    "host_clippy_warnings_denied": true,
+    "pocketic_case": "pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet",
+    "pocketic_passed": true,
+    "test_elapsed_seconds": 659.46,
+    "runner_elapsed_seconds": 759,
+    "pocketic_version": "16.0.0",
+    "icp_version": "1.4.0"
+  },
+  "completed_phases": [
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 2,
+      "parent_id": 1,
+      "name": "source_and_fixture_recipe",
+      "state": "completed",
+      "elapsed_us": 1237
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 3,
+      "parent_id": 1,
+      "name": "initial_artifacts",
+      "state": "completed",
+      "elapsed_us": 217997048
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 14,
+      "parent_id": 1,
+      "name": "replica_and_transport_setup",
+      "state": "completed",
+      "elapsed_us": 1055850
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 15,
+      "parent_id": 1,
+      "name": "generation_and_initial_review",
+      "state": "completed",
+      "elapsed_us": 19765717
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 16,
+      "parent_id": 1,
+      "name": "initial_working_fleet",
+      "state": "completed",
+      "elapsed_us": 98449322
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 18,
+      "parent_id": 17,
+      "name": "replacement_artifacts_and_generation",
+      "state": "completed",
+      "elapsed_us": 38263214
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 29,
+      "parent_id": 17,
+      "name": "root_reinstall_review_and_authority_rejection",
+      "state": "completed",
+      "elapsed_us": 1271362
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 30,
+      "parent_id": 17,
+      "name": "root_reinstall_lost_response_and_recovery",
+      "state": "completed",
+      "elapsed_us": 15797024
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 31,
+      "parent_id": 17,
+      "name": "successor_reviews_and_convergence",
+      "state": "completed",
+      "elapsed_us": 229627594
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 32,
+      "parent_id": 17,
+      "name": "retained_estate_state_and_replay",
+      "state": "completed",
+      "elapsed_us": 37056873
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 17,
+      "parent_id": 1,
+      "name": "retained_estate_reinstall",
+      "state": "completed",
+      "elapsed_us": 322016654
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 33,
+      "parent_id": 1,
+      "name": "cleanup",
+      "state": "completed",
+      "elapsed_us": 90009
+    },
+    {
+      "schema_version": 1,
+      "process_id": 43341,
+      "span_id": 1,
+      "parent_id": null,
+      "name": "production_adapter_journey",
+      "state": "completed",
+      "elapsed_us": 659376136
+    }
+  ],
+  "evidence_sha256": {
+    "final-native.log": "737efa048942a62f193d69fc3e638d0c69b1e3c2f9816c6487c0800fbaa9e270",
+    "clippy.log": "cf567fbcbb715d67b96d5267c47b36de94e88f32bbe049c1fdadbd81ab2985f0",
+    "pocketic.log": "49348c40222ed67b4a470b43b2ac30cdae10ef6ef15cc812f42354eb9a8f9b38",
+    "pre-proof-source.json": "b01b2faf5fd3a83ced52e7cd5b5ef8d2cdd5198243235a5f27004982d3aef580"
+  },
+  "limits": [
+    "Controlled native benchmark injects 20ms per inspection; no timing threshold.",
+    "No comparable downstream IC or complete-release performance measurement.",
+    "Balance-only assets outside configured observation still read serially.",
+    "Tracked-source aggregate precedes the final documentation updates."
+  ],
+  "pocketic_observation_summary": {
+    "configured_canisters": {
+      "observations": 24,
+      "elapsed_millis": 37784,
+      "remote_call_attempts": 236,
+      "all_succeeded": true
+    },
+    "estate_funding": {
+      "observations": 24,
+      "elapsed_millis": 1927,
+      "remote_call_attempts": 23,
+      "all_succeeded": true
+    },
+    "ledger_fee": {
+      "observations": 24,
+      "elapsed_millis": 2024,
+      "remote_call_attempts": 24,
+      "all_succeeded": true
+    },
+    "operator_balance": {
+      "observations": 24,
+      "elapsed_millis": 1821,
+      "remote_call_attempts": 24,
+      "all_succeeded": true
+    },
+    "pool_balances": {
+      "observations": 24,
+      "elapsed_millis": 7826,
+      "remote_call_attempts": 0,
+      "all_succeeded": true
+    },
+    "protocol_actions": {
+      "observations": 17,
+      "elapsed_millis": 29716,
+      "remote_call_attempts": 217,
+      "all_succeeded": true
+    },
+    "protocol_readiness": {
+      "observations": 24,
+      "elapsed_millis": 0,
+      "remote_call_attempts": 0,
+      "all_succeeded": true
+    },
+    "root_management": {
+      "observations": 15,
+      "elapsed_millis": 6372,
+      "remote_call_attempts": 23,
+      "all_succeeded": true
+    },
+    "terminal_inventory": {
+      "observations": 6,
+      "elapsed_millis": 34445,
+      "remote_call_attempts": 264,
+      "all_succeeded": true
+    }
+  },
+  "pool_heavy_configured_observations": [
+    {
+      "stage": "configured_canisters",
+      "elapsed_millis": 5141,
+      "remote_call_attempts": 28,
+      "succeeded": true
+    },
+    {
+      "stage": "configured_canisters",
+      "elapsed_millis": 5183,
+      "remote_call_attempts": 28,
+      "succeeded": true
+    },
+    {
+      "stage": "configured_canisters",
+      "elapsed_millis": 4932,
+      "remote_call_attempts": 28,
+      "succeeded": true
+    },
+    {
+      "stage": "configured_canisters",
+      "elapsed_millis": 5016,
+      "remote_call_attempts": 28,
+      "succeeded": true
+    },
+    {
+      "stage": "configured_canisters",
+      "elapsed_millis": 4821,
+      "remote_call_attempts": 28,
+      "succeeded": true
+    },
+    {
+      "stage": "configured_canisters",
+      "elapsed_millis": 5007,
+      "remote_call_attempts": 28,
+      "succeeded": true
+    }
+  ]
+}

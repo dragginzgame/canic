@@ -23,7 +23,7 @@ use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_enve
 use canic_host::canister_build::{
     CanisterArtifactBuildOptions, CanisterArtifactBuilder, CanisterBuildProfile,
     ConfiguredCanisterArtifactBuildOutput, WorkspaceBuildContext, copy_icp_wasm_output,
-    print_workspace_build_context_once,
+    print_workspace_build_context_once, read_wasm_artifact_metrics,
 };
 use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
@@ -234,6 +234,17 @@ where
             "Build complete",
             &build_completion_detail(1, "role", "roles", started_at.elapsed()),
         );
+        println!(
+            "{}",
+            render_app_build_table(
+                &[ConfiguredCanisterArtifactBuildOutput {
+                    role: role.clone(),
+                    output: output.clone()
+                }],
+                context.profile,
+                TerminalStyle::detected(),
+            )?
+        );
         println!("{}", output.wasm_gz_path.display());
     } else {
         build_complete_app(&options, context, &roles, &builder, started_at)?;
@@ -248,6 +259,11 @@ fn build_complete_app(
     builder: &CanisterArtifactBuilder,
     started_at: Instant,
 ) -> Result<(), BuildCommandError> {
+    let fixture_sources = canic_host::release_set::fixture::load_configured_fixture_sources(
+        &context.icp_root,
+        &context.config_path,
+    )
+    .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     let lookup_started = Instant::now();
     let reuse = match builder.prepare_complete_build_reuse(&context) {
         Ok(reuse) => Some(reuse),
@@ -259,6 +275,9 @@ fn build_complete_app(
     if let Some(reuse) = &reuse {
         match reuse.load() {
             Ok(Some(hit)) => {
+                fixture_sources
+                    .verify_unchanged(&context.icp_root, &context.config_path)
+                    .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
                 for role in &hit.roles {
                     eprintln!("Build cache {role}: hit (verified complete release)");
                 }
@@ -304,7 +323,7 @@ fn build_complete_app(
     )
     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     context = context.with_release_build_id(release.record.release_build_id);
-    let manifest_path = build_app(options, &context, roles, builder)?;
+    let manifest_path = build_app(options, &context, roles, builder, &fixture_sources)?;
     let artifact_count = all_roles.len();
     if let Some(reuse) = reuse {
         reuse
@@ -459,6 +478,7 @@ fn build_app(
     context: &WorkspaceBuildContext,
     roles: &[String],
     builder: &CanisterArtifactBuilder,
+    fixture_sources: &canic_host::release_set::fixture::ConfiguredFixtureSources,
 ) -> Result<PathBuf, BuildCommandError> {
     let style = TerminalStyle::detected();
     style.print_section(
@@ -480,6 +500,17 @@ fn build_app(
     let release_build_id = context
         .release_build_id
         .expect("complete App builds own one durable release-build identity");
+    let config = AppConfigSnapshot::load(&context.config_path)?;
+    fixture_sources
+        .verify_unchanged(&context.icp_root, &context.config_path)
+        .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    let fixtures = canic_host::release_set::fixture::compile_and_persist_fixture_artifact_manifest(
+        &context.icp_root,
+        config.component_topology(),
+        release_build_id,
+        &fixture_sources.inputs,
+    )
+    .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     let activity = TerminalActivity::start(format!(
         "{} configured roles plus infrastructure | {} profile",
         roles.len(),
@@ -513,8 +544,17 @@ fn build_app(
             timing: InfrastructureArtifactTiming::SharedConfiguredBatch(configured_elapsed),
         },
     );
-    let release_manifest =
-        persist_complete_release_set(context, release_build_id, &artifacts, &infrastructure)?;
+    fixture_sources
+        .verify_unchanged(&context.icp_root, &context.config_path)
+        .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    let release_manifest = persist_complete_release_set(
+        context,
+        release_build_id,
+        &artifacts,
+        &infrastructure,
+        &fixtures,
+        fixture_sources,
+    )?;
 
     style.print_section(
         "Infrastructure Wasm",
@@ -522,7 +562,7 @@ fn build_app(
     );
     println!(
         "{}",
-        render_infrastructure_build_table(&infrastructure, style)?
+        render_infrastructure_build_table(&infrastructure, context.profile, style)?
     );
     println!();
 
@@ -535,7 +575,10 @@ fn build_app(
             configured_elapsed.as_secs_f64()
         ),
     );
-    println!("{}", render_app_build_table(&artifacts.application, style)?);
+    println!(
+        "{}",
+        render_app_build_table(&artifacts.application, context.profile, style)?
+    );
     println!();
 
     Ok(release_manifest)
@@ -546,6 +589,8 @@ fn persist_complete_release_set(
     release_build_id: ReleaseBuildId,
     artifacts: &ConfiguredArtifactClassification,
     infrastructure: &[InfrastructureCanisterArtifactBuildOutput],
+    fixtures: &canic_host::release_set::fixture::PersistedFixtureArtifactManifest,
+    fixture_sources: &canic_host::release_set::fixture::ConfiguredFixtureSources,
 ) -> Result<PathBuf, BuildCommandError> {
     let config = AppConfigSnapshot::load(&context.config_path)?;
     let application_targets = artifacts
@@ -586,11 +631,19 @@ fn persist_complete_release_set(
     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     let complete = compile_and_persist_current_release_set_manifest(
         &context.icp_root,
+        config.component_topology(),
         release_build_id,
         &application,
         &infrastructure,
+        fixtures,
     )
     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    fixture_sources
+        .verify_retained(fixtures)
+        .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
+    fixture_sources
+        .verify_unchanged(&context.icp_root, &context.config_path)
+        .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     finalize_release_build_from_manifest(&context.icp_root, release_build_id, &complete.path)
         .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     Ok(complete.path)
@@ -732,30 +785,37 @@ struct InfrastructureCanisterArtifactBuildOutput {
 
 fn render_app_build_table(
     outputs: &[ConfiguredCanisterArtifactBuildOutput],
+    profile: CanisterBuildProfile,
     style: TerminalStyle,
 ) -> Result<String, BuildCommandError> {
     let rows = outputs
         .iter()
         .map(|built| {
-            let wasm = std::fs::metadata(&built.output.wasm_path)?.len();
-            let gzip = std::fs::metadata(&built.output.wasm_gz_path)
-                .ok()
-                .map(|metadata| metadata.len());
+            let metrics =
+                read_wasm_artifact_metrics(&built.output.wasm_path, &built.output.wasm_gz_path)?;
             Ok([
                 built.role.clone(),
                 built.output.package_version.clone(),
                 style.success("done"),
-                wasm_size_label(Some(wasm), gzip),
+                profile.target_dir_name().to_string(),
+                metrics.code_section_bytes.to_string(),
+                metrics.data_section_bytes.to_string(),
+                wasm_size_label(Some(metrics.raw_bytes), Some(metrics.gzip_bytes)),
             ])
         })
         .collect::<Result<Vec<_>, BuildCommandError>>()?;
     Ok(render_bordered_table(
-        &["ROLE", "VERSION", "STATUS", "WASM"],
+        &[
+            "ROLE", "VERSION", "STATUS", "PROFILE", "CODE (B)", "DATA (B)", "WASM",
+        ],
         &rows,
         &[
             ColumnAlign::Left,
             ColumnAlign::Left,
             ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
             ColumnAlign::Right,
         ],
     ))
@@ -763,21 +823,23 @@ fn render_app_build_table(
 
 fn render_infrastructure_build_table(
     outputs: &[InfrastructureCanisterArtifactBuildOutput],
+    profile: CanisterBuildProfile,
     style: TerminalStyle,
 ) -> Result<String, BuildCommandError> {
     let rows = outputs
         .iter()
         .map(|built| {
-            let wasm = std::fs::metadata(&built.output.wasm_path)?.len();
-            let gzip = std::fs::metadata(&built.output.wasm_gz_path)
-                .ok()
-                .map(|metadata| metadata.len());
+            let metrics =
+                read_wasm_artifact_metrics(&built.output.wasm_path, &built.output.wasm_gz_path)?;
             Ok([
                 built.role.clone(),
                 built.output.package_version.clone(),
                 built.deployment_scope.label().to_string(),
                 style.success("done"),
-                wasm_size_label(Some(wasm), gzip),
+                profile.target_dir_name().to_string(),
+                metrics.code_section_bytes.to_string(),
+                metrics.data_section_bytes.to_string(),
+                wasm_size_label(Some(metrics.raw_bytes), Some(metrics.gzip_bytes)),
                 built.timing.label(),
             ])
         })
@@ -788,6 +850,9 @@ fn render_infrastructure_build_table(
             "VERSION",
             "INSTANCES",
             "STATUS",
+            "PROFILE",
+            "CODE (B)",
+            "DATA (B)",
             "WASM",
             "ELAPSED",
         ],
@@ -797,6 +862,9 @@ fn render_infrastructure_build_table(
             ColumnAlign::Left,
             ColumnAlign::Left,
             ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
             ColumnAlign::Right,
             ColumnAlign::Right,
         ],
@@ -1231,8 +1299,12 @@ mod tests {
             output: test_artifact_output(&root, "app", 2048, 512),
         }];
 
-        let table = render_app_build_table(&outputs, TerminalStyle::detected())
-            .expect("render build table");
+        let table = render_app_build_table(
+            &outputs,
+            CanisterBuildProfile::Fast,
+            TerminalStyle::detected(),
+        )
+        .expect("render build table");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert!(table.starts_with('+'));
@@ -1246,11 +1318,64 @@ mod tests {
                 (!cell.is_empty()).then_some(cell)
             })
             .collect::<Vec<_>>();
-        assert_eq!(headers, ["ROLE", "VERSION", "STATUS", "WASM"]);
+        assert_eq!(
+            headers,
+            [
+                "ROLE", "VERSION", "STATUS", "PROFILE", "CODE (B)", "DATA (B)", "WASM"
+            ]
+        );
+        assert!(table.contains("fast"));
         assert!(table.contains("| app  |"));
         assert!(table.contains("done"));
         assert!(table.contains("2.00 KiB (gz 512.00 B)"));
         assert!(table.contains(env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
+    fn build_table_distinguishes_code_from_data_for_each_profile() {
+        let root = temp_dir("canic-cli-build-sections");
+        let outputs = [("data_heavy", 1_u8, 80_u8), ("code_heavy", 80, 1)].map(
+            |(role, instructions, data)| {
+                let output = test_artifact_output(&root, role, 1024, 256);
+                let mut wasm = b"\0asm\x01\0\0\0\x01\x04\x01\x60\0\0\x03\x02\x01\0".to_vec();
+                wasm.extend([10, instructions + 4, 1, instructions + 2, 0]);
+                wasm.extend(vec![1; usize::from(instructions)]); // nop instructions
+                wasm.push(11); // end
+                wasm.extend([11, data + 3, 1, 1, data]); // one passive data segment
+                wasm.extend(vec![0; usize::from(data)]);
+                fs::write(&output.wasm_path, &wasm).unwrap();
+                ConfiguredCanisterArtifactBuildOutput {
+                    role: role.to_string(),
+                    output,
+                }
+            },
+        );
+        for profile in [CanisterBuildProfile::Fast, CanisterBuildProfile::Release] {
+            let table =
+                render_app_build_table(&outputs, profile, TerminalStyle::detected()).unwrap();
+            for (output, expected) in outputs.iter().zip([[5, 83], [84, 4]]) {
+                let row = table
+                    .lines()
+                    .find(|line| line.contains(&output.role))
+                    .unwrap();
+                let cells = row.split('|').map(str::trim).collect::<Vec<_>>();
+                assert_eq!(cells[4], profile.target_dir_name());
+                assert_eq!(cells[5], expected[0].to_string());
+                assert_eq!(cells[6], expected[1].to_string());
+                let metrics = read_wasm_artifact_metrics(
+                    &output.output.wasm_path,
+                    &output.output.wasm_gz_path,
+                )
+                .unwrap();
+                assert_eq!(cells[5], metrics.code_section_bytes.to_string());
+                assert_eq!(cells[6], metrics.data_section_bytes.to_string());
+                assert_eq!(
+                    cells[7],
+                    wasm_size_label(Some(metrics.raw_bytes), Some(metrics.gzip_bytes))
+                );
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1285,13 +1410,20 @@ mod tests {
             },
         ];
 
-        let table = render_infrastructure_build_table(&outputs, TerminalStyle::detected())
-            .expect("render infrastructure table");
+        let table = render_infrastructure_build_table(
+            &outputs,
+            CanisterBuildProfile::Release,
+            TerminalStyle::detected(),
+        )
+        .expect("render infrastructure table");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert!(table.contains("| CANISTER"));
         assert!(table.contains("| VERSION"));
         assert!(table.contains("| INSTANCES"));
+        assert!(table.contains("release"));
+        assert!(table.contains("CODE (B)"));
+        assert!(table.contains("DATA (B)"));
         assert!(table.contains("fleet_coordinator"));
         assert!(table.contains("root"));
         assert!(table.contains("1 / Fleet Subnet"));
@@ -1493,7 +1625,18 @@ mod tests {
         fs::create_dir_all(&artifact_root).expect("create artifact root");
         let wasm_path = artifact_root.join(format!("{role}.wasm"));
         let wasm_gz_path = artifact_root.join(format!("{role}.wasm.gz"));
-        fs::write(&wasm_path, vec![0_u8; wasm_size]).expect("write wasm");
+        let mut wasm = b"\0asm\x01\0\0\0".to_vec();
+        // One custom section with an empty name and padding; these fixtures use
+        // a two-byte section length and preserve their requested total size.
+        let payload = u16::try_from(wasm_size - 11).unwrap();
+        assert!((128..16_384).contains(&payload));
+        wasm.extend([
+            0,
+            u8::try_from(payload & 0x7f).unwrap() | 0x80,
+            u8::try_from(payload >> 7).unwrap(),
+        ]);
+        wasm.resize(wasm_size, 0);
+        fs::write(&wasm_path, wasm).expect("write wasm");
         fs::write(&wasm_gz_path, vec![0_u8; gzip_size]).expect("write gzip");
         canic_host::canister_build::CanisterArtifactBuildOutput {
             package_name: format!("canister_{role}"),

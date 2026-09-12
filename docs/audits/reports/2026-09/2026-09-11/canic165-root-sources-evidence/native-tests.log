@@ -1,0 +1,56 @@
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 27.09s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-70052057650eb192)
+
+running 6 tests
+test workflow::bootstrap::root_store::tests::expected_artifact_metadata_is_derived_without_local_staging_state ... ok
+test workflow::bootstrap::root_store::fixture::tests::completion_checks_all_retained_source_metadata ... ok
+test workflow::bootstrap::root_store::tests::live_catalog_must_equal_the_complete_ordered_release_set ... ok
+test workflow::bootstrap::root_store::tests::sha256_decoder_accepts_only_canonical_lowercase_hex ... ok
+test workflow::bootstrap::root_store::tests::runtime_projection_does_not_conflate_package_selector_with_cargo_identity ... ok
+test workflow::bootstrap::root_store::fixture::tests::release_sources_require_ordered_admitted_roles_and_exact_content ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 250 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_core-cdb29c7405defb50)
+
+running 13 tests
+test replay_policy::tests::role_command::asynchronous_root_intents_are_replay_protected_by_operation_id ... ok
+test replay_policy::tests::role_command::coordinator_long_running_intents_are_operation_replay_protected ... ok
+test replay_policy::tests::role_command::managed_admission_transitions_are_operation_replay_protected ... ok
+test replay_policy::tests::role_command::coordinator_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::managed_auth_effects_own_exact_replay_contracts ... ok
+test replay_policy::tests::role_command::managed_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::managed_observability_does_not_acquire_mutation_replay_policy ... ok
+test replay_policy::tests::role_command::query_like_root_commands_do_not_acquire_mutation_replay_policy ... ok
+test replay_policy::tests::role_command::root_admission_transitions_are_operation_replay_protected ... ok
+test replay_policy::tests::role_command::root_capability_variant_delegates_to_its_nested_command_manifest ... ok
+test replay_policy::tests::role_command::store_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::root_command_variants_have_one_exact_replay_policy_each ... ok
+test replay_policy::tests::role_command::store_effect_variants_preserve_cost_and_convergence ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 1264 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_host-41b2c29968c050d9)
+
+running 17 tests
+test release_set::application::tests::compiler_freezes_one_canonical_qualified_topology_union ... ok
+test release_set::application::tests::projection_rejects_cross_build_topology_and_manifest_tampering ... ok
+test release_set::application::tests::projection_stores_a_component_role_once_when_another_spec_admits_it_as_a_descendant ... ok
+test release_set::application::tests::projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence ... ok
+test release_set::application::tests::separate_roots_receive_only_their_admitted_spec_closure ... ok
+test release_set::application::tests::store_limit_counts_exact_artifact_bytes_once_without_erasing_authorization ... ok
+test release_set::application::tests::compiler_rejects_outputs_outside_their_qualified_build_targets ... ok
+test release_set::application::tests::compiler_rejects_incomplete_duplicate_or_orphan_role_sets ... ok
+test release_set::application::tests::fixture_projection_binds_content_and_limits_each_roots_admitted_roles ... ok
+test release_set::application::persistence::tests::publication_rejects_symlinked_artifact_files ... ok
+test release_set::application::persistence::tests::publication_rejects_path_drift_and_artifacts_outside_the_project ... ok
+test release_set::application::persistence::tests::publication_rejects_wasm_without_the_exact_embedded_release_identity ... ok
+test release_set::application::persistence::tests::publication_rejects_incomplete_duplicate_and_cross_build_outputs ... ok
+test release_set::application::persistence::tests::qualified_build_persists_one_exact_canonical_union ... ok
+test fleet_ensure::ops::current_protocol::tests::fresh_fleet_store_bootstrap_is_deterministic ... ok
+test release_set::application::persistence::tests::loader_rejects_noncanonical_identity_or_topology_drift ... ok
+test release_set::application::persistence::tests::exact_identity_rejects_conflicting_or_late_union_publication ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 562 filtered out; finished in 0.06s
+

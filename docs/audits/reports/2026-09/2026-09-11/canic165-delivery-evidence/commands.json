@@ -1,0 +1,535 @@
+{
+  "date": "2026-09-11",
+  "git_head": "c9c91f19c25ea710884b621146d66950391ddc0d",
+  "source_snapshot": "pending-real-fetch-reinstall-source.sha256",
+  "source_input_count": 1639,
+  "source_and_inventory_unchanged_during_final_runtime_checks": true,
+  "fixture_generation_enabled": false,
+  "complete_batch_ready_to_push": false,
+  "broad_gate_run": false,
+  "version_or_publication_action": false,
+  "runs": [
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --lib -- ops::fixture_importer storage::stable::async_job_recovery ops::storage::async_job_recovery",
+      "result": "pass",
+      "tests": 17,
+      "test_seconds": 0.24,
+      "runner_seconds": null,
+      "evidence": "native.log",
+      "source_snapshot": "source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "result": "pass",
+      "tests": 5,
+      "test_seconds": 130.45,
+      "runner_seconds": 202,
+      "evidence": "consumer.log",
+      "source_snapshot": "source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "result": "pass",
+      "tests": 1,
+      "test_seconds": 467.42,
+      "runner_seconds": 497,
+      "evidence": "bootstrap.log",
+      "source_snapshot": "source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-core -p canic_icydb_lifecycle_probe -p canic-tests --lib --test icydb_lifecycle_composition -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-core -p canic-testing-internal -p canister_user_shard --features canic-testing-internal/governed-pocketic-tests --tests -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib -- ops::fixture_grant ops::canister_pool",
+      "result": "pass",
+      "tests": 16,
+      "test_seconds": 0.37,
+      "runner_seconds": null,
+      "evidence": "native.log",
+      "source_snapshot": "revocation-source.sha256",
+      "note": "Run preceded final baseline-only assertion cleanup; control-plane production and native test inputs are unchanged."
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-control-plane -p canic-testing-internal --features canic-testing-internal/governed-pocketic-tests --tests -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "revocation-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "result": "pass",
+      "tests": 1,
+      "test_seconds": 52.34,
+      "runner_seconds": 67,
+      "evidence": "bootstrap.log",
+      "source_snapshot": "revocation-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib -- ops::fixture_grant ops::canister_pool ops::component_registry",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "replacement-source.sha256",
+      "tests": 39,
+      "test_seconds": 0.44,
+      "runner_seconds": null
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --lib -- ops::storage::fleet_activation::fixture ops::runtime::metrics::management_call",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "replacement-source.sha256",
+      "tests": 4,
+      "test_seconds": 0.0,
+      "runner_seconds": null
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-core -p canic-control-plane -p canic-testing-internal -p canister_user_hub --features canic-testing-internal/governed-pocketic-tests --tests -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "replacement-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "replacement-source.sha256",
+      "tests": 1,
+      "test_seconds": 436.53,
+      "runner_seconds": 498
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic_icydb_lifecycle_probe -p canic-testing-internal -p canic-tests --lib --test icydb_lifecycle_composition -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "pending-reinstall-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "result": "pass",
+      "evidence": "consumer.log",
+      "source_snapshot": "pending-reinstall-source.sha256",
+      "tests": 5,
+      "test_seconds": 109.13,
+      "runner_seconds": 155
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --lib -- async_job_recovery workflow::runtime::async_job",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "durable-backoff-native-source.sha256",
+      "tests": 13,
+      "test_seconds": 0.27
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-core -p canic-control-plane --lib --tests -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "durable-backoff-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "result": "pass",
+      "evidence": "consumer.log",
+      "source_snapshot": "durable-backoff-source.sha256",
+      "tests": 5,
+      "test_seconds": 126.15,
+      "runner_seconds": 200
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --test stable_memory_abi_guard --test timer_inventory_guard",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "durable-backoff-source.sha256",
+      "tests": 18
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib -- ops::fixture_store ops::storage::template::gc workflow::runtime::template::publication::lifecycle::gc empty_root_final_inventory_is_exact_durable_and_response_idempotent",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "retirement-source.sha256",
+      "tests": 20,
+      "test_seconds": 0.34
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-control-plane --lib --tests -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "retirement-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-tests --test icydb_lifecycle_composition -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "retirement-store-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "result": "pass",
+      "evidence": "consumer.log",
+      "source_snapshot": "retirement-store-source.sha256",
+      "tests": 5,
+      "test_seconds": 76.18,
+      "runner_seconds": 137
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "retirement-source.sha256",
+      "tests": 1,
+      "test_seconds": 122.35,
+      "runner_seconds": 158
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --test timer_inventory_guard",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "retirement-source.sha256",
+      "tests": 15,
+      "test_seconds": 1.0
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "result": "failed",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "grouped-retirement-discovery-source.sha256",
+      "note": "Existing grouped service references correctly reject standalone Root removal. Final regression requires STATE_CONFLICT and retained sources.",
+      "tests": 0,
+      "test_seconds": 296.23,
+      "runner_seconds": 312
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles",
+      "result": "failed",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "subtree-retirement-stall-source.sha256",
+      "note": "Driver finalized at zero descendants before the last subtree journal completed. Final driver follows durable DescendantsEmpty.",
+      "tests": 0,
+      "test_seconds": 133.03,
+      "runner_seconds": 156
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles",
+      "result": "failed",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "retirement-accounting-stall-source.sha256",
+      "note": "Workload retirement completed; final inventory incorrectly counted child installation precharge after settlement.",
+      "tests": 0,
+      "test_seconds": 250.12,
+      "runner_seconds": 282
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles",
+      "result": "failed",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "retirement-inventory-trace-source.sha256",
+      "note": "Temporary diagnostics confirm 13603 calculated bytes versus 12660 settled bytes. All temporary production logging removed before final checks.",
+      "tests": 0,
+      "test_seconds": 247.55,
+      "runner_seconds": 294
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib -- ops::component_registry",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "combined-retirement-source.sha256",
+      "tests": 21,
+      "test_seconds": 0.38
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-control-plane -p canic-testing-internal --features canic-testing-internal/governed-pocketic-tests --lib --tests -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "combined-retirement-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "combined-retirement-source.sha256",
+      "tests": 1,
+      "test_seconds": 192.55,
+      "runner_seconds": 237
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "combined-retirement-source.sha256",
+      "tests": 1,
+      "test_seconds": 53.08,
+      "runner_seconds": 55
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "combined-retirement-source.sha256",
+      "tests": 1,
+      "test_seconds": 25.2,
+      "runner_seconds": 27
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "result": "failed",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "pending-funding-rejection-source.sha256",
+      "note": "Registered initial Hub funding incorrectly rejected with AUTHORITY_UNAUTHORIZED while its fixture kept the Component Prepared.",
+      "tests": 0,
+      "test_seconds": 49.4,
+      "runner_seconds": 66
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-control-plane -p canic-testing-internal --features canic-testing-internal/governed-pocketic-tests --lib --tests -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "pending-funding-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib -- workflow::component_rpc",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "pending-funding-source.sha256",
+      "tests": 2,
+      "test_seconds": 0.0
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "pending-funding-source.sha256",
+      "tests": 1,
+      "test_seconds": 85.57,
+      "runner_seconds": 100
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-testing-internal --features governed-pocketic-tests --lib --tests -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "automatic-funding-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::pending_fixture_automatically_funds_within_configured_allowance",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "automatic-funding-source.sha256",
+      "tests": 1,
+      "test_seconds": 42.04,
+      "runner_seconds": 59
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "automatic-funding-source.sha256",
+      "tests": 1,
+      "test_seconds": 55.25,
+      "runner_seconds": 57
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host --lib fixture_publication_",
+      "result": "pass",
+      "tests": 5,
+      "test_seconds": 0.18,
+      "evidence": "native.log",
+      "source_snapshot": "publication-attempts-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host --lib fleet_ensure::ops::plan_content::tests",
+      "result": "pass",
+      "tests": 4,
+      "test_seconds": 0.03,
+      "evidence": "native.log",
+      "source_snapshot": "publication-attempts-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host --lib pool_maintenance_attempt_bound_survives_lost_response_and_restart",
+      "result": "pass",
+      "tests": 1,
+      "test_seconds": 0.21,
+      "evidence": "native.log",
+      "source_snapshot": "publication-attempts-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host --lib interruption_at_every_effect_converges_once_and_second_run_has_zero_effects",
+      "result": "pass",
+      "tests": 1,
+      "test_seconds": 0.36,
+      "evidence": "native.log",
+      "source_snapshot": "publication-attempts-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host --lib fleet_ensure::ops::current_protocol::",
+      "result": "pass",
+      "tests": 13,
+      "test_seconds": 0.17,
+      "evidence": "native.log",
+      "source_snapshot": "publication-attempts-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host --lib fixture_upload_report_retains_identity_and_externalizes_payload",
+      "result": "pass",
+      "tests": 1,
+      "test_seconds": 0.0,
+      "evidence": "native.log",
+      "source_snapshot": "publication-attempts-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-host -p canic-testing-internal --features canic-testing-internal/governed-pocketic-tests --lib --tests -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "publication-attempts-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::current_store_bootstraps_application_catalog_and_replays_zero_effects",
+      "result": "pass",
+      "tests": 1,
+      "test_seconds": 48.63,
+      "runner_seconds": 93,
+      "evidence": "bootstrap.log",
+      "source_snapshot": "publication-attempts-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-core -p canic_icydb_lifecycle_probe -p canic-testing-internal -p canic-tests --lib --test icydb_lifecycle_composition -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "pending-real-fetch-reinstall-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "result": "pass",
+      "tests": 6,
+      "test_seconds": 131.54,
+      "runner_seconds": 163,
+      "evidence": "consumer.log",
+      "source_snapshot": "pending-real-fetch-reinstall-source.sha256"
+    }
+  ],
+  "sha256": {
+    "bootstrap.log": "462b518a1f91d67753b0d6055ca50057be0af9329b5c28d9374f26fdd34f66f3",
+    "clippy.log": "242c87144161f704c1316819b61418da926ad771ced70f6b1371c541003e2edc",
+    "consumer.log": "1fcda2484e4ca845efb0ff5fed894046432bae12213056701df03a1b2673c11c",
+    "native.log": "62a37bfccec4a6b6bff17ae658a187c00816136a435f1f2497a42f6e3951520f",
+    "source-snapshots.tar.gz": "8666d9f16a3064b456a3bf583b417b26bf1e73ee7f52fc72275e5e002a5e9fd1"
+  },
+  "revocation_interrupted_at_store_effect_qualified": false,
+  "revocation_removal_admission_outage_qualified": true,
+  "source_archive": "source-snapshots.tar.gz",
+  "source_snapshot_sha256": {
+    "source.sha256": "a215942920a55700b56d4891eb57ca4bae7b28e067ad8277db4011875e57308f",
+    "revocation-source.sha256": "cc73f4d4883eea1b9d5b2aba59427406b1dfb27ce3d2c204d07ab88a4cac434f",
+    "replacement-source.sha256": "4ee198cf7cd96030947f1bab1d19e163f953261b06fe4e17726f50de1c397463",
+    "pending-reinstall-source.sha256": "17218a56670eb34b1f8a666fd496798ca39b42c697e13643f8d563faecf085a7",
+    "durable-backoff-native-source.sha256": "549bb81ae171bb10f22511dd1310eab5e1024e221fdf89b7c8e689ffd11353b2",
+    "durable-backoff-source.sha256": "78c72f93089519a321082957f871f7fcd52f5098886a33b0a0f3b00e19ff3ee7",
+    "retirement-store-source.sha256": "29be87ab12bc5045bd513a413af4a38bdc904fc2208f45cf7cd13b3205fcc227",
+    "retirement-source.sha256": "a30605814630e9aed8445c68c7f05700572194dff9ffeb2385e800f61eefa3f1",
+    "grouped-retirement-discovery-source.sha256": "593d60361c913172364d466a03fbb85da96f5414a25cd3108dc225ec2ab9f46b",
+    "subtree-retirement-stall-source.sha256": "d6a48d11e4668024134be3b45419bd0e4ca25674cd245494d7de8cf2c19367c7",
+    "retirement-accounting-stall-source.sha256": "7b958e80992f18c4e4e32fead1fc586692c148c308307b0c7c7a20a6429213b1",
+    "retirement-inventory-trace-source.sha256": "e3d741a87f5be4f2a4d8302525c57a2580814e34f1eb74ca07c317275d1953a3",
+    "combined-retirement-source.sha256": "7a829390b8fca8087b89e8cee660a20e33e2cc346710fd42773aed051337fbdd",
+    "pending-funding-rejection-source.sha256": "547e64f431f8ee8d24d417f36d5ec31a11aa23d587dbd315aea411e05fc4c246",
+    "pending-funding-source.sha256": "f613a2ceebfef214c8854089eb5ab4a77c1370a1c253c9af712fe0856a177dc0",
+    "automatic-funding-source.sha256": "831f22e67d7d2d52d58eb1ae9b097be2a8740c9cbfe1c8a278bb331bbc8adf32",
+    "publication-attempts-source.sha256": "ec4c747aa40514ce8944eeb4070cc9899cd1d5bb0405acbb6a4dd3663955a257",
+    "pending-real-fetch-reinstall-source.sha256": "2101a577f49acc59e50f60c24a8d444eb990b775a5833f709eca33b117a10361"
+  },
+  "replacement_grant_and_stopped_target_reuse_qualified": true,
+  "updated_date": "2026-09-12",
+  "recovery_qualification": {
+    "partial_automatic_import_reinstall_with_actual_store": true,
+    "store_grant_receipts_discarded_at_test_caller": true,
+    "root_interrupted_while_awaiting_store_grant_reply": false,
+    "actual_store_fetch_reply_held_across_reinstall": false,
+    "actual_store_fetch_pending_at_reinstall_submission": true
+  },
+  "fixture_retry_backoff_restored_in_native_record_qualified": true,
+  "maximum_async_job_recovery_record_bytes": 810,
+  "retirement_qualification": {
+    "explicit_preparation_replay_retains_fixture_bytes": true,
+    "actual_store_restart_during_nonempty_clearing": true,
+    "bounded_fixture_entry_cleanup_and_exact_accounting": true,
+    "terminal_and_conflicting_operation_replay": true,
+    "existing_root_retirement_without_fixtures": true,
+    "root_retirement_with_fixture_imports": true,
+    "reviewed_fixture_funding": false,
+    "fixture_retirement_uses_direct_component_lifecycle": true,
+    "grouped_standalone_root_removal_rejected_with_sources_retained": true,
+    "grouped_root_removal_enabled": false,
+    "last_descendant_journal_completed_before_final_inventory": true,
+    "terminal_child_accounting_uses_settled_record_bytes": true
+  },
+  "pending_component_funding_qualification": {
+    "prepared_root_registered_component_funding": true,
+    "unregistered_callers_and_prepared_recycling_rejected": true,
+    "configured_request_cooldown_and_total_limits_preserved": true,
+    "exact_reply_replay_no_second_transfer": true,
+    "recipient_stopped_during_exact_balance_assertions": true,
+    "two_grant_fixture_with_smaller_final_grant": true,
+    "balance_assertions_per_effect_at_fixed_time": true,
+    "pending_fixture_receipt_and_placement_fence_preserved": true,
+    "automatic_target_funding_timer_qualified": true,
+    "reviewed_generated_fixture_funding_qualified": false
+  },
+  "automatic_fixture_funding_qualification": {
+    "recipient_running_during_automatic_grants": true,
+    "successful_grants_requested_only_by_actual_target_timer": true,
+    "configured_request_and_total_limits_preserved": true,
+    "smaller_final_grant": true,
+    "typed_exhaustion_independently_observed": true,
+    "automatic_requests_stop_after_exhaustion": true,
+    "pending_receipt_and_placement_fence_preserved": true,
+    "same_import_completes_after_application_hold_released": true,
+    "selected_targets_and_sources_retained": true,
+    "production_funding_defaults_changed": false,
+    "reviewed_generated_fixture_funding_qualified": false
+  },
+  "publication_retry_qualification": {
+    "configured_attempt_limit_bound_to_exact_action": true,
+    "all_permitted_update_and_retry_observation_costs_reserved": true,
+    "attempt_persisted_before_external_call": true,
+    "failed_and_lost_calls_consume_attempts_across_restart": true,
+    "exhaustion_prevents_another_publication_call": true,
+    "last_attempt_lost_reply_reconciles_without_another_call": true,
+    "impossible_journal_counter_rejected": true,
+    "zero_attempts_and_cost_overflow_rejected": true,
+    "real_root_store_publication_and_replay_regression": true,
+    "journal_and_action_current_schema_hard_cut": true,
+    "funding_defaults_changed": false,
+    "complete_generated_fleet_apply_qualified": false
+  },
+  "pending_real_store_fetch_reinstall_qualification": {
+    "canonical_store_and_cross_subnet_consumer": true,
+    "existing_heap_lease_observed_before_reinstall_submission": true,
+    "lease_observer_read_only_and_internal_fixture_feature_only": true,
+    "replacement_empty_after_additional_network_progress": true,
+    "replacement_pending_until_exact_new_grant_and_admission": true,
+    "replacement_receipt_binds_new_installation": true,
+    "old_grant_read_rejected": true,
+    "store_reply_deterministically_held_until_after_reinstall": false,
+    "root_grant_await_interruption_qualified": false,
+    "complete_generated_fleet_apply_qualified": false
+  }
+}

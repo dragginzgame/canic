@@ -259,6 +259,8 @@ pub(in crate::fleet_ensure) fn preparation(
     plan.root_reinstall_bindings.clear();
     plan.recovery_review = None;
     plan.reinstall = Some(Box::new(FleetReinstallRecord {
+        target_artifacts_sha256: None,
+        source: None,
         operation_id: plan.operation_id.clone(),
         source_operation_id: input.source.operation_id.clone(),
         authorities,

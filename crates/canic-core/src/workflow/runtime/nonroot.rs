@@ -46,6 +46,7 @@ pub fn init_nonroot_canister(
     embedded_release_build_id: Option<&str>,
 ) -> Result<(), InternalError> {
     let CanisterInitPayload {
+        fixture,
         install_id,
         release_build_id,
         authority,
@@ -66,11 +67,21 @@ pub fn init_nonroot_canister(
             ManagedCanisterBinding::ComponentChild(binding.clone())
         }
     };
+    if let Some(assignment) = &fixture {
+        let target = match &assignment.grant.binding.target {
+            ManagedCanisterBinding::Component(binding) => binding.canister_id,
+            ManagedCanisterBinding::ComponentChild(binding) => binding.canister_id,
+        };
+        if target != IcOps::canister_self() {
+            return Err(InternalError::conflict());
+        }
+    }
     ConfigOps::validate_protected_component_deployment(
         component_deployment.as_ref(),
         owning_component(&managed_binding),
     )?;
     let component_runtime = PreparedComponentRuntime {
+        fixture,
         binding: managed_binding,
         deployment: *component_deployment,
     };

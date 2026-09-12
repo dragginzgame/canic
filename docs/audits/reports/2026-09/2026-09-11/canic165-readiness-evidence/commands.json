@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "scope": "targeted CANIC-165 receipt-gated readiness qualification",
+  "git_head": "c9c91f19c25ea710884b621146d66950391ddc0d",
+  "checks": [
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core -p canic-control-plane --lib -- domain::policy::pure::fleet_activation ops::fixture_importer ops::storage::fleet_activation::fixture::tests api::runtime workflow::component_registry::tests::membership_requires_the_exact_installed_fixture_receipt",
+      "exit_code": 0,
+      "passed": 27,
+      "log": "native-tests.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-core -p canic-control-plane -p canic_icydb_lifecycle_probe -p canic-tests -p canister_user_hub -p canister_user_shard --lib --test icydb_lifecycle_composition -- -D warnings",
+      "exit_code": 0,
+      "log": "clippy.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-testing-internal -p canic-control-plane --features canic-testing-internal/governed-pocketic-tests --tests -- -D warnings",
+      "exit_code": 0,
+      "log": "clippy.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-core -p canic-control-plane -p canic-testing-internal --features canic-testing-internal/governed-pocketic-tests --tests -- -D warnings",
+      "exit_code": 0,
+      "log": "clippy.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "exit_code": 0,
+      "passed": 5,
+      "case_seconds": 124.68,
+      "runner_seconds": 175,
+      "log": "consumer.log",
+      "source_snapshot": "consumer-source.sha256"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "exit_code": 0,
+      "passed": 1,
+      "case_seconds": 452.11,
+      "runner_seconds": 503,
+      "log": "bootstrap.log",
+      "source_snapshot": "source.sha256"
+    }
+  ],
+  "runtime_source_inputs": 1633,
+  "source_unchanged_during_each_runtime_run": true,
+  "consumer_to_root_source_changes": [
+    "crates/canic-control-plane/src/workflow/component_registry/mod.rs",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs"
+  ],
+  "lineage": "The consumer proves the final core, application and Store/IcyDB changes. The subsequent Root proof includes final independent plan-selected receipt authority and bootstrap/account replay assertions. Final native and Clippy checks use the final Root snapshot.",
+  "fixture_generation_enabled": false,
+  "ready_to_push": false,
+  "broad_gate_run": false,
+  "version_or_publication_performed": false,
+  "evidence_sha256": {
+    "bootstrap.log": "ab00a4d85daf35aac12e191ef808646a4032015a13d19a7cc264f39ec638d53d",
+    "clippy.log": "b20ed877a897a0a98a4632a287279778a74f6016dcbab28997b0830389ea7013",
+    "consumer-source.sha256": "8a4596c505c0a2fc99a7edd754f58f33434d1fcc7eee3a04881eb4dbf0454319",
+    "consumer.log": "d6a9fc609f051b90d70d70aa74afec71e8d168da7a83854c13cb7047f7a0c2b1",
+    "native-tests.log": "996eb42419c2e7286adfe1d433736668bf6b8156f196937af53b667c419991d7",
+    "source.sha256": "6afb66947af6daed2d785510ca2f9f22c22ed082d08efe7cba1b6333f3a25006"
+  }
+}

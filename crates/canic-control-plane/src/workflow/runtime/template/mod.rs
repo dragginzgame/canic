@@ -1,7 +1,7 @@
 mod client;
 pub mod publication;
 
-pub(in crate::workflow::runtime::template) use client::WasmStoreInternalClient;
+pub(in crate::workflow) use client::WasmStoreInternalClient;
 pub use publication::WasmStorePublicationWorkflow;
 
 use crate::{

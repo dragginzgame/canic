@@ -60,13 +60,34 @@ impl WasmStoreGcOps {
                 canic_core::diagnostics::codes::STATE_CONFLICT,
             ));
         }
-        if current.operation_id.is_none() {
-            WasmStoreGcStateStore::set(WasmStoreGcStateRecord {
-                operation_id: Some(operation_id),
-                ..current
-            });
+        // Later-phase replay acknowledges the same intent without moving backwards.
+        if current.mode != WasmStoreGcMode::Normal {
+            return if current.operation_id == Some(operation_id) {
+                Ok(())
+            } else {
+                Err(Error::from_registered(
+                    canic_core::diagnostics::codes::STATE_CONFLICT,
+                ))
+            };
         }
-        Self::transition_to(WasmStoreGcMode::Prepared, changed_at)
+        let mut next = transition_record(&current, WasmStoreGcMode::Prepared, changed_at)?;
+        next.operation_id = Some(operation_id);
+        WasmStoreGcStateStore::set(next);
+        Ok(())
+    }
+
+    /// Admit collection only after this exact operation has prepared the Store.
+    pub fn require_collection(operation_id: [u8; 32]) -> Result<bool, Error> {
+        let current = Self::status();
+        if operation_id == [0; 32]
+            || current.operation_id != Some(operation_id)
+            || current.mode == WasmStoreGcMode::Normal
+        {
+            return Err(Error::from_registered(
+                canic_core::diagnostics::codes::STATE_CONFLICT,
+            ));
+        }
+        Ok(current.mode != WasmStoreGcMode::Complete)
     }
 
     // Mark this local wasm store as actively executing store-local GC work.
@@ -293,6 +314,42 @@ mod tests {
             canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
 
+        WasmStoreGcStateStore::clear_for_test();
+    }
+
+    #[test]
+    fn exact_preparation_replay_preserves_every_later_phase_and_collection_requires_preparation() {
+        WasmStoreGcStateStore::clear_for_test();
+        assert!(WasmStoreGcOps::require_collection([7; 32]).is_err());
+        WasmStoreGcOps::prepare([7; 32], 10).unwrap();
+        for mode in [
+            WasmStoreGcMode::Prepared,
+            WasmStoreGcMode::InProgress,
+            WasmStoreGcMode::Clearing,
+            WasmStoreGcMode::Complete,
+        ] {
+            match mode {
+                WasmStoreGcMode::InProgress => WasmStoreGcOps::begin(20).unwrap(),
+                WasmStoreGcMode::Clearing => WasmStoreGcOps::begin_clearing(30).unwrap(),
+                WasmStoreGcMode::Complete => WasmStoreGcOps::complete(40).unwrap(),
+                _ => {}
+            }
+            let retained = WasmStoreGcOps::status();
+            WasmStoreGcOps::prepare([7; 32], 99).unwrap();
+            assert_eq!(WasmStoreGcOps::status(), retained);
+            assert_eq!(
+                WasmStoreGcOps::require_collection([7; 32]).unwrap(),
+                mode != WasmStoreGcMode::Complete
+            );
+            assert!(WasmStoreGcOps::require_collection([8; 32]).is_err());
+            assert!(WasmStoreGcOps::prepare([8; 32], 99).is_err());
+            assert_eq!(WasmStoreGcOps::status(), retained);
+        }
+        let mut ownerless = WasmStoreGcOps::status();
+        ownerless.operation_id = None;
+        WasmStoreGcStateStore::set(ownerless.clone());
+        assert!(WasmStoreGcOps::prepare([7; 32], 99).is_err());
+        assert_eq!(WasmStoreGcOps::status(), ownerless);
         WasmStoreGcStateStore::clear_for_test();
     }
 }

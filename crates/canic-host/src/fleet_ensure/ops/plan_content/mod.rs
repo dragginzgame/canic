@@ -4,6 +4,7 @@
 //! Does not own: Store policy, action ordering, or remote publication.
 //! Boundary: durable plan JSON retains chunk hashes, never inline chunk bytes.
 
+mod fixture;
 #[cfg(test)]
 mod tests;
 
@@ -22,6 +23,7 @@ use std::{collections::BTreeMap, io};
 type ChunkSetKey = (String, String);
 
 pub(super) fn retain(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), EnsureStateError> {
+    fixture::retain(paths, plan)?;
     let authorities = typed_chunk_authorities(plan)?;
     for action in &plan.protocol_actions {
         let EnsureAction::FleetProtocol { action, .. } = action else {
@@ -45,7 +47,7 @@ pub(super) fn retain(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), 
 
 pub(super) fn remove_inline_bytes(projection: &mut Value) -> Result<(), EnsureStateError> {
     for action in protocol_actions_mut(projection)? {
-        if fleet_protocol_action_kind(action)? != Some("publish_store_chunk") {
+        if !is_publication(action)? {
             continue;
         }
         let request = request_mut(action)?;
@@ -66,9 +68,7 @@ pub(super) fn remove_inline_bytes(projection: &mut Value) -> Result<(), EnsureSt
 
 pub(super) fn contains_inline_bytes(projection: &Value) -> Result<bool, EnsureStateError> {
     for action in protocol_actions(projection)? {
-        if fleet_protocol_action_kind(action)? == Some("publish_store_chunk")
-            && request(action)?.contains_key("bytes")
-        {
+        if is_publication(action)? && request(action)?.contains_key("bytes") {
             return Ok(true);
         }
     }
@@ -76,6 +76,7 @@ pub(super) fn contains_inline_bytes(projection: &Value) -> Result<bool, EnsureSt
 }
 
 pub(super) fn hydrate(paths: &EnsurePaths, projection: &mut Value) -> Result<(), EnsureStateError> {
+    fixture::hydrate(paths, projection)?;
     let authorities = projected_chunk_authorities(projection)?;
     for action in protocol_actions_mut(projection)? {
         if fleet_protocol_action_kind(action)? != Some("publish_store_chunk") {
@@ -87,21 +88,7 @@ pub(super) fn hydrate(paths: &EnsurePaths, projection: &mut Value) -> Result<(),
         let chunk_index = u32::try_from(unsigned_field(request, "chunk_index")?)
             .map_err(|_| authority("published chunk index exceeds u32"))?;
         let key = chunk_set_key(&template_id, &version);
-        let (bytes, expected, expected_size) = if let Some(inline) = request.get("bytes") {
-            if request.contains_key("bytes_sha256") || request.contains_key("bytes_size") {
-                return authority_error("published chunk mixes inline and referenced content");
-            }
-            let bytes = serde_json::from_value::<Vec<u8>>(inline.clone())
-                .map_err(|_| authority("published inline chunk bytes are invalid"))?;
-            let expected = wasm_hash(&bytes);
-            let expected_size = bytes.len() as u64;
-            (bytes, expected, expected_size)
-        } else {
-            let expected = decode_chunk_hash(request)?;
-            let expected_size = unsigned_field(request, "bytes_size")?;
-            let bytes = read_object(paths, &expected, expected_size)?;
-            (bytes, expected, expected_size)
-        };
+        let (bytes, expected, expected_size) = load_chunk_bytes(paths, request)?;
         if let Some(prepared) = prepared_chunk(&authorities, &key, chunk_index)?
             && prepared != expected
         {
@@ -117,6 +104,34 @@ pub(super) fn hydrate(paths: &EnsurePaths, projection: &mut Value) -> Result<(),
         );
     }
     Ok(())
+}
+
+fn is_publication(action: &Value) -> Result<bool, EnsureStateError> {
+    Ok(matches!(
+        fleet_protocol_action_kind(action)?,
+        Some("publish_store_chunk" | "publish_store_fixture_chunk")
+    ))
+}
+
+fn load_chunk_bytes(
+    paths: &EnsurePaths,
+    request: &Map<String, Value>,
+) -> Result<(Vec<u8>, Vec<u8>, u64), EnsureStateError> {
+    if let Some(inline) = request.get("bytes") {
+        if request.contains_key("bytes_sha256") || request.contains_key("bytes_size") {
+            return authority_error("published chunk mixes inline and referenced content");
+        }
+        let bytes = serde_json::from_value::<Vec<u8>>(inline.clone())
+            .map_err(|_| authority("published inline chunk bytes are invalid"))?;
+        let expected = wasm_hash(&bytes);
+        let expected_size = bytes.len() as u64;
+        Ok((bytes, expected, expected_size))
+    } else {
+        let expected = decode_chunk_hash(request)?;
+        let expected_size = unsigned_field(request, "bytes_size")?;
+        let bytes = read_object(paths, &expected, expected_size)?;
+        Ok((bytes, expected, expected_size))
+    }
 }
 
 fn typed_chunk_authorities(

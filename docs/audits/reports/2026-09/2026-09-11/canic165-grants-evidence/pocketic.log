@@ -1,0 +1,62 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:33763/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 23s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.32s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.42 MiB (8831607 B)  headroom=1.58 MiB (1654153 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.63s candid=1.48s binaryen=0.00s gzip/validation=0.52s total=3.66s
+[WASM]       DONE   Fleet Coordinator artifact                           1m 42s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       DONE   canister_index_child                                 35.61s
+[WASM]       DONE   canister_index_hub                                    6.11s
+[WASM]       DONE   canister_scale_hub                                    5.67s
+[WASM]       DONE   canister_scale                                        5.41s
+[WASM]       DONE   canister_user_hub                                    35.55s
+[WASM]       DONE   canister_user_shard                                  37.50s
+[WASM]       DONE   batch: 6 built, 0 cached, 0 failed                   2m 05s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             37.52s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 51.01s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 440.06s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=446196 kB high_water=466996 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 524s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  524s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 525s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.FEkshI

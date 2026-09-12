@@ -14,6 +14,8 @@ pub mod component_deployment;
 pub mod component_runtime;
 pub mod config;
 pub mod error;
+pub mod fixture_content;
+pub mod fixture_provisioning;
 pub mod fleet_activation;
 pub mod fleet_admission_projection;
 pub mod ic;

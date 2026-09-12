@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "scope": "targeted automatic registered consumer and composed lifecycle qualification",
+  "checks": [
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --lib -- ops::fixture_importer async_job_recovery workflow::runtime::timer",
+      "exit_code": 0,
+      "passed": 20,
+      "log": "native-tests.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-core -p canic_icydb_lifecycle_probe -p canic-tests --lib --test icydb_lifecycle_composition --test timer_inventory_guard --test stable_memory_abi_guard -- -D warnings",
+      "exit_code": 0,
+      "log": "clippy.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "exit_code": 0,
+      "passed": 5,
+      "case_seconds": 121.29,
+      "runner_seconds": 164,
+      "log": "pocketic.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked --no-fail-fast -p canic-core --test timer_inventory_guard --test stable_memory_abi_guard",
+      "exit_code": 0,
+      "passed": 18,
+      "log": "guards.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-core --test timer_inventory_guard --test stable_memory_abi_guard -- -D warnings",
+      "exit_code": 0,
+      "log": "clippy.log"
+    }
+  ],
+  "runtime_source_snapshot": "source.sha256",
+  "runtime_source_inputs": 1631,
+  "runtime_source_unchanged": true,
+  "native_lineage": "Native checks qualify unchanged lease/failure storage and progress invariants. Subsequent watchdog dispatch changes are covered by final scoped Clippy and real PocketIC.",
+  "post_runtime_guard_changes": {
+    "crates/canic-core/tests/timer_inventory_guard.rs": "3b7a38febc7f8201308213c28aab4173d3f435965e1434ed45eea8b489c7eea4"
+  },
+  "ready_to_push": false
+}

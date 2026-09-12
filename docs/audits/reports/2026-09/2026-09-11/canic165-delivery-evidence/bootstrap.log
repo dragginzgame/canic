@@ -1,0 +1,1256 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:33555/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 28.13s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.54 MiB (8955708 B)  headroom=1.46 MiB (1530052 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.68s candid=1.52s binaryen=0.00s gzip/validation=0.53s total=3.77s
+[WASM]       DONE   Fleet Coordinator artifact                           1m 50s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       DONE   canister_index_child                                 37.37s
+[WASM]       DONE   canister_index_hub                                    6.10s
+[WASM]       DONE   canister_scale_hub                                    6.06s
+[WASM]       DONE   canister_scale                                        5.80s
+[WASM]       DONE   canister_user_hub                                    38.71s
+[WASM]       DONE   canister_user_shard                                  37.23s
+[WASM]       DONE   batch: 6 built, 0 cached, 0 failed                   2m 11s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             37.25s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 53.19s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 467.42s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=477488 kB high_water=500172 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 496s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  496s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 497s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.E7cfnS
+
+--- Revocation before recycling checkpoint ---
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:43563/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 13.10s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.57 MiB (8988987 B)  headroom=1.43 MiB (1496773 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.55s candid=1.41s binaryen=0.00s gzip/validation=0.53s total=3.54s
+[WASM]       CACHE  Fleet Coordinator artifact                            1.05s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       CACHE  canister_index_child                                  0.50s
+[WASM]       CACHE  canister_index_hub                                    0.01s
+[WASM]       CACHE  canister_scale_hub                                    0.01s
+[WASM]       CACHE  canister_scale                                        0.01s
+[WASM]       CACHE  canister_user_hub                                     0.01s
+[WASM]       CACHE  canister_user_shard                                   0.01s
+[WASM]       DONE   batch: 0 built, 6 cached, 0 failed                    0.54s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              1.04s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.45s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 52.34s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=453812 kB high_water=476604 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 66s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  66s      PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 67s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.galsmw
+
+=== Retained replacement grant and stopped-target startup checkpoint ===
+ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:37661/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 00s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-98f4db7d885c1122)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.58 MiB (9000778 B)  headroom=1.42 MiB (1484982 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.62s candid=1.50s binaryen=0.00s gzip/validation=0.54s total=3.70s
+[WASM]       DONE   Fleet Coordinator artifact                           1m 40s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       DONE   canister_index_child                                 34.98s
+[WASM]       DONE   canister_index_hub                                    5.86s
+[WASM]       DONE   canister_scale_hub                                    5.82s
+[WASM]       DONE   canister_scale                                        5.55s
+[WASM]       DONE   canister_user_hub                                    35.89s
+[WASM]       DONE   canister_user_shard                                  34.96s
+[WASM]       DONE   batch: 6 built, 0 cached, 0 failed                   2m 03s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             35.31s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 49.56s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 436.53s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=484980 kB high_water=531564 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 497s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  497s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 498s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.nuVO6B
+
+
+CANIC-165 explicit Store retirement - 2026-09-12
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:36531/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 34.44s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.34s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness ... [FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             43.79s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 26.06s
+[FLEET]      RUN    finished PIC wasm build
+[FLEET]      DONE   root artifacts ready                                 1m 11s
+[WASM]       DONE   Fleet Coordinator artifact                            4.38s
+[FLEET]      DONE   Coordinator artifact ready                            4.81s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       DONE   delegation_issuer_stub                                5.93s
+[FLEET]      DONE   Store and Component artifacts ready                   7.09s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.10s
+[FLEET]      DONE   Root and Store installed                              4.10s
+[FLEET]      DONE   Coordinator installed                                 1.52s
+[FLEET]      DONE   Root joined and synchronized                          0.11s
+[FLEET]      DONE   Component Registry activated                          2.85s
+[FLEET]      DONE   fresh Fleet validated                                 0.01s
+[FLEET]      DONE   fresh Fleet setup complete                           1m 32s
+[WASM]       RUN    delegation_root_stub (1/2)
+[WASM]       RUN    cycles_ledger_stub (2/2)
+[WASM]       DONE   delegation_root_stub                                 25.96s
+[WASM]       CACHE  cycles_ledger_stub                                    0.00s
+[WASM]       DONE   batch: 1 built, 1 cached, 0 failed                   25.96s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 122.35s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=365640 kB high_water=382376 kB threads=21
+==> targeted canic-testing-internal PocketIC proof done in 157s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  157s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 158s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.C2Esb7
+
+=== Fixture-bearing retirement: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership [failed] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:37229/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 14.18s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.56 MiB (8975100 B)  headroom=1.44 MiB (1510660 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.61s candid=1.45s binaryen=0.00s gzip/validation=0.54s total=3.63s
+[WASM]       CACHE  Fleet Coordinator artifact                            1.05s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       DONE   canister_index_child                                 39.09s
+[WASM]       DONE   canister_index_hub                                    5.95s
+[WASM]       DONE   canister_scale_hub                                    6.01s
+[WASM]       DONE   canister_scale                                        5.92s
+[WASM]       DONE   canister_user_hub                                    42.49s
+[WASM]       DONE   canister_user_shard                                  43.55s
+[WASM]       DONE   batch: 6 built, 0 cached, 0 failed                   2m 23s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              1.19s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.54s
+[FLEET]      RUN    finished PIC wasm build
+[WASM]       RUN    delegation_root_stub (1/2)
+[WASM]       RUN    cycles_ledger_stub (2/2)
+[WASM]       CACHE  delegation_root_stub                                  0.60s
+[WASM]       CACHE  cycles_ledger_stub                                    0.01s
+[WASM]       DONE   batch: 0 built, 2 cached, 0 failed                    0.61s
+
+thread 'pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership' (25229) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:13251:10:
+submit autonomous root removal: Error { code: 132 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 64 filtered out; finished in 296.23s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=484336 kB high_water=531760 kB threads=19
+==> targeted canic-testing-internal PocketIC proof failed in 311s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2021-05-06 19:19:43.000000228 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:19:43.000000229 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] Component Child lifecycle failed stage=reserve diagnostic=E66
+2021-05-06 19:19:43.000000229 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai diagnostic=E66
+2021-05-06 19:19:43.000000229 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328783): E66
+2021-05-06 19:19:43.000000231 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328783)
+2021-05-06 19:19:43.000000231 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:19:43.000000234 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: user_shard
+2021-05-06 19:19:43.000000234 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:19:43.000000235 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] install_chunked_code: ctche-bd777-77776-qaaea-cai store=dfj7p-ut777-77776-qaaba-cai chunks=1
+2021-05-06 19:19:43.000000244 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:19:43.000000244 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:19:43.000000244 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m| user_shard | [Init] canister marked READY
+2021-05-06 19:19:43.000000247 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] Component Child lifecycle failed stage=complete diagnostic=E140
+2021-05-06 19:19:43.000000247 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai diagnostic=E140
+2021-05-06 19:19:43.000000247 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328783): E140
+2021-05-06 19:20:13.000000247 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AcknowledgePlacementReceipt, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328813)
+2021-05-06 19:20:13.000000247 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AcknowledgePlacementReceipt, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328813)
+2021-05-06 19:20:13.000000248 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328813)
+2021-05-06 19:20:13.000000248 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:20:13.000000250 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.create: ctche-bd777-77776-qaaea-cai pool=user_shards slot=1
+2021-05-06 19:20:13.000000250 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ partition_key=cghjm-npe4t-sojzh-e4tso-jzhe4-tsojz-he4ts-ojzhe-4tsoj-zhe4t-soi created+assigned shard=ctche-bd777-77776-qaaea-cai pool=user_shards slot=1
+2021-05-06 19:20:13.000000251 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: cudbq-m3777-77776-qaaeq-cai
+2021-05-06 19:20:13.000000251 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|  user_hub  | [Sharding] 📦 partition_key=cghjm-npe4t-sojzh-e4tso-jzhe4-tsojz-he4ts-ojzhe-4tsoj-zhe4t-soi already shard=ctche-bd777-77776-qaaea-cai pool=user_shards slot=Some(1)
+2021-05-06 19:20:13.000000252 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AcknowledgePlacementReceipt, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328813)
+2021-05-06 19:20:20.000000257 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] stop_canister: ctche-bd777-77776-qaaea-cai
+2021-05-06 19:20:28.000000257 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: ctche-bd777-77776-qaaea-cai
+2021-05-06 19:20:33.000000262 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=Provision, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328833)
+2021-05-06 19:20:33.000000262 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.provision caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:20:33.000000265 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: user_shard
+2021-05-06 19:20:33.000000265 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:20:33.000000266 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] install_chunked_code: ctche-bd777-77776-qaaea-cai store=dfj7p-ut777-77776-qaaba-cai chunks=1
+2021-05-06 19:20:33.000000277 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:20:33.000000277 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:20:33.000000277 UTC: [Canister ctche-bd777-77776-qaaea-cai] [34mINFO [0m| user_shard | [Init] canister marked READY
+2021-05-06 19:20:33.000000280 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] Component Child lifecycle failed stage=complete diagnostic=E140
+2021-05-06 19:20:33.000000280 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.provision caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai diagnostic=E140
+2021-05-06 19:20:33.000000280 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=Provision, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328833): E140
+2021-05-06 19:21:03.000000281 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=Provision, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328863)
+2021-05-06 19:21:03.000000281 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.provision caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:21:03.000000284 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: c5akm-2t777-77776-qaafa-cai
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-12T08:46:42.408957Z  INFO pocket_ic_server: The PocketIC server is listening on port 37229
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  311s     FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 312s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.aHSZbH
+make: *** [Makefile:426: test-pocketic-case] Error 1
+
+=== Fixture-bearing retirement: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles [failed] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:45973/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 21.08s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.40s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles ... [FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.56 MiB (8975100 B)  headroom=1.44 MiB (1510660 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.72s candid=1.57s binaryen=0.00s gzip/validation=0.55s total=3.88s
+[WASM]       CACHE  Fleet Coordinator artifact                            1.18s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       CACHE  canister_index_child                                  0.56s
+[WASM]       CACHE  canister_index_hub                                    0.01s
+[WASM]       CACHE  canister_scale_hub                                    0.02s
+[WASM]       CACHE  canister_scale                                        0.01s
+[WASM]       CACHE  canister_user_hub                                     0.01s
+[WASM]       CACHE  canister_user_shard                                   0.01s
+[WASM]       DONE   batch: 0 built, 6 cached, 0 failed                    0.62s
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              1.15s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.52s
+[FLEET]      RUN    finished PIC wasm build
+[WASM]       RUN    delegation_root_stub (1/2)
+[WASM]       RUN    cycles_ledger_stub (2/2)
+[WASM]       CACHE  delegation_root_stub                                  0.47s
+[WASM]       CACHE  cycles_ledger_stub                                    0.01s
+[WASM]       DONE   batch: 0 built, 2 cached, 0 failed                    0.48s
+autonomous Root removal timeout: canister=dmkut-c3777-77776-qaaaq-cai status_sender=2vxsx-fae status=ok(state=Running version=15808 controllers=1 module_hash_bytes=32 memory_bytes=420_672_392 cycles=179_588_797_426_095) log_sender=2vxsx-fae logs=[55@1620328664000000182]="\u{1b}[31mERROR\u{1b}[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai diagnostic=E140", [56@1620328664000000182]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328664): E140", [57@1620328668000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328668)", [58@1620328668000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai", [59@1620328668000000182]="\u{1b}[31mERROR\u{1b}[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai diagnostic=E140", [60@1620328668000000182]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328668): E140", [61@1620328672000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328672)", [62@1620328672000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai", [63@1620328672000000182]="\u{1b}[31mERROR\u{1b}[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai diagnostic=E140", [64@1620328672000000182]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328672): E140", [65@1620328676000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328676)", [66@1620328676000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai", [67@1620328678000000184]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) start", [68@1620328678000000184]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai", [69@1620328678000000184]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) prepared managed inventory for Fleet activation", [70@1620328678000000184]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Sync] sync.state: root cascade start snapshot=[fs]", [71@1620328678000000187]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) start", [72@1620328678000000187]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai", [73@1620328678000000187]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) complete", [74@1620328678000000187]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] canister marked READY", [75@1620328679000000199]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] stop_canister: dciz3-zl777-77776-qaabq-cai", [76@1620328681000000207]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] stop_canister: dxpiw-yd777-77776-qaaca-cai", [77@1620328683000000213]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: dxpiw-yd777-77776-qaaca-cai"
+autonomous Coordinator Root-removal timeout: canister=dllsh-pd777-77776-qaaaa-cai status_sender=2vxsx-fae status=ok(state=Running version=3608 controllers=2 module_hash_bytes=32 memory_bytes=307_145_641 cycles=599_914_838_191_374) log_sender=2vxsx-fae logs=<empty>
+
+thread 'pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles' (58340) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:13469:13:
+Root must autonomously reach external deletion readiness; root(final_inventory, removal, reclamation, binding, store_deletion, readiness_intent, readiness, preparation)=Some((false, false, false, false, false, false, false, false)); pool(tracked, store, store_deletion_pending, workload, handing_off)=(11, 1, 0, 1, 0); coordinator(draining, removal, readiness_intent, readiness, execution, completion)=Some((true, false, false, false, false, false)); progress_transitions=1; stagnant_seconds=511
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 65 filtered out; finished in 133.03s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=423160 kB high_water=473860 kB threads=19
+==> targeted canic-testing-internal PocketIC proof failed in 154s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2021-05-06 19:17:44.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [33mWARN [0m|  user_hub  | [Init] non-root bootstrap waiting for managed authority (attempt 7/64): E61
+2021-05-06 19:17:47.000000182 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:47.000000182 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:47.000000182 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m| user_shard | [Init] canister marked READY
+2021-05-06 19:17:48.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:48.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328668)
+2021-05-06 19:17:48.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:17:48.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai diagnostic=E140
+2021-05-06 19:17:48.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328668): E140
+2021-05-06 19:17:48.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [33mWARN [0m|  user_hub  | [Init] non-root bootstrap waiting for managed authority (attempt 8/64): E61
+2021-05-06 19:17:52.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:52.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328672)
+2021-05-06 19:17:52.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:17:52.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai diagnostic=E140
+2021-05-06 19:17:52.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328672): E140
+2021-05-06 19:17:52.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [33mWARN [0m|  user_hub  | [Init] non-root bootstrap waiting for managed authority (attempt 9/64): E61
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:56.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328676)
+2021-05-06 19:17:56.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.create: dxpiw-yd777-77776-qaaca-cai pool=user_shards slot=0
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.bootstrap: dxpiw-yd777-77776-qaaca-cai pool=user_shards slot=0
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] canister marked READY
+2021-05-06 19:17:57.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [33mWARN [0m|  user_hub  | [Rpc] placement receipt acknowledgement will retry operation_id=0ded5239a376a28cabc43aae8181c52949271e437c45bdf7a0c759cd146e955d: E61
+2021-05-06 19:17:58.000000184 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2021-05-06 19:17:58.000000184 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai
+2021-05-06 19:17:58.000000184 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) prepared managed inventory for Fleet activation
+2021-05-06 19:17:58.000000184 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Sync] sync.state: root cascade start snapshot=[fs]
+2021-05-06 19:17:58.000000184 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Sync] sync.state: non-root cascade start snapshot=[fs]
+2021-05-06 19:17:58.000000187 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2021-05-06 19:17:58.000000187 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai
+2021-05-06 19:17:58.000000187 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) complete
+2021-05-06 19:17:58.000000187 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] canister marked READY
+2021-05-06 19:17:58.000000188 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Sharding] 📦 partition_key=rzomn-spd4p-r6hy7-d4pr6-hy7d4-pr6hy-7d4pr-6hy7d-4pr6h-y7d4p-r6g assigned shard=dxpiw-yd777-77776-qaaca-cai pool=user_shards slot=Some(0)
+2021-05-06 19:17:58.000000188 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:58.000000188 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:58.000000188 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Init] canister marked READY
+2021-05-06 19:17:59.000000199 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] stop_canister: dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:18:01.000000207 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] stop_canister: dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:18:03.000000213 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: dxpiw-yd777-77776-qaaca-cai
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-12T08:54:48.908238Z  INFO pocket_ic_server: The PocketIC server is listening on port 45973
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  154s     FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 156s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.76pBnD
+make: *** [Makefile:426: test-pocketic-case] Error 1
+
+=== Fixture-bearing retirement: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles [failed] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:34779/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 30.66s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles ... [FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.56 MiB (8975154 B)  headroom=1.44 MiB (1510606 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.54s candid=1.42s binaryen=0.00s gzip/validation=0.53s total=3.52s
+[WASM]       DONE   Fleet Coordinator artifact                           39.16s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       DONE   canister_index_child                                  5.71s
+[WASM]       DONE   canister_index_hub                                    5.43s
+[WASM]       DONE   canister_scale_hub                                    5.39s
+[WASM]       DONE   canister_scale                                        5.07s
+[WASM]       DONE   canister_user_hub                                     6.17s
+[WASM]       DONE   canister_user_shard                                   5.66s
+[WASM]       DONE   batch: 6 built, 0 cached, 0 failed                   33.43s
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                              6.02s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 25.69s
+[FLEET]      RUN    finished PIC wasm build
+[WASM]       RUN    delegation_root_stub (1/2)
+[WASM]       RUN    cycles_ledger_stub (2/2)
+[WASM]       DONE   delegation_root_stub                                 26.45s
+[WASM]       CACHE  cycles_ledger_stub                                    0.01s
+[WASM]       DONE   batch: 1 built, 1 cached, 0 failed                   26.46s
+autonomous Root removal timeout: canister=dmkut-c3777-77776-qaaaq-cai status_sender=2vxsx-fae status=ok(state=Running version=7686 controllers=1 module_hash_bytes=32 memory_bytes=420_672_447 cycles=179_764_325_627_318) log_sender=2vxsx-fae logs=[56@1620328664000000182]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328664): E140", [57@1620328668000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328668)", [58@1620328668000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai", [59@1620328668000000182]="\u{1b}[31mERROR\u{1b}[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai diagnostic=E140", [60@1620328668000000182]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328668): E140", [61@1620328672000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328672)", [62@1620328672000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai", [63@1620328672000000182]="\u{1b}[31mERROR\u{1b}[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai diagnostic=E140", [64@1620328672000000182]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328672): E140", [65@1620328676000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328676)", [66@1620328676000000182]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai", [67@1620328678000000184]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) start", [68@1620328678000000184]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai", [69@1620328678000000184]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) prepared managed inventory for Fleet activation", [70@1620328678000000184]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Sync] sync.state: root cascade start snapshot=[fs]", [71@1620328678000000187]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) start", [72@1620328678000000187]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai", [73@1620328678000000187]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] bootstrap (root:init) complete", [74@1620328678000000187]="\u{1b}[34mINFO \u{1b}[0m|    root    | [Init] canister marked READY", [75@1620328679000000199]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] stop_canister: dciz3-zl777-77776-qaabq-cai", [76@1620328681000000207]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] stop_canister: dxpiw-yd777-77776-qaaca-cai", [77@1620328683000000213]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: dxpiw-yd777-77776-qaaca-cai", [78@1620328686000000221]="\u{1b}[32m OK  \u{1b}[0m|    root    | [CanisterLifecycle] 🗑\u{fe0f} uninstall_code: dciz3-zl777-77776-qaabq-cai", [79@1620328694000000247]="\u{1b}[32m OK  \u{1b}[0m|    root    | [Fleet] fleet: cycles_funding_enabled changed true -> false"
+autonomous Coordinator Root-removal timeout: canister=dllsh-pd777-77776-qaaaa-cai status_sender=2vxsx-fae status=ok(state=Running version=4106 controllers=2 module_hash_bytes=32 memory_bytes=307_145_641 cycles=599_894_673_567_771) log_sender=2vxsx-fae logs=<empty>
+
+thread 'pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles' (7478) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:13469:13:
+Root must autonomously reach external deletion readiness; root(final_inventory, removal, reclamation, binding, store_deletion, readiness_intent, readiness, preparation)=Some((false, false, false, false, false, false, false, false)); pool(tracked, store, store_deletion_pending, workload, handing_off)=(1, 1, 0, 0, 0); coordinator(draining, removal, readiness_intent, readiness, execution, completion)=Some((true, false, false, false, false, false)); progress_transitions=1; stagnant_seconds=511
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 65 filtered out; finished in 250.12s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=434532 kB high_water=482640 kB threads=19
+==> targeted canic-testing-internal PocketIC proof failed in 281s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2021-05-06 19:17:47.000000182 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:47.000000182 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m| user_shard | [Init] canister marked READY
+2021-05-06 19:17:48.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:48.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328668)
+2021-05-06 19:17:48.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:17:48.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai diagnostic=E140
+2021-05-06 19:17:48.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328668): E140
+2021-05-06 19:17:48.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [33mWARN [0m|  user_hub  | [Init] non-root bootstrap waiting for managed authority (attempt 8/64): E61
+2021-05-06 19:17:52.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:52.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328672)
+2021-05-06 19:17:52.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:17:52.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai diagnostic=E140
+2021-05-06 19:17:52.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328672): E140
+2021-05-06 19:17:52.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [33mWARN [0m|  user_hub  | [Init] non-root bootstrap waiting for managed authority (attempt 9/64): E61
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:56.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328676)
+2021-05-06 19:17:56.000000182 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=user_shard parent=dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.create: dxpiw-yd777-77776-qaaca-cai pool=user_shards slot=0
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.bootstrap: dxpiw-yd777-77776-qaaca-cai pool=user_shards slot=0
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:56.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Init] canister marked READY
+2021-05-06 19:17:57.000000182 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [33mWARN [0m|  user_hub  | [Rpc] placement receipt acknowledgement will retry operation_id=0ded5239a376a28cabc43aae8181c52949271e437c45bdf7a0c759cd146e955d: E61
+2021-05-06 19:17:58.000000184 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2021-05-06 19:17:58.000000184 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai
+2021-05-06 19:17:58.000000184 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) prepared managed inventory for Fleet activation
+2021-05-06 19:17:58.000000184 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Sync] sync.state: root cascade start snapshot=[fs]
+2021-05-06 19:17:58.000000184 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Sync] sync.state: non-root cascade start snapshot=[fs]
+2021-05-06 19:17:58.000000187 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) start
+2021-05-06 19:17:58.000000187 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Topology] root subnet identity initialized from lifecycle env: dmkut-c3777-77776-qaaaq-cai
+2021-05-06 19:17:58.000000187 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] bootstrap (root:init) complete
+2021-05-06 19:17:58.000000187 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Init] canister marked READY
+2021-05-06 19:17:58.000000188 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m|  user_hub  | [Sharding] 📦 partition_key=rzomn-spd4p-r6hy7-d4pr6-hy7d4-pr6hy-7d4pr-6hy7d-4pr6h-y7d4p-r6g assigned shard=dxpiw-yd777-77776-qaaca-cai pool=user_shards slot=Some(0)
+2021-05-06 19:17:58.000000188 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:58.000000188 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:58.000000188 UTC: [Canister dfj7p-ut777-77776-qaaba-cai] [34mINFO [0m| wasm_store | [Init] canister marked READY
+2021-05-06 19:17:59.000000199 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] stop_canister: dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:18:01.000000207 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] stop_canister: dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:18:03.000000213 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:18:06.000000221 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [CanisterLifecycle] 🗑️ uninstall_code: dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:18:14.000000247 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [32m OK  [0m|    root    | [Fleet] fleet: cycles_funding_enabled changed true -> false
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-12T09:01:10.105917Z  INFO pocket_ic_server: The PocketIC server is listening on port 34779
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  281s     FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 282s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.TqOMzA
+make: *** [Makefile:426: test-pocketic-case] Error 1
+
+=== Fixture-bearing retirement: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles [failed] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:43611/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 45.29s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.40s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles ... [FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.56 MiB (8976891 B)  headroom=1.44 MiB (1508869 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.59s candid=1.48s binaryen=0.00s gzip/validation=0.52s total=3.61s
+[WASM]       DONE   Fleet Coordinator artifact                           38.80s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       DONE   canister_index_child                                  5.19s
+[WASM]       DONE   canister_index_hub                                    5.43s
+[WASM]       DONE   canister_scale_hub                                    5.47s
+[WASM]       DONE   canister_scale                                        5.16s
+[WASM]       DONE   canister_user_hub                                     5.99s
+[WASM]       DONE   canister_user_shard                                   5.77s
+[WASM]       DONE   batch: 6 built, 0 cached, 0 failed                   33.00s
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                              6.11s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 26.24s
+[FLEET]      RUN    finished PIC wasm build
+[WASM]       RUN    delegation_root_stub (1/2)
+[WASM]       RUN    cycles_ledger_stub (2/2)
+[WASM]       DONE   delegation_root_stub                                 26.40s
+[WASM]       CACHE  cycles_ledger_stub                                    0.00s
+[WASM]       DONE   batch: 1 built, 1 cached, 0 failed                   26.40s
+retirement Store: WasmStoreStatusResponse { gc: WasmStoreGcStatusResponse { mode: Normal, changed_at: 0, prepared_at: None, started_at: None, completed_at: None, runs_completed: 0 }, occupied_store_bytes: 5420512, occupied_store_size: "5.17 MiB", max_store_bytes: 40000000, max_store_size: "38.15 MiB", remaining_store_bytes: 34579488, remaining_store_size: "32.98 MiB", headroom_bytes: Some(4000000), headroom_size: Some("3.81 MiB"), within_headroom: false, template_count: 7, max_templates: None, release_count: 7, max_template_versions_per_template: None, templates: [WasmStoreTemplateStatusResponse { template_id: TemplateId("component:index_child"), versions: 1 }, WasmStoreTemplateStatusResponse { template_id: TemplateId("component:index_hub"), versions: 1 }, WasmStoreTemplateStatusResponse { template_id: TemplateId("component:scale_hub"), versions: 1 }, WasmStoreTemplateStatusResponse { template_id: TemplateId("component:scale_replica"), versions: 1 }, WasmStoreTemplateStatusResponse { template_id: TemplateId("component:user_hub"), versions: 1 }, WasmStoreTemplateStatusResponse { template_id: TemplateId("component:user_shard"), versions: 1 }, WasmStoreTemplateStatusResponse { template_id: TemplateId("root-release-set:0771cf973bebcd66b0810604022e5fff1849b8bb31ace08cab1656e6f2998618"), versions: 1 }] }
+autonomous Root removal timeout: canister=dmkut-c3777-77776-qaaaq-cai status_sender=2vxsx-fae status=ok(state=Running version=7686 controllers=1 module_hash_bytes=32 memory_bytes=420_675_126 cycles=179_763_013_838_733) log_sender=2vxsx-fae logs=[540@1620329154000001624]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [541@1620329155000001627]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [542@1620329156000001630]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [543@1620329157000001633]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [544@1620329158000001636]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [545@1620329159000001639]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [546@1620329160000001642]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [547@1620329161000001645]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [548@1620329162000001648]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [549@1620329163000001651]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [550@1620329164000001654]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [551@1620329165000001657]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [552@1620329166000001660]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [553@1620329167000001663]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [554@1620329168000001666]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [555@1620329169000001669]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [556@1620329170000001672]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [557@1620329171000001675]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [558@1620329172000001678]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [559@1620329173000001681]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [560@1620329174000001684]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [561@1620329175000001687]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [562@1620329176000001690]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [563@1620329177000001693]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [564@1620329178000001696]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [565@1620329179000001699]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [566@1620329180000001702]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [567@1620329181000001705]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [568@1620329182000001708]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [569@1620329183000001711]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [570@1620329184000001714]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660", [571@1620329185000001717]="\u{1b}[33mWARN \u{1b}[0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660"; truncated omitted_records=5 omitted_content_bytes=445
+autonomous Coordinator Root-removal timeout: canister=dllsh-pd777-77776-qaaaa-cai status_sender=2vxsx-fae status=ok(state=Running version=4106 controllers=2 module_hash_bytes=32 memory_bytes=307_145_641 cycles=599_894_673_567_771) log_sender=2vxsx-fae logs=<empty>
+
+thread 'pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles' (29187) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:13479:13:
+Root must autonomously reach external deletion readiness; root(final_inventory, removal, reclamation, binding, store_deletion, readiness_intent, readiness, preparation)=Some((false, false, false, false, false, false, false, false)); pool(tracked, store, store_deletion_pending, workload, handing_off)=(1, 1, 0, 0, 0); coordinator(draining, removal, readiness_intent, readiness, execution, completion)=Some((true, false, false, false, false, false)); progress_transitions=1; stagnant_seconds=511
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 65 filtered out; finished in 247.55s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=461488 kB high_water=499716 kB threads=19
+==> targeted canic-testing-internal PocketIC proof failed in 293s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2021-05-06 19:25:51.000001615 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:25:52.000001618 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:25:53.000001621 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:25:54.000001624 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:25:55.000001627 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:25:56.000001630 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:25:57.000001633 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:25:58.000001636 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:25:59.000001639 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:00.000001642 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:01.000001645 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:02.000001648 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:03.000001651 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:04.000001654 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:05.000001657 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:06.000001660 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:07.000001663 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:08.000001666 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:09.000001669 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:10.000001672 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:11.000001675 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:12.000001678 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:13.000001681 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:14.000001684 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:15.000001687 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:16.000001690 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:17.000001693 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:18.000001696 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:19.000001699 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:20.000001702 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:21.000001705 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:22.000001708 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:23.000001711 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:24.000001714 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:25.000001717 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:26.000001720 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:27.000001723 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:28.000001726 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:29.000001729 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+2021-05-06 19:26:30.000001732 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Topology] TEMP inventory bytes retained=13603 charged=12660
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-12T09:12:21.218566Z  INFO pocket_ic_server: The PocketIC server is listening on port 43611
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  293s     FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 294s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.xGQGh9
+make: *** [Makefile:426: test-pocketic-case] Error 1
+
+=== Fixture-bearing retirement: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles [pass] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:33195/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 42.07s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::fixture_bearing_root_retirement_conserves_assets_and_cycles ... [FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.56 MiB (8975089 B)  headroom=1.44 MiB (1510671 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.63s candid=1.44s binaryen=0.00s gzip/validation=0.52s total=3.62s
+[WASM]       DONE   Fleet Coordinator artifact                           36.17s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       DONE   canister_index_child                                  5.10s
+[WASM]       DONE   canister_index_hub                                    5.27s
+[WASM]       DONE   canister_scale_hub                                    5.30s
+[WASM]       DONE   canister_scale                                        5.07s
+[WASM]       DONE   canister_user_hub                                     5.62s
+[WASM]       DONE   canister_user_shard                                   5.35s
+[WASM]       DONE   batch: 6 built, 0 cached, 0 failed                   31.70s
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                              5.67s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                 24.91s
+[FLEET]      RUN    finished PIC wasm build
+[WASM]       RUN    delegation_root_stub (1/2)
+[WASM]       RUN    cycles_ledger_stub (2/2)
+[WASM]       DONE   delegation_root_stub                                 25.13s
+[WASM]       CACHE  cycles_ledger_stub                                    0.00s
+[WASM]       DONE   batch: 1 built, 1 cached, 0 failed                   25.14s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 192.55s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=396600 kB high_water=415712 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 236s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  236s     PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 237s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.Is7lM8
+
+=== Fixture-bearing retirement: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership [pass] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:34401/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... [FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.56 MiB (8975089 B)  headroom=1.44 MiB (1510671 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.43s candid=1.33s binaryen=0.00s gzip/validation=0.52s total=3.35s
+[WASM]       CACHE  Fleet Coordinator artifact                            1.04s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       CACHE  canister_index_child                                  0.49s
+[WASM]       CACHE  canister_index_hub                                    0.01s
+[WASM]       CACHE  canister_scale_hub                                    0.01s
+[WASM]       CACHE  canister_scale                                        0.01s
+[WASM]       CACHE  canister_user_hub                                     0.01s
+[WASM]       CACHE  canister_user_shard                                   0.01s
+[WASM]       DONE   batch: 0 built, 6 cached, 0 failed                    0.54s
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              1.03s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.42s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 53.08s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=486008 kB high_water=533356 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 54s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  54s      PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 55s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.notnGx
+
+=== Fixture-bearing retirement: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness [pass] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:44859/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness ... [FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              1.01s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.46s
+[FLEET]      RUN    finished PIC wasm build
+[FLEET]      DONE   root artifacts ready                                  3.01s
+[WASM]       CACHE  Fleet Coordinator artifact                            1.04s
+[FLEET]      DONE   Coordinator artifact ready                            1.47s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       DONE   delegation_issuer_stub                                5.97s
+[FLEET]      DONE   Store and Component artifacts ready                   7.15s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      DONE   PocketIC topology ready                               0.09s
+[FLEET]      DONE   Root and Store installed                              4.07s
+[FLEET]      DONE   Coordinator installed                                 1.45s
+[FLEET]      DONE   Root joined and synchronized                          0.12s
+[FLEET]      DONE   Component Registry activated                          2.96s
+[FLEET]      DONE   fresh Fleet validated                                 0.01s
+[FLEET]      DONE   fresh Fleet setup complete                           20.33s
+[WASM]       RUN    delegation_root_stub (1/2)
+[WASM]       RUN    cycles_ledger_stub (2/2)
+[WASM]       CACHE  delegation_root_stub                                  0.45s
+[WASM]       CACHE  cycles_ledger_stub                                    0.01s
+[WASM]       DONE   batch: 0 built, 2 cached, 0 failed                    0.46s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 25.20s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=368000 kB high_water=383672 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 26s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  26s      PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 27s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.79bNmj
+
+=== Pending fixture funding: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership [failed] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+    Blocking waiting for file lock on package cache
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:36203/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 15.49s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... [FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.56 MiB (8975089 B)  headroom=1.44 MiB (1510671 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.52s candid=1.40s binaryen=0.00s gzip/validation=0.52s total=3.47s
+[WASM]       CACHE  Fleet Coordinator artifact                            1.31s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       CACHE  canister_index_child                                  0.66s
+[WASM]       CACHE  canister_index_hub                                    0.02s
+[WASM]       CACHE  canister_scale_hub                                    0.02s
+[WASM]       CACHE  canister_scale                                        0.01s
+[WASM]       CACHE  canister_user_hub                                     0.02s
+[WASM]       CACHE  canister_user_shard                                   0.01s
+[WASM]       DONE   batch: 0 built, 6 cached, 0 failed                    0.73s
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              1.05s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.46s
+[FLEET]      RUN    finished PIC wasm build
+
+thread 'pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership' (30424) panicked at crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs:587:22:
+Root accepts registered descendant funding request: Error { code: 30 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 65 filtered out; finished in 49.40s
+
+error: test failed, to rerun pass `-p canic-testing-internal --lib`
+error: 1 target failed:
+    `-p canic-testing-internal --lib`
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=457700 kB high_water=478984 kB threads=19
+==> targeted canic-testing-internal PocketIC proof failed in 65s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2021-05-06 19:18:47.000000121 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m| scale_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:18:47.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dciz3-zl777-77776-qaabq-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328727)
+2021-05-06 19:18:47.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dciz3-zl777-77776-qaabq-cai role=scale_replica parent=dciz3-zl777-77776-qaabq-cai
+2021-05-06 19:18:47.000000121 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [32m OK  [0m| scale_hub  | [Init] scale.bootstrap: dznf6-dt777-77776-qaada-cai pool=scales worker=1/1
+2021-05-06 19:18:47.000000121 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m| scale_hub  | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:18:47.000000121 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [34mINFO [0m| scale_hub  | [Init] canister marked READY
+2021-05-06 19:18:48.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:18:48.000000121 UTC: [Canister d6mdk-ol777-77776-qaadq-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init start
+2021-05-06 19:18:48.000000121 UTC: [Canister d6mdk-ol777-77776-qaadq-cai] [34mINFO [0m| user_shard | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:18:48.000000121 UTC: [Canister d6mdk-ol777-77776-qaadq-cai] [34mINFO [0m| user_shard | [Init] canister marked READY
+2021-05-06 19:18:48.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328728)
+2021-05-06 19:18:48.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:18:48.000000121 UTC: [Canister dciz3-zl777-77776-qaabq-cai] [33mWARN [0m| scale_hub  | [Rpc] placement receipt acknowledgement will retry operation_id=b5cf15d9af743dc99c427830c9138cd0b0f7cd749541e2bbde6e49d6accad125: E61
+2021-05-06 19:18:48.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai diagnostic=E140
+2021-05-06 19:18:48.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328728): E140
+2021-05-06 19:18:48.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [33mWARN [0m|  user_hub  | [Init] non-root bootstrap waiting for managed authority (attempt 11/64): E61
+2021-05-06 19:18:52.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:18:52.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328732)
+2021-05-06 19:18:52.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:18:52.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Rpc] root provision replay recovery required effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai diagnostic=E140
+2021-05-06 19:18:52.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Rpc] execute_root_capability failed (capability=AllocatePlacementChild, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328732): E140
+2021-05-06 19:18:52.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [33mWARN [0m|  user_hub  | [Init] non-root bootstrap waiting for managed authority (attempt 12/64): E61
+2021-05-06 19:18:54.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=ComponentRuntime component_index=2 canister=dxpiw-yd777-77776-qaaca-cai operation_id=[10, 105, 254, 93, 170, 113, 195, 132, 220, 52, 227, 187, 141, 149, 34, 12, 137, 140, 84, 101, 133, 153, 187, 108, 160, 19, 103, 31, 177, 227, 207, 138] diagnostic=E137
+2021-05-06 19:18:54.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113] phase=Published activated_components=2/3 diagnostic=E137
+2021-05-06 19:18:56.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init start
+2021-05-06 19:18:56.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] capability authorized (capability=AllocatePlacementChild, caller=dxpiw-yd777-77776-qaaca-cai, subnet=dmkut-c3777-77776-qaaaq-cai, now=1620328736)
+2021-05-06 19:18:56.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [34mINFO [0m|    root    | [Rpc] root provision replay effect marked effect=provision_canister command_kind=root.allocate_placement_child caller=dxpiw-yd777-77776-qaaca-cai role=user_shard parent=dxpiw-yd777-77776-qaaca-cai
+2021-05-06 19:18:56.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.create: d6mdk-ol777-77776-qaadq-cai pool=user_shards slot=0
+2021-05-06 19:18:56.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [32m OK  [0m|  user_hub  | [Sharding] ✨ shard.bootstrap: d6mdk-ol777-77776-qaadq-cai pool=user_shards slot=0
+2021-05-06 19:18:56.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|  user_hub  | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:18:56.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [34mINFO [0m|  user_hub  | [Init] canister marked READY
+2021-05-06 19:18:57.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] [33mWARN [0m|  user_hub  | [Rpc] placement receipt acknowledgement will retry operation_id=8971362a571f727a5069a69e4a40ec4444d749ea638004630d3985361aba530c: E61
+2021-05-06 19:18:57.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=ComponentRuntime component_index=2 canister=dxpiw-yd777-77776-qaaca-cai operation_id=[10, 105, 254, 93, 170, 113, 195, 132, 220, 52, 227, 187, 141, 149, 34, 12, 137, 140, 84, 101, 133, 153, 187, 108, 160, 19, 103, 31, 177, 227, 207, 138] diagnostic=E137
+2021-05-06 19:18:57.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113] phase=Published activated_components=2/3 diagnostic=E137
+2021-05-06 19:19:01.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=ComponentMembership component_index=2 canister=dxpiw-yd777-77776-qaaca-cai operation_id=[10, 105, 254, 93, 170, 113, 195, 132, 220, 52, 227, 187, 141, 149, 34, 12, 137, 140, 84, 101, 133, 153, 187, 108, 160, 19, 103, 31, 177, 227, 207, 138] diagnostic=E140
+2021-05-06 19:19:01.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113] phase=Published activated_components=2/3 diagnostic=E140
+2021-05-06 19:19:07.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [31mERROR[0m|    root    | [Fleet] Root Component activation failed stage=ComponentMembership component_index=2 canister=dxpiw-yd777-77776-qaaca-cai operation_id=[10, 105, 254, 93, 170, 113, 195, 132, 220, 52, 227, 187, 141, 149, 34, 12, 137, 140, 84, 101, 133, 153, 187, 108, 160, 19, 103, 31, 177, 227, 207, 138] diagnostic=E140
+2021-05-06 19:19:07.000000121 UTC: [Canister dmkut-c3777-77776-qaaaq-cai] [33mWARN [0m|    root    | [Fleet] Root Component provisioning retry: operation_id=[113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113, 113] phase=Published activated_components=2/3 diagnostic=E140
+2021-05-06 19:19:14.000000121 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] Panicked at 'Fleet activation fence rejected endpoint test_recovery_generation: E140', crates/canic-core/src/dispatch/mod.rs:109:9
+2021-05-06 19:19:14.000000122 UTC: [Canister dxpiw-yd777-77776-qaaca-cai] Panicked at 'Fleet activation fence rejected endpoint create_account: E140', crates/canic-core/src/dispatch/mod.rs:109:9
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-12T10:34:04.343244Z  INFO pocket_ic_server: The PocketIC server is listening on port 36203
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  65s      FAIL   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 66s
+WORKSPACE TESTS FAILED: targeted canic-testing-internal PocketIC proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.YKYwgm
+make: *** [Makefile:426: test-pocketic-case] Error 1
+
+=== Pending fixture funding: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership [pass] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:41387/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 12.50s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... [FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.56 MiB (8975116 B)  headroom=1.44 MiB (1510644 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.50s candid=1.37s binaryen=0.00s gzip/validation=0.53s total=3.43s
+[WASM]       CACHE  Fleet Coordinator artifact                            1.06s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       DONE   canister_index_child                                  5.36s
+[WASM]       DONE   canister_index_hub                                    5.21s
+[WASM]       DONE   canister_scale_hub                                    5.35s
+[WASM]       DONE   canister_scale                                        5.22s
+[WASM]       DONE   canister_user_hub                                     5.82s
+[WASM]       DONE   canister_user_shard                                   5.59s
+[WASM]       DONE   batch: 6 built, 0 cached, 0 failed                   32.55s
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              1.06s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.46s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 85.57s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=482692 kB high_water=531848 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 99s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  99s      PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 100s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.r6CJpe
+
+=== Automatic fixture funding: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::pending_fixture_automatically_funds_within_configured_allowance [pass] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:46579/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 15.80s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.32s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::pending_fixture_automatically_funds_within_configured_allowance ... Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.55 MiB (8967883 B)  headroom=1.45 MiB (1517877 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.69s candid=1.44s binaryen=0.00s gzip/validation=0.54s total=3.71s
+[WASM]       RUN    canister_user_hub (1/2)
+[WASM]       RUN    canister_user_shard (2/2)
+[WASM]       CACHE  canister_user_hub                                     0.48s
+[WASM]       CACHE  canister_user_shard                                   0.02s
+[WASM]       DONE   batch: 0 built, 2 cached, 0 failed                    0.50s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[WASM]       CACHE  Fleet Coordinator artifact                            1.06s
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              1.20s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.49s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 66 filtered out; finished in 42.04s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=385632 kB high_water=402672 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 58s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  58s      PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 59s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.DQFG3D
+
+=== Automatic fixture funding: make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership [pass] ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:35419/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership ... [FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+Build declaration cache root: miss (extracted current Wasm)
+[WASM]       SIZE   root/candidate.wasm  code=8.56 MiB (8975116 B)  headroom=1.44 MiB (1510644 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm: shrink=1.57s candid=1.41s binaryen=0.00s gzip/validation=0.52s total=3.54s
+[WASM]       RUN    canister_index_child (1/6)
+[WASM]       RUN    canister_index_hub (2/6)
+[WASM]       RUN    canister_scale_hub (3/6)
+[WASM]       RUN    canister_scale (4/6)
+[WASM]       RUN    canister_user_hub (5/6)
+[WASM]       RUN    canister_user_shard (6/6)
+[WASM]       CACHE  canister_index_child                                  0.47s
+[WASM]       CACHE  canister_index_hub                                    0.01s
+[WASM]       CACHE  canister_scale_hub                                    0.01s
+[WASM]       CACHE  canister_scale                                        0.01s
+[WASM]       CACHE  canister_user_hub                                     0.01s
+[WASM]       CACHE  canister_user_shard                                   0.01s
+[WASM]       DONE   batch: 0 built, 6 cached, 0 failed                    0.52s
+[WASM]       CACHE  Fleet Coordinator artifact                            1.00s
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       CACHE  bootstrap Store artifact                              0.98s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.44s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 66 filtered out; finished in 55.25s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=496944 kB high_water=546708 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 56s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  56s      PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 57s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.k6tyUm
+
+=== Durable reviewed publication attempts ===
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (39 targets: 30 parallel, 9 serial PocketIC)
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.4.0)
+==> shared PocketIC server ready: http://127.0.0.1:41515/
+==> targeted canic-testing-internal PocketIC proof
+==> verifying exact test identity (listing only)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+   Compiling canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `test` profile [optimized + debuginfo] target(s) in 43.54s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/canic_testing_internal-a53636dabe5b59e7)
+
+running 1 test
+test pic::fleet_registry::baseline::tests::current_store_bootstraps_application_catalog_and_replays_zero_effects ... [WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       DONE   delegation_root_stub                                  6.23s
+[WASM]       RUN    delegation_issuer_stub (1/1)
+[WASM]       DONE   delegation_issuer_stub                                5.93s
+[FLEET]      RUN    starting PocketIC instance
+[FLEET]      READY  PocketIC instance
+[FLEET]      RUN    building bootstrap wasm_store artifact
+[WASM]       DONE   bootstrap Store artifact                             28.04s
+[FLEET]      RUN    building PIC root wasm artifact
+[WASM]       RUN    delegation_root_stub (1/1)
+[WASM]       CACHE  delegation_root_stub                                  0.48s
+[FLEET]      RUN    finished PIC wasm build
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 66 filtered out; finished in 48.63s
+
+==> shared PocketIC resources after targeted canic-testing-internal PocketIC proof: rss=319276 kB high_water=382004 kB threads=19
+==> targeted canic-testing-internal PocketIC proof done in 92s
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  92s      PASS   targeted canic-testing-internal PocketIC proof
+workspace runner wall time: 93s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.D1YdBM

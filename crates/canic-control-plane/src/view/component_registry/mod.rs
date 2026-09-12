@@ -967,6 +967,7 @@ pub struct RootComponentCreationEffectView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentInstallEffectView {
+    pub fixture_grant_revision: Option<u64>,
     pub raw_module_hash: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
@@ -983,6 +984,7 @@ pub struct RootComponentInstallEffectView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentChildInstallEffectView {
+    pub fixture_grant_revision: Option<u64>,
     pub raw_module_hash: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,

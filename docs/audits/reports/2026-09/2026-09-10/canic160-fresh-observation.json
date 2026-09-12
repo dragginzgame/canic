@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "issue": "CANIC-160",
+  "base_commit": "c9c91f19c",
+  "source_path": "crates/canic-host/src/fleet_ensure/ops/platform.rs",
+  "source_sha256": "9fc4ba48109af98b20b5e8747bf3759c296b14c01f409404c18fbdd69aeff734",
+  "method": "native transport fixture; single fresh-path retention call removed in control; no IC latency simulation",
+  "measurements": {
+    "control": [
+      {
+        "assets": 1,
+        "configured_ms": 18,
+        "configured_calls": 3,
+        "balance_ms": 7,
+        "balance_calls": 1
+      },
+      {
+        "assets": 14,
+        "configured_ms": 126,
+        "configured_calls": 16,
+        "balance_ms": 196,
+        "balance_calls": 14
+      },
+      {
+        "assets": 27,
+        "configured_ms": 234,
+        "configured_calls": 29,
+        "balance_ms": 218,
+        "balance_calls": 27
+      }
+    ],
+    "candidate": [
+      {
+        "assets": 1,
+        "configured_ms": 20,
+        "configured_calls": 3,
+        "balance_ms": 2,
+        "balance_calls": 0
+      },
+      {
+        "assets": 14,
+        "configured_ms": 118,
+        "configured_calls": 16,
+        "balance_ms": 40,
+        "balance_calls": 0
+      },
+      {
+        "assets": 27,
+        "configured_ms": 235,
+        "configured_calls": 29,
+        "balance_ms": 78,
+        "balance_calls": 0
+      }
+    ]
+  },
+  "validation": {
+    "focused_tests_passed": 29,
+    "host_clippy_warnings_denied": true
+  },
+  "limits": [
+    "Not a live IC or complete deployment benchmark.",
+    "Single measurements include local CLI process startup; no wall-time threshold is enforced.",
+    "Pool inspection concurrency remains unchanged."
+  ]
+}

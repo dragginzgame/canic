@@ -301,6 +301,7 @@ pub struct DesiredFleet {
     pub management_creation_fee_cycles: String,
     pub material_cycle_threshold: String,
     pub maximum_observation_burn_cycles: String,
+    /// Observation stall bound and maximum paid attempts per fixture publication action.
     pub maximum_stalled_observations: u32,
     pub maximum_update_burn_cycles: String,
     pub operator: String,
@@ -406,6 +407,18 @@ pub struct CanisterCyclePolicy {
 pub struct ReinstallHistoryWitness {
     /// Exact installed module retained before this reviewed reinstall.
     pub prior_module_sha256: String,
+    pub authority: RootManagementBinding,
+    pub candid: String,
+    pub candid_sha256: String,
+    /// Exact replacement Root admitted only while reconciling its own durable intent.
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub replacement: Option<Box<ReinstallRootWitnessRecord>>,
+}
+
+/// Exact management identity and protocol for the selected replacement Root.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReinstallRootWitnessRecord {
     pub authority: RootManagementBinding,
     pub candid: String,
     pub candid_sha256: String,
@@ -536,6 +549,24 @@ pub enum EnsureAction {
 }
 
 impl EnsureAction {
+    /// Paid publication attempts retained in the reviewed action, independent of observations.
+    pub(crate) fn fixture_publication_attempt_limit(&self) -> Option<u32> {
+        if let Self::FleetProtocol { action, .. } = self {
+            match action.as_ref() {
+                CurrentFleetProtocolAction::PrepareStoreFixture {
+                    maximum_attempts, ..
+                }
+                | CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+                    maximum_attempts, ..
+                } => {
+                    return Some(*maximum_attempts);
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
@@ -598,6 +629,20 @@ pub enum CurrentFleetProtocolAction {
         expected_version: canic_core::dto::fleet_registry::FleetRegistryVersion,
         request: canic_core::dto::fleet_registry::FleetSubnetRootJoinRequest,
     },
+    PrepareStoreFixture {
+        /// Total paid calls admitted by this exact reviewed action.
+        maximum_attempts: u32,
+        request: canic_core::dto::root_store::RootStoreFixturePrepareRequest,
+        source: canic_core::dto::root_store::RootStoreFixture,
+        store: candid::Principal,
+    },
+    PublishStoreFixtureChunk {
+        /// Total paid calls admitted by this exact reviewed action.
+        maximum_attempts: u32,
+        request: canic_core::dto::fixture_provisioning::FixtureChunkUpload,
+        expected: canic_core::dto::fixture_provisioning::FixtureSourceStatus,
+        source_bytes: u64,
+    },
     PrepareStoreChunkSet {
         request: canic_control_plane::dto::template::TemplateChunkSetPrepareInput,
     },
@@ -622,6 +667,23 @@ pub enum CurrentFleetProtocolAction {
 }
 
 impl CurrentFleetProtocolAction {
+    /// Retained payload shared by publication reporting and the plan content store.
+    pub(crate) fn publication_bytes(&self) -> Option<&[u8]> {
+        match self {
+            Self::PublishStoreChunk { request } => Some(&request.bytes),
+            Self::PublishStoreFixtureChunk { request, .. } => Some(&request.bytes),
+            _ => None,
+        }
+    }
+
+    pub(crate) const fn publication_bytes_mut(&mut self) -> Option<&mut Vec<u8>> {
+        match self {
+            Self::PublishStoreChunk { request } => Some(&mut request.bytes),
+            Self::PublishStoreFixtureChunk { request, .. } => Some(&mut request.bytes),
+            _ => None,
+        }
+    }
+
     /// Role that exclusively owns this current control-plane transition.
     #[must_use]
     pub const fn target_kind(&self) -> DesiredCanisterKind {
@@ -635,10 +697,12 @@ impl CurrentFleetProtocolAction {
             | Self::ObservePoolReadiness { .. }
             | Self::AdoptStore { .. }
             | Self::BootstrapStore { .. }
+            | Self::PrepareStoreFixture { .. }
             | Self::PrepareComponentRegistry { .. }
             | Self::SynchronizeRegistry { .. } => DesiredCanisterKind::Root,
             Self::PrepareStoreChunkSet { .. }
             | Self::PublishStoreChunk { .. }
+            | Self::PublishStoreFixtureChunk { .. }
             | Self::StageStoreManifest { .. } => DesiredCanisterKind::Store,
         }
     }
@@ -653,8 +717,10 @@ impl CurrentFleetProtocolAction {
             | Self::ObservePoolReadiness { .. }
             | Self::JoinRoot { .. }
             | Self::PrepareComponentRegistry { .. }
+            | Self::PrepareStoreFixture { .. }
             | Self::PrepareStoreChunkSet { .. }
             | Self::PublishStoreChunk { .. }
+            | Self::PublishStoreFixtureChunk { .. }
             | Self::StageStoreManifest { .. } => None,
             Self::ActivateRegistryMirror { request, .. }
             | Self::SynchronizeRegistry { request, .. } => Some(request.operation_id),
@@ -909,7 +975,7 @@ pub struct FleetEnsurePlan {
     /// Informational dependent work; grants no funding or effect authority.
     #[serde(deserialize_with = "serialization::required_option")]
     pub recovery_review: Option<Box<FleetRecoveryReview>>,
-    /// One explicit same-release wipe, retained through preparation and full convergence.
+    /// One explicit selected-build wipe, retained through preparation and full convergence.
     #[serde(deserialize_with = "serialization::required_option")]
     pub reinstall: Option<Box<FleetReinstallRecord>>,
     #[serde(deserialize_with = "serialization::required_option")]
@@ -964,10 +1030,16 @@ impl FleetEnsurePlanScope {
     }
 }
 
-/// Exact operation-scoped authority for one requested same-release database wipe.
+/// Exact source estate and selected target authority for one requested database wipe.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetReinstallRecord {
+    /// Selected build content identity bound before preparation effects.
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub target_artifacts_sha256: Option<String>,
+    /// Completed source authority; partial activation retains its separate evidence.
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub source: Option<Box<FleetReinstallSourceRecord>>,
     #[serde(deserialize_with = "serialization::required_option")]
     pub activation_reset: Option<Box<FleetActivationResetRecord>>,
     pub operation_id: String,
@@ -975,6 +1047,15 @@ pub struct FleetReinstallRecord {
     pub authorities: Vec<RootManagementBinding>,
     /// Empty during preparation; the full plan binds every sealed physical asset.
     pub assets: Vec<FleetReinstallAssetRecord>,
+}
+
+/// Immutable completed-source input and artifact identities retained before sealing.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetReinstallSourceRecord {
+    pub reviewed_desired: ReviewedDesiredFleetRecord,
+    pub wasm_sha256_by_canister: BTreeMap<String, String>,
+    pub candid_sha256_by_path: BTreeMap<String, String>,
 }
 
 /// Exact retained source bytes and issued protocol effects inspected for activation recovery.
@@ -1157,6 +1238,8 @@ pub enum FleetEnsureCompletion {
 pub struct EffectRecord {
     /// Root maintenance calls whose intent was persisted, including lost responses.
     pub maintenance_attempts: u32,
+    /// Fixture publication calls reserved before issue, including failed or lost replies.
+    pub publication_attempts: u32,
     pub action_sha256: String,
     #[serde(deserialize_with = "serialization::required_option")]
     pub created_principal: Option<String>,

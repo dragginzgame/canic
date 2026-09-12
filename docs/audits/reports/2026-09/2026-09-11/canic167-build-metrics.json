@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "issue": "CANIC-167",
+  "date": "2026-09-12",
+  "status": "targeted qualification passed; unpublished",
+  "runs": [
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host --lib build_provenance",
+      "result": "pass",
+      "tests": 21,
+      "test_seconds": 0.14,
+      "log": "host-tests.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-cli --lib build::tests",
+      "result": "pass",
+      "tests": 26,
+      "test_seconds": 0.01,
+      "log": "cli-tests.log"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-host -p canic-cli --lib --bins --tests -- -D warnings",
+      "result": "pass",
+      "log": "clippy.log"
+    }
+  ],
+  "evidence_archive": "canic167-build-metrics-evidence.tar.gz",
+  "evidence_archive_sha256": "23257cf08c7b837eed554a6021ec8326a2afaea9ba624c80a80a2f8398762912",
+  "log_sha256": {
+    "host-tests.log": "8a78e6fb23ccc47f0dcd08740a129943c2094c2a4a773f4a651b631a6541b240",
+    "cli-tests.log": "db82b5fc7a6bd6ba2592abaf160e49b397e7783c43b088b8403d6b6d37812305",
+    "clippy.log": "c86518717ea5ae9138423119b7888a074749ce910358a2020d3dfbada056d762"
+  },
+  "source_sha256": {
+    "Cargo.lock": "8f1d7837ed6a695473bb79a39e4c89e7c3ce115fba7b8821f1042eb5125acad2",
+    "Cargo.toml": "218a97dd142e744bc4d9c6e9facecf8c11a9abcd8370ed097c1f0ecc0760d395",
+    "crates/canic-cli/src/build.rs": "fdab8304afac6469606e148d9db99af5e2d41ef4717aee6177354837ed2fa0a0",
+    "crates/canic-host/src/artifact_io/mod.rs": "592368a3cec962f093f09083c4617ce65a53803f88b74849a6109c046374952b",
+    "crates/canic-host/src/artifact_io/wasm/mod.rs": "a3f0b7292638019e422f4c79152442f874d573ac006441dedca8a5ec4cc847ee",
+    "crates/canic-host/src/build_provenance/artifacts.rs": "dbf060af554368172aa54966b1fc0263735dd5ac31302440a39f7aa312d9920b",
+    "crates/canic-host/src/build_provenance/envelope.rs": "112f5096136088fde9966b15698b0062f2ffaed583f415903a26fc5c3b5c94b3",
+    "crates/canic-host/src/build_provenance/model.rs": "37a4d84d9012d55031651cd4eed3cf2f1d6466064e133737deda4bdb957bc3eb",
+    "crates/canic-host/src/build_provenance/tests.rs": "95d9e6b7984223eb643f1cc2d3520bd77c78010c830c533699da7b2dfb802482",
+    "crates/canic-host/src/canister_build/metrics/mod.rs": "6c3781479f223f287ad805f16d3aa76043d430e24e2299ab18ba452dcb468bee",
+    "crates/canic-host/src/canister_build/mod.rs": "cbd2837cc7d9e474b37a53cf9808e533cdc999d3d6d029ec92d997ff5787ddbd",
+    "crates/canic-host/src/policy_gate/tests/mod.rs": "b6cc0edf58044f4e08152f0280afc8a8076e3f83f1a1daae7664d22c495ab7a8",
+    "rust-toolchain.toml": "7553618f800829444096beea3dce84c3d07585efda504c19adb6787369bbd9e8"
+  },
+  "qualification": {
+    "profiles": [
+      "fast",
+      "release"
+    ],
+    "independent_code_data_distributions": true,
+    "exact_section_payload_counts": true,
+    "final_artifact_size_and_hash_match": true,
+    "artifact_bytes_preserved": true,
+    "malformed_wasm_and_missing_gzip_rejected": true,
+    "final_metrics_independent_of_optional_optimizer": true,
+    "new_size_limit_or_headroom_projection": false,
+    "real_toko_size_reduction_measured": false,
+    "canic165_generated_fleet_apply_qualified": false
+  },
+  "limits": [
+    "Native tests precede final const and private-module visibility cleanup; final scoped Clippy checks the retained source.",
+    "Build summaries measure section payload lengths, not deployment headroom or eventual stable memory.",
+    "Machine-readable final metrics use the existing selected-role --provenance path.",
+    "No broad gate, version transaction, Git publication, staging effect or sibling mutation ran."
+  ]
+}

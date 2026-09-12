@@ -28,6 +28,7 @@ pub(super) fn record_to_status(
     record: FleetActivationRecord,
     is_root: bool,
 ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
+    super::fixture::validate(&record)?;
     let FleetActivationRecord {
         state,
         root_authority,

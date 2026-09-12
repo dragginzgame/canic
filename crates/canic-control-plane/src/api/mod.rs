@@ -1,4 +1,8 @@
 //! Public control-plane APIs for lifecycle and template publication.
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+pub mod fixture_content;
+#[cfg(feature = "wasm-store-canister")]
+pub mod fixture_store;
 
 #[cfg(feature = "root-control-plane")]
 pub mod canister_pool;

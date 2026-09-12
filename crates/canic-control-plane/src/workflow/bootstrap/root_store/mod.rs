@@ -2,11 +2,13 @@
 //!
 //! Responsibility: verify and publish one root's exact initial application release set.
 //! Does not own: host staging, Fleet Registry registration, or root runtime activation.
-//! Boundary: no Store effect begins until the staged canonical manifest matches protected root
-//! authority and every admitted application artifact is complete.
+//! Boundary: registration binds the protected manifest; release publication additionally
+//! requires complete application artifacts and fixture sources.
 
 #[cfg(test)]
 mod tests;
+
+mod fixture;
 
 use crate::{
     dto::template::{TemplateManifestResponse, WasmStoreCatalogEntryResponse},
@@ -38,6 +40,8 @@ use canic_core::{
     role_contract::ProtocolProfileDigest,
 };
 use std::collections::{BTreeMap, BTreeSet};
+
+pub use fixture::{prepare, source_status};
 
 /// Manifest authority the root can reproduce from its embedded Component topology.
 ///
@@ -85,6 +89,7 @@ pub async fn bootstrap(
     super::root::ensure_required_wasm_store_canister()?;
     let store = exact_adopted_store(authority.wasm_store_authority.wasm_store)?;
     let manifest = load_and_validate_manifest(&authority, request.clone()).await?;
+    fixture::require_complete(&authority, &manifest).await?;
     let artifact_identities = artifact_identities(&manifest)?;
     let staged = expected_artifact_manifests(&manifest, store.binding.clone())?;
 
@@ -100,6 +105,7 @@ pub async fn bootstrap(
             wasm_store,
             release_set: authority.initial_release_set,
             catalog,
+            fixtures: manifest.fixtures,
         },
     )
 }
@@ -112,6 +118,7 @@ pub async fn status(
     let _ = RootWasmStoreStateOps::root_store_bootstrap_receipt(&request)?;
     let store = exact_adopted_store(authority.wasm_store_authority.wasm_store)?;
     let manifest = load_and_validate_manifest(&authority, request).await?;
+    fixture::require_complete(&authority, &manifest).await?;
     let artifact_identities = artifact_identities(&manifest)?;
     // Bootstrap already verified every staged chunk before publishing the release set. Status is
     // a bounded verification of the protected manifest metadata against the live Store catalog;
@@ -125,6 +132,7 @@ pub async fn status(
         wasm_store,
         release_set: authority.initial_release_set,
         catalog,
+        fixtures: manifest.fixtures,
     })
 }
 
@@ -232,6 +240,11 @@ fn validate_manifest_projection(
                 .ok_or_else(InternalError::invalid_input)?;
         }
     }
+    let fixture_bytes = fixture::validate_sources(&manifest.fixtures, unique_artifacts.keys())
+        .map_err(|_| InternalError::invalid_input())?;
+    let total_bytes = total_bytes
+        .checked_add(fixture_bytes)
+        .ok_or_else(InternalError::resource_exhausted)?;
     if total_bytes > authority.binding.limits.maximum_wasm_store_bytes {
         return Err(InternalError::resource_exhausted());
     }

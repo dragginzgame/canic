@@ -1,0 +1,49 @@
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+    Finished `test` profile [optimized + debuginfo] target(s) in 33.35s
+     Running unittests src/lib.rs (target/debug/deps/canic_cli-9ca71b98ed82cc36)
+
+running 15 tests
+test fleet::tests::ensure_defaults_to_current_fleet_document ... ok
+test fleet::tests::deliberate_reinstall_cannot_replace_a_reviewed_apply_digest ... ok
+test fleet::tests::ensure_requires_canonical_apply_digest ... ok
+test fleet::tests::fleet_commands_are_current_generation_and_lexicographically_ordered ... ok
+test fleet::tests::generate_defaults_to_policy_seed_and_desired_paths ... ok
+test fleet::tests::fresh_generation_requires_and_retains_exact_creation_fee_authority ... ok
+test fleet::tests::generate_replace_requires_canonical_digest ... ok
+test fleet::tests::observation_timing_is_informational_and_preserves_failed_call_counts ... ok
+test fleet::tests::phase_progress_json_has_exact_operation_authority_and_numeric_counts ... ok
+test fleet::tests::text_report_distinguishes_host_creates_and_ordered_reinstall_actions ... ok
+test fleet::tests::text_report_formats_every_cycle_quantity_with_three_decimal_units ... ok
+test fleet::tests::recovery_review_is_visible_in_text_json_and_typed_progress ... ok
+test fleet::tests::text_report_formats_pending_funding_and_unobserved_balances ... ok
+test fleet::tests::generated_desired_output_requires_exact_digest_for_replacement ... ok
+test fleet::tests::ensure_reopens_retained_reviewed_input_when_working_toml_is_missing ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 460 filtered out; finished in 0.03s
+
+     Running tests/subcommand_order.rs (target/debug/deps/subcommand_order-512972c06117294f)
+
+running 2 tests
+test no_arguments_prints_help_successfully ... ok
+test command_help_is_ordered_and_concise ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_host-5eff65a6466693ee)
+
+running 9 tests
+test fleet_ensure::ops::install_history::tests::changed_wasm_history_binds_both_reviewed_modules ... ok
+test fleet_ensure::ops::install_history::tests::same_wasm_recovery_requires_deployment_history_not_a_controller_change ... ok
+test fleet_ensure::tests::reinstall_history_accepts_only_the_exact_intended_root_replacement ... ok
+test fleet_ensure::tests::reinstall_seals_roots_before_coordinator_to_finish_inflight_funding ... ok
+test fleet_ensure::ops::install_history::tests::management_history_wire_labels_decode_into_the_exact_reinstall_proof ... ok
+test fleet_ensure::tests::reinstall_preparation_binds_exact_running_authority_before_sealing ... ok
+test fleet_ensure::tests::reinstall_selected_artifact_identity_detects_in_place_changes ... ok
+test fleet_ensure::ops::current_protocol::tests::activation_source_requires_exact_completed_prefix_and_issued_provisioning ... ok
+test fleet_ensure::ops::reinstall::adoption::tests::interrupted_adoption_rejects_drift_before_replacing_either_document ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 557 filtered out; finished in 0.47s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.tINUu3

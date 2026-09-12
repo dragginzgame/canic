@@ -37,3 +37,15 @@ pub struct CanicIcydbLifecycleStore {}
     timestamps
 )]
 pub struct LifecycleProbeRow {}
+
+/// Deterministic application rows used only by the fixture commit qualification.
+#[entity(
+    store = "CanicIcydbLifecycleStore",
+    version = 1,
+    pk(fields = ["id"]),
+    fields(
+        field(name = "id", value(item(prim = "Nat64"))),
+        field(name = "value", value(item(prim = "Nat64")))
+    )
+)]
+pub struct FixtureProbeRow {}

@@ -8,6 +8,7 @@ use canic::{
             ComponentDirectoryHead, ComponentDirectoryProvenance,
             ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
         },
+        fixture_provisioning::{FixtureAssignment, FixtureGrant, FixtureTargetBinding},
         fleet_registry::{
             FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
             FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
@@ -71,6 +72,43 @@ const LIFECYCLE_PARTICIPANT_INIT_TRAP_ENV: (&str, &str) =
     ("CANIC_TEST_LIFECYCLE_PARTICIPANT_INIT_TRAP", "1");
 const ICYDB_PARTICIPANT_TRAP_ENV: (&str, &str) = ("CANIC_TEST_ICYDB_PARTICIPANT_TRAP", "1");
 
+/// Build only the canonical Store for the retained fixture transport proof.
+///
+/// # Panics
+/// Panics if the canonical local Store artifact cannot be built or read.
+#[must_use]
+pub fn retained_fixture_store_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| {
+        let workspace_root = workspace_root();
+        let context = canic_host::canister_build::WorkspaceBuildContext {
+            role: "wasm_store".to_string(),
+            profile: canic_host::canister_build::CanisterBuildProfile::Fast,
+            environment: "local".to_string(),
+            build_network: canic_host::icp_config::resolve_icp_build_network_from_root(
+                &workspace_root,
+                "local",
+            )
+            .expect("local Store build network"),
+            config_path: workspace_root.join(COMBINED_LIFECYCLE_CONFIG_PATH),
+            icp_root: workspace_root.clone(),
+            workspace_root,
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: Some(
+                super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID
+                    .1
+                    .parse()
+                    .expect("test release build"),
+            ),
+        };
+        let output = canic_host::canister_build::build_workspace_canister_artifact(&context)
+            .expect("build canonical retained fixture Store");
+        std::fs::read(output.wasm_path).expect("read canonical retained fixture Store")
+    })
+    .clone()
+}
+
 ///
 /// LifecycleBoundaryFixture
 ///
@@ -100,7 +138,133 @@ pub struct CanicIcydbLifecycleFixture {
     pub wasm: Vec<u8>,
 }
 
+/// Exact source and runtime authority of one disposable importer target.
+pub struct InstalledFixtureConsumer {
+    pub canister_id: Principal,
+    pub directory: ComponentRuntimeDirectoryPreparationRequest,
+    pub assignment: canic::dto::fixture_provisioning::FixtureAssignment,
+}
+
 impl CanicIcydbLifecycleFixture {
+    /// Reinstall a disposable composed target under a new exact install identity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the disposable target rejects reinstall after the caller's cooldown.
+    #[must_use]
+    pub fn reinstall_composed_canister(
+        &self,
+        canister_id: Principal,
+        install_id: [u8; 32],
+    ) -> ComponentRuntimeDirectoryPreparationRequest {
+        let mut payload =
+            init_payload_for_config(canister_id, self.root, COMBINED_LIFECYCLE_CONFIG_PATH);
+        payload.install_id = install_id;
+        let directory = directory_request(&payload);
+        self.pic
+            .reinstall_canister(
+                canister_id,
+                self.wasm.clone(),
+                encode_init_args(payload),
+                None,
+            )
+            .expect("reinstall disposable composed target");
+        directory
+    }
+
+    /// Install a composed consumer with protected source selection before any data delivery.
+    ///
+    /// # Panics
+    ///
+    /// Panics if fixture content or the disposable target installation is invalid.
+    #[must_use]
+    pub fn install_fixture_consumer(
+        &self,
+        store: Principal,
+        descriptor: canic::dto::fixture_provisioning::FixtureDescriptor,
+    ) -> InstalledFixtureConsumer {
+        let canister_id = self.pic.create_canister();
+        self.pic.add_cycles(canister_id, INSTALL_CYCLES);
+        let mut payload =
+            init_payload_for_config(canister_id, self.root, COMBINED_LIFECYCLE_CONFIG_PATH);
+        let target = match &payload.authority {
+            CanisterInitAuthority::Component { binding, .. } => {
+                canic::ids::ManagedCanisterBinding::Component(binding.clone())
+            }
+            CanisterInitAuthority::ComponentChild { .. } => {
+                unreachable!("composed fixture is top-level")
+            }
+        };
+        let content_id =
+            canic_core::api::fixture_content::FixtureContentApi::content_id(&descriptor)
+                .expect("fixture descriptor");
+        let assignment = FixtureAssignment {
+            store,
+            grant: FixtureGrant {
+                revision: 1,
+                enabled: true,
+                binding: FixtureTargetBinding {
+                    target,
+                    installation: payload.install_id,
+                    release_build_id: payload.release_build_id,
+                    content_id,
+                },
+            },
+            descriptor,
+        };
+        payload.fixture = Some(Box::new(assignment.clone()));
+        let directory = directory_request(&payload);
+        self.pic.install_canister(
+            canister_id,
+            self.wasm.clone(),
+            encode_init_args(payload),
+            None,
+        );
+        InstalledFixtureConsumer {
+            canister_id,
+            directory,
+            assignment,
+        }
+    }
+
+    /// Reinstall a disposable fixture target with a new protected installation and grant.
+    ///
+    /// # Panics
+    ///
+    /// Panics if identities are reused or the disposable target rejects reinstall.
+    #[must_use]
+    pub fn reinstall_fixture_consumer(
+        &self,
+        previous: &InstalledFixtureConsumer,
+        install_id: [u8; 32],
+        revision: u64,
+    ) -> InstalledFixtureConsumer {
+        assert_ne!(install_id, previous.assignment.grant.binding.installation);
+        assert!(revision > previous.assignment.grant.revision);
+        let canister_id = previous.canister_id;
+        let mut payload =
+            init_payload_for_config(canister_id, self.root, COMBINED_LIFECYCLE_CONFIG_PATH);
+        payload.install_id = install_id;
+        let mut assignment = previous.assignment.clone();
+        assignment.grant.revision = revision;
+        assignment.grant.binding.installation = install_id;
+        payload.fixture = Some(Box::new(assignment.clone()));
+        let directory = directory_request(&payload);
+        self.pic
+            .reinstall_canister(
+                canister_id,
+                self.wasm.clone(),
+                encode_init_args(payload),
+                None,
+            )
+            .expect("reinstall disposable fixture consumer");
+        InstalledFixtureConsumer {
+            canister_id,
+            directory,
+            assignment,
+        }
+    }
+
     /// Install the exact managed Canic/IcyDB composition probe while it remains Prepared.
     #[must_use]
     pub fn install_composed_canister(
@@ -253,6 +417,19 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
 /// Build the exact published-IcyDB composition probe and start one fresh PocketIC.
 #[must_use]
 pub fn install_canic_icydb_lifecycle_fixture() -> CanicIcydbLifecycleFixture {
+    install_canic_icydb_lifecycle_fixture_with_builder(
+        PocketIcBuilder::new().with_application_subnet(),
+    )
+}
+
+/// Build the composition probe with caller-selected disposable subnet topology.
+///
+/// # Panics
+/// Panics if the probe cannot be built or PocketIC cannot start.
+#[must_use]
+pub fn install_canic_icydb_lifecycle_fixture_with_builder(
+    builder: PocketIcBuilder,
+) -> CanicIcydbLifecycleFixture {
     let workspace_root = workspace_root();
     let target_dir = test_target_dir(&workspace_root, "pic-canic-icydb-lifecycle-wasm");
     build_combined_canister_once(&workspace_root);
@@ -264,7 +441,7 @@ pub fn install_canic_icydb_lifecycle_fixture() -> CanicIcydbLifecycleFixture {
             "canic_icydb_lifecycle_probe",
             CanicWasmBuildProfile::Fast.target_dir_name(),
         ),
-        pic: start_pocket_ic(PocketIcBuilder::new().with_application_subnet()),
+        pic: start_pocket_ic(builder),
     }
 }
 
@@ -539,6 +716,7 @@ fn init_payload_for_config(
         .expect("lifecycle Fleet admission projection");
 
     CanisterInitPayload {
+        fixture: None,
         install_id: identity.install_id,
         release_build_id: identity.release_build_id,
         component_deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {

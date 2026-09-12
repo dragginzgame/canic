@@ -1,0 +1,8 @@
+    Checking toml v1.1.6+spec-1.1.0
+    Checking canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Checking canic-tests v0.110.14 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 55.19s

@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "issue": "CANIC-165",
+  "status": "partial-qualification",
+  "date": "2026-09-11",
+  "release_assignment": null,
+  "dependencies": {
+    "canic": "0.110.14",
+    "icydb": "0.257.4",
+    "ic_memory": "0.13.2",
+    "pocketic": "16.0.0"
+  },
+  "checks": [
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic_icydb_lifecycle_probe -p canic-icydb-lifecycle-schema -p canic-testing-internal -p canic-tests --lib --test icydb_lifecycle_composition -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "result": "pass",
+      "tests": 2,
+      "test_seconds": 30.33,
+      "runner_seconds": 38
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+      "result": "pass",
+      "tests": 1,
+      "test_seconds": 431.01,
+      "runner_seconds": 444
+    }
+  ],
+  "fixture_measurements": {
+    "rows": 8,
+    "row_bytes": 16,
+    "maximum_commit_instructions": 19499486,
+    "maximum_validation_instructions": 20704750,
+    "receipt_replay_instructions": 13658619,
+    "production_limits_qualified": false
+  },
+  "source_files": 1559,
+  "source_unchanged": true,
+  "evidence": [
+    {
+      "path": "bootstrap.log",
+      "sha256": "1945bda59b80ceb9704b7da065d57b013b1f775a0d02aed0bca005446a6e9211"
+    },
+    {
+      "path": "clippy.log",
+      "sha256": "90a9f23c61b68c0abcf6acf3dcf17a6381583c2087f2b4ca7749a7c3f8d643e2"
+    },
+    {
+      "path": "pocketic.log",
+      "sha256": "2869ae377ab53c0ddd351081247825f40dc31b47a82652163e81480509d24e29"
+    },
+    {
+      "path": "source-sha256.json",
+      "sha256": "c6a9038c37f0f4bea6304e6f06a3d16398d38dc5ed2c50670278ccef9301c804"
+    }
+  ],
+  "remaining": [
+    "Combined initial parent/child fixture readiness and exact Store read-grant qualification",
+    "Paused transport callback and final lost-response qualification",
+    "Retained Store source ingestion, target pull, retention, funding and outage bounds",
+    "Application facade/config/protocol propagation and downstream role qualification"
+  ],
+  "production_api_added": false,
+  "sibling_repositories_modified": false,
+  "broad_gate_run": false,
+  "version_changed": false,
+  "published": false,
+  "staging_changed": false,
+  "final_checks": {
+    "format": "pass",
+    "diff_whitespace": "pass",
+    "document_semantics": "pass",
+    "local_links": "pass",
+    "evidence_hashes": "pass",
+    "evidence_secret_scan": "pass"
+  }
+}

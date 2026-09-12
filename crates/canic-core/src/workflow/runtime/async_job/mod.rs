@@ -70,7 +70,7 @@ impl AsyncJobWorkflow {
     /// Finish only the exact active attempt and preserve the provider result when current.
     pub fn finish(attempt: AsyncJobAttempt, result: TimerRunResult) -> TimerRunResult {
         let completion = async_job_completion(result.completion().outcome());
-        match AsyncJobRecoveryOps::finish(attempt, completion) {
+        match AsyncJobRecoveryOps::finish(attempt, completion, IcOps::now_nanos()) {
             Ok(true) => result,
             Ok(false) => TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop),
             Err(_) => invariant_failure(),

@@ -39,6 +39,7 @@ pub mod component_registry;
 pub mod cycles;
 pub mod env;
 pub mod error;
+pub mod fixture_provisioning;
 pub mod fleet_activation;
 pub mod fleet_admission;
 pub mod fleet_funding;

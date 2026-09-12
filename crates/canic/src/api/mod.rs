@@ -110,3 +110,10 @@ pub mod metrics {
 pub mod ops {
     pub use crate::__internal::core::{log, perf};
 }
+
+/// Registered application fixture consumption and exact receipt observation.
+pub mod fixture_provisioning {
+    pub use crate::__internal::core::api::fixture_provisioning::{
+        FixtureImporter, FixtureProvisioningApi,
+    };
+}

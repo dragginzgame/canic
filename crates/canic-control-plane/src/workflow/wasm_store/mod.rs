@@ -4,6 +4,8 @@
 //! Does not own: endpoint authorization, root deletion authority, or stable Store data.
 //! Boundary: an authenticated root may reclaim cycles only from its empty GC-complete Store.
 
+pub mod gc;
+
 use crate::{
     config,
     dto::template::{

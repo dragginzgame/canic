@@ -64,6 +64,10 @@ const fn protocol_kind(action: &CurrentFleetProtocolAction) -> &'static str {
         CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => "prepare_component_registry",
         CurrentFleetProtocolAction::PrepareStoreChunkSet { .. } => "prepare_store_chunk_set",
         CurrentFleetProtocolAction::ProvisionComponents { .. } => "provision_components",
+        CurrentFleetProtocolAction::PrepareStoreFixture { .. } => "prepare_store_fixture",
+        CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. } => {
+            "publish_store_fixture_chunk"
+        }
         CurrentFleetProtocolAction::PublishStoreChunk { .. } => "publish_store_chunk",
         CurrentFleetProtocolAction::ReconcilePoolAsset { .. } => "reconcile_pool_asset",
         CurrentFleetProtocolAction::StageStoreManifest { .. } => "stage_store_manifest",

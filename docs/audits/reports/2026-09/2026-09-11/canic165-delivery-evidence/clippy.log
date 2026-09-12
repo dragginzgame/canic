@@ -1,0 +1,129 @@
+## production and consumer integration
+   Compiling canic-macros v0.110.14 (/home/adam/projects/canic/crates/canic-macros)
+   Compiling canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic_icydb_lifecycle_probe v0.110.14 (/home/adam/projects/canic/canisters/test/canic_icydb_lifecycle_probe)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Checking canic-tests v0.110.14 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 44.66s
+
+## final core, Fleet and Shard tests
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+   Compiling canister_user_shard v0.110.14 (/home/adam/projects/canic/apps/test/user_shard)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 05s
+
+--- Revocation before recycling checkpoint ---
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 2.46s
+
+=== Retained replacement grant and stopped-target startup checkpoint ===
+ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-core -p canic-control-plane -p canic-testing-internal -p canister_user_hub --features canic-testing-internal/governed-pocketic-tests --tests -- -D warnings
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+   Compiling canister_user_hub v0.110.14 (/home/adam/projects/canic/apps/test/user_hub)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 32.17s
+
+=== 2026-09-12 partial-import reinstall and discarded Store receipts ===
+ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic_icydb_lifecycle_probe -p canic-testing-internal -p canic-tests --lib --test icydb_lifecycle_composition -- -D warnings
+    Checking smallvec v1.16.1
+    Checking parking_lot_core v0.9.12
+    Checking icu_normalizer v2.3.0
+    Checking ic-cdk-executor v2.0.0
+    Checking tracing-subscriber v0.3.23
+    Checking ic-cdk v0.20.2
+    Checking ic-cdk-timers v1.0.0
+    Checking parking_lot v0.12.5
+    Checking ic-timers v0.7.0
+    Checking idna_adapter v1.2.2
+    Checking tokio v1.53.1
+   Compiling string_cache v0.8.9
+    Checking icydb-core v0.257.4
+    Checking idna v1.1.0
+   Compiling lalrpop v0.20.2
+    Checking url v2.5.8
+    Checking canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking tracing-appender v0.2.5
+    Checking tokio-util v0.7.19
+    Checking tower v0.5.3
+    Checking tokio-rustls v0.26.5
+    Checking tower-http v0.6.11
+    Checking h2 v0.4.19
+   Compiling candid_parser v0.4.1
+    Checking hyper v1.11.1
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.13.5
+    Checking pocket-ic v16.0.0
+    Checking ic-agent v0.49.2
+    Checking ic-query v0.42.0
+    Checking ic-testkit v0.9.0
+    Checking icydb v0.257.4
+   Compiling canic-icydb-lifecycle-schema v0.110.14 (/home/adam/projects/canic/canisters/test/canic_icydb_lifecycle_probe/schema)
+    Checking canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic_icydb_lifecycle_probe v0.110.14 (/home/adam/projects/canic/canisters/test/canic_icydb_lifecycle_probe)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Checking canic-tests v0.110.14 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 01s
+
+
+CANIC-165 durable outage backoff - 2026-09-12
+    Checking canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 48.63s
+
+
+CANIC-165 explicit Store retirement - 2026-09-12
+    Checking memchr v2.8.3
+    Checking ic_principal v0.1.5
+    Checking candid v0.10.35
+    Checking ic-stable-structures v0.7.2
+    Checking serde_json v1.0.151
+    Checking ic-memory v0.13.2
+    Checking ic-cdk v0.20.2
+    Checking canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 46.25s
+
+
+CANIC-165 explicit Store retirement - 2026-09-12
+    Checking canic-tests v0.110.14 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1.17s
+
+=== Fixture-bearing retirement: cargo clippy --locked --keep-going -p canic-control-plane -p canic-testing-internal --features canic-testing-internal/governed-pocketic-tests --lib --tests -- -D warnings [pass] ===
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 15.02s
+
+=== Pending fixture funding: cargo clippy --locked --keep-going -p canic-control-plane -p canic-testing-internal --features canic-testing-internal/governed-pocketic-tests --lib --tests -- -D warnings [pass] ===
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 2.58s
+
+=== Automatic fixture funding: cargo clippy --locked -p canic-testing-internal --features governed-pocketic-tests --lib --tests -- -D warnings [pass] ===
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 2.28s
+
+=== Durable reviewed publication attempts ===
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 13.95s
+
+=== Reinstall submitted during an actual pending Store fetch ===
+   Compiling canic_icydb_lifecycle_probe v0.110.14 (/home/adam/projects/canic/canisters/test/canic_icydb_lifecycle_probe)
+    Checking canic-tests v0.110.14 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1.02s

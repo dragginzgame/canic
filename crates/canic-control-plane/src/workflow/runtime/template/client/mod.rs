@@ -4,7 +4,8 @@ use crate::{
         TemplateChunkRequest, TemplateChunkResponse, TemplateChunkSetInfoResponse,
         TemplateChunkSetPrepareInput, TemplateLookupRequest, TemplateManifestInput,
         WasmStoreCatalogEntryResponse, WasmStoreDeletionCycleReclamationRequest,
-        WasmStoreDeletionCycleReclamationResponse, WasmStoreStatusResponse,
+        WasmStoreDeletionCycleReclamationResponse, WasmStoreGcRequest, WasmStoreGcTarget,
+        WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion},
 };
@@ -15,14 +16,20 @@ use canic_core::{
         error::InternalError,
         ops::{cost_guard::CostGuardPermit, ic::call::CallOps},
     },
-    dto::{error::Error, role::OperationStatusRequest},
+    dto::{
+        error::Error,
+        fixture_provisioning::{
+            FixtureDescriptor, FixtureGrant, FixtureGrantRequest, FixtureSourceStatus,
+            FixtureStoreError,
+        },
+    },
     protocol,
 };
 
 ///
 /// WasmStoreInternalClient
 ///
-pub(in crate::workflow::runtime::template) struct WasmStoreInternalClient {
+pub(in crate::workflow) struct WasmStoreInternalClient {
     store_pid: Principal,
 }
 
@@ -39,7 +46,7 @@ impl WasmStoreInternalClient {
         Self::STATUS,
     ];
 
-    pub(super) const fn new(store_pid: Principal) -> Self {
+    pub(in crate::workflow) const fn new(store_pid: Principal) -> Self {
         Self { store_pid }
     }
 
@@ -118,9 +125,16 @@ impl WasmStoreInternalClient {
         .await
     }
 
-    pub(super) async fn run_gc(&self, operation_id: [u8; 32]) -> Result<(), InternalError> {
+    pub(super) async fn run_gc(
+        &self,
+        operation_id: [u8; 32],
+        target: WasmStoreGcTarget,
+    ) -> Result<(), InternalError> {
         match self
-            .command(StoreCommand::RunGc(OperationStatusRequest { operation_id }))
+            .command(StoreCommand::RunGc(WasmStoreGcRequest {
+                operation_id,
+                target,
+            }))
             .await?
         {
             StoreCommandResponse::OperationAccepted(receipt)
@@ -163,6 +177,58 @@ impl WasmStoreInternalClient {
             .await?;
 
         Ok(response.bytes)
+    }
+
+    pub(in crate::workflow) async fn prepare_fixture(
+        &self,
+        descriptor: FixtureDescriptor,
+    ) -> Result<Result<FixtureSourceStatus, FixtureStoreError>, InternalError> {
+        match self
+            .command(StoreCommand::PrepareFixture(descriptor))
+            .await?
+        {
+            StoreCommandResponse::FixtureSource(status) => Ok(status),
+            _ => Err(InternalError::conflict()),
+        }
+    }
+
+    pub(in crate::workflow) async fn fixture_status(
+        &self,
+        content_id: [u8; 32],
+    ) -> Result<Result<FixtureSourceStatus, FixtureStoreError>, InternalError> {
+        match self
+            .status_request(StoreCatalogRequest::Fixture(content_id))
+            .await?
+        {
+            StoreCatalogResponse::Fixture(status) => Ok(status),
+            _ => Err(InternalError::conflict()),
+        }
+    }
+
+    pub(in crate::workflow) async fn fixture_grant(
+        &self,
+        target: Principal,
+    ) -> Result<Option<FixtureGrant>, InternalError> {
+        match self
+            .status_request(StoreCatalogRequest::FixtureGrant(target))
+            .await?
+        {
+            StoreCatalogResponse::FixtureGrant(grant) => Ok(grant.map(|grant| *grant)),
+            _ => Err(InternalError::conflict()),
+        }
+    }
+
+    pub(in crate::workflow) async fn set_fixture_grant(
+        &self,
+        request: FixtureGrantRequest,
+    ) -> Result<Result<FixtureGrant, FixtureStoreError>, InternalError> {
+        match self
+            .command(StoreCommand::SetFixtureGrant(Box::new(request)))
+            .await?
+        {
+            StoreCommandResponse::FixtureGrant(grant) => Ok(*grant),
+            _ => Err(InternalError::conflict()),
+        }
     }
 
     async fn command(&self, command: StoreCommand) -> Result<StoreCommandResponse, InternalError> {

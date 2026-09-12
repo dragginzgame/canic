@@ -127,6 +127,15 @@ pub(super) fn compile_root_authorities(
         .map_err(|error| CanicInitError::Release(error.to_string()))?;
     validate_finalized_release_build_manifest(root, bootstrap.release_build_id, &complete.path)
         .map_err(|error| CanicInitError::Release(error.to_string()))?;
+    complete
+        .manifest
+        .require_fixture_delivery(
+            root,
+            &bootstrap
+                .component_deployment_configuration
+                .component_topology,
+        )
+        .map_err(|error| CanicInitError::Release(error.to_string()))?;
     if complete.manifest.infrastructure_artifact_manifest_sha256 != infrastructure.digest {
         return Err(CanicInitError::Release(
             "complete release authority does not bind the infrastructure manifest".to_string(),
@@ -197,6 +206,15 @@ fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, CanicIni
         &complete.path,
     )
     .map_err(|error| CanicInitError::Release(error.to_string()))?;
+    complete
+        .manifest
+        .require_fixture_delivery(
+            request.root,
+            &bootstrap
+                .component_deployment_configuration
+                .component_topology,
+        )
+        .map_err(|error| CanicInitError::Release(error.to_string()))?;
     if complete.manifest.infrastructure_artifact_manifest_sha256 != infrastructure.digest {
         return Err(CanicInitError::Release(
             "complete release authority does not bind the infrastructure manifest".to_string(),
@@ -380,12 +398,22 @@ fn compile_root_authority(
             "complete release authority does not bind the application artifact union".to_string(),
         ));
     }
+    let fixtures = complete
+        .manifest
+        .verify_fixtures(
+            workspace_root,
+            &bootstrap
+                .component_deployment_configuration
+                .component_topology,
+        )
+        .map_err(|error| CanicInitError::Release(error.to_string()))?;
     let manifest = FleetSubnetRootReleaseSetManifest::project(
         &bootstrap
             .component_deployment_configuration
             .component_topology,
         &binding,
         &union.union,
+        &fixtures.manifest,
     )
     .map_err(|error| CanicInitError::Release(error.to_string()))?;
     let manifest_digest = manifest
@@ -395,6 +423,7 @@ fn compile_root_authority(
                 .component_topology,
             &binding,
             &union.union,
+            &fixtures.manifest,
         )
         .map_err(|error| CanicInitError::Release(error.to_string()))?;
     Ok(FleetSubnetRootAuthority {

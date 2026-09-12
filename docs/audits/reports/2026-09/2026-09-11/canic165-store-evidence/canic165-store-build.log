@@ -1,0 +1,9 @@
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Finished `fast` profile [optimized] target(s) in 38.72s
+     Running `target/fast/examples/build_artifact wasm_store fast /home/adam/projects/canic /home/adam/projects/canic canisters/test/canic_icydb_lifecycle_probe/canic.toml --refresh-canonical-did --release-build-id a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae`
+Build phase declaration bootstrap_store: 5.59s
+Build phase runtime Cargo/link bootstrap_store: 35.30s
+[WASM]       SIZE   wasm_store/candidate.wasm  code=2.78 MiB (2911232 B)  headroom=7.22 MiB (7574528 B)
+Build phase finalization /home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.wasm: shrink=0.56s candid=0.51s binaryen=0.00s gzip/validation=0.19s total=1.26s
+/home/adam/projects/canic/.canic/release-builds/a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.wasm.gz

@@ -2,7 +2,7 @@ use crate::{
     dto::template::{
         TemplateChunkSetInfoResponse, TemplateManifestInput, WasmStoreCatalogEntryResponse,
         WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
-        WasmStoreStatusResponse,
+        WasmStoreGcTarget, WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion},
     ops::storage::template::TemplateChunkedOps,
@@ -55,7 +55,7 @@ pub(super) async fn store_prepare_gc(
     operation_id: [u8; 32],
 ) -> Result<(), InternalError> {
     WasmStoreInternalClient::new(store_pid)
-        .run_gc(operation_id)
+        .run_gc(operation_id, WasmStoreGcTarget::Prepared)
         .await
 }
 
@@ -65,7 +65,7 @@ pub(super) async fn store_begin_gc(
     operation_id: [u8; 32],
 ) -> Result<(), InternalError> {
     WasmStoreInternalClient::new(store_pid)
-        .run_gc(operation_id)
+        .run_gc(operation_id, WasmStoreGcTarget::Complete)
         .await
 }
 
@@ -75,7 +75,7 @@ pub(super) async fn store_complete_gc(
     operation_id: [u8; 32],
 ) -> Result<(), InternalError> {
     WasmStoreInternalClient::new(store_pid)
-        .run_gc(operation_id)
+        .run_gc(operation_id, WasmStoreGcTarget::Complete)
         .await
 }
 

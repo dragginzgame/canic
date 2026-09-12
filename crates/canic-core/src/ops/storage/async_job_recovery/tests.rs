@@ -44,14 +44,14 @@ fn cycle_takeover_and_retry_reuse_only_the_exact_cycle_operation() {
     assert_eq!(first.operation_id(), takeover.operation_id());
 
     assert!(
-        AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::RetryableFailure)
+        AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::RetryableFailure, 0)
             .expect("finish retryable operation")
     );
     let retry = acquired(AsyncJobRecoveryOps::claim(owner, 41, 50).expect("claim exact retry"));
     assert_eq!(takeover.operation_id(), retry.operation_id());
 
     assert!(
-        AsyncJobRecoveryOps::finish(retry, AsyncJobCompletion::Success)
+        AsyncJobRecoveryOps::finish(retry, AsyncJobCompletion::Success, 0)
             .expect("finish exact retry")
     );
     let next = acquired(AsyncJobRecoveryOps::claim(owner, 51, 60).expect("claim next operation"));
@@ -65,7 +65,7 @@ fn non_cycle_retry_completion_retains_no_generated_operation_identity() {
     let owner = AsyncJobOwner::PlacementReceiptAcknowledgement;
     let first = acquired(AsyncJobRecoveryOps::claim(owner, 1, 3).expect("claim placement job"));
     assert!(
-        AsyncJobRecoveryOps::finish(first, AsyncJobCompletion::RetryableFailure)
+        AsyncJobRecoveryOps::finish(first, AsyncJobCompletion::RetryableFailure, 0)
             .expect("finish placement job")
     );
     let retry = acquired(AsyncJobRecoveryOps::claim(owner, 4, 6).expect("claim next attempt"));
@@ -82,7 +82,7 @@ fn stale_completion_cannot_clear_a_takeover_attempt() {
     let takeover = acquired(AsyncJobRecoveryOps::claim(owner, 2, 4).expect("take over attempt"));
 
     assert!(
-        !AsyncJobRecoveryOps::finish(first, AsyncJobCompletion::Success)
+        !AsyncJobRecoveryOps::finish(first, AsyncJobCompletion::Success, 0)
             .expect("reject stale finish")
     );
     assert_eq!(
@@ -90,7 +90,7 @@ fn stale_completion_cannot_clear_a_takeover_attempt() {
         AsyncJobClaim::Busy { retry_at_ns: 4 }
     );
     assert!(
-        AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::Success)
+        AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::Success, 0)
             .expect("finish takeover")
     );
 }
@@ -103,7 +103,7 @@ fn abandon_clears_only_active_and_cycle_retry_authority() {
         AsyncJobRecoveryOps::claim(AsyncJobOwner::CycleTopup, 1, 2).expect("claim cycle operation"),
     );
     assert!(
-        AsyncJobRecoveryOps::finish(cycle, AsyncJobCompletion::RetryableFailure)
+        AsyncJobRecoveryOps::finish(cycle, AsyncJobCompletion::RetryableFailure, 0)
             .expect("retain cycle retry")
     );
     AsyncJobRecoveryOps::abandon(AsyncJobOwner::CycleTopup);
@@ -161,6 +161,10 @@ fn every_closed_owner_survives_response_loss_restart_and_one_fenced_takeover() {
         ),
         (AsyncJobOwner::CycleTopup, "parent-funding-operation"),
         (
+            AsyncJobOwner::FixtureImport,
+            "installed-fixture-and-application-receipt",
+        ),
+        (
             AsyncJobOwner::PlacementReceiptAcknowledgement,
             "terminal-placement-receipt",
         ),
@@ -194,7 +198,7 @@ fn every_closed_owner_survives_response_loss_restart_and_one_fenced_takeover() {
             AsyncJobClaim::Busy { retry_at_ns: 40 }
         );
         assert!(
-            !AsyncJobRecoveryOps::finish(first, AsyncJobCompletion::Success)
+            !AsyncJobRecoveryOps::finish(first, AsyncJobCompletion::Success, 0)
                 .expect("reject a late completion from the lost response")
         );
         assert_eq!(AsyncJobRecoveryOps::active_lease_deadline(owner), Some(40));
@@ -202,7 +206,7 @@ fn every_closed_owner_survives_response_loss_restart_and_one_fenced_takeover() {
         if owner == AsyncJobOwner::CycleTopup {
             assert_eq!(takeover.operation_id(), first_operation_id);
             assert!(
-                AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::RetryableFailure)
+                AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::RetryableFailure, 0)
                     .expect("retain exact uncertain funding identity")
             );
             let retry = acquired(
@@ -211,18 +215,135 @@ fn every_closed_owner_survives_response_loss_restart_and_one_fenced_takeover() {
             );
             assert_eq!(retry.operation_id(), first_operation_id);
             assert!(
-                AsyncJobRecoveryOps::finish(retry, AsyncJobCompletion::Success)
+                AsyncJobRecoveryOps::finish(retry, AsyncJobCompletion::Success, 0)
                     .expect("commit the exact funding retry")
             );
         } else {
             assert_eq!(first_operation_id, None);
             assert_eq!(takeover.operation_id(), None);
             assert!(
-                AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::Success)
+                AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::Success, 0)
                     .expect("commit the owner-bound domain operation")
             );
         }
 
         assert_eq!(AsyncJobRecoveryOps::active_lease_deadline(owner), None);
     }
+}
+
+#[test]
+fn permanent_fixture_failure_survives_restore_and_stale_attempt_cannot_replace_it() {
+    use crate::domain::fixture_import::FixtureImportFailure;
+    let _guard = crate::test::seams::lock();
+    reset();
+    let first = acquired(AsyncJobRecoveryOps::claim(AsyncJobOwner::FixtureImport, 1, 2).unwrap());
+    let next = acquired(AsyncJobRecoveryOps::claim(AsyncJobOwner::FixtureImport, 2, 4).unwrap());
+    assert!(!AsyncJobRecoveryOps::is_current(first));
+    assert!(AsyncJobRecoveryOps::is_current(next));
+    assert!(!AsyncJobRecoveryOps::fail_fixture_import(
+        first,
+        FixtureImportFailure::Authority
+    ));
+    assert_eq!(AsyncJobRecoveryOps::fixture_import_failure(), None);
+    let failure = FixtureImportFailure::Application { code: 42 };
+    assert!(AsyncJobRecoveryOps::fail_fixture_import(next, failure));
+    let snapshot = AsyncJobRecoveryStore::export();
+    AsyncJobRecoveryStore::import(snapshot);
+    assert_eq!(AsyncJobRecoveryOps::fixture_import_failure(), Some(failure));
+    assert!(!AsyncJobRecoveryOps::is_current(next));
+}
+
+#[test]
+fn fixture_backoff_survives_restore_and_admits_only_one_retry_at_the_deadline() {
+    let _guard = crate::test::seams::lock();
+    reset();
+    let owner = AsyncJobOwner::FixtureImport;
+    let mut now = 1;
+    for seconds in [1, 2, 4, 8, 16, 32, 60, 60] {
+        let attempt = acquired(AsyncJobRecoveryOps::claim(owner, now, now + 100).unwrap());
+        assert!(
+            AsyncJobRecoveryOps::finish(attempt, AsyncJobCompletion::RetryableFailure, now)
+                .unwrap()
+        );
+        let deadline = now + seconds * 1_000_000_000;
+        let retained = AsyncJobRecoveryStore::export();
+        assert_eq!(retained.record.fixture_import_retry.not_before_ns, deadline);
+        AsyncJobRecoveryStore::import(retained.clone());
+        assert_eq!(
+            AsyncJobRecoveryOps::claim(owner, deadline - 1, deadline + 100).unwrap(),
+            AsyncJobClaim::Busy {
+                retry_at_ns: deadline
+            }
+        );
+        assert_eq!(AsyncJobRecoveryStore::export(), retained);
+        assert!(
+            !AsyncJobRecoveryOps::finish(attempt, AsyncJobCompletion::Success, deadline - 1)
+                .unwrap()
+        );
+        assert_eq!(AsyncJobRecoveryStore::export(), retained);
+        now = deadline;
+    }
+    let retry = acquired(AsyncJobRecoveryOps::claim(owner, now, now + 100).unwrap());
+    assert_eq!(
+        AsyncJobRecoveryOps::claim(owner, now, now + 200).unwrap(),
+        AsyncJobClaim::Busy {
+            retry_at_ns: now + 100
+        }
+    );
+    assert!(AsyncJobRecoveryOps::finish(retry, AsyncJobCompletion::Success, now).unwrap());
+    assert_eq!(
+        AsyncJobRecoveryStore::export().record.fixture_import_retry,
+        FixtureImportRetryRecord::default()
+    );
+    let progress = acquired(AsyncJobRecoveryOps::claim(owner, now, now + 100).unwrap());
+    assert!(
+        AsyncJobRecoveryOps::finish(progress, AsyncJobCompletion::RetryableFailure, now).unwrap()
+    );
+    assert_eq!(
+        AsyncJobRecoveryStore::export()
+            .record
+            .fixture_import_retry
+            .not_before_ns,
+        now + 1_000_000_000
+    );
+}
+
+#[test]
+fn fixture_retry_fences_stale_and_foreign_completions_and_saturates_without_early_retry() {
+    let _guard = crate::test::seams::lock();
+    reset();
+    let owner = AsyncJobOwner::FixtureImport;
+    let stale = acquired(AsyncJobRecoveryOps::claim(owner, 1, 2).unwrap());
+    let current = acquired(AsyncJobRecoveryOps::claim(owner, 2, 4).unwrap());
+    let foreign = acquired(AsyncJobRecoveryOps::claim(AsyncJobOwner::AuthRenewal, 2, 4).unwrap());
+    let retained = AsyncJobRecoveryStore::export();
+    assert!(!AsyncJobRecoveryOps::finish(stale, AsyncJobCompletion::RetryableFailure, 3).unwrap());
+    assert_eq!(AsyncJobRecoveryStore::export(), retained);
+    assert!(AsyncJobRecoveryOps::finish(foreign, AsyncJobCompletion::RetryableFailure, 3).unwrap());
+    assert_eq!(
+        AsyncJobRecoveryStore::export().record.fixture_import_retry,
+        retained.record.fixture_import_retry
+    );
+    let mut saturated = AsyncJobRecoveryStore::export();
+    saturated.record.fixture_import_retry.failures = u32::MAX;
+    AsyncJobRecoveryStore::import(saturated);
+    assert!(
+        AsyncJobRecoveryOps::finish(current, AsyncJobCompletion::RetryableFailure, u64::MAX - 1)
+            .unwrap()
+    );
+    assert_eq!(
+        AsyncJobRecoveryStore::export()
+            .record
+            .fixture_import_retry
+            .failures,
+        u32::MAX
+    );
+    assert_eq!(
+        AsyncJobRecoveryOps::claim(owner, u64::MAX - 1, u64::MAX).unwrap(),
+        AsyncJobClaim::Busy {
+            retry_at_ns: u64::MAX
+        }
+    );
+    // The fixture's outage delay does not block other recovery owners.
+    let _ = acquired(AsyncJobRecoveryOps::claim(AsyncJobOwner::AuthRenewal, 3, 5).unwrap());
 }

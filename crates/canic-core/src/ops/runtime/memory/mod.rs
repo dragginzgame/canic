@@ -76,9 +76,14 @@ impl MemoryRegistryOps {
     /// Measure all usable IDs through the substrate's bounded read-only report.
     /// Collection never decodes history or constructs a missing runtime.
     pub fn allocation_snapshot() -> Result<MemoryAllocationsResponse, InternalError> {
-        let report = ic_memory::default_memory_manager_memory_allocations()
-            .map_err(MemoryRegistryOpsError::from)?;
-        memory_allocations_response(report)
+        memory_allocations_response(Self::allocation_report()?)
+    }
+
+    /// Share the bounded owner report without constructing protected response rows.
+    pub(crate) fn allocation_report() -> Result<ic_memory::MemoryAllocations, InternalError> {
+        ic_memory::default_memory_manager_memory_allocations()
+            .map_err(MemoryRegistryOpsError::from)
+            .map_err(Into::into)
     }
 
     // Run eager TLS touches after the registry validates stable-memory slots.

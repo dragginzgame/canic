@@ -1,0 +1,19 @@
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 30s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-e73d16d76a87a083)
+
+running 10 tests
+test ops::fixture_store::tests::child_grant_preserves_component_identity_and_authenticates_only_the_child ... ok
+test ops::fixture_store::tests::descriptor_admission_accounts_for_the_full_command_envelope ... ok
+test ops::fixture_store::tests::descriptor_and_authority_conflicts_leave_storage_unchanged ... ok
+test ops::fixture_store::tests::fixture_capacity_includes_metadata_payload_grants_and_template_bytes ... ok
+test ops::fixture_store::tests::fixture_store_restores_content_progress_and_exact_grant_revisions ... ok
+test ops::fixture_store::tests::revoked_and_replaced_grants_fence_delayed_commands_and_reads ... ok
+test state_contract::tests::descriptors_declare_template_control_plane_and_gc_allocations ... ok
+test state_contract::tests::descriptors_reference_canonical_control_plane_data_types ... ok
+test state_contract::tests::root_component_provisioning_declares_exact_consecutive_domains ... ok
+test state_contract::tests::root_component_registry_declares_every_normalized_domain ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 244 filtered out; finished in 0.40s
+

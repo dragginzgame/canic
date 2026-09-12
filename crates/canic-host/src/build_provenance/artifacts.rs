@@ -76,20 +76,8 @@ pub(super) fn artifact_transform_provenance(
                     .metrics
                     .as_ref()
                     .map(|metrics| WasmTransformMetricsV1 {
-                        before: WasmArtifactMetricsV1 {
-                            raw_bytes: metrics.before.raw_bytes,
-                            gzip_bytes: metrics.before.gzip_bytes,
-                            code_section_bytes: metrics.before.code_section_bytes,
-                            data_section_bytes: metrics.before.data_section_bytes,
-                            defined_functions: metrics.before.defined_functions,
-                        },
-                        after: WasmArtifactMetricsV1 {
-                            raw_bytes: metrics.after.raw_bytes,
-                            gzip_bytes: metrics.after.gzip_bytes,
-                            code_section_bytes: metrics.after.code_section_bytes,
-                            data_section_bytes: metrics.after.data_section_bytes,
-                            defined_functions: metrics.after.defined_functions,
-                        },
+                        before: metrics_provenance(&metrics.before),
+                        after: metrics_provenance(&metrics.after),
                     }),
             })
         })
@@ -191,4 +179,26 @@ fn push_artifact(
         produced_by: "canic build".to_string(),
     });
     Ok(())
+}
+
+pub(super) fn final_wasm_metrics(
+    request: &BuildProvenanceRequest,
+) -> Result<WasmArtifactMetricsV1, Box<dyn std::error::Error>> {
+    let metrics = crate::canister_build::read_wasm_artifact_metrics(
+        &request.output.wasm_path,
+        &request.output.wasm_gz_path,
+    )?;
+    Ok(metrics_provenance(&metrics))
+}
+
+const fn metrics_provenance(
+    metrics: &crate::canister_build::WasmArtifactMetrics,
+) -> WasmArtifactMetricsV1 {
+    WasmArtifactMetricsV1 {
+        raw_bytes: metrics.raw_bytes,
+        gzip_bytes: metrics.gzip_bytes,
+        code_section_bytes: metrics.code_section_bytes,
+        data_section_bytes: metrics.data_section_bytes,
+        defined_functions: metrics.defined_functions,
+    }
 }

@@ -142,7 +142,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     )
     .expect("parse current desired fixture");
     let desired_sha256 = "35".repeat(32);
-    let plan = compile_plan(
+    let mut plan = compile_plan(
         &desired,
         &DesiredFleetArtifacts::default(),
         &[],
@@ -194,9 +194,9 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         },
     )
     .expect("retain in-progress journal");
-    let options = EnsureOptions {
+    let mut options = EnsureOptions {
         reinstall: false,
-        apply: Some(plan.plan_sha256),
+        apply: Some(plan.plan_sha256.clone()),
         desired: PathBuf::from("missing.toml"),
         environment: Some("local".to_string()),
         fleet: "retained".to_string(),
@@ -208,6 +208,39 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         .expect("load exact retained desired without working TOML");
     assert_eq!(loaded.desired, desired);
     assert_eq!(loaded.sha256, desired_sha256);
+
+    // An exact completed wipe apply also recovers its selected input after a lost final acknowledgement.
+    plan.reinstall = Some(Box::new(
+        canic_host::fleet_ensure::model::FleetReinstallRecord {
+            activation_reset: None,
+            source: Some(Box::new(
+                canic_host::fleet_ensure::model::FleetReinstallSourceRecord {
+                    reviewed_desired: *plan.reviewed_desired.clone().unwrap(),
+                    wasm_sha256_by_canister: BTreeMap::new(),
+                    candid_sha256_by_path: BTreeMap::new(),
+                },
+            )),
+            target_artifacts_sha256: Some("51".repeat(32)),
+            operation_id: plan.operation_id.clone(),
+            source_operation_id: "52".repeat(32),
+            authorities: Vec::new(),
+            assets: Vec::new(),
+        },
+    ));
+    plan.plan_sha256 = canic_host::fleet_ensure::policy::expected_plan_sha256(&plan);
+    write_plan(&paths, &plan).unwrap();
+    let mut journal = canic_host::fleet_ensure::ops::read_journal(&paths)
+        .unwrap()
+        .unwrap();
+    journal.completion = FleetEnsureCompletion::Converged;
+    journal.plan_sha256.clone_from(&plan.plan_sha256);
+    write_journal(&paths, &journal).unwrap();
+    options.apply = Some(plan.plan_sha256.clone());
+    let replay = load_ensure_authority(&root, &root.join("missing.toml"), &options).unwrap();
+    assert_eq!(replay.desired, desired);
+    assert_eq!(replay.sha256, desired_sha256);
+    options.apply = Some("53".repeat(32));
+    assert!(load_ensure_authority(&root, &root.join("missing.toml"), &options).is_err());
 
     let mut reset_options = options;
     reset_options.reinstall = true;

@@ -2,19 +2,21 @@
 //!
 //! Responsibility: admit explicit resets against exact observed authority.
 //! Does not own: transport, inventory capture, persistence or effect sequencing.
-//! Boundary: same-release wipes and partial-activation repairs bind the complete physical estate.
+//! Boundary: selected-build wipes and partial-activation repairs bind the complete physical estate.
 
 pub(in crate::fleet_ensure) mod activation;
 
 use super::*;
-use crate::fleet_ensure::model::{DesiredCanisterInit, FleetReinstallRecord};
+use crate::fleet_ensure::model::{
+    DesiredCanisterInit, FleetReinstallRecord, FleetReinstallSourceRecord,
+};
 
 /// Immutable inputs for the read-only preparation review.
 pub(in crate::fleet_ensure) struct PreparationInput<'a> {
     pub desired: &'a DesiredFleet,
-    pub artifacts: &'a DesiredFleetArtifacts,
+    pub source: &'a FleetReinstallSourceRecord,
+    pub target_artifacts_sha256: &'a str,
     pub observation: &'a RootManagementObservation,
-    pub candid_hashes: &'a BTreeMap<String, String>,
     pub source_operation_id: &'a str,
     pub desired_sha256: &'a str,
     pub operation_id: &'a str,
@@ -29,8 +31,10 @@ pub(in crate::fleet_ensure) fn preparation(
     input: PreparationInput<'_>,
 ) -> Result<FleetEnsurePlan, EnsurePolicyError> {
     let desired = input.desired;
+    let source = input.source.reviewed_desired.desired();
+    validate_selection(source, desired)?;
     validate_authority(desired, &desired.fleet)?;
-    let protocol = desired
+    let protocol = source
         .protocol
         .as_ref()
         .ok_or_else(|| conflict("typed generated protocol"))?;
@@ -63,7 +67,12 @@ pub(in crate::fleet_ensure) fn preparation(
         let live = &observed.live;
         let mut controllers = live.controllers.clone();
         controllers.sort();
-        let expected_hash = wasm_sha256(input.artifacts, &configured.name)?;
+        let expected_hash = input
+            .source
+            .wasm_sha256_by_canister
+            .get(&configured.name)
+            .cloned()
+            .ok_or_else(|| conflict("source module"))?;
         let actual = RootManagementBinding {
             controllers,
             module_sha256: live
@@ -101,7 +110,8 @@ pub(in crate::fleet_ensure) fn preparation(
             actions: vec![EnsureAction::SealAuthority {
                 candid: candid.clone(),
                 candid_sha256: input
-                    .candid_hashes
+                    .source
+                    .candid_sha256_by_path
                     .get(candid)
                     .cloned()
                     .ok_or_else(|| conflict("seal Candid"))?,
@@ -147,6 +157,8 @@ pub(in crate::fleet_ensure) fn preparation(
         protocol_actions: Vec::new(),
         recovery_review: None,
         reinstall: Some(Box::new(FleetReinstallRecord {
+            source: Some(Box::new(input.source.clone())),
+            target_artifacts_sha256: Some(input.target_artifacts_sha256.to_string()),
             activation_reset: None,
             operation_id: input.operation_id.to_string(),
             source_operation_id: input.source_operation_id.to_string(),
@@ -173,6 +185,9 @@ pub(in crate::fleet_ensure) fn validate_reset(
     intent: &FleetReinstallRecord,
     operation_id: &str,
 ) -> Result<BTreeSet<String>, EnsurePolicyError> {
+    if let Some(source) = &intent.source {
+        validate_selection(source.reviewed_desired.desired(), desired)?;
+    }
     if intent.operation_id != operation_id || intent.source_operation_id == operation_id {
         return Err(conflict("operation identity"));
     }
@@ -226,9 +241,7 @@ pub(in crate::fleet_ensure) fn validate_reset(
             principal: live.principal.clone(),
             subnet: configured.subnet.clone(),
         };
-        let module_matches = (intent.activation_reset.is_some()
-            && configured.kind != DesiredCanisterKind::Root)
-            || binding.module_sha256 == wasm_sha256(artifacts, &configured.name)?;
+        let module_matches = source_module_matches(intent, binding, configured, artifacts)?;
         let controllers_match =
             binding.controllers == resolved_controllers(configured, observation)?;
         if actual != *binding
@@ -239,7 +252,7 @@ pub(in crate::fleet_ensure) fn validate_reset(
                     && configured.kind != DesiredCanisterKind::Root
                     && live.status == CanisterRuntimeStatus::Stopped))
         {
-            return Err(conflict("same-release infrastructure authority"));
+            return Err(conflict("source infrastructure authority"));
         }
         if intent.activation_reset.is_none() || configured.kind != DesiredCanisterKind::Root {
             targets.insert(configured.name.clone());
@@ -266,6 +279,62 @@ pub(in crate::fleet_ensure) fn validate_reset(
         return Err(conflict("complete generated Fleet"));
     }
     Ok(targets)
+}
+
+fn source_module_matches(
+    intent: &FleetReinstallRecord,
+    binding: &RootManagementBinding,
+    configured: &crate::fleet_ensure::model::DesiredCanister,
+    artifacts: &DesiredFleetArtifacts,
+) -> Result<bool, EnsurePolicyError> {
+    if let Some(source) = &intent.source {
+        return Ok(intent.activation_reset.is_none()
+            && source.wasm_sha256_by_canister.get(&configured.name)
+                == Some(&binding.module_sha256));
+    }
+    Ok(intent.activation_reset.is_some()
+        && (configured.kind != DesiredCanisterKind::Root
+            || binding.module_sha256 == wasm_sha256(artifacts, &configured.name)?))
+}
+
+/// Admit a selected build only for the same observed physical authority.
+fn validate_selection(
+    source: &DesiredFleet,
+    target: &DesiredFleet,
+) -> Result<(), EnsurePolicyError> {
+    let identity = |desired: &DesiredFleet| {
+        (
+            desired.environment.clone(),
+            desired.fleet.clone(),
+            desired.operator.clone(),
+            desired.cycles_ledger.clone(),
+        )
+    };
+    if identity(source) != identity(target) {
+        return Err(conflict("source and target identity"));
+    }
+    let infrastructure = |desired: &DesiredFleet| {
+        desired
+            .canisters
+            .iter()
+            .filter(|canister| canister.kind != DesiredCanisterKind::Pool)
+            .map(|canister| {
+                (
+                    canister.name.clone(),
+                    (
+                        canister.kind,
+                        canister.subnet.clone(),
+                        canister.parent.clone(),
+                        canister.canic_init.clone(),
+                    ),
+                )
+            })
+            .collect::<BTreeMap<_, _>>()
+    };
+    if infrastructure(source) != infrastructure(target) {
+        return Err(conflict("unchanged infrastructure topology"));
+    }
+    Ok(())
 }
 
 fn conflict(field: &'static str) -> EnsurePolicyError {
@@ -318,6 +387,39 @@ pub(super) fn bind_history_witness(
             .continuation
             .as_ref()
             .ok_or_else(|| conflict("history witness hash"))?;
+        let (candid, candid_sha256) = if let Some(source) = &intent.source {
+            let source_protocol = source
+                .reviewed_desired
+                .desired()
+                .protocol
+                .as_ref()
+                .ok_or_else(|| conflict("source history protocol"))?;
+            let candid = source_protocol.root_candid.clone();
+            let digest = source
+                .candid_sha256_by_path
+                .get(&candid)
+                .cloned()
+                .ok_or_else(|| conflict("source history Candid"))?;
+            (candid, digest)
+        } else {
+            (
+                protocol.root_candid.clone(),
+                continuation.root_candid_sha256.clone(),
+            )
+        };
+        let replacement = if configured.kind == DesiredCanisterKind::Root {
+            let mut installed = authority.clone();
+            installed.module_sha256 = wasm_sha256(artifacts, &configured.name)?;
+            Some(Box::new(
+                crate::fleet_ensure::model::ReinstallRootWitnessRecord {
+                    authority: installed,
+                    candid: protocol.root_candid.clone(),
+                    candid_sha256: continuation.root_candid_sha256.clone(),
+                },
+            ))
+        } else {
+            None
+        };
         *reinstall_witness = Some(Box::new(
             crate::fleet_ensure::model::ReinstallHistoryWitness {
                 prior_module_sha256: intent
@@ -328,10 +430,41 @@ pub(super) fn bind_history_witness(
                     .module_sha256
                     .clone(),
                 authority,
-                candid: protocol.root_candid.clone(),
-                candid_sha256: continuation.root_candid_sha256.clone(),
+                candid,
+                candid_sha256,
+                replacement,
             },
         ));
     }
     Ok(())
+}
+
+/// Select an exact source witness, or the intended replacement while checking Root itself.
+pub(in crate::fleet_ensure) fn history_authority(
+    witness: &crate::fleet_ensure::model::ReinstallHistoryWitness,
+    current: &RootManagementBinding,
+    principal: &str,
+    target_hash: &str,
+    state: &crate::fleet_ensure::model::EffectState,
+) -> Option<crate::fleet_ensure::model::ReinstallRootWitnessRecord> {
+    if current == &witness.authority {
+        return Some(crate::fleet_ensure::model::ReinstallRootWitnessRecord {
+            authority: witness.authority.clone(),
+            candid: witness.candid.clone(),
+            candid_sha256: witness.candid_sha256.clone(),
+        });
+    }
+    let replacement = witness.replacement.as_deref()?;
+    // Intent is persisted before the call; a lost response can leave a completed install in Intent.
+    let pending = matches!(
+        state,
+        crate::fleet_ensure::model::EffectState::Intent
+            | crate::fleet_ensure::model::EffectState::Issued
+    );
+    let own_reinstall = pending && principal == witness.authority.principal;
+    if own_reinstall && current == &replacement.authority && current.module_sha256 == target_hash {
+        Some(replacement.clone())
+    } else {
+        None
+    }
 }

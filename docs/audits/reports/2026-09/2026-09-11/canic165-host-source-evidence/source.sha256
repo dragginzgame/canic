@@ -1,0 +1,13 @@
+9d577ffab840b248c37348f31f508b0020fa0ddca2864decaeb07f603e83eace  crates/canic-control-plane/src/api/fixture_content/mod.rs
+ddb477c10ac034fa88229e17b77cc46054deb2158535b38f30ece04842a98b83  crates/canic-control-plane/src/api/fixture_store/mod.rs
+bb9c9662687d30db7803c5e7cc21cc87dc99ebcf8407e4c871b5a48044cf44bd  crates/canic-control-plane/src/api/mod.rs
+b6654c5ae8bc77f0a247dc6dbfa99cf68c9f74ea59d2ed44a2b793cd7f3c36c8  crates/canic-control-plane/src/ops/fixture_content/mod.rs
+7b797f7aa130e889935644aa3688e5bc3642397fe1a3b8151f23ce3904421fbc  crates/canic-control-plane/src/ops/fixture_store/mod.rs
+e8274c3986990c53c457f632beddc00dd965d97ab27397980133315ef1d1ff37  crates/canic-control-plane/src/ops/fixture_store/tests.rs
+89eb0fb91a00dd8ae205c57527dc7605f8c8a27d29a7c16e7fd7ee9723c383a4  crates/canic-control-plane/src/ops/mod.rs
+e3ea015a88e1d05ffb5bbee4ecc6716d4f621b90e373a44a338a7f9e482c5203  crates/canic-host/src/release_set/fixture/mod.rs
+58ff67b04999a0a6d7257e991c4b03b6d466c4cc7be95a9fa96e95c2b3a18fe6  crates/canic-host/src/release_set/fixture/persistence/mod.rs
+6816f9922d044dbb49dbf2dcef30cf6c005d410ed810a33f3566e6ebee63e1b5  crates/canic-host/src/release_set/fixture/publication/mod.rs
+8ca28794f9ecce6217147189ab0b9cf113a11e7d83fa37ca74eaa94086806eb9  crates/canic-host/src/release_set/fixture/tests.rs
+67be0978225d5cab0daafe99b54b23aafca72d63163e6256ef4196d66671c93c  crates/canic-host/src/release_set/mod.rs
+62fff13e32823a59bb7a0f02e9d38f7a6e0b5c86c053f9d261784e20cc44a860  crates/canic-tests/tests/fixture_provisioning/store/mod.rs

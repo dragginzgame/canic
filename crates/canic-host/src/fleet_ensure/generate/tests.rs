@@ -1299,6 +1299,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         subnet: underfunded_pool.subnet.clone(),
     };
     let underfunded_record = EffectRecord {
+        publication_attempts: 0,
         maintenance_attempts: 0,
         action_sha256: action_sha256(&underfunded_action),
         created_principal: Some(underfunded_principal),
@@ -4156,11 +4157,19 @@ fn persist_test_release_authority(
     )
     .expect("write application union");
 
+    let fixtures = crate::release_set::fixture::compile_and_persist_fixture_artifact_manifest(
+        root,
+        config.component_topology(),
+        release_build_id,
+        &[],
+    )
+    .expect("persist empty fixture manifest");
     let current = CurrentReleaseSetManifest {
         application_artifact_union_sha256: application
             .digest(config.component_topology())
             .expect("application union digest"),
         build_network: canic_core::ids::BuildNetwork::Local,
+        fixture_artifact_manifest_sha256: fixtures.digest,
         infrastructure_artifact_manifest_sha256: infrastructure
             .digest()
             .expect("infrastructure manifest digest"),

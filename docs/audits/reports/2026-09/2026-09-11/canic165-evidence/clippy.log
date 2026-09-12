@@ -1,0 +1,4 @@
+   Compiling canic_icydb_lifecycle_probe v0.110.14 (/home/adam/projects/canic/canisters/test/canic_icydb_lifecycle_probe)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Checking canic-tests v0.110.14 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1.65s

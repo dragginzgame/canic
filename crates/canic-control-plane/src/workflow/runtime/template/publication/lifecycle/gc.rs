@@ -19,7 +19,10 @@ use crate::{
         WasmStoreGcStatusResponse, WasmStoreStatusResponse,
     },
     ids::{WasmStoreBinding, WasmStoreGcMode},
-    ops::storage::state::root_wasm_store::RootWasmStoreStateOps,
+    ops::{
+        canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps,
+        storage::state::root_wasm_store::RootWasmStoreStateOps,
+    },
     view::{
         component_registry::{
             RootFleetSubnetFinalInventoryView, RootFleetSubnetStoreBindingAuthority,
@@ -105,6 +108,19 @@ impl StoreGcAuthority {
     }
 }
 
+// The existing final-inventory intent closes release eligibility and every issued workload.
+fn require_fixture_references_closed(operation_id: [u8; 32]) -> Result<(), InternalError> {
+    let registry = ComponentRegistryOps::root_final_inventory_intent_registry(operation_id)?
+        .ok_or_else(InternalError::conflict)?;
+    ComponentRegistryOps::prepare_root_final_inventory(operation_id, &registry)?;
+    if CanisterPoolOps::non_store_asset_count() != 0
+        || CanisterPoolOps::has_pending_lifecycle_work()
+    {
+        return Err(InternalError::unavailable());
+    }
+    Ok(())
+}
+
 impl LifecycleOperationGuard {
     fn try_enter() -> Result<Self, InternalError> {
         let entered = LIFECYCLE_OPERATION_IN_FLIGHT.with(|in_flight| {
@@ -139,6 +155,7 @@ impl WasmStorePublicationWorkflow {
         operation_id: [u8; 32],
     ) -> Result<(Principal, WasmStoreStatusResponse), InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
+        require_fixture_references_closed(operation_id)?;
         let stores = RootWasmStoreStateOps::wasm_stores();
         if stores.len() != 1 {
             return Err(PublicationWorkflowError::InvalidState(format!(
@@ -149,12 +166,10 @@ impl WasmStorePublicationWorkflow {
         }
         let runtime = stores.into_iter().next().expect("validated one Store");
         let mut live = store_status(runtime.pid).await?;
+        require_fixture_references_closed(operation_id)?;
         match (runtime.gc.mode, live.gc.mode) {
-            (WasmStoreGcMode::Normal, WasmStoreGcMode::Normal) => {
-                store_prepare_gc(runtime.pid, operation_id).await?;
-                live = store_status(runtime.pid).await?;
-            }
-            (WasmStoreGcMode::Normal | WasmStoreGcMode::Prepared, WasmStoreGcMode::Prepared) => {}
+            (WasmStoreGcMode::Normal, WasmStoreGcMode::Normal)
+            | (WasmStoreGcMode::Normal | WasmStoreGcMode::Prepared, WasmStoreGcMode::Prepared) => {}
             (runtime_mode, live_mode) => {
                 return Err(PublicationWorkflowError::InvalidState(format!(
                     "root final inventory requires normal/prepared GC authority, found runtime={runtime_mode:?} live={live_mode:?}"
@@ -162,6 +177,12 @@ impl WasmStorePublicationWorkflow {
                 .into());
             }
         }
+        // Phase alone does not identify the operation. Explicit preparation is
+        // safe to replay and proves the Store retained this exact Root intent.
+        store_prepare_gc(runtime.pid, operation_id).await?;
+        require_fixture_references_closed(operation_id)?;
+        live = store_status(runtime.pid).await?;
+        require_fixture_references_closed(operation_id)?;
         validate_live_prepared_store(&live)?;
 
         if runtime.gc.mode == WasmStoreGcMode::Normal {
@@ -262,6 +283,12 @@ impl WasmStorePublicationWorkflow {
             store_complete_gc(runtime.pid, inventory.operation_id).await?;
             live = store_status(runtime.pid).await?;
             validate_live_store_gc_lineage(inventory, &live)?;
+        }
+        if matches!(
+            live.gc.mode,
+            WasmStoreGcMode::InProgress | WasmStoreGcMode::Clearing
+        ) {
+            return Err(InternalError::unavailable());
         }
         if live.gc.mode != WasmStoreGcMode::Complete {
             return Err(PublicationWorkflowError::InvalidState(format!(

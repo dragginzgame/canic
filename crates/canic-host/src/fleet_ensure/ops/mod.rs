@@ -633,6 +633,19 @@ fn artifact_sha256(root: &Path, configured: &str) -> Result<String, EnsureStateE
     Ok(sha256_hex(&bytes))
 }
 
+/// Consume reviewed publication authority in memory before workflow persists and issues it.
+/// A failed persistence prevents the effect; uncertain persistence conservatively consumes it.
+pub(crate) const fn reserve_fixture_publication_attempt(
+    record: &mut EffectRecord,
+    maximum_attempts: u32,
+) -> bool {
+    if record.publication_attempts >= maximum_attempts {
+        return false;
+    }
+    record.publication_attempts += 1;
+    true
+}
+
 pub fn write_journal(
     paths: &EnsurePaths,
     journal: &FleetEnsureJournalRecord,

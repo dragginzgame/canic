@@ -4,6 +4,7 @@
 //! Does not own: timers, endpoint authorization, or application metric semantics.
 //! Boundary: public query projection reads cached values only.
 
+mod memory;
 mod process;
 
 use crate::{
@@ -293,6 +294,10 @@ impl PublicMetricsOps {
                     },
                 };
             }
+        }
+        if family == PublicMetricFamily::Performance {
+            // Allocation rows own their source times, including retained values on failure.
+            rows.splice(0..0, memory::sample(now));
         }
         PublicMetricsCache::replace(family, now, rows)
     }

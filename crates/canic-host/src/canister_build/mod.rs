@@ -5,6 +5,7 @@ mod candid;
 mod candid_cache;
 pub(crate) mod compiled;
 mod context;
+mod metrics;
 mod model;
 mod process;
 mod reuse;
@@ -19,6 +20,7 @@ pub(crate) use candid::extract_candid_bytes;
 pub use context::{
     WorkspaceBuildContext, print_workspace_build_context_once, workspace_build_context_once,
 };
+pub use metrics::read_wasm_artifact_metrics;
 pub use model::{
     AppCanisterArtifactBuildOutput, ArtifactTransformKind, ArtifactTransformOutcome,
     ArtifactTransformOutput, CanisterArtifactBuildOptions, CanisterArtifactBuildOutput,

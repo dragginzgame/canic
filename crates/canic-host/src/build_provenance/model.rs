@@ -28,6 +28,7 @@ pub struct BuildProvenanceV1 {
     pub cargo: CargoProvenanceV1,
     pub protocol_profile: ProtocolProfileProvenanceV1,
     pub artifacts: Vec<ArtifactProvenanceV1>,
+    pub final_wasm_metrics: WasmArtifactMetricsV1,
     pub transforms: Vec<ArtifactTransformProvenanceV1>,
     pub warnings: Vec<EvidenceMessageV1>,
 }

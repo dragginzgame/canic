@@ -138,7 +138,10 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
 fn preflight(name: &syn::Ident) -> TokenStream2 {
     if matches!(
         name.to_string().as_str(),
-        "canic_wasm_store_chunk" | "canic_wasm_store_publish_chunk"
+        "canic_wasm_store_chunk"
+            | "canic_wasm_store_publish_chunk"
+            | "canic_wasm_store_fixture_chunk"
+            | "canic_wasm_store_publish_fixture"
     ) {
         quote!(::canic::__internal::core::dispatch::preflight_store_data_endpoint)
     } else {

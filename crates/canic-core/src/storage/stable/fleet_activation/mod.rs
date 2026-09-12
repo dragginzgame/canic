@@ -4,6 +4,8 @@
 //! Does not own: install admission, state transitions, Candid DTOs, or lifecycle scheduling.
 //! Boundary: ops validates and converts complete records before this single-record store mutates.
 
+pub mod fixture;
+
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
@@ -213,6 +215,7 @@ pub enum ProtectedComponentDeploymentRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ComponentRuntimeRecord {
+    pub fixture: Option<fixture::FixtureAssignmentRecord>,
     pub binding: ManagedCanisterBinding,
     pub deployment: ProtectedComponentDeploymentRecord,
     pub directory: Option<ComponentRuntimeDirectoryRecord>,

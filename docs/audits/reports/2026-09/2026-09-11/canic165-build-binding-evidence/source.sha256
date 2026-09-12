@@ -1,0 +1,12 @@
+1cbfce3bff4010911bf99e565fa12f1624c0fe24cafc1e8ca1de3da101f17dac  crates/canic-cli/src/build.rs
+874c98ffa7d4a3e702a02e900884337fdc0949d5bc5f06bf0f482c17f380f5d9  crates/canic-host/src/canister_build/reuse/mod.rs
+d7643bcd4e5ddc8ae01c47479a9a8b4eab177b86d9ba6a9740f88e5b42fba6b4  crates/canic-host/src/canister_build/reuse/tests.rs
+65475c10de2bbfc285c83920f129eb12356a871f4be7b3cd4992812d564dc8c2  crates/canic-host/src/fleet_ensure/generate/mod.rs
+53b89f23596148d90473240ab93eeb9d063db558c5561db543e6839b9b81c14c  crates/canic-host/src/fleet_ensure/generate/tests.rs
+820004dd10f7255f85fdd16d36ad7fba88e2814b5608f55a5bd307a7eb75f515  crates/canic-host/src/fleet_ensure/ops/canic_init/mod.rs
+818bc47681450399373b87678af56fa0ab5d3ecfaf323af878b542e6fb30acc4  crates/canic-host/src/release_set/current/mod.rs
+d98389d6a0f44a004d52fe83fa98c1b90d8d517eee098533c4920cbd7dade872  crates/canic-host/src/release_set/current/tests.rs
+936383442767e4d3653f969ad68fb8f9c99ee38a6c58b60c12490f295252127b  crates/canic-host/src/release_set/fixture/configuration/mod.rs
+c36500cb7998fb4ed0890d6d439991eb4280f0bb1609a25028f5c4fb15ef4a64  crates/canic-host/src/release_set/fixture/mod.rs
+a875c38f057245593d08130a8a7e85059d68e4806f85dde74080ea0335054ad2  crates/canic-host/src/release_set/fixture/tests.rs
+808e81172d7907216ef26330d3dac2290ad40a462e6bd32684433566c9596e50  crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs

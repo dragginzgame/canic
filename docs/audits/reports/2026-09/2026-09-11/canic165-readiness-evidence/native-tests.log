@@ -1,0 +1,42 @@
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 05s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-672eaae804ac50ed)
+
+running 1 test
+test workflow::component_registry::tests::membership_requires_the_exact_installed_fixture_receipt ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 258 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_core-ddfaf1360157e1cd)
+
+running 26 tests
+test api::runtime::tests::health_is_minimal_and_schema_versioned ... ok
+test api::runtime::tests::receipt_capacity_condition_has_exact_warning_and_failure_boundaries ... ok
+test api::runtime::tests::state_summary_joins_runtime_memory_ids_to_owner_metadata ... ok
+test domain::policy::pure::fleet_activation::tests::fixture_gate_exempts_only_exact_infrastructure_names_and_call_modes ... ok
+test api::runtime::tests::unavailable_timer_inventory_is_explicit_and_fails_runtime_status ... ok
+test domain::policy::pure::fleet_activation::tests::prepared_nonroot_uses_the_ordinary_role_recovery_allowlist ... ok
+test domain::policy::pure::fleet_activation::tests::prepared_root_admits_only_the_role_owned_entrypoints ... ok
+test domain::policy::pure::fleet_activation::tests::prepared_root_rejects_ordinary_and_wrong_kind_calls ... ok
+test domain::policy::pure::fleet_activation::tests::prepared_store_data_policy_is_reachable_only_through_compile_selected_updates ... ok
+test domain::policy::pure::fleet_activation::tests::prepared_store_uses_only_its_role_owned_commands_and_reads ... ok
+test ops::fixture_importer::tests::import_retries_wait_for_infrastructure_but_stop_on_exact_invalid_content ... ok
+test ops::fixture_importer::tests::importer_progress_never_adopts_a_different_installation_or_content ... ok
+test ops::fixture_importer::tests::importer_leases_serialize_steps_and_old_cleanup_cannot_release_a_new_attempt ... ok
+test ops::fixture_importer::tests::importer_receipt_requires_complete_position_and_exact_validated_summary ... ok
+test ops::fixture_importer::tests::importer_registration_has_one_owner_and_cannot_be_replaced_mid_import ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_rejects_same_principal_from_another_component_authority ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_rejects_substitution_and_revocation_after_restore ... ok
+test ops::storage::fleet_activation::fixture::tests::fixture_assignment_roundtrips_for_parent_and_child_without_a_progress_cursor ... ok
+test api::runtime::tests::runtime_status_includes_bootstrap_failure_metadata ... ok
+test api::runtime::tests::runtime_status_classifies_each_top_level_field_visibility ... ok
+test api::runtime::tests::runtime_status_includes_recent_failure_snapshot ... ok
+test api::runtime::tests::runtime_status_reports_auth_and_blob_storage_feature_summaries ... ok
+test api::runtime::tests::runtime_status_reports_compile_features_deterministically ... ok
+test api::runtime::tests::runtime_status_fails_closed_with_typed_capacity_diagnostic ... ok
+test api::runtime::tests::runtime_status_projects_empty_receipt_capacity ... ok
+test api::runtime::tests::runtime_status_embeds_guarded_readiness_and_build_info ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 1261 filtered out; finished in 0.21s
+

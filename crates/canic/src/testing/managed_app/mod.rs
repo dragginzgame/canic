@@ -521,6 +521,7 @@ fn compile_managed_app(
         member,
     );
     let payload = CanisterInitPayload {
+        fixture: None,
         admission: Some(admission),
         authority: CanisterInitAuthority::Component { binding, root },
         component_deployment: Box::new(protected_deployment),

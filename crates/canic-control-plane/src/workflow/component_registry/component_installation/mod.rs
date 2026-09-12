@@ -4,7 +4,10 @@
 //! Does not own: allocation authority, Registry membership, runtime activation, or lifecycle scheduling.
 //! Boundary: every paid or install effect advances its existing durable operation and is verified live.
 
+mod fixture;
+
 use super::*;
+use crate::{ops::fixture_grant, view::fixture_store::FixtureInstallation};
 
 pub(super) fn advance_creation(
     operation_id: [u8; 32],
@@ -309,6 +312,7 @@ pub(super) struct ComponentInstallPlan {
     pub(super) source: ApprovedModuleSource,
     pub(super) payload: CanisterInitPayload,
     pub(super) deployment: ProtectedComponentDeployment,
+    pub(super) fixture: Option<FixtureInstallation>,
     pub(super) canister: candid::Principal,
     pub(super) expected_status_module_hash: [u8; 32],
 }
@@ -319,6 +323,7 @@ pub(super) struct ComponentChildInstallPlan {
     pub(super) source: ApprovedModuleSource,
     pub(super) payload: CanisterInitPayload,
     pub(super) deployment: ProtectedComponentDeployment,
+    pub(super) fixture: Option<FixtureInstallation>,
     pub(super) component_group: Option<ComponentGroupDirectory>,
     pub(super) canister: candid::Principal,
     pub(super) expected_status_module_hash: [u8; 32],
@@ -390,13 +395,6 @@ pub(super) async fn component_install_plan_with_deployment(
         ProtectedComponentDeployment::UngroupedOrdinary { .. } => spec_maximum_registry_bytes,
         ProtectedComponentDeployment::GroupMember { limits, .. } => limits.maximum_registry_bytes,
     };
-    let durable = RootComponentInstallPlan {
-        raw_module_hash: artifact.raw_module_hash,
-        protocol_profile_digest: artifact.protocol_profile_digest,
-        chunk_hashes,
-        binding: binding.clone(),
-        maximum_registry_bytes,
-    };
     let target = ManagedCanisterBinding::Component(binding.clone());
     let admission = if ConfigOps::role_uses_fleet_admission(&allocation.role)? {
         Some(
@@ -409,18 +407,30 @@ pub(super) async fn component_install_plan_with_deployment(
     } else {
         None
     };
-    let payload = CanisterInitPayload {
+    let mut payload = CanisterInitPayload {
+        fixture: None,
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,
         component_deployment: Box::new(deployment.clone()),
         authority: CanisterInitAuthority::Component {
             root: root.clone(),
-            binding,
+            binding: binding.clone(),
         },
         admission,
     };
 
+    let selection = fixture_grant::component_selection(&allocation.progress)?;
+    let fixture = fixture::select(store, &mut payload, selection).await?;
+    let durable = RootComponentInstallPlan {
+        fixture_grant_revision: fixture.as_ref().map(|selected| selected.revision),
+        raw_module_hash: artifact.raw_module_hash,
+        protocol_profile_digest: artifact.protocol_profile_digest,
+        chunk_hashes,
+        binding,
+        maximum_registry_bytes,
+    };
     Ok(ComponentInstallPlan {
+        fixture,
         durable,
         source,
         payload,
@@ -480,13 +490,6 @@ pub(super) async fn child_component_install_plan(
     )?;
     let deployment = deployment_authority.deployment;
     ConfigOps::validate_protected_component_deployment(&deployment, &binding.component)?;
-    let durable = RootComponentChildInstallPlan {
-        raw_module_hash: artifact.raw_module_hash,
-        protocol_profile_digest: artifact.protocol_profile_digest,
-        chunk_hashes,
-        binding: binding.clone(),
-        maximum_registry_bytes: allocation.maximum_registry_bytes,
-    };
     let target = ManagedCanisterBinding::ComponentChild(binding.clone());
     let admission = if ConfigOps::role_uses_fleet_admission(&allocation.child_role)? {
         Some(
@@ -499,18 +502,30 @@ pub(super) async fn child_component_install_plan(
     } else {
         None
     };
-    let payload = CanisterInitPayload {
+    let mut payload = CanisterInitPayload {
+        fixture: None,
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,
         component_deployment: Box::new(deployment.clone()),
         authority: CanisterInitAuthority::ComponentChild {
             root: root.clone(),
-            binding,
+            binding: binding.clone(),
         },
         admission,
     };
 
+    let selection = fixture_grant::child_selection(&allocation.progress)?;
+    let fixture = fixture::select(store, &mut payload, selection).await?;
+    let durable = RootComponentChildInstallPlan {
+        fixture_grant_revision: fixture.as_ref().map(|selected| selected.revision),
+        raw_module_hash: artifact.raw_module_hash,
+        protocol_profile_digest: artifact.protocol_profile_digest,
+        chunk_hashes,
+        binding,
+        maximum_registry_bytes: allocation.maximum_registry_bytes,
+    };
     Ok(ComponentChildInstallPlan {
+        fixture,
         durable,
         source,
         payload,
@@ -678,7 +693,17 @@ async fn verify_and_mark_child_installed(
     _installed: RootComponentChildAllocationView,
     plan: &ComponentChildInstallPlan,
 ) -> Result<RootComponentChildAllocationResponse, InternalError> {
+    start_installed_workload(
+        plan.canister,
+        &CanisterPoolClaimKey {
+            component,
+            operation_id,
+        },
+        plan.expected_status_module_hash,
+    )
+    .await?;
     verify_installed_child(plan).await?;
+    fixture::ensure_child(plan).await?;
     let verified = ComponentRegistryOps::mark_child_verified(component, operation_id)?;
     if !matches!(
         verified.progress,
@@ -890,7 +915,17 @@ async fn verify_and_mark_installed(
     _installed: RootComponentAllocationView,
     plan: &ComponentInstallPlan,
 ) -> Result<RootComponentAllocationResponse, InternalError> {
+    start_installed_workload(
+        plan.canister,
+        &CanisterPoolClaimKey {
+            component: plan.durable.binding.component,
+            operation_id,
+        },
+        plan.expected_status_module_hash,
+    )
+    .await?;
     verify_prepared_installed_component(plan).await?;
+    fixture::ensure_component(plan).await?;
     let verified = ComponentRegistryOps::mark_verified(operation_id)?;
     if !matches!(
         verified.progress,
@@ -899,6 +934,33 @@ async fn verify_and_mark_installed(
         return Err(InternalError::invariant());
     }
     allocation_response(verified)
+}
+
+/// Recycled assets may remain stopped; the retained Installed phase owns startup retries.
+async fn start_installed_workload(
+    canister: candid::Principal,
+    claim: &CanisterPoolClaimKey,
+    expected_module: [u8; 32],
+) -> Result<(), InternalError> {
+    let validate = || {
+        CanisterPoolOps::require_workload_claim(canister, claim)?;
+        ComponentRegistryOps::require_root_store_admin_open()
+    };
+    validate()?;
+    let status = MgmtOps::canister_status(canister).await?;
+    validate()?;
+    if status.settings.controllers != [IcOps::canister_self()]
+        || status.module_hash.as_deref() != Some(expected_module.as_slice())
+    {
+        return Err(InternalError::conflict());
+    }
+    if status.status
+        != canic_core::control_plane_support::ops::ic::mgmt::CanisterStatusType::Running
+    {
+        MgmtOps::start_canister(canister).await?;
+        validate()?;
+    }
+    Ok(())
 }
 
 async fn observed_install_state(plan: &ComponentInstallPlan) -> Result<bool, InternalError> {
@@ -924,7 +986,11 @@ async fn installed_component_status(
     if observed != expected {
         return Err(InternalError::conflict());
     }
-    query_component_runtime_status(plan.canister, plan.payload.install_id).await
+    let status = query_component_runtime_status(plan.canister, plan.payload.install_id).await?;
+    if status.fixture != plan.payload.fixture {
+        return Err(InternalError::conflict());
+    }
+    Ok(status)
 }
 
 pub(super) async fn verify_installed_component(

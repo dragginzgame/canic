@@ -207,7 +207,7 @@ fn format_byte_count(bytes: usize) -> String {
     format!("{whole}.{fraction:02} MiB ({bytes} B)")
 }
 
-pub(super) fn wasm_artifact_metrics(
+pub fn wasm_artifact_metrics(
     wasm: &[u8],
     gzip_bytes: usize,
 ) -> Result<WasmArtifactMetrics, Box<dyn std::error::Error>> {

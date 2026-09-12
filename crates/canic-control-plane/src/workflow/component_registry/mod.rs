@@ -175,6 +175,7 @@ use canic_core::{
             RootPeerComponentAllocationRequest,
         },
         error::Error,
+        fixture_provisioning::{FixtureAssignment, FixtureProvisioningStatus},
         fleet_activation::FleetActivationPhase,
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootStatus},
         role::{ComponentRuntimeOperationStatus, OperationReceipt, OperationStatusRequest},
@@ -444,6 +445,7 @@ impl ComponentPartitionSnapshotAuthority {
 }
 
 struct PreparedComponentRuntimePlan {
+    fixture: Option<Box<FixtureAssignment>>,
     root_binding: canic_core::ids::FleetSubnetRootBinding,
     allocation: RootComponentAllocationView,
     partition: ComponentRegistryPartitionView,
@@ -471,6 +473,7 @@ enum ComponentRuntimePlanAuthority<'a> {
 }
 
 struct PreparedChildRuntimePlan {
+    fixture: Option<Box<FixtureAssignment>>,
     root_binding: canic_core::ids::FleetSubnetRootBinding,
     allocation: RootComponentChildAllocationView,
     committed_partition: ComponentRegistryPartitionView,
@@ -2738,9 +2741,13 @@ async fn activate_child_membership_for_parent(
         &plan.directory_request,
         plan.directory_authority_hash,
     )?;
+    if observed.fixture != plan.fixture {
+        return Err(InternalError::conflict());
+    }
     require_component_runtime_ready(
         plan.child_canister,
         managed_canister_role(&plan.child_binding),
+        plan.fixture.as_deref(),
     )
     .await?;
 
@@ -3224,9 +3231,13 @@ async fn activate_component_membership_with_plan(
         &plan.directory_request,
         plan.activation_authority_hash,
     )?;
+    if observed.fixture != plan.fixture {
+        return Err(InternalError::conflict());
+    }
     require_component_runtime_ready(
         plan.target_canister,
         managed_canister_role(&plan.target_binding),
+        plan.fixture.as_deref(),
     )
     .await?;
 
@@ -3909,6 +3920,7 @@ async fn prepared_component_runtime_plan_with_authority(
         active_component_direct_children(&partition, install.canister)?
     };
     Ok(PreparedComponentRuntimePlan {
+        fixture: install.payload.fixture,
         root_binding: root_authority.binding,
         allocation,
         partition,
@@ -4022,6 +4034,7 @@ async fn prepared_child_runtime_plan(
         != managed_canister_principal(&owning_component_binding))
     .then_some(requesting_parent_binding.clone());
     Ok(PreparedChildRuntimePlan {
+        fixture: install.payload.fixture,
         root_binding: root_authority.binding,
         allocation,
         committed_partition,
@@ -4215,6 +4228,7 @@ async fn query_component_runtime_status(
 async fn require_component_runtime_ready(
     canister: candid::Principal,
     expected_role: &CanisterRole,
+    expected_fixture: Option<&canic_core::dto::fixture_provisioning::FixtureAssignment>,
 ) -> Result<(), InternalError> {
     let call = CallOps::bounded_wait(canister, protocol::CANIC_OBSERVABILITY)
         .with_arg(CanisterStatusRequestFragment::Readiness)?
@@ -4236,10 +4250,35 @@ async fn require_component_runtime_ready(
     {
         return Err(InternalError::conflict());
     }
+    require_fixture_receipt(expected_fixture, &status.fixture)?;
     if status.status != ReadinessStatus::Ready || !status.blockers.is_empty() {
         return Err(InternalError::unavailable());
     }
     Ok(())
+}
+
+fn require_fixture_receipt(
+    expected: Option<&canic_core::dto::fixture_provisioning::FixtureAssignment>,
+    observed: &Result<
+        canic_core::dto::fixture_provisioning::FixtureProvisioningStatus,
+        canic_core::dto::fixture_provisioning::FixtureImportError,
+    >,
+) -> Result<(), InternalError> {
+    match (expected, observed) {
+        (None, Ok(FixtureProvisioningStatus::NotRequired)) => Ok(()),
+        (Some(assignment), Ok(FixtureProvisioningStatus::Complete(receipt))) => {
+            if receipt.binding == assignment.grant.binding
+                && receipt.completion_summary == assignment.descriptor.completion_summary
+            {
+                Ok(())
+            } else {
+                Err(InternalError::conflict())
+            }
+        }
+        (Some(_), Ok(FixtureProvisioningStatus::NotRequired))
+        | (None, Ok(FixtureProvisioningStatus::Complete(_))) => Err(InternalError::conflict()),
+        _ => Err(InternalError::unavailable()),
+    }
 }
 
 const fn managed_canister_role(binding: &ManagedCanisterBinding) -> &CanisterRole {
@@ -4939,6 +4978,7 @@ fn prepared_target_directory_status_for_deployment(
     )? {
         ComponentRuntimePhase::DirectoryPrepared => Ok(status.clone()),
         ComponentRuntimePhase::Active => Ok(ComponentRuntimeStatusResponse {
+            fixture: status.fixture.clone(),
             operation_id: request.operation_id,
             binding: binding.clone(),
             deployment: status.deployment.clone(),
@@ -4990,6 +5030,7 @@ fn active_target_runtime_status_for_deployment(
     )?;
     let activation = status.activation.ok_or_else(InternalError::invariant)?;
     Ok(ComponentRuntimeStatusResponse {
+        fixture: status.fixture.clone(),
         operation_id: request.operation_id,
         binding: binding.clone(),
         deployment: status.deployment.clone(),
@@ -5050,6 +5091,7 @@ fn active_membership_target_status_for_deployment(
     }
     let activation = status.activation.ok_or_else(InternalError::invariant)?;
     Ok(ComponentRuntimeStatusResponse {
+        fixture: status.fixture.clone(),
         operation_id: prepared_request.operation_id,
         binding: binding.clone(),
         deployment: status.deployment.clone(),
@@ -5872,6 +5914,85 @@ mod tests {
     };
 
     #[test]
+    fn membership_requires_the_exact_installed_fixture_receipt() {
+        use canic_core::dto::fixture_provisioning::{
+            FixtureAssignment, FixtureDescriptor, FixtureGrant, FixtureImportReceipt,
+            FixtureProvisioningStatus, FixtureTargetBinding,
+        };
+        let assignment = FixtureAssignment {
+            store: candid::Principal::from_slice(&[8; 29]),
+            grant: FixtureGrant {
+                revision: 1,
+                enabled: true,
+                binding: FixtureTargetBinding {
+                    target: ManagedCanisterBinding::Component(component_binding()),
+                    installation: [1; 32],
+                    release_build_id: ReleaseBuildId::from_nonce(
+                        ReleaseBuildNonce::from_random_bytes([2; 32]),
+                    ),
+                    content_id: [3; 32],
+                },
+            },
+            descriptor: FixtureDescriptor {
+                schema_version: 1,
+                format_hash: [4; 32],
+                encoded_length: 0,
+                chunks: Vec::new(),
+                completion_summary: [5; 32],
+            },
+        };
+        let receipt = FixtureImportReceipt {
+            binding: assignment.grant.binding.clone(),
+            completion_summary: assignment.descriptor.completion_summary,
+        };
+        let complete = Ok(FixtureProvisioningStatus::Complete(Box::new(
+            receipt.clone(),
+        )));
+        assert!(require_fixture_receipt(Some(&assignment), &complete).is_ok());
+        assert!(require_fixture_receipt(None, &Ok(FixtureProvisioningStatus::NotRequired)).is_ok());
+        for observed in [
+            Ok(FixtureProvisioningStatus::NotRequired),
+            Ok(FixtureProvisioningStatus::AwaitingImporter),
+            Ok(FixtureProvisioningStatus::Pending(None)),
+        ] {
+            assert!(require_fixture_receipt(Some(&assignment), &observed).is_err());
+        }
+        for changed in 0..6 {
+            let mut wrong = receipt.clone();
+            match changed {
+                0 => wrong.binding.installation = [7; 32],
+                1 => wrong.binding.content_id = [7; 32],
+                2 => {
+                    wrong.binding.release_build_id =
+                        ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([7; 32]));
+                }
+                3 => wrong.completion_summary = [7; 32],
+                4 => {
+                    let ManagedCanisterBinding::Component(binding) = &mut wrong.binding.target
+                    else {
+                        unreachable!()
+                    };
+                    binding.canister_id = candid::Principal::from_slice(&[7; 29]);
+                }
+                _ => {
+                    let ManagedCanisterBinding::Component(binding) = &mut wrong.binding.target
+                    else {
+                        unreachable!()
+                    };
+                    binding.fleet_subnet_root = candid::Principal::from_slice(&[7; 29]);
+                }
+            }
+            let observed = Ok(FixtureProvisioningStatus::Complete(Box::new(wrong)));
+            assert_eq!(
+                require_fixture_receipt(Some(&assignment), &observed)
+                    .unwrap_err()
+                    .code(),
+                InternalError::conflict().code()
+            );
+        }
+    }
+
+    #[test]
     fn grouped_allocation_cannot_advance_through_ordinary_lifecycle() {
         let allocation = RootComponentAllocationView {
             operation_id: [1; 32],
@@ -5931,6 +6052,7 @@ mod tests {
         };
         let operation_id = [10; 32];
         let mut status = ComponentRuntimeStatusResponse {
+            fixture: None,
             operation_id,
             binding: managed.clone(),
             deployment: Box::new(deployment.clone()),
@@ -6010,6 +6132,7 @@ mod tests {
         let direct_children_hash =
             ComponentRuntimeOps::direct_children_hash(&[]).expect("empty direct-child hash");
         let mut status = ComponentRuntimeStatusResponse {
+            fixture: None,
             operation_id,
             binding: ManagedCanisterBinding::Component(binding.clone()),
             deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary { binding }),
@@ -6111,6 +6234,7 @@ mod tests {
             direct_children: Vec::new(),
         };
         let status = ComponentRuntimeStatusResponse {
+            fixture: None,
             operation_id,
             binding: managed,
             deployment: Box::new(deployment.clone()),
@@ -6254,6 +6378,7 @@ mod tests {
         let component = component_binding();
         let managed = ManagedCanisterBinding::Component(component.clone());
         let mut status = ComponentRuntimeStatusResponse {
+            fixture: None,
             operation_id: [11; 32],
             binding: managed.clone(),
             deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {

@@ -84,7 +84,7 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
     let wasm_path = artifact_root.join("app.wasm");
     let wasm_gz_path = artifact_root.join("app.wasm.gz");
     let did_path = artifact_root.join("app.did");
-    fs::write(&wasm_path, b"wasm").expect("write wasm");
+    fs::write(&wasm_path, b"\0asm\x01\0\0\0").expect("write wasm");
     fs::write(&wasm_gz_path, b"gzip").expect("write gzip");
 
     let request = sample_request(
@@ -391,7 +391,7 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
     let wasm_path = artifact_root.join(format!("{role}.wasm"));
     let wasm_gz_path = artifact_root.join(format!("{role}.wasm.gz"));
     let did_path = artifact_root.join(format!("{role}.did"));
-    fs::write(&wasm_path, b"wasm").expect("write wasm");
+    fs::write(&wasm_path, b"\0asm\x01\0\0\0").expect("write wasm");
     fs::write(&wasm_gz_path, b"gzip").expect("write gzip");
 
     CanisterArtifactBuildOutput {
@@ -428,4 +428,70 @@ fn canic_repo_root() -> PathBuf {
         .find(|path| path.join(".git").exists())
         .expect("Canic repository root has .git")
         .to_path_buf()
+}
+
+#[test]
+fn final_metrics_match_artifacts_for_both_profiles_and_section_distributions() {
+    let root = temp_dir("canic-final-artifact-metrics");
+    write_sample_workspace(&root, "demo", "app");
+    for profile in [CanisterBuildProfile::Fast, CanisterBuildProfile::Release] {
+        for (instructions, data) in [(1_u8, 80_u8), (80, 1)] {
+            let output = write_sample_artifacts(&root, "app");
+            let mut wasm = b"\0asm\x01\0\0\0\x01\x04\x01\x60\0\0\x03\x02\x01\0".to_vec();
+            wasm.extend([10, instructions + 4, 1, instructions + 2, 0]);
+            wasm.extend(vec![1; usize::from(instructions)]);
+            wasm.push(11);
+            wasm.extend([11, data + 3, 1, 1, data]);
+            wasm.extend(vec![0; usize::from(data)]);
+            fs::write(&output.wasm_path, &wasm).unwrap();
+            let measured = crate::canister_build::read_wasm_artifact_metrics(
+                &output.wasm_path,
+                &output.wasm_gz_path,
+            )
+            .unwrap();
+            let mut request = sample_request(&root, output);
+            request.profile = profile;
+            let envelope = build_provenance_envelope(&request).unwrap();
+            let payload: BuildProvenanceV1 = serde_json::from_value(envelope.payload).unwrap();
+            let metrics = payload.final_wasm_metrics;
+            assert_eq!(
+                envelope.target.profile.as_deref(),
+                Some(profile.target_dir_name())
+            );
+            assert_eq!(payload.cargo.profile, profile.target_dir_name());
+            assert_eq!(metrics.code_section_bytes, u64::from(instructions + 4));
+            assert_eq!(metrics.data_section_bytes, u64::from(data + 3));
+            assert_eq!(metrics.code_section_bytes, measured.code_section_bytes);
+            assert_eq!(metrics.data_section_bytes, measured.data_section_bytes);
+            assert_eq!(metrics.raw_bytes, measured.raw_bytes);
+            assert_eq!(metrics.gzip_bytes, measured.gzip_bytes);
+            assert_eq!(metrics.defined_functions, 1);
+            assert_eq!(metrics.raw_bytes, payload.artifacts[0].size_bytes);
+            assert_eq!(metrics.gzip_bytes, payload.artifacts[1].size_bytes);
+            assert_eq!(
+                payload.artifacts[0].sha256,
+                canic_core::cdk::utils::hash::sha256_hex(&wasm)
+            );
+            assert_eq!(fs::read(&request.output.wasm_path).unwrap(), wasm);
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn final_metrics_reject_malformed_wasm_and_missing_gzip() {
+    let root = temp_dir("canic-final-artifact-metrics-invalid");
+    let output = write_sample_artifacts(&root, "app");
+    fs::write(&output.wasm_path, b"not wasm").unwrap();
+    assert!(
+        crate::canister_build::read_wasm_artifact_metrics(&output.wasm_path, &output.wasm_gz_path)
+            .is_err()
+    );
+    fs::write(&output.wasm_path, b"\0asm\x01\0\0\0").unwrap();
+    fs::remove_file(&output.wasm_gz_path).unwrap();
+    assert!(
+        crate::canister_build::read_wasm_artifact_metrics(&output.wasm_path, &output.wasm_gz_path)
+            .is_err()
+    );
+    fs::remove_dir_all(root).unwrap();
 }

@@ -8,6 +8,7 @@ pub const CANIC_COORDINATOR_OPERATION_STATUS: &str = "canic_coordinator_operatio
 pub const CANIC_COORDINATOR_REGISTRY: &str = "canic_coordinator_registry";
 pub const CANIC_WASM_STORE_CATALOG: &str = "canic_wasm_store_catalog";
 pub const CANIC_ROOT_COMMAND: &str = "canic_root_command";
+pub const CANIC_ROOT_FIXTURE_STATUS: &str = "canic_root_fixture_status";
 pub const CANIC_ROOT_STATUS: &str = "canic_root_status";
 pub const CANIC_PUBLIC_STATUS: &str = "canic_public_status";
 pub const CANIC_OBSERVABILITY: &str = "canic_observability";
@@ -18,6 +19,8 @@ pub const CANIC_ROOT_AUTH_STATUS: &str = "canic_root_auth_status";
 pub const CANIC_ROOT_OPERATION_STATUS: &str = "canic_root_operation_status";
 pub const CANIC_WASM_STORE_COMMAND: &str = "canic_wasm_store_command";
 pub const CANIC_WASM_STORE_STATUS: &str = "canic_wasm_store_status";
+pub const CANIC_WASM_STORE_FIXTURE_CHUNK: &str = "canic_wasm_store_fixture_chunk";
+pub const CANIC_WASM_STORE_PUBLISH_FIXTURE: &str = "canic_wasm_store_publish_fixture";
 
 /// Return the exact command endpoint owned by one Canic role.
 #[must_use]

@@ -1,0 +1,7 @@
+   Compiling canic v0.110.14 (/home/adam/projects/canic/crates/canic)
+    Checking canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic-host v0.110.14 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-cli v0.110.14 (/home/adam/projects/canic/crates/canic-cli)
+    Checking canic-testing-internal v0.110.14 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 39.09s

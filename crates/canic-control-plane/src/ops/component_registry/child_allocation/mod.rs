@@ -437,6 +437,7 @@ impl ComponentRegistryOps {
             creation,
             canister,
             installation: RootComponentChildInstallEffectRecord {
+                fixture_grant_revision: plan.fixture_grant_revision,
                 raw_module_hash: plan.raw_module_hash,
                 protocol_profile_digest: plan.protocol_profile_digest,
                 chunk_hashes: plan.chunk_hashes,
@@ -492,6 +493,7 @@ impl ComponentRegistryOps {
             creation,
             canister,
             installation: RootComponentChildInstallEffectRecord {
+                fixture_grant_revision: plan.fixture_grant_revision,
                 raw_module_hash: plan.raw_module_hash,
                 protocol_profile_digest: plan.protocol_profile_digest,
                 chunk_hashes: plan.chunk_hashes.clone(),

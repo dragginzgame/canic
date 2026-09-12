@@ -10,7 +10,7 @@ use ic_memory::{
 };
 use std::cell::RefCell;
 
-canic::memory::ic_memory_range!(authority = "test", start = 200, end = 200, mode = Allowed);
+canic::memory::ic_memory_range!(authority = "test", start = 200, end = 201, mode = Allowed);
 
 struct UserRows;
 

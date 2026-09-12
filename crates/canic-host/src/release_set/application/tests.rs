@@ -4,12 +4,21 @@
 //! Does not own: Cargo execution, artifact persistence, Store publication, or installation.
 //! Boundary: exercises topology completeness, build qualification, and admission-scoped output.
 
+use super::*;
+use crate::{
+    component_topology::{
+        FleetSubnetRootTopologyInput, RootComponentAdmissionInput, plan_fleet_topology,
+    },
+    release_set::fixture::FixtureArtifactEntry,
+};
 use std::io::Write;
 
 use candid::Principal;
+use canic_control_plane::api::fixture_content::FixtureContentApi;
 use canic_core::{
     bootstrap::{compiled::ConfigModel, parse_config_model},
     cdk::{types::Cycles, utils::hash::hex_bytes},
+    dto::fixture_provisioning::{FixtureChunkDescriptor, FixtureDescriptor},
     ids::{
         AppId, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
         FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildId,
@@ -17,12 +26,6 @@ use canic_core::{
     },
 };
 use flate2::{Compression, GzBuilder};
-
-use crate::component_topology::{
-    FleetSubnetRootTopologyInput, RootComponentAdmissionInput, plan_fleet_topology,
-};
-
-use super::*;
 
 const CONFIG: &str = r#"
 [app]
@@ -360,9 +363,13 @@ fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence()
     let release_build_id = release_build(12);
     let union = compile_union(&plan.component_topology, release_build_id);
     let binding = &plan.fleet_subnet_roots[0];
-    let manifest =
-        FleetSubnetRootReleaseSetManifest::project(&plan.component_topology, binding, &union)
-            .expect("root release-set projection");
+    let manifest = FleetSubnetRootReleaseSetManifest::project(
+        &plan.component_topology,
+        binding,
+        &union,
+        &empty_fixtures(&union),
+    )
+    .expect("root release-set projection");
 
     assert_eq!(
         manifest
@@ -394,7 +401,12 @@ fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence()
         "one child artifact remains authorized under both exact Spec catalogs"
     );
     manifest
-        .validate_against(&plan.component_topology, binding, &union)
+        .validate_against(
+            &plan.component_topology,
+            binding,
+            &union,
+            &empty_fixtures(&union),
+        )
         .expect("valid exact projection");
     assert_eq!(
         serde_json::to_vec(&manifest).expect("canonical host manifest"),
@@ -403,20 +415,35 @@ fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence()
     );
     assert_eq!(
         manifest
-            .canonical_bytes(&plan.component_topology, binding, &union)
+            .canonical_bytes(
+                &plan.component_topology,
+                binding,
+                &union,
+                &empty_fixtures(&union)
+            )
             .expect("manifest bytes"),
         manifest
-            .canonical_bytes(&plan.component_topology, binding, &union)
+            .canonical_bytes(
+                &plan.component_topology,
+                binding,
+                &union,
+                &empty_fixtures(&union)
+            )
             .expect("stable manifest bytes")
     );
     assert_eq!(
         hex_bytes(
             manifest
-                .digest(&plan.component_topology, binding, &union)
+                .digest(
+                    &plan.component_topology,
+                    binding,
+                    &union,
+                    &empty_fixtures(&union)
+                )
                 .expect("frozen manifest digest")
                 .into_bytes()
         ),
-        "4d149d1f67fe0b5cf3bfa0d7d22a6a8b190a6eaca295c2815bcae7f032b77be5"
+        "0f9784a4720c0d136e16831f89125193118a29cc73f546fdb8116352d00d3a09"
     );
 }
 
@@ -434,6 +461,7 @@ fn projection_stores_a_component_role_once_when_another_spec_admits_it_as_a_desc
         &plan.component_topology,
         &plan.fleet_subnet_roots[0],
         &union,
+        &empty_fixtures(&union),
     )
     .expect("root release-set projection");
 
@@ -483,9 +511,13 @@ fn separate_roots_receive_only_their_admitted_spec_closure() {
             .component_topology
             .project_for_admissions(&binding.component_admissions)
             .expect("root-local topology projection");
-        let manifest =
-            FleetSubnetRootReleaseSetManifest::project(&plan.component_topology, binding, &union)
-                .expect("root-local projection");
+        let manifest = FleetSubnetRootReleaseSetManifest::project(
+            &plan.component_topology,
+            binding,
+            &union,
+            &empty_fixtures(&union),
+        )
+        .expect("root-local projection");
         assert_eq!(manifest.entries.len(), 2);
         assert!(
             manifest
@@ -557,6 +589,7 @@ fn store_limit_counts_exact_artifact_bytes_once_without_erasing_authorization() 
         &plan.component_topology,
         &plan.fleet_subnet_roots[0],
         &union,
+        &empty_fixtures(&union),
     )
     .expect("exact Store byte ceiling");
     assert_eq!(manifest.entries.len(), 4);
@@ -567,6 +600,7 @@ fn store_limit_counts_exact_artifact_bytes_once_without_erasing_authorization() 
             &plan.component_topology,
             &plan.fleet_subnet_roots[0],
             &union,
+        &empty_fixtures(&union),
         ),
         Err(ApplicationReleaseSetError::WasmStoreLimitExceeded {
             maximum_bytes,
@@ -581,9 +615,13 @@ fn projection_rejects_cross_build_topology_and_manifest_tampering() {
     let release_build_id = release_build(15);
     let union = compile_union(&plan.component_topology, release_build_id);
     let binding = &plan.fleet_subnet_roots[0];
-    let manifest =
-        FleetSubnetRootReleaseSetManifest::project(&plan.component_topology, binding, &union)
-            .expect("root projection");
+    let manifest = FleetSubnetRootReleaseSetManifest::project(
+        &plan.component_topology,
+        binding,
+        &union,
+        &empty_fixtures(&union),
+    )
+    .expect("root projection");
 
     let mut wrong_topology_union = union.clone();
     wrong_topology_union.fleet_component_topology_digest =
@@ -593,6 +631,7 @@ fn projection_rejects_cross_build_topology_and_manifest_tampering() {
             &plan.component_topology,
             binding,
             &wrong_topology_union,
+            &empty_fixtures(&union),
         ),
         Err(ApplicationReleaseSetError::UnionTopologyDigestMismatch { .. })
     );
@@ -607,7 +646,12 @@ fn projection_rejects_cross_build_topology_and_manifest_tampering() {
     let mut wrong_build = manifest.clone();
     wrong_build.release_build_id = release_build(17);
     std::assert_matches!(
-        wrong_build.validate_against(&plan.component_topology, binding, &union),
+        wrong_build.validate_against(
+            &plan.component_topology,
+            binding,
+            &union,
+            &empty_fixtures(&union)
+        ),
         Err(ApplicationReleaseSetError::ManifestBuildMismatch { .. })
     );
 
@@ -615,14 +659,152 @@ fn projection_rejects_cross_build_topology_and_manifest_tampering() {
     wrong_digest.component_topology_digest =
         canic_core::ids::ComponentTopologyDigest::from_bytes([18; 32]);
     std::assert_matches!(
-        wrong_digest.validate_against(&plan.component_topology, binding, &union),
+        wrong_digest.validate_against(
+            &plan.component_topology,
+            binding,
+            &union,
+            &empty_fixtures(&union)
+        ),
         Err(ApplicationReleaseSetError::ManifestTopologyDigestMismatch { .. })
     );
 
     let mut wrong_entries = manifest;
     wrong_entries.entries.pop();
     std::assert_matches!(
-        wrong_entries.validate_against(&plan.component_topology, binding, &union),
+        wrong_entries.validate_against(
+            &plan.component_topology,
+            binding,
+            &union,
+            &empty_fixtures(&union)
+        ),
         Err(ApplicationReleaseSetError::ProjectionMismatch)
     );
+}
+
+fn empty_fixtures(union: &ApplicationArtifactUnion) -> FixtureArtifactManifest {
+    FixtureArtifactManifest {
+        schema_version: 1,
+        release_build_id: union.release_build_id,
+        component_topology_digest: union.fleet_component_topology_digest,
+        entries: Vec::new(),
+    }
+}
+
+#[test]
+fn fixture_projection_binds_content_and_limits_each_roots_admitted_roles() {
+    let plan = complete_plan(u64::MAX);
+    let union = compile_union(&plan.component_topology, release_build(19));
+    let mut fixtures = shared_fixture_sources(&union);
+    let mut binding = plan.fleet_subnet_roots[0].clone();
+    binding
+        .component_admissions
+        .retain(|admission| admission.component_spec.as_str() == "alpha");
+    binding.component_topology_digest = plan
+        .component_topology
+        .project_for_admissions(&binding.component_admissions)
+        .unwrap()
+        .digest()
+        .unwrap();
+    let manifest = FleetSubnetRootReleaseSetManifest::project(
+        &plan.component_topology,
+        &binding,
+        &union,
+        &fixtures,
+    )
+    .unwrap();
+    assert_eq!(
+        manifest
+            .fixtures
+            .iter()
+            .map(|source| source.role.as_str())
+            .collect::<Vec<_>>(),
+        vec!["alpha", "shared"]
+    );
+    assert_eq!(
+        serde_json::to_vec(&manifest).unwrap(),
+        serde_json::to_vec(&manifest.root_store_manifest()).unwrap()
+    );
+    let original = manifest
+        .digest(&plan.component_topology, &binding, &union, &fixtures)
+        .unwrap();
+    let wasm_bytes: u64 = manifest
+        .entries
+        .iter()
+        .map(|entry| entry.artifact.wasm_gz_size_bytes)
+        .sum();
+    binding.limits.maximum_wasm_store_bytes = wasm_bytes + 17;
+    FleetSubnetRootReleaseSetManifest::project(
+        &plan.component_topology,
+        &binding,
+        &union,
+        &fixtures,
+    )
+    .expect("shared fixture content counts once in its separate namespace");
+    binding.limits.maximum_wasm_store_bytes -= 1;
+    std::assert_matches!(
+        FleetSubnetRootReleaseSetManifest::project(
+            &plan.component_topology,
+            &binding,
+            &union,
+            &fixtures
+        ),
+        Err(ApplicationReleaseSetError::WasmStoreLimitExceeded { .. })
+    );
+    binding.limits.maximum_wasm_store_bytes = u64::MAX;
+    fixtures.entries[0].descriptor.completion_summary = [4; 32];
+    fixtures.entries[0].content_id =
+        FixtureContentApi::content_id(&fixtures.entries[0].descriptor).unwrap();
+    let changed = FleetSubnetRootReleaseSetManifest::project(
+        &plan.component_topology,
+        &binding,
+        &union,
+        &fixtures,
+    )
+    .unwrap();
+    assert_ne!(
+        original,
+        changed
+            .digest(&plan.component_topology, &binding, &union, &fixtures)
+            .unwrap()
+    );
+    std::assert_matches!(
+        manifest.validate_against(&plan.component_topology, &binding, &union, &fixtures),
+        Err(ApplicationReleaseSetError::ProjectionMismatch)
+    );
+    fixtures.release_build_id = release_build(20);
+    std::assert_matches!(
+        FleetSubnetRootReleaseSetManifest::project(
+            &plan.component_topology,
+            &binding,
+            &union,
+            &fixtures
+        ),
+        Err(ApplicationReleaseSetError::Fixture(
+            FixtureArtifactError::Authority
+        ))
+    );
+}
+
+fn shared_fixture_sources(union: &ApplicationArtifactUnion) -> FixtureArtifactManifest {
+    let descriptor = FixtureDescriptor {
+        schema_version: 1,
+        format_hash: [1; 32],
+        encoded_length: 17,
+        chunks: vec![FixtureChunkDescriptor {
+            digest: [2; 32],
+            length: 17,
+        }],
+        completion_summary: [3; 32],
+    };
+    let content_id = FixtureContentApi::content_id(&descriptor).unwrap();
+    let mut fixtures = empty_fixtures(union);
+    fixtures.entries = ["alpha", "beta", "shared"]
+        .into_iter()
+        .map(|role| FixtureArtifactEntry {
+            role: CanisterRole::from(role),
+            content_id,
+            descriptor: descriptor.clone(),
+        })
+        .collect();
+    fixtures
 }

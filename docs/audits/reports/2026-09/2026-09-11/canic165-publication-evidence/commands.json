@@ -1,0 +1,6 @@
+{
+  "native": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked --no-fail-fast -p canic-host -p canic-core --lib -- fleet_ensure::ops::current_protocol::fixture fleet_ensure::ops::current_protocol::tests::fresh_fleet_store fleet_ensure::ops::plan_content fleet_ensure::json fleet_ensure::tests::interruption_at_every_effect fleet_ensure::tests::current_plan_retains_store_chunks release_set::fixture replay_policy::tests",
+  "policy": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-core --lib -- domain::policy::pure::fleet_activation",
+  "clippy": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked --keep-going -p canic-host -p canic-core -p canic-control-plane -p canic -p canic-testing-internal --features canic-testing-internal/governed-pocketic-tests --lib --tests -- -D warnings",
+  "pocketic": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::current_store_bootstraps_application_catalog_and_replays_zero_effects"
+}

@@ -30,6 +30,7 @@ pub enum CanisterInitAuthority {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct CanisterInitPayload {
+    pub fixture: Option<Box<crate::dto::fixture_provisioning::FixtureAssignment>>,
     pub install_id: [u8; 32],
     pub release_build_id: ReleaseBuildId,
     pub authority: CanisterInitAuthority,
@@ -104,6 +105,7 @@ mod tests {
             canister_id: principal,
         };
         let payload = CanisterInitPayload {
+            fixture: None,
             install_id: [11; 32],
             release_build_id,
             component_deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {

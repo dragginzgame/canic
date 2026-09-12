@@ -17,3 +17,5 @@ pub mod public_metrics;
 pub mod runtime;
 pub mod state;
 pub mod value;
+
+pub mod fixture_import;

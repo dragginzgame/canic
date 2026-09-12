@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-10
+Last updated: 2026-09-12
 
 ## Purpose
 
@@ -25,9 +25,521 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from tagged `v0.110.13`. Its immutable
-release details are in [the 0.110 changelog](../changelog/0.110.md). Package
-versions remain 0.110.13; the current source batch uses the open 0.110.14 draft.
+Current development begins from tagged `v0.110.14` at `c9c91f19c`.
+Release details are in [the 0.110 changelog](../changelog/0.110.md). Package
+versions remain 0.110.14; the current source batch uses the open 0.110.15 draft.
+
+The maintainer-requested IcyDB update on 2026-09-12 pins the isolated lifecycle
+fixture to published 0.257.5 and updates exactly its six locked packages. SQL
+remains disabled and ic-memory stays at 0.13.2 with one runtime identity. No
+Canic adapter changes were required. IcyDB's new control-storage format requires
+database recreation, consistent with Canic's reinstall-only release contract.
+Both focused dependency guards and scoped Clippy pass. All five Store/IcyDB
+integration cases pass in 154.78s (267s runner including compilation and builds),
+covering atomic commits, source/grant recovery, restart and partial-import
+reinstall. All 1,635 recorded source inputs and inventory stayed unchanged.
+Logs are `/tmp/canic-icydb-guards.log`, `/tmp/canic-icydb-clippy.log` and
+`/tmp/canic-icydb-02575-pocketic.log`; the snapshot is
+`/tmp/canic-icydb-02575-source.sha256`. The .15 changelog includes the update.
+Earlier 0.257.4 qualification records below remain historical. The dependency
+update is qualified; the complete CANIC-165 batch remains open.
+
+## Upstream feedback through CANIC-167
+
+The maintainer selected continued Canic-only feedback work on 2026-09-11.
+The downstream section ledger now ends at CANIC-167 after a read-only
+2026-09-12 refresh. The [current triage](../audits/reports/2026-09/2026-09-11/toko-upstream-feedback.md)
+separates implemented corrections, remaining acceptance and new design work.
+
+The latest push-readiness check finds no issue beyond CANIC-167. The .15 draft
+now groups completed CANIC-160/163/164/166/167 corrections, identifies its current
+record hard cuts and retains the latest reporting/dependency qualification.
+CANIC-165 stays under root Unreleased. Its source changes share the current
+worktree and files with those corrections: a prepared .15 changelog does not
+make the combined worktree ready to publish. Finish the two exact interrupted
+effects and generated Fleet apply/funding before recommending the current
+combined batch. No version, commit, push or broad gate ran for this notes update.
+
+CANIC-167 is the new feedback item. Final application, infrastructure and
+selected-role build summaries now expose exact code/data section bytes and
+profile through the existing host parser. Selected-role provenance records
+required `final_wasm_metrics` alongside profile and raw/gzip hashes. The current
+v1 record hard-cuts; no new size ceiling or headroom claim is introduced. The
+[check record](../audits/reports/2026-09/2026-09-11/canic167-build-metrics.json)
+retains 21 passing host tests, 26 CLI build tests and scoped warning-denied
+Clippy. Formatting, document and .15 draft checks pass. This bounded reporting
+correction and its changelog are ready for release review in .15.
+
+The refreshed CANIC-165 handoff also requests matched Translation and Game Shard
+size/import-cost receipts against compact embedding. The design records that
+accepted downstream boundary; Toko remains read-only. Newer local funding and
+retirement evidence covers part of its remaining list, while exact suspended
+effects and generated apply/funding remain open. CANIC-166 still needs fresh
+reviewed staging recovery execution. The complete CANIC-165 batch is not
+push-ready; the reporting change does not complete it.
+
+CANIC-166 names the same retained partial-activation operation already covered
+by CANIC-157's bounded recovery owner. Ordinary plan/apply now report an exact
+local source-evidence match as a request for a separate explicit reinstall
+review; other unreadable plans retain their cause and preservation guidance.
+No source plan is defaulted, migrated, executed or silently superseded. CLI
+help and the [runbook](../features/operations/fleet-ensure.md#unreadable-retained-plan)
+describe the existing admission and multi-review sequence. Staging authority,
+cycle observations and actual execution remain separate from this local work.
+The diagnostic correction extends the open .15 draft. Five focused host tests,
+15 Fleet CLI tests and two recursive/bare help tests pass; host/CLI library,
+binary and test Clippy passes with warnings denied. Formatting, document links,
+semantics and .15 draft checks pass. The subsequent CANIC-163 extension below
+is also qualified; the combined draft remains open until publication.
+
+The 2026-09-12 read-only feedback refresh confirms CANIC-166's remaining
+boundary is downstream staging recovery execution and subsequent deployment
+qualification. Its current issue text accepts the existing bounded review owner
+and does not request another Canic recovery implementation. The recorded scratch
+review establishes a prior admitted observation only; a fresh review must check
+the selected release, authority, inventory and cycles before any apply. No live
+recovery or sibling mutation was performed by this continuation.
+
+CANIC-165 now qualifies reinstall submitted while a real Store fetch is pending.
+A disposable cross-subnet consumer exposes its existing fetch lease through a
+read-only internal-fixture observation. The replacement remains empty after
+reinstall and additional network progress, then completes with its new exact
+grant and receipt; the old grant is rejected. This observes a pending fetch at
+submission, without deterministically holding the reply until after reinstall.
+The stricter held-reply case and Root interruption inside its Store grant/revoke
+await remain open, together with complete generated Fleet apply/funding.
+
+All six Store/IcyDB integration cases pass in 131.54s (163s runner), alongside
+scoped core/probe/internal-testing/integration Clippy. All 1,639 source inputs
+and inventory remain unchanged. The existing
+[delivery evidence](../audits/reports/2026-09/2026-09-11/canic165-delivery.md)
+records the exact boundary and retains the stricter qualification flags as false.
+The feature contract, design and Unreleased changelog reflect the checkpoint.
+CANIC-165 remains unassigned and the complete batch is not push-ready.
+
+CANIC-165's publication retry gap is corrected. The existing Fleet plan binds a
+paid-attempt limit per preparation/upload, derived from its configured retry
+bound, and reserves update plus retry-observation costs. The existing journal
+consumes an attempt before the external call; failed/lost replies and restart
+cannot restore it. Exact source observation still reconciles at the limit.
+Exhaustion stops before another update, and the current action/journal records
+hard-cut without compatibility defaults. No funding defaults are increased.
+
+Twenty-four distinct focused host checks pass (25 test executions across the
+selected filters), including persisted intent before issue, failure/restart,
+last-attempt reply loss, bound exhaustion, tampered-counter rejection, exact
+budget binding, overflow, source-content hydration and prior maintenance/replay.
+Host/internal-testing library/test Clippy passes. The real Root/Store publication
+and zero-effect replay case passes in 48.63s (93s runner). All 1,638
+source inputs and inventory stay unchanged; the existing
+[delivery evidence](../audits/reports/2026-09/2026-09-11/canic165-delivery.md)
+retains this checkpoint. This combines host journal evidence with actual Store
+transport evidence, not a complete generated Fleet apply. The two exact
+interrupted-call cases and generated apply/funding qualification remain next.
+The changelog and operator/feature contracts are updated. CANIC-165 remains
+Unreleased and the complete batch is not push-ready; no version, publication,
+deployment or sibling mutation ran.
+
+CANIC-165 now also qualifies the actual automatic funding timer while an initial
+Hub's fixture import is held. The running target requests its configured 2T,
+receives 2T plus a final 1T, reaches the 3T child allowance and stops requesting
+after exhaustion. The same import subsequently completes with targets and source
+bytes retained. The high trigger threshold belongs only to the disposable test
+configuration; production funding defaults are unchanged. This closes the
+automatic-timer qualification left open by the preceding checkpoint.
+
+The new exact PocketIC case passes in 42.04s (59s runner); the existing
+initial/later-Shard funding/recovery regression passes in 55.25s (57s runner).
+Scoped internal-testing library/test Clippy passes. All 1,638 source inputs and
+inventory stay unchanged, with logs and snapshot in the existing
+[delivery evidence](../audits/reports/2026-09/2026-09-11/canic165-delivery.md).
+That checkpoint identified the publication retry gap corrected above. The exact
+interrupted grant/revoke and Store-fetch/reinstall cases and generated apply
+remain FP2 acceptance. CANIC-165 remains Unreleased and the complete batch is
+not push-ready. No version, publication, deployment or sibling mutation ran.
+
+The preceding CANIC-165 continuation fixes funding admission for a registered initial
+Component whose fixture keeps it Prepared. The exact Prepared Root now admits
+its cycles request through the existing role limits, cost guard and receipt
+owner; other capability restrictions remain. PocketIC qualifies request clamping,
+cooldown, exact replay without another transfer and total-allowance exhaustion,
+then completes the same fixture import and initial/later-Shard journey. The
+recipient is stopped only during exact balance checks; this is a real Root
+transfer proof using a short disposable two-grant allowance,
+not qualification of the target's automatic funding timer.
+Unregistered callers and Prepared recycling reject. The focused case passes in
+85.57s (100s runner), both Component RPC native tests pass,
+and affected library/test Clippy passes. All 1,637 source inputs and inventory
+stay unchanged; the [delivery evidence](../audits/reports/2026-09/2026-09-11/canic165-delivery.md)
+retains the prior rejection and final qualification. Reviewed generated publication
+and retry costs, automatic target-funding integration, the two exact interrupted
+effects and generated apply remain open. CANIC-165 remains Unreleased and the
+complete batch is not push-ready; no version, publication or deployment ran.
+
+CANIC-165 now qualifies real fixture-bearing retirement through the existing
+Root-owned direct Component lifecycle. The combined test exposed two defects:
+the driver finalized at zero descendants before the last subtree journal had
+completed, and final Root inventory counted a released child-installation
+precharge as retained bytes. The driver now follows the durable `DescendantsEmpty`
+result and its exact Registry head; final accounting uses settled child-record
+sizes. Neither correction adds state, a journal or a lifecycle owner.
+
+The new disposable Hub/Shard case completes an actual fixture import, verifies
+its exact release-bound receipt and retained source, then finishes workload
+handoff, Store cleanup/deletion, Root deletion and Coordinator Ledger retirement.
+All pool assets remain controlled; lost transfer replies reconcile and terminal
+replay issues no additional Ledger transfer. It passes in 192.55s
+(237s runner). The existing no-fixture Root retirement also passes
+in 25.20s (27s runner). The grouped initial/later-Shard
+case passes in 53.08s (55s runner) and now proves that
+standalone Root removal remains rejected while Coordinator group/service
+references exist, with the Registry and fixture sources retained. Grouped Root
+removal has not been enabled or bypassed by this work.
+
+All 21 targeted Component Registry tests and control-plane/internal-testing
+library/test Clippy pass. The [delivery evidence](../audits/reports/2026-09/2026-09-11/canic165-delivery.md)
+retains the failing regressions, diagnostic source and final logs/snapshot; all
+1,637 final source inputs and inventory stayed unchanged. Temporary production
+tracing is removed. Explicit Store preparation/collection and bounded cleanup
+remain covered by the earlier Store/IcyDB and timer qualification below.
+Reviewed funding, the two exact interrupted-effect proofs and fixture-bearing
+generated Fleet apply remain open. CANIC-165 stays Unreleased and unassigned;
+package versions remain 0.110.14 and the complete batch is not push-ready.
+No broad gate, publication, deployment or sibling mutation ran.
+
+The 2026-09-12 CANIC-165 continuation fixes source-outage backoff across
+same-release restart. The existing async-job record now retains the failure
+streak and earliest retry time, with an exact 810-byte maximum. Shared completion
+and claim admission enforce the delay without another cursor or journal. The
+existing one-to-60-second policy limits retry frequency, not lifetime cycle spend.
+Thirteen focused recovery tests, all 18 memory/timer guards and core/control-plane
+library/test Clippy pass. All five Store/IcyDB cases pass in 126.15s (200s runner).
+All 1,635 final source inputs and inventory stayed unchanged; the native test
+snapshot preceded only explicit default-constructor/import lint cleanup and is
+retained separately in the [delivery evidence](../audits/reports/2026-09/2026-09-11/canic165-delivery.md).
+The Unreleased changelog and feature/design docs include this correction.
+Reviewed funding, source-reference release/terminal Store retirement, the two
+exact interrupted-effect proofs and fixture-bearing generated apply remain open;
+CANIC-165 and the complete combined worktree are not push-ready. No broad gate,
+version, publication or deployment ran. Earlier record-size evidence below is
+historical and is superseded by this checkpoint's measured bound.
+
+CANIC-165 implementation remains the selected priority; the maintainer explicitly
+deferred minor closeout and requested continued issue fixes. Its [design](../audits/working/canic165-fixture-provisioning/design.md)
+now has a [published-IcyDB commit proof](../audits/reports/2026-09/2026-09-11/canic165-import-commit.md):
+separate application rows/checkpoint roll back together on traps; returned errors
+after insertion do not roll back. Exact retry, fresh-heap restart, one-row stored
+validation, receipt replay and actual same-Principal reinstall fencing pass.
+The two-test composed lifecycle integration passes in 30.33s (38s runner), and
+the exact initial-Shard baseline passes in 431.01s (444s runner). Focused Clippy
+passes; 1,559 source files stayed unchanged through both final runs.
+
+The measured maximum validation step is 20,704,750 instructions on eight
+16-byte rows; this does not define a product limit or qualify production ceilings.
+Root may remain Prepared while a child runtime is Active, so grants must not
+wait for global Root activation or parent data readiness. The subsequent
+[transport qualification](../audits/reports/2026-09/2026-09-11/canic165-transport.md)
+passes held replies, wrong callers/installations/content, concurrent-pull
+rejection, post-await trap rollback and lease cleanup, replaced-import callback
+fencing, actual reinstall during a fetch, and durable receipt recovery. All three
+composition integration tests pass in 34.12s (39s runner); focused probe and
+integration Clippy passes. The final 1,561-file source snapshot stayed unchanged.
+The concurrently updated toml/toml_edit lock entries are preserved and included
+in that final snapshot; no dependency upgrade was performed by this slice.
+
+FP1's application/transport boundary is qualified. FP2 now has a qualified
+[retained Store source/grant primitive](../audits/reports/2026-09/2026-09-11/canic165-store.md):
+opaque fixture allocation 68, resumable verified chunks, full command-envelope
+bounds, shared template/fixture capacity, exact Component/child grants and
+revision-fenced revocation. The canonical Store Candid and role/state ownership
+are updated. The actual Store PocketIC journey proves upload restart, a 1 MiB
+chunk, target-only reads and retained/replaced grants. All four composition
+tests pass in 50.82s (94s runner); 44 core and 10 Store/state native checks,
+scoped Clippy and the Root-only compile pass. All 1,605 recorded Rust/config/
+Candid inputs stayed unchanged during final PocketIC qualification.
+
+The initial [host artifact compiler](../audits/reports/2026-09/2026-09-11/canic165-host-sources.md)
+now has qualified [complete-build integration](../audits/reports/2026-09/2026-09-11/canic165-build-binding.md).
+Attached packages select a source document through `package.metadata.canic.fixture`.
+The build retains exact chunks before Cargo, binds the fixture child manifest
+into the complete release and checks source fingerprints plus retained
+descriptors before finalization. Cache reuse verifies that same selection,
+including explicitly declared inputs in otherwise excluded directories. The
+transient-change proof rejects different retained bytes even after source files
+are restored. No local source path is added to runtime configuration.
+
+All 42 focused host tests and 25 CLI build tests pass; host/CLI/internal testing
+library and test Clippy passes with warnings denied. The required current
+manifest field is a pre-1.0 hard cut; empty-fixture builds bind an empty child
+manifest. Existing no-fixture generation passes. Fixture-bearing releases
+explicitly reject Fleet generation/initialization while delivery is unfinished.
+The [build contract](../features/build-and-evidence/fixture-artifacts.md) documents
+source selection, bounds, failure behavior and the current delivery boundary.
+
+The [Root source-authority checkpoint](../audits/reports/2026-09/2026-09-11/canic165-root-sources.md)
+now binds role-selected fixtures into the protected Root manifest. Root registers
+only those descriptors; the retained, still-observed publication controller
+uploads bounded verified chunks directly to Store. Root bootstrap and live
+status require complete source metadata without reading fixture payloads.
+The required manifest field changes through the current pre-1.0 hard cut.
+Replay-policy coverage also includes all new Root/Store fixture commands.
+
+All 36 focused native tests and affected-target warning-denied Clippy pass.
+All four Store/lifecycle PocketIC cases pass in 102.02s (177s runner), including
+a controller's 1 MiB upload, restart replay and removal fencing. The actual
+Prepared-Root source registration/bootstrap case passes in 188.06s (217s runner),
+including unknown-role/incorrect-manifest-size refusal, cursor recovery,
+incomplete bootstrap refusal and exact upload replay. Those times include
+artifact builds. All 1,598 recorded Rust/config/Candid inputs stayed unchanged
+during runtime qualification; subsequent test-import cleanup is compile/lint
+qualified separately in the checkpoint.
+
+The [reviewed host publication checkpoint](../audits/reports/2026-09/2026-09-11/canic165-publication.md)
+now schedules Root preparation and bounded direct Store uploads through the
+existing journal and content-addressed plan owner. Hydration rejects changed
+Store/descriptor/receipt/bytes; retained Store cursors reconcile lost replies
+and completed replay. A dedicated controller-authenticated composite query
+reads Root's exact Store metadata while Prepared, with exact endpoint/kind
+admission; ordinary Root status keeps its existing call behavior. The earlier
+standalone publication selector is removed.
+
+All 55 focused native checks and affected-target warning-denied Clippy pass.
+The actual two-chunk Root/Store compiler journey passes in 201.20s (240s runner,
+including artifact builds), covering discarded upload replies, exact retained
+progress, bootstrap and immediate effect-free replay. All 1,615 final recorded
+Rust/config/Candid inputs stayed unchanged during final runtime qualification.
+This composes native journal evidence with actual canister commands; complete
+CLI-generated apply plus application receipt delivery remains FP2 work.
+
+The [initial target-grant and assignment checkpoint](../audits/reports/2026-09/2026-09-11/canic165-grants.md)
+now derives source access from verified Component/child installation intent and
+installs the exact Store, descriptor and revision-1 grant into protected target
+state. Root checks the installed assignment before issuance and rechecks retained
+allocation and Root authority after Store awaits. Directory/activation status
+preserves the assignment. Protected-state admission and status reject changed
+installation, release, managed binding, descriptor/content and initial revision.
+Publication and consumers share one core content/chunk verifier; Store retains
+the complete command-envelope check. No application cursor is duplicated.
+
+All 47 focused native checks, isolated Root/Store compiles and scoped Clippy pass.
+The three assignment regressions pass again after final test-module relocation.
+The actual initial-Shard journey passes in 440.06s (525s runner including native
+compilation and uncached Wasm builds): Hub/Shard assignments match exact Store
+grants and descriptors, unselected roles receive no grants, and terminal replay
+preserves grants and pool observations. All 1,622 recorded source inputs and
+the source inventory stayed unchanged. This qualifies initial grant/assignment
+and runtime ordering; the subsequent combined receipt proof is recorded below.
+
+The [automatic registered consumer](../audits/reports/2026-09/2026-09-11/canic165-consumer.md)
+now has actual Store/IcyDB qualification. One native watchdog pre-arms recovery
+before dispatching bounded work; the existing async recovery record retains its
+attempt fence and permanent diagnostic, with a measured 751-byte maximum and
+no application cursor. An ordinary once timer stranded work after a trap; the
+watchdog correction passes that same recovery journey. Successful steps request
+immediate continuation, and transient failures use provisioning backoff at the
+existing recovery cadence. The manual-step API is removed.
+
+Twenty native checks, scoped Clippy and all five Store/lifecycle PocketIC cases
+pass (121.29s; 164s runner including compilation). Automatic targets recover from
+source outages, returned-error traps, bad checkpoints and restart; invalid
+receipts reject, completed replay survives revocation/restart and a permanent
+authority failure remains stopped after restart. All 1,631 recorded source inputs
+and their inventory remained unchanged. All eighteen timer/memory guard cases and
+final guard Clippy pass. The memory guard also corrects false positives from
+constants and native test fixtures.
+
+Receipt-gated application dispatch and membership are now implemented. Protected
+readiness carries the typed fixture result; Root compares completion against its
+own retained installation plan. Infrastructure calls and initial child bootstrap
+remain available while data loads. Twenty-seven native checks and the five
+Store/IcyDB PocketIC cases pass, including pending/failed endpoint rejection and
+receipt recovery after restart. The narrowed protected assignment read avoids
+reconstructing Directory status on every application call; the eight-row probe
+measures 21.64M validation instructions, with no new instruction cap.
+
+The [combined Prepared-Root/Hub/Shard receipt proof](../audits/reports/2026-09/2026-09-11/canic165-readiness.md)
+passes in 452.11s (503s runner including compilation and uncached artifacts).
+Both imports remain held while the initial child appears and Root stays Prepared.
+The child completes before the parent is released; pending observations retain
+the same selected targets. Terminal memberships have exact receipts, and repeated
+account assignment returns the existing Shard without increasing pool workload.
+All 1,633 inputs and their inventory stayed unchanged during each real-canister
+run. All 27 final native regressions and warning-denied scoped Clippy pass;
+source, test, facade and documentation propagation for this readiness slice are
+complete.
+
+[Later-Shard delivery and codec failure recovery](../audits/reports/2026-09/2026-09-11/canic165-delivery.md)
+are now qualified. The disposable Shard importer completes automatically while
+only the initial Hub remains deliberately held. After initial membership, the
+Fleet proof fills configured Shard capacity, removes the publication controller,
+interrupts Store access and retries one account. One later Shard receives an exact
+Root grant and completes its receipt before assignment; replay preserves its
+identity and pool state. No operator import-release call is needed for Shards.
+
+Argument encoding and reply decoding failures now retain a permanent `Codec`
+diagnostic instead of retrying as transport outages. A malformed PocketIC peer
+is read once; no rows commit, application calls remain blocked and the exact
+failure survives target restart. All 17 native regressions, five Store/IcyDB
+cases and final scoped Clippy pass. The final Fleet case passes in 467.42s
+(497s runner including uncached artifacts); the consumer cases take 130.45s
+(202s runner). All 1,633 source inputs and their inventory stayed unchanged
+through final runtime qualification. The recovery record stays at 751 bytes.
+
+Root now revokes an allocation's fixture grant before recycling uninstalls its
+code. The existing pending pool claim fences Store calls and reset completion;
+revocation failure stays pending, and stale reset callbacks cannot overwrite a
+completed or replaced claim. Already revoked exact grants reconcile without a
+second mutation. Sixteen focused grant/pool regressions and affected-target
+Clippy pass. The extended real Fleet proof passes in 52.34s (67s runner with
+cached artifacts): Store outage at removal admission leaves the target intact;
+removal then returns it to Ready without code, with its exact grant disabled.
+Terminal replay preserves the target entry and grant; stale issuance rejects.
+All 1,634 recorded inputs and their inventory stayed unchanged. Interruption
+inside the revocation call still needs its own runtime evidence.
+
+Replacement source grants now retain their selected revision in the existing
+parent/child installation intent and protected target assignment. Fresh selection
+requires the same Root, release and physical target, a disabled prior grant and
+a different installation. Exact retries preserve that selection; an old pool
+claim cannot issue access after recycling. The stable install-effect field is an
+explicit nullable current-schema field, with no compatibility reader.
+
+The replacement proof exposed a stopped recycled target stranded at Installed.
+That existing owner now checks the selected module, Root controller and workload
+claim before starting the target; already-running retries skip the effect.
+The extended Fleet case passes in 436.53s (498s runner including uncached builds):
+the same stopped physical Shard receives a new installation, revision-3 grant and
+matching completed import. Exact replay and a stale previous-installation
+revocation preserve that grant. All 1,634 source inputs and inventory stayed
+unchanged through runtime and final native checks. All 39 focused control-plane
+and four core regressions pass, as does affected-target Clippy with warnings
+denied. The delivery evidence retains all commands and source snapshots.
+
+The 2026-09-12 continuation qualifies reinstall during a partially completed
+automatic import against the actual Store. One committed application row and its
+checkpoint disappear on same-Principal reinstall; the new installation begins
+empty, resumes automatically and completes with its own revision-3 grant and
+receipt. Discarded Store revocation/issuance receipts reconcile through retained
+state and exact retry across Store restart; stale access stays rejected. These
+receipts are discarded at the test caller, not inside Root's suspended await.
+All five Store/IcyDB integration cases pass in 109.13s (155s runner), as does
+scoped warning-denied Clippy. All 1,635 source inputs and inventory stayed
+unchanged through final qualification. Concurrent lockfile updates were preserved
+and the focused checks repeated against them. A disk-full compile was resolved by
+reclaiming 49.6 GiB of stale Canic incremental caches; source and evidence stayed
+intact. No production fault control or manual delivery endpoint was introduced.
+
+Next: Root interruption while awaiting grant/revocation replies, reinstall while
+an actual Store fetch reply is suspended, reviewed funding/backoff, reference
+release and terminal Store retirement.
+Then enable fixture-bearing Fleet generation and qualify complete generated apply.
+The current conservative fixture GC block is not the complete retention lifecycle.
+CANIC-165 and the combined worktree are not push-ready. Changelog and active docs
+are updated, with the root Unreleased note still unassigned. The .15 operator
+batch remains separately qualified. No package version, Git publication or live
+Fleet changed; continue implementation without a closeout-audit prerequisite.
+
+CANIC-163's [selected-build reinstall batch](../audits/working/canic163-selected-build-reinstall/design.md)
+is implemented and qualified. Fresh explicit intent binds completed-source
+infrastructure/protocol authority separately from selected target artifacts.
+Interrupted apply and exact completed-digest replay retain that selection when
+another desired build is supplied. Root history reconciliation covers lost
+responses while the durable effect remains Intent, without repeating installs.
+The record format changes through the current pre-1.0 hard cut.
+
+Nine host, 15 Fleet CLI and two help tests pass; affected host/CLI/testing
+Clippy passes with warnings denied. The exact mixed-Fleet PocketIC proof passes
+in 770.29 seconds (784-second runner): changed and identical-build wipes,
+selected installed hashes, fixture rows, physical retention, conservation and
+replay. All 1,557 recorded source files remained unchanged during that run;
+public allocation checks still pass. The [qualification](../audits/reports/2026-09/2026-09-11/canic163-selected-build-reinstall.md)
+records exact scope and evidence. The complete .15 CANIC-160/163/164/166 batch
+and changelog are ready for release review. Toko wrapper adoption and actual
+application startup remain downstream work; no sibling or live Fleet changed.
+
+CANIC-139 remains narrowed to unchanged-release reuse and safe intermediate
+caching, without cross-identity finalized-Wasm reuse. CANIC-165 remains a
+separate provisioning design and proof sequence.
+
+The [CANIC-166 read-only staging assessment succeeded](../audits/reports/2026-09/2026-09-11/canic166-staging-review.md):
+24 pool assets and 392.571T native cycles were accounted for. Its 219T preparation
+allowance is a conservative cap, not expected cost. No apply or reset ran; all
+original operation inputs and global identity remain unchanged, and temporary
+identity copies were removed. Staging need not wait for 163, but later reviews,
+explicit apply authority and terminal conservation remain required.
+CANIC-141 remains behind selected recovery/provisioning work. Older
+Confirmed labels with published fixes are not a new implementation queue.
+The existing CANIC-160/164 batch below is preserved; no sibling, package version,
+Git publication or live estate changed.
+
+## CANIC-164 public allocation summaries
+
+The maintainer selected CANIC-164 after the CANIC-160 work. The existing
+`performance` opt-in now publishes bounded anonymous `memory.allocations.*`
+gauges through the existing sampler, cache and history. State distinguishes
+available, unsupported and failed collection; failures retain successful source
+times. Physical, capacity and binding partitions are checked independently.
+Raw keys/owners stay protected, and payload occupancy remains unavailable.
+
+All 26 focused native cases and nine timer PocketIC cases pass. Native evidence
+covers real one-page buckets with every usable ID allocated and unchanged backing
+bytes. Runtime sampling preserves allocation/generation reports through 300
+periods and history rollover. Complete sampling peaks at 18,065,610 instructions
+in that full-history fixture; the separate scheduled maximum is 18,728,667.
+Retained history uses 4,097,514 bytes within the existing 8 MiB ceiling. The
+historical 20M reference remains advisory; these are not live Toko measurements.
+
+The exact mixed-Fleet proof passes in 1,110.58s (1,138s runner), including
+369.31s initial artifact work, both deliberate resets and recovery/replay.
+Root, both Hubs, Shard and other managed roles return complete cached allocation
+summaries; Store explicitly reports unsupported. Anonymous protected reads remain
+denied. The 3,900-file source aggregate stayed unchanged across both runtime
+proofs. Affected core, fixture/probe and timer-test Clippy checks pass with
+warnings denied. See the [assessment](../audits/reports/2026-09/2026-09-10/canic164-public-memory.md)
+and [public contract](../features/runtime/public-observability.md#public-allocation-summaries).
+
+The combined scoped CANIC-160/164 batch and .15 changelog are ready for release
+review. This stays in the selected same-minor follow-up to published .14 despite
+the soft release-count guideline. Toko frontend adoption, live allocation
+attribution and comparable deployment timings remain downstream work. No sibling,
+package version, Git publication or live Fleet changed; no broad gate ran.
+
+## CANIC-160 shared and concurrent pool observations
+
+The maintainer published .14 and reported a 75-minute release run, then selected
+CANIC-160's remaining fresh-path duplication. The host platform now shares one
+inspection response by exact Root/target across fresh configured observation
+and balance review. Each consumer retains its own authority checks; failures
+are not inserted, and observations expire before effects and on errors.
+
+The subsequent accepted slice overlaps independent configured pending-pool
+inspections using the existing four-request bound. Root/operator and pool-page
+preparation remains ordered; every issued read drains before an ordered error
+returns, and no following batch starts after failure. Balance review reuses
+validated responses; unconfigured balance-only assets still read serially.
+
+All 33 focused platform/concurrency cases and warning-denied host library/test
+Clippy pass. The initial cache-bypass control reproduced 42 duplicate calls
+across 1-, 14- and 27-asset fixtures; balance review now adds zero calls. A
+controlled native fixture with 20ms inspection latency measures 440→164ms for
+14 assets and 836→290ms for 27, with exact observation/call-count parity.
+The exact 27-canister PocketIC reinstall proof passes in 659.46s (759s runner),
+including authority rejection, lost-response recovery, funding reviews,
+conservation and effect-free replay. The 3,898-file tracked source inventory
+remained unchanged through qualification; documentation was updated afterward.
+
+The [initial reuse assessment](../audits/reports/2026-09/2026-09-10/canic160-fresh-observation.md)
+and [concurrency evidence](../audits/reports/2026-09/2026-09-10/canic160-pool-concurrency.md)
+retain separate checkpoints and measurement limits. Comparable downstream IC
+timings and provisioning-wait attribution remain open; no sibling, live Fleet,
+package version or publication changed. These timings do not predict the next
+complete release duration.
+
+This complete Canic correction and the .15 notes are ready for release review.
+The same-minor follow-up is deliberate despite the soft 12-release guideline:
+it corrects the published observation optimization for an affected operator
+path and does not begin another minor. No broad gate was rerun. The sections
+below retain the earlier .14 implementation handoff and qualification history.
 
 ## Validation Throughput: Qualified Before Push
 

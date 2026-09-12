@@ -1,5 +1,6 @@
 //! Root-owned maintenance for prepaid empty Canisters on one physical Subnet.
 
+mod fixture;
 mod refill;
 
 use crate::ops::{
@@ -186,7 +187,7 @@ async fn maintain_once_for_demand(
         ReadyDemand::Exact(ready_target) => maintain_once_inner_for_target(ready_target).await,
     };
     let completion = maintenance_result_completion(&result);
-    if !AsyncJobRecoveryOps::finish(attempt, completion)? {
+    if !AsyncJobRecoveryOps::finish(attempt, completion, IcOps::now_nanos())? {
         return Err(InternalError::invariant());
     }
     result
@@ -402,7 +403,7 @@ fn finish_maintenance_timer(
 ) -> TimerRunResult {
     let timer_result = maintenance_timer_result(result);
     let completion = timer_result_completion(timer_result.completion().outcome());
-    let Ok(exact) = AsyncJobRecoveryOps::finish(attempt, completion) else {
+    let Ok(exact) = AsyncJobRecoveryOps::finish(attempt, completion, IcOps::now_nanos()) else {
         return TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop);
     };
     if exact && completion == AsyncJobCompletion::InvariantFailure {
@@ -578,8 +579,14 @@ async fn reset_asset(
     if preparation == CanisterPoolResetPreparation::Ready {
         return Ok(ResetAssetOutcome::Ready);
     }
+    // A source outage must leave recycling pending, not mark the reset terminally failed.
+    fixture::revoke_before_reset(canister_id).await?;
     let root = IcOps::canister_self();
+    let recycling = CanisterPoolOps::pending_recycling_claim(canister_id)?;
     let result = observe_reset_asset_cycles(canister_id, root, preparation).await;
+    if let Some(claim) = &recycling {
+        CanisterPoolOps::require_pending_recycling_claim(canister_id, claim)?;
+    }
 
     match result {
         Ok(cycles) if cycles >= required_cycles => {
@@ -618,6 +625,7 @@ async fn observe_reset_asset_cycles(
     if preparation != CanisterPoolResetPreparation::Reset {
         return Err(InternalError::invariant());
     }
+    let recycling = CanisterPoolOps::pending_recycling_claim(canister_id)?;
     MgmtOps::update_settings(&UpdateSettingsArgs {
         canister_id,
         settings: CanisterSettings {
@@ -627,6 +635,9 @@ async fn observe_reset_asset_cycles(
         sender_canister_version: None,
     })
     .await?;
+    if let Some(claim) = &recycling {
+        CanisterPoolOps::require_pending_recycling_claim(canister_id, claim)?;
+    }
     MgmtOps::uninstall_code(canister_id).await?;
     MgmtOps::get_cycles(canister_id).await
 }

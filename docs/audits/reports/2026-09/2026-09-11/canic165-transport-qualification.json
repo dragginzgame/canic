@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "issue": "CANIC-165",
+  "date": "2026-09-11",
+  "status": "partial-qualification",
+  "qualified_boundary": "application-commit-and-test-peer-transport",
+  "release_assignment": null,
+  "checks": [
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic_icydb_lifecycle_probe --all-targets --all-features -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-tests --test icydb_lifecycle_composition --all-features -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "result": "pass",
+      "tests": 3,
+      "test_seconds": 34.12,
+      "runner_seconds": 39
+    }
+  ],
+  "source_files": 1561,
+  "source_unchanged": true,
+  "source_snapshot": "canic165-transport-evidence/source.sha256",
+  "evidence": [
+    {
+      "path": "canic165-transport-evidence/pocketic.log",
+      "sha256": "85ab55ded7499d72cb4b1012a5d3093021680e5dbc3718408156769c68119b5e"
+    },
+    {
+      "path": "canic165-transport-evidence/probe-clippy.log",
+      "sha256": "a1b8039ee2012cc7f1fe3526e79663189aa6e88b65f8b34d96c32ce2594afa3d"
+    },
+    {
+      "path": "canic165-transport-evidence/source.sha256",
+      "sha256": "ecfb8c0b8d69e7c06500fecdfa4719d9768959a2187aaf677adce8d65ed1991d"
+    },
+    {
+      "path": "canic165-transport-evidence/tests-clippy.log",
+      "sha256": "d7640634ade50db499a1df77feeb6b92aa33dc782cf473c3a7220357d7372d29"
+    }
+  ],
+  "remaining": [
+    "Retained production Store upload, exact Root-derived grants and target delivery",
+    "Combined initial parent/child receipt-gated placement and application dispatch",
+    "Later Shards, source retention, funding and outage bounds",
+    "Facade, config, release-input and protocol propagation",
+    "Production fixture size, per-message instruction and application qualification"
+  ],
+  "production_api_added": false,
+  "production_limits_qualified": false,
+  "dependency_upgrade_performed": false,
+  "concurrent_lockfile_update_preserved": true,
+  "sibling_repositories_modified": false,
+  "broad_gate_run": false,
+  "version_changed": false,
+  "published": false,
+  "live_deployment_changed": false
+}

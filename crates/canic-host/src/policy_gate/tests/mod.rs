@@ -189,6 +189,13 @@ fn sample_build_provenance_payload() -> BuildProvenanceV1 {
             candid_sha256: "3".repeat(64),
             protocol_profile_digest: "4".repeat(64),
         },
+        final_wasm_metrics: crate::build_provenance::WasmArtifactMetricsV1 {
+            raw_bytes: 8,
+            gzip_bytes: 4,
+            code_section_bytes: 0,
+            data_section_bytes: 0,
+            defined_functions: 0,
+        },
         artifacts: vec![
             sample_artifact(ArtifactProvenanceKindV1::Wasm, "a"),
             sample_artifact(ArtifactProvenanceKindV1::WasmGzip, "b"),

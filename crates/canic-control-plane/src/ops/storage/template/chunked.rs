@@ -63,7 +63,8 @@ impl TemplateChunkedOps {
         let chunk_sets = TemplateChunkSetStateStore::export().entries;
         let occupied_store_bytes = TemplateManifestStateStore::occupied_bytes()
             + TemplateChunkSetStateStore::occupied_bytes()
-            + TemplateChunkStore::occupied_bytes();
+            + TemplateChunkStore::occupied_bytes()
+            + crate::storage::stable::fixture_store::FixtureStore::occupied_bytes();
         let template_versions = projected_template_versions(&manifests, &chunk_sets);
         let remaining_store_bytes = limits.max_store_bytes.saturating_sub(occupied_store_bytes);
         let release_count = u32::try_from(
@@ -186,7 +187,8 @@ impl TemplateChunkedOps {
         let projected_chunk_sets = TemplateChunkSetStateStore::export().entries;
         let projected_bytes = manifest_store_bytes(&projected_manifests)
             + chunk_set_store_bytes(&projected_chunk_sets)
-            + TemplateChunkStore::occupied_bytes();
+            + TemplateChunkStore::occupied_bytes()
+            + crate::storage::stable::fixture_store::FixtureStore::occupied_bytes();
         let projected_versions =
             projected_template_versions(&projected_manifests, &projected_chunk_sets);
         ensure_store_limits_from_versions(limits, projected_bytes, projected_versions)?;
@@ -221,7 +223,8 @@ impl TemplateChunkedOps {
         let projected_chunk_sets = replace_chunk_set_entry(release.clone(), info_record.clone());
         let projected_bytes = TemplateManifestStateStore::occupied_bytes()
             + chunk_set_store_bytes(&projected_chunk_sets)
-            + TemplateChunkStore::occupied_bytes();
+            + TemplateChunkStore::occupied_bytes()
+            + crate::storage::stable::fixture_store::FixtureStore::occupied_bytes();
         let projected_versions =
             projected_template_versions(&projected_manifests, &projected_chunk_sets);
         ensure_store_limits_from_versions(limits, projected_bytes, projected_versions)?;
@@ -256,7 +259,8 @@ impl TemplateChunkedOps {
         // Publishing one chunk can only change the occupied-byte total for this store.
         let current_store_bytes = TemplateManifestStateStore::occupied_bytes()
             + TemplateChunkSetStateStore::occupied_bytes()
-            + TemplateChunkStore::occupied_bytes();
+            + TemplateChunkStore::occupied_bytes()
+            + crate::storage::stable::fixture_store::FixtureStore::occupied_bytes();
         let existing_chunk_bytes = TemplateChunkStore::entry_bytes(&chunk_key).unwrap_or(0);
         let projected_bytes = current_store_bytes
             .saturating_sub(existing_chunk_bytes)

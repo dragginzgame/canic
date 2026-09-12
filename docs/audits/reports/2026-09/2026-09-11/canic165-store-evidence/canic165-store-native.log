@@ -1,0 +1,68 @@
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.14 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 48.24s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-672eaae804ac50ed)
+
+running 9 tests
+test ops::fixture_store::tests::child_grant_preserves_component_identity_and_authenticates_only_the_child ... ok
+test ops::fixture_store::tests::descriptor_and_authority_conflicts_leave_storage_unchanged ... ok
+test ops::fixture_store::tests::fixture_capacity_includes_metadata_payload_grants_and_template_bytes ... ok
+test ops::fixture_store::tests::fixture_store_restores_content_progress_and_exact_grant_revisions ... ok
+test ops::fixture_store::tests::revoked_and_replaced_grants_fence_delayed_commands_and_reads ... ok
+test state_contract::tests::descriptors_declare_template_control_plane_and_gc_allocations ... ok
+test state_contract::tests::descriptors_reference_canonical_control_plane_data_types ... ok
+test state_contract::tests::root_component_provisioning_declares_exact_consecutive_domains ... ok
+test state_contract::tests::root_component_registry_declares_every_normalized_domain ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 244 filtered out; finished in 0.39s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_core-ddfaf1360157e1cd)
+
+running 44 tests
+test memory::policy::tests::accepts_application_keys_only_outside_reserved_ranges ... ok
+test memory::policy::tests::accepts_canic_framework_namespaces_in_owned_ranges ... ok
+test memory::policy::tests::rejects_application_reservations ... ok
+test memory::policy::tests::rejects_canic_framework_namespaces_outside_owned_ranges ... ok
+test memory::policy::tests::rejects_memory_manager_sentinel_id_through_ic_memory ... ok
+test memory::policy::tests::runtime_bootstrap_policy_has_explicit_v1_identity ... ok
+test role_contract::tests::allocation_owners_cannot_claim_another_owner_range ... ok
+test role_contract::tests::auth_capabilities_select_only_their_owned_persistence ... ok
+test role_contract::tests::automatic_topup_is_derived_only_from_the_exact_configured_role ... ok
+test role_contract::tests::built_in_fleet_coordinator_selects_admission_registry_funding_and_restore_fence ... ok
+test role_contract::tests::built_in_wasm_store_owns_template_gc_and_fixture_ids ... ok
+test role_contract::tests::canonical_allocations_form_packed_owner_ledgers ... ok
+test role_contract::tests::canonical_allocations_match_the_active_memory_map ... ok
+test role_contract::tests::capability_derivation_is_centralized_for_auth_and_sharding ... ok
+test role_contract::tests::catalog_is_valid_and_classifies_every_public_feature ... ok
+test role_contract::tests::catalog_matches_canic_cargo_features ... ok
+test role_contract::tests::child_provisioning_is_derived_only_for_roles_with_spawn_grants ... ok
+test role_contract::tests::crypto_features_without_role_authority_are_rejected ... ok
+test role_contract::tests::disabled_delegation_excludes_root_auth_even_with_an_issuer_declaration ... ok
+test role_contract::tests::distinct_allocation_keys_cannot_share_a_memory_id ... ok
+test role_contract::tests::feature_implication_closure_is_idempotent ... ok
+test role_contract::tests::fleet_admission_projection_allocation_requires_explicit_nonroot_enrollment ... ok
+test role_contract::tests::local_application_authorization_capability_is_exactly_role_pruned ... ok
+test role_contract::tests::local_application_authorization_rejects_the_verifier_only_feature_set ... ok
+test role_contract::tests::missing_required_feature_rejects_without_a_contract ... ok
+test role_contract::tests::placement_capabilities_select_only_their_placement_state ... ok
+test role_contract::tests::repeated_selection_merges_allocation_provenance ... ok
+test role_contract::tests::required_crypto_feature_closure_is_not_treated_as_surplus ... ok
+test role_contract::tests::root_chain_key_signing_feature_is_required_only_when_an_issuer_exists ... ok
+test role_contract::tests::root_inherently_selects_icp_refill_state ... ok
+test role_contract::tests::surplus_state_feature_allocates_normally ... ok
+test role_contract::tests::unknown_role_rejects_without_a_contract ... ok
+test state_contract::tests::auth_and_replay_descriptors_reference_canonical_data_types ... ok
+test state_contract::tests::blob_storage_descriptors_reference_canonical_data_types ... ok
+test state_contract::tests::current_state_domains_use_exactly_schema_version_one ... ok
+test state_contract::tests::cycles_and_log_descriptors_reference_canonical_data_types ... ok
+test state_contract::tests::descriptors_exactly_cover_declared_core_memory_ids ... ok
+test state_contract::tests::descriptors_use_unique_memory_ids ... ok
+test state_contract::tests::intent_descriptors_reference_canonical_data_types ... ok
+test state_contract::tests::placement_descriptors_reference_canonical_data_types ... ok
+test state_contract::tests::runtime_bindings_and_fleet_state_descriptors_reference_canonical_data_types ... ok
+test state_contract::tests::sharding_descriptors_reference_canonical_data_types ... ok
+test state_contract::tests::state_contract_storage_owns_serialized_labels ... ok
+test state_contract::tests::topology_registry_descriptors_reference_canonical_data_types ... ok
+
+test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 1233 filtered out; finished in 0.01s
+

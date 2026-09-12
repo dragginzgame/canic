@@ -14,7 +14,9 @@ pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 29;
 pub const CANIC_CORE_MIN_ID: u8 = 30;
 pub const CANIC_CORE_MAX_ID: u8 = 99;
 pub const CANIC_CORE_LOWER_MAX_ID: u8 = 61;
-pub const CANIC_CORE_UPPER_MIN_ID: u8 = 66;
+pub const CANIC_CORE_AUTH_MIN_ID: u8 = 66;
+pub const CANIC_CORE_AUTH_MAX_ID: u8 = 67;
+pub const CANIC_CORE_UPPER_MIN_ID: u8 = 69;
 
 /// Canonical stable-memory IDs grouped by record owner.
 pub mod memory {
@@ -27,6 +29,7 @@ pub mod memory {
 
         // Wasm Store state.
         pub const WASM_STORE_GC_STATE_ID: u8 = 14;
+        pub const FIXTURE_STORE_ID: u8 = 68;
 
         // Fleet Coordinator state.
         pub const FLEET_COORDINATOR_REGISTRY_ID: u8 = 15;
@@ -146,7 +149,7 @@ use memory::{
         BLOB_STORAGE_PENDING_DELETIONS_ID, BLOB_STORAGE_ROOTS_ID,
     },
     control_plane::{
-        FLEET_COORDINATOR_ADMISSION_ID, FLEET_COORDINATOR_FUNDING_ID,
+        FIXTURE_STORE_ID, FLEET_COORDINATOR_ADMISSION_ID, FLEET_COORDINATOR_FUNDING_ID,
         FLEET_COORDINATOR_REGISTRY_ID, ROOT_ADMISSION_ID, ROOT_CANISTER_INVENTORY_ASSETS_ID,
         ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID, ROOT_CANISTER_POOL_STATE_ID,
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
@@ -182,6 +185,7 @@ const TEMPLATE_CHUNK_SETS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_SETS
 const TEMPLATE_CHUNK_REFS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_REFS_ID)];
 const TEMPLATE_CHUNK_PAYLOADS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_PAYLOADS_ID)];
 const WASM_STORE_GC_STATE_IDS: &[MemoryId] = &[MemoryId::new(WASM_STORE_GC_STATE_ID)];
+const FIXTURE_STORE_IDS: &[MemoryId] = &[MemoryId::new(FIXTURE_STORE_ID)];
 const FLEET_COORDINATOR_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(FLEET_COORDINATOR_REGISTRY_ID)];
 const FLEET_COORDINATOR_ADMISSION_IDS: &[MemoryId] =
     &[MemoryId::new(FLEET_COORDINATOR_ADMISSION_ID)];
@@ -258,6 +262,11 @@ const BLOB_STORAGE_GATEWAY_PRINCIPALS_IDS: &[MemoryId] =
 const BLOB_STORAGE_BILLING_IDS: &[MemoryId] = &[MemoryId::new(BLOB_STORAGE_BILLING_ID)];
 
 const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
+    definition(
+        StateAllocationKey::FixtureStore,
+        AllocationOwner::CanicControlPlane,
+        FIXTURE_STORE_IDS,
+    ),
     definition(
         StateAllocationKey::TemplateManifests,
         AllocationOwner::CanicControlPlane,
@@ -524,10 +533,12 @@ pub fn validate_allocation_definitions(
                                 | FLEET_COORDINATOR_FUNDING_ID
                                 | ROOT_ADMISSION_ID
                                 | ROOT_FUNDING_ID
+                                | FIXTURE_STORE_ID
                         )
                 }
                 AllocationOwner::CanicCore => {
                     (owner_min_id..=owner_max_id).contains(&id)
+                        && id != FIXTURE_STORE_ID
                         && !matches!(
                             id,
                             FLEET_COORDINATOR_ADMISSION_ID

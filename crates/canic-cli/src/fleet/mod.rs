@@ -35,6 +35,7 @@ use canic_host::{
         generate_desired_fleet, initialize_fresh_estate_seed, load_desired_fleet,
         model::{EnsureAction, InstallMode},
         plan, plan_reinstall, report_json_value, retained_in_progress_plan,
+        retained_reinstall_apply_plan,
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
@@ -360,7 +361,7 @@ fn ensure_command() -> Command {
                 .num_args(0)
                 .conflicts_with("apply")
                 .help(
-                    "Review a new same-release Fleet database wipe; preparation seals allocation",
+                    "Review a selected-build database wipe or supported partial-activation recovery",
                 ),
         )
         .arg(internal_environment_arg())
@@ -465,8 +466,7 @@ fn load_ensure_authority(
 ) -> Result<LoadedDesiredFleet, FleetCommandError> {
     if !options.reinstall
         && let Some(environment) = options.environment.as_deref()
-        && let Some(plan) =
-            retained_in_progress_plan::<IcpEnsurePlatformError>(root, environment, &options.fleet)?
+        && let Some(plan) = retained_ensure_plan(root, environment, options)?
         && let Some(desired) = plan.reviewed_desired
     {
         return Ok(LoadedDesiredFleet {
@@ -484,11 +484,7 @@ fn load_ensure_authority(
         });
     }
     if !options.reinstall
-        && let Some(plan) = retained_in_progress_plan::<IcpEnsurePlatformError>(
-            root,
-            &current.desired.environment,
-            &options.fleet,
-        )?
+        && let Some(plan) = retained_ensure_plan(root, &current.desired.environment, options)?
         && let Some(desired) = plan.reviewed_desired
     {
         return Ok(LoadedDesiredFleet {
@@ -497,6 +493,28 @@ fn load_ensure_authority(
         });
     }
     Ok(current)
+}
+
+fn retained_ensure_plan(
+    root: &std::path::Path,
+    environment: &str,
+    options: &EnsureOptions,
+) -> Result<Option<canic_host::fleet_ensure::model::FleetEnsurePlan>, FleetCommandError> {
+    if let Some(digest) = options.apply.as_deref()
+        && let Some(plan) = retained_reinstall_apply_plan::<IcpEnsurePlatformError>(
+            root,
+            environment,
+            &options.fleet,
+            digest,
+        )?
+    {
+        return Ok(Some(plan));
+    }
+    Ok(retained_in_progress_plan::<IcpEnsurePlatformError>(
+        root,
+        environment,
+        &options.fleet,
+    )?)
 }
 
 fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
@@ -765,6 +783,25 @@ fn append_reinstall_guidance(lines: &mut Vec<String>, report: &FleetEnsureReport
             "reinstall: application data will be discarded; logical pool roles may be reassigned"
                 .to_string(),
         );
+        if let Some(source) = &intent.source {
+            let source_build = source
+                .reviewed_desired
+                .desired()
+                .bootstrap
+                .as_ref()
+                .map(|bootstrap| bootstrap.release_build_id);
+            let target_build = report
+                .plan
+                .reviewed_desired
+                .as_ref()
+                .and_then(|reviewed| reviewed.desired().bootstrap.as_ref())
+                .map(|bootstrap| bootstrap.release_build_id);
+            if let (Some(source), Some(target)) = (source_build, target_build) {
+                lines.push(format!(
+                    "reinstall builds: source={source} selected={target}"
+                ));
+            }
+        }
         if let Some(activation) = &intent.activation_reset {
             lines.push(format!(
                 "activation recovery: source_operation={} source_plan_document_sha256={}",

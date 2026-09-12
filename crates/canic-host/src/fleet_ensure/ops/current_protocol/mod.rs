@@ -4,6 +4,7 @@
 //! Does not own: journal sequencing, generic canister convergence, or historical recovery.
 //! Boundary: the reviewed action binds one exact Coordinator, Candid contract, Registry, and plan.
 
+mod fixture;
 mod fresh;
 mod inactive_activation;
 #[cfg(test)]
@@ -165,6 +166,7 @@ enum RootCommandFragment {
     ImportPoolCanister(canic_core::dto::pool::PoolCanisterRequest),
     AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
     BootstrapStore(RootStoreBootstrapRequest),
+    PrepareStoreFixture(canic_core::dto::root_store::RootStoreFixturePrepareRequest),
     PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
     SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
 }
@@ -175,6 +177,12 @@ enum RootCommandFragment {
     reason = "the private decoder mirrors the exact Root command response wire"
 )]
 enum RootCommandResponseFragment {
+    PrepareStoreFixture(
+        Result<
+            canic_core::dto::fixture_provisioning::FixtureSourceStatus,
+            canic_core::dto::fixture_provisioning::FixtureStoreError,
+        >,
+    ),
     MaintainPool(canic_core::dto::pool::PoolMaintenanceResponse),
     ImportPoolCanister(canic_core::dto::pool::PoolImportResponse),
     OperationAccepted(OperationReceipt),
@@ -208,6 +216,8 @@ enum RootStatusResponseFragment {
 /// Typed current-protocol compilation or transport failure.
 #[derive(Debug, ThisError)]
 pub enum CurrentProtocolError {
+    #[error("fixture Store rejected publication: {0:?}")]
+    Fixture(canic_core::dto::fixture_provisioning::FixtureStoreError),
     #[error("current Fleet protocol app config is unavailable: {}", .0.display())]
     AppConfigUnavailable(PathBuf),
 
@@ -854,6 +864,8 @@ struct ComponentOperationAuthority<'a> {
 const fn current_protocol_stage(action: &CurrentFleetProtocolAction) -> u8 {
     match action {
         CurrentFleetProtocolAction::ReconcilePoolAsset { .. }
+        | CurrentFleetProtocolAction::PrepareStoreFixture { .. }
+        | CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. }
         | CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
         | CurrentFleetProtocolAction::PublishStoreChunk { .. }
         | CurrentFleetProtocolAction::StageStoreManifest { .. }
@@ -927,12 +939,26 @@ fn bind_action(
     desired: &DesiredFleet,
     state: &FleetEnsureStateRecord,
     protocol_intent: &DesiredFleetProtocol,
-    action: CurrentFleetProtocolAction,
+    mut action: CurrentFleetProtocolAction,
     target: Principal,
     name: String,
     maximum_execution_burn_cycles: u128,
 ) -> Result<EnsureAction, CurrentProtocolError> {
-    let maximum_execution_burn_cycles = match &action {
+    let maximum_execution_burn_cycles = match &mut action {
+        CurrentFleetProtocolAction::PrepareStoreFixture {
+            maximum_attempts, ..
+        }
+        | CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+            maximum_attempts, ..
+        } => {
+            *maximum_attempts = desired.maximum_stalled_observations;
+            if *maximum_attempts == 0 {
+                return Err(CurrentProtocolError::ResponseMismatch);
+            }
+            maximum_execution_burn_cycles
+                .checked_mul(u128::from(*maximum_attempts))
+                .ok_or(CurrentProtocolError::ResponseMismatch)?
+        }
         CurrentFleetProtocolAction::ObservePoolReadiness { .. } => 0,
         CurrentFleetProtocolAction::MaintainPoolReadiness {
             maximum_updates, ..
@@ -1097,6 +1123,14 @@ pub(super) fn observe(
             };
             observation(status == *expected, &status)
         }
+        CurrentFleetProtocolAction::PrepareStoreFixture { source, .. } => {
+            fixture::observe_preparation(icp, &resolved, source)
+        }
+        CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+            expected,
+            source_bytes,
+            ..
+        } => fixture::observe_upload(icp, &resolved, expected, *source_bytes),
         CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
             let status =
                 query_store_staging(icp, &resolved, &request.template_id, &request.version)?;
@@ -1368,6 +1402,15 @@ pub(super) fn apply(
             )?
             .to_vec()
         }
+        CurrentFleetProtocolAction::PrepareStoreFixture {
+            request, source, ..
+        } => fixture::prepare(icp, &resolved, request, source)?,
+        CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+            request,
+            expected,
+            source_bytes,
+            ..
+        } => fixture::upload(icp, &resolved, request, expected, *source_bytes)?,
         CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
             let response: StoreCommandResponse = call_with_candid(
                 icp,
@@ -2090,12 +2133,27 @@ pub fn compile_current_store_sequence(
         authority.initial_release_set.release_build_id,
     )
     .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+    let complete = crate::release_set::load_persisted_current_release_set_manifest(
+        root,
+        authority.initial_release_set.release_build_id,
+    )
+    .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+    if complete.manifest.application_artifact_union_sha256 != persisted.digest {
+        return Err(CurrentProtocolError::Configuration(
+            "complete release does not bind application artifacts".to_string(),
+        ));
+    }
+    let fixtures = complete
+        .manifest
+        .verify_fixtures(root, topology)
+        .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     compile_current_store_sequence_from_union(
         root,
         topology,
         authority,
         operation_id,
         &persisted.union,
+        &fixtures.manifest,
     )
 }
 
@@ -2113,6 +2171,7 @@ pub fn compile_current_store_sequence_from_union(
     authority: &FleetSubnetRootAuthority,
     operation_id: [u8; 32],
     union: &ApplicationArtifactUnion,
+    fixtures: &crate::release_set::fixture::FixtureArtifactManifest,
 ) -> Result<CompiledCurrentStoreSequence, CurrentProtocolError> {
     union
         .validate_against(topology)
@@ -2122,8 +2181,9 @@ pub fn compile_current_store_sequence_from_union(
             "application artifact union release build differs from Root authority".to_string(),
         ));
     }
-    let manifest = FleetSubnetRootReleaseSetManifest::project(topology, &authority.binding, union)
-        .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+    let manifest =
+        FleetSubnetRootReleaseSetManifest::project(topology, &authority.binding, union, fixtures)
+            .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     let manifest_bytes = serde_json::to_vec(&manifest.root_store_manifest())
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     let manifest_digest: [u8; 32] = Sha256::digest(&manifest_bytes).into();
@@ -2208,11 +2268,20 @@ pub fn compile_current_store_sequence_from_union(
         ),
         manifest_payload_size_bytes: manifest_bytes.len() as u64,
     };
+    fixture::append_actions(
+        root,
+        &manifest,
+        fixtures,
+        authority.wasm_store_authority.wasm_store,
+        &bootstrap_request,
+        &mut actions,
+    )?;
     let expected_bootstrap = RootStoreBootstrapResponse {
         fleet_subnet_root: authority.binding.fleet_subnet_root,
         wasm_store: authority.wasm_store_authority.wasm_store,
         release_set: authority.initial_release_set,
         catalog,
+        fixtures: manifest.fixtures.clone(),
     };
     actions.push(CurrentFleetProtocolAction::BootstrapStore {
         expected: expected_bootstrap.clone(),

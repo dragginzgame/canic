@@ -27,6 +27,10 @@ pub struct CanicHealthStatus {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanicReadinessStatus {
+    pub fixture: Result<
+        crate::dto::fixture_provisioning::FixtureProvisioningStatus,
+        crate::dto::fixture_provisioning::FixtureImportError,
+    >,
     pub schema_version: u32,
     pub role: Option<String>,
     pub status: ReadinessStatus,

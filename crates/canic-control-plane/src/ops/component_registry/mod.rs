@@ -987,6 +987,7 @@ impl RootComponentCreationPlan {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentInstallPlan {
+    pub fixture_grant_revision: Option<u64>,
     pub raw_module_hash: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
@@ -996,6 +997,7 @@ pub struct RootComponentInstallPlan {
 
 #[derive(Debug, Eq, PartialEq)]
 struct RootComponentInstallAuthority<'a> {
+    fixture_grant_revision: Option<u64>,
     raw_module_hash: [u8; 32],
     protocol_profile_digest: ProtocolProfileDigest,
     chunk_hashes: &'a [Vec<u8>],
@@ -1005,6 +1007,7 @@ struct RootComponentInstallAuthority<'a> {
 impl<'a> From<&'a RootComponentInstallPlan> for RootComponentInstallAuthority<'a> {
     fn from(plan: &'a RootComponentInstallPlan) -> Self {
         Self {
+            fixture_grant_revision: plan.fixture_grant_revision,
             raw_module_hash: plan.raw_module_hash,
             protocol_profile_digest: plan.protocol_profile_digest,
             chunk_hashes: &plan.chunk_hashes,
@@ -1016,6 +1019,19 @@ impl<'a> From<&'a RootComponentInstallPlan> for RootComponentInstallAuthority<'a
 impl<'a> From<&'a RootComponentInstallEffectView> for RootComponentInstallAuthority<'a> {
     fn from(effect: &'a RootComponentInstallEffectView) -> Self {
         Self {
+            fixture_grant_revision: effect.fixture_grant_revision,
+            raw_module_hash: effect.raw_module_hash,
+            protocol_profile_digest: effect.protocol_profile_digest,
+            chunk_hashes: &effect.chunk_hashes,
+            binding: &effect.binding,
+        }
+    }
+}
+
+impl<'a> From<&'a RootComponentInstallEffectRecord> for RootComponentInstallAuthority<'a> {
+    fn from(effect: &'a RootComponentInstallEffectRecord) -> Self {
+        Self {
+            fixture_grant_revision: effect.fixture_grant_revision,
             raw_module_hash: effect.raw_module_hash,
             protocol_profile_digest: effect.protocol_profile_digest,
             chunk_hashes: &effect.chunk_hashes,
@@ -1038,6 +1054,7 @@ impl RootComponentInstallPlan {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentChildInstallPlan {
+    pub fixture_grant_revision: Option<u64>,
     pub raw_module_hash: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
@@ -1047,6 +1064,7 @@ pub struct RootComponentChildInstallPlan {
 
 #[derive(Debug, Eq, PartialEq)]
 struct RootComponentChildInstallAuthority<'a> {
+    fixture_grant_revision: Option<u64>,
     raw_module_hash: [u8; 32],
     protocol_profile_digest: ProtocolProfileDigest,
     chunk_hashes: &'a [Vec<u8>],
@@ -1064,6 +1082,7 @@ struct ComponentChildInstallReservationAuthority<'a> {
 impl<'a> From<&'a RootComponentChildInstallPlan> for RootComponentChildInstallAuthority<'a> {
     fn from(plan: &'a RootComponentChildInstallPlan) -> Self {
         Self {
+            fixture_grant_revision: plan.fixture_grant_revision,
             raw_module_hash: plan.raw_module_hash,
             protocol_profile_digest: plan.protocol_profile_digest,
             chunk_hashes: &plan.chunk_hashes,
@@ -1075,6 +1094,21 @@ impl<'a> From<&'a RootComponentChildInstallPlan> for RootComponentChildInstallAu
 impl<'a> From<&'a RootComponentChildInstallEffectView> for RootComponentChildInstallAuthority<'a> {
     fn from(effect: &'a RootComponentChildInstallEffectView) -> Self {
         Self {
+            fixture_grant_revision: effect.fixture_grant_revision,
+            raw_module_hash: effect.raw_module_hash,
+            protocol_profile_digest: effect.protocol_profile_digest,
+            chunk_hashes: &effect.chunk_hashes,
+            binding: &effect.binding,
+        }
+    }
+}
+
+impl<'a> From<&'a RootComponentChildInstallEffectRecord>
+    for RootComponentChildInstallAuthority<'a>
+{
+    fn from(effect: &'a RootComponentChildInstallEffectRecord) -> Self {
+        Self {
+            fixture_grant_revision: effect.fixture_grant_revision,
             raw_module_hash: effect.raw_module_hash,
             protocol_profile_digest: effect.protocol_profile_digest,
             chunk_hashes: &effect.chunk_hashes,
@@ -1703,7 +1737,8 @@ fn terminal_component_registry_bytes(
     .chain(
         child_allocations
             .iter()
-            .map(charged_child_allocation_entry_bytes),
+            // Child commit settles the installation precharge into exact retained entries.
+            .map(RootComponentRegistryStore::child_allocation_entry_bytes),
     )
     .chain(
         subtree_removals
@@ -1723,24 +1758,6 @@ fn terminal_component_registry_bytes(
             .checked_add(bytes)
             .ok_or_else(InternalError::invariant)
     })
-}
-
-fn charged_child_allocation_entry_bytes(record: &RootComponentChildAllocationRecord) -> u64 {
-    match &record.progress {
-        RootComponentChildAllocationProgressRecord::Reserved => {
-            RootComponentRegistryStore::child_allocation_entry_bytes(record)
-        }
-        RootComponentChildAllocationProgressRecord::CreationIntent(creation)
-        | RootComponentChildAllocationProgressRecord::Created {
-            effect: creation, ..
-        } => creation.charged_entry_bytes,
-        RootComponentChildAllocationProgressRecord::InstallIntent { installation, .. }
-        | RootComponentChildAllocationProgressRecord::Installed { installation, .. }
-        | RootComponentChildAllocationProgressRecord::Verified { installation, .. }
-        | RootComponentChildAllocationProgressRecord::Committed { installation, .. } => {
-            installation.charged_entry_bytes
-        }
-    }
 }
 
 const fn removed_component_membership_receipt(
@@ -2162,6 +2179,7 @@ fn install_effect_record_to_view(
     effect: RootComponentInstallEffectRecord,
 ) -> RootComponentInstallEffectView {
     RootComponentInstallEffectView {
+        fixture_grant_revision: effect.fixture_grant_revision,
         raw_module_hash: effect.raw_module_hash,
         protocol_profile_digest: effect.protocol_profile_digest,
         chunk_hashes: effect.chunk_hashes,
@@ -2606,6 +2624,7 @@ fn child_install_effect_record_to_view(
     effect: RootComponentChildInstallEffectRecord,
 ) -> RootComponentChildInstallEffectView {
     RootComponentChildInstallEffectView {
+        fixture_grant_revision: effect.fixture_grant_revision,
         raw_module_hash: effect.raw_module_hash,
         protocol_profile_digest: effect.protocol_profile_digest,
         chunk_hashes: effect.chunk_hashes,
@@ -3216,6 +3235,9 @@ fn child_install_charged_entry_bytes(
     record: &RootComponentChildAllocationRecord,
     plan: &RootComponentChildInstallPlan,
 ) -> Result<u64, InternalError> {
+    if plan.fixture_grant_revision == Some(0) {
+        return Err(InternalError::conflict());
+    }
     let (creation, canister) = match &record.progress {
         RootComponentChildAllocationProgressRecord::Created { effect, canister } => {
             (effect.clone(), *canister)
@@ -3225,6 +3247,7 @@ fn child_install_charged_entry_bytes(
         }
     };
     let installation = RootComponentChildInstallEffectRecord {
+        fixture_grant_revision: plan.fixture_grant_revision,
         raw_module_hash: plan.raw_module_hash,
         protocol_profile_digest: plan.protocol_profile_digest,
         chunk_hashes: plan.chunk_hashes.clone(),
@@ -3354,10 +3377,8 @@ fn validate_child_install_effect_record(
     effect: &RootComponentChildInstallEffectRecord,
     plan: &RootComponentChildInstallPlan,
 ) -> Result<(), InternalError> {
-    if effect.raw_module_hash != plan.raw_module_hash
-        || effect.protocol_profile_digest != plan.protocol_profile_digest
-        || effect.chunk_hashes != plan.chunk_hashes
-        || effect.binding != plan.binding
+    if RootComponentChildInstallAuthority::from(effect)
+        != RootComponentChildInstallAuthority::from(plan)
     {
         return Err(InternalError::invariant());
     }
@@ -3458,6 +3479,9 @@ fn install_charged_entry_bytes(
     record: &RootComponentAllocationRecord,
     plan: &RootComponentInstallPlan,
 ) -> Result<u64, InternalError> {
+    if plan.fixture_grant_revision == Some(0) {
+        return Err(InternalError::conflict());
+    }
     let (creation, canister) = match &record.progress {
         RootComponentAllocationProgressRecord::Created { effect, canister } => {
             (effect.clone(), *canister)
@@ -3468,6 +3492,7 @@ fn install_charged_entry_bytes(
     };
     let mut maximum = record.clone();
     let installation = RootComponentInstallEffectRecord {
+        fixture_grant_revision: plan.fixture_grant_revision,
         raw_module_hash: plan.raw_module_hash,
         protocol_profile_digest: plan.protocol_profile_digest,
         chunk_hashes: plan.chunk_hashes.clone(),
@@ -6335,11 +6360,7 @@ fn validate_install_effect_record(
     effect: &RootComponentInstallEffectRecord,
     plan: &RootComponentInstallPlan,
 ) -> Result<(), InternalError> {
-    if effect.raw_module_hash != plan.raw_module_hash
-        || effect.protocol_profile_digest != plan.protocol_profile_digest
-        || effect.chunk_hashes != plan.chunk_hashes
-        || effect.binding != plan.binding
-    {
+    if RootComponentInstallAuthority::from(effect) != RootComponentInstallAuthority::from(plan) {
         return Err(InternalError::invariant());
     }
     Ok(())

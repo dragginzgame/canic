@@ -7,7 +7,7 @@
 use crate::{
     canister_protocol::call_with_candid,
     fleet_ensure::{
-        model::{LiveCanister, ReinstallHistoryWitness},
+        model::{LiveCanister, ReinstallRootWitnessRecord},
         ops::current_protocol::CurrentProtocolError,
     },
     icp::IcpCli,
@@ -73,7 +73,7 @@ enum Mode {
 pub(super) fn observe(
     icp: &IcpCli,
     root: &Path,
-    witness: &ReinstallHistoryWitness,
+    witness: &ReinstallRootWitnessRecord,
     operator: Principal,
     before: u64,
     live: &LiveCanister,

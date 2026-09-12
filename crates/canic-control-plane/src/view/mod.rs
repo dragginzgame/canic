@@ -12,6 +12,8 @@ pub mod component_directory_synchronization;
 pub mod component_provisioning;
 #[cfg(feature = "root-control-plane")]
 pub mod component_registry;
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+pub mod fixture_store;
 #[cfg(feature = "fleet-coordinator-canister")]
 pub mod fleet_coordinator;
 #[cfg(feature = "root-control-plane")]

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-11",
+  "issue": "CANIC-166",
+  "scope": "Unreadable-plan diagnosis and existing recovery runbook; no new recovery executor",
+  "checks": {
+    "host_native": {
+      "passed": 5,
+      "failed": 0
+    },
+    "cli_fleet": {
+      "passed": 15,
+      "failed": 0
+    },
+    "cli_help": {
+      "passed": 2,
+      "failed": 0
+    },
+    "clippy": {
+      "packages": [
+        "canic-host",
+        "canic-cli"
+      ],
+      "targets": [
+        "lib",
+        "bins",
+        "tests"
+      ],
+      "all_features": true,
+      "warnings_denied": true,
+      "passed": true
+    }
+  },
+  "logs": {
+    "native": {
+      "path": "canic166-evidence/native.log",
+      "sha256": "31bde06db99c89772861326f27601beda0b518dcc750f0c809515ed1dabe452f"
+    },
+    "cli": {
+      "path": "canic166-evidence/cli.log",
+      "sha256": "91175766207a2e30c6f48e03b2a8449dcad9091687d72180cbcc222ab907dfbb"
+    },
+    "clippy": {
+      "path": "canic166-evidence/clippy.log",
+      "sha256": "e4cb0406f79c833ae154a712473ed7fdd5f9036921abe00a47227668bdfcc257"
+    }
+  },
+  "new_pocketic_run": false,
+  "live_recovery_executed": false,
+  "sibling_repositories_modified": false,
+  "versions_changed": false,
+  "published": false
+}

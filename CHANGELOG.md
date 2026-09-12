@@ -8,10 +8,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- CANIC-165 (in progress, breaking and reinstall-only): release-bound fixture
+  delivery through Store, automatic imports and receipt-gated readiness for
+  initial and later Components/Shards, bounded funding/retries, replacement
+  grant fencing and resumable source retirement. Exact Root/Store interruption
+  proofs and complete generated Fleet apply/funding remain unfinished;
+  fixture-bearing generation stays disabled. This feature is not ready for adoption.
+
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.15` improves Fleet planning, selected-build reinstall and recovery,
+  with breaking reinstall review records, opt-in public memory summaries,
+  final Wasm code/data reporting and IcyDB 0.257.5 fixture compatibility.
 - `0.110.14` improves build/validation speed and reliability, metrics and Fleet recovery,
   and adds protected allocation diagnostics with aligned IcyDB/memory dependencies.
 - `0.110.13` introduces breaking Fleet review-record changes for safer reinstall

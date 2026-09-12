@@ -393,10 +393,15 @@ fn timer_registration_custody_is_closed() {
         native_registration_owners(),
         "native timer registration custody changed"
     );
-    assert_eq!(
-        observed_action_owners,
-        native_registration_owners(),
-        "native timer registration actions changed"
+    // Reconciliation owns scheduling as well as registration. Direct method actions
+    // may be a subset, but every action must remain inside a registered owner.
+    let unowned_actions = observed_action_owners
+        .difference(&native_registration_owners())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    assert!(
+        unowned_actions.is_empty(),
+        "native timer actions outside registered custody: {unowned_actions:?}"
     );
 }
 
@@ -762,6 +767,7 @@ fn native_registration_owners() -> BTreeSet<String> {
     [
         "canisters/test/runtime_probe/src/lib.rs",
         "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+        "crates/canic-core/src/workflow/fixture_provisioning/timer/mod.rs",
         "crates/canic-core/src/workflow/metrics/publication/timer/mod.rs",
         "crates/canic-core/src/workflow/placement/acknowledgement.rs",
         "crates/canic-core/src/workflow/runtime/auth/renewal.rs",

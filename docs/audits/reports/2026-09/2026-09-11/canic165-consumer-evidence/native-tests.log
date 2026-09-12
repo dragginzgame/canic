@@ -1,0 +1,28 @@
+   Compiling canic-core v0.110.14 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 49.33s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-ddfaf1360157e1cd)
+
+running 20 tests
+test ops::fixture_importer::tests::import_retries_wait_for_infrastructure_but_stop_on_exact_invalid_content ... ok
+test ops::fixture_importer::tests::importer_progress_never_adopts_a_different_installation_or_content ... ok
+test ops::fixture_importer::tests::importer_receipt_requires_complete_position_and_exact_validated_summary ... ok
+test ops::fixture_importer::tests::importer_registration_has_one_owner_and_cannot_be_replaced_mid_import ... ok
+test ops::fixture_importer::tests::importer_leases_serialize_steps_and_old_cleanup_cannot_release_a_new_attempt ... ok
+test workflow::runtime::timer::tests::authority_snapshot_rejects_a_claim_outside_canic_custody ... ok
+test storage::stable::async_job_recovery::tests::async_job_recovery_roundtrips_at_its_exact_worst_case_bound ... ok
+test workflow::runtime::timer::tests::failed_custody_insertion_runs_registration_cleanup ... ok
+test workflow::runtime::timer::tests::authority_snapshot_rejects_a_running_canic_claim ... ok
+test workflow::runtime::timer::tests::fixed_claim_identities_are_exact_and_unique ... ok
+test storage::stable::async_job_recovery::tests::async_job_recovery_export_import_replaces_the_complete_record ... ok
+test workflow::runtime::timer::tests::authority_snapshot_rejects_a_watchdog_dispatched_async_job_attempt ... ok
+test ops::storage::async_job_recovery::tests::abandon_clears_only_active_and_cycle_retry_authority ... ok
+test ops::storage::async_job_recovery::tests::cycle_takeover_and_retry_reuse_only_the_exact_cycle_operation ... ok
+test ops::storage::async_job_recovery::tests::every_closed_owner_survives_response_loss_restart_and_one_fenced_takeover ... ok
+test ops::storage::async_job_recovery::tests::invalid_lease_and_generation_exhaustion_fail_without_mutation ... ok
+test ops::storage::async_job_recovery::tests::live_attempts_coalesce_and_expired_minimal_takeover_advances_only_the_attempt ... ok
+test ops::storage::async_job_recovery::tests::non_cycle_retry_completion_retains_no_generated_operation_identity ... ok
+test ops::storage::async_job_recovery::tests::permanent_fixture_failure_survives_restore_and_stale_attempt_cannot_replace_it ... ok
+test ops::storage::async_job_recovery::tests::stale_completion_cannot_clear_a_takeover_attempt ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 1266 filtered out; finished in 0.24s
+
