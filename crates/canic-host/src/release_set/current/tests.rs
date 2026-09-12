@@ -80,10 +80,7 @@ fn complete_release_binds_fixture_bytes_and_rejects_substituted_receipts() {
         bound.manifest.verify_fixtures(&root, &topology).unwrap(),
         fixtures
     );
-    assert!(matches!(
-        bound.manifest.require_fixture_delivery(&root, &topology),
-        Err(FixtureArtifactError::DeliveryUnavailable)
-    ));
+
     let mut substituted = fixtures.clone();
     substituted.digest = [9; 32];
     assert!(matches!(

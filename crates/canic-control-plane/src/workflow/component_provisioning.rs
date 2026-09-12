@@ -174,6 +174,19 @@ pub async fn accept_and_schedule(
     Ok(OperationReceipt { operation_id })
 }
 
+/// Resume the retained aggregate owner after heap timers have been discarded.
+/// Prepared Roots still need this worker to finish activation; the dispatcher
+/// preserves persisted retry deadlines and review-required failure fences.
+pub fn resume_after_restart() -> Result<(), InternalError> {
+    if TimerApi::require_active().is_err() {
+        return Ok(());
+    }
+    if let Some(current) = RootComponentProvisioningOps::active_operation()? {
+        schedule_provisioning(current.operation_id, current.plan_hash, Duration::ZERO);
+    }
+    Ok(())
+}
+
 fn schedule_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32], delay: Duration) {
     TimerApi::defer_lifecycle_required(
         delay,

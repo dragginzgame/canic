@@ -1,11 +1,11 @@
 {
   "date": "2026-09-11",
   "git_head": "c9c91f19c25ea710884b621146d66950391ddc0d",
-  "source_snapshot": "pending-real-fetch-reinstall-source.sha256",
-  "source_input_count": 1639,
-  "source_and_inventory_unchanged_during_final_runtime_checks": true,
-  "fixture_generation_enabled": false,
-  "complete_batch_ready_to_push": false,
+  "source_snapshot": "generated-wire-source.sha256",
+  "source_input_count": 1641,
+  "source_and_inventory_unchanged_during_final_runtime_checks": false,
+  "fixture_generation_enabled": true,
+  "complete_batch_ready_to_push": true,
   "broad_gate_run": false,
   "version_or_publication_action": false,
   "runs": [
@@ -424,16 +424,162 @@
       "runner_seconds": 163,
       "evidence": "consumer.log",
       "source_snapshot": "pending-real-fetch-reinstall-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::root_restart_reconciles_held_store_grant_and_revocation_replies",
+      "result": "failed",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "held-store-replies-drained-source.sha256",
+      "tests": 0,
+      "test_seconds": 90.77,
+      "runner_seconds": 132,
+      "note": "Clean stop/restart retained the grant, but Prepared Root never rescheduled its aggregate provisioning worker; Fleet activation stalled."
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib component_provisioning",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "held-store-replies-worker-source.sha256",
+      "tests": 23,
+      "test_seconds": 0.38
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::root_restart_reconciles_held_store_grant_and_revocation_replies",
+      "result": "failed",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "held-store-replies-worker-source.sha256",
+      "tests": 0,
+      "test_seconds": 142.54,
+      "runner_seconds": 174,
+      "note": "The restored worker completed Fleet activation. The test barrier then failed to rearm because its own bounded management response expired during the caller-timeout clock advance."
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-control-plane -p canic-testing-internal --lib --tests --features canic-testing-internal/governed-pocketic-tests,canic/internal-test-fixtures -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "held-store-replies-root-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::root_restart_reconciles_held_store_grant_and_revocation_replies",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "held-store-replies-root-source.sha256",
+      "tests": 1,
+      "test_seconds": 98.26,
+      "runner_seconds": 113
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic -p canic-testing-internal -p canic-tests --features canic-testing-internal/governed-pocketic-tests,canic/internal-test-fixtures --lib --test icydb_lifecycle_composition -- -D warnings",
+      "result": "failed",
+      "evidence": "clippy.log",
+      "source_snapshot": "held-store-replies-root-source.sha256",
+      "note": "Consumer journey exceeded the line lint by one; extracted its controller authorization/barrier setup without suppressing the lint."
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic -p canic-testing-internal -p canic-tests --features canic-testing-internal/governed-pocketic-tests,canic/internal-test-fixtures --lib --test icydb_lifecycle_composition -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "held-store-replies-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=icydb_lifecycle_composition",
+      "result": "pass",
+      "evidence": "consumer.log",
+      "source_snapshot": "held-store-replies-source.sha256",
+      "tests": 7,
+      "test_seconds": 78.07,
+      "runner_seconds": 88
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-testing-internal --lib --features governed-pocketic-tests release_cache_",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "generated-cache-source.sha256",
+      "tests": 2,
+      "test_seconds": 10.94
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-testing-internal --lib --tests --features governed-pocketic-tests,canic/internal-test-fixtures -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "generated-cache-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-host -p canic-testing-internal --lib --features canic-testing-internal/governed-pocketic-tests -- release_set::current fixture_publication release_cache_ continuation",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "generated-apply-source.sha256",
+      "tests": 21
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation",
+      "result": "failed",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "generated-apply-source.sha256",
+      "tests": 0,
+      "note": "Cache input/output destinations overlapped; rejected before artifact build or deployment."
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-host -p canic-testing-internal --lib --tests --features canic-testing-internal/governed-pocketic-tests,canic/internal-test-fixtures -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "generated-cache-inputs-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo test --locked -p canic-testing-internal --lib --features governed-pocketic-tests generated_release_cache_restores_fixture_authority_without_source_rebuild",
+      "result": "pass",
+      "evidence": "native.log",
+      "source_snapshot": "generated-cache-inputs-source.sha256",
+      "tests": 1
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation",
+      "result": "failed",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "generated-cache-inputs-source.sha256",
+      "tests": 0,
+      "note": "Deployment reached terminal, but the mirrored Candid type omitted PrepareStoreFixture and its raw argument comparison never injected reset reply loss."
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-host -p canic-testing-internal --lib --tests --features canic-testing-internal/governed-pocketic-tests,canic/internal-test-fixtures -- -D warnings",
+      "result": "pass",
+      "evidence": "clippy.log",
+      "source_snapshot": "generated-wire-source.sha256"
+    },
+    {
+      "date": "2026-09-12",
+      "command": "ICP_ENVIRONMENT=local RUSTC_WRAPPER= CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation",
+      "result": "pass",
+      "evidence": "bootstrap.log",
+      "source_snapshot": "generated-wire-source.sha256",
+      "tests": 1,
+      "test_seconds": 824.01
     }
   ],
   "sha256": {
-    "bootstrap.log": "462b518a1f91d67753b0d6055ca50057be0af9329b5c28d9374f26fdd34f66f3",
-    "clippy.log": "242c87144161f704c1316819b61418da926ad771ced70f6b1371c541003e2edc",
-    "consumer.log": "1fcda2484e4ca845efb0ff5fed894046432bae12213056701df03a1b2673c11c",
-    "native.log": "62a37bfccec4a6b6bff17ae658a187c00816136a435f1f2497a42f6e3951520f",
-    "source-snapshots.tar.gz": "8666d9f16a3064b456a3bf583b417b26bf1e73ee7f52fc72275e5e002a5e9fd1"
+    "bootstrap.log": "e4728de644780e4e44296c0eb05d8727e4d85e50946e4d60856e18a81533857c",
+    "clippy.log": "f734724ecbaefa2464724a52acca9ff1ca93b58e234e9b87c184887945dacf08",
+    "consumer.log": "beb1a1867b227a34c8601fb882bcff9178bc74bfb9148061e130befd61f47585",
+    "native.log": "fb2cfd0aa18fa24c819eb08c9288f96170a14a7718d1b8f7b6c1d7fd19b02615",
+    "source-snapshots.tar.gz": "fa0467a58f8c7583a046fe0c50af03381ce2600849ed998080bf889d360469e5"
   },
-  "revocation_interrupted_at_store_effect_qualified": false,
+  "revocation_interrupted_at_store_effect_qualified": true,
   "revocation_removal_admission_outage_qualified": true,
   "source_archive": "source-snapshots.tar.gz",
   "source_snapshot_sha256": {
@@ -454,16 +600,26 @@
     "pending-funding-source.sha256": "f613a2ceebfef214c8854089eb5ab4a77c1370a1c253c9af712fe0856a177dc0",
     "automatic-funding-source.sha256": "831f22e67d7d2d52d58eb1ae9b097be2a8740c9cbfe1c8a278bb331bbc8adf32",
     "publication-attempts-source.sha256": "ec4c747aa40514ce8944eeb4070cc9899cd1d5bb0405acbb6a4dd3663955a257",
-    "pending-real-fetch-reinstall-source.sha256": "2101a577f49acc59e50f60c24a8d444eb990b775a5833f709eca33b117a10361"
+    "pending-real-fetch-reinstall-source.sha256": "2101a577f49acc59e50f60c24a8d444eb990b775a5833f709eca33b117a10361",
+    "held-store-replies-drained-source.sha256": "740d2b689fa45f39bedd87c607094bdf7d7f21f11adef7a30a0c27a9d98a8178",
+    "held-store-replies-worker-source.sha256": "6eadfe6920609e7207f01be7d8cf31435cc38929d8f623af8648550ec9512c16",
+    "held-store-replies-root-source.sha256": "84e43d248c8133196bc5b044dbbd42d7f0efce2b057d02ca6923edb144ffd0bf",
+    "held-store-replies-source.sha256": "59e6d4871277cdab5f1e79d872360373543bc91db035438b7090e3b6f66892b9",
+    "generated-cache-source.sha256": "ce0d8163cfe1df48dd4b561dc8659951e6baec41f635f0ea880b75f0b03676ea",
+    "generated-apply-source.sha256": "458c5076ce4126c07869863babfb8b74fb0429addfd11bfb7c9ef886dd9cf9e2",
+    "generated-cache-inputs-source.sha256": "09a449ee6550612757da05841381ed3386429f4a88e622ba9e0b622ec22f318d",
+    "generated-wire-source.sha256": "1d0fdcd845fa4bca8d73d79e3aa0c0e715d9d21dddcbe6f10a447b017722d8b9"
   },
   "replacement_grant_and_stopped_target_reuse_qualified": true,
   "updated_date": "2026-09-12",
   "recovery_qualification": {
     "partial_automatic_import_reinstall_with_actual_store": true,
     "store_grant_receipts_discarded_at_test_caller": true,
-    "root_interrupted_while_awaiting_store_grant_reply": false,
-    "actual_store_fetch_reply_held_across_reinstall": false,
-    "actual_store_fetch_pending_at_reinstall_submission": true
+    "root_interrupted_while_awaiting_store_grant_reply": true,
+    "actual_store_fetch_reply_held_across_reinstall": true,
+    "actual_store_fetch_pending_at_reinstall_submission": true,
+    "root_interrupted_while_awaiting_store_revocation_reply": true,
+    "root_restart_boundary": "Stop begins while Store reply is held; bounded caller response drains before same-Wasm heap replacement. The real Store reply remains held through restart."
   },
   "fixture_retry_backoff_restored_in_native_record_qualified": true,
   "maximum_async_job_recovery_record_bytes": 810,
@@ -530,6 +686,66 @@
     "old_grant_read_rejected": true,
     "store_reply_deterministically_held_until_after_reinstall": false,
     "root_grant_await_interruption_qualified": false,
+    "complete_generated_fleet_apply_qualified": false,
+    "scope_note": "This block describes the unchanged vanilla Store control. Instrumented held-reply proof is recorded separately under held_store_reply_qualification."
+  },
+  "source_and_inventory_unchanged_during_each_final_runtime_check": true,
+  "qualification_source_note": "The passing Root proof and final consumer proof retain distinct snapshots. Only consumer barrier authorization setup was extracted between them; production and Root-test inputs are unchanged. The later generated Fleet proof uses generated-wire-source.sha256; preceding qualification blocks retain their own historical scopes and incomplete-at-that-checkpoint flags. The generated_fixture_apply_qualification block completes the later apply/funding boundary.",
+  "held_store_reply_qualification": {
+    "canonical_store_logic_with_internal_fixture_response_barrier": true,
+    "production_finalized_or_byte_identical_store_artifact": false,
+    "barrier_controls_require_controller": true,
+    "actual_grant_effect_retained_across_root_stop_and_restart": true,
+    "actual_revocation_effect_retained_across_root_stop_and_restart": true,
+    "bounded_root_call_drained_before_heap_replacement": true,
+    "root_heap_replacement_with_undrained_callbacks_qualified": false,
+    "prepared_root_provisioning_worker_resumed_from_existing_journal": true,
+    "root_grant_revision_and_selected_targets_unchanged": true,
+    "revocation_before_target_reset_and_effect_free_replay": true,
+    "actual_store_reply_held_past_consumer_reinstall": true,
+    "replacement_empty_before_exact_readmission": true,
+    "old_grant_read_rejected": true,
+    "reviewed_generated_fixture_funding_qualified": false,
     "complete_generated_fleet_apply_qualified": false
+  },
+  "generated_cache_qualification": {
+    "empty_fixture_authority_restored_without_rebuild": true,
+    "distinct_release_cache_identities_preserved": true,
+    "fixture_bearing_payload_cache_qualified": false,
+    "complete_generated_fleet_apply_qualified": false,
+    "source_snapshot": "generated-cache-source.sha256",
+    "scope_note": "Only generated Fleet test output inventory and its native regression changed after held-reply runtime checks. All other recorded source inputs retain the prior snapshot hashes."
+  },
+  "generated_fixture_apply_qualification": {
+    "fixture_bearing_generation_enabled": true,
+    "production_generated_sealed_canister_artifacts": true,
+    "synthetic_neutral_shard_source": true,
+    "shipping_store_without_response_barrier": true,
+    "fixture_payload_cache_and_authored_input_fingerprint": true,
+    "reviewed_fixture_action_and_retry_reserve": true,
+    "actual_upload_reply_lost_and_fresh_adapter_recovery": true,
+    "exact_target_completion_receipt": true,
+    "no_duplicate_publication_on_recovery_or_terminal_replay": true,
+    "cycle_conservation_and_selected_build_reinstall": true,
+    "test_seconds": 824.01,
+    "source_snapshot": "generated-wire-source.sha256",
+    "downstream_toko_import_cost_or_size_qualification": false,
+    "git_head": "9e1becc5853521d351d485f4f7198bd8a78426fa",
+    "runner_seconds": 839,
+    "target_seconds": 838,
+    "complete_generated_fleet_apply_qualified": true,
+    "reviewed_generated_fixture_funding_qualified": true
+  },
+  "changelog_draft": "0.110.15",
+  "canic165_fp2_complete": true,
+  "current_development_git_head": "9e1becc5853521d351d485f4f7198bd8a78426fa",
+  "final_document_checks": {
+    "changed_markdown_links": "pass",
+    "current_document_semantics": "pass",
+    "release_notes_preflight_0_110_15": "pass",
+    "exact_changed_rustfmt": "pass",
+    "diff_whitespace": "pass",
+    "evidence_hashes": "pass",
+    "source_inventory_and_hashes": "pass"
   }
 }

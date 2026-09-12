@@ -1394,6 +1394,8 @@ pub struct FleetEnsureJournalRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureContinuationAuthority {
+    /// Additional paid fixture attempts, beyond each publication action's first call.
+    pub fixture_publication_retry_attempts: u32,
     pub app_config_sha256: String,
     pub application_artifact_union_sha256: String,
     pub coordinator_candid_sha256: String,

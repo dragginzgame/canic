@@ -17,6 +17,7 @@ pub(super) fn review(
     observation: &FleetObservation,
     bounds: CycleBounds,
     maximum_successor_actions: u32,
+    fixture_publication_retry_attempts: u32,
     base: u128,
     available: u128,
 ) -> Result<FleetRecoveryReview, EnsurePolicyError> {
@@ -28,7 +29,9 @@ pub(super) fn review(
             field: "successor burn bound",
         })?;
     let ceiling = per_step
-        .checked_mul(u128::from(maximum_successor_actions))
+        .checked_mul(
+            u128::from(maximum_successor_actions) + u128::from(fixture_publication_retry_attempts),
+        )
         .ok_or(EnsurePolicyError::ArithmeticOverflow {
             field: "successor burn bound",
         })?;

@@ -115,10 +115,6 @@ pub enum FixtureArtifactError {
     ChangedInputs,
     #[error("fixture source configuration is invalid: {0}")]
     Configuration(String),
-    #[error(
-        "fixture target delivery is not implemented; this release cannot generate Fleet effects yet"
-    )]
-    DeliveryUnavailable,
     #[error("fixture artifact bytes differ from selected content")]
     Content,
     #[error("fixture artifact already exists with different bytes: {0}")]

@@ -8,6 +8,8 @@
 #[macro_export]
 macro_rules! canic_emit_local_wasm_store_endpoints {
     () => {
+        $crate::__canic_fixture_reply_support!();
+
         #[doc(hidden)]
         const fn __canic_wasm_store_command_payload_max_bytes(
             command: &::canic::dto::template::StoreCommand,
@@ -110,8 +112,18 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                         .map(StoreCommandResponse::FixtureSource)
                 }
                 StoreCommand::SetFixtureGrant(request) => {
-                    $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::set_grant(*request)
-                        .map(|result| StoreCommandResponse::FixtureGrant(Box::new(result)))
+                    let enabled = request.enabled;
+                    let result = $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::set_grant(*request)?;
+                    if result.is_ok() {
+                        $crate::__canic_fixture_reply_checkpoint!(if enabled {
+                            __CanicFixtureReplyKind::Grant
+                        } else {
+                            __CanicFixtureReplyKind::Revoke
+                        });
+                    }
+                    // Keep the default expansion free of fixture-only unused bindings.
+                    let _ = enabled;
+                    Ok(StoreCommandResponse::FixtureGrant(Box::new(result)))
                 }
                 StoreCommand::ActivateFleet(request) => {
                     let operation_id = request.operation_id;
@@ -356,7 +368,11 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             if let Err(error) = $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::authorize_read(caller, &request) {
                 return Ok(Err(error));
             }
-            Ok($crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::read(request))
+            let result = $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::read(request);
+            if result.is_ok() {
+                $crate::__canic_fixture_reply_checkpoint!(__CanicFixtureReplyKind::Chunk);
+            }
+            Ok(result)
         }
 
         #[$crate::canic_update(internal, requires(caller::is_root()))]

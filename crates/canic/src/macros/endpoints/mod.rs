@@ -7,6 +7,7 @@
 mod blob_storage;
 mod blob_storage_billing;
 mod bundles;
+mod fixture_reply;
 mod fleet_coordinator;
 mod role;
 mod root;

@@ -12,12 +12,14 @@ use crate::{
         ops::{EnsurePaths, EnsureStateError, artifact_sha256, is_sha256, read_plan, write_plan},
         policy::expected_plan_sha256,
     },
-    release_set::load_persisted_application_artifact_union,
+    release_set::{
+        load_persisted_application_artifact_union, load_persisted_current_release_set_manifest,
+    },
 };
 use canic_core::{
     cdk::utils::hash::sha256_hex, dto::root_store::ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
 };
-use std::path::Path;
+use std::{collections::BTreeSet, path::Path};
 
 pub(super) fn resolve_authority(
     root: &Path,
@@ -53,8 +55,12 @@ pub(super) fn resolve_authority(
         })?;
     // The release manifest has a protocol-owned size limit. Root adoption/bootstrap,
     // joining, synchronization, activation, Component preparation and readiness follow.
+    let fixture_steps = fixture_publication_steps(root, desired)?;
     let per_root = artifact_steps
-        .checked_add(ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES.div_ceil(chunk_bytes) + 8)
+        .checked_add(fixture_steps)
+        .and_then(|total| {
+            total.checked_add(ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES.div_ceil(chunk_bytes) + 8)
+        })
         .ok_or_else(|| invalid("Root step bound overflow"))?;
     let roots = u64::try_from(bootstrap.roots.len()).map_err(|error| invalid(error.to_string()))?;
     let imports = bootstrap.roots.iter().try_fold(0_u64, |total, input| {
@@ -72,7 +78,17 @@ pub(super) fn resolve_authority(
             "fresh protocol exceeds the bounded successor catalogue",
         ));
     }
+    let fixture_publication_retry_attempts = fixture_steps
+        .checked_mul(roots)
+        .and_then(|steps| {
+            steps.checked_mul(u64::from(
+                desired.maximum_stalled_observations.saturating_sub(1),
+            ))
+        })
+        .and_then(|attempts| u32::try_from(attempts).ok())
+        .ok_or_else(|| invalid("fixture publication retry bound overflow"))?;
     Ok(Some(FleetEnsureContinuationAuthority {
+        fixture_publication_retry_attempts,
         app_config_sha256: artifact_sha256(root, &protocol.app_config)?,
         application_artifact_union_sha256: sha256_hex(&union_bytes),
         coordinator_candid_sha256: artifact_sha256(root, &protocol.coordinator_candid)?,
@@ -81,6 +97,40 @@ pub(super) fn resolve_authority(
         root_candid_sha256: artifact_sha256(root, &protocol.root_candid)?,
         store_candid_sha256: artifact_sha256(root, &protocol.store_candid)?,
     }))
+}
+
+fn fixture_publication_steps(root: &Path, desired: &DesiredFleet) -> Result<u64, EnsureStateError> {
+    let bootstrap = desired
+        .bootstrap
+        .as_ref()
+        .ok_or_else(|| invalid("missing bootstrap authority"))?;
+    let complete = load_persisted_current_release_set_manifest(root, bootstrap.release_build_id)
+        .map_err(|error| invalid(error.to_string()))?;
+    let fixtures = complete
+        .manifest
+        .verify_fixtures(
+            root,
+            &bootstrap
+                .component_deployment_configuration
+                .component_topology,
+        )
+        .map_err(|error| invalid(error.to_string()))?;
+    let mut contents = BTreeSet::new();
+    fixtures
+        .manifest
+        .entries
+        .iter()
+        .try_fold(0_u64, |total, entry| {
+            if !contents.insert(entry.content_id) {
+                return Ok(total);
+            }
+            let chunks = u64::try_from(entry.descriptor.chunks.len())
+                .map_err(|error| invalid(error.to_string()))?;
+            total
+                .checked_add(1)
+                .and_then(|total| total.checked_add(chunks))
+                .ok_or_else(|| invalid("fixture publication step bound overflow"))
+        })
 }
 
 /// Construct the candidate durable record before workflow validates its full authority.

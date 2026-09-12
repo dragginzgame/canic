@@ -426,8 +426,12 @@ lost. Those attempts never reset on progress or process restart. At the limit,
 status reconciliation remains available, but an uncommitted action returns
 `FixturePublicationBound` before another update. Preserve that operation;
 changing local desired input does not enlarge its retained review authority.
-Fixture-bearing generation remains gated by the outstanding CANIC-165 delivery
-qualification described in the [fixture contract](../build-and-evidence/fixture-artifacts.md).
+Fresh-Fleet review includes fixture preparation/chunk actions in the successor
+bound and separately records `fixture_publication_retry_attempts` for their
+additional permitted calls. Their configured update/observation allowance enters
+the continuation reserve and plan digest. Generation verifies the selected
+release's fixture manifest and retained payloads before admitting effects; see
+the [fixture contract](../build-and-evidence/fixture-artifacts.md).
 
 The provisioning burn reservation includes this selected wait bound. It does
 not turn unused descendant capacity into terminal inventory work.

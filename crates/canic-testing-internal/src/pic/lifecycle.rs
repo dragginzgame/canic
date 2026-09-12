@@ -109,6 +109,73 @@ pub fn retained_fixture_store_wasm() -> Vec<u8> {
     .clone()
 }
 
+/// Build the host-generated Store with controller-only response barriers.
+///
+/// Uses canonical Store endpoints/storage with test scheduling enabled; this is
+/// not a production-finalized or byte-identical Store artifact.
+///
+/// # Panics
+/// Panics if the canonical package or its instrumented Wasm cannot be built.
+#[must_use]
+pub fn held_fixture_store_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| {
+        // Materialize and qualify the ordinary host-owned package first.
+        let _ = retained_fixture_store_wasm();
+        let workspace = workspace_root();
+        let config = workspace.join(COMBINED_LIFECYCLE_CONFIG_PATH);
+        let manifest = config
+            .parent()
+            .unwrap()
+            .join(".canic/generated/canic-fleet-wasm-store/Cargo.toml");
+        let target = workspace.join("target/pic-wasm");
+        let mut command = std::process::Command::new("cargo");
+        command
+            .current_dir(&workspace)
+            .args([
+                "build",
+                "--locked",
+                "--manifest-path",
+                manifest.to_str().unwrap(),
+                "--target",
+                "wasm32-unknown-unknown",
+                "--profile",
+                "fast",
+                "--features",
+                "canic/internal-test-fixtures",
+                "--target-dir",
+                target.to_str().unwrap(),
+            ])
+            .env("ICP_ENVIRONMENT", "local")
+            .env("CARGO_INCREMENTAL", "0")
+            .env(
+                canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
+                canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
+            )
+            .env(
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                &config,
+            )
+            .env(
+                canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV,
+                &workspace,
+            )
+            .env(
+                super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.0,
+                super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.1,
+            )
+            .env(
+                super::artifacts::INTERNAL_TEST_PROTOCOL_PROFILE_DIGEST.0,
+                super::artifacts::INTERNAL_TEST_PROTOCOL_PROFILE_DIGEST.1,
+            );
+        let status = command.status().expect("build response-barrier Store");
+        assert!(status.success(), "response-barrier Store build");
+        std::fs::read(target.join("wasm32-unknown-unknown/fast/canister_wasm_store.wasm"))
+            .expect("read response-barrier Store")
+    })
+    .clone()
+}
+
 ///
 /// LifecycleBoundaryFixture
 ///

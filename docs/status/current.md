@@ -25,7 +25,9 @@ package set, and the governed validation marker at the end of this file. The
 version transaction owns that marker; explanatory prose is not a second release
 guard.
 
-Current development begins from tagged `v0.110.14` at `c9c91f19c`.
+Published development base is tagged `v0.110.14` at `c9c91f19c`. The current
+pre-existing development commit is `9e1becc58` (subject `0.110.15`); its package
+versions still read 0.110.14.
 Release details are in [the 0.110 changelog](../changelog/0.110.md). Package
 versions remain 0.110.14; the current source batch uses the open 0.110.15 draft.
 
@@ -42,80 +44,70 @@ Logs are `/tmp/canic-icydb-guards.log`, `/tmp/canic-icydb-clippy.log` and
 `/tmp/canic-icydb-02575-pocketic.log`; the snapshot is
 `/tmp/canic-icydb-02575-source.sha256`. The .15 changelog includes the update.
 Earlier 0.257.4 qualification records below remain historical. The dependency
-update is qualified; the complete CANIC-165 batch remains open.
+update is qualified; the completed CANIC-165 boundary is recorded below.
 
 ## Upstream feedback through CANIC-167
 
-The maintainer selected continued Canic-only feedback work on 2026-09-11.
-The downstream section ledger now ends at CANIC-167 after a read-only
-2026-09-12 refresh. The [current triage](../audits/reports/2026-09/2026-09-11/toko-upstream-feedback.md)
-separates implemented corrections, remaining acceptance and new design work.
+The read-only 2026-09-12 Toko refresh still ends at CANIC-167. The accepted
+Canic-only CANIC-165 implementation is now qualified through generated Fleet
+apply and reviewed funding. Its complete source shares the current worktree
+with the earlier corrections, so the finished feature joins the existing .15
+draft. The combined planned batch and changelog are ready for the maintainer's
+release/push flow. No version transaction, Git publication, broad gate or live
+staging effect ran during this continuation.
 
-The latest push-readiness check finds no issue beyond CANIC-167. The .15 draft
-now groups completed CANIC-160/163/164/166/167 corrections, identifies its current
-record hard cuts and retains the latest reporting/dependency qualification.
-CANIC-165 stays under root Unreleased. Its source changes share the current
-worktree and files with those corrections: a prepared .15 changelog does not
-make the combined worktree ready to publish. Finish the two exact interrupted
-effects and generated Fleet apply/funding before recommending the current
-combined batch. No version, commit, push or broad gate ran for this notes update.
+The final generated mixed-Fleet PocketIC case passes in 824.01s (838s target,
+839s runner). It uses ordinary host-generated, sealed Store/Root/application
+artifacts with a neutral Shard fixture. Actual controller/reset/upload replies
+are lost and recovered; the exact source and target receipt, original review,
+paid-attempt reserve, conservation and effect-free replay are checked. Changed-
+build and identical-build deliberate reinstalls also converge and replay. All
+1,641 recorded source inputs remained unchanged. Earlier tests separately
+qualify initial/later targets, pending-target funding, bounded backoff, grant
+replacement, held responses, Root restart and direct source retirement.
 
-CANIC-167 is the new feedback item. Final application, infrastructure and
-selected-role build summaries now expose exact code/data section bytes and
-profile through the existing host parser. Selected-role provenance records
-required `final_wasm_metrics` alongside profile and raw/gzip hashes. The current
-v1 record hard-cuts; no new size ceiling or headroom claim is introduced. The
-[check record](../audits/reports/2026-09/2026-09-11/canic167-build-metrics.json)
-retains 21 passing host tests, 26 CLI build tests and scoped warning-denied
-Clippy. Formatting, document and .15 draft checks pass. This bounded reporting
-correction and its changelog are ready for release review in .15.
+Fresh review previously omitted fixture publication steps and their retry
+allowance. It now includes distinct source preparation/chunks in the successor
+bound and requires `fixture_publication_retry_attempts` for additional calls.
+The allowance is digest-bound and funded at configured costs; defaults are
+unchanged. Current v1 records hard-cut without compatibility defaults. Generation
+and initialization now verify retained fixture authority and admit the existing
+reviewed delivery path.
 
-The refreshed CANIC-165 handoff also requests matched Translation and Game Shard
-size/import-cost receipts against compact embedding. The design records that
-accepted downstream boundary; Toko remains read-only. Newer local funding and
-retirement evidence covers part of its remaining list, while exact suspended
-effects and generated apply/funding remain open. CANIC-166 still needs fresh
-reviewed staging recovery execution. The complete CANIC-165 batch is not
-push-ready; the reporting change does not complete it.
+The generated artifact cache retains fixture manifests and payloads, fingerprints
+authored input separately, restores exact release authority and rejects changed
+source bytes. A native regression proves this boundary. The first runtime
+attempt rejected overlapping cache input/output paths; the next reached terminal
+deployment but exposed a stale mirrored Candid type in reset fault injection.
+Both test defects were corrected. The final run exercises every intended lost
+reply. The [delivery record](../audits/reports/2026-09/2026-09-11/canic165-delivery.md)
+retains passing and failing logs, source snapshots and exact scope.
 
-CANIC-166 names the same retained partial-activation operation already covered
-by CANIC-157's bounded recovery owner. Ordinary plan/apply now report an exact
-local source-evidence match as a request for a separate explicit reinstall
-review; other unreadable plans retain their cause and preservation guidance.
-No source plan is defaulted, migrated, executed or silently superseded. CLI
-help and the [runbook](../features/operations/fleet-ensure.md#unreadable-retained-plan)
-describe the existing admission and multi-review sequence. Staging authority,
-cycle observations and actual execution remain separate from this local work.
-The diagnostic correction extends the open .15 draft. Five focused host tests,
-15 Fleet CLI tests and two recursive/bare help tests pass; host/CLI library,
-binary and test Clippy passes with warnings denied. Formatting, document links,
-semantics and .15 draft checks pass. The subsequent CANIC-163 extension below
-is also qualified; the combined draft remains open until publication.
+Nineteen focused host tests and both cache regressions pass; the final corrected
+cache-input test also passes separately. Scoped host/internal-testing Clippy,
+formatting and documentation/release-note checks qualify this continuation.
+The earlier held-reply Root case passed in 98.26s, seven Store/IcyDB cases in
+78.07s, and 23 provisioning native tests passed. These retain distinct snapshots;
+no new control-plane runtime source changed during the generated-apply extension.
 
-The 2026-09-12 read-only feedback refresh confirms CANIC-166's remaining
-boundary is downstream staging recovery execution and subsequent deployment
-qualification. Its current issue text accepts the existing bounded review owner
-and does not request another Canic recovery implementation. The recorded scratch
-review establishes a prior admitted observation only; a fresh review must check
-the selected release, authority, inventory and cycles before any apply. No live
-recovery or sibling mutation was performed by this continuation.
+CANIC-160/163/164/167 and CANIC-166's local diagnostic/runbook corrections remain
+qualified in .15. CANIC-166 live staging recovery, Toko's application conversion
+and matched Translation/Game Shard size/import-cost receipts remain downstream
+work. CANIC-139 retains exact unchanged-release reuse and safe intermediate
+caching; finalized cross-release Wasm reuse remains excluded. CANIC-141's mixed-
+subnet fee work remains explicitly deferred, outside this selected batch. See
+[the current triage](../audits/reports/2026-09/2026-09-11/toko-upstream-feedback.md).
 
-CANIC-165 now qualifies reinstall submitted while a real Store fetch is pending.
-A disposable cross-subnet consumer exposes its existing fetch lease through a
-read-only internal-fixture observation. The replacement remains empty after
-reinstall and additional network progress, then completes with its new exact
-grant and receipt; the old grant is rejected. This observes a pending fetch at
-submission, without deterministically holding the reply until after reinstall.
-The stricter held-reply case and Root interruption inside its Store grant/revoke
-await remain open, together with complete generated Fleet apply/funding.
+Cadence reassessment: keep this already accepted, now qualified provisioning
+batch with the open .15 corrections instead of splitting its implementation
+proofs into more patch releases. This exceeds the minor's soft release-count
+guideline; it does not authorize another minor or its human-owned closeout audit.
 
-All six Store/IcyDB integration cases pass in 131.54s (163s runner), alongside
-scoped core/probe/internal-testing/integration Clippy. All 1,639 source inputs
-and inventory remain unchanged. The existing
-[delivery evidence](../audits/reports/2026-09/2026-09-11/canic165-delivery.md)
-records the exact boundary and retains the stricter qualification flags as false.
-The feature contract, design and Unreleased changelog reflect the checkpoint.
-CANIC-165 remains unassigned and the complete batch is not push-ready.
+### Earlier CANIC-165 checkpoints
+
+The following checkpoint statements preserve their original evidence scope;
+remaining-work and readiness statements there are historical. Current readiness
+is the generated-apply checkpoint above.
 
 CANIC-165's publication retry gap is corrected. The existing Fleet plan binds a
 paid-attempt limit per preparation/upload, derived from its configured retry

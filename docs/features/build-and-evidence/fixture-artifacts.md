@@ -1,9 +1,9 @@
 # Fixture build artifacts
 
-CANIC-165 currently supports preparing immutable fixture artifacts during a
-complete App build and compiling reviewed Store publication actions.
-Receipt-gated target delivery is still being implemented. Fleet generation and initialization reject releases
-that contain fixtures until that delivery owner is connected.
+Canic retains immutable fixture artifacts during a complete App build and delivers
+them through reviewed Store publication and automatic target imports. Fleet
+generation and initialization verify the exact selected fixture manifest and
+payloads. Deployment completion requires each target's durable import receipt.
 
 ## Declaration
 
@@ -111,7 +111,12 @@ Each preparation/upload binds `maximum_attempts` from the desired Fleet's
 reservation covers that many calls at the configured per-update burn bound;
 retry observations also count toward conservation. Zero attempts and arithmetic
 overflow reject planning. The allowance and exact content are included in the
-action/plan hashes. No default funding limit is raised.
+action/plan hashes. Fresh-Fleet review includes one preparation and every chunk
+per distinct content object in its per-Root successor bound. Its required
+`fixture_publication_retry_attempts` records the additional permitted calls;
+continuation funding reserves their configured update/observation costs separately
+from the action count. The complete allowance participates in the review digest.
+No default funding limit is raised.
 
 The existing journal's required `publication_attempts` field consumes an attempt
 before each call. Failed calls, lost replies and process interruption retain that
@@ -264,9 +269,9 @@ the same import with the selected targets and source bytes retained.
 
 The disposable test raises its demand threshold to exercise funding without
 burning the target's existing balance. Production defaults are unchanged.
-Reviewed publication retry accounting now has focused host qualification. Complete
-generated Fleet funding remains qualification work; the target funding allowance
-does not establish a lifetime limit on execution from existing balances.
+Reviewed publication retry accounting and generated Fleet funding pass focused
+qualification. The target funding allowance does not establish a lifetime limit
+on execution from existing balances.
 
 ## Receipt-gated readiness
 
@@ -292,15 +297,18 @@ readiness flag or application cursor is introduced.
 
 ## Delivery boundary
 
-A successful complete build is not Store publication or runtime attestation.
-Until the complete delivery, funding and retention lifecycle is qualified,
-fixture-bearing releases cannot generate Fleet effects or compile Canic
-installation arguments.
-Releases with no fixture prerequisite continue through the existing flow.
+A successful complete build supplies source authority; reviewed apply publishes
+it and runtime receipts establish target readiness. A generated mixed-Fleet
+PocketIC journey qualifies the ordinary sealed packages through publication,
+actual upload reply loss, fresh-adapter recovery, exact source/receipt checks,
+reviewed retry funding, cycle conservation and terminal replay. Its selected-build
+and identical-build reinstall paths also converge and replay without effects.
 
-The [CANIC-165 design](../../audits/working/canic165-fixture-provisioning/design.md)
-owns the remaining interrupted-grant recovery, funding and retention
-lifecycle. The
+The neutral test source is application-authored fixture data supplied to the host
+manifest compiler. This proof does not measure Toko's Translation or Game Shard
+payloads or qualify a live staging recovery. Those remain downstream work under
+the [CANIC-165 design](../../audits/working/canic165-fixture-provisioning/design.md).
+The
 [combined readiness proof](../../audits/reports/2026-09/2026-09-11/canic165-readiness.md)
 qualifies Prepared-Root initial-child ordering, receipt-gated membership and
 application dispatch.
@@ -311,8 +319,8 @@ recovery, exact account replay and permanent codec failure across target restart
 It also proves revocation before recycling, stopped-target reuse with a new grant
 and completed import, and rejection of a stale previous-installation revocation.
 The Store/IcyDB journey covers reinstall after a partial automatic import and
-reconciliation of discarded Store grant receipts across restart. Interruption
-inside Root's Store await remains a separate qualification boundary.
+reconciliation of discarded Store grant receipts across restart. The held-reply
+extension below qualifies interrupted grant and revocation effects.
 
 A further real Store/IcyDB case submits reinstall while the consumer's existing
 fetch lease is active. It places Store and the consumer on separate disposable
@@ -322,11 +330,23 @@ and installation receipt; reads with the old grant reject. A controller-guarded
 probe query observes the lease through the `internal-test-fixtures` feature,
 without changing transport or scheduling.
 
-This case establishes pending fetch at reinstall submission. It does not control
-reply delivery relative to the actual reinstall, so deterministic held-reply
-qualification remains open. It also does not establish the generated Fleet's
-topology, Root interruption inside a grant/revoke await, or complete generated
-apply/funding.
+This vanilla case establishes pending fetch at reinstall submission. A separate
+case now holds the canonical Store response until after consumer reinstall,
+then proves empty replacement state, exact replacement completion and rejection
+of the old grant. Its response barrier is available only in internal test builds;
+normal Store builds emit neither the barrier nor its controller-only endpoints.
+The instrumented Store executes real authorization and storage operations, but
+is not a production-finalized or byte-identical shipping artifact.
+
+A Root journey holds replies after real grant and revocation mutations, starts
+stop during each held call, drains the bounded caller response, and restarts the
+same Root Wasm while Store still holds its reply. Grant revision, selected targets
+and effect-free revocation replay remain exact. Root restore now reschedules the
+retained provisioning owner while Prepared; the existing dispatcher preserves
+retry deadlines and review-required failures. This uses the supported stop/drain
+boundary before heap replacement, not a promise to interpret undrained callbacks
+after a Rust heap replacement. The generated Fleet proof above separately uses
+the ordinary Store package without these response controls.
 
 
 ## Source retirement
@@ -355,6 +375,5 @@ qualified together.
 
 Standalone Root removal remains unavailable while Coordinator group/service
 references exist. That rejection retains the Registry and fixture sources; this
-work does not introduce grouped application retirement. Reviewed funding, the
-remaining exact interrupted-effect cases and complete generated apply still
-precede enabling fixture-bearing Fleet generation.
+work does not introduce grouped application retirement. Generated publication and
+funding qualification do not expand that retirement authority.

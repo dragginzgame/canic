@@ -129,7 +129,7 @@ pub(super) fn compile_root_authorities(
         .map_err(|error| CanicInitError::Release(error.to_string()))?;
     complete
         .manifest
-        .require_fixture_delivery(
+        .verify_fixtures(
             root,
             &bootstrap
                 .component_deployment_configuration
@@ -208,7 +208,7 @@ fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, CanicIni
     .map_err(|error| CanicInitError::Release(error.to_string()))?;
     complete
         .manifest
-        .require_fixture_delivery(
+        .verify_fixtures(
             request.root,
             &bootstrap
                 .component_deployment_configuration

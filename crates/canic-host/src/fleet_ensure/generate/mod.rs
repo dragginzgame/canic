@@ -2019,7 +2019,7 @@ fn release_authority(
     }
     complete
         .manifest
-        .require_fixture_delivery(request.root, component_topology)
+        .verify_fixtures(request.root, component_topology)
         .map_err(|error| FleetGenerateError::Release(error.to_string()))?;
     Ok((infrastructure, complete))
 }

@@ -365,6 +365,7 @@ mod tests {
         ImportPoolCanister(PoolCanisterRequest),
         AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
         BootstrapStore(RootStoreBootstrapRequest),
+        PrepareStoreFixture(RootStoreFixturePrepareRequest),
         PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
         SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
     }
@@ -1682,6 +1683,7 @@ mod tests {
     }
 
     struct RootStoreFixture {
+        wasm: Option<Vec<u8>>,
         manifest: RootStoreReleaseSetManifest,
         artifacts: BTreeMap<CanisterRole, Vec<u8>>,
     }
@@ -1793,6 +1795,17 @@ wrapper_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export XDG_CONFIG_HOME="$wrapper_root/xdg-config"
 export XDG_DATA_HOME="$wrapper_root/xdg-data"
 export DO_NOT_TRACK=1
+case " $* " in
+  *" canister call "*" canic_wasm_store_publish_fixture "*)
+    icp "$@"
+    printf '%s\n' fixture >> "$wrapper_root/fixture-publications.log"
+    if [ -f "$wrapper_root/lose-fixture-response" ] && [ ! -e "$wrapper_root/lost-fixture-response" ]; then
+      : > "$wrapper_root/lost-fixture-response"
+      exit 78
+    fi
+    exit 0
+    ;;
+esac
 case " $* " in
   *" canister call "*" icrc1_transfer "*)
     if [ -f "$wrapper_root/lose-estate-funding-response" ]; then
@@ -1967,8 +1980,15 @@ exec icp "$@"
         let mut phase = Span::start("artifact_recipe");
         let release_build_id =
             persist_internal_test_release_build_plan(adapter_root, build_network, release_nonce);
-        let outputs =
+        let fixtures = prepare_generated_fixture_artifacts(
+            adapter_root,
+            &configuration.component_topology,
+            release_build_id,
+            configured_roles,
+        );
+        let mut outputs =
             literal_zero_release_artifact_outputs(adapter_root, release_build_id, configured_roles);
+        append_generated_fixture_outputs(adapter_root, &fixtures, &mut outputs);
         let cache = literal_zero_release_artifact_cache_spec(
             workspace_root,
             &workspace_root.join("target/test-artifacts/external-artifact-cache"),
@@ -1978,6 +1998,7 @@ exec icp "$@"
             build_network,
             release_build_id,
         );
+        let cache = bind_generated_fixture_cache_inputs(cache, adapter_root, &fixtures);
         phase = phase.next("artifact_cache_lookup");
         let started_at = Instant::now();
         let outcome = match prepare_artifact_cache(&cache)
@@ -2149,6 +2170,69 @@ exec icp "$@"
     }
 
     #[cfg(test)]
+    fn prepare_generated_fixture_artifacts(
+        root: &Path,
+        topology: &canic_core::bootstrap::compiled::ComponentTopology,
+        release: ReleaseBuildId,
+        roles: &[String],
+    ) -> canic_host::release_set::fixture::PersistedFixtureArtifactManifest {
+        let inputs = if roles.iter().any(|role| role == "user_shard") {
+            let path = root.join("fixture-source/user_shard.bin");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, b"reviewed fixture source").unwrap();
+            vec![canic_host::release_set::fixture::FixtureSourceInput {
+                role: "user_shard".into(),
+                format_hash: [2; 32],
+                completion_summary: [3; 32],
+                chunk_paths: vec!["fixture-source/user_shard.bin".to_string()],
+            }]
+        } else {
+            Vec::new()
+        };
+        canic_host::release_set::fixture::compile_and_persist_fixture_artifact_manifest(
+            root, topology, release, &inputs,
+        )
+        .expect("retain neutral generated fixture authority before artifact caching")
+    }
+
+    #[cfg(test)]
+    fn bind_generated_fixture_cache_inputs(
+        mut cache: ArtifactCacheSpec,
+        root: &Path,
+        fixtures: &canic_host::release_set::fixture::PersistedFixtureArtifactManifest,
+    ) -> ArtifactCacheSpec {
+        let selection = root.join("fixture-source/selection.json");
+        std::fs::create_dir_all(selection.parent().unwrap()).unwrap();
+        std::fs::write(&selection, serde_json::to_vec(&fixtures.manifest).unwrap()).unwrap();
+        cache = cache.with_input("fixture-selection", &selection);
+        if !fixtures.manifest.entries.is_empty() {
+            cache = cache.with_input(
+                "fixture-source",
+                &root.join("fixture-source/user_shard.bin"),
+            );
+        }
+        cache
+    }
+
+    #[cfg(test)]
+    fn append_generated_fixture_outputs(
+        root: &Path,
+        fixtures: &canic_host::release_set::fixture::PersistedFixtureArtifactManifest,
+        outputs: &mut BTreeMap<String, PathBuf>,
+    ) {
+        let release_root = literal_zero_release_root(root, fixtures.manifest.release_build_id);
+        for entry in &fixtures.manifest.entries {
+            let content = hex_bytes(entry.content_id);
+            for index in 0..entry.descriptor.chunks.len() {
+                outputs.insert(
+                    format!("fixture-{content}-{index}"),
+                    release_root.join(format!("fixture-content/{content}/{index}.bin")),
+                );
+            }
+        }
+    }
+
+    #[cfg(test)]
     fn literal_zero_release_artifact_outputs(
         adapter_root: &Path,
         release_build_id: ReleaseBuildId,
@@ -2163,6 +2247,10 @@ exec icp "$@"
             (
                 "current-manifest".to_string(),
                 release_root.join("current-release-set-manifest.json"),
+            ),
+            (
+                "fixture-manifest".to_string(),
+                release_root.join("fixture-artifact-manifest.json"),
             ),
             (
                 "infrastructure-manifest".to_string(),
@@ -2376,14 +2464,12 @@ exec icp "$@"
             &application_outputs,
         )
         .expect("persist literal-zero application authority");
-        let fixtures =
-            canic_host::release_set::fixture::compile_and_persist_fixture_artifact_manifest(
-                adapter_root,
-                &configuration.component_topology,
-                release_build_id,
-                &[],
-            )
-            .expect("persist empty fixture authority");
+        let fixtures = prepare_generated_fixture_artifacts(
+            adapter_root,
+            &configuration.component_topology,
+            release_build_id,
+            configured_roles,
+        );
         let current = compile_and_persist_current_release_set_manifest(
             adapter_root,
             &configuration.component_topology,
@@ -2507,6 +2593,90 @@ exec icp "$@"
                 format!("{first}:{name}")
             );
         }
+    }
+
+    #[test]
+    fn generated_release_cache_restores_fixture_authority_without_source_rebuild() {
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let root = std::env::temp_dir().join(format!(
+            "canic-fixture-authority-cache-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        let _cleanup = TestDirectoryCleanup(root.clone());
+        let release = persist_internal_test_release_build_plan(
+            &root,
+            BuildNetwork::Local,
+            INTERNAL_TEST_RELEASE_BUILD_NONCE,
+        );
+        let configuration = AppConfigSnapshot::load(
+            &workspace.join("apps/test/test-configs/generated-mixed-topology.toml"),
+        )
+        .unwrap()
+        .model()
+        .compile_component_deployment_configuration()
+        .unwrap();
+        let topology = &configuration.component_topology;
+        let roles = vec!["user_shard".to_string(), "root".to_string()];
+        let fixtures = prepare_generated_fixture_artifacts(&root, topology, release, &roles);
+        assert!(!fixtures.manifest.entries.is_empty());
+        let mut outputs = literal_zero_release_artifact_outputs(&root, release, &roles);
+        append_generated_fixture_outputs(&root, &fixtures, &mut outputs);
+        let mut cache = ArtifactCacheSpec::new(
+            &root.join("cache"),
+            "generated-fixture-authority",
+            "canic/generated-fixture-authority/v1",
+        );
+        for (name, path) in &outputs {
+            cache = cache.with_output(name, path);
+        }
+        let cache = bind_generated_fixture_cache_inputs(cache, &root, &fixtures);
+        let ArtifactCachePreparation::Build(transaction) = prepare_artifact_cache(&cache).unwrap()
+        else {
+            panic!("private cache must start empty");
+        };
+        for (name, path) in &outputs {
+            if path.is_file() {
+                transaction.import_output(name, path).unwrap();
+            } else {
+                // Only the release plan and fixture authority are real in this native proof.
+                std::fs::write(transaction.output_path(name).unwrap(), name).unwrap();
+            }
+        }
+        transaction.commit().unwrap();
+        std::fs::remove_dir_all(literal_zero_release_root(&root, release)).unwrap();
+        assert!(matches!(
+            prepare_artifact_cache(&cache).unwrap(),
+            ArtifactCachePreparation::Reused(_)
+        ));
+        let restored = canic_host::release_set::fixture::load_fixture_artifact_manifest(
+            &root,
+            topology,
+            release,
+            fixtures.digest,
+        )
+        .expect("cache restores exact fixture authority after the release directory is removed");
+        assert_eq!(restored, fixtures);
+        std::fs::write(
+            root.join("fixture-source/user_shard.bin"),
+            b"changed source",
+        )
+        .unwrap();
+        assert!(matches!(
+            prepare_artifact_cache(&cache).unwrap(),
+            ArtifactCachePreparation::Build(_)
+        ));
+        std::fs::remove_dir_all(root.join("fixture-source")).unwrap();
+        canic_host::release_set::fixture::verify_fixture_artifacts(
+            &root,
+            topology,
+            release,
+            fixtures.digest,
+        )
+        .expect("retained payload verifies without authored source files");
     }
 
     #[cfg(test)]
@@ -4320,8 +4490,30 @@ exec icp "$@"
         root_wasm: Vec<u8>,
         component_wasms: &BTreeMap<CanisterRole, Vec<u8>>,
     ) -> BootstrappedRootFixture {
+        install_fixture_root_with_store(
+            pic,
+            coordinator,
+            config_path,
+            fixture_roles,
+            root_wasm,
+            component_wasms,
+            None,
+        )
+    }
+
+    #[cfg(test)]
+    fn install_fixture_root_with_store(
+        pic: &PocketIc,
+        coordinator: Principal,
+        config_path: &Path,
+        fixture_roles: &[&str],
+        root_wasm: Vec<u8>,
+        component_wasms: &BTreeMap<CanisterRole, Vec<u8>>,
+        store_wasm: Option<Vec<u8>>,
+    ) -> BootstrappedRootFixture {
         let coordinator_wasm = build_test_coordinator_wasm();
         let mut store_fixture = build_root_store_fixture_with_config(config_path, component_wasms);
+        store_fixture.wasm = store_wasm;
         let payload = b"reviewed fixture source";
         for (index, role) in ["user_hub", "user_shard"].into_iter().enumerate() {
             if !fixture_roles.contains(&role) {
@@ -4379,6 +4571,293 @@ exec icp "$@"
             config_path,
         );
         fixture
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    enum FixtureHeldReply {
+        Grant,
+        Revoke,
+    }
+
+    #[cfg(test)]
+    fn arm_fixture_reply(
+        pic: &PocketIc,
+        store: Principal,
+        root: Principal,
+        kind: FixtureHeldReply,
+    ) {
+        assert!(
+            pic.update_candid_as::<bool, _>(store, root, "canic_test_fixture_reply_arm", (kind,))
+                .unwrap()
+        );
+    }
+
+    #[cfg(test)]
+    fn fixture_replies_waiting(pic: &PocketIc, store: Principal, root: Principal) -> u32 {
+        pic.query_candid_as(store, root, "canic_test_fixture_reply_waiting", ())
+            .unwrap()
+    }
+
+    #[cfg(test)]
+    #[track_caller]
+    fn wait_for_held_fixture_reply(pic: &PocketIc, store: Principal, root: Principal) {
+        let mut waiting = 0;
+        for _ in 0..180 {
+            waiting = fixture_replies_waiting(pic, store, root);
+            if waiting == 1 {
+                return;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        panic!("Root must reach one held real Store reply; observed {waiting}");
+    }
+
+    #[cfg(test)]
+    fn held_fixture_grant(
+        pic: &PocketIc,
+        store: Principal,
+        root: Principal,
+        target: Principal,
+    ) -> canic::dto::fixture_provisioning::FixtureGrant {
+        let response: Result<StoreCatalogResponse, Error> = pic
+            .query_candid_as(
+                store,
+                root,
+                canic::protocol::CANIC_WASM_STORE_CATALOG,
+                (StoreCatalogRequest::FixtureGrant(target),),
+            )
+            .unwrap();
+        let StoreCatalogResponse::FixtureGrant(Some(grant)) = response.unwrap() else {
+            panic!("actual Store grant");
+        };
+        *grant
+    }
+
+    #[test]
+    fn root_restart_reconciles_held_store_grant_and_revocation_replies() {
+        let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = initial_shard_root_canister_config_path(&workspace);
+        let config = AppConfigSnapshot::load(&config_path).unwrap();
+        let root_wasm = build_initial_shard_root_wasm();
+        let store_wasm = crate::pic::held_fixture_store_wasm();
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let fixture = install_fixture_root_with_store(
+            &pic,
+            coordinator,
+            &config_path,
+            &["user_shard"],
+            root_wasm.clone(),
+            build_initial_shard_component_wasms(),
+            Some(store_wasm),
+        );
+        let root = fixture.root_id;
+        let store = fixture.response.wasm_store;
+        let (version, sync) = join_and_synchronize_root(&pic, coordinator, &fixture);
+        activate_registry_and_prepare_component_registry(
+            &pic,
+            coordinator,
+            &fixture,
+            version,
+            sync,
+        );
+        let CoordinatorRegistryResponse::Registry(registry) =
+            coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
+        let request = fixture_fresh_component_plan(config.model(), &registry, [0xc7; 32]).request;
+        arm_fixture_reply(&pic, store, root, FixtureHeldReply::Grant);
+        coordinator_command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::ProvisionComponents(request),
+        )
+        .unwrap();
+        wait_for_held_fixture_reply(&pic, store, root);
+        let selected = selected_fixture_targets(&pic, root);
+        let shard = selected
+            .iter()
+            .find(|(_, role)| role.as_str() == "user_shard")
+            .unwrap()
+            .0;
+        let grant = held_fixture_grant(&pic, store, root, shard);
+        assert!(grant.enabled);
+        assert_eq!(grant.revision, 1);
+        assert_ne!(
+            fixture_readiness(&pic, root, shard).status,
+            canic::dto::runtime::ReadinessStatus::Ready
+        );
+        restart_root_with_held_fixture_reply(&pic, root, store, root_wasm.clone());
+        assert_eq!(fixture_replies_waiting(&pic, store, root), 1);
+        release_fixture_reply(&pic, store, root);
+        for _ in 0..240 {
+            if fixture_readiness(&pic, root, shard).status
+                == canic::dto::runtime::ReadinessStatus::Ready
+            {
+                break;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        assert_eq!(
+            fixture_readiness(&pic, root, shard).status,
+            canic::dto::runtime::ReadinessStatus::Ready
+        );
+        assert_eq!(selected_fixture_targets(&pic, root), selected);
+        assert_eq!(held_fixture_grant(&pic, store, root, shard), grant);
+        // A child receipt precedes Fleet activation. Removal must wait for the
+        // existing Coordinator owner to finish that transition before admission.
+        wait_for_fixture_fleet_activation(&pic, coordinator, [0xc7; 32]);
+        qualify_held_fixture_revocation(&pic, &fixture, shard, &grant, root_wasm);
+    }
+
+    #[cfg(test)]
+    fn release_fixture_reply(pic: &PocketIc, store: Principal, root: Principal) {
+        pic.update_candid_as::<(), _>(store, root, "canic_test_fixture_reply_release", ())
+            .unwrap();
+        for _ in 0..40 {
+            if fixture_replies_waiting(pic, store, root) == 0 {
+                return;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        panic!("released Store response must drain before another barrier is armed");
+    }
+
+    /// Stop during the held call, drain its bounded response, then replace the heap.
+    #[cfg(test)]
+    fn restart_root_with_held_fixture_reply(
+        pic: &PocketIc,
+        root: Principal,
+        store: Principal,
+        wasm: Vec<u8>,
+    ) {
+        let stopping = pic
+            .submit_call_with_effective_principal(
+                Principal::management_canister(),
+                RawEffectivePrincipal::CanisterId(root.as_slice().to_vec()),
+                Principal::anonymous(),
+                "stop_canister",
+                encode_one(QualificationCanisterIdRecord { canister_id: root }).unwrap(),
+            )
+            .unwrap();
+        // Admit stop before advancing beyond the pinned CDK's 300-second
+        // bounded-call timeout. Store still retains its successful effect/reply.
+        for _ in 0..5 {
+            pic.tick();
+        }
+        pic.advance_time(Duration::from_secs(301));
+        pic.await_call(stopping)
+            .expect("bounded outstanding calls must drain before Root restart");
+        assert_eq!(fixture_replies_waiting(pic, store, root), 1);
+        pic.upgrade_canister(root, wasm, crate::pic::upgrade_args(), None)
+            .unwrap();
+        pic.start_canister(root, None).unwrap();
+    }
+
+    #[cfg(test)]
+    fn wait_for_fixture_fleet_activation(
+        pic: &PocketIc,
+        coordinator: Principal,
+        operation_id: [u8; 32],
+    ) {
+        let mut last = None;
+        for _ in 0..240 {
+            let CoordinatorOperationReadResponse::Operation(
+                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+            ) = coordinator_status(
+                pic,
+                coordinator,
+                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
+            )
+            .unwrap()
+            else {
+                panic!("exact fixture provisioning operation");
+            };
+            if status.components_provisioned_at_ns.is_some()
+                && status.runtimes_activated_at_ns.is_some()
+                && status.runtime_activated_root_count == status.root_batch_count
+            {
+                assert!(status.pending_root_failure.is_none());
+                return;
+            }
+            last = Some(status);
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        panic!("fixture Fleet must reach terminal activation: {last:?}");
+    }
+
+    #[cfg(test)]
+    fn qualify_held_fixture_revocation(
+        pic: &PocketIc,
+        fixture: &BootstrappedRootFixture,
+        shard: Principal,
+        grant: &canic::dto::fixture_provisioning::FixtureGrant,
+        root_wasm: Vec<u8>,
+    ) {
+        let root = fixture.root_id;
+        let store = fixture.response.wasm_store;
+        let ManagedCanisterBinding::ComponentChild(binding) = &grant.binding.target else {
+            unreachable!()
+        };
+        let component = binding.component.component;
+        let RootStatusResponseFragment::ComponentRegistryPartition(partition) = root_status(
+            pic,
+            root,
+            RootStatusRequestFragment::ComponentRegistryPartition(
+                canic::dto::component_registry::ComponentRegistryPartitionRequest { component },
+            ),
+        )
+        .unwrap() else {
+            panic!("Component partition");
+        };
+        let request = canic::dto::component_registry::RootComponentSubtreeRemovalRequest {
+            operation_id: [0xc9; 32],
+            component,
+            target_canister_id: shard,
+            expected_registry: partition.head,
+        };
+        arm_fixture_reply(pic, store, root, FixtureHeldReply::Revoke);
+        let _message = pic
+            .submit_call(
+                root,
+                Principal::anonymous(),
+                canic::protocol::CANIC_ROOT_COMMAND,
+                encode_one(RootCommandFragment::RemoveSubtree(request.clone())).unwrap(),
+            )
+            .unwrap();
+        wait_for_held_fixture_reply(pic, store, root);
+        let revoked = held_fixture_grant(pic, store, root, shard);
+        assert!(!revoked.enabled);
+        assert_eq!(revoked.binding, grant.binding);
+        assert_eq!(revoked.revision, grant.revision + 1);
+        assert!(
+            pic.canister_status(shard, Some(root))
+                .unwrap()
+                .module_hash
+                .is_some()
+        );
+        restart_root_with_held_fixture_reply(pic, root, store, root_wasm);
+        assert_eq!(fixture_replies_waiting(pic, store, root), 1);
+        release_fixture_reply(pic, store, root);
+        root_command(
+            pic,
+            root,
+            RootCommandFragment::RemoveSubtree(request.clone()),
+        )
+        .unwrap();
+        wait_for_fixture_subtree_removal(pic, root, request.operation_id);
+        assert!(
+            pic.canister_status(shard, Some(root))
+                .unwrap()
+                .module_hash
+                .is_none()
+        );
+        assert_fixture_revocation_and_replay(pic, root, store, shard, grant, request);
     }
 
     #[test]
@@ -5779,6 +6258,15 @@ exec icp "$@"
             build_network,
             INTERNAL_TEST_RELEASE_BUILD_NONCE,
         );
+        let generated_fixtures =
+            canic_host::release_set::load_persisted_current_release_set_manifest(
+                &adapter_root,
+                release_artifacts.release_build_id,
+            )
+            .unwrap()
+            .manifest
+            .verify_fixtures(&adapter_root, &configuration.component_topology)
+            .unwrap();
         let root_wasm = release_artifacts.root_wasm_bytes.clone();
         let cycles_ledger_wasm = build_journey_cycles_ledger_wasm();
         let store_fixture = build_root_store_fixture_with_config_for_release(
@@ -6637,6 +7125,29 @@ exec icp "$@"
                 local_replica.clone(),
                 !matches!(funding, FundingJourney::Fresh),
             );
+            if !generated_fixtures.manifest.entries.is_empty() {
+                std::fs::write(adapter_root.join("lose-fixture-response"), []).unwrap();
+                let interrupted = fleet_ensure_workflow::apply(
+                    &adapter_root,
+                    &desired,
+                    &desired_identity,
+                    &desired.fleet,
+                    &planned.plan.plan_sha256,
+                    &mut platform,
+                );
+                assert!(
+                    matches!(interrupted, Err(EnsureWorkflowError::Platform(_))),
+                    "actual fixture upload must succeed with its response lost: {interrupted:?}"
+                );
+                assert!(adapter_root.join("lost-fixture-response").is_file());
+                platform = literal_zero_journey_platform(
+                    &desired,
+                    &icp_wrapper,
+                    &adapter_root,
+                    local_replica.clone(),
+                    false,
+                );
+            }
             let completed = fleet_ensure_workflow::apply(
                 &adapter_root,
                 &desired,
@@ -6657,6 +7168,9 @@ exec icp "$@"
                 .expect("read automatic phase journal")
                 .expect("retained journal");
             assert!(!journal.successor_phases.is_empty());
+            if !generated_fixtures.manifest.entries.is_empty() {
+                assert_generated_fixture_review(&planned.plan, &journal, &desired);
+            }
             assert_eq!(journal.plan_sha256, planned.plan.plan_sha256);
             assert!(
                 journal
@@ -6709,6 +7223,8 @@ exec icp "$@"
             assert_eq!(status.settings.controllers, vec![root]);
             assert!(status.cycles >= readiness_floor);
         }
+
+        assert_generated_fixture_receipts(&pic, root, store, operator, &pools, &generated_fixtures);
 
         let requested_controlled_cycles = requested
             .into_iter()
@@ -6790,6 +7306,22 @@ exec icp "$@"
             ledger_account_balance(&pic, cycles_ledger, root),
             Nat::from(0_u8)
         );
+        if !generated_fixtures.manifest.entries.is_empty() {
+            let unique_chunks = generated_fixtures
+                .manifest
+                .entries
+                .iter()
+                .map(|entry| entry.descriptor.chunks.len())
+                .sum::<usize>();
+            assert_eq!(
+                std::fs::read_to_string(adapter_root.join("fixture-publications.log"))
+                    .unwrap()
+                    .lines()
+                    .count(),
+                unique_chunks,
+                "lost upload response, fresh adapter and terminal replay must not publish twice"
+            );
+        }
         progress_elapsed("literal-zero terminal replay complete", replay_started_at);
         if initial_workload_count == 5 && matches!(funding, FundingJourney::Fresh) {
             phase = phase.next("selected_build_reinstall");
@@ -6819,6 +7351,115 @@ exec icp "$@"
         );
         phase.finish();
         journey_span.finish();
+    }
+
+    #[cfg(test)]
+    fn assert_generated_fixture_review(
+        original: &FleetEnsurePlan,
+        journal: &canic_host::fleet_ensure::model::FleetEnsureJournalRecord,
+        desired: &DesiredFleet,
+    ) {
+        let mut publications = BTreeMap::new();
+        for phase in &journal.successor_phases {
+            for action in &phase.plan.as_ref().unwrap().protocol_actions {
+                let EnsureAction::FleetProtocol {
+                    action: publication,
+                    maximum_execution_burn_cycles,
+                    ..
+                } = action
+                else {
+                    continue;
+                };
+                if let CurrentFleetProtocolAction::PrepareStoreFixture {
+                    maximum_attempts: attempts,
+                    ..
+                }
+                | CurrentFleetProtocolAction::PublishStoreFixtureChunk {
+                    maximum_attempts: attempts,
+                    ..
+                } = publication.as_ref()
+                {
+                    assert_eq!(*attempts, desired.maximum_stalled_observations);
+                    assert!(*maximum_execution_burn_cycles > 0);
+                    publications.insert(
+                        canic_host::fleet_ensure::ops::action_sha256(action),
+                        *attempts,
+                    );
+                }
+            }
+        }
+        assert!(
+            !publications.is_empty(),
+            "fixture publication must be a reviewed effect"
+        );
+        let retries: u32 = publications.values().map(|attempts| attempts - 1).sum();
+        let authority = original.continuation.as_ref().unwrap();
+        assert_eq!(authority.fixture_publication_retry_attempts, retries);
+        assert!(authority.maximum_successor_actions as usize >= publications.len());
+        let review = original.recovery_review.as_ref().unwrap();
+        assert!(review.continuation_reserve_cycles > 0);
+        assert!(review.whole_continuation_ceiling_cycles >= review.continuation_reserve_cycles);
+    }
+
+    #[cfg(test)]
+    fn assert_generated_fixture_receipts(
+        pic: &PocketIc,
+        root: Principal,
+        store: Principal,
+        operator: Principal,
+        pools: &[Principal],
+        fixtures: &canic_host::release_set::fixture::PersistedFixtureArtifactManifest,
+    ) {
+        for source in &fixtures.manifest.entries {
+            let status: Result<StoreCatalogResponse, Error> = pic
+                .query_candid_as(
+                    store,
+                    operator,
+                    canic::protocol::CANIC_WASM_STORE_CATALOG,
+                    (StoreCatalogRequest::Fixture(source.content_id),),
+                )
+                .unwrap();
+            let StoreCatalogResponse::Fixture(Ok(status)) = status.unwrap() else {
+                panic!("generated apply must retain the selected source");
+            };
+            assert!(status.complete);
+            assert_eq!(status.received_bytes, source.descriptor.encoded_length);
+            let mut completed = Vec::new();
+            for target in pools {
+                if pic
+                    .canister_status(*target, Some(root))
+                    .unwrap()
+                    .module_hash
+                    .is_none()
+                {
+                    continue;
+                }
+                let readiness = fixture_readiness(pic, root, *target);
+                if let Ok(canic::dto::fixture_provisioning::FixtureProvisioningStatus::Complete(
+                    receipt,
+                )) = readiness.fixture
+                    && receipt.binding.content_id == source.content_id
+                {
+                    assert_eq!(
+                        receipt.binding.release_build_id,
+                        fixtures.manifest.release_build_id
+                    );
+                    assert_eq!(
+                        receipt.binding.target,
+                        managed_binding_status(pic, root, *target)
+                    );
+                    assert_eq!(
+                        receipt.completion_summary,
+                        source.descriptor.completion_summary
+                    );
+                    completed.push(*target);
+                }
+            }
+            assert!(
+                !completed.is_empty(),
+                "generated fixture must reach its actual target"
+            );
+        }
     }
 
     #[cfg(test)]
@@ -15461,7 +16102,7 @@ cycles = "80T"
         pic: &PocketIc,
         root_wasm: Vec<u8>,
         coordinator: Principal,
-        store_fixture: RootStoreFixture,
+        mut store_fixture: RootStoreFixture,
         placement: BootstrappedRootPlacement,
         config_path: &Path,
         store_operation_id: Option<[u8; 32]>,
@@ -15485,7 +16126,10 @@ cycles = "80T"
             store
         });
         let pool_imports = pool_setup(pic, root_id);
-        let wasm_store_wasm = build_test_wasm_store_wasm();
+        let wasm_store_wasm = store_fixture
+            .wasm
+            .take()
+            .unwrap_or_else(build_test_wasm_store_wasm);
         let installed = prepare_current_root_fixture(
             pic,
             &root_wasm,
@@ -15542,6 +16186,7 @@ cycles = "80T"
         let RootStoreFixture {
             manifest,
             artifacts,
+            ..
         } = store_fixture;
         let manifest_bytes = serde_json::to_vec(&manifest).expect("canonical root release set");
         let digest = ReleaseSetDigest::from_bytes(
@@ -15949,6 +16594,7 @@ cycles = "80T"
         let (manifest, artifacts) =
             exact_root_store_fixture(config_path, component_wasms, release_build_id);
         RootStoreFixture {
+            wasm: None,
             manifest,
             artifacts,
         }
@@ -16260,6 +16906,10 @@ cycles = "80T"
             (
                 "pending fixture automatic funding",
                 pending_fixture_automatically_funds_within_configured_allowance,
+            ),
+            (
+                "Root restart during Store grant and revocation replies",
+                root_restart_reconciles_held_store_grant_and_revocation_replies,
             ),
             (
                 "Prepared Root initial-Shard bootstrap",
