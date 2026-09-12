@@ -5,7 +5,7 @@
 //! Boundary: delegates delivery and receipt observation to the provisioning workflow.
 
 use crate::dto::fixture_provisioning::{FixtureImportError, FixtureProvisioningStatus};
-pub use crate::model::fixture_importer::FixtureImporter;
+pub use crate::ops::fixture_importer::FixtureImporter;
 
 /// Application-facing fixture consumer; call registration from the synchronous lifecycle participant.
 pub struct FixtureProvisioningApi;

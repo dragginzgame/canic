@@ -12,22 +12,64 @@ use crate::{
         FixtureAssignment, FixtureImportError, FixtureImportFailure, FixtureImportProgress,
         FixtureProvisioningStatus, FixtureStoreError,
     },
-    model::fixture_importer::{FixtureImportLease, FixtureImporterRegistry},
+    model::fixture_importer::{
+        FixtureImportAuthority, FixtureImportLease, FixtureImporterRegistry,
+        FixtureImporterRegistryError,
+    },
     ops::{ic::IcOps, storage::fleet_activation::FleetActivationOps},
 };
+use std::cell::RefCell;
 
-pub use crate::model::fixture_importer::FixtureImporter;
+thread_local! {
+    static REGISTRY: RefCell<FixtureImporterRegistry<&'static dyn FixtureImporter>> =
+        const { RefCell::new(FixtureImporterRegistry::new()) };
+}
+
+/// Synchronous application participant for bounded import and validation steps.
+///
+/// Register once from the existing synchronous lifecycle participant, after restoring
+/// the database. Mutating methods must commit rows and their checkpoint in one message.
+/// Canic traps a returned error or invalid postcondition to roll back that message.
+/// Each validation step must inspect bounded stored data; completion must not rescan it.
+pub trait FixtureImporter: Sync {
+    /// Read the durable checkpoint without changing it; `None` means not begun.
+    fn progress(
+        &self,
+        assignment: &FixtureAssignment,
+    ) -> Result<Option<FixtureImportProgress>, FixtureImportError>;
+    /// Initialize an absent checkpoint for this exact assignment without wiping existing data.
+    fn begin(&self, assignment: &FixtureAssignment) -> Result<(), FixtureImportError>;
+    /// Apply one verified chunk and advance the same durable checkpoint exactly once.
+    fn apply_chunk(
+        &self,
+        assignment: &FixtureAssignment,
+        index: u32,
+        bytes: &[u8],
+    ) -> Result<(), FixtureImportError>;
+    /// Validate a bounded portion of stored data and eventually commit the exact receipt.
+    fn validate_step(&self, assignment: &FixtureAssignment) -> Result<(), FixtureImportError>;
+}
 
 /// Scoped ownership of one fetch; IC callback cleanup also releases this exact lease.
 pub struct ImportLease(FixtureImportLease);
 
 impl ImportLease {
     pub fn acquire(assignment: &FixtureAssignment) -> Result<Self, FixtureImportError> {
-        FixtureImporterRegistry::acquire(&assignment.grant.binding).map(Self)
+        let binding = &assignment.grant.binding;
+        let authority = FixtureImportAuthority {
+            target: binding.target.clone(),
+            installation: binding.installation,
+            release_build_id: binding.release_build_id,
+            content_id: binding.content_id,
+        };
+        REGISTRY
+            .with_borrow_mut(|registry| registry.acquire(authority))
+            .map(Self)
+            .map_err(registry_error)
     }
 
     pub fn require_current(&self) -> Result<(), FixtureImportError> {
-        if !FixtureImporterRegistry::is_current(&self.0) {
+        if !REGISTRY.with_borrow(|registry| registry.is_current(&self.0)) {
             return Err(FixtureImportError::Authority);
         }
         Ok(())
@@ -36,7 +78,7 @@ impl ImportLease {
 
 impl Drop for ImportLease {
     fn drop(&mut self) {
-        FixtureImporterRegistry::release(&self.0);
+        REGISTRY.with_borrow_mut(|registry| registry.release(&self.0));
     }
 }
 
@@ -148,12 +190,14 @@ fn fail(error: FixtureImportError) -> ! {
 
 /// Register through the sole heap model owner.
 pub fn register(importer: &'static dyn FixtureImporter) -> Result<(), FixtureImportError> {
-    FixtureImporterRegistry::register(importer)
+    REGISTRY
+        .with_borrow_mut(|registry| registry.register(importer))
+        .map_err(registry_error)
 }
 
 /// Read the one registered participant without holding a borrow across callbacks.
 pub fn registered() -> Option<&'static dyn FixtureImporter> {
-    FixtureImporterRegistry::importer()
+    REGISTRY.with_borrow(FixtureImporterRegistry::importer)
 }
 
 /// Require Active runtime infrastructure independently of application data readiness.
@@ -163,6 +207,13 @@ pub fn require_active() -> Result<(), FixtureImportError> {
         return Err(FixtureImportError::Authority);
     }
     Ok(())
+}
+
+const fn registry_error(error: FixtureImporterRegistryError) -> FixtureImportError {
+    match error {
+        FixtureImporterRegistryError::Busy => FixtureImportError::Busy,
+        FixtureImporterRegistryError::Registration => FixtureImportError::Registration,
+    }
 }
 
 fn runtime_error(
@@ -175,7 +226,7 @@ fn runtime_error(
 
 /// Invalidate a stale heap fetch only after the durable owner proves expiry.
 pub fn abandon_expired_fetch() {
-    FixtureImporterRegistry::abandon();
+    REGISTRY.with_borrow_mut(FixtureImporterRegistry::abandon);
 }
 
 /// Classify returned failures; callback traps remain uncertain work for recovery.
@@ -217,5 +268,5 @@ pub fn permanent_failure(error: FixtureImportError) -> Option<FixtureImportFailu
 /// Observe the existing lease without changing transport or application progress.
 #[cfg(feature = "internal-test-fixtures")]
 pub fn fetch_in_flight() -> bool {
-    FixtureImporterRegistry::fetch_in_flight()
+    REGISTRY.with_borrow(FixtureImporterRegistry::fetch_in_flight)
 }

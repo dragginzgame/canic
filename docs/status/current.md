@@ -26,7 +26,7 @@ version transaction owns that marker; explanatory prose is not a second release
 guard.
 
 Published development base is tagged `v0.110.14` at `c9c91f19c`. The current
-pre-existing development commit is `9e1becc58` (subject `0.110.15`); its package
+pre-existing development commit is `87cfa79fb` (subject `0.110.15`); its package
 versions still read 0.110.14.
 Release details are in [the 0.110 changelog](../changelog/0.110.md). Package
 versions remain 0.110.14; the current source batch uses the open 0.110.15 draft.
@@ -45,6 +45,20 @@ Logs are `/tmp/canic-icydb-guards.log`, `/tmp/canic-icydb-clippy.log` and
 `/tmp/canic-icydb-02575-source.sha256`. The .15 changelog includes the update.
 Earlier 0.257.4 qualification records below remain historical. The dependency
 update is qualified; the completed CANIC-165 boundary is recorded below.
+
+## Release validation follow-up: importer layering
+
+The maintainer's release check exposed a model dependency on public fixture DTOs.
+The correction moves the callback interface and DTO conversion into ops while a
+DTO-free model retains single registration, exact installation/source authority
+and monotonic fetch leases. The public API and wire formats remain unchanged.
+The layering guard, eight focused importer tests and `canic-core` library/test
+Clippy with `internal-test-fixtures` and warnings denied pass on the corrected
+source. Logs: `/tmp/canic165-layering-tests.log` and
+`/tmp/canic165-layering-clippy.log`. The existing .15 changelog includes the fix;
+the combined planned batch is ready for the maintainer's release flow. No broad
+gate, version transaction or publication was run for this correction. Earlier
+PocketIC evidence below remains bound to its recorded source snapshots.
 
 ## Upstream feedback through CANIC-167
 
