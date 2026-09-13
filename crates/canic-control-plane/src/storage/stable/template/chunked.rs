@@ -1,5 +1,7 @@
 use crate::ids::{TemplateChunkKey, TemplateReleaseKey};
 use canic_core::CANIC_WASM_CHUNK_BYTES;
+#[cfg(any(test, feature = "wasm-store-canister"))]
+use canic_core::cdk::structures::Memory;
 use canic_core::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use canic_core::cdk::structures::{
     DefaultMemoryImpl, Vec as StableVec,
@@ -417,12 +419,7 @@ impl TemplateChunkStore {
     #[must_use]
     pub fn count() -> usize {
         TEMPLATE_CHUNK_REFS.with_borrow(|map| {
-            map.iter()
-                .filter(|entry| {
-                    TEMPLATE_CHUNK_PAYLOADS
-                        .with_borrow(|payloads| payloads.get(entry.value().slot).is_some())
-                })
-                .count()
+            TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| count_resolving_chunks(map, payloads))
         })
     }
 
@@ -543,6 +540,19 @@ impl TemplateChunkStore {
     }
 }
 
+// StableVec slots are contiguous. Counting resolvable references only needs its
+// length; decoding every payload would copy the whole Store during GC accounting.
+#[cfg(any(test, feature = "wasm-store-canister"))]
+fn count_resolving_chunks<R: Memory, P: Memory>(
+    refs: &StableBtreeMap<TemplateChunkKey, TemplateChunkRefRecord, R>,
+    payloads: &StableVec<TemplateChunkPayloadRecord, P>,
+) -> usize {
+    let payload_slots = payloads.len();
+    refs.iter()
+        .filter(|entry| entry.value().slot < payload_slots)
+        .count()
+}
+
 #[cfg(any(test, feature = "wasm-store-canister"))]
 fn chunk_set_entry_size(release: &TemplateReleaseKey, record: &TemplateChunkSetRecord) -> u64 {
     (release.to_bytes().len() + record.to_bytes().len()) as u64
@@ -566,12 +576,91 @@ fn chunk_entry_size(chunk_key: &TemplateChunkKey, payload_len: u32) -> u64 {
 mod tests {
     use super::*;
     use crate::ids::{TemplateId, TemplateVersion};
+    use canic_core::cdk::structures::VectorMemory;
+    use std::{cell::Cell, rc::Rc};
+
+    #[derive(Clone, Default)]
+    struct ObservedPayloadMemory {
+        memory: VectorMemory,
+        bytes_read: Rc<Cell<usize>>,
+    }
+
+    impl Memory for ObservedPayloadMemory {
+        fn size(&self) -> u64 {
+            self.memory.size()
+        }
+
+        fn grow(&self, pages: u64) -> i64 {
+            self.memory.grow(pages)
+        }
+
+        fn read(&self, offset: u64, dst: &mut [u8]) {
+            self.bytes_read.set(self.bytes_read.get() + dst.len());
+            self.memory.read(offset, dst);
+        }
+
+        fn write(&self, offset: u64, bytes: &[u8]) {
+            self.memory.write(offset, bytes);
+        }
+    }
 
     fn release() -> TemplateReleaseKey {
         TemplateReleaseKey::new(
             TemplateId::new("embedded:app"),
             TemplateVersion::new("0.18.0"),
         )
+    }
+
+    #[test]
+    fn chunk_count_uses_metadata_and_preserves_slot_resolution_after_reopen() {
+        let refs_memory = VectorMemory::default();
+        let payload_memory = ObservedPayloadMemory::default();
+        let mut refs = StableBtreeMap::init(refs_memory.clone());
+        let payloads = StableVec::init(payload_memory.clone());
+        assert_eq!(count_resolving_chunks(&refs, &payloads), 0);
+
+        // Include an empty but valid payload: presence is determined by its slot.
+        for (index, len) in [0, CANIC_WASM_CHUNK_BYTES, CANIC_WASM_CHUNK_BYTES]
+            .into_iter()
+            .enumerate()
+        {
+            let slot = payloads.len();
+            payloads.push(&TemplateChunkPayloadRecord {
+                bytes: vec![7; len],
+            });
+            refs.insert(
+                TemplateChunkKey::new(release(), u32::try_from(index).unwrap()),
+                TemplateChunkRefRecord {
+                    slot,
+                    payload_len: u32::try_from(len).unwrap(),
+                },
+            );
+        }
+        for (index, slot) in [(3, payloads.len()), (4, u64::MAX)] {
+            refs.insert(
+                TemplateChunkKey::new(release(), index),
+                TemplateChunkRefRecord {
+                    slot,
+                    payload_len: 0,
+                },
+            );
+        }
+        drop(refs);
+        drop(payloads);
+
+        let refs = StableBtreeMap::<TemplateChunkKey, TemplateChunkRefRecord, _>::init(refs_memory);
+        let payloads = StableVec::<TemplateChunkPayloadRecord, _>::init(payload_memory.clone());
+        let previous_count = refs
+            .iter()
+            .filter(|entry| payloads.get(entry.value().slot).is_some())
+            .count();
+        assert_eq!(previous_count, 3);
+        let payload_pages = payload_memory.size();
+        payload_memory.bytes_read.set(0);
+        assert_eq!(count_resolving_chunks(&refs, &payloads), previous_count);
+        // Bound metadata traffic independently of the vector's header offsets.
+        assert!(payload_memory.bytes_read.get() <= 64);
+        assert_eq!(payload_memory.size(), payload_pages);
     }
 
     #[test]

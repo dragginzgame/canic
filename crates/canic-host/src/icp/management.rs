@@ -17,7 +17,7 @@ use serde::{Deserialize, de::DeserializeOwned};
 use thiserror::Error as ThisError;
 
 use super::{
-    model::{IcpCli, LOCAL_ICP_TARGET},
+    model::IcpCli,
     run::{run_json, run_output, run_secret_output},
 };
 
@@ -74,7 +74,9 @@ impl IcpCli {
     /// Whether this command context is bound directly to one local replica.
     #[must_use]
     pub(crate) fn uses_direct_local_replica(&self) -> bool {
-        self.environment.as_deref() == Some(LOCAL_ICP_TARGET) && self.local_replica.is_some()
+        self.local_replica
+            .as_ref()
+            .is_some_and(|target| self.environment.as_deref() == Some(target.environment.as_str()))
     }
 
     /// Perform one typed management-canister update routed through the target
@@ -126,8 +128,8 @@ impl IcpCli {
         &self,
         environment: &str,
     ) -> Result<IcpNetworkStatus, IcpManagementCallError> {
-        if environment == LOCAL_ICP_TARGET
-            && let Some(target) = &self.local_replica
+        if let Some(target) = &self.local_replica
+            && environment == target.environment
         {
             return Ok(IcpNetworkStatus {
                 api_url: target.url.clone(),
@@ -274,17 +276,33 @@ mod tests {
     #[test]
     fn explicit_local_replica_owns_management_network_resolution() {
         let target = LocalReplicaTarget {
+            environment: "local-qualification".into(),
             root_key: "010203".to_string(),
             url: "http://127.0.0.1:4943/".to_string(),
         };
-        let icp = IcpCli::new("missing-icp", Some(LOCAL_ICP_TARGET.to_string()))
+        let icp = IcpCli::new("missing-icp", Some(target.environment.clone()))
             .with_local_replica(Some(target.clone()));
 
         let status = icp
-            .network_status(LOCAL_ICP_TARGET)
+            .network_status(&target.environment)
             .expect("resolve explicit local replica without invoking ICP CLI");
 
         assert_eq!(status.api_url, target.url);
         assert_eq!(status.root_key, target.root_key);
+        assert!(icp.uses_direct_local_replica());
+        let mut direct = std::process::Command::new("icp");
+        icp.add_target_args(&mut direct);
+        assert_eq!(
+            direct.get_args().collect::<Vec<_>>(),
+            ["-n", &target.url, "-k", &target.root_key].map(std::ffi::OsStr::new)
+        );
+        let other = IcpCli::new("missing-icp", Some("ic".into())).with_local_replica(Some(target));
+        assert!(!other.uses_direct_local_replica());
+        let mut named = std::process::Command::new("icp");
+        other.add_target_args(&mut named);
+        assert_eq!(
+            named.get_args().collect::<Vec<_>>(),
+            ["-e", "ic"].map(std::ffi::OsStr::new)
+        );
     }
 }

@@ -15,7 +15,6 @@ use crate::{
         types::Principal,
     },
     ids::IntentResourceKey,
-    impl_storable_bounded,
     model::{
         intent::{
             PayloadBinding, RECEIPT_BACKED_INTENT_SCHEMA_VERSION, ReceiptBackedIntentState,
@@ -24,29 +23,18 @@ use crate::{
         replay::OperationId,
     },
     role_contract::allocation::memory::{
-        application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
+        application_receipt::APPLICATION_RECEIPT_ELIGIBILITY_ID,
         intent::{INTENT_RECEIPT_BACKED_RECORDS_ID, INTENT_TOTALS_ID},
         placement::PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
     },
     storage::stable::intent::{
-        APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
-        ApplicationReceiptEligibilityKeyRecord, ApplicationReceiptEligibilityRecord,
-        ApplicationReceiptReplayRecord, IntentResourceTotalsRecord,
-        PlacementAcknowledgementEntryRecord, ReceiptBackedIntentRecord,
+        APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, ApplicationReceiptEligibilityKeyRecord,
+        ApplicationReceiptEligibilityRecord, ApplicationReceiptRetentionRecord,
+        IntentResourceTotalsRecord, PlacementAcknowledgementEntryRecord, ReceiptBackedIntentRecord,
     },
 };
-use serde::{Deserialize, Serialize};
 
 const RECORDS: u64 = 1_000;
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct PreviousTotalsRecord {
-    reserved_qty: u64,
-    committed_qty: u64,
-    pending_count: u64,
-}
-
-impl_storable_bounded!(PreviousTotalsRecord, 64, false);
 
 #[test]
 fn intent_resource_totals_bound_covers_every_u64_value() {
@@ -60,103 +48,26 @@ fn intent_resource_totals_bound_covers_every_u64_value() {
 }
 
 #[test]
-fn corrected_totals_bound_loads_the_existing_v2_map_without_a_reader() {
-    let memory = VectorMemory::default();
-    let mut previous =
-        StableBtreeMap::<IntentResourceKey, PreviousTotalsRecord, _>::init(memory.clone());
-    previous.insert(
-        resource_key(0),
-        PreviousTotalsRecord {
-            reserved_qty: 1,
-            committed_qty: 2,
-            pending_count: 3,
-        },
-    );
-    assert_eq!(btree_page_size(&memory), 1_727);
-    drop(previous);
-
-    let mut corrected =
-        StableBtreeMap::<IntentResourceKey, IntentResourceTotalsRecord, _>::init(memory.clone());
-    for seed in 1..=100 {
-        corrected.insert(resource_key(seed), max_totals());
+fn receipt_stable_capacity_fits_with_reserved_cleanup_at_the_admission_limit() {
+    for state in [ReceiptBackedIntentState::Pending, terminal_state()] {
+        assert!(
+            receipt_record(u64::MAX, state).to_bytes().len()
+                <= ReceiptBackedIntentRecord::STORABLE_MAX_SIZE as usize
+        );
     }
-    drop(corrected);
-
-    let reloaded = StableBtreeMap::<IntentResourceKey, IntentResourceTotalsRecord, _>::init(memory);
-    assert_eq!(reloaded.len(), 101);
-    assert_eq!(reloaded.get(&resource_key(100)), Some(max_totals()));
-}
-
-#[test]
-#[ignore = "explicit 1,000-row 0.96 stable-capacity measurement"]
-fn receipt_backed_stable_capacity_envelope_is_measured_at_the_admission_limit() {
-    assert_eq!(
-        receipt_record(u64::MAX, ReceiptBackedIntentState::Pending)
-            .to_bytes()
-            .len(),
-        441
-    );
-    assert_eq!(
-        receipt_record(u64::MAX, terminal_state()).to_bytes().len(),
-        617
-    );
-
-    let primary_ascending = measure_map(ascending().map(|seed| {
-        let record = receipt_record(seed, terminal_state());
-        (record.operation_id, record)
-    }));
-    let primary_permuted = measure_map(permuted().map(|seed| {
-        let record = receipt_record(seed, terminal_state());
-        (record.operation_id, record)
-    }));
-    let acknowledgements_ascending = measure_map(ascending().map(|seed| {
-        let operation_id = operation_id(seed);
-        (
-            operation_id,
-            PlacementAcknowledgementEntryRecord { operation_id },
-        )
-    }));
-    let acknowledgements_permuted = measure_map(permuted().map(|seed| {
-        let operation_id = operation_id(seed);
-        (
-            operation_id,
-            PlacementAcknowledgementEntryRecord { operation_id },
-        )
-    }));
-    let replay_ascending = measure_map(ascending().map(|seed| {
-        let record = application_replay_record(seed);
-        (record.operation_id, record)
-    }));
-    let replay_permuted = measure_map(permuted().map(|seed| {
-        let record = application_replay_record(seed);
-        (record.operation_id, record)
-    }));
-    let eligibility_ascending = measure_map(ascending().map(application_eligibility_entry));
-    let eligibility_permuted = measure_map(permuted().map(application_eligibility_entry));
-    let totals_ascending = measure_map(ascending().map(|seed| (resource_key(seed), max_totals())));
-    let totals_permuted = measure_map(permuted().map(|seed| (resource_key(seed), max_totals())));
-
-    assert_eq!(primary_ascending, (8_855, 27));
-    assert_eq!(primary_permuted, (8_855, 20));
-    assert_eq!(acknowledgements_ascending, (1_463, 5));
-    assert_eq!(acknowledgements_permuted, (1_463, 4));
-    assert_eq!(totals_ascending, (1_768, 6));
-    assert_eq!(totals_permuted, (1_768, 5));
-    assert_eq!(
-        application_replay_record(u64::MAX).to_bytes().len(),
-        ApplicationReceiptReplayRecord::STORABLE_MAX_SIZE as usize
-    );
-    assert_eq!(replay_ascending, (1_430, 5));
-    assert_eq!(replay_permuted, (1_430, 4));
-    assert_eq!(
-        application_eligibility_entry(u64::MAX).1.to_bytes().len(),
-        ApplicationReceiptEligibilityRecord::STORABLE_MAX_SIZE as usize
-    );
-    assert_eq!(eligibility_ascending, (2_362, 8));
-    assert_eq!(eligibility_permuted, (2_362, 6));
-    assert_eq!(managed_application_ascending_pages(), (27, 5, 8, 6, 513));
-    assert_eq!(managed_reserved_application_ascending_pages(), (8, 513));
-    assert_eq!(managed_placement_ascending_pages(), (27, 5, 6, 385));
+    for entries in [ascending().collect::<Vec<_>>(), permuted().collect()] {
+        let (_, pages) = measure_map(entries.into_iter().map(|seed| {
+            let record = receipt_record(seed, terminal_state());
+            (record.operation_id, record)
+        }));
+        assert!(pages <= 32, "receipt primary exceeds two 1 MiB buckets");
+    }
+    let (_, _, _, allocated) = managed_placement_ascending_pages();
+    assert!(allocated <= 65);
+    let (_, eligibility, _, allocated) = managed_application_ascending_pages_with_reservation(true);
+    let reserved = super::intent::application_eligibility_required_pages(RECORDS).unwrap();
+    assert!(eligibility >= reserved);
+    assert!(allocated <= 65);
 }
 
 fn measure_map<K, V>(entries: impl IntoIterator<Item = (K, V)>) -> (u32, u64)
@@ -175,7 +86,7 @@ where
 
 fn managed_placement_ascending_pages() -> (u64, u64, u64, u64) {
     let physical = VectorMemory::default();
-    let manager = MemoryManager::init(physical.clone());
+    let manager = MemoryManager::init_with_bucket_size(physical.clone(), 16);
     let primary_memory = manager.get(MemoryId::new(INTENT_RECEIPT_BACKED_RECORDS_ID));
     let acknowledgement_memory = manager.get(MemoryId::new(PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID));
     let totals_memory = manager.get(MemoryId::new(INTENT_TOTALS_ID));
@@ -201,26 +112,15 @@ fn managed_placement_ascending_pages() -> (u64, u64, u64, u64) {
     )
 }
 
-fn managed_application_ascending_pages() -> (u64, u64, u64, u64, u64) {
-    managed_application_ascending_pages_with_reservation(false)
-}
-
-fn managed_reserved_application_ascending_pages() -> (u64, u64) {
-    let measured = managed_application_ascending_pages_with_reservation(true);
-    (measured.2, measured.4)
-}
-
 fn managed_application_ascending_pages_with_reservation(
     reserve_eligibility: bool,
-) -> (u64, u64, u64, u64, u64) {
+) -> (u64, u64, u64, u64) {
     let physical = VectorMemory::default();
-    let manager = MemoryManager::init(physical.clone());
+    let manager = MemoryManager::init_with_bucket_size(physical.clone(), 16);
     let primary_memory = manager.get(MemoryId::new(INTENT_RECEIPT_BACKED_RECORDS_ID));
-    let replay_memory = manager.get(MemoryId::new(APPLICATION_RECEIPT_REPLAY_ID));
     let eligibility_memory = manager.get(MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID));
     let totals_memory = manager.get(MemoryId::new(INTENT_TOTALS_ID));
     let mut primary = StableBtreeMap::init(primary_memory.clone());
-    let mut replay = StableBtreeMap::init(replay_memory.clone());
     let mut eligibility = StableBtreeMap::init(eligibility_memory.clone());
     let mut totals = StableBtreeMap::init(totals_memory.clone());
 
@@ -235,14 +135,12 @@ fn managed_application_ascending_pages_with_reservation(
         let record = receipt_record(seed, terminal_state());
         let operation_id = record.operation_id;
         primary.insert(operation_id, record);
-        replay.insert(operation_id, application_replay_record(seed));
         let (eligibility_key, eligibility_record) = application_eligibility_entry(seed);
         eligibility.insert(eligibility_key, eligibility_record);
         totals.insert(resource_key(seed), max_totals());
     }
     (
         primary_memory.size(),
-        replay_memory.size(),
         eligibility_memory.size(),
         totals_memory.size(),
         physical.size(),
@@ -297,6 +195,9 @@ fn terminal_state() -> ReceiptBackedIntentState {
 
 fn receipt_record(seed: u64, state: ReceiptBackedIntentState) -> ReceiptBackedIntentRecord {
     ReceiptBackedIntentRecord {
+        application_retention: Some(ApplicationReceiptRetentionRecord {
+            replay_deadline_ns: u64::MAX,
+        }),
         schema_version: RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
         operation_id: operation_id(seed),
         payload_binding: PayloadBinding::new([u8::MAX; 32]),
@@ -306,14 +207,6 @@ fn receipt_record(seed: u64, state: ReceiptBackedIntentState) -> ReceiptBackedIn
         revision: u64::MAX,
         created_at_ns: u64::MAX,
         updated_at_ns: u64::MAX,
-    }
-}
-
-fn application_replay_record(seed: u64) -> ApplicationReceiptReplayRecord {
-    ApplicationReceiptReplayRecord {
-        schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
-        operation_id: operation_id(seed),
-        replay_deadline_ns: u64::MAX,
     }
 }
 

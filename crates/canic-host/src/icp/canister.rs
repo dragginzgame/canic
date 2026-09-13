@@ -14,6 +14,25 @@ enum CanisterCallMode {
 }
 
 impl IcpCli {
+    /// Assemble the maintained query invocation for a caller-owned bounded process runner.
+    pub(crate) fn bounded_query_command(
+        &self,
+        canister: &str,
+        method: &str,
+        args_file: &Path,
+        candid_path: &Path,
+    ) -> std::process::Command {
+        self.record_remote_call();
+        self.canister_binary_args_command(
+            canister,
+            method,
+            args_file,
+            Some("json"),
+            Some(candid_path),
+            CanisterCallMode::Query,
+        )
+    }
+
     /// Call one canister method with raw binary Candid arguments from a file.
     pub fn canister_call_binary_args_output_with_candid(
         &self,

@@ -13,8 +13,6 @@
 )]
 
 #[cfg(feature = "sharding")]
-pub mod lifecycle;
-#[cfg(feature = "sharding")]
 pub mod registry;
 
 #[cfg(feature = "sharding")]
@@ -79,6 +77,8 @@ impl_storable_bounded!(ShardKey, ShardKey::STORABLE_MAX_SIZE, false);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ShardEntryRecord {
+    /// Whether this registered shard participates in assignment selection.
+    pub active: bool,
     /// Logical slot index within the pool (assigned deterministically).
     pub slot: u32,
     pub capacity: u32,
@@ -90,7 +90,7 @@ pub struct ShardEntryRecord {
 
 impl ShardEntryRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "ShardEntryRecord";
-    pub const STORABLE_MAX_SIZE: u32 = 240;
+    pub const STORABLE_MAX_SIZE: u32 = 256;
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 
     #[cfg(feature = "sharding")]
@@ -104,6 +104,7 @@ impl ShardEntryRecord {
         let pool = BoundedString64::try_new(pool).map_err(|err| format!("pool name: {err}"))?;
 
         Ok(Self {
+            active: true,
             slot,
             canister_role: role,
             capacity,
@@ -178,36 +179,6 @@ pub struct ShardingAssignmentsData {
 
 impl ShardingAssignmentsData {
     pub const STATE_CONTRACT_NAME: &'static str = "ShardingAssignmentsData";
-}
-
-///
-/// ShardingActiveSetRecord
-///
-/// One logical active-shard snapshot row.
-///
-
-#[derive(Clone, Debug)]
-pub struct ShardingActiveSetRecord {
-    pub pid: Principal,
-}
-
-impl ShardingActiveSetRecord {
-    pub const STATE_CONTRACT_NAME: &'static str = "ShardingActiveSetRecord";
-}
-
-///
-/// ShardingActiveSetData
-///
-/// Canonical active-shard-set export snapshot.
-///
-
-#[derive(Clone, Debug)]
-pub struct ShardingActiveSetData {
-    pub entries: Vec<ShardingActiveSetRecord>,
-}
-
-impl ShardingActiveSetData {
-    pub const STATE_CONTRACT_NAME: &'static str = "ShardingActiveSetData";
 }
 
 ///

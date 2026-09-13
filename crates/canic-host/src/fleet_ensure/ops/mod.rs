@@ -43,6 +43,8 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
+#[cfg(feature = "local-fleet")]
+pub(crate) use canic_init::{CanicInitRequest, compile_arguments, compile_root_authorities};
 pub(crate) use platform::{EstateFundingObservation, estate_funding_applied};
 pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
 #[cfg(test)]
@@ -74,9 +76,10 @@ pub(crate) const fn root_owned_lifecycle(
             Some(RootOwnedCanisterLifecycle::Store)
         }
         DesiredCanisterKind::Pool => match status {
-            CanisterPoolAssetStatus::Ready
-            | CanisterPoolAssetStatus::PendingReset
-            | CanisterPoolAssetStatus::Failed { .. } => Some(RootOwnedCanisterLifecycle::Idle),
+            CanisterPoolAssetStatus::Ready => Some(RootOwnedCanisterLifecycle::Idle),
+            CanisterPoolAssetStatus::PendingReset | CanisterPoolAssetStatus::Failed { .. } => {
+                Some(RootOwnedCanisterLifecycle::Retained)
+            }
             CanisterPoolAssetStatus::Claimed { .. } => Some(RootOwnedCanisterLifecycle::Claimed),
             CanisterPoolAssetStatus::Workload { .. } => Some(RootOwnedCanisterLifecycle::Workload),
             _ => None,

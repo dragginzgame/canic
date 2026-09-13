@@ -6,6 +6,7 @@
 
 pub use candid;
 
+pub mod bounded_cell;
 pub mod serialize;
 pub mod structures;
 pub mod types;

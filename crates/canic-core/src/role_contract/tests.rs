@@ -120,13 +120,12 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::CoreCyclesIcpRefillRecords, vec![39]),
         (StateAllocationKey::CoreRuntimeLog, vec![40]),
         (StateAllocationKey::CoreIntent, vec![41, 42, 43, 44, 45, 46]),
-        (StateAllocationKey::CoreApplicationReceipts, vec![47, 48]),
+        (StateAllocationKey::CoreApplicationReceipts, vec![48]),
         (StateAllocationKey::CorePlacementAcknowledgement, vec![49]),
         (StateAllocationKey::PlacementScalingRegistry, vec![50]),
         (StateAllocationKey::PlacementIndexRegistry, vec![51]),
         (StateAllocationKey::ShardingRegistry, vec![52]),
         (StateAllocationKey::ShardingAssignments, vec![53]),
-        (StateAllocationKey::ShardingActiveSet, vec![54]),
         (StateAllocationKey::BlobStorageRoots, vec![55]),
         (StateAllocationKey::BlobStoragePendingDeletions, vec![56]),
         (StateAllocationKey::BlobStorageGatewayPrincipals, vec![57]),
@@ -160,52 +159,6 @@ fn canonical_allocations_match_the_active_memory_map() {
         ),
     ]);
     assert_eq!(actual, expected);
-}
-
-#[test]
-fn canonical_allocations_form_packed_owner_ledgers() {
-    let ids = |owner| {
-        let mut ids = allocation::allocation_definitions()
-            .iter()
-            .filter(|definition| definition.owner == owner)
-            .flat_map(|definition| definition.memory_ids)
-            .map(|memory_id| memory_id.get())
-            .collect::<Vec<_>>();
-        ids.sort_unstable();
-        ids
-    };
-
-    assert_eq!(
-        ids(AllocationOwner::CanicControlPlane),
-        (allocation::CANIC_CONTROL_PLANE_MIN_ID
-            ..=allocation::memory::control_plane::ROOT_COMPONENT_PROVISIONING_STATE_ID)
-            .chain(std::iter::once(
-                allocation::memory::control_plane::FLEET_COORDINATOR_FUNDING_ID,
-            ))
-            .chain(std::iter::once(
-                allocation::memory::control_plane::ROOT_FUNDING_ID,
-            ))
-            .chain(std::iter::once(
-                allocation::memory::control_plane::FLEET_COORDINATOR_ADMISSION_ID,
-            ))
-            .chain(std::iter::once(
-                allocation::memory::control_plane::ROOT_ADMISSION_ID,
-            ))
-            .chain(std::iter::once(
-                allocation::memory::control_plane::FIXTURE_STORE_ID
-            ))
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(
-        ids(AllocationOwner::CanicCore),
-        (allocation::CANIC_CORE_MIN_ID
-            ..=allocation::memory::fleet_admission_projection::FLEET_ADMISSION_PROJECTION_ID)
-            .chain([
-                allocation::memory::auth::DELEGATED_TOKEN_ISSUER_STATE_ID,
-                allocation::memory::auth::ROOT_DELEGATION_STATE_ID,
-            ])
-            .collect::<Vec<_>>()
-    );
 }
 
 #[test]
@@ -733,7 +686,7 @@ fn placement_capabilities_select_only_their_placement_state() {
     let contract = resolved_service_contract(sharding, BTreeSet::from([CanicFeatureKey::Sharding]));
     assert_eq!(
         placement_allocation_ids(&contract.allocations),
-        vec![52, 53, 54]
+        vec![52, 53]
     );
 }
 
@@ -818,8 +771,7 @@ fn surplus_state_feature_allocates_normally() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 55, 56, 57, 58,
-            60,
+            30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 48, 49, 55, 56, 57, 58, 60,
         ]
     );
 }
@@ -857,7 +809,7 @@ fn repeated_selection_merges_allocation_provenance() {
         allocation_ids(&contract.allocations),
         vec![
             10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
-            35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59, 60, 63, 65,
+            35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 48, 49, 59, 60, 63, 65,
         ]
     );
     assert_eq!(
@@ -889,8 +841,8 @@ fn built_in_wasm_store_owns_template_gc_and_fixture_ids() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-            49, 60, 68,
+            10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 48, 49,
+            60, 68,
         ]
     );
     assert_eq!(

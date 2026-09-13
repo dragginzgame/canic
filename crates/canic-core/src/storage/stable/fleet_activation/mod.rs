@@ -6,7 +6,7 @@
 
 pub mod fixture;
 
-use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
+use crate::cdk::bounded_cell::BoundedCell;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
     config::{
@@ -30,17 +30,15 @@ pub const MAX_FLEET_ACTIVATION_RECORD_BYTES: u32 = 2_097_152;
 /// Maximum credential generations retained while a Fleet is being activated.
 pub const MAX_RETAINED_PREPARED_CREDENTIAL_GENERATIONS: usize = 2;
 
-const FLEET_ACTIVATION_RECORD_KEY: u8 = 0;
-
 eager_static! {
     static FLEET_ACTIVATION: RefCell<
-        StableBtreeMap<u8, FleetActivationRecord, RuntimeMemory<DefaultMemoryImpl>>,
-    > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
+        BoundedCell<Option<FleetActivationRecord>, RuntimeMemory<DefaultMemoryImpl>>,
+    > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
         key = "canic.core.fleet.activation.v1",
         ty = FleetActivation,
         id = FLEET_ACTIVATION_ID,
-    )));
+    ), None));
 }
 
 ///
@@ -458,15 +456,15 @@ pub struct FleetActivation;
 impl FleetActivation {
     #[must_use]
     pub(crate) fn get() -> Option<FleetActivationRecord> {
-        FLEET_ACTIVATION.with_borrow(|store| store.get(&FLEET_ACTIVATION_RECORD_KEY))
+        FLEET_ACTIVATION.with_borrow(|store| store.get().clone())
     }
 
     pub(crate) fn initialize(record: FleetActivationRecord) -> bool {
         FLEET_ACTIVATION.with_borrow_mut(|store| {
-            if store.get(&FLEET_ACTIVATION_RECORD_KEY).is_some() {
+            if store.get().is_some() {
                 return false;
             }
-            let previous = store.insert(FLEET_ACTIVATION_RECORD_KEY, record);
+            let previous = store.set(Some(record));
             debug_assert!(previous.is_none());
             true
         })
@@ -474,10 +472,10 @@ impl FleetActivation {
 
     pub(crate) fn replace(record: FleetActivationRecord) -> bool {
         FLEET_ACTIVATION.with_borrow_mut(|store| {
-            if store.get(&FLEET_ACTIVATION_RECORD_KEY).is_none() {
+            if store.get().is_none() {
                 return false;
             }
-            store.insert(FLEET_ACTIVATION_RECORD_KEY, record);
+            store.set(Some(record));
             true
         })
     }
@@ -493,9 +491,9 @@ impl FleetActivation {
     #[cfg(test)]
     pub(crate) fn import(data: FleetActivationData) {
         FLEET_ACTIVATION.with_borrow_mut(|store| {
-            store.clear_new();
+            store.set(None);
             if let Some(record) = data.record {
-                store.insert(FLEET_ACTIVATION_RECORD_KEY, record);
+                store.set(Some(record));
             }
         });
     }

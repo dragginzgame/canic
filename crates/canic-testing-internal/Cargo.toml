@@ -17,7 +17,7 @@ ignored = ["serde"]
 # Keep the large governed PocketIC case catalogue out of ordinary and fast
 # library-test compilation. The workspace PocketIC lane enables it explicitly.
 default = ["pocketic-fixtures"]
-governed-pocketic-tests = ["pocketic-fixtures"]
+governed-pocketic-tests = ["pocketic-fixtures", "canic-host/local-fleet"]
 pocketic-fixtures = []
 
 [dependencies]

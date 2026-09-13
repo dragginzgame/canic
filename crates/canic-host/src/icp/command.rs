@@ -226,8 +226,8 @@ pub fn add_target_args(
     local_replica: Option<&LocalReplicaTarget>,
 ) {
     if let Some(environment) = environment {
-        if environment == LOCAL_ICP_TARGET
-            && let Some(local_replica) = local_replica
+        if let Some(local_replica) = local_replica
+            && environment == local_replica.environment
         {
             command.env_remove("ICP_ENVIRONMENT");
             command

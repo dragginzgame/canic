@@ -105,6 +105,17 @@ impl ShardingRegistryOps {
             .map_err(|err| ShardingRegistryOpsError::InvalidKey(err).into())
     }
 
+    /// Enumerate activation from the same rows used for shard placement.
+    pub fn active_shards() -> Vec<Principal> {
+        ShardingRegistry::with(|core| {
+            core.all_entries()
+                .into_iter()
+                .filter(|record| record.entry.active)
+                .map(|record| record.pid)
+                .collect()
+        })
+    }
+
     /// Create a new shard entry in the registry.
     pub fn create(
         pid: Principal,
@@ -330,6 +341,7 @@ impl ShardingRegistryOps {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cdk::structures::{BTreeMap, VectorMemory};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -346,6 +358,31 @@ mod tests {
     fn insert_assignment(pool: &str, partition_key: &str, shard: Principal) {
         let key = ShardKey::try_new(pool, partition_key).expect("test assignment key");
         ShardingRegistry::with_mut(|core| core.insert_assignment(key, shard));
+    }
+
+    #[test]
+    fn activation_is_owned_by_the_registry_row_and_survives_reopen() {
+        let memory = VectorMemory::default();
+        let mut records = BTreeMap::init(memory.clone());
+        let active =
+            ShardEntryRecord::try_new("pool", 0, CanisterRole::new("shard"), 10, 1).unwrap();
+        assert!(active.active);
+        let mut inactive = active.clone();
+        inactive.active = false;
+        records.insert(p(1), active.clone());
+        records.insert(p(2), inactive.clone());
+        drop(records);
+        let reopened = BTreeMap::<Principal, ShardEntryRecord, _>::init(memory);
+        assert_eq!(reopened.get(&p(1)), Some(active));
+        assert_eq!(reopened.get(&p(2)), Some(inactive));
+        ShardingRegistryOps::clear_for_test();
+        ShardingRegistry::with_mut(|core| {
+            for entry in reopened.iter() {
+                core.insert_entry(*entry.key(), entry.value());
+            }
+        });
+        assert_eq!(ShardingRegistryOps::active_shards(), vec![p(1)]);
+        ShardingRegistryOps::clear_for_test();
     }
 
     #[test]

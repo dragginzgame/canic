@@ -296,8 +296,6 @@ type ObservabilityResponse = variant {
 };
 // Durable identity returned when one role-owned asynchronous command is accepted.
 type OperationReceipt = record { operation_id : blob };
-// Lookup key shared by each role's local durable-operation status variant.
-type OperationStatusRequest = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec CycleTrackerEntry };
 type PageRequest = record { offset : nat64; limit : nat64 };
 type Page_1 = record { total : nat64; entries : vec PublicHistoryPoint };
@@ -451,8 +449,6 @@ type StoreCatalogReadResponse = variant {
   FixtureGrant : opt FixtureGrant;
 };
 // Closed Store control-plane command union.
-type WasmStoreGcTarget = variant { Complete; Prepared };
-type WasmStoreGcRequest = record { operation_id : blob; target : WasmStoreGcTarget };
 type StoreCommand = variant {
   ActivateFleet : FleetActivationRequest;
   PrepareFixture : FixtureDescriptor;
@@ -604,6 +600,11 @@ type WasmStoreGcOperationStatus = record {
   gc : WasmStoreGcStatusResponse;
   operation_id : blob;
 };
+// Root-owned retirement intent; preparation replay never authorizes collection.
+type WasmStoreGcRequest = record {
+  operation_id : blob;
+  target : WasmStoreGcTarget;
+};
 type WasmStoreGcStatusResponse = record {
   prepared_at : opt nat64;
   changed_at : nat64;
@@ -612,12 +613,24 @@ type WasmStoreGcStatusResponse = record {
   completed_at : opt nat64;
   started_at : opt nat64;
 };
+// Exact outcome requested from the existing Store retirement operation.
+type WasmStoreGcTarget = variant { Complete; Prepared };
+// Aggregate retained inventory; template and opaque fixture chunks stay distinct.
+type WasmStoreInventoryResponse = record {
+  expected_template_chunks : nat64;
+  fixture_sources : nat64;
+  stored_template_chunks : nat64;
+  approved_catalog_entries : nat64;
+  expected_fixture_chunks : nat64;
+  stored_fixture_chunks : nat64;
+};
 type WasmStoreStatusResponse = record {
   gc : WasmStoreGcStatusResponse;
   templates : vec WasmStoreTemplateStatusResponse;
   occupied_store_bytes : nat64;
   headroom_bytes : opt nat64;
   remaining_store_bytes : nat64;
+  inventory : WasmStoreInventoryResponse;
   max_store_bytes : nat64;
   max_template_versions_per_template : opt nat16;
   max_templates : opt nat32;

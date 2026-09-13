@@ -239,7 +239,7 @@ where
     Ok(output)
 }
 
-fn write_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {
+pub fn write_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {
     let directory = std::env::temp_dir();
     for _ in 0..MAX_ARGUMENT_FILE_ATTEMPTS {
         let sequence = NEXT_ARGUMENT_FILE.fetch_add(1, Ordering::Relaxed);

@@ -29,3 +29,11 @@ pub enum FixtureGrantSelection {
     Fresh,
     Retained(Option<u64>),
 }
+
+/// Current source declarations and physically retained chunk entries.
+#[cfg(feature = "wasm-store-canister")]
+pub struct FixtureStoreInventoryView {
+    pub sources: u64,
+    pub expected_chunks: u64,
+    pub stored_chunks: u64,
+}

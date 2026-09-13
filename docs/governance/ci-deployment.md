@@ -375,7 +375,12 @@ commit into one machine-checked current-status release marker. Source
 development and draft preflight require no manually maintained status marker;
 the bump removes stale marker lines and writes the sole candidate marker
 itself. Lineage prose is descriptive and is not a versioning or publication
-authority. Immediately before changing version
+authority. The same transaction generates a visible version/source/date/gate
+summary at the start of current status and identifies the preserved handoff as
+pre-transaction development history. It replaces only complete generated summary
+blocks; no manual summary maintenance or prose-based admission check is needed.
+The summary records a validated candidate, not successful tagging or publication.
+Immediately before changing version
 files, the bump transaction fetches the current `origin` branch, requires it
 to remain an ancestor of the validated local source, and requires the exact
 planned release tag to be absent remotely. The release commit may then

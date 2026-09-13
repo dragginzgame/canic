@@ -4,6 +4,8 @@
 //! Does not own: supersession, reset admission, source mutation or remote effects.
 //! Boundary: exact source bytes and issued-effect hashes are evidence, not reset authority.
 
+mod view;
+
 use crate::fleet_ensure::{
     model::{
         CurrentFleetProtocolAction, DesiredCanisterKind, EffectState, EnsureAction,
@@ -125,6 +127,9 @@ fn inspect(
     let mut registry_preparations = Vec::new();
     let mut stores = BTreeMap::new();
     for (index, raw_action) in actions.iter().enumerate() {
+        if index + 1 < effects.len() && completed_bootstrap(raw_action, &effects[index])? {
+            continue;
+        }
         let action: EnsureAction =
             serde_json::from_value(raw_action.clone()).map_err(|_| invalid())?;
         let EnsureAction::FleetProtocol {
@@ -211,6 +216,16 @@ fn inspect(
         registry_preparations,
         stores: stores.into_values().collect(),
     })
+}
+
+fn completed_bootstrap(action: &Value, effect: &Value) -> Result<bool, EnsureStateError> {
+    let Some(digest) = view::completed_bootstrap_hash(action)? else {
+        return Ok(false);
+    };
+    if string(effect, "state")? != "applied" || string(effect, "action_sha256")? != digest {
+        return Err(invalid());
+    }
+    Ok(true)
 }
 
 fn string<'a>(value: &'a Value, field: &str) -> Result<&'a str, EnsureStateError> {

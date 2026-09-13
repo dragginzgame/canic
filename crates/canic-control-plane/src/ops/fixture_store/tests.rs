@@ -436,3 +436,43 @@ fn retired_fixture_collection_is_bounded_accounted_and_restart_safe() {
     assert_eq!(FixtureStore::occupied_bytes(), 0);
     assert!(FixtureStore::export().entries.is_empty());
 }
+
+#[test]
+fn fixture_inventory_distinguishes_declared_uploaded_and_retiring_chunks() {
+    let _scope = FixtureScope::new();
+    let bytes = vec![vec![1; 64], vec![2; 128]];
+    let descriptor = descriptor(&bytes);
+    let content = content_id(&descriptor).unwrap();
+    prepare(descriptor, u64::MAX, 0).unwrap();
+    let declared = FixtureStore::inventory();
+    assert_eq!(
+        (
+            declared.sources,
+            declared.expected_chunks,
+            declared.stored_chunks
+        ),
+        (1, 2, 0)
+    );
+    let entries = vec![FixtureStore::chunk_entry(content, 0, bytes[0].clone())];
+    let occupied = FixtureStore::projected_bytes(&entries).unwrap();
+    FixtureStore::commit(entries, occupied);
+    let partial = FixtureStore::inventory();
+    assert_eq!((partial.expected_chunks, partial.stored_chunks), (2, 1));
+    // Retirement removes source metadata before chunks; neither count implies integrity.
+    assert!(!FixtureStore::clear_retired_step());
+    let retiring = FixtureStore::inventory();
+    assert_eq!(
+        (
+            retiring.sources,
+            retiring.expected_chunks,
+            retiring.stored_chunks
+        ),
+        (0, 0, 1)
+    );
+    while !FixtureStore::clear_retired_step() {}
+    let empty = FixtureStore::inventory();
+    assert_eq!(
+        (empty.sources, empty.expected_chunks, empty.stored_chunks),
+        (0, 0, 0)
+    );
+}

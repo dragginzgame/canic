@@ -179,7 +179,7 @@ fn manifest_entry_size(release: &TemplateReleaseKey, record: &TemplateManifestRe
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::TemplateId;
+    use crate::{ids::TemplateId, storage::stable::template::chunked::TemplateChunkSetRecord};
 
     fn manifest() -> TemplateManifestRecord {
         TemplateManifestRecord {
@@ -200,6 +200,37 @@ mod tests {
             TemplateId::new("embedded:app"),
             TemplateVersion::new("0.18.0"),
         )
+    }
+
+    #[test]
+    fn manifest_listing_does_not_need_staged_chunk_metadata() {
+        let mut manifest = manifest();
+        manifest.chunking_mode = TemplateChunkingMode::Chunked;
+        manifest.payload_size_bytes = 40 * 1_048_576;
+        let chunks = TemplateChunkSetRecord {
+            payload_hash: manifest.payload_hash.clone(),
+            payload_size_bytes: manifest.payload_size_bytes,
+            chunk_count: 40,
+            chunk_hashes: vec![vec![255; 32]; 40],
+            created_at: 41,
+        };
+        let manifest_bytes = manifest.to_bytes().len();
+        let aggregate_bytes =
+            canic_core::cdk::serialize::serialize(&(Some(&manifest), Some(&chunks)))
+                .unwrap()
+                .len();
+        eprintln!("template manifest bytes={manifest_bytes} aggregate bytes={aggregate_bytes}");
+        assert!(aggregate_bytes > manifest_bytes);
+        TemplateManifestStateStore::upsert(release(), manifest);
+        crate::storage::stable::template::chunked::TemplateChunkSetStateStore::upsert(
+            release(),
+            chunks.clone(),
+        );
+        TemplateManifestStateStore::remove(&release());
+        assert_eq!(
+            crate::storage::stable::template::chunked::TemplateChunkSetStateStore::get(&release()),
+            Some(chunks)
+        );
     }
 
     #[test]

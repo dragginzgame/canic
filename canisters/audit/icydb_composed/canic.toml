@@ -1,0 +1,30 @@
+[app]
+name = "composed_audit"
+init_mode = "enabled"
+
+[roles.root]
+kind = "root"
+
+[roles.probe]
+kind = "canister"
+package = "."
+
+[auth.delegated_tokens]
+enabled = false
+
+[component_specs.probe]
+component_role = "probe"
+maximum_instances = 1
+
+[component_specs.probe.metrics]
+profile = "leaf"
+
+[component_groups.probe.components.probe]
+component_spec = "probe"
+
+[component_group_deployments.probe]
+component_group = "probe"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1

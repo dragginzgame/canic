@@ -1,0 +1,12 @@
+{
+  "name": "canic-frontend-consumer",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@icp-sdk/auth": "8.0.3",
+    "@icp-sdk/core": "5.4.0"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

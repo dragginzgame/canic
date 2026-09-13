@@ -1,3 +1,5 @@
+#[cfg(all(test, feature = "wasm-store-canister"))]
+mod allocation_tests;
 #[cfg(feature = "root-control-plane")]
 pub mod canister_pool;
 #[cfg(feature = "root-control-plane")]

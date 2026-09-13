@@ -723,6 +723,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let mut source = multi_component_source(&operator, &coordinator_subnet, &placement);
     source.fleet_subnet_roots[0].canister_pool.maximum_size = 5;
     source.admission.principals.clone_from(&authored_admission);
+    source.admission.identity_origin = Some("https://service.example.com".to_string());
     let seed = EstateSeed {
         schema_version: 1,
         fleet_id: "a8".repeat(32).parse().expect("Fleet ID"),
@@ -782,7 +783,13 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             ),
             1,
         );
-    fs::write(&source_path, source_document).expect("write protected Fleet source");
+    let mut source_document: toml::Value = toml::from_str(&source_document).unwrap();
+    source_document["admission"].as_table_mut().unwrap().insert(
+        "identity_origin".to_string(),
+        toml::Value::String(source.admission.identity_origin.clone().unwrap()),
+    );
+    fs::write(&source_path, toml::to_string(&source_document).unwrap())
+        .expect("write protected Fleet source");
     fs::write(
         &seed_path,
         retained_estate_seed_toml(
@@ -905,6 +912,15 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(generated.observed_controlled_cycles, 319_900_000_000_000);
     assert_eq!(generated.release_build_id, release_build_id);
     let desired = generated.desired;
+    assert_eq!(
+        desired
+            .bootstrap
+            .as_ref()
+            .unwrap()
+            .admission_identity_origin
+            .as_deref(),
+        Some("https://service.example.com")
+    );
     assert_eq!(
         desired
             .bootstrap
@@ -1139,47 +1155,61 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
             ..
         }
     ));
-    let fresh_plan = crate::fleet_ensure::policy::compile_plan(
-        &fresh.desired,
-        &fresh_artifacts,
-        &[],
-        &"74".repeat(32),
-        &fresh.desired.fleet,
-        &FleetObservation {
-            additional_controlled_cycles: BTreeMap::new(),
-            canisters: fresh
-                .desired
-                .canisters
-                .iter()
-                .map(|canister| (canister.name.clone(), None))
-                .collect(),
-            estate_funding_domains: fresh
-                .desired
-                .bootstrap
-                .as_ref()
-                .into_iter()
-                .flat_map(|bootstrap| &bootstrap.roots)
-                .map(|root| {
-                    (
-                        root.root.clone(),
-                        crate::fleet_ensure::model::EstateFundingDomainObservation {
-                            balance_cycles: None,
-                            cycles_ledger: fresh.desired.cycles_ledger.clone(),
-                            pool: None,
-                            root_principal: None,
-                        },
-                    )
-                })
-                .collect(),
-            ledger_fee_cycles: 100_000_000,
-            operator_cycles: u128::MAX,
-            protocol_ready: BTreeMap::new(),
-        },
-        1_800_000_000_000_000_000,
-        &"74".repeat(32),
-        None,
-    )
-    .expect("compile fresh estate creation plan");
+    let compile_fresh = |desired: &DesiredFleet| {
+        crate::fleet_ensure::policy::compile_plan(
+            desired,
+            &fresh_artifacts,
+            &[],
+            &"74".repeat(32),
+            &desired.fleet,
+            &FleetObservation {
+                additional_controlled_cycles: BTreeMap::new(),
+                canisters: desired
+                    .canisters
+                    .iter()
+                    .map(|canister| (canister.name.clone(), None))
+                    .collect(),
+                estate_funding_domains: desired
+                    .bootstrap
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|bootstrap| &bootstrap.roots)
+                    .map(|root| {
+                        (
+                            root.root.clone(),
+                            crate::fleet_ensure::model::EstateFundingDomainObservation {
+                                balance_cycles: None,
+                                cycles_ledger: desired.cycles_ledger.clone(),
+                                pool: None,
+                                root_principal: None,
+                            },
+                        )
+                    })
+                    .collect(),
+                ledger_fee_cycles: 100_000_000,
+                operator_cycles: u128::MAX,
+                protocol_ready: BTreeMap::new(),
+            },
+            1_800_000_000_000_000_000,
+            &"74".repeat(32),
+            None,
+        )
+    };
+    assert!(matches!(
+        compile_fresh(&fresh.desired),
+        Err(crate::fleet_ensure::policy::EnsurePolicyError::MixedSubnetCreationFees { .. })
+    ));
+    let mut single_subnet = fresh.desired.clone();
+    let bootstrap = single_subnet.bootstrap.as_mut().unwrap();
+    bootstrap.coordinator_subnet = bootstrap.roots[0].placement_subnet;
+    single_subnet
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.name == "coordinator")
+        .unwrap()
+        .subnet = bootstrap.coordinator_subnet.to_string();
+    let fresh_plan = compile_fresh(&single_subnet)
+        .expect("compile fresh estate creation on one reviewed fee subnet");
     let ordered_fresh_actions = workflow::ordered_actions(&fresh_plan);
     let root_install_index = ordered_fresh_actions
         .iter()
@@ -1771,15 +1801,15 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     }
     let fresh_source_digest = "75".repeat(32);
     let mut fresh_platform = IcpEnsurePlatform::new(
-        fresh.desired.clone(),
+        single_subnet.clone(),
         icp.to_str().expect("fake ICP path"),
         &root,
     );
     let public_fresh_plan = workflow::plan(
         &root,
-        &fresh.desired,
+        &single_subnet,
         &fresh_source_digest,
-        &fresh.desired.fleet,
+        &single_subnet.fleet,
         1_800_000_000_000_000_001,
         &mut fresh_platform,
     )
@@ -3917,6 +3947,7 @@ fn multi_component_source(
         funding_profile: FleetFundingProfile::PreviewMultiSubnet,
         operator: operator.to_string(),
         admission: AdmissionSource {
+            identity_origin: None,
             principals: vec![operator.to_string()],
         },
         coordinator: CoordinatorSource {

@@ -84,4 +84,11 @@ async fn test_user_rows() -> Result<Vec<reinstall_fixture::UserRow>, Error> {
     Ok(reinstall_fixture::rows())
 }
 
+/// Spend real fixture cycles before reviewing an underfunded reinstall.
+#[canic_update(requires(env::build_local_only(), caller::is_controller()))]
+async fn test_recovery_balance(retain: u128) -> Result<u128, Error> {
+    let excess = ic_cdk::api::canister_cycle_balance().saturating_sub(retain);
+    Ok(ic_cdk::api::cycles_burn(excess))
+}
+
 canic::finish!();

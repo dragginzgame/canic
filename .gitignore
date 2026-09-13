@@ -44,3 +44,4 @@ perf.data.old
 target/*
 .canic
 .backups
+node_modules/

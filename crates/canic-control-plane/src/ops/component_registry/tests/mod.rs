@@ -783,6 +783,7 @@ fn assert_durable_root_final_inventory_intent(
 
 fn prepared_store_status() -> WasmStoreStatusResponse {
     WasmStoreStatusResponse {
+        inventory: crate::dto::template::WasmStoreInventoryResponse::default(),
         gc: crate::dto::template::WasmStoreGcStatusResponse {
             mode: WasmStoreGcMode::Prepared,
             changed_at: 18,

@@ -72,7 +72,7 @@ and a current stable-key/owner binding, the ic-memory ledger binding, or an
 explicit unknown binding. Range claims describe allocation policy; they do not
 establish an unknown allocation's owner. Zero-page entries remain visible.
 
-Collection uses ic-memory 0.13.2's owned runtime report. It reads 34,848 bytes of
+Collection uses ic-memory 0.13.3's owned runtime report. It reads 34,848 bytes of
 validated manager metadata and bounded current declarations without decoding
 history, constructing stores, growing memory, writing, or advancing the ledger
 generation. Canic requires an already bootstrapped runtime.
@@ -96,14 +96,12 @@ The ledger is included in the rows and known-binding total; do not add it twice.
 Unknown-binding bytes are managed buckets without a current binding.
 Unmanaged bytes are physical extent outside the manager's accounted extent.
 
-Canic retains the default 128-page (8 MiB) buckets. Storage uses
-`ic_memory::RuntimeMemory`; collections and memory traits come from
+Canic defaults to 16-page (1 MiB) buckets. The build-time
+`CANIC_MEMORY_BUCKET_PAGES` setting selects larger buckets for applications
+requiring more manager capacity. See the [stable-memory layout](stable-memory-layout.md)
+for the capacity tradeoff, consolidated stores and measured template decisions.
+Storage uses `ic_memory::RuntimeMemory`; collections and memory traits come from
 `ic_memory::ic_stable_structures`, the exact re-exported substrate dependency.
-The reported CANIC-162 Game Hub size of 232 MiB is consistent with 29 default
-buckets plus a 64 KiB manager page (232.0625 MiB), but still needs live per-owner
-measurement. No memory reduction is claimed. The
-[assessment](../../audits/reports/2026-09/2026-09-10/canic162-memory.md)
-records adoption and composed lifecycle evidence with IcyDB 0.257.4.
 
 ## Optional Public Metrics
 

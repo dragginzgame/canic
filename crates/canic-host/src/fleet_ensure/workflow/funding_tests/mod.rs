@@ -7,7 +7,7 @@ use super::{
 };
 use crate::fleet_ensure::{
     model::*,
-    ops::{EffectObservation, EffectOutcome},
+    ops::{EffectObservation, EffectOutcome, read_journal},
 };
 use std::{io, path::PathBuf};
 
@@ -217,6 +217,83 @@ impl EnsurePlatform for FundingPlatform {
             receipt: Some("7".into()),
         })
     }
+}
+
+#[test]
+fn mixed_root_creation_fees_reject_before_funding_and_preserve_evidence() {
+    let mut fixture = Fixture::new();
+    let mut second_root = fixture.desired.canisters[0].clone();
+    second_root.name = "second-root".into();
+    second_root.subnet = candid::Principal::from_slice(&[77]).to_text();
+    fixture.desired.canisters.push(second_root);
+    let mut second_domain = fixture.plan.conservation.estate_funding_domains[0].clone();
+    second_domain.root = "second-root".into();
+    fixture
+        .plan
+        .conservation
+        .estate_funding_domains
+        .push(second_domain);
+    fixture.plan.reviewed_desired = Some(Box::new(ReviewedDesiredFleetRecord::capture(
+        &fixture.desired,
+    )));
+    fixture.plan.plan_sha256 = expected_plan_sha256(&fixture.plan);
+    write_plan(&fixture.paths, &fixture.plan).unwrap();
+    let mut journal = read_journal(&fixture.paths).unwrap().unwrap();
+    journal.plan_sha256.clone_from(&fixture.plan.plan_sha256);
+    journal
+        .estate_funding_required
+        .as_mut()
+        .unwrap()
+        .plan_sha256
+        .clone_from(&fixture.plan.plan_sha256);
+    journal
+        .initial_estate_funding_cycles_by_root
+        .insert("second-root".into(), 40);
+    write_journal(&fixture.paths, &journal).unwrap();
+    let digest = fixture.plan.plan_sha256.clone();
+    assert!(matches!(
+        fixture.apply(&digest),
+        Err(EnsureWorkflowError::Policy(
+            EnsurePolicyError::MixedSubnetCreationFees { .. }
+        ))
+    ));
+    assert!(fixture.platform.transfers.is_empty());
+    assert_eq!(read_journal(&fixture.paths).unwrap().unwrap(), journal);
+    assert_eq!(read_plan(&fixture.paths).unwrap().unwrap(), fixture.plan);
+}
+
+#[test]
+fn creation_fee_scope_includes_pending_roots_and_excludes_idle_roots() {
+    let mut fixture = Fixture::new();
+    let mut second_root = fixture.desired.canisters[0].clone();
+    second_root.name = "second-root".into();
+    second_root.subnet = candid::Principal::from_slice(&[77]).to_text();
+    fixture.desired.canisters.push(second_root);
+    let mut second_domain = fixture.plan.conservation.estate_funding_domains[0].clone();
+    second_domain.root = "second-root".into();
+    second_domain.required_creation_count = 0;
+    fixture
+        .plan
+        .conservation
+        .estate_funding_domains
+        .push(second_domain);
+    assert_eq!(
+        validate_creation_fee_scope(
+            &fixture.desired,
+            &fixture.plan.canisters,
+            &fixture.plan.conservation.estate_funding_domains,
+        ),
+        Ok(())
+    );
+    fixture.plan.conservation.estate_funding_domains[1].pending_creation_count = 1;
+    assert!(matches!(
+        validate_creation_fee_scope(
+            &fixture.desired,
+            &fixture.plan.canisters,
+            &fixture.plan.conservation.estate_funding_domains,
+        ),
+        Err(EnsurePolicyError::MixedSubnetCreationFees { .. })
+    ));
 }
 
 #[test]

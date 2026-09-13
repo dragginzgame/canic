@@ -48,6 +48,10 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         about: "Build Canic App and infrastructure artifacts",
     },
     CommandSpec {
+        name: "component",
+        about: "Review, create and reconcile one top-level Component",
+    },
+    CommandSpec {
         name: "cycles",
         about: "Inspect and transfer cycles for current Fleets",
     },
@@ -64,6 +68,10 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         about: "Converge one Fleet from current desired state",
     },
     CommandSpec {
+        name: "frontend",
+        about: "Export and verify exact frontend environment bindings",
+    },
+    CommandSpec {
         name: "info",
         about: "Inspect one terminal current Fleet",
     },
@@ -78,6 +86,10 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "network",
         about: "Enroll canonical network trust identities",
+    },
+    CommandSpec {
+        name: "observatory",
+        about: "Collect bounded Fleet observations and public reports",
     },
     CommandSpec {
         name: "replica",

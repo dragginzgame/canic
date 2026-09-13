@@ -18,7 +18,10 @@ Examples:
 const CONFIG_HELP_AFTER: &str = "\
 Examples:
   canic app config test
-  canic app config test --verbose";
+  canic app config test --verbose
+
+AUTO identifies the selected Component role for a Spec. Initial instances require
+Component Group placement; later instances use `canic component`.";
 
 ///
 /// ListOptions

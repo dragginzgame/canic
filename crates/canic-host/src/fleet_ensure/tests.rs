@@ -3147,6 +3147,130 @@ fn funding_margin_is_bounded_by_the_target_observation_only() {
 }
 
 #[test]
+fn mixed_subnet_creation_fees_reject_before_plan_or_effect() {
+    let mut fixture = fixture();
+    let other_subnet = Principal::from_slice(&[77]).to_text();
+    fixture.desired.canisters[1]
+        .subnet
+        .clone_from(&other_subnet);
+    fixture.platform.desired = fixture.desired.clone();
+    let error = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"14".repeat(32),
+        "test-fleet",
+        100,
+        &mut fixture.platform,
+    )
+    .expect_err("two creation subnets cannot share scalar fee authority");
+    let mut expected = vec![SUBNET.to_string(), other_subnet];
+    expected.sort();
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::Policy(
+            crate::fleet_ensure::policy::EnsurePolicyError::MixedSubnetCreationFees { subnets }
+        ) if subnets == expected
+    ));
+    assert!(fixture.platform.mutations.is_empty());
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    assert!(
+        crate::fleet_ensure::ops::read_plan(&paths)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        crate::fleet_ensure::ops::read_journal(&paths)
+            .unwrap()
+            .is_none()
+    );
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn retained_other_subnet_does_not_block_single_subnet_creation() {
+    let mut fixture = fixture();
+    let other_subnet = Principal::from_slice(&[77]).to_text();
+    fixture.desired.canisters[0]
+        .subnet
+        .clone_from(&other_subnet);
+    fixture.platform.desired = fixture.desired.clone();
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &"14".repeat(32),
+        "test-fleet",
+        100,
+        &mut fixture.platform,
+    )
+    .expect("retained treasury consumes no creation fee");
+    assert_eq!(
+        planned.plan.conservation.maximum_unavoidable_fee_cycles,
+        130
+    );
+    assert!(fixture.platform.mutations.is_empty());
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn retained_mixed_subnet_creation_plan_rejects_before_apply() {
+    let mut fixture = fixture();
+    let desired_sha256 = "14".repeat(32);
+    let mut plan = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        100,
+        &mut fixture.platform,
+    )
+    .unwrap()
+    .plan;
+    // Model an already reviewed document admitted before the fee-scope guard.
+    for action in plan
+        .canisters
+        .iter_mut()
+        .flat_map(|canister| &mut canister.actions)
+    {
+        if let EnsureAction::Create { name, subnet, .. } = action
+            && name == "created"
+        {
+            *subnet = Principal::from_slice(&[77]).to_text();
+        }
+    }
+    plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    crate::fleet_ensure::ops::write_plan(&paths, &plan).unwrap();
+    let error = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect_err("retained review cannot bypass fee authority");
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::Policy(
+            crate::fleet_ensure::policy::EnsurePolicyError::MixedSubnetCreationFees { .. }
+        )
+    ));
+    assert!(fixture.platform.mutations.is_empty());
+    assert_eq!(
+        crate::fleet_ensure::ops::read_plan(&paths)
+            .unwrap()
+            .unwrap(),
+        plan
+    );
+    assert!(
+        crate::fleet_ensure::ops::read_journal(&paths)
+            .unwrap()
+            .is_none()
+    );
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
 fn live_ledger_fee_drift_rejects_before_intent_or_effect() {
     let mut fixture = fixture();
     fixture.platform.ledger_fee_cycles += 1;

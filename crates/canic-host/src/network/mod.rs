@@ -303,6 +303,32 @@ pub fn resolve_canonical_network_id_from_root(
     Ok(profile.canonical_network_id)
 }
 
+/// Read an explicitly enrolled local trust anchor for a browser handoff.
+///
+/// Mainnet uses the SDK's built-in anchor and never exports an alternate key.
+pub fn frontend_root_key(
+    workspace_root: &Path,
+    environment: &str,
+) -> Result<Option<Vec<u8>>, NetworkIdentityError> {
+    let network = resolve_canonical_network_id_from_root(workspace_root, environment)?;
+    if network == CanonicalNetworkId::ic_mainnet() {
+        return Ok(None);
+    }
+    let paths = NetworkPaths::new(workspace_root, environment, network);
+    let bytes = read_required_regular_file(&paths.root_key)?;
+    let observed = CanonicalNetworkId::from_der_root_trust_anchor(&bytes).map_err(|error| {
+        NetworkIdentityError::InvalidRootKeyDer {
+            reason: error.to_string(),
+        }
+    })?;
+    if observed != network {
+        return Err(NetworkIdentityError::ContradictoryAuthority {
+            reason: "enrolled root key changed during frontend export".to_string(),
+        });
+    }
+    Ok(Some(bytes))
+}
+
 fn validate_existing_authority(
     paths: &NetworkPaths,
     expected_digest: [u8; 32],

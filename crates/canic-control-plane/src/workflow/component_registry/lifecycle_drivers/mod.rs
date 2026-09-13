@@ -8,6 +8,8 @@ use super::*;
 use std::{cell::RefCell, collections::BTreeSet};
 
 thread_local! {
+    static SCHEDULED_COMPONENT_ALLOCATIONS: RefCell<BTreeSet<[u8; 32]>> =
+        const { RefCell::new(BTreeSet::new()) };
     static SCHEDULED_COMPONENT_CHILD_ALLOCATIONS: RefCell<BTreeSet<(ComponentInstanceId, [u8; 32])>> =
         const { RefCell::new(BTreeSet::new()) };
 }
@@ -16,6 +18,11 @@ const MAX_COMPONENT_CHILD_ALLOCATION_PHASES_PER_INVOCATION: usize = 16;
 
 /// Privately advance one accepted ordinary or peer top-level allocation.
 pub fn schedule_component_allocation(operation_id: [u8; 32]) {
+    let inserted = SCHEDULED_COMPONENT_ALLOCATIONS
+        .with(|scheduled| scheduled.borrow_mut().insert(operation_id));
+    if !inserted {
+        return;
+    }
     schedule_component_allocation_after(operation_id, Duration::ZERO);
 }
 
@@ -25,7 +32,11 @@ fn schedule_component_allocation_after(operation_id: [u8; 32], delay: Duration) 
         "Fleet Subnet Root Component allocation",
         async move {
             match Box::pin(advance_component_allocation_once(operation_id)).await {
-                Ok(true) => {}
+                Ok(true) => {
+                    SCHEDULED_COMPONENT_ALLOCATIONS.with(|scheduled| {
+                        scheduled.borrow_mut().remove(&operation_id);
+                    });
+                }
                 Ok(false) => schedule_component_allocation_after(operation_id, Duration::ZERO),
                 Err(_) => {
                     schedule_component_allocation_after(operation_id, Duration::from_secs(1));

@@ -4,15 +4,17 @@
 //! Does not own: canonical `.icp` artifacts, build profiles, or deployment orchestration.
 //! Boundary: resolves one dedicated Wasm target directory while respecting explicit Cargo input.
 
+use crate::{
+    canister_build::compiler_cache::{CompilerCacheError, check_implicit_cache},
+    durable_io::{RegularFileLockError, lock_regular_file_with_parents},
+};
 use std::{
     env,
     ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output},
 };
-
-use crate::durable_io::{RegularFileLockError, lock_regular_file_with_parents};
 
 const DEFAULT_WASM_TARGET_RELATIVE: &str = "target/canic-wasm";
 const CANISTER_BUILD_LOCK_RELATIVE: &str = ".canic/locks/canister-artifact-build.lock";
@@ -27,6 +29,41 @@ pub fn configure_canister_cargo_command(command: &mut Command, workspace_root: &
         env::var_os("RUSTC_WRAPPER").as_deref(),
         env::var_os("PATH").as_deref(),
     );
+}
+
+/// Check an automatically selected cache before launching the actual build once.
+pub fn output_canister_cargo_command(command: &mut Command) -> Result<Output, CompilerCacheError> {
+    let explicit = env::var_os("RUSTC_WRAPPER");
+    let search_path = env::var_os("PATH");
+    // Keep the command's selected path even if the executable disappeared since
+    // discovery. Rediscovery here would lose the actionable launch diagnostic.
+    let implicit = command
+        .get_envs()
+        .find(|(name, _)| *name == "RUSTC_WRAPPER")
+        .and_then(|(_, value)| value)
+        .map(PathBuf::from)
+        .filter(|selected| {
+            explicit.is_none()
+                && search_path.as_deref().is_some_and(|paths| {
+                    env::split_paths(paths)
+                        .any(|directory| directory.join(sccache_executable_name()) == *selected)
+                })
+        });
+    output_with_implicit_cache(command, implicit.as_deref())
+}
+
+fn output_with_implicit_cache(
+    command: &mut Command,
+    implicit: Option<&Path>,
+) -> Result<Output, CompilerCacheError> {
+    if let Some(wrapper) = implicit
+        && command
+            .get_envs()
+            .any(|(name, value)| name == "RUSTC_WRAPPER" && value == Some(wrapper.as_os_str()))
+    {
+        check_implicit_cache(command, wrapper)?;
+    }
+    command.output().map_err(CompilerCacheError::CargoLaunch)
 }
 
 /// Declaration passes retain runtime cfg/profile semantics without paying for LTO.
@@ -369,6 +406,121 @@ mod tests {
         );
 
         fs::remove_dir_all(root).expect("remove cache test root");
+    }
+
+    #[cfg(unix)]
+    fn cache_probe_fixture(cache_body: &str, compiler_body: &str) -> (PathBuf, PathBuf, Command) {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let root = temp_dir("compiler cache probe");
+        fs::create_dir_all(&root).unwrap();
+        let wrapper = root.join(sccache_executable_name());
+        let compiler = root.join("compiler");
+        for (path, body) in [(&wrapper, cache_body), (&compiler, compiler_body)] {
+            fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let mut cargo = Command::new("/bin/sh");
+        cargo.current_dir(&root).args([
+            "-c",
+            "printf 'build started' > cargo-ran; printf 'compiler build error' >&2; exit 7",
+        ]);
+        cargo
+            .env("RUSTC", compiler)
+            .env("RUSTC_WRAPPER", &wrapper)
+            .env_remove("RUSTC_WORKSPACE_WRAPPER")
+            .env("CANIC_CACHE_PROBE_FIXTURE", "selected");
+        (root, wrapper, cargo)
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn implicit_cache_failure_stops_before_cargo_with_actionable_original_evidence() {
+        let (root, wrapper, mut cargo) =
+            cache_probe_fixture("printf 'cache service unavailable' >&2; exit 47", "exit 0");
+        let error = output_with_implicit_cache(&mut cargo, Some(&wrapper)).unwrap_err();
+        assert!(matches!(
+            &error,
+            CompilerCacheError::ImplicitCache {
+                source: super::super::compiler_cache::ProbeError::Exit { status, stderr, .. },
+                ..
+            } if status.code() == Some(47) && stderr == "cache service unavailable"
+        ));
+        assert!(error.to_string().contains("RUSTC_WRAPPER="));
+        assert!(!root.join("cargo-ran").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn compiler_startup_failure_is_not_attributed_to_the_implicit_cache() {
+        let (root, wrapper, mut cargo) = cache_probe_fixture(
+            "touch cache-ran; exit 0",
+            "printf 'compiler unavailable' >&2; exit 51",
+        );
+        let error = output_with_implicit_cache(&mut cargo, Some(&wrapper)).unwrap_err();
+        assert!(matches!(
+            error,
+            CompilerCacheError::Compiler {
+                source: super::super::compiler_cache::ProbeError::Exit { status, .. },
+                ..
+            } if status.code() == Some(51)
+        ));
+        assert!(!root.join("cache-ran").exists());
+        assert!(!root.join("cargo-ran").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn working_discovery_preserves_cargo_failure_and_probe_environment() {
+        let (root, wrapper, mut cargo) = cache_probe_fixture(
+            "test \"$CANIC_CACHE_PROBE_FIXTURE\" = selected || exit 54; exec \"$@\"",
+            "test \"$1\" = -vV || exit 55; test -f compiler || exit 56; exit 0",
+        );
+        let path = env::join_paths([&root]).unwrap();
+        let selected = resolve_implicit_sccache_wrapper(None, Some(&path));
+        assert_eq!(selected.as_deref(), Some(wrapper.as_path()));
+        let output = output_with_implicit_cache(&mut cargo, selected.as_deref()).unwrap();
+        assert_eq!(output.status.code(), Some(7));
+        assert_eq!(output.stderr, b"compiler build error");
+        assert!(root.join("cargo-ran").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn explicit_empty_and_custom_wrappers_bypass_implicit_probes() {
+        for explicit in ["", "custom-wrapper"] {
+            let (root, wrapper, mut cargo) = cache_probe_fixture("exit 47", "exit 51");
+            cargo.env("RUSTC_WRAPPER", explicit);
+            let path = env::join_paths([&root]).unwrap();
+            assert!(
+                resolve_implicit_sccache_wrapper(Some(OsStr::new(explicit)), Some(&path)).is_none()
+            );
+            // Even a stale discovery result cannot replace a command's explicit choice.
+            let output = output_with_implicit_cache(&mut cargo, Some(&wrapper)).unwrap();
+            assert_eq!(output.status.code(), Some(7));
+            assert!(root.join("cargo-ran").exists());
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn disappeared_implicit_cache_reports_launch_failure_before_cargo() {
+        let (root, wrapper, mut cargo) = cache_probe_fixture("exit 0", "exit 0");
+        fs::remove_file(&wrapper).unwrap();
+        let error = output_with_implicit_cache(&mut cargo, Some(&wrapper)).unwrap_err();
+        assert!(matches!(
+            error,
+            CompilerCacheError::ImplicitCache {
+                source: super::super::compiler_cache::ProbeError::Launch(_),
+                ..
+            }
+        ));
+        assert!(!root.join("cargo-ran").exists());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

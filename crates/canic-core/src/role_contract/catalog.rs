@@ -466,10 +466,6 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
         StateAllocationKey::ShardingAssignments,
     ),
     feature_allocation(
-        CanicFeatureKey::Sharding,
-        StateAllocationKey::ShardingActiveSet,
-    ),
-    feature_allocation(
         CanicFeatureKey::WasmStoreCanister,
         StateAllocationKey::TemplateManifests,
     ),

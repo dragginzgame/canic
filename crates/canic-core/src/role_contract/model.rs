@@ -142,7 +142,6 @@ pub enum StateAllocationKey {
     PlacementIndexRegistry,
     ShardingRegistry,
     ShardingAssignments,
-    ShardingActiveSet,
     BlobStorageRoots,
     BlobStoragePendingDeletions,
     BlobStorageGatewayPrincipals,

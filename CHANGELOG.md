@@ -8,10 +8,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+Completed development work is grouped in the open 0.110.16 draft.
+
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.16` makes a breaking, reinstall-only stable-memory layout reduction,
+  rejects ambiguous creation fees, fixes retained-pool funding and reinstall review
+  continuation, improves build/recovery diagnostics and release consistency,
+  adds reviewed Component recovery, browser handoff, bounded host observatory reports
+  and persistent multi-subnet local Fleets,
+  and records controlled IcyDB Wasm measurements, including a rejected startup
+  outlining experiment.
 - `0.110.15` improves Fleet planning, selected-build reinstall and recovery,
   with release-bound Store fixture delivery, receipt-gated readiness, bounded
   publication/recovery, complete standalone host state metadata, layering and

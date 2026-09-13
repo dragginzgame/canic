@@ -132,6 +132,7 @@ fn fixture() -> InitFixture {
     let operator = principal(8);
     let placement = subnet(6);
     let bootstrap = DesiredFleetBootstrap {
+        admission_identity_origin: None,
         admission: compile_fleet_admission_policy_template(vec![principal(9)], Vec::new())
             .expect("admission template"),
         app: AppId::from("init_wire_test"),

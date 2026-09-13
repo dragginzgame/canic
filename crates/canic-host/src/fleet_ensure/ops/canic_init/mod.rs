@@ -93,7 +93,7 @@ pub enum CanicInitError {
     Argument(#[from] ProtocolEffectError),
 }
 
-pub(super) struct CanicInitRequest<'a> {
+pub struct CanicInitRequest<'a> {
     pub desired: &'a DesiredFleet,
     pub init: &'a DesiredCanisterInit,
     pub operation_id: &'a str,
@@ -108,7 +108,7 @@ pub(super) fn write_arguments(request: CanicInitRequest<'_>) -> Result<PathBuf, 
 }
 
 /// Compile the exact Root authorities installed by the generated current Fleet bootstrap.
-pub(super) fn compile_root_authorities(
+pub fn compile_root_authorities(
     root: &Path,
     desired: &DesiredFleet,
     principals: &BTreeMap<String, String>,
@@ -170,7 +170,7 @@ pub(super) fn compile_root_authorities(
     clippy::too_many_lines,
     reason = "one typed initializer compiler keeps all infrastructure role branches together"
 )]
-fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, CanicInitError> {
+pub fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, CanicInitError> {
     let bootstrap = request
         .desired
         .bootstrap

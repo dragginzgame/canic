@@ -30,6 +30,7 @@ pub use canister_protocol::{
 };
 pub mod canister_ready;
 mod cargo_metadata;
+pub mod component_operation;
 pub mod component_topology;
 pub mod config_discovery;
 pub mod diagnostics;
@@ -38,11 +39,15 @@ mod entropy;
 pub mod evidence_envelope;
 pub mod fleet_ensure;
 pub mod format;
+pub mod frontend;
 pub mod ic_wasm;
 pub mod icp;
 pub mod icp_config;
+#[cfg(feature = "local-fleet")]
+pub mod local_fleet;
 pub mod network;
 pub mod observability;
+pub mod observatory;
 pub mod policy_gate;
 pub mod protocol_binding;
 pub mod registry;

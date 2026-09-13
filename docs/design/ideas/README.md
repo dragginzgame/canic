@@ -15,12 +15,9 @@ Supporting implementation evidence does not belong here.
 - `declarative-authentication-profiles/`
 - `demand-driven-canister-pool-maintenance/`
 - `estate-budget-replenishment/`
-- `fleet-observatory/`
 - `immutable-test-checkout-lease/`
-- `long-running-multi-subnet-local-fleet/`
 - `operator-funding-conversion-authority/`
-- `operator-top-level-component-lifecycle/`
-- `product-frontend-delivery-handoff/`
+- `role-specific-stable-initialization/`
 - `standalone-blob-service-extraction/`
 
 ## Maintainer Priorities
@@ -31,6 +28,10 @@ The two most pressing ideas, identified by the maintainer on 2026-09-06, are:
    give Root one Canic-owned entrypoint and consistent Fleet crate names.
 2. [Standalone blob extraction](standalone-blob-service-extraction/design.md):
    remove application blob-storage semantics from Canic infrastructure.
+
+The operator Component lifecycle, frontend handoff, host-first observatory and
+persistent local Fleet were promoted to 0.110 OP1–OP4 on 2026-09-13 by explicit
+maintainer instruction. Their maintained design and tracker live in 0.110.
 
 Canonical infrastructure was promoted into the current 0.110 CR1 batch on
 2026-09-07 at the maintainer’s request. Standalone blob extraction remains

@@ -229,6 +229,17 @@ fn release_draft_preflight_does_not_require_a_manual_status_marker() {
 
 #[test]
 fn governed_bump_replaces_stale_status_markers_it_owns() {
+    assert_governed_status_snapshot("");
+}
+
+#[test]
+fn governed_bump_replaces_repeated_generated_status_summaries() {
+    assert_governed_status_snapshot(
+        "<!-- canic-status-summary:start -->\nstale snapshot\n<!-- canic-status-summary:end -->\n<!-- canic-status-summary:start -->\nrepeated snapshot\n<!-- canic-status-summary:end -->\n",
+    );
+}
+
+fn assert_governed_status_snapshot(previous_summary: &str) {
     let root = unique_temp_repo("bump-owns-status-marker");
     fs::create_dir_all(&root).expect("temp repo should be created");
     run_git(&root, &["init"]);
@@ -246,7 +257,9 @@ fn governed_bump_replaces_stale_status_markers_it_owns() {
     write_file(
         &root,
         "docs/status/current.md",
-        "Current source remains descriptive.\n\n<!-- canic-release-state: source-development -->\n<!-- canic-release-validation: version=0.92.7 source=1111111111111111111111111111111111111111 date=2026-08-28 gate=complete -->\n",
+        &format!(
+            "{previous_summary}Current source remains descriptive.\n\n<!-- canic-release-state: source-development -->\n<!-- canic-release-validation: version=0.92.7 source=1111111111111111111111111111111111111111 date=2026-08-28 gate=complete -->\n"
+        ),
     );
     write_file(
         &root,
@@ -322,13 +335,40 @@ esac
     );
     let status = fs::read_to_string(root.join("docs/status/current.md"))
         .expect("sealed current status should be readable");
+    assert_generated_status_snapshot(&status, &validated_head);
+    let _ = fs::remove_dir_all(root);
+}
+
+fn assert_generated_status_snapshot(status: &str, validated_head: &str) {
     let expected = format!(
         "<!-- canic-release-validation: version=0.92.8 source={validated_head} date=2026-08-29 gate=complete -->"
     );
     assert_eq!(status.matches(&expected).count(), 1);
     assert_eq!(status.matches("<!-- canic-release-").count(), 1);
-    assert!(status.contains("Current source remains descriptive."));
-    let _ = fs::remove_dir_all(root);
+    assert_eq!(
+        status
+            .matches("<!-- canic-status-summary:start -->")
+            .count(),
+        1
+    );
+    assert_eq!(
+        status.matches("<!-- canic-status-summary:end -->").count(),
+        1
+    );
+    let (summary, handoff) = status
+        .split_once("<!-- canic-status-summary:end -->")
+        .expect("generated summary should precede the original handoff");
+    for field in [
+        "`0.92.8`".to_string(),
+        "`2026-08-29`".to_string(),
+        format!("`{validated_head}`"),
+        "`complete`".to_string(),
+    ] {
+        assert!(summary.contains(&field));
+    }
+    assert!(!summary.contains("stale snapshot"));
+    assert!(!summary.contains("repeated snapshot"));
+    assert!(handoff.contains("Current source remains descriptive."));
 }
 
 fn create_candidate_repo(name: &str) -> (PathBuf, String) {

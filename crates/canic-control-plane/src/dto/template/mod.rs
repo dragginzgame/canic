@@ -156,6 +156,7 @@ pub struct WasmStoreGcStatusResponse {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreStatusResponse {
+    pub inventory: WasmStoreInventoryResponse,
     pub gc: WasmStoreGcStatusResponse,
     pub occupied_store_bytes: u64,
     pub occupied_store_size: String,
@@ -171,6 +172,17 @@ pub struct WasmStoreStatusResponse {
     pub release_count: u32,
     pub max_template_versions_per_template: Option<u16>,
     pub templates: Vec<WasmStoreTemplateStatusResponse>,
+}
+
+/// Aggregate retained inventory; template and opaque fixture chunks stay distinct.
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreInventoryResponse {
+    pub approved_catalog_entries: u64,
+    pub expected_template_chunks: u64,
+    pub stored_template_chunks: u64,
+    pub fixture_sources: u64,
+    pub expected_fixture_chunks: u64,
+    pub stored_fixture_chunks: u64,
 }
 
 /// Store garbage-collection detail projected through the operation lane.

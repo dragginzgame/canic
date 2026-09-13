@@ -13,6 +13,7 @@ auth
 backup
 blob-storage
 build
+component
 cycles
 diagnostic
 evidence
@@ -21,6 +22,7 @@ info
 inspect
 medic
 network
+observatory
 replica
 restore
 scaffold
@@ -224,3 +226,39 @@ canic diagnostic 123
 For argument-boundary debugging, `CANIC_TRACE_ARGV=1` prints every raw argument
 before parsing. It may disclose secrets and should not be retained in shared
 logs.
+
+## Operator Components
+
+Use `canic component plan <fleet> <name> --root <logical-root> --spec <spec>`
+to retain one review. Apply its `review_sha256` with
+`canic component apply <fleet> <name> --review <sha256>`. Root owns allocation,
+installation and activation; the local name retains one operation across retries.
+Each apply submits or resumes at most once, then polls status. Root coalesces
+concurrent scheduling for the same operation. The default wait is 60 seconds; `--wait-secs 0` advances once. A pending result
+is resumable using the same name and digest. `component status` refreshes progress
+without submitting. `--json` emits the complete operation record and terminal
+`progress.binding` with the Component identity, role and Principal.
+
+`canic info env <fleet> --component-operation <name> --json` verifies that exact
+operation's live completion before including its binding. It replaces a retained
+Ready-pool row for the same Principal. It does not scan or silently adopt other
+operations. A completed `component apply` replay returns its recorded result
+without calls; use `component status` for a fresh live observation.
+
+The review binds the terminal Fleet, installed release, Root/subnet, controller
+set, selected identity and admitted Spec. Changes require deliberate resolution;
+retain uncertain operation files. Files under `.canic/component-operations/` use
+atomic writes, bounded reads and the same Fleet lock as Ensure. This command
+claims existing Ready capacity and retains the installed Root funding policy;
+it does not make a new funding transfer. `AUTO` in `app config` means automatic
+role selection for a Spec. Initial instances require Component Group placement.
+
+The [Component operation guide](../../docs/features/operations/component-operations.md)
+describes review, exact retry, completion checks and environment export.
+
+`frontend capacity`, `export` and `verify` provide the supported browser handoff
+and external native-cycle preflight. See the
+[frontend handoff guide](../../docs/features/operations/frontend-handoff.md).
+
+The [Fleet observatory](../../docs/features/operations/fleet-observatory.md) supplies
+independent role observations and bounded public reports from the host.

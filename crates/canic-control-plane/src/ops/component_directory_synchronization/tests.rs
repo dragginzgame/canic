@@ -2,9 +2,11 @@
 
 use super::*;
 use crate::storage::stable::component_provisioning::{
-    RootComponentProvisioningData, RootComponentProvisioningStore,
+    RootComponentOperationKey, RootComponentOperationRecord, RootComponentProvisioningData,
+    RootComponentProvisioningStore,
 };
 use canic_core::{
+    cdk::structures::{BTreeMap, Memory, VectorMemory},
     dto::{
         component_provisioning::RootComponentDirectorySynchronizationRequest,
         component_registry::ComponentRegistryHead, fleet_registry::FleetRegistryVersion,
@@ -178,4 +180,45 @@ fn synchronization_exact_retry_rejects_changed_authority() {
     let error = RootComponentDirectorySynchronizationOps::status(&conflicting)
         .expect_err("changed plan hash must reject");
     assert_eq!(error.code(), canic_core::diagnostics::codes::STATE_CONFLICT);
+}
+
+#[test]
+fn provisioning_operation_map_uses_small_pages_and_checks_oversize_before_writes() {
+    RootComponentProvisioningStore::import(RootComponentProvisioningData::default());
+    let command = request([4; 32]);
+    RootComponentDirectorySynchronizationOps::accept(
+        &command,
+        principal(9),
+        [10; 32],
+        vec![target()],
+        100,
+    )
+    .unwrap();
+    let record =
+        RootComponentProvisioningStore::directory_synchronization(command.operation_id).unwrap();
+    let memory = VectorMemory::default();
+    let mut map = BTreeMap::init(memory.clone());
+    let key = RootComponentOperationKey::DirectorySynchronization(command.operation_id);
+    let value = RootComponentOperationRecord::DirectorySynchronization(Box::new(record.clone()));
+    map.insert(key, value.clone());
+    assert_eq!(memory.size(), 1);
+    drop(map);
+    let mut reopened = BTreeMap::<RootComponentOperationKey, RootComponentOperationRecord, _>::init(
+        memory.clone(),
+    );
+    assert_eq!(reopened.get(&key), Some(value.clone()));
+    let before = memory.borrow().clone();
+    let mut oversized = record;
+    oversized.targets = vec![oversized.targets[0].clone(); 50_000];
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            reopened.insert(
+                key,
+                RootComponentOperationRecord::DirectorySynchronization(Box::new(oversized)),
+            );
+        }))
+        .is_err()
+    );
+    assert_eq!(*memory.borrow(), before);
+    assert_eq!(reopened.get(&key), Some(value));
 }
