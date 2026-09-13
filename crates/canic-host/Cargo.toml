@@ -19,9 +19,11 @@ ignored = ["serde_bytes"]
 [dependencies]
 candid = { workspace = true }
 candid_parser = { workspace = true }
+# Host materializes metadata for every infrastructure role.
 canic-control-plane = { workspace = true, features = [
     "fleet-coordinator-canister",
     "root-control-plane",
+    "wasm-store-canister",
 ] }
 canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
 ciborium = { workspace = true }

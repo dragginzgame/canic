@@ -30,7 +30,7 @@ macro_rules! __canic_fixture_reply_checkpoint {
 #[macro_export]
 macro_rules! __canic_fixture_reply_support {
     () => {
-        #[derive(::__internal::candid::CandidType, Clone, Copy, ::__internal::serde::Deserialize, Eq, PartialEq)]
+        #[derive(::canic::__internal::candid::CandidType, Clone, Copy, ::canic::__internal::serde::Deserialize, Eq, PartialEq)]
         #[serde(crate = "::canic::__internal::serde")]
         enum __CanicFixtureReplyKind { Grant, Revoke, Chunk }
 

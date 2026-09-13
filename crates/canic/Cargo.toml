@@ -47,6 +47,7 @@ toml = { workspace = true }
 
 [dev-dependencies]
 candid_parser = { workspace = true }
+syn = { workspace = true, features = ["full", "visit"] }
 
 [lints]
 workspace = true

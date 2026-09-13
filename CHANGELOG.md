@@ -14,8 +14,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.15` improves Fleet planning, selected-build reinstall and recovery,
   with release-bound Store fixture delivery, receipt-gated readiness, bounded
-  publication/recovery, layering and secret-scan corrections, breaking review
-  records, public memory summaries, final Wasm code/data reporting and IcyDB 0.257.5 fixture compatibility.
+  publication/recovery, complete standalone host state metadata, layering and
+  validation corrections, breaking review records, public memory summaries, final Wasm code/data reporting and IcyDB 0.257.9 fixture compatibility.
 - `0.110.14` improves build/validation speed and reliability, metrics and Fleet recovery,
   and adds protected allocation diagnostics with aligned IcyDB/memory dependencies.
 - `0.110.13` introduces breaking Fleet review-record changes for safer reinstall
