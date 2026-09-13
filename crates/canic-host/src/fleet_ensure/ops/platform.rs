@@ -2094,6 +2094,7 @@ impl IcpEnsurePlatform {
             }
             RootOwnedCanisterLifecycle::Claimed
             | RootOwnedCanisterLifecycle::Idle
+            | RootOwnedCanisterLifecycle::Reconciling
             | RootOwnedCanisterLifecycle::Retained => CanisterRuntimeStatus::Stopped,
         };
         Ok(Some(LiveCanister {
@@ -6850,6 +6851,29 @@ printf 'finish\n' >> events
                     if retained {
                         assert_eq!((*amount, *expected_post_cycles), (1_130 - cycles, 1_130));
                     }
+                }
+                if retained && cycles == 1_100 {
+                    observation
+                        .canisters
+                        .get_mut(&coordinator.name)
+                        .unwrap()
+                        .as_mut()
+                        .unwrap()
+                        .status = CanisterRuntimeStatus::Stopped;
+                    let prerequisite = compile_plan(
+                        &desired,
+                        &DesiredFleetArtifacts::default(),
+                        &[],
+                        &"11".repeat(32),
+                        &desired.fleet,
+                        &observation,
+                        1,
+                        &"22".repeat(32),
+                        None,
+                    )
+                    .expect("live reset evidence must not block Coordinator readiness");
+                    assert!(prerequisite.canisters.iter().flat_map(|entry| &entry.actions)
+                        .any(|action| matches!(action, EnsureAction::Start { name, .. } if name == &coordinator.name)));
                 }
             }
         }

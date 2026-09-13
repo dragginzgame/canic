@@ -1575,8 +1575,10 @@ fn reuse_plan(
             live.root_owned_lifecycle,
             Some(RootOwnedCanisterLifecycle::Claimed | RootOwnedCanisterLifecycle::Workload)
         );
-    let retained_balance_evidence =
-        live.root_owned_lifecycle == Some(RootOwnedCanisterLifecycle::Retained);
+    let separately_managed_pool_balance = matches!(
+        live.root_owned_lifecycle,
+        Some(RootOwnedCanisterLifecycle::Reconciling | RootOwnedCanisterLifecycle::Retained)
+    );
     let mut disposition = CanisterDisposition::Reuse;
     if let Some(wasm) = &configured.wasm {
         let wasm_sha256 = wasm_sha256(artifacts, &configured.name)?;
@@ -1631,7 +1633,7 @@ fn reuse_plan(
         cycle_policy,
         bounds,
         created_at_time,
-        active_pool_asset || retained_balance_evidence,
+        active_pool_asset || separately_managed_pool_balance,
         &mut actions,
         accumulator,
     )?;

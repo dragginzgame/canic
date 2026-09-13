@@ -4,6 +4,67 @@ use crate::component_operation::{
     ComponentOperationError,
     model::{ComponentAuthorityRecord, ComponentPhase, ComponentProgressRecord},
 };
+use candid::Principal;
+use canic_core::ids::{
+    CanisterRole, ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+};
+
+///
+/// AuthorityBinding
+///
+/// Live authority excludes the historical review document's identity.
+///
+
+#[derive(Eq, PartialEq)]
+struct AuthorityBinding<'a> {
+    environment: &'a str,
+    fleet: &'a str,
+    root_name: &'a str,
+    binding: &'a FleetSubnetRootBinding,
+    release_set: &'a FleetSubnetRootReleaseSet,
+    root_module_sha256: &'a str,
+    root_candid_sha256: &'a [u8; 32],
+    root_controllers: &'a [String],
+    registry_sha256: &'a [u8; 32],
+    operator: Principal,
+    component_spec: &'a ComponentSpecId,
+    spec_hash: &'a [u8; 32],
+    role: &'a CanisterRole,
+}
+
+fn authority_binding(record: &ComponentAuthorityRecord) -> AuthorityBinding<'_> {
+    let ComponentAuthorityRecord {
+        source_plan_sha256: _,
+        environment,
+        fleet,
+        root_name,
+        binding,
+        release_set,
+        root_module_sha256,
+        root_candid_sha256,
+        root_controllers,
+        registry_sha256,
+        operator,
+        component_spec,
+        spec_hash,
+        role,
+    } = record;
+    AuthorityBinding {
+        environment,
+        fleet,
+        root_name,
+        binding,
+        release_set,
+        root_module_sha256,
+        root_candid_sha256,
+        root_controllers,
+        registry_sha256,
+        operator: *operator,
+        component_spec,
+        spec_hash,
+        role,
+    }
+}
 
 /// Confine local operation names and target labels to individual path components.
 pub fn validate_label(value: &str) -> Result<(), ComponentOperationError> {
@@ -23,7 +84,7 @@ pub fn validate_authority(
     expected: &ComponentAuthorityRecord,
     observed: &ComponentAuthorityRecord,
 ) -> Result<(), ComponentOperationError> {
-    if expected != observed {
+    if authority_binding(expected) != authority_binding(observed) {
         return Err(ComponentOperationError::Authority {
             field: "reviewed binding",
         });

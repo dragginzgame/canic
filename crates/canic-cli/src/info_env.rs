@@ -150,9 +150,9 @@ fn load_env_report(options: &InfoEnvOptions) -> Result<InfoEnvReport, InfoEnvCom
             name,
             &mut transport,
         )?;
-        if record.plan.authority.source_plan_sha256 != resolution.plan.plan_sha256 {
+        if resolve_info_env_fleet(options, &root)? != resolution {
             return Err(ComponentOperationError::Authority {
-                field: "terminal Fleet source",
+                field: "terminal Fleet changed during Component observation",
             }
             .into());
         }

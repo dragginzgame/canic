@@ -14,7 +14,7 @@ enabled = false
 
 [component_specs.default]
 component_role = "app"
-maximum_instances = 2
+maximum_instances = 4
 
 [component_groups.qualification.components.default]
 component_spec = "default"

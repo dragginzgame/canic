@@ -35,6 +35,17 @@ to its selected release. An incomplete existing operation resumes Root's driver
 after same-release restoration; it does not allocate a second identity.
 Changing authority fails instead of retargeting an issued operation.
 
+An unchanged-Fleet Ensure review may have a new plan hash. That hash records
+the Component review's original provenance; it does not strand the operation
+when the live network, registry, Root, release, controller and Spec bindings
+still match. Retry, status and export retain the original review and operation
+identities. Actual authority changes still reject.
+
+Subsequent Fleet Ensure inventory includes ordinary Components alongside initial
+Component Groups. Each ordinary Component must join an exact Root pool claim,
+active registry partition and completed allocation, with the current release,
+module and controllers. Root admission and descendant limits still apply.
+
 `component status demo extra --json` refreshes observations without submitting.
 A completed apply returns its retained receipt without network calls. Use status
 when a fresh live observation is required. Typed Root failures are preserved;
@@ -48,12 +59,19 @@ This explicitly refreshes the selected operation and exports its terminal role
 and Principal. If the Principal was previously a Ready pool asset, its exported
 role is replaced. Fleet Ensure's retained inventory is not rewritten. The output
 contains canister identifiers, not controller or provisioning credentials.
+If current Fleet inventory changes during the live Component observation,
+export rejects so one output cannot combine different Fleet observations.
 
 Operations are stored under `.canic/component-operations/<environment>/<fleet>/`.
 Retain that directory with the same-release Fleet workspace during recovery.
 These commands do not provide cross-release adoption or migration.
 
 ## Qualification
+
+The combined [local Fleet case](local-development-fleet.md#qualification) starts
+from fresh Ensure convergence and qualifies a changed no-op review, lost reply,
+ordinary Component inventory, single-submission retry and exact environment
+export. It also checks explicitly imported Root-owned capacity and restart.
 
 Focused native cases cover authority, corruption, intent persistence, monotonic
 progress and replay. A real Root test covers lost response, same-release

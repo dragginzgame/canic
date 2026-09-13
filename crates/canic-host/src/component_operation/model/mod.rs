@@ -15,6 +15,7 @@ pub struct ComponentAuthorityRecord {
     pub environment: String,
     pub fleet: String,
     pub root_name: String,
+    /// Historical review provenance; live authority can survive an unchanged-Fleet replan.
     pub source_plan_sha256: String,
     pub binding: FleetSubnetRootBinding,
     pub release_set: FleetSubnetRootReleaseSet,

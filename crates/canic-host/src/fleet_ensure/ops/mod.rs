@@ -78,7 +78,7 @@ pub(crate) const fn root_owned_lifecycle(
         DesiredCanisterKind::Pool => match status {
             CanisterPoolAssetStatus::Ready => Some(RootOwnedCanisterLifecycle::Idle),
             CanisterPoolAssetStatus::PendingReset | CanisterPoolAssetStatus::Failed { .. } => {
-                Some(RootOwnedCanisterLifecycle::Retained)
+                Some(RootOwnedCanisterLifecycle::Reconciling)
             }
             CanisterPoolAssetStatus::Claimed { .. } => Some(RootOwnedCanisterLifecycle::Claimed),
             CanisterPoolAssetStatus::Workload { .. } => Some(RootOwnedCanisterLifecycle::Workload),
