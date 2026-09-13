@@ -17,6 +17,9 @@ pub mod workflow;
 mod tests;
 
 pub use dto::{DesiredFleetLoadError, LoadedDesiredFleet, load_desired_fleet};
+#[cfg(feature = "local-fleet")]
+pub(crate) use generate::generate_local_fleet;
+
 pub use generate::{
     FleetGenerateError, FleetGenerateRequest, FreshEstateSeedRequest, GeneratedDesiredFleet,
     fresh_pool_creation_funding, generate_desired_fleet, initialize_fresh_estate_seed,

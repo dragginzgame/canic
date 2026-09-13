@@ -26,27 +26,26 @@ pub fn plan_reinstall<P: EnsurePlatform>(
     let paths = EnsurePaths::under(root, &desired.environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
     let state = read_state(&paths, requested_fleet)?;
-    let journal = read_journal(&paths)?.ok_or(EnsureWorkflowError::JournalIntegrity)?;
-    if journal.completion == FleetEnsureCompletion::InProgress {
-        match capture::source::read(&paths, &desired.environment, requested_fleet) {
-            Ok(source) => {
-                return activation::plan_preparation(
-                    root,
-                    &paths,
-                    desired,
-                    desired_sha256,
-                    created_at_time,
-                    &source,
-                    &state,
-                    platform,
-                );
-            }
-            Err(crate::fleet_ensure::ops::EnsureStateError::InvalidActivationSource) => {
-                return Err(EnsureWorkflowError::ReinstallConflict);
-            }
-            Err(error) => return Err(error.into()),
+    // Source evidence is not an executable journal. Inspect it before requiring
+    // current effect fields; the existing review still owns live reset admission.
+    match capture::source::read(&paths, &desired.environment, requested_fleet) {
+        Ok(source) => {
+            return activation::plan_preparation(
+                root,
+                &paths,
+                desired,
+                desired_sha256,
+                created_at_time,
+                &source,
+                &state,
+                platform,
+            );
         }
+        Err(EnsureStateError::InvalidActivationSource) => {}
+        Err(error) => return Err(error.into()),
     }
+    let journal = retained_plan::journal(&paths, &desired.environment, requested_fleet)?
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
     let prior = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
     if prior.scope != FleetEnsurePlanScope::Full
         || journal.completion != FleetEnsureCompletion::Converged

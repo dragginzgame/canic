@@ -54,7 +54,10 @@ fn allocation_snapshot_preserves_unopened_memories_and_ledger_generation() {
             assert_eq!(prior.size, entry.virtual_extent);
         }
     }
-    assert_eq!(report.bucket_size_pages, 128);
+    assert_eq!(
+        report.bucket_size_pages,
+        crate::memory::configured_bucket_pages()
+    );
     assert_eq!(report.metadata_bytes_read, 34_848);
     assert!(matches!(
         report.memories[0].binding,

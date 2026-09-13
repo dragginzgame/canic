@@ -61,6 +61,21 @@ impl TemplateChunkedOps {
     ) -> WasmStoreStatusResponse {
         let manifests = TemplateManifestStateStore::export().entries;
         let chunk_sets = TemplateChunkSetStateStore::export().entries;
+        let fixture = crate::storage::stable::fixture_store::FixtureStore::inventory();
+        let inventory = crate::dto::template::WasmStoreInventoryResponse {
+            approved_catalog_entries: manifests
+                .iter()
+                .filter(|entry| entry.record.manifest_state == TemplateManifestState::Approved)
+                .count() as u64,
+            expected_template_chunks: chunk_sets
+                .iter()
+                .map(|entry| u64::from(entry.record.chunk_count))
+                .sum(),
+            stored_template_chunks: TemplateChunkStore::count() as u64,
+            fixture_sources: fixture.sources,
+            expected_fixture_chunks: fixture.expected_chunks,
+            stored_fixture_chunks: fixture.stored_chunks,
+        };
         let occupied_store_bytes = TemplateManifestStateStore::occupied_bytes()
             + TemplateChunkSetStateStore::occupied_bytes()
             + TemplateChunkStore::occupied_bytes()
@@ -87,6 +102,7 @@ impl TemplateChunkedOps {
         templates.sort_by(|left, right| left.template_id.cmp(&right.template_id));
 
         WasmStoreStatusResponse {
+            inventory,
             gc: WasmStoreGcStatusResponse {
                 mode: gc.mode,
                 changed_at: gc.changed_at,

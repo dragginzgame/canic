@@ -147,8 +147,8 @@ pub fn global_environment_conflict(
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "admission" | "blob-storage" | "cycles" | "fleet" | "inspect" | "medic" | "status"
-        | "token" => true,
+        "admission" | "blob-storage" | "component" | "cycles" | "fleet" | "frontend"
+        | "inspect" | "medic" | "observatory" | "status" | "token" => true,
         "auth" => auth_leaf_accepts_globals(tail),
         "info" => info_leaf_accepts_globals(tail),
         "replica" => matches!(
@@ -166,8 +166,8 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_environment(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "admission" | "blob-storage" | "build" | "cycles" | "fleet" | "inspect" | "medic"
-        | "status" | "token" => true,
+        "admission" | "blob-storage" | "build" | "component" | "cycles" | "fleet" | "frontend"
+        | "inspect" | "medic" | "observatory" | "status" | "token" => true,
         "app" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "auth" => auth_leaf_accepts_globals(tail),
         "info" => info_leaf_accepts_globals(tail),

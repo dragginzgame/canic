@@ -4,11 +4,10 @@
 //! Does not own: canister-history observation, endpoint policy, or timer suspension.
 //! Boundary: ops validates complete transitions before this single-record store mutates.
 
+use crate::cdk::bounded_cell::BoundedCell;
 use crate::{
     cdk::{
-        structures::{
-            DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-        },
+        structures::{DefaultMemoryImpl, memory::RuntimeMemory},
         types::Principal,
     },
     role_contract::allocation::memory::authority_restore::AUTHORITY_RESTORE_FENCE_ID,
@@ -19,17 +18,15 @@ use std::cell::RefCell;
 /// Maximum encoded bytes admitted for the complete authority restore fence.
 pub const MAX_AUTHORITY_RESTORE_FENCE_RECORD_BYTES: u32 = 256;
 
-const AUTHORITY_RESTORE_FENCE_RECORD_KEY: u8 = 0;
-
 eager_static! {
     static AUTHORITY_RESTORE_FENCE: RefCell<
-        StableBtreeMap<u8, AuthorityRestoreFenceRecord, RuntimeMemory<DefaultMemoryImpl>>,
-    > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
+        BoundedCell<Option<AuthorityRestoreFenceRecord>, RuntimeMemory<DefaultMemoryImpl>>,
+    > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
         key = "canic.core.authority_restore.fence.v1",
         ty = AuthorityRestoreFenceStore,
         id = AUTHORITY_RESTORE_FENCE_ID,
-    )));
+    ), None));
 }
 
 /// Exact terminal receipt retained after one live authority snapshot resumes.
@@ -86,15 +83,15 @@ pub struct AuthorityRestoreFenceStore;
 impl AuthorityRestoreFenceStore {
     #[must_use]
     pub(crate) fn get() -> Option<AuthorityRestoreFenceRecord> {
-        AUTHORITY_RESTORE_FENCE.with_borrow(|store| store.get(&AUTHORITY_RESTORE_FENCE_RECORD_KEY))
+        AUTHORITY_RESTORE_FENCE.with_borrow(|store| store.get().clone())
     }
 
     pub(crate) fn initialize(record: AuthorityRestoreFenceRecord) -> bool {
         AUTHORITY_RESTORE_FENCE.with_borrow_mut(|store| {
-            if store.get(&AUTHORITY_RESTORE_FENCE_RECORD_KEY).is_some() {
+            if store.get().is_some() {
                 return false;
             }
-            let previous = store.insert(AUTHORITY_RESTORE_FENCE_RECORD_KEY, record);
+            let previous = store.set(Some(record));
             debug_assert!(previous.is_none());
             true
         })
@@ -102,10 +99,10 @@ impl AuthorityRestoreFenceStore {
 
     pub(crate) fn replace(record: AuthorityRestoreFenceRecord) -> bool {
         AUTHORITY_RESTORE_FENCE.with_borrow_mut(|store| {
-            if store.get(&AUTHORITY_RESTORE_FENCE_RECORD_KEY).is_none() {
+            if store.get().is_none() {
                 return false;
             }
-            store.insert(AUTHORITY_RESTORE_FENCE_RECORD_KEY, record);
+            store.set(Some(record));
             true
         })
     }
@@ -121,9 +118,9 @@ impl AuthorityRestoreFenceStore {
     #[cfg(test)]
     pub(crate) fn import(data: AuthorityRestoreFenceData) {
         AUTHORITY_RESTORE_FENCE.with_borrow_mut(|store| {
-            store.clear_new();
+            store.set(None);
             if let Some(record) = data.record {
-                store.insert(AUTHORITY_RESTORE_FENCE_RECORD_KEY, record);
+                store.set(Some(record));
             }
         });
     }

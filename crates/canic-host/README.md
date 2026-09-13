@@ -17,10 +17,20 @@ canic build <app> <role> --profile release
 Every managed package declares exact App/role metadata. Artifact builds are
 non-incremental for deterministic Wasm. An explicit `RUSTC_WRAPPER` wins;
 otherwise the host discovers `sccache` on `PATH`.
+Before starting Cargo compilation with that implicit cache, Canic probes
+compiler startup directly and through the cache using `rustc -vV` (or the
+environment-selected `RUSTC`, including `RUSTC_WORKSPACE_WRAPPER`). The probes
+inherit the build directory, toolchain environment and command environment.
+A cache probe failure retains the original error and points to
+`RUSTC_WRAPPER= canic build <app> <role> --profile release` for direct
+compilation. An explicitly empty or custom `RUSTC_WRAPPER` bypasses implicit
+cache probing. Canic does not retry a failed build with a different wrapper.
+The probe checks compiler startup, not every later cache operation or
+Cargo configuration override; ordinary Cargo/compiler failures remain intact.
 
 ## Fleet Ensure
 
-The only maintained Fleet mutation owner is:
+Production Fleet convergence uses the maintained Ensure owner:
 
 ```bash
 canic fleet ensure <fleet> --desired <path>
@@ -71,3 +81,27 @@ When ICP CLI uses password storage, pass its supported identity password file
 through the individual operator environment. Canic forwards the path to ICP
 CLI and does not read or render the password contents. Keep credentials outside
 the repository.
+
+Operator Component provisioning is available through `component_operation`:
+the host retains exact review and submission authority while Root owns its
+lifecycle. See the [Component operation guide](../../docs/features/operations/component-operations.md).
+
+Frontend browser artifacts and external native-cycle preflight are owned by
+`frontend`. See the [frontend handoff guide](../../docs/features/operations/frontend-handoff.md)
+and [independent SDK consumer](examples/frontend-consumer/README.md).
+
+The [Fleet observatory](../../docs/features/operations/fleet-observatory.md) supplies
+independent role observations and bounded public reports from the host.
+
+## Persistent local Fleet
+
+The optional `local-fleet` feature exposes `LocalFleetSession` for a persistent
+PocketIC-backed Fleet with separate application subnets, exact release-bound
+preparation, ordinary Fleet Ensure convergence and a fixed browser gateway.
+The packaged `local_fleet` example uses only public library APIs. It accepts
+bounded JSON-line commands for seed/generation, convergence, current role/subnet
+discovery, frontend export, status, restart, time advance and shutdown; reset
+binds one exact former session. See the
+[local Fleet guide](../../docs/features/operations/local-development-fleet.md)
+for configuration, executable fingerprinting, resource limits and simulation
+fidelity. Production canisters do not gain a testing dependency.

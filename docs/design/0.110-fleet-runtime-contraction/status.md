@@ -1,6 +1,208 @@
 # Canic 0.110 Implementation Status
 
-## Validation throughput before push
+## Promoted operator batches — 2026-09-13
+
+The maintainer explicitly requests CANIC-010/008/002/017 in 0.110 now. Their
+former idea deferrals are superseded by the
+[promoted design](0.110-design.md#promoted-downstream-operator-batches).
+No further promotion ceremony or minor closeout is required to implement this
+accepted sequence. The previously completed .16 corrections remain preserved;
+the expanded delivery request is complete and ready for the governed release
+flow with its direct evidence and propagation recorded below. No new patch
+number is allocated; versions remain .15 and the open draft is .16.
+
+| Batch | Outcome | Owner | Included evidence / validation | Status |
+| --- | --- | --- | --- | --- |
+| OP1 / 010 | Reviewed ordinary Component lifecycle | Host workflow and CLI; existing Root operation | Exact authority, crash persistence, lost replies, activation, capacity/caller rejection, terminal replay and packaged CLI; focused native/PocketIC/Clippy | Ready in open .16 |
+| OP2 / 008 | Verified frontend environment/binding handoff | Host export and CLI | Nonterminal/stale/tampered input rejection, bounded public output, local trust and independent frontend consumer | Ready in open .16 |
+| OP3 / 002 | Supported bounded Fleet observatory | Host protected-status projection and downstream adapter | Freshness, provenance, partial/failing roles, bounds and measured runtime/host cost | Ready in open .16 |
+| OP4 / 017 | Persistent multi-subnet local Fleet | Host developer process and public test primitives | Two Roots, browser gateway/discovery, restart/time/reset/shutdown, resource bounds, packaged consumer | Ready in open .16 |
+
+The maintainer explicitly chooses this existing minor despite the advisory
+12-release guideline. Implementation batches are not individual patch releases.
+Existing 0.110 contraction work and the eventual human-owned minor closeout
+remain separate; this promotion does not start 0.111.
+
+### OP4 implementation checkpoint
+
+The optional public host `local-fleet` feature and packaged foreground consumer
+are implemented. Preparation binds exact local release/workspace/session authority,
+preallocates through the bundled Ledger, initializes Roots with the maintained
+initializer and delegates convergence to ordinary Fleet Ensure. Current role/subnet
+discovery and sealed Candid feed the existing frontend handoff. Exact environment
+binding fixes the direct ICP adapter's former literal-`local` restriction.
+
+The two-Root acceptance case passes in 190.34s (238s runner), with two application
+placements, authenticated SDK calls before/after restart and immutable frontend
+bundle reuse. All 4,126 recorded source files stayed unchanged. Four lifecycle
+cases pass in 22.32s, including lost Ledger responses, capacity/ownership rejection,
+time/trust, interrupted/terminal reset and late orphan-write isolation between
+session directories. Logs: `/tmp/canic-op4-public-fleet-final.log`,
+`/tmp/canic-op4-lifecycle-generation-final.log`. The direct ICP environment
+regression and all 20 generator cases pass; final host/library/test/example and
+internal governed-fixture Clippy pass (`/tmp/canic-op4-transport-native.log`,
+`/tmp/canic-op4-generator-native.log`, `/tmp/canic-op4-final-targets-clippy.log`).
+The host library also compiles without the optional feature, and the internal
+library/tests compile in their ordinary default feature selection
+(`/tmp/canic-op4-host-default-check.log`, `/tmp/canic-op4-fixture-default-check.log`).
+Layering, current-document semantics (zero layout warnings), formatting and
+whitespace checks pass (`/tmp/canic-op4-layering.log`, `/tmp/canic-op4-docs-final.log`).
+
+The actual Cargo host archive contains 280 Rust files identical to workspace
+source. Its extracted consumer builds against exact current local Canic path
+dependencies and unchanged external lock identities, then passes allocation,
+duplicate requests, time advance, restart, shutdown/reopen, terminal reset and
+old-reset rejection through public JSON commands in 21.12s. Evidence:
+`/tmp/canic-op4-package-evidence.json`, `/tmp/canic-op4-package-build.log`,
+`/tmp/canic-op4-consumer-result.json`. The archive/startup and full Fleet proofs
+are separate; no published adoption or mainnet fidelity is claimed. After the full Fleet run, source changes are limited to a pure invalid-Fleet-label
+rejection and formatting. Final scoped lint and archive compilation cover those
+changes; native and lifecycle evidence remains recorded separately above. OP4 is ready in
+open .16. See the
+[local Fleet guide](../../features/operations/local-development-fleet.md).
+
+### OP3 implementation checkpoint
+
+The host snapshot, role-specific transport, bounded process runner, public
+projection/HTML/HTTP adapter and CLI are implemented. Current Store metadata
+counts supplement protected byte accounting. The shipped Store Candid was regenerated
+and the structural runtime/status equality regression passes
+(`/tmp/canic-op4-canonical-test.log`). Local journal progress remains
+visible without treating an interrupted Fleet as terminal authority. The
+[observatory guide](../../features/operations/fleet-observatory.md) owns the
+contract, budgets and limits. The live case passes in 116.10s (132s runner), with eight queries, 7,670 private
+bytes and 1.59s for private/public/partial collections. Exact funding/Store
+responses, privacy and independent Store failure all pass. Store inventory,
+CLI help, layering and documentation checks pass. Final seven native cases, scoped Clippy, formatting and package inventory pass
+(`/tmp/canic-op3-native-complete.log`, `/tmp/canic-op3-clippy-complete.log`,
+`/tmp/canic-op3-canic-host-package.txt`, `/tmp/canic-op3-canic-cli-package.txt`).
+The package lists include ten host observatory files and the CLI adapter, with
+no example dependency installation directory. OP3 is ready in open .16. Those
+OP3 package lists are inventory evidence; the later OP4 host archive/startup
+qualification above remains distinct from publication/adoption. Logs: `/tmp/canic-op3-pocketic-qualified.log`,
+`/tmp/canic-op3-inventory.log`, `/tmp/canic-op3-help.log`. The guide records
+Store artifact cost and the exact limitations.
+No runtime rendering, global selector, controller bypass or sibling edit is added.
+
+### OP2 implementation checkpoint
+
+The host/CLI now generate and verify exact browser manifests and bindings,
+retain selected admission origins in Fleet generation, export enrolled local
+trust and inspect native asset cycles against explicit payload/funding bounds.
+The [frontend guide](../../features/operations/frontend-handoff.md) owns the
+contract and external asset/identity responsibilities. The current II limit is
+100 alternative origins, correcting the older feedback's ten-origin assumption.
+
+Twelve focused native/Node cases pass, including independent SDK digest parity,
+tampering and trust isolation (`/tmp/canic-frontend-tests-final.log`). Generated
+TypeScript now also compiles against SDK core 5.4.0/auth 8.0.3 and TypeScript
+6.0.3 (`/tmp/canic-frontend-sdk-types.log`). Admission-origin generation and CLI
+help pass (`/tmp/canic-frontend-generation.log`, `/tmp/canic-frontend-cli-help.log`).
+
+The exact public CLI/SDK Fleet case passes in 148.27s (174s runner). It covers
+fresh convergence, local trust, generated declarations, the exact admitted user,
+a denied user, missing-journal/stale-sidecar/origin rejection and typed native
+capacity failure (`/tmp/canic-frontend-pocketic.log`). Its frontend phase takes
+4.01s and its complete one-role bundle is 136,858 bytes. No Internet Identity UI
+ceremony, real asset upload, Toko adoption or published-package adoption is
+claimed. Initial attempts corrected fixture TOML/discovery and a transparent
+error assertion; they did not justify weakening runtime checks. Final host/CLI/internal-fixture/leaf Clippy, layering, documentation and package
+inventories pass (`/tmp/canic-frontend-clippy-final.log`,
+`/tmp/canic-frontend-docs.log`, `/tmp/canic-frontend-canic-host-package.txt`,
+`/tmp/canic-frontend-canic-cli-package.txt`). OP2 is ready in open .16. All four promoted batches are now complete; their separate evidence is recorded above.
+
+### OP1 implementation checkpoint
+
+The host and public CLI implement `component plan`, `apply` and `status`, with
+one durable operation ID, exact selected network/review/controller/release/Spec
+bindings, atomic intent before submission, bounded polling and terminal local
+replay. `info env --component-operation <name>` refreshes completion and replaces
+an old Ready-pool export row. The [operator guide](../../features/operations/component-operations.md)
+owns usage and recovery semantics. Ten native recovery/authority cases, six
+export cases and recursive CLI help pass at their recorded checkpoints.
+
+The first runtime case found and corrected resume-after-restoration: apply now
+replays the same Root command once, then polls; Root coalesces scheduling for
+that operation. It passes in 100.01s (159s runner), including denied caller, lost
+reply, same-release Root restoration, duplicate resume, one additional Component
+and terminal replay without calls or cycle changes (`/tmp/canic-op1-pocketic.log`).
+
+The public CLI/production ICP case passes in 23.40s (38s runner), using an
+isolated identity, a real management gateway, current endpoint-checked Candid,
+lost accepted response, terminal binding and exact JSON export. Tampered Candid
+rejects and completed replay succeeds without a transport executable. Log:
+`/tmp/canic-op1-public-cli-pocketic.log`. Its explicit terminal starting fixture
+and synthetic IC identity do not claim a full Ensure convergence or immutable
+published-package adoption. Earlier failed attempts were corrected fixture
+extraction/gateway/discovery setup, separate from the first case's runtime fix.
+
+Final native recovery (10), artifact-sidecar (2), governed catalogue, scoped
+Clippy, layering and document checks pass. Package file inventories include the
+complete host owner and CLI command. Logs: `/tmp/canic-op1-native-final.log`,
+`/tmp/canic-op1-artifact-tests.log`, `/tmp/canic-op1-catalogue.log`,
+`/tmp/canic-op1-final-clippy.log` and `/tmp/canic-op1-docs-final.log`. OP1 is ready
+in the open .16 draft. All four promoted batches are now complete and ready
+for the governed release flow. Existing package versions and external
+repositories are unchanged.
+
+## Current upstream follow-up
+
+CANIC-168 is a completed, separate host build-diagnostic batch in the open .16
+draft: compiler startup is checked before using an implicit cache; explicit
+wrappers, original failures and one-shot Cargo execution remain intact. Forty-
+five build-owner and 14 bootstrap-related tests plus scoped host Clippy pass.
+The memory batch below remains complete. Role-specific memory initialization
+is [parked under ideas](../ideas/role-specific-stable-initialization/design.md).
+
+CANIC-166's journal-entry correction uses the existing source inspector before
+explicit reset admission and diagnoses ordinary journal failures through that
+same owner. A private read-only projection verifies an already Applied bootstrap
+receipt without fixture metadata; it cannot create an executable action. All
+192 native Fleet Ensure tests pass, and a copy of Toko's exact 30-row source
+reaches the recovery diagnostic with all 17 source files unchanged. The current-
+release PocketIC reinstall journey passes in 666.84s before that final receipt
+projection; the native/copy proofs qualify the latter. The obsolete `.12` executable harness is now retired; its original immutable
+proof report remains historical. Current-runtime recovery and source/adoption
+qualification stay maintained. Live staging effects remain separate.
+
+CANIC-014's visible version/source/date/gate summary is now generated by the
+governed bump, with the preserved human handoff explicitly predating that
+transaction. All 16 release-flow tests, scoped Clippy and ShellCheck pass.
+Both corrections extend the existing open .16 draft; see the
+[current handoff](../../status/current.md).
+
+Before OP1–OP4 were added, the completed in-repository corrections and
+changelog were ready for the governed release flow. Final host Clippy, source-entry regressions and lightweight
+ownership/document checks pass. Package versions remain .15; no version or
+publication action ran. CANIC-141 now rejects ambiguous mixed-subnet creation
+through the feedback's explicit fail-closed alternative, including retained
+apply and mixed-Root funding. All 197 native Fleet Ensure cases and affected
+host/testing Clippy and native governed-catalogue validation pass. Toko's live recovery/conversion and the four larger
+product requests remain separate; see the current triage for their owners and
+release-boundary constraints. No new minor is started.
+
+## Stable-memory follow-up after 0.110.15
+
+The maintainer authorized allocation reduction and the reviewed consolidations
+on 2026-09-13 after the .15 push completed. The single open .16 batch is owned by
+Canic core/control-plane storage, with host state-manifest and runtime-fixture
+propagation. It adopts ic-memory 0.13.3, configurable 1 MiB buckets, four bounded
+singleton cells, small provisioning-map pages, and receipt/shard consolidation.
+Template payload and metadata merges are rejected on measured access costs and
+independent lifetimes. Native checks, scoped Clippy and all nine cases in the
+three focused PocketIC targets pass with unchanged source inputs. The complete
+.16 batch and changelog are ready for the maintainer's normal release flow. See [layout and inventory](../../features/runtime/stable-memory-layout.md)
+and [current handoff](../../status/current.md). This necessary allocation
+follow-up remains on the affected minor despite the advisory release-count
+threshold; no new minor, closeout, version or publication is authorized.
+
+The same batch also avoids loading template chunk bodies for GC counts, using
+reference slots and vector length. Eleven focused native chunk/publication
+tests and scoped control-plane Clippy qualify this later metadata-only change;
+the preceding PocketIC evidence retains its recorded snapshot. Stable layout
+and the 1 MiB default remain unchanged, and the complete batch stays ready.
+
+## Earlier validation throughput before the .14 push
 
 The maintainer's pre-push VS1 outcome is qualified at the recorded ic-memory
 0.13.1 checkpoint. BF2-BF4 and the other feedback corrections retain their scope.

@@ -5,12 +5,14 @@ mod backup;
 mod blob_storage;
 mod build;
 mod cli;
+mod component;
 mod cycles;
 mod diagnostic;
 mod endpoints;
 mod evidence;
 mod evidence_support;
 mod fleet;
+mod frontend;
 mod info;
 mod info_env;
 mod info_subnets;
@@ -19,6 +21,7 @@ mod list;
 mod medic;
 mod metrics;
 mod network;
+mod observatory;
 mod output;
 mod replica;
 mod restore;
@@ -41,6 +44,7 @@ use crate::cli::{
 };
 use clap::error::ErrorKind;
 pub use cli::top_level_command;
+pub use frontend::FrontendCommandError;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
@@ -60,6 +64,9 @@ pub enum CliError {
 
     #[error("build: {0}")]
     Build(#[from] build::BuildCommandError),
+
+    #[error("component: {0}")]
+    Component(#[source] Box<component::ComponentCommandError>),
 
     #[error("cycles: {0}")]
     Cycles(#[source] Box<cycles::CyclesCommandError>),
@@ -82,6 +89,9 @@ pub enum CliError {
     #[error("fleet: {0}")]
     Fleet(#[source] Box<fleet::FleetCommandError>),
 
+    #[error("frontend: {0}")]
+    Frontend(#[source] Box<frontend::FrontendCommandError>),
+
     #[error("info: {0}")]
     Info(#[from] info::InfoCommandError),
 
@@ -93,6 +103,9 @@ pub enum CliError {
 
     #[error("network: {0}")]
     Network(#[from] network::NetworkCommandError),
+
+    #[error("observatory: {0}")]
+    Observatory(#[from] observatory::ObservatoryCommandError),
 
     #[error("app: {0}")]
     Apps(#[source] Box<apps::AppCommandError>),
@@ -238,14 +251,17 @@ where
         "backup" => backup::run(tail).map_err(CliError::from),
         "blob-storage" => blob_storage::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
+        "component" => component::run(tail).map_err(|error| CliError::Component(Box::new(error))),
         "cycles" => cycles::run(tail).map_err(CliError::from),
         "diagnostic" => diagnostic::run(tail).map_err(CliError::from),
         "evidence" => evidence::run(tail).map_err(CliError::from),
         "fleet" => fleet::run(tail).map_err(CliError::from),
+        "frontend" => frontend::run(tail).map_err(|error| CliError::Frontend(Box::new(error))),
         "info" => info::run(tail).map_err(CliError::from),
         "inspect" => inspect::run(tail).map_err(CliError::from),
         "medic" => medic::run(tail).map_err(CliError::from),
         "network" => network::run(tail).map_err(CliError::from),
+        "observatory" => observatory::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
         "restore" => restore::run(tail).map_err(CliError::from),
         "scaffold" => scaffold::run(tail).map_err(CliError::from),

@@ -4,6 +4,7 @@
 //! Does not own: storage, clocks, transport, live observation, or effects.
 //! Boundary: workflow supplies exact desired/live inputs and persists the returned immutable plan.
 
+mod creation_fee;
 pub(super) mod recovery;
 pub(super) mod reinstall;
 pub(in crate::fleet_ensure) mod root_reinstall;
@@ -37,10 +38,17 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
+pub(super) use creation_fee::validate_creation_fee_scope;
+
 /// Pure current-contract plan compilation failure.
 
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum EnsurePolicyError {
+    #[error(
+        "this Fleet operation creates on multiple subnets {subnets:?}, but management_creation_fee_cycles supplies only one exact fee; mixed-subnet creation is unsupported and no effect was authorized; retain this operation's evidence and review placement so new creations use one subnet (existing identities on other subnets may be reused or reinstalled)"
+    )]
+    MixedSubnetCreationFees { subnets: Vec<String> },
+
     #[error(
         "Root {root} reset omits known controlled assets {missing_principals:?}; refresh the estate seed and matching policy imports, regenerate desired state, and review before reinstall"
     )]
@@ -612,6 +620,7 @@ pub fn compile_plan(
     let defer_pool_creation = reconciliation_only || continuation.is_some();
     let estate_funding_domains =
         compile_estate_funding_domains(desired, observation, bounds, defer_pool_creation)?;
+    validate_creation_fee_scope(desired, &accumulator.canisters, &estate_funding_domains)?;
     append_estate_funding_actions(
         &estate_funding_domains,
         created_at_time,

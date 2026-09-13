@@ -318,6 +318,9 @@ pub struct DesiredFleet {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DesiredFleetBootstrap {
+    /// Browser Principal namespace reviewed with this Fleet's admission input.
+    #[serde(default)]
+    pub admission_identity_origin: Option<String>,
     pub admission: canic_core::ids::FleetAdmissionPolicyTemplate,
     pub app: canic_core::ids::AppId,
     pub canonical_network_id: canic_core::ids::CanonicalNetworkId,

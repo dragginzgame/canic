@@ -519,7 +519,7 @@ mod tests {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
 
         for (config_path, role, expected_ids) in [
-            ("apps/test/canic.toml", "user_hub", vec![52, 53, 54]),
+            ("apps/test/canic.toml", "user_hub", vec![52, 53]),
             (
                 "canisters/audit/scaling_probe/canic.toml",
                 "scale_hub",
@@ -567,8 +567,8 @@ mod tests {
         assert_eq!(
             ids,
             vec![
-                10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47,
-                48, 49, 60, 68,
+                10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 48,
+                49, 60, 68,
             ]
         );
         let fixture = manifest.roles[0]

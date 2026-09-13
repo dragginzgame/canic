@@ -1,0 +1,41 @@
+[workspace]
+members = ["schema"]
+resolver = "2"
+
+[package]
+name = "canic_composed_wasm_probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata.canic]
+app = "composed_audit"
+role = "probe"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+participant = ["dep:icydb", "dep:canic-composed-empty-schema"]
+
+[dependencies]
+canic = { path = "../../../crates/canic", default-features = false, features = [] }
+candid = "0.10"
+ic-cdk = "0.20.2"
+icydb = { version = "=0.257.9", default-features = false, features = ["metrics"], optional = true }
+
+[build-dependencies]
+canic = { path = "../../../crates/canic", default-features = false }
+icydb = { version = "=0.257.9", default-features = false, optional = true }
+canic-composed-empty-schema = { path = "schema", optional = true }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = "symbols"
+debug = false
+panic = "abort"
+overflow-checks = false
+incremental = false

@@ -7,7 +7,7 @@
 use crate::{
     cli::{
         clap::{
-            flag_arg, parse_matches, path_option, render_usage, required_string,
+            flag_arg, parse_matches, path_option, render_usage, required_string, string_option,
             string_option_or_else, value_arg,
         },
         defaults::{default_icp, local_environment},
@@ -17,8 +17,11 @@ use crate::{
     output, version_text,
 };
 use canic_host::{
+    component_operation::{
+        ComponentOperationError, ops::transport::IcpComponentTransport, workflow,
+    },
     fleet_ensure::{CurrentFleetInventoryError, CurrentFleetResolution, resolve_current_fleet},
-    icp::IcpCommandError,
+    icp::{IcpCli, IcpCommandError},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
     registry::RegistryEntry,
 };
@@ -46,6 +49,9 @@ Examples:
 
 #[derive(Debug, ThisError)]
 pub enum InfoEnvCommandError {
+    #[error(transparent)]
+    Component(#[from] ComponentOperationError),
+
     #[error("{0}")]
     Usage(String),
 
@@ -89,6 +95,7 @@ struct InfoEnvBinding {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct InfoEnvOptions {
+    component_operation: Option<String>,
     fleet: String,
     json: bool,
     out: Option<PathBuf>,
@@ -105,6 +112,7 @@ impl InfoEnvOptions {
             .map_err(|_| InfoEnvCommandError::Usage(usage()))?;
 
         Ok(Self {
+            component_operation: string_option(&matches, "component-operation"),
             fleet: required_string(&matches, "fleet"),
             json: matches.get_flag("json"),
             out: path_option(&matches, "out"),
@@ -131,8 +139,58 @@ where
 
 fn load_env_report(options: &InfoEnvOptions) -> Result<InfoEnvReport, InfoEnvCommandError> {
     let root = resolve_current_canic_icp_root().map_err(InfoEnvCommandError::IcpRoot)?;
-    let resolution = resolve_info_env_fleet(options, &root)?;
+    let mut resolution = resolve_info_env_fleet(options, &root)?;
+    if let Some(name) = &options.component_operation {
+        let icp = IcpCli::new(&options.icp, Some(options.environment.clone())).with_cwd(&root);
+        let mut transport = IcpComponentTransport::new(&root, icp);
+        let record = workflow::status(
+            &root,
+            &options.environment,
+            &options.fleet,
+            name,
+            &mut transport,
+        )?;
+        if record.plan.authority.source_plan_sha256 != resolution.plan.plan_sha256 {
+            return Err(ComponentOperationError::Authority {
+                field: "terminal Fleet source",
+            }
+            .into());
+        }
+        let progress = record
+            .progress
+            .filter(|progress| progress.complete)
+            .ok_or(ComponentOperationError::Progress)?;
+        let binding = progress.binding.ok_or(ComponentOperationError::Progress)?;
+        include_component_entry(
+            &mut resolution.registry.entries,
+            RegistryEntry {
+                pid: binding.canister_id.to_text(),
+                role: Some(binding.role.to_string()),
+                parent_pid: Some(binding.fleet_subnet_root.to_text()),
+                module_hash: None,
+                protocol_binding: None,
+            },
+        )?;
+    }
     Ok(env_report(options, &resolution))
+}
+
+fn include_component_entry(
+    entries: &mut Vec<RegistryEntry>,
+    observed: RegistryEntry,
+) -> Result<(), ComponentOperationError> {
+    if let Some(existing) = entries.iter_mut().find(|entry| entry.pid == observed.pid) {
+        let same_root = existing.parent_pid == observed.parent_pid;
+        let role_agrees = existing.role == observed.role
+            || existing.role.as_deref() == Some("canister_pool_asset");
+        if !(same_root && role_agrees) {
+            return Err(ComponentOperationError::Progress);
+        }
+        *existing = observed;
+    } else {
+        entries.push(observed);
+    }
+    Ok(())
 }
 
 fn resolve_info_env_fleet(
@@ -279,6 +337,14 @@ fn info_env_command() -> ClapCommand {
                 .help("Installed Fleet name to inspect"),
         )
         .arg(flag_arg("json").long("json"))
+        .arg(
+            value_arg("component-operation")
+                .long("component-operation")
+                .value_name("name")
+                .help(
+                    "Include one exact operator Component after verifying live terminal progress",
+                ),
+        )
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
@@ -306,6 +372,27 @@ mod tests {
             module_hash: None,
             protocol_binding: None,
         }
+    }
+
+    #[test]
+    fn operator_binding_replaces_the_retained_ready_pool_role() {
+        let mut pool = registry_entry(USER_HUB, Some("canister_pool_asset"));
+        pool.parent_pid = Some(ROOT.to_string());
+        let mut observed = registry_entry(USER_HUB, Some("user_hub"));
+        observed.parent_pid = Some(ROOT.to_string());
+        let mut entries = vec![pool];
+        include_component_entry(&mut entries, observed.clone()).unwrap();
+        assert_eq!(entries, vec![observed.clone()]);
+        include_component_entry(&mut entries, observed.clone()).unwrap();
+        let mut wrong_root = observed;
+        wrong_root.parent_pid = Some(COORDINATOR.to_string());
+        assert!(matches!(
+            include_component_entry(&mut entries, wrong_root),
+            Err(ComponentOperationError::Progress)
+        ));
+        let bindings = env_bindings(&entries);
+        assert_eq!(bindings[0].variable, "CANIC_USER_HUB");
+        assert_eq!(bindings[0].canister_id, USER_HUB);
     }
 
     #[test]

@@ -57,11 +57,35 @@ placement.minimum_distinct_roots = 2
 "#;
 
 #[test]
+fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
+    assert_activation_source_review(1, Some(0), false);
+}
+
+#[test]
+fn activation_source_thirty_rows_without_publication_counters_reach_review() {
+    // CANIC-166 reports 29 Applied rows followed by one Issued provisioning row.
+    assert_activation_source_review(29, None, false);
+}
+
+#[test]
+fn activation_source_completed_bootstrap_without_fixtures_remains_receipt_only() {
+    assert_activation_source_review(29, None, true);
+}
+
+#[test]
+fn activation_source_retains_recorded_publication_attempts_through_handoff() {
+    assert_activation_source_review(1, Some(3), false);
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "the source evidence fixture binds a real typed provisioning plan to its issued prefix"
 )]
-fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
+fn assert_activation_source_review(
+    completed_prefix: usize,
+    publication_attempts: Option<u32>,
+    completed_bootstrap: bool,
+) {
     use crate::fleet_ensure::ops::{EnsurePaths, EnsureStateError, reinstall::source};
     use canic_core::dto::component_registry::RootComponentRegistryPreparationRequest;
 
@@ -102,34 +126,51 @@ fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
         },
         expected,
     };
-    let actions = [
-        prepare,
-        CurrentFleetProtocolAction::ProvisionComponents {
-            request: compiled.request,
-            plan_hash: compiled.plan_hash,
-        },
-        CurrentFleetProtocolAction::ObservePoolReadiness {
-            minimum_ready: 1,
-            readiness_floor: Cycles::new(1),
-        },
-    ]
-    .into_iter()
-    .enumerate()
-    .map(|(index, action)| EnsureAction::FleetProtocol {
-        action: Box::new(action),
-        candid: "root.did".to_string(),
-        candid_sha256: "a".repeat(64),
-        maximum_execution_burn_cycles: 1,
-        name: format!("action-{index}"),
-        principal: root.fleet_subnet_root.to_text(),
-    })
-    .collect::<Vec<_>>();
+    let mut actions = std::iter::repeat_n(prepare, completed_prefix)
+        .chain([
+            CurrentFleetProtocolAction::ProvisionComponents {
+                request: compiled.request,
+                plan_hash: compiled.plan_hash,
+            },
+            CurrentFleetProtocolAction::ObservePoolReadiness {
+                minimum_ready: 1,
+                readiness_floor: Cycles::new(1),
+            },
+        ])
+        .enumerate()
+        .map(|(index, action)| EnsureAction::FleetProtocol {
+            action: Box::new(action),
+            candid: "root.did".to_string(),
+            candid_sha256: "a".repeat(64),
+            maximum_execution_burn_cycles: 1,
+            name: format!("action-{index}"),
+            principal: root.fleet_subnet_root.to_text(),
+        })
+        .collect::<Vec<_>>();
+    if completed_bootstrap {
+        let EnsureAction::FleetProtocol { action, .. } = &mut actions[0] else {
+            unreachable!("protocol fixture");
+        };
+        **action = CurrentFleetProtocolAction::BootstrapStore {
+            expected: canic_core::dto::root_store::RootStoreBootstrapResponse {
+                fleet_subnet_root: root.fleet_subnet_root,
+                wasm_store: candid::Principal::anonymous(),
+                release_set: root.active_release_set,
+                catalog: Vec::new(),
+                fixtures: Vec::new(),
+            },
+            request: RootStoreBootstrapRequest {
+                operation_id: [44; 32],
+                manifest_payload_size_bytes: 1,
+            },
+        };
+    }
     let digest = "a".repeat(64);
     let temp = crate::test_support::temp_dir("activation-source");
     fs::create_dir_all(&temp).expect("source workspace");
     let source_wasm = temp.join("source-root.wasm");
     fs::write(&source_wasm, b"source module").expect("source artifact");
-    let plan = serde_json::json!({
+    let mut plan = serde_json::json!({
         "schema_version": 1, "scope": "full", "fleet": "source", "environment": "local",
         "operation_id": canic_core::cdk::utils::hash::hex_bytes([42; 32]),
         "plan_sha256": digest, "canisters": [{"actions": []}],
@@ -142,20 +183,41 @@ fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
                 "wasm": source_wasm, "subnet": "aaaaa-aa", "controllers": [desired.operator], "controller_canisters": [] }],
         } },
     });
-    let journal = serde_json::json!({
+    let mut journal = serde_json::json!({
         "schema_version": 1, "completion": "in_progress", "fleet": "source",
         "operation_id": plan["operation_id"], "plan_sha256": digest,
         "initial_controlled_cycles": "0", "initial_operator_cycles": "0",
         "initial_estate_funding_cycles_by_root": {}, "stalled_observations": 0,
         "successor_phases": [], "funding_reviews": [], "estate_funding_required": null,
-        "effects": actions[..2].iter().enumerate().map(|(index, action)| serde_json::json!({
+        "effects": actions[..=completed_prefix].iter().enumerate().map(|(index, action)| serde_json::json!({
             "action_sha256": crate::fleet_ensure::ops::action_sha256(action),
-            "state": if index == 0 { "applied" } else { "issued" },
-            "publication_attempts": 0, "maintenance_attempts": 0, "created_principal": null, "destination_post_cycles": null,
+            "state": if index < completed_prefix { "applied" } else { "issued" },
+            "maintenance_attempts": 2, "created_principal": null, "destination_post_cycles": null,
             "destination_pre_cycles": null, "post_cycles": null, "pre_cycles": null,
             "pre_canister_version": null, "progress_identity": null, "receipt": null,
         })).collect::<Vec<_>>(),
     });
+    if let Some(attempts) = publication_attempts {
+        for effect in journal["effects"].as_array_mut().expect("effects") {
+            effect["publication_attempts"] = attempts.into();
+        }
+    }
+    if completed_bootstrap {
+        // Freeze the completed source bytes before the fixture field existed.
+        // Hash that independent serialized fixture, never a default-filled action.
+        let current = String::from_utf8(
+            crate::fleet_ensure::json::to_vec(&actions[0]).expect("bootstrap fixture"),
+        )
+        .expect("JSON UTF-8");
+        assert_eq!(current.matches(",\"fixtures\":[]").count(), 1);
+        let source = current.replace(",\"fixtures\":[]", "");
+        journal["effects"][0]["action_sha256"] =
+            canic_core::cdk::utils::hash::sha256_hex(source.as_bytes()).into();
+        plan["protocol_actions"][0]["action"]["expected"]
+            .as_object_mut()
+            .expect("bootstrap receipt")
+            .remove("fixtures");
+    }
     let paths = EnsurePaths::under(&temp, "local", "source");
     fs::create_dir_all(paths.plan.parent().expect("parent")).expect("directory");
     fs::write(&paths.plan, serde_json::to_vec(&plan).expect("plan")).expect("write plan");
@@ -180,8 +242,9 @@ fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
     let evidence = source::read(&paths, "local", "source").expect("source evidence");
     assert_eq!(evidence.operation_id, plan["operation_id"]);
     assert_eq!(evidence.plan_sha256, digest);
-    assert_eq!(evidence.provisioning, actions[1]);
-    assert_eq!(evidence.registry_preparations, [actions[0].clone()]);
+    assert_eq!(evidence.provisioning, actions[completed_prefix]);
+    let preparations = &actions[usize::from(completed_bootstrap)..completed_prefix];
+    assert_eq!(evidence.registry_preparations, preparations);
     assert_eq!(
         evidence.plan_document_sha256,
         canic_core::cdk::utils::hash::sha256_hex(&fs::read(&paths.plan).expect("plan bytes"))
@@ -224,7 +287,12 @@ fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
         "/plan_sha256",
     ] {
         let mut changed = journal.clone();
-        *changed.pointer_mut(pointer).expect("field") = "changed".into();
+        let invalid_value = match pointer {
+            "/effects/1/state" if completed_prefix == 1 => "applied",
+            "/effects/0/state" | "/effects/1/state" => "issued",
+            _ => "changed",
+        };
+        *changed.pointer_mut(pointer).expect("field") = invalid_value.into();
         fs::write(
             &paths.journal,
             serde_json::to_vec(&changed).expect("changed journal"),
@@ -260,6 +328,14 @@ fn assert_unreadable_activation_review(
         read_plan(paths),
         Err(crate::fleet_ensure::ops::EnsureStateError::Decode { .. })
     ));
+    let failed_document = match crate::fleet_ensure::ops::read_journal(paths) {
+        Ok(Some(_)) => &paths.plan,
+        Err(crate::fleet_ensure::ops::EnsureStateError::Decode { path, .. }) => {
+            assert_eq!(path, paths.journal);
+            &paths.journal
+        }
+        other => panic!("unexpected retained journal admission: {other:?}"),
+    };
     let failures = [
         workflow::retained_in_progress_plan::<crate::fleet_ensure::tests::MockError>(
             &paths.workspace,
@@ -286,7 +362,11 @@ fn assert_unreadable_activation_review(
         )
         .expect_err("ordinary apply cannot execute source"),
     ];
-    for error in failures {
+    for (error, failed_document) in
+        failures
+            .into_iter()
+            .zip([failed_document, failed_document, &paths.plan])
+    {
         assert!(matches!(
             error,
             workflow::EnsureWorkflowError::RetainedActivationReviewRequired {
@@ -294,7 +374,7 @@ fn assert_unreadable_activation_review(
             } if operation_id == evidence.operation_id
                 && plan_sha256 == evidence.plan_sha256
                 && source_document_sha256 == evidence.plan_document_sha256
-                && matches!(*source, crate::fleet_ensure::ops::EnsureStateError::Decode { .. })
+                && matches!(source.as_ref(), crate::fleet_ensure::ops::EnsureStateError::Decode { path, .. } if path == failed_document)
         ));
     }
     assert_eq!(
@@ -855,6 +935,7 @@ fn current_desired_state_rejects_component_demand_above_pool_target() {
         .collect::<Vec<_>>();
     roots[0].limits.canister_pool.canister_cycles = Cycles::new(4_999_999_999_999);
     desired.bootstrap = Some(DesiredFleetBootstrap {
+        admission_identity_origin: None,
         admission: compile_fleet_admission_policy_template(vec![principal(1)], Vec::new())
             .expect("Fleet admission template"),
         app: registry.authority.binding.fleet.app.clone(),

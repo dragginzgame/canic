@@ -70,13 +70,6 @@ fn receipt_backed_stable_allocations_remain_single_owner() {
     );
     assert_eq!(
         storage
-            .matches("canic.core.application_receipt.replay.v1")
-            .count(),
-        1,
-        "application replay deadlines must have one exact adjunct allocation",
-    );
-    assert_eq!(
-        storage
             .matches("canic.core.application_receipt.eligibility.v1")
             .count(),
         1,
@@ -84,7 +77,6 @@ fn receipt_backed_stable_allocations_remain_single_owner() {
     );
     assert!(allocations.contains("pub const INTENT_RECEIPT_BACKED_RECORDS_ID: u8 = 45;"));
     assert!(allocations.contains("pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 49;"));
-    assert!(allocations.contains("pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 47;"));
     assert!(allocations.contains("pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 48;"));
 }
 

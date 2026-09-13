@@ -9,7 +9,7 @@
 use serde::Serialize;
 
 use crate::role_contract::allocation::memory::{
-    application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
+    application_receipt::APPLICATION_RECEIPT_ELIGIBILITY_ID,
     async_job_recovery::ASYNC_JOB_RECOVERY_ID,
     auth::{
         DELEGATED_TOKEN_ISSUER_STATE_ID, LOCAL_APPLICATION_AUTHORIZATION_STATE_ID,
@@ -37,7 +37,7 @@ use crate::role_contract::allocation::memory::{
     },
     replay::REPLAY_RECEIPTS_ID,
     runtime::{RUNTIME_BINDINGS_ID, RUNTIME_CANISTER_CHILDREN_ID},
-    sharding::{SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
+    sharding::{SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
 };
 use crate::role_contract::{AllocationOwner, StateAllocationKey};
 
@@ -268,8 +268,7 @@ fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
 
 fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
     use crate::storage::stable::sharding::{
-        ShardEntryRecord, ShardingActiveSetData, ShardingActiveSetRecord, ShardingAssignmentRecord,
-        ShardingAssignmentsData, ShardingRegistryData,
+        ShardEntryRecord, ShardingAssignmentRecord, ShardingAssignmentsData, ShardingRegistryData,
     };
 
     vec![
@@ -294,18 +293,6 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
                 ShardingAssignmentsData::STATE_CONTRACT_NAME,
                 170,
                 "sharding_assignments_restore_partition_bindings",
-            )],
-            Vec::new(),
-        ),
-        descriptor(
-            StateAllocationKey::ShardingActiveSet,
-            vec![state_domain(
-                "sharding_active_set",
-                SHARDING_ACTIVE_SET_ID,
-                ShardingActiveSetRecord::STATE_CONTRACT_NAME,
-                ShardingActiveSetData::STATE_CONTRACT_NAME,
-                180,
-                "sharding_active_set_restores_active_shards",
             )],
             Vec::new(),
         ),
@@ -661,27 +648,16 @@ fn intent_domains() -> Vec<StateDomainManifest> {
 fn application_receipt_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::intent::{
         ApplicationReceiptEligibilityData, ApplicationReceiptEligibilityRecord,
-        ApplicationReceiptReplayData, ApplicationReceiptReplayRecord,
     };
 
-    vec![
-        state_domain(
-            "application_receipt_replay",
-            APPLICATION_RECEIPT_REPLAY_ID,
-            ApplicationReceiptReplayRecord::STATE_CONTRACT_NAME,
-            ApplicationReceiptReplayData::STATE_CONTRACT_NAME,
-            116,
-            "application_receipt_replay_restores_exact_deadlines",
-        ),
-        state_domain(
-            "application_receipt_eligibility",
-            APPLICATION_RECEIPT_ELIGIBILITY_ID,
-            ApplicationReceiptEligibilityRecord::STATE_CONTRACT_NAME,
-            ApplicationReceiptEligibilityData::STATE_CONTRACT_NAME,
-            117,
-            "application_receipt_eligibility_restores_exact_terminal_deadlines",
-        ),
-    ]
+    vec![state_domain(
+        "application_receipt_eligibility",
+        APPLICATION_RECEIPT_ELIGIBILITY_ID,
+        ApplicationReceiptEligibilityRecord::STATE_CONTRACT_NAME,
+        ApplicationReceiptEligibilityData::STATE_CONTRACT_NAME,
+        117,
+        "application_receipt_eligibility_restores_exact_terminal_deadlines",
+    )]
 }
 
 fn placement_acknowledgement_domains() -> Vec<StateDomainManifest> {
@@ -979,10 +955,9 @@ mod tests {
     fn intent_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::intent::{
             ApplicationReceiptEligibilityData, ApplicationReceiptEligibilityRecord,
-            ApplicationReceiptReplayData, ApplicationReceiptReplayRecord, IntentExpiryEntryRecord,
-            IntentExpiryIndexData, IntentMetaData, IntentPendingData, IntentPendingEntryRecord,
-            IntentRecord, IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord,
-            IntentTotalsData, PlacementAcknowledgementEntryRecord,
+            IntentExpiryEntryRecord, IntentExpiryIndexData, IntentMetaData, IntentPendingData,
+            IntentPendingEntryRecord, IntentRecord, IntentRecordsData, IntentResourceTotalsRecord,
+            IntentStoreMetaRecord, IntentTotalsData, PlacementAcknowledgementEntryRecord,
             PlacementAcknowledgementIndexData, ReceiptBackedIntentRecord, ReceiptBackedIntentsData,
         };
 
@@ -1029,12 +1004,6 @@ mod tests {
                 "placement_acknowledgement_index",
                 PlacementAcknowledgementEntryRecord::STATE_CONTRACT_NAME,
                 PlacementAcknowledgementIndexData::STATE_CONTRACT_NAME,
-            ),
-            (
-                StateAllocationKey::CoreApplicationReceipts,
-                "application_receipt_replay",
-                ApplicationReceiptReplayRecord::STATE_CONTRACT_NAME,
-                ApplicationReceiptReplayData::STATE_CONTRACT_NAME,
             ),
             (
                 StateAllocationKey::CoreApplicationReceipts,
@@ -1113,8 +1082,8 @@ mod tests {
     #[test]
     fn sharding_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::sharding::{
-            ShardEntryRecord, ShardingActiveSetData, ShardingActiveSetRecord,
-            ShardingAssignmentRecord, ShardingAssignmentsData, ShardingRegistryData,
+            ShardEntryRecord, ShardingAssignmentRecord, ShardingAssignmentsData,
+            ShardingRegistryData,
         };
 
         let descriptors = canic_state_descriptors();
@@ -1131,12 +1100,6 @@ mod tests {
                 "sharding_assignments",
                 ShardingAssignmentRecord::STATE_CONTRACT_NAME,
                 ShardingAssignmentsData::STATE_CONTRACT_NAME,
-            ),
-            (
-                StateAllocationKey::ShardingActiveSet,
-                "sharding_active_set",
-                ShardingActiveSetRecord::STATE_CONTRACT_NAME,
-                ShardingActiveSetData::STATE_CONTRACT_NAME,
             ),
         ] {
             let descriptor = descriptors

@@ -14,12 +14,10 @@ use crate::{
         placement::allocation::PlacementAllocationIdentity,
     },
     storage::stable::intent::{
-        APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
-        ApplicationReceiptEligibilityData, ApplicationReceiptEligibilityEntryRecord,
-        ApplicationReceiptEligibilityKeyRecord, ApplicationReceiptEligibilityRecord,
-        ApplicationReceiptReplayData, ApplicationReceiptReplayEntryRecord,
-        ApplicationReceiptReplayRecord, IntentStore, IntentTotalsData,
-        PlacementAcknowledgementEntryRecord, PlacementAcknowledgementIndexData,
+        APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, ApplicationReceiptEligibilityData,
+        ApplicationReceiptEligibilityEntryRecord, ApplicationReceiptEligibilityKeyRecord,
+        ApplicationReceiptEligibilityRecord, ApplicationReceiptRetentionRecord, IntentStore,
+        IntentTotalsData, PlacementAcknowledgementEntryRecord, PlacementAcknowledgementIndexData,
         PlacementAcknowledgementIndexEntryRecord, ReceiptBackedIntentStore,
     },
 };
@@ -139,72 +137,6 @@ fn terminal_evidence(decision: TerminalEvidenceDecision, byte: u8) -> TerminalEv
     TerminalEvidence::new(Principal::from_slice(&[1; 29]), decision, [byte; 32])
 }
 
-fn application_replay_contradiction_cases(
-    canonical: ApplicationReceiptReplayEntryRecord,
-    placement_operation_id: OperationId,
-) -> [(&'static str, ApplicationReceiptReplayData); 5] {
-    let orphan_id = operation_id(251);
-    [
-        ("missing", ApplicationReceiptReplayData::default()),
-        (
-            "wrong schema",
-            ApplicationReceiptReplayData {
-                entries: vec![ApplicationReceiptReplayEntryRecord {
-                    record: ApplicationReceiptReplayRecord {
-                        schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION + 1,
-                        ..canonical.record
-                    },
-                    ..canonical
-                }],
-            },
-        ),
-        (
-            "wrong identity",
-            ApplicationReceiptReplayData {
-                entries: vec![ApplicationReceiptReplayEntryRecord {
-                    record: ApplicationReceiptReplayRecord {
-                        operation_id: orphan_id,
-                        ..canonical.record
-                    },
-                    ..canonical
-                }],
-            },
-        ),
-        (
-            "orphan",
-            ApplicationReceiptReplayData {
-                entries: vec![
-                    canonical,
-                    ApplicationReceiptReplayEntryRecord {
-                        operation_id: orphan_id,
-                        record: ApplicationReceiptReplayRecord {
-                            schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
-                            operation_id: orphan_id,
-                            replay_deadline_ns: REPLAY_DEADLINE,
-                        },
-                    },
-                ],
-            },
-        ),
-        (
-            "Canic-owned",
-            ApplicationReceiptReplayData {
-                entries: vec![
-                    canonical,
-                    ApplicationReceiptReplayEntryRecord {
-                        operation_id: placement_operation_id,
-                        record: ApplicationReceiptReplayRecord {
-                            schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
-                            operation_id: placement_operation_id,
-                            replay_deadline_ns: REPLAY_DEADLINE,
-                        },
-                    },
-                ],
-            },
-        ),
-    ]
-}
-
 fn application_eligibility_contradiction_cases(
     canonical: ApplicationReceiptEligibilityEntryRecord,
 ) -> [(&'static str, ApplicationReceiptEligibilityData); 7] {
@@ -269,24 +201,6 @@ fn application_eligibility_contradiction_cases(
             },
         ),
     ]
-}
-
-fn assert_reconciliation_rejects_application_replay_contradictions(
-    canonical: ApplicationReceiptReplayEntryRecord,
-    placement_operation_id: OperationId,
-    sentinel: &PlacementAcknowledgementIndexData,
-) {
-    for (name, replay) in application_replay_contradiction_cases(canonical, placement_operation_id)
-    {
-        ReceiptBackedIntentStore::import_application_replay(replay);
-        ReceiptBackedIntentOps::reconcile_receipt_indexes()
-            .expect_err("contradictory receipt indexes must reject");
-        assert_eq!(
-            ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
-            *sentinel,
-            "placement index mutated for {name} application replay contradiction"
-        );
-    }
 }
 
 fn assert_reconciliation_rejects_application_eligibility_contradictions(
@@ -740,7 +654,6 @@ fn application_receipt_replay_window_is_checked_only_after_exact_lookup_misses()
         }
     );
     assert!(ReceiptBackedIntentStore::get(closed.operation_id).is_none());
-    assert!(ReceiptBackedIntentStore::get_application_replay(closed.operation_id).is_none());
 
     let mut maximum = receipt_input(42);
     maximum.replay_deadline_ns = 300 + MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS;
@@ -770,40 +683,6 @@ fn application_receipt_replay_window_is_checked_only_after_exact_lookup_misses()
 }
 
 #[test]
-fn application_replay_metadata_contradictions_fail_closed() {
-    reset();
-    let input = receipt_input(44);
-    begin_receipt(&input, 100).expect("create application receipt");
-
-    ReceiptBackedIntentStore::import_application_replay(ApplicationReceiptReplayData::default());
-    let missing = ReceiptBackedIntentOps::load(input.operation_id)
-        .expect_err("application receipt without replay metadata must reject");
-    assert_eq!(
-        missing.code(),
-        crate::diagnostics::codes::EVIDENCE_UNAVAILABLE
-    );
-
-    reset();
-    let orphan_id = operation_id(45);
-    ReceiptBackedIntentStore::import_application_replay(ApplicationReceiptReplayData {
-        entries: vec![ApplicationReceiptReplayEntryRecord {
-            operation_id: orphan_id,
-            record: ApplicationReceiptReplayRecord {
-                schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
-                operation_id: orphan_id,
-                replay_deadline_ns: REPLAY_DEADLINE,
-            },
-        }],
-    });
-    let orphan = ReceiptBackedIntentOps::load(orphan_id)
-        .expect_err("orphan application replay metadata must reject");
-    assert_eq!(
-        orphan.code(),
-        crate::diagnostics::codes::EVIDENCE_UNAVAILABLE
-    );
-}
-
-#[test]
 fn receipt_index_reconciliation_is_ordered_fail_closed_and_non_mutating_on_error() {
     reset();
     let application = receipt_input(46);
@@ -818,7 +697,6 @@ fn receipt_index_reconciliation_is_ordered_fail_closed_and_non_mutating_on_error
         150,
     )
     .expect("settle application receipt");
-    let canonical_application = ReceiptBackedIntentStore::export_application_replay().entries[0];
     let canonical_eligibility = ReceiptBackedIntentStore::export_application_eligibility();
 
     let placement = placement_receipt_input(46);
@@ -846,15 +724,6 @@ fn receipt_index_reconciliation_is_ordered_fail_closed_and_non_mutating_on_error
     };
     ReceiptBackedIntentStore::import_placement_acknowledgement_index(sentinel_index.clone());
 
-    assert_reconciliation_rejects_application_replay_contradictions(
-        canonical_application,
-        placement.operation_id,
-        &sentinel_index,
-    );
-
-    ReceiptBackedIntentStore::import_application_replay(ApplicationReceiptReplayData {
-        entries: vec![canonical_application],
-    });
     let canonical_entry = canonical_eligibility.entries[0];
     assert_reconciliation_rejects_application_eligibility_contradictions(
         canonical_entry,
@@ -1575,7 +1444,7 @@ fn poisoned_earliest_application_eligibility_rejects_before_any_reclamation() {
     eligibility.entries[0].record.payload_binding = PayloadBinding::new([250; 32]);
     ReceiptBackedIntentStore::import_application_eligibility(eligibility);
     let records_before = ReceiptBackedIntentStore::export_records();
-    let replay_before = ReceiptBackedIntentStore::export_application_replay();
+    let count_before = ReceiptBackedIntentStore::application_count();
     let eligibility_before = ReceiptBackedIntentStore::export_application_eligibility();
     let totals_before = IntentStore::export_totals();
 
@@ -1586,10 +1455,7 @@ fn poisoned_earliest_application_eligibility_rejects_before_any_reclamation() {
     .expect_err("poisoned earliest entry must stop cleanup");
 
     assert_eq!(ReceiptBackedIntentStore::export_records(), records_before);
-    assert_eq!(
-        ReceiptBackedIntentStore::export_application_replay(),
-        replay_before
-    );
+    assert_eq!(ReceiptBackedIntentStore::application_count(), count_before);
     assert_eq!(
         ReceiptBackedIntentStore::export_application_eligibility(),
         eligibility_before
@@ -1641,5 +1507,57 @@ fn receipt_backed_rollback_and_revision_conflict_preserve_exact_totals() {
     assert_eq!(
         loaded.state,
         ReceiptBackedIntentState::RolledBack { evidence }
+    );
+}
+
+#[test]
+fn embedded_receipt_retention_and_count_fail_closed_without_rebuilding_indexes() {
+    reset();
+    let input = receipt_input(44);
+    begin_receipt(&input, 100).expect("create application receipt");
+    assert_eq!(ReceiptBackedIntentStore::application_count(), 1);
+    begin_receipt(&input, 100).expect("retry application receipt");
+    assert_eq!(ReceiptBackedIntentStore::application_count(), 1);
+    let mut primary = ReceiptBackedIntentStore::get(input.operation_id).unwrap();
+    primary.application_retention = None;
+    ReceiptBackedIntentStore::insert(primary.clone());
+    assert_eq!(ReceiptBackedIntentStore::application_count(), 0);
+    assert_eq!(
+        ReceiptBackedIntentOps::load(input.operation_id)
+            .unwrap_err()
+            .code(),
+        crate::diagnostics::codes::EVIDENCE_UNAVAILABLE
+    );
+    primary.application_retention = Some(ApplicationReceiptRetentionRecord {
+        replay_deadline_ns: input.replay_deadline_ns,
+    });
+    ReceiptBackedIntentStore::insert(primary);
+    let mut meta = IntentStore::meta();
+    meta.application_receipt_count = 0;
+    IntentStore::set_meta(meta);
+    let before = ReceiptBackedIntentStore::export_placement_acknowledgement_index();
+    assert_eq!(
+        ReceiptBackedIntentOps::reconcile_receipt_indexes()
+            .unwrap_err()
+            .code(),
+        crate::diagnostics::codes::EVIDENCE_UNAVAILABLE
+    );
+    assert_eq!(
+        ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
+        before
+    );
+    reset();
+    let placement = placement_receipt_input(44);
+    ReceiptBackedIntentOps::begin_placement_or_load(&placement, 100).unwrap();
+    let mut primary = ReceiptBackedIntentStore::get(placement.operation_id).unwrap();
+    primary.application_retention = Some(ApplicationReceiptRetentionRecord {
+        replay_deadline_ns: REPLAY_DEADLINE,
+    });
+    ReceiptBackedIntentStore::insert(primary);
+    assert_eq!(
+        ReceiptBackedIntentOps::load(placement.operation_id)
+            .unwrap_err()
+            .code(),
+        crate::diagnostics::codes::EVIDENCE_UNEXPECTED_STATE
     );
 }

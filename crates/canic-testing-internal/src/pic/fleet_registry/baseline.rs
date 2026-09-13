@@ -1966,6 +1966,243 @@ exec icp "$@"
         store_wasm_bytes: Vec<u8>,
     }
 
+    #[cfg(all(test, feature = "governed-pocketic-tests"))]
+    #[test]
+    #[ignore = "public persistent multi-subnet local Fleet qualification"]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one public lifecycle journey shares its release artifacts across convergence and restart"
+    )]
+    fn persistent_local_fleet_converges_two_roots_through_public_host() {
+        use canic_host::local_fleet::{model::LocalFleetConfig, workflow::LocalFleetSession};
+        let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = workspace.join("canisters/audit/root_probe/local_fleet.toml");
+        let config = AppConfigSnapshot::load(&config_path).unwrap();
+        let deployment = config
+            .model()
+            .compile_component_deployment_configuration()
+            .unwrap();
+        let roles = config
+            .model()
+            .roles
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let directory = literal_zero_adapter_root(&workspace).join("persistent-local");
+        std::fs::create_dir_all(&directory).unwrap();
+        let _cleanup = TestDirectoryCleanup(directory.clone());
+        let artifacts = build_literal_zero_release_artifacts(
+            &workspace,
+            &directory,
+            &config_path,
+            &deployment,
+            &roles,
+            BuildNetwork::Local,
+            INTERNAL_TEST_RELEASE_BUILD_NONCE,
+        );
+        let (icp, operator, _) = prepare_isolated_icp(&directory);
+        let browser = prepare_frontend_identity(&directory, "browser-identity.json");
+        let port_guard = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = port_guard.local_addr().unwrap().port();
+        drop(port_guard);
+        let binary = PathBuf::from(std::env::var_os("POCKET_IC_BIN").expect("pinned PocketIC"));
+        let local = LocalFleetConfig {
+            schema_version: 1,
+            name: "qualification".into(),
+            server_binary_sha256: canic_host::local_fleet::ops::binary_sha256(&binary).unwrap(),
+            server_binary: binary,
+            gateway_port: port,
+            application_subnets: 2,
+            maximum_canisters: 12,
+            canister_memory_bytes: 256 * 1024 * 1024,
+            allocation_debit_cycles: 500_000_000_000_000,
+            request_timeout_secs: 60,
+            server_lifetime_secs: 1200,
+        };
+        let mut session = LocalFleetSession::open(&directory, &local).unwrap();
+        let initial = session.status().unwrap();
+        std::fs::write(directory.join("Cargo.toml"), "[workspace]\n").unwrap();
+        std::fs::write(directory.join("icp.yaml"), format!(
+            "canisters: []\nnetworks:\n  - name: local\n    mode: managed\nenvironments:\n  - name: {}\n    network: local\n    canisters: []\n", initial.environment)).unwrap();
+        let retained_config = retain_generated_journey_source(&directory, &config_path);
+        let policy = local_fleet_two_root_policy(
+            operator,
+            browser,
+            &initial.application_subnets,
+            &retained_config,
+        );
+        let source = directory.join("fleet-policy.toml");
+        let seed = directory.join("fleet-seed.toml");
+        std::fs::write(&source, policy).unwrap();
+        canic_host::fleet_ensure::initialize_fresh_estate_seed(
+            &canic_host::fleet_ensure::FreshEstateSeedRequest {
+                cycles_ledger: "um5iw-rqaaa-aaaaq-qaaba-cai",
+                management_creation_fee_cycles: 1_300_000_000_000,
+                seed: &seed,
+                source: &source,
+            },
+        )
+        .unwrap();
+        let generated = session
+            .generate_fleet(&canic_host::fleet_ensure::FleetGenerateRequest {
+                app_config: &retained_config,
+                environment: &initial.environment,
+                fleet: "development",
+                icp_executable: icp.to_str().unwrap(),
+                release_build_id: artifacts.release_build_id,
+                root: &directory,
+                seed: &seed,
+                source: &source,
+            })
+            .unwrap();
+        let report = session
+            .converge_fleet(&directory, &generated.desired, icp.to_str().unwrap())
+            .unwrap();
+        assert!(report.terminal);
+        assert!(
+            report
+                .plan
+                .canisters
+                .iter()
+                .flat_map(|canister| &canister.actions)
+                .all(|action| !matches!(action, EnsureAction::Create { .. }))
+        );
+        let before = session.status().unwrap();
+        let discovery = session
+            .discover(&directory, &generated.desired.fleet)
+            .unwrap();
+        let app_subnets = discovery
+            .roles
+            .iter()
+            .filter(|entry| entry.role.as_deref() == Some("app"))
+            .map(|entry| entry.subnet_id)
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(app_subnets.len(), 2);
+        assert_local_fleet_browser(&directory, &before, &generated.desired.fleet);
+        assert_eq!(
+            before
+                .canisters
+                .iter()
+                .filter(|canister| canister.allocation_role == "root")
+                .count(),
+            2
+        );
+        assert_eq!(
+            before
+                .canisters
+                .iter()
+                .filter(|canister| canister.allocation_role == "wasm_store")
+                .count(),
+            2
+        );
+        session.restart(&initial.session_id).unwrap();
+        let replay = session
+            .converge_fleet(&directory, &generated.desired, icp.to_str().unwrap())
+            .unwrap();
+        assert!(replay.terminal);
+        assert_eq!(session.status().unwrap().gateway, before.gateway);
+        assert_local_fleet_browser(
+            &directory,
+            &session.status().unwrap(),
+            &generated.desired.fleet,
+        );
+        session.shutdown(&initial.session_id).unwrap();
+    }
+
+    #[cfg(all(test, feature = "governed-pocketic-tests"))]
+    fn local_fleet_two_root_policy(
+        operator: Principal,
+        browser: Principal,
+        subnets: &[Principal],
+        config: &Path,
+    ) -> String {
+        let source = generated_journey_policy(operator, subnets[0], 1, 1, config);
+        let mut policy: toml::Value = toml::from_str(&source).unwrap();
+        policy["admission"].as_table_mut().unwrap().insert(
+            "identity_origin".into(),
+            toml::Value::String("http://localhost:5173".into()),
+        );
+        policy["admission"]["principals"]
+            .as_array_mut()
+            .unwrap()
+            .push(toml::Value::String(browser.to_text()));
+        let roots = policy["fleet_subnet_roots"].as_array_mut().unwrap();
+        let mut second = roots[0].clone();
+        second["placement_subnet"] = toml::Value::String(subnets[1].to_text());
+        second["component_group_placements"]["qualification"] =
+            toml::Value::Array(vec![toml::Value::Integer(1)]);
+        roots.push(second);
+        toml::to_string_pretty(&policy).unwrap()
+    }
+
+    #[cfg(all(test, feature = "governed-pocketic-tests"))]
+    fn assert_local_fleet_browser(
+        directory: &Path,
+        local: &canic_host::local_fleet::view::LocalFleetView,
+        fleet: &str,
+    ) {
+        use canic_host::frontend::{model::*, ops, workflow};
+        let authority = ops::authority(directory, &local.environment, fleet).unwrap();
+        let applications = authority
+            .entries
+            .iter()
+            .filter(|entry| entry.role.as_deref() == Some("app"))
+            .collect::<Vec<_>>();
+        assert_eq!(applications.len(), 2);
+        assert_ne!(applications[0].parent_pid, applications[1].parent_pid);
+        let input = FrontendEnvironmentInput {
+            schema_version: 1,
+            environment: local.environment.clone(),
+            canonical_network_id: authority.network,
+            api_origin: local.gateway.trim_end_matches('/').into(),
+            identity: FrontendIdentityInput {
+                canister_id: Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap(),
+                provider_origin: format!(
+                    "http://rdmx6-jaaaa-aaaaa-aaadq-cai.localhost:{}",
+                    local
+                        .gateway
+                        .trim_end_matches('/')
+                        .rsplit_once(':')
+                        .unwrap()
+                        .1
+                ),
+                derivation_origin: "http://localhost:5173".into(),
+                alternative_origins: Vec::new(),
+            },
+            asset: None,
+            roles: applications
+                .iter()
+                .map(|entry| FrontendRoleInput {
+                    role: "app".into(),
+                    canister_id: Principal::from_text(&entry.pid).unwrap(),
+                })
+                .collect(),
+        };
+        let browser = directory.join("browser");
+        let output = if browser.exists() {
+            directory.join("browser-restarted")
+        } else {
+            browser.clone()
+        };
+        let manifest = workflow::prepare_handoff(directory, fleet, &input, &output).unwrap();
+        assert_eq!(
+            manifest.local_root_key_der_hex.as_deref(),
+            Some(local.root_key_der_hex.as_str())
+        );
+        ops::verify_bundle(&output, &manifest.manifest_sha256).unwrap();
+        let original: FrontendManifestRecord =
+            serde_json::from_slice(&std::fs::read(browser.join("canic-frontend.json")).unwrap())
+                .unwrap();
+        ops::verify_bundle(&browser, &original.manifest_sha256).unwrap();
+        assert_eq!(original.roles, manifest.roles);
+        assert_eq!(
+            original.local_root_key_der_hex,
+            manifest.local_root_key_der_hex
+        );
+        assert_frontend_sdk_call(directory, &original, true);
+    }
+
     #[cfg(test)]
     fn build_literal_zero_release_artifacts(
         workspace_root: &Path,
@@ -3286,8 +3523,16 @@ exec icp "$@"
 
     #[cfg(test)]
     fn selected_fixture_targets(pic: &PocketIc, root: Principal) -> Vec<(Principal, CanisterRole)> {
-        root_pool_status(pic, root)
-            .entries
+        selected_fixture_targets_from_pool(pic, root, &root_pool_status(pic, root))
+    }
+
+    #[cfg(test)]
+    fn selected_fixture_targets_from_pool(
+        pic: &PocketIc,
+        root: Principal,
+        pool: &CanisterPoolResponse,
+    ) -> Vec<(Principal, CanisterRole)> {
+        pool.entries
             .iter()
             .filter(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
             .filter_map(|entry| {
@@ -6134,11 +6379,1155 @@ exec icp "$@"
     enum FundingJourney {
         Fresh,
         Reinstall,
-        ActivationRecovery,
         FailedImports,
         Estate,
         FailedReserve,
         FundingPause,
+    }
+
+    #[test]
+    #[ignore = "requires Node.js and the pinned frontend-consumer npm dependencies; run explicitly for OP2 qualification"]
+    fn frontend_handoff_public_cli_and_sdk_preserve_admission_and_local_trust() {
+        assert_literal_zero_host_journey(FundingJourney::Fresh, 1);
+    }
+
+    #[cfg(test)]
+    fn frontend_consumer_script() -> PathBuf {
+        workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .join("crates/canic-host/examples/frontend-consumer/qualify.mjs")
+    }
+
+    #[cfg(test)]
+    fn prepare_frontend_identity(root: &Path, name: &str) -> Principal {
+        let result = std::process::Command::new("node")
+            .arg(frontend_consumer_script())
+            .arg("identity")
+            .arg(root.join(name))
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        Principal::from_text(String::from_utf8(result.stdout).unwrap().trim()).unwrap()
+    }
+
+    #[cfg(test)]
+    fn assert_frontend_sdk_call(
+        root: &Path,
+        manifest: &canic_host::frontend::model::FrontendManifestRecord,
+        admitted: bool,
+    ) {
+        let identity = if admitted {
+            "browser-identity.json"
+        } else {
+            "unadmitted-identity.json"
+        };
+        let result = std::process::Command::new("node")
+            .arg(frontend_consumer_script())
+            .arg(if admitted { "call" } else { "denied" })
+            .arg(root.join("browser"))
+            .arg(&manifest.manifest_sha256)
+            .arg(manifest.roles[0].canister_id.to_text())
+            .arg("audit_frontend_admission_probe")
+            .env("CANIC_FRONTEND_IDENTITY", root.join(identity))
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        println!("{}", String::from_utf8_lossy(&result.stdout));
+    }
+
+    #[cfg(test)]
+    fn assert_frontend_handoff(
+        root: &Path,
+        isolated_icp: &Path,
+        pic: &mut PocketIc,
+        desired: &DesiredFleet,
+        caller: Principal,
+    ) {
+        use canic_host::frontend::{model::*, ops};
+        let authority = ops::authority(root, &desired.environment, &desired.fleet).unwrap();
+        let application = authority
+            .entries
+            .iter()
+            .find(|entry| entry.role.as_deref() == Some("app"))
+            .unwrap();
+        let canister_id = Principal::from_text(&application.pid).unwrap();
+        let release = desired.bootstrap.as_ref().unwrap().release_build_id;
+        let candid = literal_zero_role_artifact_path(root, release, "app", "did");
+        canic_host::canister_build::validate_wasm_candid_endpoints(
+            &literal_zero_role_artifact_path(root, release, "app", "wasm"),
+            &candid,
+        )
+        .unwrap();
+        let sidecar = canic_host::icp::local_canister_candid_path(root, "local", "app");
+        std::fs::create_dir_all(sidecar.parent().unwrap()).unwrap();
+        std::fs::copy(candid, &sidecar).unwrap();
+        let gateway = pic.make_live(None);
+        let input = FrontendEnvironmentInput {
+            schema_version: 1,
+            environment: desired.environment.clone(),
+            canonical_network_id: authority.network,
+            api_origin: gateway.as_str().trim_end_matches('/').to_string(),
+            identity: FrontendIdentityInput {
+                canister_id: Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap(),
+                provider_origin: "http://identity.localhost:5173".to_string(),
+                derivation_origin: "http://localhost:5173".to_string(),
+                alternative_origins: Vec::new(),
+            },
+            asset: None,
+            roles: vec![FrontendRoleInput {
+                role: "app".into(),
+                canister_id,
+            }],
+        };
+        assert_ne!(caller, Principal::from_text(&desired.operator).unwrap());
+        std::fs::write(
+            root.join("frontend.json"),
+            serde_json::to_vec(&input).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+        std::fs::write(root.join("icp.yaml"), "canisters: []\n").unwrap();
+        std::fs::create_dir_all(root.join("apps/frontend")).unwrap();
+        std::fs::copy(
+            workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+                .join("canisters/audit/root_probe/frontend.toml"),
+            root.join("apps/frontend/canic.toml"),
+        )
+        .unwrap();
+        std::fs::write(root.join("root-key.der"), pic.root_key().unwrap()).unwrap();
+        let wrapper = operator_cli_gateway_wrapper(root, gateway.as_str(), isolated_icp);
+        run_environment_cli(
+            root,
+            &wrapper,
+            "local",
+            &[
+                "frontend",
+                "export",
+                &desired.fleet,
+                "--input",
+                "frontend.json",
+                "--out",
+                "browser",
+                "--json",
+            ],
+        )
+        .unwrap();
+        let manifest: FrontendManifestRecord = serde_json::from_slice(
+            &std::fs::read(root.join("browser/canic-frontend.json")).unwrap(),
+        )
+        .unwrap();
+        run_environment_cli(
+            root,
+            &wrapper,
+            "local",
+            &[
+                "frontend",
+                "verify",
+                "browser",
+                "--sha256",
+                &manifest.manifest_sha256,
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            manifest.local_root_key_der_hex,
+            Some(hex_bytes(pic.root_key().unwrap()))
+        );
+        assert_frontend_sdk_call(root, &manifest, true);
+        prepare_frontend_identity(root, "unadmitted-identity.json");
+        assert_frontend_sdk_call(root, &manifest, false);
+        assert_frontend_invalid_inputs(root, desired, &input, &sidecar);
+        assert_frontend_asset_capacity(root, &wrapper, pic, desired);
+        assert_observatory_handoff(root, &wrapper, desired);
+    }
+
+    #[cfg(test)]
+    fn assert_observatory_handoff(root: &Path, wrapper: &Path, desired: &DesiredFleet) {
+        use canic_host::observatory::view::ObservatorySnapshotView;
+        let release = desired.bootstrap.as_ref().unwrap().release_build_id;
+        for role in ["app", "fleet_coordinator", "root", "wasm_store"] {
+            let source = literal_zero_role_artifact_path(root, release, role, "did");
+            let target = canic_host::icp::local_canister_candid_path(root, "local", role);
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::copy(source, target).unwrap();
+        }
+        let started = Instant::now();
+        run_environment_cli(
+            root,
+            wrapper,
+            "local",
+            &[
+                "observatory",
+                "snapshot",
+                &desired.fleet,
+                "--out",
+                "observatory-private.json",
+            ],
+        )
+        .unwrap();
+        let snapshot: ObservatorySnapshotView =
+            serde_json::from_slice(&std::fs::read(root.join("observatory-private.json")).unwrap())
+                .unwrap();
+        assert_observatory_live_roles(&snapshot);
+        assert_observatory_public_and_partial(root, wrapper, desired, &snapshot);
+        eprintln!(
+            "observatory qualification: {} role instances, {} queries, {} private bytes, {:?} for three collections",
+            snapshot.roles.len(),
+            snapshot.remote_call_attempts,
+            std::fs::metadata(root.join("observatory-private.json"))
+                .unwrap()
+                .len(),
+            started.elapsed()
+        );
+    }
+
+    #[cfg(test)]
+    fn assert_observatory_live_roles(
+        snapshot: &canic_host::observatory::view::ObservatorySnapshotView,
+    ) {
+        use canic_host::observatory::view::Observation;
+        assert!(matches!(snapshot.authority, Observation::Observed { .. }));
+        assert!(matches!(snapshot.operation, Observation::Observed { .. }));
+        for role in ["fleet_coordinator", "root", "wasm_store", "app"] {
+            let observed = snapshot
+                .roles
+                .iter()
+                .find(|entry| entry.role == role)
+                .unwrap();
+            assert!(
+                matches!(observed.overview, Observation::Observed { .. }),
+                "{role}: {:?}",
+                observed.overview
+            );
+        }
+        let store = snapshot
+            .roles
+            .iter()
+            .find(|entry| entry.role == "wasm_store")
+            .unwrap();
+        let Observation::Observed {
+            value: inventory, ..
+        } = &store.store
+        else {
+            panic!("Store inventory: {:?}", store.store);
+        };
+        assert!(inventory.approved_catalog_entries > 0);
+        assert!(inventory.occupied_bytes > 0);
+        assert_eq!(
+            inventory.expected_template_chunks,
+            inventory.stored_template_chunks
+        );
+        for role in ["fleet_coordinator", "root"] {
+            let entry = snapshot
+                .roles
+                .iter()
+                .find(|entry| entry.role == role)
+                .unwrap();
+            let Observation::Observed { value, .. } = &entry.funding else {
+                panic!("{role} funding: {:?}", entry.funding);
+            };
+            assert!(value.native_cycles.parse::<u128>().unwrap() > 0);
+        }
+    }
+
+    #[cfg(test)]
+    fn assert_observatory_public_and_partial(
+        root: &Path,
+        wrapper: &Path,
+        desired: &DesiredFleet,
+        snapshot: &canic_host::observatory::view::ObservatorySnapshotView,
+    ) {
+        use canic_host::observatory::{
+            model::ObservatoryProfile,
+            view::{Observation, ObservatorySnapshotView, PublicObservatoryView},
+        };
+        let profile = ObservatoryProfile {
+            schema_version: 1,
+            title: "Disposable Fleet".into(),
+            role_labels: BTreeMap::new(),
+        };
+        std::fs::write(
+            root.join("observatory-profile.json"),
+            serde_json::to_vec(&profile).unwrap(),
+        )
+        .unwrap();
+        run_environment_cli(
+            root,
+            wrapper,
+            "local",
+            &[
+                "observatory",
+                "snapshot",
+                &desired.fleet,
+                "--public",
+                "--profile",
+                "observatory-profile.json",
+                "--out",
+                "observatory-public.json",
+            ],
+        )
+        .unwrap();
+        let bytes = std::fs::read(root.join("observatory-public.json")).unwrap();
+        let public: PublicObservatoryView = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(public.roles.len(), snapshot.roles.len());
+        let text = String::from_utf8(bytes).unwrap();
+        for role in &snapshot.roles {
+            assert!(!text.contains(&role.canister_id));
+        }
+        // An independently broken Store binding leaves other roles observable.
+        std::fs::write(
+            canic_host::icp::local_canister_candid_path(root, "local", "wasm_store"),
+            "service : {};\n",
+        )
+        .unwrap();
+        run_environment_cli(
+            root,
+            wrapper,
+            "local",
+            &[
+                "observatory",
+                "snapshot",
+                &desired.fleet,
+                "--out",
+                "observatory-partial.json",
+            ],
+        )
+        .unwrap();
+        let partial: ObservatorySnapshotView =
+            serde_json::from_slice(&std::fs::read(root.join("observatory-partial.json")).unwrap())
+                .unwrap();
+        assert!(matches!(
+            partial
+                .roles
+                .iter()
+                .find(|entry| entry.role == "wasm_store")
+                .unwrap()
+                .store,
+            Observation::Unavailable { .. }
+        ));
+        assert!(matches!(
+            partial
+                .roles
+                .iter()
+                .find(|entry| entry.role == "app")
+                .unwrap()
+                .overview,
+            Observation::Observed { .. }
+        ));
+    }
+
+    #[cfg(test)]
+    fn assert_frontend_invalid_inputs(
+        root: &Path,
+        desired: &DesiredFleet,
+        input: &canic_host::frontend::model::FrontendEnvironmentInput,
+        sidecar: &Path,
+    ) {
+        use canic_host::frontend::FrontendError;
+        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
+            root,
+            &desired.environment,
+            &desired.fleet,
+        );
+        let held = paths.journal.with_extension("held");
+        std::fs::rename(&paths.journal, &held).unwrap();
+        let missing = canic_host::frontend::workflow::prepare_handoff(
+            root,
+            &desired.fleet,
+            input,
+            &root.join("incomplete"),
+        );
+        std::fs::rename(held, &paths.journal).unwrap();
+        assert!(matches!(
+            missing,
+            Err(FrontendError::Inventory(
+                canic_host::fleet_ensure::CurrentFleetInventoryError::NotConverged { .. }
+            ))
+        ));
+        assert!(!root.join("incomplete").exists());
+        let mut wrong = input.clone();
+        wrong.identity.derivation_origin = "http://other.localhost:5173".to_string();
+        assert!(matches!(
+            canic_host::frontend::workflow::prepare_handoff(
+                root,
+                &desired.fleet,
+                &wrong,
+                &root.join("wrong")
+            ),
+            Err(FrontendError::AdmissionOrigin)
+        ));
+        std::fs::write(sidecar, b"service : {};").unwrap();
+        assert!(matches!(
+            canic_host::frontend::workflow::prepare_handoff(
+                root,
+                &desired.fleet,
+                input,
+                &root.join("stale")
+            ),
+            Err(FrontendError::ProtocolBinding(_))
+        ));
+    }
+
+    #[cfg(test)]
+    fn assert_frontend_asset_capacity(
+        root: &Path,
+        wrapper: &Path,
+        pic: &PocketIc,
+        desired: &DesiredFleet,
+    ) {
+        use canic_host::frontend::{FrontendError, model::FrontendAssetCapacityInput, ops};
+        let asset = pic.create_canister_with_settings(
+            Some(Principal::from_text(&desired.operator).unwrap()),
+            None,
+        );
+        pic.add_cycles(asset, 10_000_000_000);
+        let input = FrontendAssetCapacityInput {
+            environment: "local".to_string(),
+            canister_id: asset,
+            payload_directory: root.join("browser"),
+            minimum_native_cycles: 1,
+            maximum_payload_bytes: 32 * 1024 * 1024,
+            maximum_files: 100,
+        };
+        let icp =
+            canic_host::icp::IcpCli::new(wrapper.to_str().unwrap(), Some("local".to_string()))
+                .with_cwd(root);
+        let report = ops::asset_capacity(&icp, &input).unwrap();
+        assert!(report.sufficient);
+        assert_eq!(report.payload.files, 5);
+        let result = run_environment_cli(
+            root,
+            wrapper,
+            "local",
+            &[
+                "frontend",
+                "capacity",
+                &asset.to_text(),
+                "--payload",
+                "browser",
+                "--minimum-native-cycles",
+                &u128::MAX.to_string(),
+                "--maximum-payload-bytes",
+                "33554432",
+                "--maximum-files",
+                "100",
+                "--json",
+            ],
+        );
+        assert!(
+            matches!(result, Err(canic_cli::CliError::Frontend(error)) if matches!(*error, canic_cli::FrontendCommandError::Host(FrontendError::NativeCapacity { .. })))
+        );
+    }
+
+    #[cfg(test)]
+    fn operator_cli_root_candid(workspace: &Path) -> Vec<u8> {
+        use crate::pic::artifacts::{
+            CanicWasmBuildProfile, build_internal_test_wasm_canisters_with_env,
+        };
+        let target = workspace.join("target/pic-wasm/operator-candid");
+        let config = root_canister_config_path(workspace);
+        build_internal_test_wasm_canisters_with_env(
+            workspace,
+            &target,
+            &["delegation_root_stub"],
+            CanicWasmBuildProfile::Fast,
+            &[
+                (
+                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                    config.to_str().unwrap(),
+                ),
+                (canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1"),
+            ],
+        );
+        let output = Command::new("candid-extractor")
+            .arg(target.join("wasm32-unknown-unknown/fast/delegation_root_stub.wasm"))
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "extract Root companion Candid: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output.stdout
+    }
+
+    #[cfg(test)]
+    fn operator_cli_protocol(
+        directory: &Path,
+        role: &str,
+        wasm: &[u8],
+    ) -> canic_host::protocol_binding::RegistryProtocolBinding {
+        let wasm_path = directory.join(format!("{role}.wasm"));
+        std::fs::write(&wasm_path, wasm).unwrap();
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let candid = if role == "root" {
+            operator_cli_root_candid(&workspace)
+        } else {
+            std::fs::read(workspace.join("crates/canic/candid/fleet_coordinator.did")).unwrap()
+        };
+        let path = canic_host::icp::local_canister_candid_path(directory, "ic", role);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, &candid).unwrap();
+        canic_host::canister_build::validate_wasm_candid_endpoints(&wasm_path, &path).unwrap();
+        let role = canic_core::ids::CanisterRole::from(role.to_string());
+        let capabilities = std::collections::BTreeSet::new();
+        let release_identity = "operator-cli-runtime-fixture".to_string();
+        let hashes = canic_core::role_contract::derive_protocol_profile_hashes(
+            &release_identity,
+            &role,
+            &capabilities,
+            &candid,
+        );
+        canic_host::protocol_binding::RegistryProtocolBinding {
+            release_identity,
+            role,
+            capabilities,
+            candid_sha256: hashes.candid_sha256,
+            protocol_profile_digest: hashes.protocol_profile_digest,
+        }
+    }
+
+    // An explicit terminal starting fixture, not evidence of Ensure convergence or
+    // publication. Real management/Registry observations bind its operator inputs.
+    #[cfg(test)]
+    fn operator_cli_terminal_fixture(
+        directory: &Path,
+        fixture: &ActiveComponentRegistryFixture,
+        operator: Principal,
+    ) {
+        use canic_host::fleet_ensure::{model, ops, policy};
+        let CoordinatorRegistryResponse::Registry(registry) = coordinator_status(
+            fixture.pic(),
+            fixture.coordinator,
+            CoordinatorRegistryRequest::Registry,
+        )
+        .unwrap();
+        let mut canisters = Vec::new();
+        let mut principals = std::collections::BTreeMap::new();
+        let mut topology = std::collections::BTreeMap::new();
+        for (name, kind, principal, role, wasm) in [
+            (
+                "coordinator",
+                "coordinator",
+                fixture.coordinator,
+                "fleet_coordinator",
+                build_test_coordinator_wasm(),
+            ),
+            ("root", "root", fixture.root, "root", build_test_root_wasm()),
+        ] {
+            let status = fixture.pic().canister_status(principal, None).unwrap();
+            let controllers = status
+                .settings
+                .controllers
+                .iter()
+                .map(Principal::to_text)
+                .collect::<Vec<_>>();
+            let parent = (name == "root").then_some("coordinator");
+            canisters.push(serde_json::json!({
+                "controllers": controllers, "drain": null, "initial_cycles": "0",
+                "init_arg": null, "init_candid": null, "kind": kind,
+                "minimum_cycles": "0", "name": name, "parent": parent,
+                "presence": "present", "principal": principal.to_text(), "replace": false,
+                "subnet": fixture.pic().get_subnet(principal).unwrap().to_text(), "wasm": null
+            }));
+            principals.insert(name.to_string(), principal.to_text());
+            topology.insert(
+                name.to_string(),
+                serde_json::json!({
+                    "kind": kind, "module_hash": hex_bytes(status.module_hash.unwrap()),
+                    "parent": parent, "role": role,
+                    "protocol_binding": operator_cli_protocol(directory, role, &wasm)
+                }),
+            );
+        }
+        let desired = serde_json::json!({
+            "canisters": canisters, "cycles_ledger": Principal::management_canister().to_text(),
+            "environment": "ic", "fleet": "fixture", "ledger_fee_cycles": "0",
+            "management_creation_fee_cycles": "0", "material_cycle_threshold": "0",
+            "maximum_observation_burn_cycles": "0", "maximum_stalled_observations": 10,
+            "maximum_update_burn_cycles": "0", "operator": operator.to_text(),
+            "schema_version": 1, "treasury": "coordinator"
+        });
+        let mut plan: model::FleetEnsurePlan = serde_json::from_value(serde_json::json!({
+            "recovery_review": null, "reinstall": null, "continuation": null, "canisters": [],
+            "conservation": {"estate_funding_domains": [], "expected_post_operation_cycles": "0",
+                "maximum_execution_burn_cycles": "0", "maximum_new_funding_cycles": "0",
+                "maximum_operator_debit_cycles": "0", "maximum_unavoidable_fee_cycles": "0",
+                "observed_controlled_cycles": "0", "retained_in_reused_canisters_cycles": "0",
+                "scheduled_transfer_cycles": "0"},
+            "desired_sha256": "operator-cli-starting-fixture", "environment": "ic", "fleet": "fixture",
+            "operation_id": "operator-cli-starting-fixture", "plan_sha256": "", "planned_at_time": 0,
+            "protocol_actions": [], "root_start_authority": null, "root_reinstall_bindings": [],
+            "reviewed_desired": {"desired": desired, "protocol_steps": []}, "schema_version": 1,
+            "scope": "full", "terminal_inventory_operation_id": null
+        })).unwrap();
+        plan.plan_sha256 = policy::expected_plan_sha256(&plan);
+        let journal = serde_json::from_value(serde_json::json!({
+            "funding_reviews": [], "successor_phases": [], "completion": "converged",
+            "estate_funding_required": null, "effects": [], "fleet": "fixture",
+            "initial_controlled_cycles": "0", "initial_estate_funding_cycles_by_root": {},
+            "initial_operator_cycles": "0", "operation_id": plan.operation_id,
+            "plan_sha256": plan.plan_sha256, "schema_version": 1, "stalled_observations": 0
+        }))
+        .unwrap();
+        let state = serde_json::from_value(serde_json::json!({
+            "active_registry": registry, "completed_reinstall_action_sha256": {},
+            "completed_reinstall_operation_id": null, "completed_reinstalls": {}, "fleet": "fixture",
+            "pending_principals": {}, "principals": principals, "retained_cycles_by_principal": {},
+            "schema_version": 1, "topology": topology
+        })).unwrap();
+        let paths = ops::EnsurePaths::under(directory, "ic", "fixture");
+        ops::write_plan(&paths, &plan).unwrap();
+        ops::write_journal(&paths, &journal).unwrap();
+        ops::write_state(&paths, &state).unwrap();
+    }
+
+    #[cfg(test)]
+    fn operator_cli_gateway_wrapper(directory: &Path, gateway: &str, isolated: &Path) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt as _;
+        let wrapper = directory.join("operator-cli-icp");
+        let isolated = isolated.to_str().unwrap();
+        let key = directory.join("root-key.der");
+        let key_hex = hex_bytes(std::fs::read(&key).unwrap());
+        let key = key.to_str().unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                r#"#!/bin/bash
+set -euo pipefail
+case " $* " in
+  *" canister "*|*" cycles "*)
+    unset ICP_ENVIRONMENT
+    args=()
+    while (( $# )); do
+      case "$1" in
+        -e|--environment) shift 2 ;;
+        *) args+=("$1"); shift ;;
+      esac
+    done
+    '{isolated}' "${{args[@]}}" -n '{gateway}' -k '{key_hex}'
+    case " $* ${{args[*]}} " in
+      *" canic_root_command "*)
+        if [ -f '{key}.lose-reply' ]; then
+          rm '{key}.lose-reply'
+          exit 79
+        fi ;;
+    esac ;;
+  *) exec '{isolated}' "$@" ;;
+esac
+"#
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+        wrapper
+    }
+
+    #[cfg(test)]
+    fn run_operator_cli(
+        directory: &Path,
+        wrapper: &Path,
+        args: &[&str],
+    ) -> Result<(), canic_cli::CliError> {
+        run_environment_cli(directory, wrapper, "ic", args)
+    }
+
+    #[cfg(test)]
+    fn run_environment_cli(
+        directory: &Path,
+        wrapper: &Path,
+        environment: &str,
+        args: &[&str],
+    ) -> Result<(), canic_cli::CliError> {
+        use std::ffi::OsString;
+        struct RestoreDirectory(PathBuf);
+        impl Drop for RestoreDirectory {
+            fn drop(&mut self) {
+                std::env::set_current_dir(&self.0).unwrap();
+            }
+        }
+        let _restore = RestoreDirectory(std::env::current_dir().unwrap());
+        std::env::set_current_dir(directory).unwrap();
+        let mut invocation = vec![
+            OsString::from("--environment"),
+            OsString::from(environment),
+            OsString::from("--icp"),
+            wrapper.as_os_str().to_owned(),
+        ];
+        invocation.extend(args.iter().map(OsString::from));
+        canic_cli::run(invocation)
+    }
+
+    #[cfg(test)]
+    fn resume_operator_cli(
+        directory: &Path,
+        wrapper: &Path,
+    ) -> canic_host::component_operation::model::ComponentOperationRecord {
+        use canic_host::component_operation::ops;
+        let path = ops::record_path(directory, "ic", "fixture", "extra").unwrap();
+        let planned = ops::read(&path).unwrap().unwrap();
+        assert_eq!(planned.submission_attempts, 0);
+        let review = &planned.plan.review_sha256;
+        assert!(
+            run_operator_cli(
+                directory,
+                wrapper,
+                &[
+                    "component",
+                    "apply",
+                    "fixture",
+                    "extra",
+                    "--review",
+                    "wrong"
+                ]
+            )
+            .is_err()
+        );
+        assert_eq!(ops::read(&path).unwrap().unwrap(), planned);
+        std::fs::write(directory.join("root-key.der.lose-reply"), []).unwrap();
+        assert!(
+            run_operator_cli(
+                directory,
+                wrapper,
+                &[
+                    "component",
+                    "apply",
+                    "fixture",
+                    "extra",
+                    "--review",
+                    review,
+                    "--wait-secs",
+                    "0"
+                ]
+            )
+            .is_err()
+        );
+        assert_eq!(ops::read(&path).unwrap().unwrap().submission_attempts, 1);
+        run_operator_cli(
+            directory,
+            wrapper,
+            &[
+                "component",
+                "apply",
+                "fixture",
+                "extra",
+                "--review",
+                review,
+                "--wait-secs",
+                "120",
+            ],
+        )
+        .unwrap();
+        let terminal = ops::read(&path).unwrap().unwrap();
+        assert!(terminal.progress.as_ref().unwrap().complete);
+        terminal
+    }
+
+    #[cfg(test)]
+    fn assert_operator_cli_export(directory: &Path, wrapper: &Path, binding: &ComponentBinding) {
+        let destination = directory.join("frontend-environment.json");
+        run_operator_cli(
+            directory,
+            wrapper,
+            &[
+                "info",
+                "env",
+                "fixture",
+                "--component-operation",
+                "extra",
+                "--json",
+                "--out",
+                destination.to_str().unwrap(),
+            ],
+        )
+        .unwrap();
+        let report: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(destination).unwrap()).unwrap();
+        assert!(report["bindings"].as_array().unwrap().iter().any(|entry| {
+            entry["canister_id"] == binding.canister_id.to_text()
+                && entry["role"] == binding.role.to_string()
+        }));
+    }
+
+    #[test]
+    fn operator_component_public_cli_uses_real_icp_and_exports_terminal_binding() {
+        use canic_host::component_operation::{ComponentOperationError, ops, workflow};
+        let mut fixture = setup_active_component_registry_with_pic(build_management_pic);
+        let directory =
+            std::env::temp_dir().join(format!("canic-operator-cli-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let (isolated, operator, _) = prepare_isolated_icp(&directory);
+        for principal in [fixture.root, fixture.coordinator] {
+            fixture
+                .pic()
+                .update_canister_settings(
+                    principal,
+                    None,
+                    ic_testkit::pocket_ic::CanisterSettings {
+                        controllers: Some(vec![Principal::anonymous(), operator]),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+        }
+        operator_cli_terminal_fixture(&directory, &fixture, operator);
+        std::fs::write(directory.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+        std::fs::write(directory.join("icp.yaml"), "canisters: []\n").unwrap();
+        std::fs::create_dir_all(directory.join("apps/test")).unwrap();
+        std::fs::copy(
+            root_canister_config_path(&workspace_root_for(env!("CARGO_MANIFEST_DIR"))),
+            directory.join("apps/test/canic.toml"),
+        )
+        .unwrap();
+        std::fs::write(
+            directory.join("root-key.der"),
+            fixture.pic().root_key().unwrap(),
+        )
+        .unwrap();
+        let gateway = fixture.start_http_gateway();
+        let wrapper = operator_cli_gateway_wrapper(&directory, &gateway, &isolated);
+        let spec = fixture.issuer.component_spec.to_string();
+        run_operator_cli(
+            &directory,
+            &wrapper,
+            &[
+                "component",
+                "plan",
+                "fixture",
+                "extra",
+                "--root",
+                "root",
+                "--spec",
+                &spec,
+            ],
+        )
+        .unwrap();
+        let terminal = resume_operator_cli(&directory, &wrapper);
+        let review = &terminal.plan.review_sha256;
+        let binding = terminal
+            .progress
+            .as_ref()
+            .unwrap()
+            .binding
+            .as_ref()
+            .unwrap();
+        assert_eq!(binding.role, fixture.issuer.role);
+        assert_ne!(binding.canister_id, fixture.issuer.canister_id);
+        assert_operator_cli_export(&directory, &wrapper, binding);
+
+        let mut broken = ops::transport::IcpComponentTransport::new(
+            &directory,
+            canic_host::icp::IcpCli::new("/does-not-exist", Some("ic".to_string())),
+        );
+        assert_eq!(
+            workflow::apply(&directory, "ic", "fixture", "extra", review, &mut broken).unwrap(),
+            terminal
+        );
+        // A modified sidecar must fail before another observation or command is accepted.
+        let candid = canic_host::icp::local_canister_candid_path(&directory, "ic", "root");
+        std::fs::write(candid, "service : {};").unwrap();
+        assert!(matches!(
+            broken.authority("ic", "fixture", "root", &fixture.issuer.component_spec),
+            Err(ComponentOperationError::ProtocolBinding(_))
+        ));
+        drop(fixture);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[cfg(test)]
+    struct OperatorComponentTransport<'a> {
+        fixture: &'a ActiveComponentRegistryFixture,
+        authority: canic_host::component_operation::model::ComponentAuthorityRecord,
+        caller: Principal,
+        submissions: usize,
+        lose_reply: bool,
+    }
+
+    #[cfg(test)]
+    impl OperatorComponentTransport<'_> {
+        fn query(
+            &self,
+            request: RootStatusRequestFragment,
+        ) -> Result<
+            RootStatusResponseFragment,
+            canic_host::component_operation::ComponentOperationError,
+        > {
+            let method = match request {
+                RootStatusRequestFragment::Operation(_) => {
+                    canic::protocol::CANIC_ROOT_OPERATION_STATUS
+                }
+                _ => canic::protocol::CANIC_ROOT_STATUS,
+            };
+            let response: Result<RootStatusResponseFragment, Error> = self
+                .fixture
+                .pic()
+                .query_candid_as(self.fixture.root, self.caller, method, (request,))
+                .expect("operator Root query transport");
+            response.map_err(|error| {
+                canic_host::CanisterProtocolError::Response {
+                    canister: self.fixture.root,
+                    method,
+                    source: canic_host::icp::IcpJsonResponseError::Rejected(error),
+                }
+                .into()
+            })
+        }
+    }
+
+    #[cfg(test)]
+    impl canic_host::component_operation::ops::ComponentTransport for OperatorComponentTransport<'_> {
+        fn observe(
+            &mut self,
+            plan: &canic_host::component_operation::model::ComponentPlanRecord,
+        ) -> Result<
+            canic_host::component_operation::view::ComponentObservation,
+            canic_host::component_operation::ComponentOperationError,
+        > {
+            let RootStatusResponseFragment::FleetAuthority(authority) =
+                self.query(RootStatusRequestFragment::FleetAuthority)?
+            else {
+                panic!("Root authority response");
+            };
+            assert_eq!(authority.binding, plan.authority.binding);
+            assert_eq!(authority.initial_release_set, plan.authority.release_set);
+            Ok(
+                canic_host::component_operation::view::ComponentObservation {
+                    authority: self.authority.clone(),
+                    ready_assets: root_pool_status(self.fixture.pic(), self.fixture.root).ready,
+                },
+            )
+        }
+
+        fn progress(
+            &mut self,
+            plan: &canic_host::component_operation::model::ComponentPlanRecord,
+        ) -> Result<
+            canic_host::component_operation::view::ComponentProgressObservation,
+            canic_host::component_operation::ComponentOperationError,
+        > {
+            use canic_host::component_operation::{
+                ComponentOperationError, view::ComponentProgressObservation,
+            };
+            let response = self.query(RootStatusRequestFragment::Operation(
+                OperationStatusRequest {
+                    operation_id: plan.operation_id,
+                },
+            ));
+            let response = match response {
+                Err(ComponentOperationError::Protocol(
+                    canic_host::CanisterProtocolError::Response {
+                        source: canic_host::icp::IcpJsonResponseError::Rejected(error),
+                        ..
+                    },
+                )) if error.code()
+                    == canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code() =>
+                {
+                    return Ok(ComponentProgressObservation { progress: None });
+                }
+                other => other?,
+            };
+            let RootStatusResponseFragment::Operation(
+                RootOperationStatusResponse::ProvisionComponent(status),
+            ) = response
+            else {
+                panic!("Root Component status");
+            };
+            canic_host::component_operation::ops::project_progress(plan, status)
+        }
+
+        fn submit(
+            &mut self,
+            plan: &canic_host::component_operation::model::ComponentPlanRecord,
+        ) -> Result<(), canic_host::component_operation::ComponentOperationError> {
+            let response = root_command_as(
+                self.fixture.pic(),
+                self.fixture.root,
+                self.caller,
+                RootCommandFragment::ProvisionComponent(RootComponentAllocationRequest {
+                    operation_id: plan.operation_id,
+                    component_spec: plan.authority.component_spec.clone(),
+                }),
+            )
+            .map_err(|error| canic_host::CanisterProtocolError::Response {
+                canister: self.fixture.root,
+                method: canic::protocol::CANIC_ROOT_COMMAND,
+                source: canic_host::icp::IcpJsonResponseError::Rejected(error),
+            })?;
+            let RootCommandResponseFragment::OperationAccepted(receipt) = response else {
+                panic!("Root Component receipt");
+            };
+            assert_eq!(receipt.operation_id, plan.operation_id);
+            self.submissions += 1;
+            if self.lose_reply {
+                return Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset).into());
+            }
+            Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    fn operator_component_authority(
+        fixture: &ActiveComponentRegistryFixture,
+    ) -> canic_host::component_operation::model::ComponentAuthorityRecord {
+        let RootStatusResponseFragment::FleetAuthority(root_authority) = root_status(
+            fixture.pic(),
+            fixture.root,
+            RootStatusRequestFragment::FleetAuthority,
+        )
+        .unwrap() else {
+            panic!("Root authority");
+        };
+        canic_host::component_operation::model::ComponentAuthorityRecord {
+            environment: "local".to_string(),
+            fleet: "fixture".to_string(),
+            root_name: "root".to_string(),
+            source_plan_sha256: canic_core::cdk::utils::hash::sha256_hex(
+                b"operator runtime qualification source",
+            ),
+            binding: root_authority.binding,
+            release_set: root_authority.initial_release_set,
+            root_module_sha256: hex_bytes(root_authority.expected_module_hash),
+            root_candid_sha256: [1; 32],
+            root_controllers: vec![Principal::anonymous().to_text()],
+            registry_sha256: [2; 32],
+            operator: Principal::anonymous(),
+            component_spec: fixture.issuer.component_spec.clone(),
+            spec_hash: fixture.issuer.spec_hash,
+            role: fixture.issuer.role.clone(),
+        }
+    }
+
+    #[cfg(test)]
+    fn advance_operator_component(
+        directory: &Path,
+        review: &str,
+        transport: &mut OperatorComponentTransport<'_>,
+    ) -> canic_host::component_operation::model::ComponentOperationRecord {
+        // Duplicate exact commands must coalesce into one active Root driver.
+        canic_host::component_operation::workflow::apply(
+            directory, "local", "fixture", "core", review, transport,
+        )
+        .unwrap();
+        canic_host::component_operation::workflow::apply(
+            directory, "local", "fixture", "core", review, transport,
+        )
+        .unwrap();
+        for _ in 0..80 {
+            transport.fixture.pic().advance_time(Duration::from_secs(1));
+            transport.fixture.pic().tick();
+            let observed = canic_host::component_operation::workflow::status(
+                directory, "local", "fixture", "core", transport,
+            )
+            .unwrap();
+            if observed
+                .progress
+                .as_ref()
+                .is_some_and(|progress| progress.complete)
+            {
+                return observed;
+            }
+        }
+        panic!("operator Component did not reach terminal activation");
+    }
+
+    #[test]
+    fn operator_component_recovers_lost_response_and_replays_terminal_binding() {
+        use canic_host::component_operation::{ComponentOperationError, workflow};
+        let fixture = setup_active_component_registry();
+        let directory = std::env::temp_dir().join(format!(
+            "canic-operator-component-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _cleanup = TestDirectoryCleanup(directory.clone());
+        let authority = operator_component_authority(&fixture);
+        // This case qualifies the production journal and Root lifecycle. Exact local
+        // ICP sidecar/terminal-inventory resolution is a separate transport boundary.
+        let mut transport = OperatorComponentTransport {
+            fixture: &fixture,
+            authority: authority.clone(),
+            caller: Principal::anonymous(),
+            submissions: 0,
+            lose_reply: true,
+        };
+        let reviewed = workflow::plan(&directory, "core", authority, &mut transport).unwrap();
+        let review = &reviewed.plan.review_sha256;
+        let before = root_pool_status(fixture.pic(), fixture.root).workload;
+        transport.caller = Principal::from_slice(&[99]);
+        let denied = workflow::apply(
+            &directory,
+            "local",
+            "fixture",
+            "core",
+            review,
+            &mut transport,
+        );
+        assert!(
+            matches!(denied, Err(ComponentOperationError::Protocol(canic_host::CanisterProtocolError::Response { source: canic_host::icp::IcpJsonResponseError::Rejected(error), .. })) if error.code() == canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+        );
+        transport.caller = Principal::anonymous();
+        assert!(matches!(
+            workflow::apply(
+                &directory,
+                "local",
+                "fixture",
+                "core",
+                review,
+                &mut transport
+            ),
+            Err(ComponentOperationError::Io(_))
+        ));
+        fixture
+            .pic()
+            .upgrade_canister(
+                fixture.root,
+                build_test_root_wasm(),
+                crate::pic::upgrade_args(),
+                None,
+            )
+            .expect("restore same-release Root after lost submission reply");
+        transport.lose_reply = false;
+        let terminal = advance_operator_component(&directory, review, &mut transport);
+        let submissions = transport.submissions;
+        assert!((2..=3).contains(&submissions));
+        assert_eq!(
+            root_pool_status(fixture.pic(), fixture.root).workload,
+            before + 1
+        );
+        let progress = terminal.progress.as_ref().unwrap();
+        assert_eq!(
+            progress.phase,
+            canic_host::component_operation::model::ComponentPhase::Committed
+        );
+        let binding = progress.binding.as_ref().unwrap();
+        assert_ne!(binding.canister_id, fixture.issuer.canister_id);
+        assert_eq!(binding.role, fixture.issuer.role);
+        let balance = fixture.pic().cycle_balance(fixture.root);
+        transport.caller = Principal::from_slice(&[99]);
+        assert_eq!(
+            workflow::apply(
+                &directory,
+                "local",
+                "fixture",
+                "core",
+                review,
+                &mut transport
+            )
+            .unwrap(),
+            terminal
+        );
+        assert_eq!(fixture.pic().cycle_balance(fixture.root), balance);
+        assert_eq!(transport.submissions, submissions);
     }
 
     #[test]
@@ -6164,12 +7553,6 @@ exec icp "$@"
     #[test]
     fn generated_reinstall_recovers_lost_install_and_reaches_working_fleet() {
         assert_literal_zero_host_journey(FundingJourney::Reinstall, 19);
-    }
-
-    #[test]
-    #[ignore = "requires an immutable v0.110.12 source snapshot in CANIC_ACTIVATION_SOURCE"]
-    fn installed_partial_activation_recovers_through_reviewed_reinstall() {
-        assert_literal_zero_host_journey(FundingJourney::ActivationRecovery, 1);
     }
 
     #[test]
@@ -6199,22 +7582,10 @@ exec icp "$@"
         let journey_started_at = Instant::now();
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let source_workspace = if matches!(funding, FundingJourney::ActivationRecovery) {
-            let source = PathBuf::from(
-                std::env::var_os("CANIC_ACTIVATION_SOURCE")
-                    .expect("immutable affected release source snapshot"),
-            );
-            assert_eq!(
-                std::fs::read_to_string(source.join(".canic157-source-revision"))
-                    .unwrap()
-                    .trim(),
-                "95c6caa03867cd68b3bc57ba88c02b961251460b"
-            );
-            source
-        } else {
-            workspace_root.clone()
-        };
-        let config_path = source_workspace.join(match initial_workload_count {
+        let config_path = workspace_root.join(match initial_workload_count {
+            1 if matches!(funding, FundingJourney::Fresh) => {
+                "canisters/audit/root_probe/frontend.toml"
+            }
             1 => "canisters/audit/root_probe/activation.toml",
             4 => "canisters/audit/root_probe/four-workloads.toml",
             5 => "apps/test/test-configs/generated-mixed-topology.toml",
@@ -6248,9 +7619,12 @@ exec icp "$@"
         std::fs::create_dir_all(&adapter_root)
             .expect("create CANIC-121 production-adapter fixture");
         let _adapter_root_cleanup = TestDirectoryCleanup(adapter_root.clone());
+        let frontend_identity = (initial_workload_count == 1
+            && matches!(funding, FundingJourney::Fresh))
+        .then(|| prepare_frontend_identity(&adapter_root, "browser-identity.json"));
         phase = phase.next("initial_artifacts");
         let release_artifacts = build_literal_zero_release_artifacts(
-            &source_workspace,
+            &workspace_root,
             &adapter_root,
             &config_path,
             &configuration,
@@ -6422,6 +7796,7 @@ exec icp "$@"
         .expect("compile literal-zero Fleet admission template");
         let authority = &installed.init_args.authority;
         let bootstrap = DesiredFleetBootstrap {
+            admission_identity_origin: None,
             admission,
             app: authority.binding.authority.binding.fleet.app.clone(),
             canonical_network_id: authority
@@ -6566,6 +7941,7 @@ exec icp "$@"
         phase = phase.next("generation_and_initial_review");
         let live_url = pic.make_live(None);
         let local_replica = LocalReplicaTarget {
+            environment: "local".into(),
             root_key: hex_bytes(pic.root_key().expect("PocketIC local root key")),
             url: live_url.to_string(),
         };
@@ -6581,6 +7957,7 @@ exec icp "$@"
                 root_key: &pic.root_key().expect("PocketIC trust anchor"),
                 workload_count: initial_workload_count,
                 ready_count,
+                frontend_identity,
             })
         } else {
             desired
@@ -6634,10 +8011,8 @@ exec icp "$@"
         );
         let desired = if fund_estate
             || funded_import_repair
-            || matches!(
-                funding,
-                FundingJourney::Reinstall | FundingJourney::ActivationRecovery
-            ) {
+            || matches!(funding, FundingJourney::Reinstall)
+        {
             prepare_journey_infrastructure(
                 &pic,
                 &adapter_root,
@@ -6692,26 +8067,6 @@ exec icp "$@"
                 "funded autonomous production-adapter journey complete",
                 journey_started_at,
             );
-            phase.finish();
-            journey_span.finish();
-            return;
-        }
-
-        if matches!(funding, FundingJourney::ActivationRecovery) {
-            prepare_ready_imports(&pic, root, operator, &pools);
-            assert_installed_activation_recovery(ReinstallJourney {
-                adapter_root: &adapter_root,
-                config: &workspace_root.join("canisters/audit/root_probe/activation.toml"),
-                icp_wrapper: &icp_wrapper,
-                local_replica: &local_replica,
-                pic: &pic,
-                desired: &desired,
-                coordinator,
-                root,
-                store,
-                pools: &pools,
-            });
-            pic.stop_live();
             phase.finish();
             journey_span.finish();
             return;
@@ -7341,6 +8696,10 @@ exec icp "$@"
             assert_public_memory_allocation_samples(&pic, root, store, operator, &pools);
         }
 
+        if let Some(caller) = frontend_identity {
+            phase = phase.next("frontend_cli_and_sdk");
+            assert_frontend_handoff(&adapter_root, &icp_wrapper, &mut pic, &desired, caller);
+        }
         phase = phase.next("cleanup");
         pic.stop_live();
         std::fs::remove_dir_all(adapter_root)
@@ -7667,379 +9026,6 @@ exec icp "$@"
         pools: &'a [Principal],
     }
 
-    /// Reproduce the installed activation mismatch, then use only reviewed production recovery.
-    #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one installed-source proof retains the real fault, all three reviews, lost reply and terminal replay"
-    )]
-    #[expect(
-        clippy::result_large_err,
-        reason = "the fixture matches production typed failures at the review boundary"
-    )]
-    fn assert_installed_activation_recovery(input: ReinstallJourney<'_>) {
-        use canic_host::fleet_ensure::model::{
-            FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlanScope,
-            FleetEnsureTopologyRecord, InstallMode,
-        };
-        use canic_host::fleet_ensure::ops::{EnsurePaths, read_state, write_journal, write_state};
-        let root = input.adapter_root;
-        let pic = input.pic;
-        let operator = Principal::from_text(&input.desired.operator).unwrap();
-        let platform = |desired: &DesiredFleet| {
-            literal_zero_journey_platform(
-                desired,
-                input.icp_wrapper,
-                root,
-                input.local_replica.clone(),
-                true,
-            )
-        };
-        let ledger = Principal::from_text(&input.desired.cycles_ledger).unwrap();
-        let operator_balance = ledger_account_balance(pic, ledger, operator);
-        let paths = EnsurePaths::under(root, &input.desired.environment, &input.desired.fleet);
-        let mut state = read_state(&paths, &input.desired.fleet).unwrap();
-        for canister in &input.desired.canisters {
-            let principal = canister.principal.clone().unwrap();
-            state
-                .principals
-                .insert(canister.name.clone(), principal.clone());
-            state.retained_cycles_by_principal.insert(
-                principal.clone(),
-                pic.cycle_balance(Principal::from_text(&principal).unwrap()),
-            );
-            state.topology.insert(
-                canister.name.clone(),
-                FleetEnsureTopologyRecord {
-                    kind: canister.kind,
-                    module_hash: canister
-                        .wasm
-                        .as_ref()
-                        .map(|path| hex_bytes(wasm_hash(&std::fs::read(root.join(path)).unwrap()))),
-                    parent: None,
-                    protocol_binding: None,
-                    role: None,
-                },
-            );
-        }
-        write_state(&paths, &state).unwrap();
-        let mut old_platform = platform(input.desired);
-        let mut source = fleet_ensure_workflow::plan(
-            root,
-            input.desired,
-            &desired_sha256(input.desired),
-            &input.desired.fleet,
-            1_800_000_000_000_000_001,
-            &mut old_platform,
-        )
-        .expect("review installed source protocol")
-        .plan;
-        // Fault injection: the old Root retains install A, while Store is actually reinstalled
-        // with B. All subsequent source effects execute against immutable 0.110.12 runtime.
-        let store = input
-            .desired
-            .canisters
-            .iter()
-            .find(|c| c.name == "store")
-            .unwrap();
-        let store_reset = EnsureAction::Install {
-            canic_init: store.canic_init.clone(),
-            reinstall_witness: None,
-            init_arg: None,
-            init_arg_sha256: None,
-            init_candid: None,
-            init_candid_sha256: None,
-            name: store.name.clone(),
-            principal: store.principal.clone().unwrap(),
-            wasm: store.wasm.clone().unwrap(),
-            wasm_sha256: state.topology["store"].module_hash.clone().unwrap(),
-            mode: InstallMode::Reinstall,
-        };
-        old_platform
-            .apply(
-                &source.operation_id,
-                &store_reset,
-                &fixture_effect_intent(&store_reset),
-                &state,
-            )
-            .expect("install Store B on the affected runtime");
-        for canister in &mut source.canisters {
-            canister.actions.clear();
-        }
-        source.protocol_actions = old_platform
-            .fresh_protocol_actions(&source.operation_id, &state)
-            .expect("compile the real source protocol");
-        let initial_controlled = [input.coordinator, input.root, input.store]
-            .into_iter()
-            .chain(input.pools.iter().copied())
-            .map(|id| pic.cycle_balance(id))
-            .sum();
-        source.conservation.maximum_operator_debit_cycles = 0;
-        source.conservation.maximum_new_funding_cycles = 0;
-        source.conservation.maximum_unavoidable_fee_cycles = 0;
-        source.conservation.scheduled_transfer_cycles = 0;
-        source.conservation.maximum_execution_burn_cycles = 100_000_000_000_000;
-        source.conservation.observed_controlled_cycles = initial_controlled;
-        source.plan_sha256 = canic_host::fleet_ensure::policy::expected_plan_sha256(&source);
-        let mut journal = FleetEnsureJournalRecord {
-            funding_reviews: Vec::new(),
-            successor_phases: Vec::new(),
-            completion: FleetEnsureCompletion::InProgress,
-            estate_funding_required: None,
-            effects: Vec::new(),
-            fleet: source.fleet.clone(),
-            initial_controlled_cycles: initial_controlled,
-            initial_estate_funding_cycles_by_root: BTreeMap::from([("root".into(), 0)]),
-            initial_operator_cycles: (&operator_balance.0).try_into().unwrap(),
-            operation_id: source.operation_id.clone(),
-            plan_sha256: source.plan_sha256.clone(),
-            schema_version: 1,
-            stalled_observations: 0,
-        };
-        // Retain only the affected source schema. No current-plan decoder or completed journal
-        // is used to make the old operation eligible for reset.
-        let mut opaque = serde_json::to_value(&source).unwrap();
-        opaque.as_object_mut().unwrap().remove("reinstall");
-        opaque.as_object_mut().unwrap().remove("recovery_review");
-        std::fs::write(&paths.plan, serde_json::to_vec_pretty(&opaque).unwrap()).unwrap();
-        for action in &source.protocol_actions {
-            let mut effect = fixture_effect_intent(action);
-            journal.effects.push(effect.clone());
-            write_journal(&paths, &journal).unwrap();
-            let outcome = old_platform
-                .apply(&source.operation_id, action, &effect, &state)
-                .expect("execute actual source protocol effect");
-            effect.receipt = outcome.receipt;
-            effect.post_cycles = outcome.post_cycles;
-            effect.state = EffectState::Issued;
-            let provisioning = matches!(action, EnsureAction::FleetProtocol { action, .. }
-                if matches!(action.as_ref(), CurrentFleetProtocolAction::ProvisionComponents { .. }));
-            if !provisioning {
-                for attempt in 0..64 {
-                    if old_platform
-                        .observe_effect(&source.operation_id, action, &effect, &state)
-                        .unwrap()
-                        .applied
-                    {
-                        effect.state = EffectState::Applied;
-                        break;
-                    }
-                    old_platform.pace_effect_observation(action, attempt);
-                }
-                assert_eq!(effect.state, EffectState::Applied);
-            }
-            *journal.effects.last_mut().unwrap() = effect;
-            write_journal(&paths, &journal).unwrap();
-            if provisioning {
-                break;
-            }
-        }
-        assert_eq!(journal.effects.last().unwrap().state, EffectState::Issued);
-        let Some(operation_id) = source.protocol_actions.iter().find_map(|action| {
-            if let EnsureAction::FleetProtocol { action, .. } = action
-                && let CurrentFleetProtocolAction::ProvisionComponents { request, .. } =
-                    action.as_ref()
-            {
-                Some(request.operation_id)
-            } else {
-                None
-            }
-        }) else {
-            panic!("source provisioning operation");
-        };
-        super::super::fixture::progress(
-            "waiting for affected Root publication with blocked activation",
-        );
-        let mut published = false;
-        for _ in 0..180 {
-            let status: Result<RootStatusResponseFragment, Error> = pic
-                .query_candid_as(
-                    input.root,
-                    operator,
-                    canic::protocol::CANIC_ROOT_OPERATION_STATUS,
-                    (RootStatusRequestFragment::Operation(
-                        OperationStatusRequest { operation_id },
-                    ),),
-                )
-                .unwrap();
-            if let Ok(RootStatusResponseFragment::Operation(
-                RootOperationStatusResponse::ProvisionComponents(status),
-            )) = status
-                && status.phase
-                    == canic::dto::component_provisioning::RootComponentProvisioningPhase::Published
-                && status.activated_component_count == status.component_count
-            {
-                assert!(!status.root_runtime_active);
-                published = true;
-                break;
-            }
-            std::thread::sleep(Duration::from_secs(1));
-        }
-        assert!(
-            published,
-            "affected Root must reach Published while activation remains blocked"
-        );
-        let pool = root_pool_status_as(pic, input.root, operator);
-        assert_eq!((pool.workload, pool.ready, pool.pending_reset), (1, 1, 0));
-        super::super::fixture::progress(
-            "affected Root is Published and inactive; building corrected release",
-        );
-        let original_plan = std::fs::read(&paths.plan).unwrap();
-        let original_journal = std::fs::read(&paths.journal).unwrap();
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config = AppConfigSnapshot::load(input.config).unwrap();
-        let configuration = config
-            .model()
-            .compile_component_deployment_configuration()
-            .unwrap();
-        let roles = config
-            .model()
-            .roles
-            .keys()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        let replacement = build_literal_zero_release_artifacts(
-            &workspace,
-            root,
-            input.config,
-            &configuration,
-            &roles,
-            BuildNetwork::Local,
-            REINSTALL_RELEASE_BUILD_NONCE,
-        );
-        let mut desired = input.desired.clone();
-        desired.bootstrap.as_mut().unwrap().release_build_id = replacement.release_build_id;
-        let protocol = desired.protocol.as_mut().unwrap();
-        protocol.app_config = input.config.to_string_lossy().into_owned();
-        protocol.coordinator_candid = replacement.coordinator_candid;
-        protocol.root_candid = replacement.root_candid;
-        protocol.store_candid = replacement.store_candid;
-        for canister in &mut desired.canisters {
-            canister.wasm = match canister.name.as_str() {
-                "coordinator" => Some(replacement.coordinator_wasm.clone()),
-                "root" => Some(replacement.root_wasm.clone()),
-                "store" => Some(replacement.store_wasm.clone()),
-                _ => canister.wasm.clone(),
-            };
-        }
-        let digest = desired_sha256(&desired);
-        super::super::fixture::progress("reviewing installed partial-activation preparation");
-        let prepared = fleet_ensure_workflow::plan_reinstall(
-            root,
-            &desired,
-            &digest,
-            &desired.fleet,
-            1_800_000_000_000_000_010,
-            &mut platform(&desired),
-        )
-        .expect("review source-bound stop and restart preparation");
-        assert_eq!(
-            prepared.plan.scope,
-            FleetEnsurePlanScope::ReinstallPreparation
-        );
-        assert_eq!(std::fs::read(&paths.plan).unwrap(), original_plan);
-        assert_eq!(std::fs::read(&paths.journal).unwrap(), original_journal);
-        let apply = |review: &FleetEnsurePlan| {
-            fleet_ensure_workflow::apply(
-                root,
-                &desired,
-                &digest,
-                &desired.fleet,
-                &review.plan_sha256,
-                &mut platform(&desired),
-            )
-        };
-        pic.set_controllers(
-            input.root,
-            Some(operator),
-            vec![operator, Principal::anonymous()],
-        )
-        .expect("inject controller drift after preparation review");
-        assert!(matches!(apply(&prepared.plan), Err(EnsureWorkflowError::Policy(
-            canic_host::fleet_ensure::policy::EnsurePolicyError::RootManagementAuthorityMismatch { .. }
-        ))));
-        assert_eq!(std::fs::read(&paths.plan).unwrap(), original_plan);
-        assert_eq!(std::fs::read(&paths.journal).unwrap(), original_journal);
-        pic.set_controllers(input.root, Some(operator), vec![operator])
-            .expect("restore exact source controller authority");
-        let settled =
-            apply(&prepared.plan).expect("settle old callbacks through actual stop/restart");
-        assert!(settled.terminal);
-        assert_eq!(apply(&prepared.plan).unwrap().effects_applied, 0);
-        let reset = fleet_ensure_workflow::plan(
-            root,
-            &desired,
-            &digest,
-            &desired.fleet,
-            1_800_000_000_000_000_011,
-            &mut platform(&desired),
-        )
-        .expect("review corrected Root reinstall");
-        assert_eq!(
-            reset.plan.scope,
-            FleetEnsurePlanScope::RootReinstallPrerequisite
-        );
-        std::fs::write(root.join("lose-install-response"), []).unwrap();
-        assert!(matches!(
-            apply(&reset.plan),
-            Err(EnsureWorkflowError::Platform(_))
-        ));
-        assert!(root.join("lost-install-response").exists());
-        let reset_done = apply(&reset.plan).expect("reconcile actual lost Root install response");
-        assert!(reset_done.terminal);
-        assert_eq!(apply(&reset.plan).unwrap().effects_applied, 0);
-        let full = fleet_ensure_workflow::plan(
-            root,
-            &desired,
-            &digest,
-            &desired.fleet,
-            1_800_000_000_000_000_012,
-            &mut platform(&desired),
-        )
-        .expect("review remaining Fleet convergence");
-        assert_eq!(full.plan.scope, FleetEnsurePlanScope::Full);
-        let done = apply(&full.plan).expect("complete the recovered Fleet");
-        assert!(done.terminal);
-        assert!(done.actual_conservation.is_some());
-        assert_eq!(apply(&full.plan).unwrap().effects_applied, 0);
-        let terminal = root_pool_status_as(pic, input.root, operator);
-        assert_eq!(
-            (terminal.workload, terminal.ready, terminal.pending_reset),
-            (1, 1, 0)
-        );
-        let retained = terminal
-            .entries
-            .iter()
-            .filter(|asset| asset.canister_id != input.store)
-            .map(|asset| asset.canister_id)
-            .collect::<BTreeSet<_>>();
-        assert_eq!(retained, input.pools.iter().copied().collect());
-        for asset in input.pools {
-            assert_eq!(
-                pic.canister_status(*asset, Some(input.root))
-                    .unwrap()
-                    .settings
-                    .controllers,
-                vec![input.root]
-            );
-        }
-        let final_controlled: u128 = [input.coordinator, input.root, input.store]
-            .into_iter()
-            .chain(input.pools.iter().copied())
-            .map(|id| pic.cycle_balance(id))
-            .sum();
-        assert!(initial_controlled >= final_controlled);
-        assert!(initial_controlled - final_controlled < 100_000_000_000_000);
-        assert_eq!(
-            ledger_account_balance(pic, ledger, input.root),
-            Nat::from(0_u8)
-        );
-        assert_eq!(
-            ledger_account_balance(pic, ledger, operator),
-            operator_balance
-        );
-    }
-
     /// Passive application row returned by both fixture roles.
     #[cfg(test)]
     #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
@@ -8180,6 +9166,193 @@ esac
     #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
+        reason = "one recovery proof preserves applied installs across funding review, lost reply and terminal replay"
+    )]
+    fn complete_selected_reinstall(
+        input: &ReinstallJourney<'_>,
+        reset: &canic_host::fleet_ensure::model::FleetEnsurePlan,
+        underfunded: bool,
+    ) -> (
+        canic_host::fleet_ensure::model::FleetEnsureReport,
+        u128,
+        u128,
+    ) {
+        use canic_host::fleet_ensure::model::{EffectState, FleetEnsureSuccessorReviewReason};
+        let root = input.adapter_root;
+        let desired = input.desired;
+        let digest = desired_sha256(desired);
+        let platform = || {
+            literal_zero_journey_platform(
+                desired,
+                input.icp_wrapper,
+                root,
+                input.local_replica.clone(),
+                true,
+            )
+        };
+        #[expect(
+            clippy::result_large_err,
+            reason = "qualification asserts the existing public workflow error variants"
+        )]
+        let apply = |plan: &canic_host::fleet_ensure::model::FleetEnsurePlan| {
+            fleet_ensure_workflow::apply(
+                root,
+                desired,
+                &digest,
+                &desired.fleet,
+                &plan.plan_sha256,
+                &mut platform(),
+            )
+        };
+        let first = apply(reset);
+        if !underfunded {
+            return (first.expect("complete the funded repeat wipe"), 0, 0);
+        }
+        assert!(
+            matches!(first, Err(EnsureWorkflowError::SuccessorReviewRequired {
+            reason: FleetEnsureSuccessorReviewReason::AdditionalEffect, review: Some(ref details),
+        }) if details.maximum_additional_debit_cycles > 0),
+            "exact additional funding review: {first:?}"
+        );
+        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
+            root,
+            &desired.environment,
+            &desired.fleet,
+        );
+        let retained = canic_host::fleet_ensure::ops::read_journal(&paths)
+            .unwrap()
+            .unwrap();
+        assert_eq!(retained.operation_id, reset.operation_id);
+        assert_eq!(retained.effects.len(), 3);
+        assert!(
+            retained
+                .effects
+                .iter()
+                .all(|effect| effect.state == EffectState::Applied)
+        );
+        assert!(retained.successor_phases.is_empty());
+        let original_plan = std::fs::read(&paths.plan).unwrap();
+        let installs = std::fs::read_to_string(root.join("reinstall-mutations.log")).unwrap();
+        assert_eq!(installs.lines().count(), 3);
+        let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
+        let operator = Principal::from_text(&desired.operator).unwrap();
+        let balance = ledger_account_balance(input.pic, ledger, operator);
+        let withdrawals_before: u64 = input
+            .pic
+            .query_candid(ledger, "withdrawal_count", ())
+            .unwrap();
+        let retry = apply(reset);
+        assert!(
+            matches!(
+                retry,
+                Err(EnsureWorkflowError::SuccessorReviewRequired { .. })
+            ),
+            "paused reset requires a new review without repeating effects: {retry:?}"
+        );
+        let replayed = canic_host::fleet_ensure::ops::read_journal(&paths)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            replayed.effects, retained.effects,
+            "all three exact install receipts survive retry"
+        );
+        assert_eq!(std::fs::read(&paths.plan).unwrap(), original_plan);
+        assert_eq!(ledger_account_balance(input.pic, ledger, operator), balance);
+        let mut debit = 0;
+        let mut burn = 0;
+        let mut expected_withdrawals = withdrawals_before;
+        for _ in 0..8 {
+            let reviewed = fleet_ensure_workflow::plan(
+                root,
+                desired,
+                &digest,
+                &desired.fleet,
+                1_800_000_000_000_000_135,
+                &mut platform(),
+            )
+            .expect("review recovery under the same reinstall operation");
+            assert_eq!(reviewed.plan.operation_id, reset.operation_id);
+            let actions = planned_actions(&reviewed.plan);
+            assert!(actions.iter().all(|action| !matches!(
+                action,
+                EnsureAction::Install { .. } | EnsureAction::Create { .. }
+            )));
+            let funds = actions
+                .iter()
+                .filter_map(|action| match action {
+                    EnsureAction::Fund {
+                        principal,
+                        pool_funding,
+                        ..
+                    } => {
+                        let authority = pool_funding.as_ref().expect("reconciliation owns funding");
+                        assert_eq!(authority.root, input.root.to_text());
+                        assert_eq!(
+                            authority.lifecycle,
+                            canic_host::fleet_ensure::model::EstatePoolAssetLifecycle::PendingReset
+                        );
+                        Some(principal)
+                    }
+                    _ => None,
+                })
+                .collect::<BTreeSet<_>>();
+            assert!(
+                funds.len() <= 1,
+                "only the intentionally depleted Hub needs funding"
+            );
+            debit += reviewed.plan.conservation.maximum_operator_debit_cycles;
+            burn += reviewed.plan.conservation.maximum_execution_burn_cycles;
+            expected_withdrawals += u64::try_from(funds.len()).unwrap();
+            if !funds.is_empty() {
+                let lost = root.join("lost-funding-response");
+                if lost.exists() {
+                    std::fs::remove_file(lost).unwrap();
+                }
+                std::fs::write(root.join("lose-funding-response"), []).unwrap();
+            }
+            let mut result = apply(&reviewed.plan);
+            if !funds.is_empty() {
+                assert!(
+                    matches!(result, Err(EnsureWorkflowError::Platform(_))),
+                    "lose the completed withdrawal response: {result:?}"
+                );
+                assert!(root.join("lost-funding-response").exists());
+                result = apply(&reviewed.plan);
+            }
+            assert_eq!(
+                std::fs::read_to_string(root.join("reinstall-mutations.log")).unwrap(),
+                installs
+            );
+            let withdrawals: u64 = input
+                .pic
+                .query_candid(ledger, "withdrawal_count", ())
+                .unwrap();
+            assert_eq!(
+                withdrawals, expected_withdrawals,
+                "retry cannot repeat a paid withdrawal"
+            );
+            match result {
+                Ok(complete) => {
+                    assert!(debit > 0);
+                    assert_eq!(
+                        ledger_account_balance(input.pic, ledger, operator),
+                        balance - Nat::from(debit)
+                    );
+                    return (complete, debit, burn);
+                }
+                Err(EnsureWorkflowError::SuccessorReviewRequired {
+                    review: Some(details),
+                    ..
+                }) => assert!(!details.actions.is_empty()),
+                Err(error) => panic!("reviewed recovery must converge: {error:?}"),
+            }
+        }
+        panic!("bounded same-operation recovery reviews exhausted");
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
         reason = "one production-adapter journey proves stable-row wiping, interruption recovery, conservation and deliberate repeat identity"
     )]
     fn assert_selected_build_reinstall_journey(input: ReinstallJourney<'_>) {
@@ -8253,6 +9426,7 @@ esac
         let before_operator = ledger_account_balance(input.pic, ledger, operator);
         let before_root = ledger_account_balance(input.pic, ledger, input.root);
         let mut previous_operation = None;
+        let mut cumulative_funding = 0_u128;
         for wipe in 0..2_u64 {
             let wipe_span = Span::start(if wipe == 0 {
                 "first_deliberate_wipe"
@@ -8288,6 +9462,35 @@ esac
                             value: 1001
                         }
                     ]
+                );
+            }
+            if wipe == 0 {
+                let hub = selected_fixture_targets_from_pool(
+                    input.pic,
+                    input.root,
+                    &root_pool_status_as(input.pic, input.root, operator),
+                )
+                .into_iter()
+                .find(|(_, role)| role.as_str() == "user_hub")
+                .unwrap()
+                .0;
+                let burned: Result<u128, Error> = input
+                    .pic
+                    .update_candid_as(
+                        hub,
+                        input.root,
+                        "test_recovery_balance",
+                        (323_400_000_000_u128,),
+                    )
+                    .expect("spend fixture cycles through its local controller endpoint");
+                assert!(burned.unwrap() > 0);
+                assert!(
+                    input.pic.cycle_balance(hub)
+                        < bootstrap.roots[0]
+                            .limits
+                            .canister_pool
+                            .canister_cycles
+                            .to_u128()
                 );
             }
             let native_before = all
@@ -8509,15 +9712,9 @@ esac
                     3
                 );
             }
-            let complete = fleet_ensure_workflow::apply(
-                root,
-                desired,
-                &digest,
-                &desired.fleet,
-                &reset.plan.plan_sha256,
-                &mut platform(),
-            )
-            .expect("recover and complete the exact wipe");
+            let (complete, funding, additional_burn) =
+                complete_selected_reinstall(&input, &reset.plan, wipe == 0);
+            cumulative_funding += funding;
             assert!(complete.terminal);
             assert!(complete.actual_conservation.is_some());
             phase = phase.next("reset_state_and_conservation");
@@ -8562,15 +9759,16 @@ esac
                 .iter()
                 .map(|id| input.pic.cycle_balance(*id))
                 .sum::<u128>();
-            assert!(native_after <= native_before);
+            assert!(native_after <= native_before + funding);
             assert!(
-                native_before - native_after
+                native_before + funding - native_after
                     <= preparation.plan.conservation.maximum_execution_burn_cycles
                         + reset.plan.conservation.maximum_execution_burn_cycles
+                        + additional_burn
             );
             assert_eq!(
                 ledger_account_balance(input.pic, ledger, operator),
-                before_operator
+                before_operator.clone() - Nat::from(cumulative_funding)
             );
             assert_eq!(
                 ledger_account_balance(input.pic, ledger, input.root),
@@ -8583,12 +9781,19 @@ esac
                 "lost changed or identical Wasm response never repeats an install"
             );
             phase = phase.next("reset_terminal_replay");
+            // A newly reviewed funding plan uses its own selected input. A reset replay
+            // still recovers its retained selection despite a changed workspace build.
+            let replay_desired = if complete.plan.reinstall.is_some() {
+                &source_desired
+            } else {
+                desired
+            };
             let replay = fleet_ensure_workflow::apply(
                 root,
-                &source_desired,
-                &desired_sha256(&source_desired),
+                replay_desired,
+                &desired_sha256(replay_desired),
                 &desired.fleet,
-                &reset.plan.plan_sha256,
+                &complete.plan.plan_sha256,
                 &mut platform(),
             )
             .expect("effect-free wipe replay");
@@ -10175,6 +11380,7 @@ exec '{}' "$@"
         root_key: &'a [u8],
         workload_count: usize,
         ready_count: usize,
+        frontend_identity: Option<Principal>,
     }
 
     #[cfg(test)]
@@ -10242,13 +11448,25 @@ exec '{}' "$@"
         .expect("enroll the exact generator network");
         let source = root.join("fleet-policy.toml");
         let seed = root.join("fleet-seed.toml");
-        let source_text = generated_journey_policy(
+        let mut source_text = generated_journey_policy(
             input.operator,
             input.subnet,
             input.workload_count,
             input.ready_count,
             &config,
         );
+        if let Some(caller) = input.frontend_identity {
+            let mut policy: toml::Value = toml::from_str(&source_text).unwrap();
+            policy["admission"].as_table_mut().unwrap().insert(
+                "identity_origin".to_string(),
+                toml::Value::String("http://localhost:5173".to_string()),
+            );
+            policy["admission"]["principals"]
+                .as_array_mut()
+                .unwrap()
+                .push(toml::Value::String(caller.to_text()));
+            source_text = toml::to_string_pretty(&policy).unwrap();
+        }
         std::fs::write(&source, source_text).expect("write reviewed generator policy");
         canic_host::fleet_ensure::initialize_fresh_estate_seed(
             &canic_host::fleet_ensure::FreshEstateSeedRequest {
@@ -14988,6 +16206,12 @@ cycles = "80T"
     }
 
     fn setup_active_component_registry_fresh() -> ActiveComponentRegistryFixture {
+        setup_active_component_registry_with_pic(build_pic)
+    }
+
+    fn setup_active_component_registry_with_pic(
+        new_pic: fn() -> PocketIc,
+    ) -> ActiveComponentRegistryFixture {
         let total_started = Instant::now();
         let phase_started = Instant::now();
         let root_wasm = build_test_root_wasm();
@@ -14999,7 +16223,7 @@ cycles = "80T"
         let store_fixture = build_root_store_fixture();
         progress_elapsed("Store and Component artifacts ready", phase_started);
         let phase_started = Instant::now();
-        let pic = build_pic();
+        let pic = new_pic();
         progress_elapsed("PocketIC topology ready", phase_started);
         let phase_started = Instant::now();
         let coordinator = pic.create_canister();
@@ -15211,10 +16435,25 @@ cycles = "80T"
                 (CanisterObservabilityRequest::MemoryAllocations,),
             )
             .expect("Root allocation query");
-        assert!(matches!(
-            root_report,
-            Ok(CanisterObservabilityResponse::MemoryAllocations(_))
-        ));
+        let CanisterObservabilityResponse::MemoryAllocations(root_report) =
+            root_report.expect("Root allocation report")
+        else {
+            panic!("expected Root allocations");
+        };
+        assert_memory_allocation_conservation(
+            &root_report,
+            pic.get_stable_memory(fixture.root).len() as u64,
+        );
+        eprintln!(
+            "Root stable allocation: physical={} buckets={} virtual={}",
+            root_report.physical_extent.bytes,
+            root_report.allocated_bucket_bytes,
+            root_report
+                .memories
+                .iter()
+                .map(|entry| entry.virtual_extent.bytes)
+                .sum::<u64>()
+        );
 
         let relay_request = || {
             RootCommandFragment::ObserveCanister(FleetCanisterObservabilityRequest {
@@ -15267,7 +16506,10 @@ cycles = "80T"
         physical_extent: u64,
     ) {
         assert_eq!(report.physical_extent.bytes, physical_extent);
-        assert_eq!(report.bucket_size_pages, 128);
+        assert_eq!(
+            report.bucket_size_pages,
+            canic::memory::configured_bucket_pages()
+        );
         assert_eq!(report.metadata_bytes_read, 34_848);
         assert_eq!(report.memories.len(), 255);
         assert_eq!(
@@ -16866,6 +18108,14 @@ cycles = "80T"
             (
                 "autonomous Root removal",
                 published_draining_root_autonomously_reaches_external_deletion_readiness,
+            ),
+            (
+                "operator Component public CLI",
+                operator_component_public_cli_uses_real_icp_and_exports_terminal_binding,
+            ),
+            (
+                "operator Component lost-response recovery",
+                operator_component_recovers_lost_response_and_replays_terminal_binding,
             ),
             (
                 "protected current memory allocations",

@@ -4,28 +4,25 @@
 //! Does not own: projection compilation, phase policy, endpoint authorization, or distribution.
 //! Boundary: ops converts complete model state to and from this memory-ID-61 record.
 
+use crate::cdk::bounded_cell::BoundedCell;
 use crate::model::fleet_admission_projection::FleetAdmissionTargetTransitionPhaseModel;
 use crate::{
-    cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-    },
+    cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
     ids::{FleetAdmissionProjection, MAX_FLEET_ADMISSION_PROJECTION_RECORD_BYTES},
     role_contract::allocation::memory::fleet_admission_projection::FLEET_ADMISSION_PROJECTION_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
 
-const FLEET_ADMISSION_PROJECTION_RECORD_KEY: u8 = 0;
-
 eager_static! {
     static FLEET_ADMISSION_PROJECTION: RefCell<
-        StableBtreeMap<u8, FleetAdmissionProjectionRecord, RuntimeMemory<DefaultMemoryImpl>>,
-    > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
+        BoundedCell<Option<FleetAdmissionProjectionRecord>, RuntimeMemory<DefaultMemoryImpl>>,
+    > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
         key = "canic.core.fleet_admission.projection.v1",
         ty = FleetAdmissionProjectionStore,
         id = FLEET_ADMISSION_PROJECTION_ID,
-    )));
+    ), None));
 }
 
 /// Stable local fence/open phase.
@@ -108,26 +105,25 @@ pub struct FleetAdmissionProjectionStore;
 impl FleetAdmissionProjectionStore {
     #[must_use]
     pub(crate) fn get() -> Option<FleetAdmissionProjectionRecord> {
-        FLEET_ADMISSION_PROJECTION
-            .with_borrow(|store| store.get(&FLEET_ADMISSION_PROJECTION_RECORD_KEY))
+        FLEET_ADMISSION_PROJECTION.with_borrow(|store| store.get().clone())
     }
 
     pub(crate) fn initialize(record: FleetAdmissionProjectionRecord) -> bool {
         FLEET_ADMISSION_PROJECTION.with_borrow_mut(|store| {
-            if let Some(existing) = store.get(&FLEET_ADMISSION_PROJECTION_RECORD_KEY) {
+            if let Some(existing) = store.get().clone() {
                 return existing == record;
             }
-            store.insert(FLEET_ADMISSION_PROJECTION_RECORD_KEY, record);
+            store.set(Some(record));
             true
         })
     }
 
     pub(crate) fn replace(record: FleetAdmissionProjectionRecord) -> bool {
         FLEET_ADMISSION_PROJECTION.with_borrow_mut(|store| {
-            if store.get(&FLEET_ADMISSION_PROJECTION_RECORD_KEY).is_none() {
+            if store.get().is_none() {
                 return false;
             }
-            store.insert(FLEET_ADMISSION_PROJECTION_RECORD_KEY, record);
+            store.set(Some(record));
             true
         })
     }

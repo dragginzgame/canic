@@ -1,0 +1,8 @@
+[package]
+name = "canic-composed-empty-schema"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+icydb = { version = "=0.257.9", default-features = false }

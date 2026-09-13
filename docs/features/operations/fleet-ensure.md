@@ -62,7 +62,7 @@ schema_version = 1
 fleet_id = "<retained-live-fleet-id>"
 coordinator = "<retained-coordinator-principal>"
 cycles_ledger = "um5iw-rqaaa-aaaaq-qaaba-cai"
-management_creation_fee_cycles = "500B" # exact fee for future creations on the reviewed subnets
+management_creation_fee_cycles = "500B" # illustrative; use the exact fee for the creation subnet
 
 # Optional; omit to adopt the Coordinator as treasury.
 [treasury]
@@ -167,6 +167,17 @@ completed Fleet therefore plans no additional reinstall. The
 qualifies generation, reviewed reset, lost-response recovery, working Fleet
 reconstruction, conservation and both effect-free replay paths.
 
+PendingReset and Failed pool assets use the Root's reconciliation funding
+authority. They do not receive ordinary Ready-pool top-ups. If a completed
+infrastructure reset discovers funding outside its reviewed authority, Ensure
+pauses for another review. Retrying the paused reset preserves its plan and
+completed installation receipts and reports that a review is required. Run
+ordinary Ensure planning with the same selected input to review the additional
+effects under the same operation; apply the new digest. The completed installs
+are verified through their retained action hashes, canister versions and live
+authority, and are not repeated. Replay of that new funding plan uses its own
+reviewed input and digest.
+
 Whole-Fleet evacuation applies only to deletion and is an optional follow-up to
 this reinstall correction. Existing Root deletion returns native cycles and
 transfers its Ledger balance with an exact receipt; the Coordinator can then
@@ -187,13 +198,22 @@ If an exact retained identity is no longer observable, planning rejects instead
 of creating a substitute. The generator queries the configured Cycles Ledger's
 current fee and binds it into the desired document. Every seed must explicitly
 declare `management_creation_fee_cycles` in compact `B`, `T` or `Q` units for
-the reviewed target subnets, including retained estates that need more capacity.
+the reviewed creation subnet, including retained estates that need more capacity.
 There is no implicit zero: use `0B` only when it is the exact applicable fee.
 The fee applies to future creations, not already-paid retained assets. Planning
 adds the readiness floor, execution margin and management fee per new asset,
 then accounts for the separate Ledger fee. A changed fee changes the generated
 authority and requires reviewing the new plan; do not edit generated desired
 state or compensate with an unreviewed Ledger credit.
+The scalar fee currently supports creation on only one exact subnet per
+operation. `MixedSubnetCreationFees` rejects a fresh mixed-subnet topology,
+mixed-Root growth, or direct creation combined with Root growth on another
+subnet before creation or funding effects. It checks pending Root creations too
+and applies to retained plans. Reuse, reinstall and fully supplied Roots on
+other subnets do not consume a creation fee and do not trigger this limitation.
+The host cannot infer that two different subnets charge the same amount and
+does not substitute a global maximum. Preserve retained evidence on rejection;
+do not split an issued operation or erase its journal to bypass the guard.
 Observation and update burn values are distinct conservative
 ceilings checked against measured terminal conservation, not assumed fees.
 On IC mainnet, every Fiduciary placement must carry an exact
@@ -713,25 +733,34 @@ journal, installed artifact and paid-effect receipts.
 
 ## Unreadable retained plan
 
-An unreadable plan is not permission to replace an unfinished operation. A
-missing required nullable field, such as `recovery_review`, is rejected even
-when `schema_version` is 1. Preserve the complete Fleet directory, referenced
+An unreadable plan or journal is not permission to replace an unfinished
+operation. Missing required fields, such as plan `recovery_review` or journal
+effect `publication_attempts`, are rejected even when `schema_version` is 1.
+Preserve the complete Fleet directory, referenced
 content objects, release artifacts, desired inputs, estate seed and paid-effect
 receipts. Do not insert null fields, recalculate the plan digest or delete the
 journal. The current decoder cannot determine whether omission reflects a
 different source contract or damaged evidence.
 
-Ordinary Ensure reports `RetainedActivationReviewRequired` only when the
+Ordinary Ensure diagnoses failures in either document and reports
+`RetainedActivationReviewRequired` only when the
 existing local source inspector finds an exact Applied protocol prefix ending
 in Issued provisioning, with an unissued readiness tail. The diagnostic names
 the operation, journal's plan reference and hash of the source document. These
 are evidence identities; the journal reference is not a verified current plan
 digest, and local inspection does not establish live reset authority.
 
+The inspector also verifies the original action hash for an already Applied
+Store bootstrap receipt that lacks fixture metadata. This private receipt
+projection is limited to the completed prefix; it does not construct a current
+bootstrap command, invent empty fixtures or permit an Issued bootstrap row.
+The source documents and all paid-attempt evidence remain byte-for-byte intact.
+
 For that source shape, use the existing explicit `fleet ensure <fleet>
 --reinstall` review with the selected corrected release's desired input and
 the exact environment. Omit `--apply`. This deliberately bypasses ordinary
-resume selection and requests the bounded CANIC-157 partial-activation review
+resume selection, inspects source evidence before requiring current journal
+fields, and requests the bounded CANIC-157 partial-activation review
 described above. It leaves the active source documents in place and may reject
 if source artifacts, controllers, complete physical inventory, Root Ledger
 balances, pending paid effects or debit bounds do not satisfy admission. It

@@ -26,7 +26,7 @@ use crate::{
         RootManagementBinding,
     },
     fleet_ensure::ops::{EnsurePaths, root_owned_lifecycle, write_root_start_authority},
-    icp::IcpCli,
+    icp::{IcpCli, LocalReplicaTarget},
     icp_config::resolve_icp_build_network_from_root,
     network::resolve_canonical_network_id_from_root,
     release_build::validate_finalized_release_build_manifest,
@@ -123,6 +123,9 @@ pub struct GeneratedDesiredFleet {
 /// Typed no-effect Fleet generation failure.
 #[derive(Debug, ThisError)]
 pub enum FleetGenerateError {
+    #[error(transparent)]
+    Frontend(#[from] crate::frontend::FrontendError),
+
     #[error("invalid desired Fleet policy: {0}")]
     Policy(#[from] crate::fleet_ensure::policy::EnsurePolicyError),
     #[error("invalid protected funding policy: {0}")]
@@ -290,6 +293,8 @@ struct FleetSource {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct AdmissionSource {
+    #[serde(default)]
+    identity_origin: Option<String>,
     principals: Vec<String>,
 }
 
@@ -681,6 +686,7 @@ struct EstateObservationRequest<'a, 'request> {
     seed: &'a EstateSeed,
     source: &'a FleetSource,
     topology: &'a crate::component_topology::PlannedFleetTopology,
+    local_replica: Option<&'a LocalReplicaTarget>,
 }
 
 #[derive(candid::CandidType)]
@@ -696,12 +702,36 @@ enum RootEstateStatusResponse {
 }
 
 /// Generate one exact low-level desired document without issuing an IC update.
+pub fn generate_desired_fleet(
+    request: &FleetGenerateRequest<'_>,
+) -> Result<GeneratedDesiredFleet, FleetGenerateError> {
+    generate(request, None)
+}
+
+/// Generate through the exact owned local gateway while retaining local network authority.
+#[cfg(feature = "local-fleet")]
+pub fn generate_local_fleet(
+    request: &FleetGenerateRequest<'_>,
+    target: &LocalReplicaTarget,
+) -> Result<GeneratedDesiredFleet, FleetGenerateError> {
+    if resolve_icp_build_network_from_root(request.root, request.environment)
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?
+        == BuildNetwork::Ic
+    {
+        return Err(FleetGenerateError::Authority(
+            "local Fleet generation requires a local network profile".into(),
+        ));
+    }
+    generate(request, Some(target))
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "generation keeps one visible fail-closed authority-validation sequence"
 )]
-pub fn generate_desired_fleet(
+fn generate(
     request: &FleetGenerateRequest<'_>,
+    local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<GeneratedDesiredFleet, FleetGenerateError> {
     let source: FleetSource = load_toml(request.source, "source")?;
     let seed: EstateSeed = load_toml(request.seed, "seed")?;
@@ -721,6 +751,12 @@ pub fn generate_desired_fleet(
     let deployment_configuration = ComponentDeploymentConfiguration::compile(config.model())
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
     let admission = compile_source_admission_policy(&source.admission.principals)?;
+    if let Some(origin) = &source.admission.identity_origin {
+        let local = canonical_network_id(request, &source)?
+            != canic_core::ids::CanonicalNetworkId::ic_mainnet();
+        crate::frontend::policy::validate_origin(origin, local)
+            .map_err(FleetGenerateError::Frontend)?;
+    }
     let root_inputs = source
         .fleet_subnet_roots
         .iter()
@@ -793,7 +829,7 @@ pub fn generate_desired_fleet(
     let store_candid = candid_sidecar(request.root, store_artifact)?;
     let root_candid_path = request.root.join(&root_candid);
     let observed = if seed.fresh_estate {
-        validate_fresh_generation_authority(request, &source, operator)?;
+        validate_fresh_generation_authority(request, &source, operator, local_replica)?;
         BTreeMap::new()
     } else {
         observe_estate(&EstateObservationRequest {
@@ -805,6 +841,7 @@ pub fn generate_desired_fleet(
             seed: &seed,
             source: &source,
             topology: &topology,
+            local_replica,
         })?
     };
     let treasury = seed
@@ -819,7 +856,7 @@ pub fn generate_desired_fleet(
                 .to_string(),
         ));
     }
-    let ledger_fee_cycles = observe_ledger_fee(request, &seed.cycles_ledger)?;
+    let ledger_fee_cycles = observe_ledger_fee(request, &seed.cycles_ledger, local_replica)?;
     let desired = compile_desired(CompileDesiredRequest {
         request,
         source: &source,
@@ -856,12 +893,14 @@ fn validate_fresh_generation_authority(
     request: &FleetGenerateRequest<'_>,
     source: &FleetSource,
     operator: Principal,
+    local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<(), FleetGenerateError> {
     let icp = IcpCli::new(
         request.icp_executable,
         Some(request.environment.to_string()),
     )
-    .with_cwd(request.root.to_path_buf());
+    .with_cwd(request.root.to_path_buf())
+    .with_local_replica(local_replica.cloned());
     let active = icp
         .identity_principal_text()
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
@@ -1186,6 +1225,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
     let app = input.app.clone();
     Ok(DesiredFleet {
         bootstrap: Some(DesiredFleetBootstrap {
+            admission_identity_origin: input.source.admission.identity_origin.clone(),
             admission: input.admission,
             app,
             canonical_network_id: canonical_network_id(input.request, input.source)?,
@@ -1238,13 +1278,15 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
 fn observe_ledger_fee(
     request: &FleetGenerateRequest<'_>,
     cycles_ledger: &str,
+    local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<u128, FleetGenerateError> {
     parse_principal("Cycles Ledger", cycles_ledger)?;
     let icp = IcpCli::new(
         request.icp_executable,
         Some(request.environment.to_string()),
     )
-    .with_cwd(request.root.to_path_buf());
+    .with_cwd(request.root.to_path_buf())
+    .with_local_replica(local_replica.cloned());
     let value: Nat = icp
         .canister_query_candid(cycles_ledger, "icrc1_fee", &(), None)
         .map_err(|error| {
@@ -1276,12 +1318,14 @@ fn observe_estate(
         seed,
         source,
         topology,
+        local_replica,
     } = input;
     let icp = IcpCli::new(
         request.icp_executable,
         Some(request.environment.to_string()),
     )
-    .with_cwd(request.root.to_path_buf());
+    .with_cwd(request.root.to_path_buf())
+    .with_local_replica(local_replica.cloned());
     let active = icp
         .identity_principal_text()
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;

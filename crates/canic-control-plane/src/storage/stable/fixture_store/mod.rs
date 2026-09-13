@@ -59,6 +59,33 @@ impl FixtureStoreData {
 pub struct FixtureStore;
 
 impl FixtureStore {
+    /// Count metadata and chunk keys without reading chunk payloads.
+    pub fn inventory() -> crate::view::fixture_store::FixtureStoreInventoryView {
+        FIXTURES.with_borrow(|map| {
+            let mut inventory = crate::view::fixture_store::FixtureStoreInventoryView {
+                sources: 0,
+                expected_chunks: 0,
+                stored_chunks: 0,
+            };
+            for entry in map.iter() {
+                match entry.key()[0] {
+                    1 => {
+                        let source: FixtureSourceRecord =
+                            candid::decode_one(&entry.value()).expect("fixture source record");
+                        inventory.sources += 1;
+                        inventory.expected_chunks = inventory
+                            .expected_chunks
+                            .checked_add(source.descriptor.chunks.len() as u64)
+                            .expect("bounded fixture chunk inventory");
+                    }
+                    2 => inventory.stored_chunks += 1,
+                    _ => {}
+                }
+            }
+            inventory
+        })
+    }
+
     pub fn source(content: [u8; 32]) -> Option<FixtureSourceRecord> {
         get(key(1, content, 0))
             .map(|bytes| candid::decode_one(&bytes).expect("fixture source record"))

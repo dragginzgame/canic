@@ -27,6 +27,12 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 /// Run no-op upgrade handling for the audit leaf probe.
 async fn canic_upgrade() {}
 
+/// Prove browser-owned authenticated ingress through the current Fleet admission policy.
+#[canic_query(requires(caller::is_fleet_admitted()))]
+async fn audit_frontend_admission_probe() -> Result<candid::Principal, Error> {
+    Ok(ic_cdk::api::msg_caller())
+}
+
 #[canic_query(requires(env::build_local_only()))]
 async fn audit_time_probe() -> Result<QueryPerfSample<u64>, Error> {
     Ok(MetricsQuery::sample_query(time()))

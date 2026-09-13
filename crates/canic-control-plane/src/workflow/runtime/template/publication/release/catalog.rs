@@ -171,6 +171,7 @@ mod tests {
             binding: WasmStoreBinding::new("primary"),
             pid: Principal::anonymous(),
             status: WasmStoreStatusResponse {
+                inventory: crate::dto::template::WasmStoreInventoryResponse::default(),
                 gc: WasmStoreGcStatusResponse {
                     mode,
                     changed_at: 1,

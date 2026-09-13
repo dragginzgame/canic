@@ -10,6 +10,8 @@ pub(super) const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=1.2.0, <2.0.0";
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalReplicaTarget {
+    /// Exact selected local environment; another environment must use its own network authority.
+    pub environment: String,
     pub url: String,
     pub root_key: String,
 }

@@ -6,7 +6,8 @@
 
 use canic_core::{
     cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::RuntimeMemory,
+        DefaultMemoryImpl, Storable, btreemap::BTreeMap as StableBtreeMap, cell::Cell,
+        memory::RuntimeMemory, storable::Bound,
     },
     dto::{
         component_deployment::{ComponentDeploymentLimits, ComponentDeploymentPurpose},
@@ -30,7 +31,7 @@ use canic_core::{
     },
 };
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
+use std::{borrow::Cow, cell::RefCell};
 
 const ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES: u32 = 8_650_000;
 // CBOR encodes a 32-byte `[u8; 32]` key as a two-byte array header followed by
@@ -116,11 +117,33 @@ impl RootComponentOperationRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "RootComponentOperationRecord";
 }
 
-impl_storable_bounded!(
-    RootComponentOperationRecord,
-    ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES,
-    false
-);
+// Unbounded allocator metadata selects small overflow pages. The product record
+// remains bounded: encoding is checked before the B-tree can write any bytes.
+impl Storable for RootComponentOperationRecord {
+    const BOUND: Bound = Bound::Unbounded;
+
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        let bytes =
+            canic_core::cdk::serialize::serialize(self).expect("encode provisioning operation");
+        assert!(
+            bytes.len() <= ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES as usize,
+            "provisioning operation exceeds its encoded record limit"
+        );
+        Cow::Owned(bytes)
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.to_bytes().into_owned()
+    }
+
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
+        assert!(
+            bytes.len() <= ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES as usize,
+            "provisioning operation exceeds its encoded record limit"
+        );
+        canic_core::cdk::serialize::deserialize(&bytes).expect("decode provisioning operation")
+    }
+}
 
 /// Stable placement-index key.
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]

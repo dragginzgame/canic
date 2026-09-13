@@ -10,6 +10,11 @@ use super::{
 };
 
 impl IcpCli {
+    /// Validate an already bounded local version response without launching another process.
+    pub(crate) fn accepts_version_output(output: &str) -> bool {
+        parse_icp_cli_version(output).is_some_and(is_supported_icp_cli_version)
+    }
+
     /// Resolve and validate the installed ICP CLI version.
     pub fn compatible_version(&self) -> Result<String, IcpCommandError> {
         compatible_version_output(&self.executable, self.cwd.as_deref())

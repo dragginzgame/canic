@@ -4,13 +4,14 @@ pub(crate) mod cache;
 mod candid;
 mod candid_cache;
 pub(crate) mod compiled;
+mod compiler_cache;
 mod context;
 mod metrics;
 mod model;
 mod process;
 mod reuse;
 
-pub use crate::build_profile::CanisterBuildProfile;
+pub use crate::{artifact_io::validate_wasm_candid_endpoints, build_profile::CanisterBuildProfile};
 pub use artifact::{
     CanisterArtifactBuilder, build_workspace_canister_artifact,
     build_workspace_canister_artifact_with_options, build_workspace_configured_canister_artifacts,

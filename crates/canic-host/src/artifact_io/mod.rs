@@ -232,7 +232,30 @@ pub fn validate_sidecar_only_candid_artifact(
         .into());
     }
 
-    let declared = parse_candid_service_endpoints(&candid)?
+    validate_candid_methods(wasm_path, did_path, &snapshot, &candid)
+}
+
+/// Verify that a Wasm exports exactly the application methods declared in its Candid.
+///
+/// Lifecycle and IC CDK internal exports are outside the public method inventory.
+/// This compares endpoint names; release-bound Candid hashes retain the type authority.
+pub fn validate_wasm_candid_endpoints(
+    wasm_path: &Path,
+    did_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let wasm = fs::read(wasm_path)?;
+    let candid = fs::read_to_string(did_path)?;
+    let snapshot = wasm::wasm_contract_snapshot(&wasm)?;
+    validate_candid_methods(wasm_path, did_path, &snapshot, &candid)
+}
+
+fn validate_candid_methods(
+    wasm_path: &Path,
+    did_path: &Path,
+    snapshot: &wasm::WasmContractSnapshot,
+    candid: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let declared = parse_candid_service_endpoints(candid)?
         .into_iter()
         .map(|endpoint| endpoint.name)
         .collect::<BTreeSet<_>>();

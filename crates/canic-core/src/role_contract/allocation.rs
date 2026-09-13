@@ -100,7 +100,6 @@ pub mod memory {
     }
 
     pub mod application_receipt {
-        pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 47;
         pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 48;
     }
 
@@ -113,7 +112,6 @@ pub mod memory {
     pub mod sharding {
         pub const SHARDING_REGISTRY_ID: u8 = 52;
         pub const SHARDING_ASSIGNMENTS_ID: u8 = 53;
-        pub const SHARDING_ACTIVE_SET_ID: u8 = 54;
     }
 
     pub mod blob_storage {
@@ -137,7 +135,7 @@ pub mod memory {
 }
 
 use memory::{
-    application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
+    application_receipt::APPLICATION_RECEIPT_ELIGIBILITY_ID,
     async_job_recovery::ASYNC_JOB_RECOVERY_ID,
     auth::{
         DELEGATED_TOKEN_ISSUER_STATE_ID, LOCAL_APPLICATION_AUTHORIZATION_STATE_ID,
@@ -177,7 +175,7 @@ use memory::{
     },
     replay::REPLAY_RECEIPTS_ID,
     runtime::{RUNTIME_BINDINGS_ID, RUNTIME_CANISTER_CHILDREN_ID},
-    sharding::{SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
+    sharding::{SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
 };
 
 const TEMPLATE_MANIFESTS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_MANIFESTS_ID)];
@@ -239,10 +237,8 @@ const CORE_INTENT_IDS: &[MemoryId] = &[
     MemoryId::new(INTENT_RECEIPT_BACKED_RECORDS_ID),
     MemoryId::new(INTENT_EXPIRY_INDEX_ID),
 ];
-const CORE_APPLICATION_RECEIPT_IDS: &[MemoryId] = &[
-    MemoryId::new(APPLICATION_RECEIPT_REPLAY_ID),
-    MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID),
-];
+const CORE_APPLICATION_RECEIPT_IDS: &[MemoryId] =
+    &[MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID)];
 const CORE_PLACEMENT_ACKNOWLEDGEMENT_IDS: &[MemoryId] =
     &[MemoryId::new(PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID)];
 const CORE_AUTHORITY_RESTORE_FENCE_IDS: &[MemoryId] = &[MemoryId::new(AUTHORITY_RESTORE_FENCE_ID)];
@@ -253,7 +249,6 @@ const PLACEMENT_SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_SC
 const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
 const SHARDING_ASSIGNMENTS_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ASSIGNMENTS_ID)];
-const SHARDING_ACTIVE_SET_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ACTIVE_SET_ID)];
 const BLOB_STORAGE_ROOTS_IDS: &[MemoryId] = &[MemoryId::new(BLOB_STORAGE_ROOTS_ID)];
 const BLOB_STORAGE_PENDING_DELETIONS_IDS: &[MemoryId] =
     &[MemoryId::new(BLOB_STORAGE_PENDING_DELETIONS_ID)];
@@ -431,11 +426,6 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::ShardingAssignments,
         AllocationOwner::CanicCore,
         SHARDING_ASSIGNMENTS_IDS,
-    ),
-    definition(
-        StateAllocationKey::ShardingActiveSet,
-        AllocationOwner::CanicCore,
-        SHARDING_ACTIVE_SET_IDS,
     ),
     definition(
         StateAllocationKey::BlobStorageRoots,

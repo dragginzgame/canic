@@ -19,9 +19,7 @@ use crate::{
                 ShardingMetricOperation as MetricOperation, ShardingMetricReason as MetricReason,
             },
         },
-        storage::placement::{
-            sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps,
-        },
+        storage::placement::sharding::ShardingRegistryOps,
     },
     workflow::placement::{
         allocation::{PlacementAllocationRequest, PlacementAllocationWorkflow},
@@ -93,7 +91,6 @@ impl ShardAllocator {
             MetricEvent::failed(MetricOperation::CreateShard, &err);
             return Err(err);
         }
-        ShardingLifecycleOps::set_active(pid);
         if let Err(err) = PlacementAllocationWorkflow::finish_registered_child(&permit, pid) {
             MetricEvent::failed(MetricOperation::CreateShard, &err);
             return Err(err);

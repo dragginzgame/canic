@@ -26,9 +26,7 @@ use crate::{
                 ShardingMetricOperation as MetricOperation, ShardingMetricReason as MetricReason,
             },
         },
-        storage::placement::{
-            sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps,
-        },
+        storage::placement::sharding::ShardingRegistryOps,
     },
     workflow::placement::sharding::{ShardingWorkflow, ShardingWorkflowError},
 };
@@ -71,7 +69,7 @@ impl ShardingWorkflow {
             MetricEvent::failed(MetricOperation::Assign, &err);
             return Err(err);
         }
-        let active = ShardingLifecycleOps::active_shards();
+        let active = ShardingRegistryOps::active_shards();
         crate::perf!("load_active_shards");
         if active.is_empty() {
             return match Self::assign_bootstrap_created(
@@ -233,7 +231,7 @@ impl ShardingWorkflow {
         let partition_key = partition_key.as_ref();
         ShardingRegistryOps::validate_assignment_key(pool, partition_key)?;
 
-        let active = ShardingLifecycleOps::active_shards();
+        let active = ShardingRegistryOps::active_shards();
         if active.is_empty() {
             Self::ensure_bootstrap_capacity(pool, partition_key, &pool_cfg.policy)?;
         }

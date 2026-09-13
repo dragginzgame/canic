@@ -31,6 +31,7 @@ use super::{
     cache::{
         canister_build_target_root, configure_canister_cargo_command,
         configure_declaration_command, declaration_target_root, lock_canister_build_target,
+        output_canister_cargo_command,
     },
     candid::remove_stale_icp_candid_sidecars,
     candid_cache::{CandidExtractionCache, extract_configured_candid},
@@ -478,7 +479,7 @@ fn run_canister_runtime_batch(
     for spec in &group.specs {
         command.arg("--package").arg(&spec.package_name);
     }
-    let output = command.output()?;
+    let output = output_canister_cargo_command(&mut command)?;
     if !output.status.success() {
         return Err(format!(
             "configured runtime batch failed: {}",
@@ -717,7 +718,7 @@ fn run_canister_build(
         );
     }
 
-    let output = command.output()?;
+    let output = output_canister_cargo_command(&mut command)?;
     if !output.status.success() {
         return Err(format!(
             "cargo build failed for {}: {}",
@@ -742,7 +743,7 @@ fn run_canister_profile_candid_build(
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let mut command =
         canister_profile_candid_command(context, manifest_path, context.profile, options);
-    let output = command.output()?;
+    let output = output_canister_cargo_command(&mut command)?;
     if !output.status.success() {
         return Err(format!(
             "profile Candid build failed for {}: {}",
@@ -804,7 +805,7 @@ fn run_canister_build_batch(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut command = canister_cargo_batch_command(context, cargo_workspace_root, specs, profile);
 
-    let output = command.output()?;
+    let output = output_canister_cargo_command(&mut command)?;
     if output.status.success() {
         return Ok(());
     }

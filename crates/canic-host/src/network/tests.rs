@@ -92,6 +92,30 @@ fn exact_reenrollment_is_idempotent() {
 }
 
 #[test]
+fn frontend_trust_uses_only_exact_enrolled_local_bytes() {
+    let (root, root_key_path, root_key, fingerprint) = fixture("frontend-trust");
+    assert_eq!(frontend_root_key(&root, "ic").unwrap(), None);
+    assert!(frontend_root_key(&root, "local").is_err());
+    let report = enroll_network(enroll(&root, "local", &root_key_path, &fingerprint)).unwrap();
+    assert_eq!(
+        frontend_root_key(&root, "local").unwrap(),
+        Some(root_key.clone())
+    );
+    let mut tampered = root_key;
+    *tampered.last_mut().unwrap() ^= 1;
+    fs::write(
+        report.authority_directory.join(ROOT_KEY_RELATIVE_PATH),
+        tampered,
+    )
+    .unwrap();
+    assert!(matches!(
+        frontend_root_key(&root, "local"),
+        Err(NetworkIdentityError::ContradictoryAuthority { .. })
+    ));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn enrollment_resumes_after_authority_root_was_published() {
     let (root, root_key_path, _, fingerprint) = fixture("resume");
     let first = enroll_network(enroll(&root, "local", &root_key_path, &fingerprint))

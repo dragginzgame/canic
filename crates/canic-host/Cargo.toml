@@ -16,6 +16,9 @@ publish = true
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]
 
+[features]
+local-fleet = ["dep:ic-testkit", "dep:reqwest"]
+
 [dependencies]
 candid = { workspace = true }
 candid_parser = { workspace = true }
@@ -31,6 +34,8 @@ flate2 = { workspace = true }
 getrandom = { workspace = true }
 ic-agent = { workspace = true }
 ic-query = { workspace = true }
+ic-testkit = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { workspace = true }
 serde_json = { workspace = true }
@@ -39,12 +44,17 @@ syn = { workspace = true, features = ["full", "visit"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
+url = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true }
 
 [dev-dependencies]
 ic-testkit = { workspace = true }
+
+[[example]]
+name = "local_fleet"
+required-features = ["local-fleet"]
 
 [lints]
 workspace = true

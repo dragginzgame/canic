@@ -63,7 +63,7 @@ The former stateful-retirement/release-adoption proposal is
 It grants no compatibility exception or implementation authority.
 
 The former runtime-heavy generic Fleet Observatory is now an
-[unnumbered host-first idea](ideas/fleet-observatory/status.md).
+[promoted 0.110 host-first batch](0.110-fleet-runtime-contraction/0.110-design.md#op3-host-first-fleet-observatory-canic-002).
 
 Deferred ideas do not gate this nine-line path unless a later explicit
 amendment moves one into a numbered design.

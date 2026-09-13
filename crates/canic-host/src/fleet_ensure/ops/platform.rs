@@ -4,6 +4,10 @@
 //! Does not own: effect ordering, durable intent, retry policy, or plan approval.
 //! Boundary: the workflow calls one method only after persisting its exact action identity.
 
+use crate::icp::cycles_ledger::{
+    CanisterSettings, CmcCreateCanisterArgs, CreateCanisterArgs, CreateCanisterError,
+    CreateCanisterSuccess, SubnetSelection,
+};
 use crate::{
     canister_protocol::{CanisterProtocolError, call_with_candid, query_with_candid},
     fleet_ensure::{
@@ -523,29 +527,6 @@ enum ManagedCanisterStatusResponse {
     CycleBalance(canic_core::dto::role::CycleBalanceStatusResponse),
 }
 
-#[derive(CandidType)]
-struct CreateCanisterArgs {
-    amount: Nat,
-    created_at_time: Option<u64>,
-    creation_args: Option<CmcCreateCanisterArgs>,
-    from_subaccount: Option<[u8; 32]>,
-}
-
-#[derive(CandidType)]
-struct CmcCreateCanisterArgs {
-    settings: Option<CanisterSettings>,
-    subnet_selection: Option<SubnetSelection>,
-}
-
-#[derive(CandidType)]
-struct CanisterSettings {
-    compute_allocation: Option<Nat>,
-    controllers: Option<Vec<Principal>>,
-    freezing_threshold: Option<Nat>,
-    memory_allocation: Option<Nat>,
-    reserved_cycles_limit: Option<Nat>,
-}
-
 struct CreateCanisterAuthority<'a> {
     controller_canisters: &'a [String],
     controllers: &'a [String],
@@ -553,42 +534,6 @@ struct CreateCanisterAuthority<'a> {
     ledger: &'a str,
     requested_initial_cycles: u128,
     subnet: &'a str,
-}
-
-#[derive(CandidType)]
-enum SubnetSelection {
-    Subnet { subnet: Principal },
-}
-
-#[derive(CandidType, Deserialize)]
-struct CreateCanisterSuccess {
-    block_id: Nat,
-    canister_id: Principal,
-}
-
-#[derive(CandidType, Deserialize)]
-enum CreateCanisterError {
-    CreatedInFuture {
-        ledger_time: u64,
-    },
-    Duplicate {
-        duplicate_of: Nat,
-        canister_id: Option<Principal>,
-    },
-    FailedToCreate {
-        error: String,
-        fee_block: Option<Nat>,
-        refund_block: Option<Nat>,
-    },
-    GenericError {
-        error_code: Nat,
-        message: String,
-    },
-    InsufficientFunds {
-        balance: Nat,
-    },
-    TemporarilyUnavailable,
-    TooOld,
 }
 
 #[derive(CandidType)]
@@ -5318,6 +5263,7 @@ mod tests {
             )
             .unwrap();
             owners.platform.desired.bootstrap = Some(crate::fleet_ensure::model::DesiredFleetBootstrap {
+            admission_identity_origin: None,
                 admission: canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_policy_template(vec![operator], Vec::new()).unwrap(),
                 app: canic_core::ids::AppId::from("inspection"),
                 canonical_network_id: canic_core::ids::CanonicalNetworkId::ic_mainnet(),
@@ -6697,6 +6643,217 @@ printf 'finish\n' >> events
             ),
             None
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one platform-to-policy matrix proves lifecycle projection and exclusive funding authority"
+    )]
+    fn configured_pool_observation_preserves_one_funding_owner() {
+        use crate::fleet_ensure::{model::DesiredFleetArtifacts, policy::compile_plan};
+
+        let mut fixture = PoolInspectionFixture::fresh(1);
+        fixture.target = Principal::from_slice(&[10]);
+        let root_id = fixture.root_id.to_text();
+        let target = fixture.target.to_text();
+        let mut desired = fixture.owners.platform.desired.clone();
+        desired.cycles_ledger = Principal::from_slice(&[8]).to_text();
+        desired.treasury = "root".into();
+        desired.ledger_fee_cycles = "5".into();
+        desired.management_creation_fee_cycles = "500".into();
+        desired.material_cycle_threshold = "1".into();
+        desired.maximum_observation_burn_cycles = "10".into();
+        desired.maximum_update_burn_cycles = "20".into();
+        let mut root = desired.canisters[0].clone();
+        root.principal = Some(root_id.clone());
+        root.subnet = root_id.clone();
+        root.controllers = vec![desired.operator.clone()];
+        root.wasm = None;
+        root.initial_cycles = "1000".into();
+        root.minimum_cycles = "1000".into();
+        let mut configured = root.clone();
+        configured.name = "pool".into();
+        configured.kind = DesiredCanisterKind::Pool;
+        configured.principal = Some(target.clone());
+        configured.controllers = vec![root_id.clone()];
+        configured.parent = Some(root.name.clone());
+        let mut coordinator = root.clone();
+        coordinator.name = "coordinator".into();
+        coordinator.kind = DesiredCanisterKind::Coordinator;
+        coordinator.principal = Some(Principal::from_slice(&[20]).to_text());
+        root.parent = Some(coordinator.name.clone());
+        desired.canisters = vec![coordinator.clone(), root, configured.clone()];
+        let bootstrap = desired.bootstrap.as_mut().unwrap();
+        bootstrap.fresh_estate = false;
+        bootstrap.roots = vec![crate::fleet_ensure::model::DesiredFleetBootstrapRoot {
+            canister_pool_imports: vec![target.clone()],
+            component_admissions: Vec::new(),
+            component_topology_digest: canic_core::ids::ComponentTopologyDigest::from_bytes(
+                [1; 32],
+            ),
+            funding: crate::test_support::fleet_subnet_root_funding_authority(),
+            limits: canic_core::ids::FleetSubnetRootLimits {
+                maximum_component_instances: 1,
+                maximum_registry_bytes: 1,
+                maximum_wasm_store_bytes: 1,
+                canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                    minimum_size: 0,
+                    maximum_size: 1,
+                    canister_cycles: Cycles::new(1_000),
+                    creation_execution_margin: Cycles::new(100),
+                },
+                cycles_funding: canic_core::ids::CyclesFundingBudget {
+                    window_secs: 1,
+                    maximum_cycles: Cycles::new(1),
+                },
+                maximum_group_placements: 1,
+            },
+            placement_subnet: canic_core::ids::SubnetId::from_principal(fixture.root_id),
+            root: "root".into(),
+            store: "store".into(),
+        }];
+        let claim = canic_core::dto::pool::CanisterPoolClaim {
+            component: canic_core::ids::ComponentInstanceId::from_generated_bytes([1; 32]),
+            operation_id: [2; 32],
+        };
+        for status in [
+            CanisterPoolAssetStatus::PendingReset,
+            CanisterPoolAssetStatus::Failed {
+                reason: "reset interrupted".into(),
+            },
+            CanisterPoolAssetStatus::Ready,
+            CanisterPoolAssetStatus::Claimed {
+                claim: claim.clone(),
+            },
+            CanisterPoolAssetStatus::Workload { claim },
+        ] {
+            for cycles in [900, 1_050, 1_100] {
+                let lifecycle = estate_pool_lifecycle(&status).unwrap();
+                let retained = matches!(
+                    lifecycle,
+                    EstatePoolAssetLifecycle::PendingReset | EstatePoolAssetLifecycle::Failed
+                );
+                let live = IcpEnsurePlatform::observed_root_owned_asset(
+                    &configured,
+                    &target,
+                    &root_id,
+                    CanisterPoolAsset {
+                        canister_id: fixture.target,
+                        creation_receipt: None,
+                        cycles: Cycles::new(cycles),
+                        origin: CanisterPoolAssetOrigin::Imported,
+                        status: status.clone(),
+                        added_at_ns: 1,
+                        updated_at_ns: 1,
+                    },
+                )
+                .unwrap();
+                let mut observation = FleetObservation {
+                    additional_controlled_cycles: BTreeMap::new(),
+                    canisters: BTreeMap::from([
+                        ("pool".into(), live),
+                        (
+                            "root".into(),
+                            Some(LiveCanister {
+                                canister_version: None,
+                                controllers: vec![desired.operator.clone()],
+                                cycles: 10_000,
+                                module_sha256: None,
+                                principal: root_id.clone(),
+                                reinstall_required: false,
+                                root_owned_lifecycle: None,
+                                status: CanisterRuntimeStatus::Running,
+                            }),
+                        ),
+                    ]),
+                    estate_funding_domains: BTreeMap::from([(
+                        "root".into(),
+                        EstateFundingDomainObservation {
+                            balance_cycles: Some(0),
+                            cycles_ledger: desired.cycles_ledger.clone(),
+                            root_principal: Some(root_id.clone()),
+                            pool: Some(EstatePoolInventoryObservation {
+                                assets: vec![EstatePoolAssetObservation {
+                                    creation_receipt: None,
+                                    cycles,
+                                    lifecycle,
+                                    origin: EstatePoolAssetOrigin::Imported,
+                                    principal: target.clone(),
+                                }],
+                                maximum_size: 1,
+                                minimum_size: 0,
+                                pending_creation: None,
+                                readiness_floor_cycles: 1_000,
+                                creation_execution_margin_cycles: 100,
+                            }),
+                        },
+                    )]),
+                    ledger_fee_cycles: 5,
+                    operator_cycles: 10_000,
+                    protocol_ready: BTreeMap::new(),
+                };
+                let mut coordinator_live = observation.canisters["root"].clone().unwrap();
+                coordinator_live.principal = coordinator.principal.clone().unwrap();
+                observation
+                    .canisters
+                    .insert(coordinator.name.clone(), Some(coordinator_live));
+                let actions = current_protocol::compile_pool_reconciliation(
+                    &fixture.owners.root,
+                    &desired,
+                    &fixture.owners.state,
+                    &observation.estate_funding_domains,
+                )
+                .unwrap();
+                assert_eq!(actions.len(), usize::from(retained));
+                let plan = compile_plan(
+                    &desired,
+                    &DesiredFleetArtifacts::default(),
+                    &actions,
+                    &"11".repeat(32),
+                    &desired.fleet,
+                    &observation,
+                    1,
+                    &"22".repeat(32),
+                    None,
+                )
+                .expect("configured pool and reconciliation must share one funding owner");
+                let pool_plan = plan
+                    .canisters
+                    .iter()
+                    .find(|entry| entry.name == "pool")
+                    .unwrap();
+                let funds = pool_plan
+                    .actions
+                    .iter()
+                    .filter(|action| matches!(action, EnsureAction::Fund { .. }))
+                    .collect::<Vec<_>>();
+                let should_fund = if retained {
+                    cycles < 1_100
+                } else {
+                    cycles < 1_000 && lifecycle == EstatePoolAssetLifecycle::Ready
+                };
+                assert_eq!(funds.len(), usize::from(should_fund));
+                if let Some(EnsureAction::Fund {
+                    amount,
+                    pool_funding,
+                    expected_post_cycles,
+                    ..
+                }) = funds.first()
+                {
+                    let authority = pool_funding.as_ref().unwrap();
+                    assert_eq!(
+                        (&authority.root, authority.lifecycle),
+                        (&root_id, lifecycle)
+                    );
+                    if retained {
+                        assert_eq!((*amount, *expected_post_cycles), (1_130 - cycles, 1_130));
+                    }
+                }
+            }
+        }
+        std::fs::remove_dir_all(&fixture.owners.root).unwrap();
     }
 
     #[test]

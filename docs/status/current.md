@@ -2,6 +2,57 @@
 
 Last updated: 2026-09-13
 
+## CANIC-169: pool funding and reinstall continuation qualified
+
+CANIC-169 is fixed in the open **0.110.16** draft. PendingReset and Failed pool
+assets now remain under reconciliation funding authority; the duplicate-funding
+guard stays intact. A completed reset can enter the existing same-operation
+follow-up review while retaining its exact installation evidence. Reapplying the
+paused reset requests review without repeating effects.
+
+All 199 targeted Fleet Ensure native tests pass (two existing ignored cases),
+and affected host/testing/Hub Clippy passes. The complete mixed-topology PocketIC
+case passes in 760.95s (776s runner): an underfunded asset, three completed
+infrastructure installs, lost install/funding replies, bounded follow-up reviews,
+conservation, restored application rows, readiness, effect-free replay and a
+second deliberate wipe. All 1,791 recorded source/build inputs stayed unchanged.
+The [feedback report](../audits/reports/2026-09/2026-09-11/toko-upstream-feedback.md#canic-169-qualification)
+records identities and limitations. The complete .16 batch and changelogs are
+ready for the governed release flow. Package versions remain .15; no broad gate,
+version bump, commit, push or live Toko recovery was performed.
+
+## Four promoted operator batches complete in 0.110
+
+The maintainer promoted CANIC-010, 008, 002 and 017 into 0.110. All four
+in-repository batches are implemented, qualified and ready for the governed
+release flow in the existing open **0.110.16** draft. Package versions remain
+0.110.15. The [batch tracker](../design/0.110-fleet-runtime-contraction/status.md#promoted-operator-batches--2026-09-13)
+records scope, exact evidence and limits. Earlier .16 corrections are preserved.
+No broad validation, version transaction, commit, publication or live Toko effect
+was performed. Sibling repositories remain read-only; this is not a minor
+closeout audit or downstream adoption.
+
+OP1 supplies reviewed Component lifecycle/recovery and exact environment export.
+OP2 supplies protected-admission-bound browser manifests, generated bindings,
+local trust and native asset-capacity checks, with independent SDK evidence.
+OP3 supplies bounded private/public observatory snapshots and Store inventory;
+the shipped Store Candid now passes a structural Rust-contract regression.
+
+OP4 supplies the optional public `local-fleet` harness and packaged JSON-line
+consumer. Its two-Root/nine-canister Fleet converges, exports exact role/subnet
+routing, supports authenticated SDK calls before/after restart and shuts down
+cleanly (190.34s test, 238s runner). Four lifecycle cases pass in 22.32s, including
+real Ledger duplicate reconciliation, exact-session rejection, time/trust,
+interrupted reset and isolation from late writes into discarded generations.
+The extracted package consumer passes startup/allocation/retry/restart/reset
+through its public interface in 21.12s. It uses exact current local Canic
+sources and unchanged locked external dependencies; it is not published
+adoption. The direct ICP environment regression, 20 generator cases and final
+host/internal-fixture/consumer Clippy pass. Ordinary-feature host and internal
+fixture compilation also pass. See the
+[local Fleet guide](../features/operations/local-development-fleet.md) for
+configuration, packaging evidence and resource/fidelity limits.
+
 ## Purpose
 
 This is the compact handoff for active Canic source and roadmap work. Read it
@@ -22,14 +73,191 @@ Historical handoffs:
 Release truth comes from workspace package versions, the root and detailed
 changelogs, the annotated Git tag and release commit, the complete published
 package set, and the governed validation marker at the end of this file. The
-version transaction owns that marker; explanatory prose is not a second release
-guard.
+version transaction owns that marker and its visible candidate summary;
+explanatory prose is not a second release guard. The generated summary identifies
+the preserved handoff as pre-transaction history and does not claim publication.
 
-Published development base is tagged `v0.110.14` at `c9c91f19c`. The current
-pre-existing development commit is `7b5f1de3a` (subject `0.110.15`); its package
-versions still read 0.110.14.
-Release details are in [the 0.110 changelog](../changelog/0.110.md). Package
-versions remain 0.110.14; the current source batch uses the open 0.110.15 draft.
+Published development base is tagged `v0.110.15`; package versions remain
+0.110.15. Release details are in [the 0.110 changelog](../changelog/0.110.md).
+
+## ICYDB-033: composed outlining experiment discarded
+
+The requested follow-up against archived IcyDB 0.257.11 tested only
+`#[inline(never)]` on generated `startup_driver_attempt` in the existing empty
+metrics-enabled Canic participant. Compiler and final Wasm are byte-identical.
+Both final artifacts have 3,820,852 raw bytes, 3,585,114 code bytes and 7,164
+defined functions: all deltas are zero. Both generated-source stages contain
+the annotation; source, lock and tool controls passed. The annotation was
+removed from scratch. See the [result and exact identities](../audits/working/icydb033-composed-wasm/outlining.md).
+
+No watchdog IC instruction/cycle or lifecycle/recovery execution is claimed:
+the experiment was rejected at the size gate. Named attribution remains
+separate. Active Canic/IcyDB source and dependency pins were unchanged;
+only audit evidence, this status and the open .16 changelog were extended.
+No sibling edits, broad suite, version bump, commit or push occurred.
+
+### Earlier empty composed feature-cost pair
+
+After CANIC-168 qualification finished, the requested isolated Canic host / empty
+metrics-enabled IcyDB participant pair was built with identical release settings.
+The host has 2,396,348 raw bytes, 2,195,334 code bytes and 3,989 defined functions;
+the participant has 3,819,840 raw bytes, 3,582,760 code bytes and 7,158 functions.
+The code increment is 1,387,426 bytes (63.2%). See the
+[report and exact evidence](../audits/working/icydb033-composed-wasm/report.md).
+
+Named diagnostics point first to the generated startup watchdog and its
+recovery/schema/storage dependencies. Their sizes/counts match the canonical
+artifacts, but their type/function/code bytes differ; attribution is diagnostic,
+not an exact removable-size budget. The pair uses its recorded dirty Canic snapshot,
+published IcyDB 0.257.9 and ic-memory 0.13.3, explicitly differing from Toko's
+0.257.10/0.13.2 reference. SQL and provisioning test features are absent.
+
+Both final artifacts, endpoint checks, focused runner/fixture/schema Clippy and
+source immutability checks pass. No runtime behavior, root dependency pin,
+package version or sibling repository was changed by this investigation. The
+open .16 changelog includes it. This completes the requested pair and stops
+before query/write/per-entity variants; no PocketIC or broad gate was run.
+
+## Toko feedback continuation: CANIC-166, CANIC-168 and CANIC-014
+
+The maintainer's request to fix the remaining feedback also selects CANIC-141.
+The host takes that request's explicit fail-closed alternative: direct creates
+and Root growth in one operation must share one creation subnet while the
+fee remains scalar. `MixedSubnetCreationFees` rejects mixed targets during
+compilation and retained apply before creation/funding effects. Existing
+identities and fully supplied Roots elsewhere remain usable. This does not add
+per-subnet pricing or infer equal fees across subnets. All 197 native Fleet
+Ensure cases and affected host/testing Clippy pass, including generated mixed
+placement rejection and preserved single-subnet creation/retry coverage. Logs:
+`/tmp/canic141-fleet-tests.log`, `/tmp/canic-feedback-final-clippy.log`.
+
+The September 13 read-only refresh finds CANIC-168 and new evidence for 166;
+see the [updated triage](../audits/reports/2026-09/2026-09-11/toko-upstream-feedback.md).
+CANIC-168 is implemented as a separate host build-diagnostic batch in the open
+.16 draft. Before Coordinator, Store or application Cargo compilation, an
+implicitly selected cache must pass compiler-startup probes. Compiler failures
+and cache failures remain distinct, the cache error includes the original
+process evidence and the existing `RUSTC_WRAPPER=` override, and explicit empty
+or custom wrappers bypass implicit probing. Actual build errors remain intact;
+there is no automatic retry or fallback.
+
+All 45 build-owner tests and 14 bootstrap-related tests pass. The existing
+installed-extractor opt-in test remains ignored. Host all-feature library/test
+Clippy, formatting, diff and current-document semantics checks pass. Logs:
+`/tmp/canic168-build-tests-offline.log`, `/tmp/canic168-bootstrap-tests.log` and
+`/tmp/canic168-clippy-final.log`. The first wider test run passed 44 tests and
+failed one nested Cargo metadata request on restricted network access;
+inheriting offline mode resolved it. The final Clippy correction only removes
+redundant visibility qualifiers inside restricted modules. No runtime layout,
+release authority, version, publication or live Fleet effect changed in 168.
+The completed memory and cache-diagnostic batches and their .16 changelog are
+ready for the normal governed release flow.
+
+CANIC-166's source-entry correction is implemented. Downstream .15 adoption
+found that every one of 30 retained effect rows lacks `publication_attempts`.
+Ordinary planning now diagnoses journal failures through the same raw evidence
+inspector as unreadable plans. Explicit reinstall inspects the evidence before
+requiring current journal fields, then delegates to the existing live recovery
+review. No missing-counter defaults, executable predecessor decoder or new
+recovery owner is added. A completed Store bootstrap receipt lacking `fixtures`
+is verified by its original action hash through a private read-only projection,
+limited to the Applied prefix. All 192 native Fleet Ensure tests pass.
+
+The actual Toko source reaches `RetainedActivationReviewRequired` in an isolated
+Canic copy; all 17 original/copied operation, Wasm and content files remain
+unchanged. The maintained current-release PocketIC reinstall journey also
+passes in 666.84s, covering lost replies, full convergence, conservation and
+effect-free replay. Its 1,741 source inputs remained unchanged. That runtime
+checkpoint precedes the final completed-receipt projection, which is qualified
+by native tests and the exact copied source. The
+[triage](../audits/reports/2026-09/2026-09-11/toko-upstream-feedback.md)
+records source hashes, logs and those distinct qualification boundaries.
+
+The obsolete ignored `.12` harness is retired. Its setup required the current
+host to accept archived packages and retired executable protocol shapes;
+reinstating those paths would conflict with the maintained hard cut. Its
+[original installed-source proof](../audits/reports/2026-09/2026-09-08/activation-feedback.md#final-installed-source-proof)
+remains historical, and the failed September 13 setup is recorded in the
+[triage](../audits/reports/2026-09/2026-09-11/toko-upstream-feedback.md).
+Current-runtime recovery, permanent/transient activation-failure tests and
+exact source/adoption regressions remain. Removing the obsolete executable
+is cleanup, not fresh historical-runtime or live staging recovery evidence.
+
+CANIC-014 now has a transaction-owned visible candidate summary, generated from
+the same exact version/source/date/gate as its validation marker. Existing
+summaries are replaced and human prose remains pre-transaction history. All 16
+release-flow tests, scoped Clippy and ShellCheck pass, including rollback and
+repeated-summary replacement. The open .16 changelog also avoids package-base
+and draft prose that would become false after versioning. No old tag was
+rewritten; next-tag verification still requires publication.
+
+Before OP1–OP4 promotion, the completed corrections and their root/detailed
+changelog were ready for the normal governed release flow. Final Fleet Ensure qualification passes
+197 native cases (two existing opt-in host cases ignored), including the four
+source-entry regressions. Affected host/testing Clippy and the maintained
+PocketIC catalogue's native membership/order test pass. Formatting, layering,
+diff and current-document checks pass. Logs: `/tmp/canic141-fleet-tests.log`,
+`/tmp/canic-feedback-final-clippy.log`, `/tmp/canic-feedback-inventory.log`
+and `/tmp/canic-feedback-doc-semantics-final.log`. The preceding 192-case,
+release-flow and runtime reports retain their recorded source checkpoints.
+Package versions remain .15. No broad
+gate, version, commit or push was performed. Live Toko review/recovery,
+downstream fixture conversion and four larger product requests remain open.
+The four product requests are now explicitly scheduled as OP1–OP4 in this
+0.110 line; their implementation and evidence remain open. Their concrete
+owners are recorded in the current batch tracker.
+The role-specific memory idea remains parked as explicitly requested.
+
+## Stable-memory allocation and consolidation
+
+The maintainer authorized this in-repository batch after the read-only storage
+audits and completion of the .15 push. ic-memory advances to 0.13.3. The batch
+reduces default buckets to 1 MiB with an explicit build-time capacity choice,
+converts four singleton maps to bounded cells, repairs provisioning map page
+sizing, and consolidates receipt deadlines and shard activation into their
+owning records. Template payload consolidation was rejected on measured backing
+read/write amplification. See [stable-memory layout](../features/runtime/stable-memory-layout.md).
+
+The open .16 changelog contains the complete batch. Scoped Clippy, native
+storage/recovery checks, ownership guards and all 21 host manifest cases pass.
+All nine cases in the three focused PocketIC targets pass: Fleet allocations,
+receipt conformance and seven IcyDB lifecycle/import/recovery cases. The complete
+.16 batch and changelog are ready to push through the normal governed release
+flow; package versions remain .15. No version, Git publication or broad
+validation was requested or run. This remains
+one coherent follow-up batch on the affected 0.110 line, despite its advisory
+12-release threshold; correcting published allocation overhead does not begin
+a new minor or waive the human-owned closeout boundary.
+
+The disposable Root reports 45.0625 MiB of allocated stable memory. Native
+maximum Coordinator admission occupies 2 MiB virtually, plus one manager page
+physically. All 1,643 Rust/TOML/Candid/lock inputs stayed unchanged across runtime
+qualification. Logs: `/tmp/canic-memory-runtime-summary.log`,
+`/tmp/canic-memory-fleet-runtime.log`, `/tmp/canic-memory-receipt-runtime.log`,
+`/tmp/canic-memory-icydb-runtime.log`, `/tmp/canic-memory-measurements.log` and
+`/tmp/canic-memory-clippy-final.log`; source snapshot:
+`/tmp/canic-memory-runtime-source.json`. Runtime targets took 359s, 51s and
+191s including builds and runner setup. Servers and invocation scratch were
+cleaned by the governed runner.
+
+The subsequent memory-efficiency follow-up removes payload reads from template
+GC chunk counting. It checks reference slots against the vector length once,
+preserving empty payloads and excluding missing slots. This reduces transient
+heap use and stable reads without changing stable geometry or schemas. All 11
+focused chunk storage/publication tests and control-plane all-feature
+library/test Clippy pass; formatting and diff checks pass. Logs:
+`/tmp/canic-memory-chunk-count-tests.log` and
+`/tmp/canic-memory-chunk-count-clippy.log`. The earlier PocketIC snapshot
+predates this isolated counting change; no PocketIC rerun was needed for its
+deterministic metadata operation. The combined .16 batch and changelog remain
+ready for the normal release flow. Larger physical reductions require separate
+qualification of short-chunk packing, initialization or role-specific capacity;
+no further bucket reduction or store merge was made.
+
+Role-specific store initialization is now parked as a
+[deferred idea](../design/ideas/role-specific-stable-initialization/design.md)
+at the maintainer's request. Its 2–3 MiB per eligible canister estimate remains
+unmeasured and is not part of the active release batch.
 
 ## IcyDB 0.257.9 qualification
 
