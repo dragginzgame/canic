@@ -42,7 +42,7 @@ keep deterministic Wasm builds non-incremental.
 
 ## ICP CLI compatibility
 
-The maintained range is `icp-cli >=1.2.0, <2.0.0`; the maintainer toolchain currently pins `1.4.0`.
+The maintained range is `icp-cli >=1.2.0, <2.0.0`; the maintainer toolchain currently pins `1.5.0`.
 
 ```bash
 which icp

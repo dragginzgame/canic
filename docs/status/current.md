@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-09-12
+Last updated: 2026-09-13
 
 ## Purpose
 
@@ -26,12 +26,41 @@ version transaction owns that marker; explanatory prose is not a second release
 guard.
 
 Published development base is tagged `v0.110.14` at `c9c91f19c`. The current
-pre-existing development commit is `049621e55` (subject `0.110.15`); its package
+pre-existing development commit is `7b5f1de3a` (subject `0.110.15`); its package
 versions still read 0.110.14.
 Release details are in [the 0.110 changelog](../changelog/0.110.md). Package
 versions remain 0.110.14; the current source batch uses the open 0.110.15 draft.
 
-The maintainer-requested IcyDB update on 2026-09-12 pins the isolated lifecycle
+## IcyDB 0.257.9 qualification
+
+The 2026-09-13 update pins the isolated lifecycle fixture and all six IcyDB
+packages to published 0.257.9, retaining SQL-disabled configuration and one
+ic-memory 0.13.2 runtime. Canic's `u64` fixture schema needs no adapter changes;
+release transitions remain reinstall-only. Existing workspace edits, including
+the resolved ic-testkit 0.9.1 graph present before runtime qualification, remain
+intact. The .15 changelog includes the update.
+
+Both focused dependency guards and scoped facade/probe/schema Clippy pass.
+All seven PocketIC lifecycle/import tests pass in 78.36s (82s target, 83s runner),
+covering atomic row/checkpoint commits, outages, held replies across reinstall,
+replacement grants, restart and timer custody. All 1,642 Rust/TOML/Candid/lock
+inputs and their inventory remained unchanged during final qualification.
+Logs: `/tmp/canic-icydb-02579-guards.log`,
+`/tmp/canic-icydb-02579-clippy-final.log`,
+`/tmp/canic-icydb-02579-pocketic-final.log`; snapshot:
+`/tmp/canic-icydb-02579-source-final.sha256`.
+
+The first runtime run passed six cases and exposed pre-existing invalid derive
+paths in the internal Store response barrier. Correcting the paths to the
+existing Canic facade convention lets the generated Store compile and its held-
+reply case pass. This was the only source change between the failed and final
+runtime snapshots; `/tmp/canic-icydb-02579-pocketic.log` retains the failure.
+The combined .15 batch and changelog are ready for the maintainer's release flow.
+No broad gate, version transaction or publication ran for this update.
+
+### Earlier 0.257.5 qualification
+
+The maintainer-requested IcyDB update on 2026-09-12 pinned the isolated lifecycle
 fixture to published 0.257.5 and updates exactly its six locked packages. SQL
 remains disabled and ic-memory stays at 0.13.2 with one runtime identity. No
 Canic adapter changes were required. IcyDB's new control-storage format requires
@@ -45,6 +74,29 @@ Logs are `/tmp/canic-icydb-guards.log`, `/tmp/canic-icydb-clippy.log` and
 `/tmp/canic-icydb-02575-source.sha256`. The .15 changelog includes the update.
 Earlier 0.257.4 qualification records below remain historical. The dependency
 update is qualified; the completed CANIC-165 boundary is recorded below.
+
+## Release validation follow-up: fixture inventories and host features
+
+The next maintainer run failed three targets: the host Store memory inventory,
+managed endpoint guard and canonical Store protocol inventory. Expectations now
+include fixture allocation 68 and both fixture methods. The endpoint guard
+parses Rust declarations and admits only exact reviewed probes in unpublished
+test packages with their required controller guards/export options, plus one
+explicit malformed reply peer. Added rejection cases protect that boundary.
+Production endpoint and fixture behavior did not change.
+
+An isolated host regression then exposed a real dependency defect hidden by
+workspace feature unification: `canic-host` omitted the Store feature required
+for fixture descriptors. Its normal control-plane dependency now enables
+`wasm-store-canister`. All 21 isolated host state-manifest regressions pass;
+all 45 endpoint/protocol checks and scoped `canic`/`canic-host` library/test
+Clippy also pass on the corrected source. Logs are
+`/tmp/canic165-state-manifest-tests-fixed.log`,
+`/tmp/canic165-surface-tests-final.log` and
+`/tmp/canic165-validation-clippy.log`; the initial isolated failure is retained
+at `/tmp/canic165-state-manifest-tests.log`. The .15 batch and changelog remain
+ready for the maintainer's release flow. No broad gate, version transaction,
+Git publication or PocketIC rerun was performed during this correction.
 
 ## Release validation follow-up: secret scan
 

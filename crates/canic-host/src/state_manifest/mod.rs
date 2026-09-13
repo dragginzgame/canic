@@ -568,9 +568,16 @@ mod tests {
             ids,
             vec![
                 10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47,
-                48, 49, 60,
+                48, 49, 60, 68,
             ]
         );
+        let fixture = manifest.roles[0]
+            .state
+            .iter()
+            .find(|domain| domain.domain == "fixture_store")
+            .expect("Store fixture domain");
+        assert_eq!(fixture.memory_id, Some(68));
+        assert_eq!(fixture.owner, "canic-control-plane");
         assert_eq!(
             manifest.roles[0]
                 .reserved_memory

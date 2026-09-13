@@ -1,3 +1,5 @@
+mod managed_endpoint_gate_support;
+
 use std::{
     collections::BTreeSet,
     fs,
@@ -13,17 +15,6 @@ const MANAGED_START_MARKERS: &[&str] = &[
     "canic::start_wasm_store!(",
     "canic::start_fleet_coordinator!()",
     "canic::start_fleet_coordinator!(",
-];
-
-const RAW_ENDPOINT_MARKERS: &[&str] = &[
-    "#[ic_cdk::query",
-    "#[ic_cdk::update",
-    "#[::ic_cdk::query",
-    "#[::ic_cdk::update",
-    "#[query]",
-    "#[query(",
-    "#[update]",
-    "#[update(",
 ];
 
 fn workspace_root() -> PathBuf {
@@ -86,19 +77,7 @@ fn managed_canisters_export_endpoints_only_through_canic_macros() {
         }
     }
 
-    let mut violations = Vec::new();
-    for path in managed_sources {
-        let source = fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
-        for marker in RAW_ENDPOINT_MARKERS {
-            if source.contains(marker) {
-                violations.push(format!(
-                    "{} contains raw managed endpoint marker {marker}",
-                    path.strip_prefix(&workspace).unwrap_or(&path).display()
-                ));
-            }
-        }
-    }
+    let violations = managed_endpoint_gate_support::violations(&workspace, &managed_sources);
 
     assert!(
         violations.is_empty(),
