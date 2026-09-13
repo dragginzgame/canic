@@ -4,6 +4,8 @@
 //! Does not own: topology decisions, convergence sequencing, or historical installation state.
 //! Boundary: exact terminal Registry, Root children, and current release artifacts are required.
 
+mod ordinary;
+
 use crate::fleet_ensure::ops::bounded_observations;
 
 use super::TerminalFleetInventory;
@@ -470,20 +472,66 @@ fn query_entries(
                 "terminal Component has more than one Root allocation authority",
             )?;
         }
+        let maximum_workloads = maximum_root_workloads(root, config.component_topology())?;
+        if component_summary.maximum_workloads > maximum_workloads {
+            return Err(inventory_error(
+                "configured Component workload bound exceeds Root admissions",
+            ));
+        }
         append_pool_assets(
             icp,
             &protocols.root.candid_path,
             root,
             store,
             &component_summary.component_ids,
-            component_summary.maximum_workloads,
+            maximum_workloads,
             &mut seen,
             &mut entries,
             &mut controlled_cycles_by_principal,
             &mut pool_workloads,
         )?;
+        for observed in ordinary::observe(
+            icp,
+            registry,
+            root,
+            protocols,
+            config.component_topology(),
+            &component_bindings,
+            &pool_workloads,
+        )? {
+            let binding = observed.binding;
+            if !seen.insert(binding.canister_id)
+                || component_bindings
+                    .insert(binding.component, binding.clone())
+                    .is_some()
+            {
+                return Err(inventory_error(
+                    "ordinary Component duplicates a Fleet identity",
+                ));
+            }
+            insert_terminal_workload(
+                &mut component_workloads,
+                binding.canister_id,
+                observed.workload,
+                "ordinary Component duplicates a Root allocation",
+            )?;
+            insert_controlled_cycles(
+                &mut controlled_cycles_by_principal,
+                binding.canister_id,
+                observed.cycles,
+            )?;
+            if let Some(parent) = observed.parent {
+                parents.push_back(parent);
+            }
+            entries.push(observed.entry);
+        }
     }
     let maximum_entries = maximum_inventory_entries(registry, config.component_topology())?;
+    if entries.len() > maximum_entries {
+        return Err(inventory_error(
+            "current Fleet exceeds its authority-derived inventory bound",
+        ));
+    }
     let descendant_bound = maximum_descendant_page(config.component_topology());
     while let Some(parent) = parents.pop_front() {
         let children = query_all_children(
@@ -1803,6 +1851,32 @@ fn maximum_descendant_page(topology: &ComponentTopology) -> u64 {
         .unwrap_or(0)
 }
 
+fn maximum_root_workloads(
+    root: &FleetSubnetRootEntry,
+    topology: &ComponentTopology,
+) -> Result<u64, CurrentProtocolError> {
+    root.component_admissions
+        .iter()
+        .try_fold(0_u64, |subtotal, admission| {
+            let spec = topology.get(&admission.component_spec).ok_or_else(|| {
+                inventory_error(format!(
+                    "Root {} admits unknown Component Spec {}",
+                    root.fleet_subnet_root, admission.component_spec
+                ))
+            })?;
+            let per_component = u64::from(spec.limits.maximum_descendants)
+                .checked_add(1)
+                .ok_or_else(|| inventory_error("Component bound overflowed"))?;
+            subtotal
+                .checked_add(
+                    u64::from(admission.maximum_root_instances)
+                        .checked_mul(per_component)
+                        .ok_or_else(|| inventory_error("Component bound overflowed"))?,
+                )
+                .ok_or_else(|| inventory_error("Component bound overflowed"))
+        })
+}
+
 fn maximum_inventory_entries(
     registry: &FleetRegistry,
     topology: &ComponentTopology,
@@ -1812,27 +1886,7 @@ fn maximum_inventory_entries(
         .iter()
         .filter(|root| root.status != FleetSubnetRootStatus::Removed)
         .try_fold(1_u64, |total, root| {
-            let components =
-                root.component_admissions
-                    .iter()
-                    .try_fold(0_u64, |subtotal, admission| {
-                        let spec = topology.get(&admission.component_spec).ok_or_else(|| {
-                            inventory_error(format!(
-                                "Root {} admits unknown Component Spec {}",
-                                root.fleet_subnet_root, admission.component_spec
-                            ))
-                        })?;
-                        let per_component = u64::from(spec.limits.maximum_descendants)
-                            .checked_add(1)
-                            .ok_or_else(|| inventory_error("Component bound overflowed"))?;
-                        subtotal
-                            .checked_add(
-                                u64::from(admission.maximum_root_instances)
-                                    .checked_mul(per_component)
-                                    .ok_or_else(|| inventory_error("Component bound overflowed"))?,
-                            )
-                            .ok_or_else(|| inventory_error("Component bound overflowed"))
-                    })?;
+            let components = maximum_root_workloads(root, topology)?;
             total
                 .checked_add(components)
                 .and_then(|value| {
@@ -2461,6 +2515,95 @@ mod tests {
             plan_hash: terminal.plan_hash,
         };
         (authority, member, protocol, partition)
+    }
+
+    #[test]
+    fn ordinary_inventory_requires_exact_pool_partition_and_completed_allocation() {
+        use canic_control_plane::dto::root::RootComponentOperationStatus;
+        use canic_core::{
+            dto::{
+                component_registry::{
+                    RootComponentAllocationResponse, RootComponentInstallEvidence,
+                },
+                fleet_registry::FleetComponentSpecEntry,
+            },
+            ids::ComponentSpecAdmission,
+        };
+        let (authority, _) = empty_terminal_root_status();
+        let (_, member, protocol, snapshots) = component_partition_fixture();
+        let mut registry = authority.registry.clone();
+        registry.component_specs.push(FleetComponentSpecEntry {
+            component_spec: member.binding.component_spec.clone(),
+            spec_hash: member.binding.spec_hash,
+            component_role: member.binding.role.clone(),
+            maximum_fleet_instances: 1,
+        });
+        let mut root = authority.root.clone();
+        root.component_admissions.push(ComponentSpecAdmission {
+            component_spec: member.binding.component_spec.clone(),
+            spec_hash: member.binding.spec_hash,
+            maximum_root_instances: 1,
+        });
+        let mut partition = snapshots.current;
+        partition.provisioning_origin = ComponentProvisioningOrigin::FleetAdministrator {
+            caller: Principal::from_slice(&[99]),
+        };
+        let workload = TerminalWorkloadAuthority {
+            component: member.binding.component,
+            operation_id: member.member_operation_id,
+            root: root.fleet_subnet_root,
+        };
+        let operation = RootComponentOperationStatus {
+            complete: true,
+            allocation: RootComponentAllocationResponse {
+                operation_id: member.member_operation_id,
+                allocation_sequence: 1,
+                component: member.binding.component,
+                component_spec: member.binding.component_spec.clone(),
+                spec_hash: member.binding.spec_hash,
+                role: member.binding.role.clone(),
+                provisioning_origin: partition.provisioning_origin.clone(),
+                release_set: root.active_release_set,
+                phase: RootComponentAllocationPhase::Committed,
+                creation: None,
+                installation: Some(RootComponentInstallEvidence {
+                    binding: member.binding,
+                    raw_module_hash: [0x11; 32],
+                    chunk_hashes: vec![],
+                }),
+            },
+        };
+        ordinary::validate(
+            &registry, &root, &workload, &partition, &operation, &protocol,
+        )
+        .unwrap();
+        let mut variants = vec![(partition, operation); 8];
+        variants[0].0.binding.fleet_subnet_root = Principal::anonymous();
+        variants[1].0.status = ComponentLifecycleStatus::Prepared;
+        variants[2].1.complete = false;
+        variants[3].1.allocation.operation_id = [99; 32];
+        variants[4].1.allocation.spec_hash = [99; 32];
+        variants[5]
+            .1
+            .allocation
+            .installation
+            .as_mut()
+            .unwrap()
+            .raw_module_hash = [99; 32];
+        variants[6].1.allocation.provisioning_origin =
+            ComponentProvisioningOrigin::FleetAdministrator {
+                caller: Principal::anonymous(),
+            };
+        variants[7].0.release_set.manifest_digest =
+            canic_core::ids::ReleaseSetDigest::from_bytes([99; 32]);
+        for (partition, operation) in variants {
+            assert!(matches!(
+                ordinary::validate(
+                    &registry, &root, &workload, &partition, &operation, &protocol
+                ),
+                Err(CurrentProtocolError::TerminalInventoryField { .. })
+            ));
+        }
     }
 
     #[test]

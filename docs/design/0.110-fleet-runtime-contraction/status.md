@@ -25,6 +25,13 @@ remain separate; this promotion does not start 0.111.
 
 ### OP4 implementation checkpoint
 
+The subsequent integration audit is fixed and qualified: additional imported
+Root-owned assets participate in terminal discovery without becoming named local
+allocations. The extended two-Root case passes with ordinary Component retry,
+explicit simulated Ledger creation/Root import, export and another restart
+(215.67s; 231s runner). Local automatic refill remains disabled. Exact scope and
+limits are in the [local Fleet guide](../../features/operations/local-development-fleet.md#qualification).
+
 The optional public host `local-fleet` feature and packaged foreground consumer
 are implemented. Preparation binds exact local release/workspace/session authority,
 preallocates through the bundled Ledger, initializes Roots with the maintained
@@ -112,6 +119,13 @@ inventories pass (`/tmp/canic-frontend-clippy-final.log`,
 `/tmp/canic-frontend-canic-cli-package.txt`). OP2 is ready in open .16. All four promoted batches are now complete; their separate evidence is recorded above.
 
 ### OP1 implementation checkpoint
+
+The subsequent integration correction retains original Component provenance
+across a new no-op Ensure review and includes ordinary allocations in terminal
+Fleet inventory. Exact live authority still rejects drift. The extended OP4 case
+proves this after fresh convergence, including a lost accepted reply and one
+submission. Ten Component, six export and 200 Fleet Ensure native cases pass
+(two existing ignored); affected host/CLI/internal-fixture Clippy passes.
 
 The host and public CLI implement `component plan`, `apply` and `status`, with
 one durable operation ID, exact selected network/review/controller/release/Spec

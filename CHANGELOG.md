@@ -18,7 +18,7 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   rejects ambiguous creation fees, fixes retained-pool funding and reinstall review
   continuation, improves build/recovery diagnostics and release consistency,
   adds reviewed Component recovery, browser handoff, bounded host observatory reports
-  and persistent multi-subnet local Fleets,
+  and persistent multi-subnet local Fleets with ordinary Component inventory,
   and records controlled IcyDB Wasm measurements, including a rejected startup
   outlining experiment.
 - `0.110.15` improves Fleet planning, selected-build reinstall and recovery,

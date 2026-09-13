@@ -98,6 +98,13 @@ requested role: a pool asset can subsequently become an application canister.
 `discover` joins the maintained terminal Fleet inventory to observed local
 placement and returns current role, Principal, parent, subnet and module hash.
 It rejects a nonterminal Fleet, a foreign role identity or an invalid Fleet name.
+Additional Root-owned pool assets are included after normal Ensure refreshes terminal
+inventory. Discovery verifies that each identity exists in the owned simulator
+on one of its application subnets, with exact placement for named allocations.
+It also checks the Fleet's retained plan integrity and local network trust.
+Imported assets do not become harness-owned named allocation requests. Local
+builds disable automatic Ledger refill; additional local supply requires explicit
+creation and Root import. Discovery does not change that funding contract.
 
 Preparation stages exact sealed Candid into the selected environment's normal
 binding layout. Use the existing [frontend handoff](frontend-handoff.md), through
@@ -175,6 +182,10 @@ These checks are not an OS-enforced process RSS or disk quota. Release artifacts
 reuse the existing exact build cache; no second artifact cache or silent eviction
 policy is introduced.
 
+Additional Root-owned capacity is outside the named-allocation budget and follows the
+Fleet's reviewed capacity and funding limits. `maximum_canisters` bounds the
+harness's named allocations, not every canister that application code can create.
+
 The Fleet qualification uses real separate simulator canisters/subnets and
 Root-to-Coordinator registry synchronization across the subnet boundary. It does
 not model mainnet node/provider behavior, consensus, network latency, boundary
@@ -183,6 +194,19 @@ remains unchanged. Local preallocation avoids asking ordinary Ensure to make
 paid creates across different subnets; it does not authorize that mainnet plan.
 
 ## Qualification
+
+The extended acceptance case passes in 215.67 seconds (231 seconds for its
+targeted runner). After fresh convergence and the two browser calls below, it
+plans an ordinary Component, refreshes a no-op Fleet review, loses the accepted
+submission reply, creates capacity through the real simulated Ledger and imports
+it through Root's public command. Fleet Ensure accounts for the ordinary
+Component and imported asset. Retry keeps the original review and one submission;
+environment export and discovery succeed before/after another restart. The named
+allocation journal remains unchanged. Log:
+`/tmp/canic-operator-integration-import-pocketic.log`.
+This leaf Component case does not exercise ordinary Component descendants or
+automatic mainnet refill. Existing descendant validation is reused; the local
+runtime's explicit-supply restriction remains intact.
 
 The two-Root public host/real ICP acceptance case passes in 190.34 seconds
 (238 seconds for its targeted runner). It converges all nine canisters, checks

@@ -206,7 +206,18 @@ fn lost_response_keeps_intent_and_reconciles_without_a_second_submission() {
     ));
     transport.progress = Some(progress(&authority()));
     transport.observation.ready_assets = 0;
+    transport.observation.authority.source_plan_sha256 = "22".repeat(32);
     let completed = transport.apply(&plan.plan.review_sha256).unwrap();
+    assert_eq!(
+        completed.plan, plan.plan,
+        "review and operation identity stay immutable"
+    );
+    let refreshed_authority = transport.observation.authority.clone();
+    let directory = transport.directory.clone();
+    let reopened = workflow::plan(&directory, "core", refreshed_authority, &mut transport).unwrap();
+    assert_eq!(reopened.plan, plan.plan);
+    let refreshed = workflow::status(&directory, "local", "demo", "core", &mut transport).unwrap();
+    assert_eq!(refreshed.plan, plan.plan);
     assert!(completed.progress.as_ref().unwrap().complete);
     transport.fail_read = true;
     assert_eq!(
@@ -254,13 +265,17 @@ fn capacity_denial_and_review_conflict_do_not_reserve_a_submission() {
 #[test]
 fn release_spec_and_controller_drift_reject_the_existing_review() {
     let original = authority();
-    let mut variants = vec![original; 4];
-    variants[0].source_plan_sha256 = "22".repeat(32);
+    let mut variants = vec![original; 8];
+    variants[0].root_module_sha256 = "22".repeat(32);
     variants[1].spec_hash = [44; 32];
     variants[2].operator = Principal::from_slice(&[77]);
     variants[3]
         .root_controllers
         .push(Principal::from_slice(&[78]).to_text());
+    variants[4].registry_sha256 = [45; 32];
+    variants[5].release_set.manifest_digest = ReleaseSetDigest::from_bytes([46; 32]);
+    variants[6].binding.placement_subnet = SubnetId::from_principal(Principal::from_slice(&[79]));
+    variants[7].root_candid_sha256 = [47; 32];
     for changed in variants {
         let mut transport = TransportProbe::new();
         let plan = transport.plan();

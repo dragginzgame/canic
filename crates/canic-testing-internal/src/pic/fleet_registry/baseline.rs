@@ -1992,6 +1992,28 @@ exec icp "$@"
         let directory = literal_zero_adapter_root(&workspace).join("persistent-local");
         std::fs::create_dir_all(&directory).unwrap();
         let _cleanup = TestDirectoryCleanup(directory.clone());
+        let app_directory = directory.join("apps/qualification");
+        std::fs::create_dir_all(&app_directory).unwrap();
+        let mut app: toml::Value =
+            toml::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        app["roles"]["app"]["package"] = toml::Value::String(
+            workspace
+                .join("canisters/audit/leaf_probe")
+                .to_str()
+                .unwrap()
+                .into(),
+        );
+        std::fs::write(
+            app_directory.join("canic.toml"),
+            toml::to_string(&app).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(directory.join("Cargo.toml"), "[workspace]\n").unwrap();
+        std::fs::write(directory.join("icp.yaml"), "canisters: []\n").unwrap();
+        assert_eq!(
+            canic_host::config_discovery::discover_canic_workspace_root_from(&directory).unwrap(),
+            Some(directory.canonicalize().unwrap())
+        );
         let artifacts = build_literal_zero_release_artifacts(
             &workspace,
             &directory,
@@ -2022,7 +2044,6 @@ exec icp "$@"
         };
         let mut session = LocalFleetSession::open(&directory, &local).unwrap();
         let initial = session.status().unwrap();
-        std::fs::write(directory.join("Cargo.toml"), "[workspace]\n").unwrap();
         std::fs::write(directory.join("icp.yaml"), format!(
             "canisters: []\nnetworks:\n  - name: local\n    mode: managed\nenvironments:\n  - name: {}\n    network: local\n    canisters: []\n", initial.environment)).unwrap();
         let retained_config = retain_generated_journey_source(&directory, &config_path);
@@ -2107,6 +2128,7 @@ exec icp "$@"
             &session.status().unwrap(),
             &generated.desired.fleet,
         );
+        assert_local_fleet_component_growth(&mut session, &directory, &generated.desired, &icp);
         session.shutdown(&initial.session_id).unwrap();
     }
 
@@ -2133,7 +2155,253 @@ exec icp "$@"
         second["component_group_placements"]["qualification"] =
             toml::Value::Array(vec![toml::Value::Integer(1)]);
         roots.push(second);
+        for root in roots {
+            root["component_admissions"]["default"] = toml::Value::Integer(2);
+            root["limits"]["maximum_component_instances"] = toml::Value::Integer(2);
+            root["canister_pool"]["maximum_size"] = toml::Value::Integer(3);
+        }
         toml::to_string_pretty(&policy).unwrap()
+    }
+
+    #[cfg(all(test, feature = "governed-pocketic-tests"))]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one real Ensure sequence qualifies Component retry, export and imported local capacity"
+    )]
+    fn assert_local_fleet_component_growth(
+        session: &mut canic_host::local_fleet::workflow::LocalFleetSession,
+        directory: &Path,
+        source: &DesiredFleet,
+        icp: &Path,
+    ) {
+        use canic_host::component_operation::{ops, workflow};
+        let local = session.status().unwrap();
+        let funding = Command::new(icp)
+            .current_dir(directory)
+            .env_remove("ICP_ENVIRONMENT")
+            .args([
+                "cycles",
+                "transfer",
+                "20T",
+                &source.operator,
+                "--identity",
+                "anonymous",
+                "--network",
+                &local.gateway,
+                "--root-key",
+                &local.root_key_der_hex,
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            funding.status.success(),
+            "fund only the disposable operator from the simulated Ledger: {}",
+            String::from_utf8_lossy(&funding.stderr)
+        );
+        let root_name = source
+            .canisters
+            .iter()
+            .find(|entry| entry.kind == DesiredCanisterKind::Root)
+            .unwrap()
+            .name
+            .clone();
+        let spec = "default".parse().unwrap();
+        let mut transport = ops::transport::IcpComponentTransport::new(
+            directory,
+            canic_host::icp::IcpCli::new(icp.to_str().unwrap(), Some(local.environment.clone()))
+                .with_local_replica(Some(session.replica_target())),
+        );
+        let authority = transport
+            .authority(&local.environment, &source.fleet, &root_name, &spec)
+            .unwrap();
+        let plan = workflow::plan(directory, "extra", authority, &mut transport).unwrap();
+        let noop = session
+            .converge_fleet(directory, source, icp.to_str().unwrap())
+            .unwrap();
+        assert!(planned_actions(&noop.plan).is_empty());
+        assert_ne!(
+            noop.plan.plan_sha256,
+            plan.plan.authority.source_plan_sha256
+        );
+
+        std::fs::write(
+            directory.join("root-key.der"),
+            canic_core::cdk::utils::hash::decode_hex(&local.root_key_der_hex).unwrap(),
+        )
+        .unwrap();
+        let wrapper = operator_cli_gateway_wrapper(directory, &local.gateway, icp);
+        std::fs::write(directory.join("root-key.der.lose-reply"), []).unwrap();
+        let interrupted = run_environment_cli(
+            directory,
+            &wrapper,
+            &local.environment,
+            &[
+                "component",
+                "apply",
+                &source.fleet,
+                "extra",
+                "--review",
+                &plan.plan.review_sha256,
+                "--wait-secs",
+                "0",
+            ],
+        )
+        .expect_err("the accepted request loses its reply");
+        assert!(
+            !directory.join("root-key.der.lose-reply").exists(),
+            "Root must accept the request before losing its reply: {interrupted:?}"
+        );
+        let path = ops::record_path(directory, &local.environment, &source.fleet, "extra").unwrap();
+        assert_eq!(ops::read(&path).unwrap().unwrap().submission_attempts, 1);
+
+        // Local builds require explicit supply: create outside the harness allocation journal,
+        // then let the selected Root verify and import that capacity through its public command.
+        let ledger_icp =
+            canic_host::icp::IcpCli::new(icp.to_str().unwrap(), Some(local.environment.clone()))
+                .with_cwd(directory)
+                .with_local_replica(Some(session.replica_target()));
+        let root = plan.plan.authority.binding.fleet_subnet_root;
+        let mut creation = qualification_creation_request(
+            root,
+            *plan.plan.authority.binding.placement_subnet.as_principal(),
+            session.status().unwrap().simulated_time_ns.parse().unwrap(),
+        );
+        creation.amount = Nat::from(10_000_000_000_000_u64);
+        let created: Result<QualificationCreateCanisterSuccess, QualificationCreateCanisterError> =
+            ledger_icp
+                .canister_call_candid(&source.cycles_ledger, "create_canister", &creation, None)
+                .unwrap();
+        let imported = created.unwrap().canister_id;
+        let response: Result<RootCommandResponseFragment, canic_core::dto::error::Error> =
+            ledger_icp
+                .canister_call_candid(
+                    &root.to_text(),
+                    canic_core::protocol::CANIC_ROOT_COMMAND,
+                    &HostRootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                        canister_id: imported,
+                    }),
+                    Some(&directory.join(&source.protocol.as_ref().unwrap().root_candid)),
+                )
+                .unwrap();
+        assert!(
+            matches!(response.unwrap(), RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id }) if canister_id == imported)
+        );
+
+        // Refresh Fleet authority while the local Component record still holds only its issued intent.
+        let mut settled = false;
+        for _ in 0..8 {
+            match session.converge_fleet(directory, source, icp.to_str().unwrap()) {
+                Ok(report) => {
+                    assert!(report.terminal);
+                    settled = true;
+                    break;
+                }
+                Err(canic_host::local_fleet::LocalFleetError::Ensure(error))
+                    if matches!(*error, EnsureWorkflowError::SuccessorReviewRequired { .. }) => {}
+                Err(error) => panic!("same-Fleet reconciliation failed: {error:?}"),
+            }
+        }
+        assert!(
+            settled,
+            "bounded Fleet reviews converge after Component allocation"
+        );
+        run_environment_cli(
+            directory,
+            &wrapper,
+            &local.environment,
+            &[
+                "component",
+                "apply",
+                &source.fleet,
+                "extra",
+                "--review",
+                &plan.plan.review_sha256,
+                "--wait-secs",
+                "120",
+            ],
+        )
+        .unwrap();
+        let completed = ops::read(&path).unwrap().unwrap();
+        assert_eq!(completed.plan, plan.plan);
+        assert_eq!(
+            completed.submission_attempts, 1,
+            "observe the accepted allocation without submitting twice"
+        );
+        let binding = completed
+            .progress
+            .as_ref()
+            .filter(|progress| progress.complete)
+            .unwrap()
+            .binding
+            .as_ref()
+            .unwrap();
+        let output = directory.join("grown-component.json");
+        run_environment_cli(
+            directory,
+            &wrapper,
+            &local.environment,
+            &[
+                "info",
+                "env",
+                &source.fleet,
+                "--component-operation",
+                "extra",
+                "--json",
+                "--out",
+                output.to_str().unwrap(),
+            ],
+        )
+        .unwrap();
+        let exported: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap();
+        assert!(
+            exported["bindings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(
+                    |entry| entry["canister_id"] == binding.canister_id.to_text()
+                        && entry["role"] == binding.role.to_string()
+                )
+        );
+        let discovery = session.discover(directory, &source.fleet).unwrap();
+        let allocated = local
+            .canisters
+            .iter()
+            .filter_map(|entry| entry.canister_id)
+            .collect::<BTreeSet<_>>();
+        let added = discovery
+            .roles
+            .iter()
+            .filter(|entry| !allocated.contains(&entry.canister_id))
+            .collect::<Vec<_>>();
+        assert!(
+            added.iter().any(|entry| entry.canister_id == imported),
+            "imported Root-owned capacity is outside the named allocations"
+        );
+        assert!(
+            added
+                .iter()
+                .all(|entry| local.application_subnets.contains(&entry.subnet_id))
+        );
+        assert_eq!(
+            session.status().unwrap().canisters.len(),
+            local.canisters.len()
+        );
+        session.restart(&local.session_id).unwrap();
+        let reopened = session.discover(directory, &source.fleet).unwrap();
+        assert_eq!(
+            reopened
+                .roles
+                .iter()
+                .map(|entry| (entry.canister_id, entry.subnet_id))
+                .collect::<BTreeSet<_>>(),
+            discovery
+                .roles
+                .iter()
+                .map(|entry| (entry.canister_id, entry.subnet_id))
+                .collect::<BTreeSet<_>>()
+        );
     }
 
     #[cfg(all(test, feature = "governed-pocketic-tests"))]

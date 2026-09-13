@@ -2,6 +2,35 @@
 
 Last updated: 2026-09-13
 
+## Operator integration audit corrections qualified
+
+The open **0.110.16** batch now preserves Component retry/status/export after a
+harmless new Ensure review and discovers additional imported Root-owned local
+assets. Actual release, registry, controller, Spec, network and placement checks
+remain enforced. The combined proof also exposed and fixed ordinary Components
+missing from terminal Fleet inventory and live pool reconciliation incorrectly
+blocking fresh Coordinator startup. Stopped-Root balance waits remain distinct.
+
+The extended two-Root public host/ICP case passes in 215.67s (231s runner): fresh
+convergence, authenticated browser calls across restart, no-op review, lost reply,
+ordinary Component inventory, explicit simulated Ledger creation/Root import,
+original review with one submission, environment export and discovery across a
+second restart. Local automatic refill remains disabled. This leaf fixture does
+not qualify ordinary descendants or automatic mainnet refill. The prior complete
+CANIC-169 reinstall proof below predates this observation distinction and was not
+rerun. See the [local Fleet qualification](../features/operations/local-development-fleet.md#qualification).
+
+Focused Component (10), CLI export (6), Fleet Ensure (200; two existing ignored)
+native cases and host/CLI/internal-fixture Clippy pass. Logs:
+`/tmp/canic-operator-integration-native.log`,
+`/tmp/canic-operator-integration-cli.log`,
+`/tmp/canic-operator-inventory-native.log`,
+`/tmp/canic-operator-integration-final-clippy.log`,
+`/tmp/canic-operator-integration-import-pocketic.log`.
+The accepted in-repository .16 batch and both changelogs are ready for the governed
+release flow. Versions remain .15; no broad suite, version bump, commit, push,
+sibling edit or live Toko effect was performed.
+
 ## CANIC-169: pool funding and reinstall continuation qualified
 
 CANIC-169 is fixed in the open **0.110.16** draft. PendingReset and Failed pool

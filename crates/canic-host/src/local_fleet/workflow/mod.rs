@@ -260,7 +260,12 @@ impl LocalFleetSession {
         fleet: &str,
     ) -> Result<crate::local_fleet::view::LocalFleetDiscoveryView, LocalFleetError> {
         ops::prepare::require_workspace(&self.directory, workspace)?;
-        ops::discovery::resolve(workspace, fleet, self.status()?)
+        ops::discovery::resolve(
+            workspace,
+            fleet,
+            self.status()?,
+            self.pic.as_ref().ok_or(LocalFleetError::Session)?,
+        )
     }
 
     /// Flush and reopen the same state while retaining the same exclusive owner and gateway port.

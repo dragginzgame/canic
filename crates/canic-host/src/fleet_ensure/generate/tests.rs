@@ -3,9 +3,10 @@ use crate::{
     fleet_ensure::{
         model::{
             CanisterRuntimeStatus, CurrentFleetProtocolAction, EffectRecord, EffectState,
-            EnsureAction, FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsureStateRecord,
-            FleetObservation, LiveCanister, RootManagementCanisterObservation,
-            RootManagementObservation, RootOwnedCanisterLifecycle,
+            EnsureAction, EstatePoolAssetLifecycle, FleetEnsureCompletion,
+            FleetEnsureJournalRecord, FleetEnsureStateRecord, FleetObservation, LiveCanister,
+            RootManagementCanisterObservation, RootManagementObservation,
+            RootOwnedCanisterLifecycle,
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
@@ -3503,13 +3504,14 @@ impl EnsurePlatform for RetainedEnsurePlatform {
                             let live = self.live.get(principal)?;
                             let lifecycle = match live.root_owned_lifecycle? {
                                 RootOwnedCanisterLifecycle::Claimed => {
-                                    crate::fleet_ensure::model::EstatePoolAssetLifecycle::Claimed
+                                    EstatePoolAssetLifecycle::Claimed
                                 }
-                                RootOwnedCanisterLifecycle::Idle => {
-                                    crate::fleet_ensure::model::EstatePoolAssetLifecycle::Ready
+                                RootOwnedCanisterLifecycle::Idle => EstatePoolAssetLifecycle::Ready,
+                                RootOwnedCanisterLifecycle::Reconciling => {
+                                    EstatePoolAssetLifecycle::PendingReset
                                 }
                                 RootOwnedCanisterLifecycle::Workload => {
-                                    crate::fleet_ensure::model::EstatePoolAssetLifecycle::Workload
+                                    EstatePoolAssetLifecycle::Workload
                                 }
                                 RootOwnedCanisterLifecycle::Retained
                                 | RootOwnedCanisterLifecycle::Store => return None,

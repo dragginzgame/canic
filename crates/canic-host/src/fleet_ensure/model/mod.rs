@@ -35,6 +35,8 @@ pub struct LiveCanister {
 pub enum RootOwnedCanisterLifecycle {
     Claimed,
     Idle,
+    /// Live PendingReset/Failed asset; funding belongs to pool reconciliation.
+    Reconciling,
     /// Last exact current-generation balance retained while Root status is fenced.
     Retained,
     Store,
@@ -47,6 +49,7 @@ impl RootOwnedCanisterLifecycle {
         match self {
             Self::Claimed => "claimed",
             Self::Idle => "idle",
+            Self::Reconciling => "reconciling",
             Self::Retained => "retained",
             Self::Store => "store",
             Self::Workload => "workload",
