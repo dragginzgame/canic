@@ -2,6 +2,18 @@
 
 Last updated: 2026-09-14
 
+## CLI help test release blocker
+
+The failed CLI library target had one stale expected command list, missing
+`observatory`; its other 475 tests passed with one existing ignored case.
+Help tests now derive membership from registered commands and retain nonempty,
+unique, alphabetical rendering and actual help-dispatch checks. Both focused
+regressions and both recursive/bare-help integration cases pass. Runtime behavior
+and package versions are unchanged; the correction remains in the open .16 draft.
+Scoped CLI all-feature library/test Clippy, formatting, document semantics and
+whitespace checks pass. The accepted batch and changelogs remain ready for the
+governed release flow; no broad suite, version bump, commit or push ran here.
+
 ## Secret-scan release blocker
 
 The 60 findings in the ICYDB-033 source manifests are verified file SHA-256

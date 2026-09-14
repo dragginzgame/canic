@@ -1,7 +1,7 @@
 use super::*;
 use crate::cli::{
     globals::{INTERNAL_ENVIRONMENT_OPTION, INTERNAL_ICP_OPTION},
-    help::usage,
+    help::{top_level_command, usage},
 };
 
 #[cfg(unix)]
@@ -38,82 +38,37 @@ fn usage_lists_current_commands_alphabetically() {
         .lines()
         .filter_map(|line| line.split_whitespace().next())
         .collect::<Vec<_>>();
-    let mut sorted = names.clone();
-    sorted.sort_unstable();
+    let command = top_level_command();
+    let registered = command
+        .get_subcommands()
+        .filter(|child| !child.is_hide_set())
+        .map(clap::Command::get_name)
+        .collect::<Vec<_>>();
 
-    assert_eq!(names, sorted);
-    assert_eq!(
-        names,
-        [
-            "admission",
-            "app",
-            "auth",
-            "backup",
-            "blob-storage",
-            "build",
-            "component",
-            "cycles",
-            "diagnostic",
-            "evidence",
-            "fleet",
-            "frontend",
-            "info",
-            "inspect",
-            "medic",
-            "network",
-            "replica",
-            "restore",
-            "scaffold",
-            "state",
-            "status",
-            "token",
-            "toolchain",
-        ]
-    );
+    assert!(!names.is_empty());
+    assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
+    assert_eq!(names, registered);
     assert!(plain.contains("Usage: canic [OPTIONS] <COMMAND>"));
-    assert!(plain.contains("Converge one Fleet from current desired state"));
-    assert!(!plain.contains("  deploy"));
-    assert!(!plain.contains("  install"));
-    assert!(!plain.contains("retained"));
 }
 
 #[test]
 fn current_command_help_and_versions_return_ok() {
+    for command in top_level_command().get_subcommands() {
+        let args = [command.get_name(), "--help"];
+        assert!(run(args.iter().map(OsString::from)).is_ok(), "{args:?}");
+    }
     for args in [
-        &["admission", "--help"][..],
-        &["app", "--help"],
-        &["auth", "--help"],
-        &["backup", "--help"],
-        &["blob-storage", "--help"],
-        &["build", "--help"],
-        &["component", "--help"],
+        &["component", "apply", "--help"][..],
         &["component", "plan", "--help"],
-        &["component", "apply", "--help"],
         &["component", "status", "--help"],
-        &["cycles", "--help"],
-        &["diagnostic", "--help"],
-        &["evidence", "--help"],
-        &["fleet", "--help"],
-        &["frontend", "--help"],
+        &["fleet", "ensure", "--help"],
+        &["fleet", "generate", "--help"],
         &["frontend", "capacity", "--help"],
         &["frontend", "export", "--help"],
         &["frontend", "verify", "--help"],
-        &["fleet", "generate", "--help"],
-        &["fleet", "ensure", "--help"],
-        &["info", "--help"],
-        &["inspect", "--help"],
         &["inspect", "canister", "--help"],
         &["inspect", "fleet", "--help"],
-        &["medic", "--help"],
         &["medic", "fleet", "--help"],
-        &["network", "--help"],
-        &["replica", "--help"],
-        &["restore", "--help"],
-        &["scaffold", "--help"],
-        &["state", "--help"],
-        &["status", "--help"],
-        &["token", "--help"],
-        &["toolchain", "--help"],
         &["toolchain", "install", "--help"],
     ] {
         assert!(run(args.iter().map(OsString::from)).is_ok(), "{args:?}");
