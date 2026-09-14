@@ -1,6 +1,20 @@
 # Current Status
 
-Last updated: 2026-09-13
+Last updated: 2026-09-14
+
+## Secret-scan release blocker
+
+The 60 findings in the ICYDB-033 source manifests are verified file SHA-256
+checksums: 31 Canic and 29 archived IcyDB source entries. Every value was
+reproduced from the named file at its exact source commit. The reviewed
+fingerprint list now scopes each exception to its exact commit/path/rule/line;
+scanner rules and full-history coverage remain unchanged. This correction
+extends the open .16 draft without runtime or package-version changes.
+The pinned Gitleaks 8.30.1 full-history scan passes with zero findings at
+`676ce3b8755f4015a48b050e83b52f494dc596c4` using the updated fingerprint file.
+Fingerprint format/uniqueness, document semantics and whitespace checks pass.
+The batch and changelogs remain ready for the governed release flow; no broad
+validation or Git publication ran during this correction.
 
 ## Operator integration audit corrections qualified
 

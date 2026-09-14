@@ -17,6 +17,7 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 - `0.110.16` makes a breaking, reinstall-only stable-memory layout reduction,
   rejects ambiguous creation fees, fixes retained-pool funding and reinstall review
   continuation, improves build/recovery diagnostics and release consistency,
+  corrects secret-scan false positives in audit checksums,
   adds reviewed Component recovery, browser handoff, bounded host observatory reports
   and persistent multi-subnet local Fleets with ordinary Component inventory,
   and records controlled IcyDB Wasm measurements, including a rejected startup
